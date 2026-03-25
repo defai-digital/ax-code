@@ -1,0 +1,43 @@
+.DS_Store
+node_modules
+.worktrees
+.sst
+.env
+.idea
+.vscode
+.codex
+*~
+playground
+tmp
+dist
+ts-dist
+.turbo
+**/.serena
+.serena/
+/result
+refs
+Session.vim
+/ax-code.json
+a.out
+target
+.scripts
+.direnv/
+
+# Temp files
+~$*
+
+# Sensitive data
+auth.json
+*.db
+
+# Local config
+.ax-code/
+
+# Claude Code
+.claude/
+
+# Local dev files
+opencode-dev
+logs/
+*.bun-build
+tsconfig.tsbuildinfo

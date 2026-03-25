@@ -117,7 +117,6 @@
 |----------|-----------------|--------|--------------------|--------------|-----------:|-----------------|----------------------|----------------------|--------|-------------------|-------------|-------|
 | Agent | Agent system | OpenCode | `src/agent/` | Defines agents with modes, permissions, model choice, temperature | High | Critical | Effect.io | **Keep** | Core execution engine | Low | None (MIT) | Multi-agent architecture |
 | Agent | Subagent support | OpenCode | `src/agent/` | Spawn child agents for sub-tasks | High | High | — | **Keep** | Enables complex workflows | Low | None | — |
-| Provider | Anthropic provider | OpenCode | `src/provider/` | Claude models (Opus, Sonnet, Haiku) | High | Critical | `@ai-sdk/anthropic` | **Keep** | Top-tier coding model | Low | None | Primary provider candidate |
 | Provider | OpenAI provider | OpenCode | `src/provider/` | GPT-4, GPT-4.5 | High | Critical | `@ai-sdk/openai` | **Keep** | Market leader | Low | None | — |
 | Provider | Google provider | OpenCode | `src/provider/` | Gemini models | High | High | `@ai-sdk/google` | **Keep** | Strong competitor, large context | Low | None | — |
 | Provider | Google Vertex | OpenCode | `src/provider/` | Cloud-hosted Gemini | Medium | Medium | `@ai-sdk/google-vertex` | **Review** | Enterprise use only | Low | None | Overlaps with direct Google |
@@ -198,10 +197,6 @@
 | Infra | PTY support | OpenCode | `src/pty/` | Pseudo-terminal | Medium | Medium | bun-pty | **Keep** | Terminal emulation | Low | None | — |
 | Infra | File watching | OpenCode | — | File system monitoring | Medium | Medium | chokidar, @parcel/watcher | **Keep** | Real-time updates | Low | None | — |
 | Infra | ID generation | OpenCode | `src/id/` | ULID-based IDs | Low | High | ulid | **Keep** | Data integrity | Low | None | — |
-| Infra | Control plane | OpenCode | `src/control-plane/` | Multi-tenant management | Low | Low | — | **Cut** | Not needed for single-user | Medium | None | Enterprise complexity |
-| Infra | Enterprise package | OpenCode | `packages/enterprise/` | Enterprise features | Low | Low | — | **Cut** | Separate product concern | Medium | None | — |
-| Infra | SST/Wrangler deploy | OpenCode | root config | Serverless infra | Low | Low | sst, wrangler | **Cut** | Cloud deploy, not needed | Low | None | — |
-| Docs | Storybook | OpenCode | `packages/storybook/` | Component documentation | Low | Low | — | **Cut** | Internal dev tool | Low | None | — |
 | Docs | Docs site | OpenCode | `packages/docs/` | Documentation website | Low | Low | — | **Later** | Separate effort | Low | Check | Has own LICENSE file |
 
 ---
