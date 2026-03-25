@@ -2,7 +2,7 @@
 
 The open source, provider-agnostic AI coding agent.
 
-Built on [OpenCode](https://github.com/anomalyco/opencode) with high-value features from [ax-cli](https://github.com/defai-digital/ax-cli).
+An AI coding agent by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 
@@ -215,6 +215,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Credits
 
-ax-code is built by [DEFAI Digital](https://github.com/defai-digital), combining:
-- [OpenCode](https://github.com/anomalyco/opencode) — The mature, provider-agnostic platform (MIT)
-- [ax-cli](https://github.com/defai-digital/ax-cli) — High-value AI coding features (MIT)
+ax-code is built by [DEFAI Digital](https://github.com/defai-digital).
