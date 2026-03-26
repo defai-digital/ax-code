@@ -25,6 +25,7 @@ import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
+import { route as routeAgent } from "../agent/router"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
@@ -984,7 +985,23 @@ export namespace SessionPrompt {
   }
 
   async function createUserMessage(input: PromptInput) {
-    const agentName = input.agent || (await Agent.defaultAgent())
+    // Auto-route: if no explicit agent, check if message matches a specialized agent
+    let agentName = input.agent
+    if (!agentName) {
+      const defaultName = await Agent.defaultAgent()
+      const messageText = input.parts
+        .filter((p): p is typeof p & { type: "text" } => p.type === "text")
+        .map((p) => p.text)
+        .join(" ")
+      if (messageText) {
+        const routeResult = routeAgent(messageText, defaultName)
+        if (routeResult) {
+          agentName = routeResult.agent
+          log.info("auto-routed to agent", { agent: routeResult.agent, confidence: routeResult.confidence })
+        }
+      }
+      agentName ??= defaultName
+    }
     const agent = await Agent.get(agentName)
     if (!agent) {
       const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))

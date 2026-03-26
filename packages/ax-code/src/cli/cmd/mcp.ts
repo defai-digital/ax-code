@@ -15,6 +15,8 @@ import { Global } from "../../global"
 import { modify, applyEdits } from "jsonc-parser"
 import { Filesystem } from "../../util/filesystem"
 import { Bus } from "../../bus"
+import { available as discoverAvailable } from "../../mcp/discovery"
+import * as McpTemplates from "../../mcp/templates"
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
@@ -130,6 +132,19 @@ export const McpListCommand = cmd({
         }
 
         prompts.outro(`${servers.length} server(s)`)
+
+        // Show auto-discovered servers not yet configured
+        const configuredNames = new Set(servers.map(([name]) => name))
+        const discovered = await discoverAvailable().catch(() => [])
+        const unconfigured = discovered.filter((s) => !configuredNames.has(s.name))
+        if (unconfigured.length > 0) {
+          UI.empty()
+          prompts.intro("Detected (not configured)")
+          for (const server of unconfigured) {
+            prompts.log.info(`+ ${server.name} ${UI.Style.TEXT_DIM}${server.description}`)
+          }
+          prompts.outro(`Add with: ax-code mcp add`)
+        }
       },
     })
   },
@@ -455,30 +470,66 @@ export const McpAddCommand = cmd({
           configPath = scopeResult
         }
 
+        // Offer templates first, then fall back to manual
+        const templateGroups = McpTemplates.byCategory()
+        const templateOptions = Object.entries(templateGroups).flatMap(([category, templates]) =>
+          templates.map((t) => ({
+            label: t.name,
+            value: t.name,
+            hint: `${category} — ${t.description}`,
+          })),
+        )
+
+        const source = await prompts.select({
+          message: "How do you want to add?",
+          options: [
+            ...templateOptions.length > 0
+              ? [{ label: "From template", value: "template" as string, hint: `${templateOptions.length} pre-configured servers` }]
+              : [],
+            { label: "Custom local", value: "custom-local" as string, hint: "Run a local command" },
+            { label: "Custom remote", value: "custom-remote" as string, hint: "Connect to a remote URL" },
+          ],
+        })
+        if (prompts.isCancel(source)) throw new UI.CancelledError()
+
+        if (source === "template") {
+          const selected = await prompts.select({
+            message: "Select a template",
+            options: templateOptions,
+          })
+          if (prompts.isCancel(selected)) throw new UI.CancelledError()
+
+          const template = McpTemplates.find(selected)
+          if (!template) {
+            prompts.log.error("Template not found")
+            return
+          }
+
+          // Prompt for required env vars
+          if (template.envRequired?.length) {
+            for (const envVar of template.envRequired) {
+              if (!process.env[envVar]) {
+                const desc = template.envDescription?.[envVar] ?? ""
+                prompts.log.warn(`Required env: ${envVar}${desc ? ` (${desc})` : ""}`)
+              }
+            }
+          }
+
+          const mcpConfig = McpTemplates.toConfig(template) as Config.Mcp
+          await addMcpToConfig(template.name, mcpConfig, configPath)
+          prompts.log.success(`MCP server "${template.name}" added to ${configPath}`)
+          if (template.docs) prompts.log.info(`Docs: ${template.docs}`)
+          prompts.outro("MCP server added successfully")
+          return
+        }
+
         const name = await prompts.text({
           message: "Enter MCP server name",
           validate: (x) => (x && x.length > 0 ? undefined : "Required"),
         })
         if (prompts.isCancel(name)) throw new UI.CancelledError()
 
-        const type = await prompts.select({
-          message: "Select MCP server type",
-          options: [
-            {
-              label: "Local",
-              value: "local",
-              hint: "Run a local command",
-            },
-            {
-              label: "Remote",
-              value: "remote",
-              hint: "Connect to a remote URL",
-            },
-          ],
-        })
-        if (prompts.isCancel(type)) throw new UI.CancelledError()
-
-        if (type === "local") {
+        if (source === "custom-local") {
           const command = await prompts.text({
             message: "Enter command to run",
             placeholder: "e.g., ax-code x @modelcontextprotocol/server-filesystem",
@@ -497,7 +548,7 @@ export const McpAddCommand = cmd({
           return
         }
 
-        if (type === "remote") {
+        if (source === "custom-remote") {
           const url = await prompts.text({
             message: "Enter MCP server URL",
             placeholder: "e.g., https://example.com/mcp",
