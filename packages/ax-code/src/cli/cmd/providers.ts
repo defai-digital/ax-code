@@ -271,11 +271,26 @@ export const ProvidersLoginCommand = cmd({
         type: "string",
       }),
   async handler(args) {
+    UI.empty()
+    prompts.intro("Add credential")
+
+    // Fast path: positional arg used as provider name (not a URL)
+    const directProvider = args.url && !args.url.startsWith("http") ? args.url : undefined
+    if (directProvider) {
+      const provider = directProvider
+      const key = await prompts.password({
+        message: `Enter API key for ${provider}`,
+        validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+      })
+      if (prompts.isCancel(key)) throw new UI.CancelledError()
+      await Auth.set(provider, { type: "api", key })
+      prompts.outro("Done")
+      return
+    }
+
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
-        UI.empty()
-        prompts.intro("Add credential")
         if (args.url) {
           const url = args.url.replace(/\/+$/, "")
           const wellknown = await fetch(`${url}/.well-known/ax-code`).then((x) => x.json() as any)

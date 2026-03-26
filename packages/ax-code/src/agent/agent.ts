@@ -12,6 +12,10 @@ import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_REACT from "./prompt/react.txt"
+import PROMPT_SECURITY from "./prompt/security.txt"
+import PROMPT_ARCHITECT from "./prompt/architect.txt"
+import PROMPT_DEBUG from "./prompt/debug.txt"
+import PROMPT_PERF from "./prompt/perf.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { Permission } from "@/permission"
@@ -202,6 +206,108 @@ export namespace Agent {
               mode: "primary",
               native: true,
               steps: 20,
+            },
+            security: {
+              name: "security",
+              description:
+                "Security Auditor agent. Scans code for vulnerabilities, secrets, OWASP issues, and compliance problems. Read-only — reports findings without modifying code.",
+              prompt: PROMPT_SECURITY,
+              permission: Permission.merge(
+                defaults,
+                Permission.fromConfig({
+                  "*": "deny",
+                  grep: "allow",
+                  glob: "allow",
+                  list: "allow",
+                  bash: "allow",
+                  read: "allow",
+                  codesearch: "allow",
+                  webfetch: "allow",
+                  websearch: "allow",
+                  external_directory: {
+                    "*": "ask",
+                    ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
+                  },
+                }),
+                user,
+              ),
+              options: {},
+              mode: "primary",
+              native: true,
+              steps: 30,
+            },
+            architect: {
+              name: "architect",
+              description:
+                "Architecture Analyst agent. Analyzes system design, dependencies, coupling, patterns, and suggests structural improvements. Read-only — analyzes without modifying code.",
+              prompt: PROMPT_ARCHITECT,
+              permission: Permission.merge(
+                defaults,
+                Permission.fromConfig({
+                  "*": "deny",
+                  grep: "allow",
+                  glob: "allow",
+                  list: "allow",
+                  bash: "allow",
+                  read: "allow",
+                  codesearch: "allow",
+                  webfetch: "allow",
+                  websearch: "allow",
+                  external_directory: {
+                    "*": "ask",
+                    ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
+                  },
+                }),
+                user,
+              ),
+              options: {},
+              mode: "primary",
+              native: true,
+              steps: 25,
+            },
+            debug: {
+              name: "debug",
+              description:
+                "Debugger agent. Systematically investigates bugs — reproduces, isolates, traces root cause, and fixes. Uses all tools to diagnose and resolve issues.",
+              prompt: PROMPT_DEBUG,
+              permission: Permission.merge(
+                defaults,
+                Permission.fromConfig({
+                  question: "allow",
+                }),
+                user,
+              ),
+              options: {},
+              mode: "primary",
+              native: true,
+              steps: 30,
+            },
+            perf: {
+              name: "perf",
+              description:
+                "Performance Analyst agent. Finds bottlenecks, inefficient algorithms, memory issues, and optimization opportunities. Read-only — benchmarks and reports without modifying code.",
+              prompt: PROMPT_PERF,
+              permission: Permission.merge(
+                defaults,
+                Permission.fromConfig({
+                  "*": "deny",
+                  grep: "allow",
+                  glob: "allow",
+                  list: "allow",
+                  bash: "allow",
+                  read: "allow",
+                  codesearch: "allow",
+                  external_directory: {
+                    "*": "ask",
+                    ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
+                  },
+                }),
+                user,
+              ),
+              options: {},
+              mode: "primary",
+              native: true,
+              steps: 25,
             },
             compaction: {
               name: "compaction",
