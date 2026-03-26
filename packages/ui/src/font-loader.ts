@@ -111,7 +111,7 @@ function css(font: { family: string; regular: string; bold: string }) {
 }
 
 export function ensureMonoFont(id: string | undefined) {
-  if (!id || id === "ibm-plex-mono") return Promise.resolve()
+  if (!id || id === "geist-mono") return Promise.resolve()
   if (typeof document !== "object") return Promise.resolve()
   const font = mono[id]
   if (!font) return Promise.resolve()

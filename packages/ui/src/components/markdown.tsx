@@ -1,6 +1,6 @@
 import { useMarked } from "../context/marked"
 import { useI18n } from "../context/i18n"
-import DOMPurify from "dompurify"
+import sanitizeHtml from "sanitize-html"
 import morphdom from "morphdom"
 import { checksum } from "@ax-code/util/encode"
 import { ComponentProps, createEffect, createResource, createSignal, onCleanup, splitProps } from "solid-js"
@@ -14,24 +14,23 @@ type Entry = {
 const max = 200
 const cache = new Map<string, Entry>()
 
-if (typeof window !== "undefined" && DOMPurify.isSupported) {
-  DOMPurify.addHook("afterSanitizeAttributes", (node: Element) => {
-    if (!(node instanceof HTMLAnchorElement)) return
-    if (node.target !== "_blank") return
-
-    const rel = node.getAttribute("rel") ?? ""
-    const set = new Set(rel.split(/\s+/).filter(Boolean))
-    set.add("noopener")
-    set.add("noreferrer")
-    node.setAttribute("rel", Array.from(set).join(" "))
-  })
-}
-
-const config = {
-  USE_PROFILES: { html: true, mathMl: true },
-  SANITIZE_NAMED_PROPS: true,
-  FORBID_TAGS: ["style"],
-  FORBID_CONTENTS: ["style", "script"],
+const config: sanitizeHtml.IOptions = {
+  allowedTags: sanitizeHtml.defaults.allowedTags.filter((tag: string) => tag !== "style"),
+  allowedAttributes: {
+    ...sanitizeHtml.defaults.allowedAttributes,
+    a: ["href", "target", "rel"],
+    code: ["class"],
+    span: ["class", "style"],
+    pre: ["class"],
+    img: ["src", "alt", "width", "height"],
+  },
+  disallowedTagsMode: "discard",
+  transformTags: {
+    a: (_tagName: string, attribs: sanitizeHtml.Attributes) => ({
+      tagName: "a",
+      attribs: { ...attribs, rel: "noopener noreferrer" },
+    }),
+  },
 }
 
 const iconPaths = {
@@ -40,8 +39,7 @@ const iconPaths = {
 }
 
 function sanitize(html: string) {
-  if (!DOMPurify.isSupported) return ""
-  return DOMPurify.sanitize(html, config)
+  return sanitizeHtml(html, config)
 }
 
 function escape(text: string) {
