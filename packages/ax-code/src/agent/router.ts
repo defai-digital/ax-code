@@ -46,8 +46,10 @@ const RULES: RouteRule[] = [
       /\barchitect(ure)?\b/i,
       /\b(design|code)\s+pattern/i,
       /\b(circular|cyclic)\s+dep/i,
-      /\b(analyz|review)\b.*\b(structure|design|organization)/i,
+      /\b(analyz\w*|review)\b.*\b(structure|design|organization)/i,
       /\bcoupling\b/i,
+      /\bproject\s+structure\b/i,
+      /\bpackages?\b.*\b(organiz|structur)/i,
     ],
     confidence: 0.8,
   },
@@ -87,30 +89,8 @@ const RULES: RouteRule[] = [
     ],
     confidence: 0.7,
   },
-  {
-    agent: "react",
-    keywords: [
-      "step by step", "think through", "reason through",
-      "walk me through", "explain your reasoning",
-    ],
-    patterns: [
-      /\bstep\s+by\s+step\b/i,
-      /\b(think|reason|walk)\b.*\b(through|carefully)\b/i,
-    ],
-    confidence: 0.6,
-  },
-  {
-    agent: "plan",
-    keywords: [
-      "plan", "planning", "strategy", "approach", "design",
-      "how should", "what approach", "propose",
-    ],
-    patterns: [
-      /\b(plan|strateg|approach)\b.*\b(for|to|how)\b/i,
-      /\bhow\s+should\s+(i|we)\b/i,
-    ],
-    confidence: 0.5,
-  },
+  // react and plan are reasoning MODES, not topic domains
+  // Users should explicitly switch to them (e.g., /react, /plan)
 ]
 
 export interface RouteResult {
@@ -149,8 +129,8 @@ export function route(message: string, currentAgent: string): RouteResult | null
 
     if (score === 0) continue
 
-    // Calculate confidence based on matches
-    const confidence = Math.min(rule.confidence, score * 0.15)
+    // Calculate confidence: base from rule, boosted by number of matches
+    const confidence = Math.min(rule.confidence, 0.3 + score * 0.1)
 
     // Skip if same as current agent
     if (rule.agent === currentAgent) continue

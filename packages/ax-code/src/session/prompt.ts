@@ -26,6 +26,7 @@ import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
 import { route as routeAgent } from "../agent/router"
+import { TuiEvent } from "../cli/cmd/tui/event"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
@@ -985,22 +986,24 @@ export namespace SessionPrompt {
   }
 
   async function createUserMessage(input: PromptInput) {
-    // Auto-route: if no explicit agent, check if message matches a specialized agent
-    let agentName = input.agent
-    if (!agentName) {
-      const defaultName = await Agent.defaultAgent()
-      const messageText = input.parts
-        .filter((p): p is typeof p & { type: "text" } => p.type === "text")
-        .map((p) => p.text)
-        .join(" ")
-      if (messageText) {
-        const routeResult = routeAgent(messageText, defaultName)
-        if (routeResult) {
-          agentName = routeResult.agent
-          log.info("auto-routed to agent", { agent: routeResult.agent, confidence: routeResult.confidence })
-        }
+    // Auto-route: select the best agent for each message based on content
+    let agentName = input.agent || (await Agent.defaultAgent())
+    const messageText = input.parts
+      .filter((p): p is typeof p & { type: "text" } => p.type === "text")
+      .map((p) => p.text)
+      .join(" ")
+    if (messageText) {
+      const routeResult = routeAgent(messageText, agentName)
+      if (routeResult) {
+        agentName = routeResult.agent
+        log.info("auto-routed to agent", { agent: routeResult.agent, confidence: routeResult.confidence })
+        Bus.publish(TuiEvent.ToastShow, {
+          title: "Agent Auto-Switched",
+          message: `Switched to "${routeResult.agent}" agent for this task`,
+          variant: "info",
+          duration: 5000,
+        }).catch(() => {})
       }
-      agentName ??= defaultName
     }
     const agent = await Agent.get(agentName)
     if (!agent) {

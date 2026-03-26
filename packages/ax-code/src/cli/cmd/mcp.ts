@@ -70,7 +70,13 @@ export const McpListCommand = cmd({
   command: "list",
   aliases: ["ls"],
   describe: "list MCP servers and their status",
-  async handler() {
+  builder: (yargs) =>
+    yargs.option("discover", {
+      describe: "detect available MCP servers not yet configured",
+      type: "boolean",
+      default: false,
+    }),
+  async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -133,7 +139,8 @@ export const McpListCommand = cmd({
 
         prompts.outro(`${servers.length} server(s)`)
 
-        // Show auto-discovered servers not yet configured
+        // Show auto-discovered servers not yet configured (opt-in)
+        if (!args.discover) return
         const configuredNames = new Set(servers.map(([name]) => name))
         const discovered = await discoverAvailable().catch(() => [])
         const unconfigured = discovered.filter((s) => !configuredNames.has(s.name))
