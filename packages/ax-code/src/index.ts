@@ -16,6 +16,7 @@ import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
 import { Filesystem } from "./util/filesystem"
 import { DebugCommand } from "./cli/cmd/debug"
+import { DoctorCommand } from "./cli/cmd/doctor"
 import { StatsCommand } from "./cli/cmd/stats"
 import { McpCommand } from "./cli/cmd/mcp"
 import { GithubCommand } from "./cli/cmd/github"
@@ -130,6 +131,7 @@ let cli = yargs(hideBin(process.argv))
   .command(RunCommand)
   .command(GenerateCommand)
   .command(DebugCommand)
+  .command(DoctorCommand)
   .command(ConsoleCommand)
   .command(ProvidersCommand)
   .command(AgentCommand)

@@ -9,7 +9,6 @@
     "dev": "bun run --cwd packages/ax-code --conditions=browser src/index.ts",
     "dev:desktop": "bun --cwd packages/desktop tauri dev",
     "dev:web": "bun --cwd packages/app dev",
-    "dev:console": "ulimit -n 10240 2>/dev/null; bun run --cwd packages/console/app dev",
     "typecheck": "bun turbo typecheck",
     "prepare": "husky",
     "random": "echo 'Random script'",
@@ -19,9 +18,7 @@
   "workspaces": {
     "packages": [
       "packages/*",
-      "packages/console/*",
       "packages/sdk/js",
-      "packages/slack"
     ],
     "catalog": {
       "@effect/platform-node": "4.0.0-beta.35",
@@ -88,7 +85,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/anomalyco/opencode"
+    "url": "https://github.com/defai-digital/ax-code"
   },
   "license": "MIT",
   "prettier": {
@@ -101,7 +98,6 @@
     "tree-sitter",
     "tree-sitter-bash",
     "web-tree-sitter",
-    "electron"
   ],
   "overrides": {
     "@types/bun": "catalog:",

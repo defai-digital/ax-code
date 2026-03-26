@@ -6,7 +6,7 @@ import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
-import { supportsServerTools, buildToolsArray, buildToolConfig, DEFAULT_CONFIG as XAI_SERVER_TOOLS } from "./xai/server-tools"
+import { supportsServerTools, supportsReasoning, buildToolsArray, buildToolConfig, DEFAULT_CONFIG as XAI_SERVER_TOOLS } from "./xai/server-tools"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -627,6 +627,13 @@ export namespace ProviderTransform {
         result["server_tool_config"] = buildToolConfig(XAI_SERVER_TOOLS)
       }
       result["parallel_function_calling"] = true
+    }
+
+    // XAI/Grok: Set default reasoning effort for reasoning-capable models
+    if (input.model.api.npm === "@ai-sdk/xai" && supportsReasoning(input.model.api.id)) {
+      if (!result["reasoningEffort"]) {
+        result["reasoningEffort"] = "high"
+      }
     }
 
     if (input.model.api.id.includes("gpt-5") && !input.model.api.id.includes("gpt-5-chat")) {

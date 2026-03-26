@@ -5,9 +5,8 @@
 
 import type { CommandModule } from "yargs"
 import { Context, type DepthLevel } from "../../context"
-import { Instance } from "../../project/instance"
 
-export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dry-run": boolean }> = {
+export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dry-run": boolean; directory: string }> = {
   command: "init",
   describe: "Generate AX.md project context for AI comprehension",
   builder: (yargs) =>
@@ -27,9 +26,14 @@ export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dr
         type: "boolean",
         describe: "Preview without writing file",
         default: false,
+      })
+      .option("directory", {
+        type: "string",
+        describe: "Project directory to analyze",
+        default: process.cwd(),
       }),
   handler: async (args) => {
-    const root = Instance.directory ?? process.cwd()
+    const root = args.directory
     const depth = args.depth as DepthLevel
 
     console.log(`Analyzing project at ${root} (depth: ${depth})...`)
