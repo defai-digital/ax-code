@@ -15,7 +15,8 @@
     "./v2": "./src/v2/index.ts",
     "./v2/client": "./src/v2/client.ts",
     "./v2/gen/client": "./src/v2/gen/client/index.ts",
-    "./v2/server": "./src/v2/server.ts"
+    "./v2/server": "./src/v2/server.ts",
+    "./programmatic": "./src/programmatic/index.ts"
   },
   "files": [
     "dist"
@@ -27,5 +28,7 @@
     "typescript": "catalog:",
     "@typescript/native-preview": "catalog:"
   },
-  "dependencies": {}
+  "dependencies": {
+    "ax-code": "workspace:*"
+  }
 }
