@@ -5,5 +5,4 @@
  * to avoid import resolution issues with ax-code's module system.
  */
 
-// @ts-ignore — resolved via workspace linking
-export { createAgent } from "ax-code/sdk/programmatic"
+export { createAgent } from "../../../../ax-code/src/sdk/programmatic.ts"

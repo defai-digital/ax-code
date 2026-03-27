@@ -14,15 +14,24 @@
  * const result = await agent.run("Fix the login bug")
  * console.log(result.text)
  *
- * // Streaming
- * for await (const event of agent.stream("Explain this codebase")) {
- *   if (event.type === "text") process.stdout.write(event.text)
- * }
+ * // Streaming with convenience methods
+ * const text = await agent.stream("Explain this codebase").text()
+ *
+ * // Streaming with callbacks
+ * const stream = agent.stream("Explain this codebase")
+ * stream.on("text", (t) => process.stdout.write(t))
+ * await stream.done()
  *
  * // Multi-turn
  * const session = await agent.session()
  * await session.run("Read src/auth/index.ts")
  * await session.run("Now add input validation")
+ *
+ * // Direct API key (no local config needed)
+ * const agent2 = await createAgent({
+ *   directory: ".",
+ *   auth: { provider: "xai", apiKey: "xai-abc123" },
+ * })
  *
  * // Cleanup
  * await agent.dispose()
@@ -34,10 +43,21 @@ export type {
   Agent,
   AgentOptions,
   AgentHooks,
+  AuthConfig,
   RunOptions,
   RunResult,
   StreamEvent,
+  StreamHandle,
   SessionHandle,
   ToolCallInfo,
   PermissionRequest,
+} from "./types.js"
+export {
+  AxCodeError,
+  ProviderError,
+  TimeoutError,
+  ToolError,
+  PermissionError,
+  AgentNotFoundError,
+  DisposedError,
 } from "./types.js"
