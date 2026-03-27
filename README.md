@@ -13,16 +13,19 @@ ax-code is a terminal-based AI coding assistant that works with **any LLM provid
 ### Key Features
 
 - **Provider-agnostic** — OpenAI, Google Gemini, Grok, OpenRouter, Mistral, Groq, local models (Ollama, LM Studio)
+- **Specialized AI agents** — Security auditor, architecture analyst, debugger, performance profiler — auto-selected based on your prompt
+- **Agent auto-routing** — Automatically switches to the best agent for each task with toast notifications
 - **LSP-first** — Real language server integration (Pyright, TypeScript, Go), not regex hacks
 - **AX.md context system** — `/init` generates AI-optimized project context with depth levels
 - **Self-correction** — Automatic failure detection, reflection, and retry
 - **ReAct mode** — Structured Thought/Action/Observation reasoning
 - **Planning system** — Task decomposition with dependency ordering and verification
 - **Session persistence** — SQLite-backed, forkable, compactable sessions
-- **MCP support** — Model Context Protocol with SSE/stdio/HTTP transports
+- **MCP support** — Model Context Protocol with SSE/stdio/HTTP transports, auto-discovery, and 16 pre-configured templates
 - **25+ built-in tools** — File ops, search, bash, LSP, web fetch, tasks, todos
-- **API key encryption** — AES-256-GCM encrypted key storage at rest
+- **API key encryption** — AES-256-GCM encrypted key storage at rest, with input validation and path traversal protection
 - **Grok server-side tools** — x_search, code_execution, parallel function calling
+- **Fast provider login** — Quick API key setup via `ax-code providers login <provider-name>`
 
 ---
 
@@ -102,29 +105,41 @@ Create `.ax-code/ax-code.json` in your project:
 ## Commands
 
 ```bash
-ax-code                    # Launch TUI (default)
-ax-code init               # Generate AX.md project context
-ax-code init --depth full  # Deep analysis with code patterns
-ax-code providers list     # List available providers
-ax-code models             # List available models
-ax-code run "message"      # Non-interactive mode
-ax-code serve              # Headless API server
-ax-code --help             # All commands
+ax-code                         # Launch TUI (default)
+ax-code init                    # Generate AX.md project context
+ax-code init --depth full       # Deep analysis with code patterns
+ax-code providers list          # List available providers
+ax-code providers login openai  # Quick API key setup for a provider
+ax-code models                  # List available models
+ax-code mcp list                # List configured MCP servers
+ax-code mcp list --discover     # Detect available MCP servers
+ax-code mcp add                 # Add MCP server (from template or custom)
+ax-code run "message"           # Non-interactive mode
+ax-code serve                   # Headless API server
+ax-code --help                  # All commands
 ```
 
 ---
 
 ## Agents
 
-Switch between agents in the TUI using **Tab**:
+Switch between agents in the TUI using **Tab**, or let auto-routing pick the best agent for your task:
 
-| Agent | Mode | Purpose |
-|-------|------|---------|
-| **build** | Primary | Default — full tool access for development |
-| **plan** | Primary | Read-only analysis and planning |
-| **react** | Primary | Structured Thought/Action/Observation reasoning |
-| **general** | Subagent | Parallel multi-step task execution |
-| **explore** | Subagent | Fast codebase search and analysis |
+| Agent | Mode | Purpose | Auto-routes on |
+|-------|------|---------|----------------|
+| **build** | Primary | Default — full tool access for development | (default) |
+| **security** | Primary | Scans for vulnerabilities, secrets, OWASP issues | "scan for vulnerabilities", "security audit" |
+| **architect** | Primary | Analyzes system design, dependencies, coupling | "analyze architecture", "project structure" |
+| **debug** | Primary | Investigates bugs, traces root cause, fixes issues | "debug this", "why is it crashing" |
+| **perf** | Primary | Finds bottlenecks, memory issues, optimizations | "performance", "slow", "optimize" |
+| **plan** | Primary | Read-only analysis and planning | Manual switch only |
+| **react** | Primary | Structured Thought/Action/Observation reasoning | Manual switch only |
+| **general** | Subagent | Parallel multi-step task execution | — |
+| **explore** | Subagent | Fast codebase search and analysis | — |
+
+### Agent Auto-Routing
+
+When you send a message, ax-code analyzes the content and automatically switches to the most appropriate agent. A toast notification appears when switching occurs. Domain agents (security, architect, debug, perf) are auto-routed; mode agents (plan, react) require manual switching via Tab.
 
 ---
 
@@ -162,16 +177,20 @@ ax-code/
 ├── packages/
 │   ├── ax-code/           # Core CLI application
 │   │   └── src/
-│   │       ├── agent/     # Agent system (build, plan, react)
-│   │       ├── auth/      # Authentication + API key encryption
+│   │       ├── agent/     # Agent system (build, security, architect, debug, perf, plan, react)
+│   │       │   ├── router.ts    # Auto-routing engine (keyword + regex matching)
+│   │       │   └── prompt/      # Agent-specific system prompts
+│   │       ├── auth/      # Authentication + API key encryption + input validation
 │   │       ├── cli/       # CLI commands and TUI
 │   │       ├── config/    # Hierarchical config system
 │   │       ├── context/   # AX.md context generation
 │   │       ├── lsp/       # Language server integration
 │   │       ├── mcp/       # Model Context Protocol
+│   │       │   ├── discovery.ts   # Auto-discovery of MCP servers
+│   │       │   └── templates/     # 16 pre-configured server templates
 │   │       ├── planner/   # Task decomposition + verification
 │   │       ├── provider/  # LLM provider abstraction
-│   │       ├── session/   # Session persistence + correction
+│   │       ├── session/   # Session persistence + correction + agent auto-routing
 │   │       └── tool/      # 25+ built-in tools
 │   ├── app/               # Shared UI components
 │   ├── ui/                # UI component library
@@ -182,6 +201,25 @@ ax-code/
 ├── sdks/vscode/           # VSCode extension
 └── patches/               # Dependency patches
 ```
+
+---
+
+## MCP Server Templates
+
+Add pre-configured MCP servers instantly with `ax-code mcp add`:
+
+| Category | Servers |
+|----------|---------|
+| **Search & Web** | Exa, Brave Search |
+| **Developer Tools** | GitHub, GitLab, Linear, Sentry |
+| **Databases** | PostgreSQL, SQLite |
+| **File System** | Filesystem, Google Drive |
+| **Browser & Testing** | Puppeteer, Playwright |
+| **Cloud** | Vercel, Cloudflare |
+| **Design** | Figma |
+| **Communication** | Slack |
+
+Auto-discovery (`ax-code mcp list --discover`) detects locally available servers based on environment variables and installed tools.
 
 ---
 
