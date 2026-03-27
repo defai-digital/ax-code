@@ -7,12 +7,12 @@
   "packageManager": "bun@1.3.11",
   "scripts": {
     "dev": "bun run --env-file=../../.env --cwd packages/ax-code --conditions=browser src/index.ts",
+    "cli": "bun run --cwd packages/ax-code --conditions=browser src/index.ts",
+    "setup:cli": "bun run scripts/setup-cli.ts",
     "dev:desktop": "bun --cwd packages/desktop tauri dev",
     "dev:web": "bun --cwd packages/app dev",
     "typecheck": "bun turbo typecheck",
     "prepare": "husky",
-    "random": "echo 'Random script'",
-    "hello": "echo 'Hello World!'",
     "test": "echo 'do not run tests from root' && exit 1"
   },
   "workspaces": {

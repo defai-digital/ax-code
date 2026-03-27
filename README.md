@@ -46,14 +46,18 @@ cd ax-code
 # Install dependencies
 bun install
 
+# Set up the global `ax-code` command
+bun run setup:cli
+
 # Set an API key (pick one)
 export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Google Gemini
 export OPENAI_API_KEY="your-key"                  # OpenAI
 export XAI_API_KEY="your-key"                     # Grok
 export OPENROUTER_API_KEY="your-key"              # OpenRouter
 
-# Run
-bun run dev
+# Run (either way works)
+ax-code                # Global command (after setup:cli)
+bun run dev            # Direct from repo root
 ```
 
 ### Windows (PowerShell)
@@ -62,8 +66,12 @@ bun run dev
 # Set API key
 $env:GOOGLE_GENERATIVE_AI_API_KEY="your-key"
 
+# Set up global command
+bun run setup:cli
+
 # Run
-bun run dev
+ax-code                # Global command
+bun run dev            # Or from repo root
 ```
 
 ---
