@@ -2,11 +2,11 @@ import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
-import { generateObject, streamObject, type ModelMessage } from "ai"
+import { generateObject, type ModelMessage } from "ai"
 import { Instance } from "../project/instance"
 import { Truncate } from "../tool/truncate"
 import { Auth } from "../auth"
-import { ProviderTransform } from "../provider/transform"
+
 
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
@@ -492,24 +492,6 @@ export namespace Agent {
               systemPrompt: z.string(),
             }),
           } satisfies Parameters<typeof generateObject>[0]
-
-          // TODO: clean this up so provider specific logic doesnt bleed over
-          const authInfo = yield* auth.get(model.providerID).pipe(Effect.orDie)
-          if (model.providerID === "openai" && authInfo?.type === "oauth") {
-            return yield* Effect.promise(async () => {
-              const result = streamObject({
-                ...params,
-                providerOptions: ProviderTransform.providerOptions(resolved, {
-                  store: false,
-                }),
-                onError: () => {},
-              })
-              for await (const part of result.fullStream) {
-                if (part.type === "error") throw part.error
-              }
-              return result.object
-            })
-          }
 
           return yield* Effect.promise(() => generateObject(params).then((r) => r.object))
         }),

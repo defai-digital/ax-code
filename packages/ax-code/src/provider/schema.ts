@@ -13,12 +13,8 @@ export const ProviderID = providerIdSchema.pipe(
     zod: z.string().pipe(z.custom<ProviderID>()),
     // Well-known providers
     axCode: schema.makeUnsafe("ax-code"),
-    openai: schema.makeUnsafe("openai"),
     google: schema.makeUnsafe("google"),
-    googleVertex: schema.makeUnsafe("google-vertex"),
-    githubCopilot: schema.makeUnsafe("github-copilot"),
-    openrouter: schema.makeUnsafe("openrouter"),
-    mistral: schema.makeUnsafe("mistral"),
+    xai: schema.makeUnsafe("xai"),
   })),
 )
 

@@ -6,10 +6,8 @@ import { createOpencodeClient } from "@ax-code/sdk"
 import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Flag } from "../flag/flag"
-import { CodexAuthPlugin } from "./codex"
 import { Session } from "../session"
 import { NamedError } from "@ax-code/util/error"
-import { CopilotAuthPlugin } from "./copilot"
 import { Effect, Layer, ServiceMap } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
@@ -43,7 +41,7 @@ export namespace Plugin {
   export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Plugin") {}
 
   // Built-in plugins that are directly imported (not installed from npm)
-  const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin]
+  const INTERNAL_PLUGINS: PluginInstance[] = []
 
   // Old npm package names for plugins that are now built-in — skip if users still have them in config
   const DEPRECATED_PLUGIN_PACKAGES = ["ax-code-openai-codex-auth", "ax-code-copilot-auth"]

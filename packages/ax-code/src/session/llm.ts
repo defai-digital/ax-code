@@ -21,7 +21,6 @@ import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { Permission } from "@/permission"
-import { Auth } from "@/auth"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -57,14 +56,11 @@ export namespace LLM {
       modelID: input.model.id,
       providerID: input.model.providerID,
     })
-    const [language, cfg, provider, auth] = await Promise.all([
+    const [language, cfg, provider] = await Promise.all([
       Provider.getLanguage(input.model),
       Config.get(),
       Provider.getProvider(input.model.providerID),
-      Auth.get(input.model.providerID),
     ])
-    // TODO: move this to a proper hook
-    const isOpenaiOauth = provider.id === "openai" && auth?.type === "oauth"
 
     const system: string[] = []
     system.push(
@@ -108,21 +104,15 @@ export namespace LLM {
       mergeDeep(input.agent.options),
       mergeDeep(variant),
     )
-    if (isOpenaiOauth) {
-      options.instructions = system.join("\n")
-    }
-
-    const messages = isOpenaiOauth
-      ? input.messages
-      : [
-            ...system.map(
-              (x): ModelMessage => ({
-                role: "system",
-                content: x,
-              }),
-            ),
-            ...input.messages,
-          ]
+    const messages = [
+      ...system.map(
+        (x): ModelMessage => ({
+          role: "system",
+          content: x,
+        }),
+      ),
+      ...input.messages,
+    ]
 
     const params = await Plugin.trigger(
       "chat.params",
@@ -157,10 +147,7 @@ export namespace LLM {
       },
     )
 
-    const maxOutputTokens =
-      isOpenaiOauth || provider.id.includes("github-copilot")
-        ? undefined
-        : ProviderTransform.maxOutputTokens(input.model)
+    const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input)
 

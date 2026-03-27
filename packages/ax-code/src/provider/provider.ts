@@ -21,28 +21,15 @@ import { Filesystem } from "../util/filesystem"
 
 // Direct imports for bundled providers
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { createVertex } from "@ai-sdk/google-vertex"
-import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
-import { createOpenRouter, type LanguageModelV2 } from "@openrouter/ai-sdk-provider"
-import { createOpenaiCompatible as createGitHubCopilotOpenAICompatible } from "./sdk/copilot"
 import { createXai } from "@ai-sdk/xai"
-import { createMistral } from "@ai-sdk/mistral"
-import { createGroq } from "@ai-sdk/groq"
-import { createVercel } from "@ai-sdk/vercel"
-import { GoogleAuth } from "google-auth-library"
+import type { LanguageModelV2 } from "@ai-sdk/provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { ModelID, ProviderID } from "./schema"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
-
-  function shouldUseCopilotResponsesApi(modelID: string): boolean {
-    const match = /^gpt-(\d+)/.exec(modelID)
-    if (!match) return false
-    return Number(match[1]) >= 5 && !modelID.startsWith("gpt-5-mini")
-  }
 
   function wrapSSE(res: Response, ms: number, ctl: AbortController) {
     if (typeof ms !== "number" || ms <= 0) return res
@@ -94,16 +81,8 @@ export namespace Provider {
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
     "@ai-sdk/google": createGoogleGenerativeAI,
-    "@ai-sdk/google-vertex": createVertex,
-    "@ai-sdk/openai": createOpenAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
-    "@openrouter/ai-sdk-provider": createOpenRouter,
     "@ai-sdk/xai": createXai,
-    "@ai-sdk/mistral": createMistral,
-    "@ai-sdk/groq": createGroq,
-    "@ai-sdk/vercel": createVercel,
-    // @ts-ignore (TODO: kill this code so we dont have to maintain it)
-    "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible,
   }
 
   type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
@@ -144,15 +123,6 @@ export namespace Provider {
         options: hasKey ? {} : { apiKey: "public" },
       }
     },
-    openai: async () => {
-      return {
-        autoload: false,
-        async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-          return sdk.responses(modelID)
-        },
-        options: {},
-      }
-    },
     xai: async () => {
       return {
         autoload: false,
@@ -160,85 +130,6 @@ export namespace Provider {
           return sdk.responses(modelID)
         },
         options: {},
-      }
-    },
-    "github-copilot": async () => {
-      return {
-        autoload: false,
-        async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-          if (useLanguageModel(sdk)) return sdk.languageModel(modelID)
-          return shouldUseCopilotResponsesApi(modelID) ? sdk.responses(modelID) : sdk.chat(modelID)
-        },
-        options: {},
-      }
-    },
-    openrouter: async () => {
-      return {
-        autoload: false,
-        options: {
-          headers: {
-            "HTTP-Referer": "https://opencode.ai/",
-            "X-Title": "ax-code",
-          },
-        },
-      }
-    },
-    vercel: async () => {
-      return {
-        autoload: false,
-        options: {
-          headers: {
-            "http-referer": "https://opencode.ai/",
-            "x-title": "ax-code",
-          },
-        },
-      }
-    },
-    "google-vertex": async (provider) => {
-      const project =
-        provider.options?.project ??
-        Env.get("GOOGLE_CLOUD_PROJECT") ??
-        Env.get("GCP_PROJECT") ??
-        Env.get("GCLOUD_PROJECT")
-
-      const location = String(
-        provider.options?.location ??
-          Env.get("GOOGLE_VERTEX_LOCATION") ??
-          Env.get("GOOGLE_CLOUD_LOCATION") ??
-          Env.get("VERTEX_LOCATION") ??
-          "us-central1",
-      )
-
-      const autoload = Boolean(project)
-      if (!autoload) return { autoload: false }
-      return {
-        autoload: true,
-        vars(_options: Record<string, any>) {
-          const endpoint = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`
-          return {
-            ...(project && { GOOGLE_VERTEX_PROJECT: project }),
-            GOOGLE_VERTEX_LOCATION: location,
-            GOOGLE_VERTEX_ENDPOINT: endpoint,
-          }
-        },
-        options: {
-          project,
-          location,
-          fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-            const auth = new GoogleAuth()
-            const client = await auth.getApplicationDefault()
-            const token = await client.credential.getAccessToken()
-
-            const headers = new Headers(init?.headers)
-            headers.set("Authorization", `Bearer ${token.token}`)
-
-            return fetch(input, { ...init, headers })
-          },
-        },
-        async getModel(sdk: any, modelID: string) {
-          const id = String(modelID).trim()
-          return sdk.languageModel(id)
-        },
       }
     },
     "sap-ai-core": async () => {
@@ -545,7 +436,9 @@ export namespace Provider {
     const modelsDev = await ModelsDev.get()
     const database = mapValues(modelsDev, fromModelsDevProvider)
 
-    const disabled = new Set(config.disabled_providers ?? [])
+    // Providers without bundled SDK support are always disabled
+    const UNSUPPORTED_PROVIDERS = ["openai", "openrouter", "mistral", "groq", "vercel", "google-vertex", "github-copilot"]
+    const disabled = new Set([...UNSUPPORTED_PROVIDERS, ...(config.disabled_providers ?? [])])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
 
     function isProviderAllowed(providerID: ProviderID): boolean {
@@ -759,10 +652,7 @@ export namespace Provider {
 
       for (const [modelID, model] of Object.entries(provider.models)) {
         model.api.id = model.api.id ?? model.id ?? modelID
-        if (
-          modelID === "gpt-5-chat-latest" ||
-          (providerID === ProviderID.openrouter && modelID === "openai/gpt-5-chat")
-        )
+        if (modelID === "gpt-5-chat-latest")
           delete provider.models[modelID]
         if (model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
         if (model.status === "deprecated") delete provider.models[modelID]
@@ -827,10 +717,6 @@ export namespace Provider {
       const provider = s.providers[model.providerID]
       const options = { ...provider.options }
 
-      if (model.providerID === "google-vertex" && !model.api.npm.includes("@ai-sdk/openai-compatible")) {
-        delete options.fetch
-      }
-
       if (model.api.npm.includes("@ai-sdk/openai-compatible") && options["includeUsage"] !== false) {
         options["includeUsage"] = true
       }
@@ -889,21 +775,6 @@ export namespace Provider {
 
         const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
         if (combined) opts.signal = combined
-
-        // Strip openai itemId metadata following what codex does
-        // Codex uses #[serde(skip_serializing)] on id fields for all item types:
-        // Message, Reasoning, FunctionCall, LocalShellCall, CustomToolCall, WebSearchCall
-        if (model.api.npm === "@ai-sdk/openai" && opts.body && opts.method === "POST") {
-          const body = JSON.parse(opts.body as string)
-          if (Array.isArray(body.input)) {
-            for (const item of body.input) {
-              if ("id" in item) {
-                delete item.id
-              }
-            }
-            opts.body = JSON.stringify(body)
-          }
-        }
 
         const res = await fetchFn(input, {
           ...opts,
@@ -1035,10 +906,6 @@ export namespace Provider {
       ]
       if (providerID.startsWith("ax-code")) {
         priority = ["gpt-5-nano"]
-      }
-      if (providerID.startsWith("github-copilot")) {
-        // prioritize free models for github copilot
-        priority = ["gpt-5-mini", "claude-haiku-4.5", ...priority]
       }
       for (const item of priority) {
         if (providerID === ProviderID.amazonBedrock) {

@@ -4,7 +4,6 @@ import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { JSONSchema } from "zod/v4/core"
 import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
-import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
 import { supportsServerTools, supportsReasoning, buildToolsArray, buildToolConfig, DEFAULT_CONFIG as XAI_SERVER_TOOLS } from "./xai/server-tools"
 
@@ -24,17 +23,8 @@ export namespace ProviderTransform {
   // Maps npm package to the key the AI SDK expects for providerOptions
   function sdkKey(npm: string): string | undefined {
     switch (npm) {
-      case "@ai-sdk/github-copilot":
-        return "copilot"
-      case "@ai-sdk/openai":
-        return "openai"
-      case "@ai-sdk/google-vertex/anthropic":
-        return "anthropic"
-      case "@ai-sdk/google-vertex":
       case "@ai-sdk/google":
         return "google"
-      case "@openrouter/ai-sdk-provider":
-        return "openrouter"
     }
     return undefined
   }
@@ -60,52 +50,6 @@ export namespace ProviderTransform {
         return msg
       })
     }
-    if (
-      model.providerID === "mistral" ||
-      model.api.id.toLowerCase().includes("mistral") ||
-      model.api.id.toLocaleLowerCase().includes("devstral")
-    ) {
-      const result: ModelMessage[] = []
-      for (let i = 0; i < msgs.length; i++) {
-        const msg = msgs[i]
-        const nextMsg = msgs[i + 1]
-
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              // Mistral requires alphanumeric tool call IDs with exactly 9 characters
-              const normalizedId = part.toolCallId
-                .replace(/[^a-zA-Z0-9]/g, "") // Remove non-alphanumeric characters
-                .substring(0, 9) // Take first 9 characters
-                .padEnd(9, "0") // Pad with zeros if less than 9 characters
-
-              return {
-                ...part,
-                toolCallId: normalizedId,
-              }
-            }
-            return part
-          })
-        }
-
-        result.push(msg)
-
-        // Fix message sequence: tool messages cannot be followed by user messages
-        if (msg.role === "tool" && nextMsg?.role === "user") {
-          result.push({
-            role: "assistant",
-            content: [
-              {
-                type: "text",
-                text: "Done.",
-              },
-            ],
-          })
-        }
-      }
-      return result
-    }
-
     if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field) {
       const field = model.capabilities.interleaved.field
       return msgs.map((msg) => {
@@ -149,21 +93,13 @@ export namespace ProviderTransform {
     const final = msgs.filter((msg) => msg.role !== "system").slice(-2)
 
     const providerOptions = {
-      openrouter: {
-        cacheControl: { type: "ephemeral" },
-      },
       openaiCompatible: {
         cache_control: { type: "ephemeral" },
-      },
-      copilot: {
-        copilot_cache_control: { type: "ephemeral" },
       },
     }
 
     for (const msg of unique([...system, ...final])) {
-      const useMessageLevelOptions =
-        model.api.npm === "@ai-sdk/google-vertex/anthropic"
-      const shouldUseContentOptions = !useMessageLevelOptions && Array.isArray(msg.content) && msg.content.length > 0
+      const shouldUseContentOptions = Array.isArray(msg.content) && msg.content.length > 0
 
       if (shouldUseContentOptions) {
         const lastContent = msg.content[msg.content.length - 1]
@@ -224,8 +160,7 @@ export namespace ProviderTransform {
       model.api.id.includes("anthropic") ||
         model.api.id.includes("claude") ||
         model.id.includes("anthropic") ||
-        model.id.includes("claude") ||
-        model.api.npm === "@ai-sdk/google-vertex/anthropic"
+        model.id.includes("claude")
     ) {
       msgs = applyCaching(msgs, model)
     }
@@ -293,7 +228,6 @@ export namespace ProviderTransform {
   }
 
   const WIDELY_SUPPORTED_EFFORTS = ["low", "medium", "high"]
-  const OPENAI_EFFORTS = ["none", "minimal", ...WIDELY_SUPPORTED_EFFORTS, "xhigh"]
 
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
     if (!model.capabilities.reasoning) return {}
@@ -316,12 +250,6 @@ export namespace ProviderTransform {
 
     // see: https://docs.x.ai/docs/guides/reasoning#control-how-hard-the-model-thinks
     if (id.includes("grok") && id.includes("grok-3-mini")) {
-      if (model.api.npm === "@openrouter/ai-sdk-provider") {
-        return {
-          low: { reasoning: { effort: "low" } },
-          high: { reasoning: { effort: "high" } },
-        }
-      }
       return {
         low: { reasoningEffort: "low" },
         high: { reasoningEffort: "high" },
@@ -330,38 +258,6 @@ export namespace ProviderTransform {
     if (id.includes("grok")) return {}
 
     switch (model.api.npm) {
-      case "@openrouter/ai-sdk-provider":
-        if (!model.id.includes("gpt") && !model.id.includes("gemini-3") && !model.id.includes("claude")) return {}
-        return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoning: { effort } }]))
-
-      case "@ai-sdk/github-copilot":
-        if (model.id.includes("gemini")) {
-          // currently github copilot only returns thinking
-          return {}
-        }
-        if (model.id.includes("claude")) {
-          return {
-            thinking: { thinking_budget: 4000 },
-          }
-        }
-        const copilotEfforts = iife(() => {
-          if (id.includes("5.1-codex-max") || id.includes("5.2") || id.includes("5.3"))
-            return [...WIDELY_SUPPORTED_EFFORTS, "xhigh"]
-          const arr = [...WIDELY_SUPPORTED_EFFORTS]
-          if (id.includes("gpt-5") && model.release_date >= "2025-12-04") arr.push("xhigh")
-          return arr
-        })
-        return Object.fromEntries(
-          copilotEfforts.map((effort) => [
-            effort,
-            {
-              reasoningEffort: effort,
-              reasoningSummary: "auto",
-              include: ["reasoning.encrypted_content"],
-            },
-          ]),
-        )
-
       case "@ai-sdk/xai":
       // https://v5.ai-sdk.dev/providers/ai-sdk-providers/xai
       case "venice-ai-sdk-provider":
@@ -369,71 +265,6 @@ export namespace ProviderTransform {
       case "@ai-sdk/openai-compatible":
         return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
 
-      case "@ai-sdk/openai":
-        // https://v5.ai-sdk.dev/providers/ai-sdk-providers/openai
-        if (id === "gpt-5-pro") return {}
-        const openaiEfforts = iife(() => {
-          if (id.includes("codex")) {
-            if (id.includes("5.2") || id.includes("5.3")) return [...WIDELY_SUPPORTED_EFFORTS, "xhigh"]
-            return WIDELY_SUPPORTED_EFFORTS
-          }
-          const arr = [...WIDELY_SUPPORTED_EFFORTS]
-          if (id.includes("gpt-5-") || id === "gpt-5") {
-            arr.unshift("minimal")
-          }
-          if (model.release_date >= "2025-11-13") {
-            arr.unshift("none")
-          }
-          if (model.release_date >= "2025-12-04") {
-            arr.push("xhigh")
-          }
-          return arr
-        })
-        return Object.fromEntries(
-          openaiEfforts.map((effort) => [
-            effort,
-            {
-              reasoningEffort: effort,
-              reasoningSummary: "auto",
-              include: ["reasoning.encrypted_content"],
-            },
-          ]),
-        )
-
-      case "@ai-sdk/google-vertex/anthropic":
-        // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-vertex#anthropic-provider
-
-        if (isAnthropicAdaptive) {
-          return Object.fromEntries(
-            adaptiveEfforts.map((effort) => [
-              effort,
-              {
-                thinking: {
-                  type: "adaptive",
-                },
-                effort,
-              },
-            ]),
-          )
-        }
-
-        return {
-          high: {
-            thinking: {
-              type: "enabled",
-              budgetTokens: Math.min(16_000, Math.floor(model.limit.output / 2 - 1)),
-            },
-          },
-          max: {
-            thinking: {
-              type: "enabled",
-              budgetTokens: Math.min(31_999, model.limit.output - 1),
-            },
-          },
-        }
-
-      case "@ai-sdk/google-vertex":
-      // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-vertex
       case "@ai-sdk/google":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai
         if (id.includes("2.5")) {
@@ -465,22 +296,6 @@ export namespace ProviderTransform {
                 includeThoughts: true,
                 thinkingLevel: effort,
               },
-            },
-          ]),
-        )
-
-      case "@ai-sdk/mistral":
-        // https://v5.ai-sdk.dev/providers/ai-sdk-providers/mistral
-        return {}
-
-      case "@ai-sdk/groq":
-        // https://v5.ai-sdk.dev/providers/ai-sdk-providers/groq
-        const groqEffort = ["none", ...WIDELY_SUPPORTED_EFFORTS]
-        return Object.fromEntries(
-          groqEffort.map((effort) => [
-            effort,
-            {
-              reasoningEffort: effort,
             },
           ]),
         )
@@ -546,24 +361,6 @@ export namespace ProviderTransform {
   }): Record<string, any> {
     const result: Record<string, any> = {}
 
-    // openai and providers using openai package should set store to false by default.
-    if (
-      input.model.providerID === "openai" ||
-      input.model.api.npm === "@ai-sdk/openai" ||
-      input.model.api.npm === "@ai-sdk/github-copilot"
-    ) {
-      result["store"] = false
-    }
-
-    if (input.model.api.npm === "@openrouter/ai-sdk-provider") {
-      result["usage"] = {
-        include: true,
-      }
-      if (input.model.api.id.includes("gemini-3")) {
-        result["reasoning"] = { effort: "high" }
-      }
-    }
-
     if (
       input.model.providerID === "baseten" ||
       (input.model.providerID === "ax-code" && ["kimi-k2-thinking", "glm-4.6"].includes(input.model.api.id))
@@ -578,11 +375,11 @@ export namespace ProviderTransform {
       }
     }
 
-    if (input.model.providerID === "openai" || input.providerOptions?.setCacheKey) {
+    if (input.providerOptions?.setCacheKey) {
       result["promptCacheKey"] = input.sessionID
     }
 
-    if (input.model.api.npm === "@ai-sdk/google" || input.model.api.npm === "@ai-sdk/google-vertex") {
+    if (input.model.api.npm === "@ai-sdk/google") {
       if (input.model.capabilities.reasoning) {
         result["thinkingConfig"] = {
           includeThoughts: true,
@@ -590,18 +387,6 @@ export namespace ProviderTransform {
         if (input.model.api.id.includes("gemini-3")) {
           result["thinkingConfig"]["thinkingLevel"] = "high"
         }
-      }
-    }
-
-    // Enable thinking by default for kimi-k2.5/k2p5 models using anthropic SDK
-    const modelId = input.model.api.id.toLowerCase()
-    if (
-      input.model.api.npm === "@ai-sdk/google-vertex/anthropic" &&
-      (modelId.includes("k2p5") || modelId.includes("kimi-k2.5") || modelId.includes("kimi-k2p5"))
-    ) {
-      result["thinking"] = {
-        type: "enabled",
-        budgetTokens: Math.min(16_000, Math.floor(input.model.limit.output / 2 - 1)),
       }
     }
 
@@ -663,26 +448,10 @@ export namespace ProviderTransform {
       result["promptCacheKey"] = input.sessionID
     }
 
-    if (input.model.providerID === "openrouter") {
-      result["prompt_cache_key"] = input.sessionID
-    }
     return result
   }
 
   export function smallOptions(model: Provider.Model) {
-    if (
-      model.providerID === "openai" ||
-      model.api.npm === "@ai-sdk/openai" ||
-      model.api.npm === "@ai-sdk/github-copilot"
-    ) {
-      if (model.api.id.includes("gpt-5")) {
-        if (model.api.id.includes("5.")) {
-          return { store: false, reasoningEffort: "low" }
-        }
-        return { store: false, reasoningEffort: "minimal" }
-      }
-      return { store: false }
-    }
     if (model.providerID === "google") {
       // gemini-3 uses thinkingLevel, gemini-2.5 uses thinkingBudget
       if (model.api.id.includes("gemini-3")) {
@@ -690,13 +459,6 @@ export namespace ProviderTransform {
       }
       return { thinkingConfig: { thinkingBudget: 0 } }
     }
-    if (model.providerID === "openrouter") {
-      if (model.api.id.includes("google")) {
-        return { reasoning: { enabled: false } }
-      }
-      return { reasoningEffort: "minimal" }
-    }
-
     if (model.providerID === "venice") {
       return { veniceParameters: { disableThinking: true } }
     }

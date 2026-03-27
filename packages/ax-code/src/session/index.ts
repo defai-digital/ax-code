@@ -29,7 +29,6 @@ import { ModelID, ProviderID } from "@/provider/schema"
 import { Permission } from "@/permission"
 import { Global } from "@/global"
 import type { LanguageModelV2Usage } from "@ai-sdk/provider"
-import { iife } from "@/util/iife"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -800,14 +799,7 @@ export namespace Session {
         inputTokens - cacheReadInputTokens - cacheWriteInputTokens,
       )
 
-      const total = iife(() => {
-        if (
-          input.model.api.npm === "@ai-sdk/google-vertex/anthropic"
-        ) {
-          return adjustedInputTokens + outputTokens + cacheReadInputTokens + cacheWriteInputTokens
-        }
-        return input.usage.totalTokens
-      })
+      const total = input.usage.totalTokens
 
       const tokens = {
         total,

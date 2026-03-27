@@ -209,11 +209,7 @@ export const GithubInstallCommand = cmd({
           const app = await getAppInfo()
           await installGitHubApp()
 
-          const providers = await ModelsDev.get().then((p) => {
-            // TODO: add guide for copilot, for now just hide it
-            delete p["github-copilot"]
-            return p
-          })
+          const providers = await ModelsDev.get()
 
           const provider = await promptProvider()
           const model = await promptModel()
@@ -263,8 +259,7 @@ export const GithubInstallCommand = cmd({
           async function promptProvider() {
             const priority: Record<string, number> = {
               "ax-code": 0,
-              openai: 1,
-              google: 2,
+              google: 1,
             }
             let provider = await prompts.select({
               message: "Select provider",

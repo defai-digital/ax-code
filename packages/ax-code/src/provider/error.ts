@@ -25,13 +25,6 @@ export namespace ProviderError {
     /input length.*exceeds.*context length/i, // vLLM
   ]
 
-  function isOpenAiErrorRetryable(e: APICallError) {
-    const status = e.statusCode
-    if (!status) return e.isRetryable
-    // openai sometimes returns 404 for models that are actually available
-    return status === 404 || e.isRetryable
-  }
-
   // Providers not reliably handled in this function:
   // - z.ai: can accept overflow silently (needs token-count/context-window checks)
   function isOverflow(message: string) {
@@ -182,9 +175,7 @@ export namespace ProviderError {
       type: "api_error",
       message: m,
       statusCode: input.error.statusCode,
-      isRetryable: input.providerID.startsWith("openai")
-        ? isOpenAiErrorRetryable(input.error)
-        : input.error.isRetryable,
+      isRetryable: input.error.isRetryable,
       responseHeaders: input.error.responseHeaders,
       responseBody: input.error.responseBody,
       metadata,

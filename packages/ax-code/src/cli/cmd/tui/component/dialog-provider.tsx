@@ -17,9 +17,7 @@ import { useToast } from "../ui/toast"
 const PROVIDER_PRIORITY: Record<string, number> = {
   opencode: 0,
   "opencode-go": 1,
-  openai: 2,
-  "github-copilot": 3,
-  google: 4,
+  google: 2,
 }
 
 export function createDialogProviderOptions() {
@@ -36,7 +34,6 @@ export function createDialogProviderOptions() {
         value: provider.id,
         description: {
           opencode: "(Recommended)",
-          openai: "(ChatGPT Plus/Pro or API key)",
           "opencode-go": "Low cost subscription for everyone",
         }[provider.id],
         category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
