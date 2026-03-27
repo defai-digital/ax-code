@@ -322,13 +322,16 @@ export const ProvidersLoginCommand = cmd({
 
         const config = await Config.get()
 
+        // Only show providers with bundled SDK support (+ any user-enabled via config)
+        const SUPPORTED_PROVIDERS = new Set(["ax-code", "google", "xai", "zai", "zai-coding-plan"])
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
         const providers = await ModelsDev.get().then((x) => {
           const filtered: Record<string, (typeof x)[string]> = {}
           for (const [key, value] of Object.entries(x)) {
-            if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {
+            const allowed = enabled ? enabled.has(key) : SUPPORTED_PROVIDERS.has(key)
+            if (allowed && !disabled.has(key)) {
               filtered[key] = value
             }
           }
