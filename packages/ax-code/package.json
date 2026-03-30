@@ -22,7 +22,6 @@
   "bin": {
     "ax-code": "./bin/ax-code"
   },
-  "randomField": "this-is-a-random-value-12345",
   "exports": {
     "./*": "./src/*.ts"
   },

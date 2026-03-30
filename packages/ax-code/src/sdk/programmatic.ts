@@ -63,6 +63,8 @@ const ENV_VAR_MAP: Record<string, string> = {
   GEMINI_API_KEY: "google",
   GOOGLE_GENERATIVE_AI_API_KEY: "google",
   GOOGLE_API_KEY: "google",
+  OPENAI_API_KEY: "openai",
+  OPENAI_BASE_URL: "openai",
 }
 
 async function autoDetectAuth(): Promise<void> {
@@ -191,9 +193,14 @@ async function withRetry<T>(
         lastError.message.includes("500") ||
         lastError.message.includes("502") ||
         lastError.message.includes("503") ||
+        lastError.message.includes("504") ||
         lastError.message.includes("ECONNRESET") ||
+        lastError.message.includes("ECONNREFUSED") ||
+        lastError.message.includes("ENOTFOUND") ||
         lastError.message.includes("ETIMEDOUT") ||
-        lastError.message.includes("rate limit")
+        lastError.message.includes("rate limit") ||
+        lastError.message.includes("network") ||
+        lastError.message.includes("socket hang up")
 
       if (!isRetryable || attempt === maxRetries) throw lastError
 
