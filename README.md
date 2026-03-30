@@ -8,24 +8,28 @@ An AI coding agent by [DEFAI Digital](https://github.com/defai-digital).
 
 ## What is ax-code?
 
-ax-code is a terminal-based AI coding assistant that works with **any LLM provider** — not locked to a single vendor. It features LSP integration, session persistence, MCP support, and a rich terminal UI.
+ax-code is a terminal-based AI coding assistant that works with **any LLM provider** — not locked to a single vendor. It features LSP integration, session persistence, MCP support, a rich terminal UI, and a programmatic SDK for building custom AI apps.
 
 ### Key Features
 
-- **Provider-agnostic** — OpenAI, Google Gemini, Grok, OpenRouter, Mistral, Groq, local models (Ollama, LM Studio)
+- **Provider-agnostic** — Google Gemini, xAI Grok, Groq, Z.AI (GLM), local models (Ollama, LM Studio, vLLM)
+- **Programmatic SDK** — Direct agent instantiation without HTTP server (`createAgent()` → `agent.run()`)
 - **Specialized AI agents** — Security auditor, architecture analyst, debugger, performance profiler — auto-selected based on your prompt
 - **Agent auto-routing** — Automatically switches to the best agent for each task with toast notifications
 - **LSP-first** — Real language server integration (Pyright, TypeScript, Go), not regex hacks
 - **AX.md context system** — `/init` generates AI-optimized project context with depth levels
+- **Memory warmup** — Pre-cache project context for faster, more accurate AI responses
 - **Self-correction** — Automatic failure detection, reflection, and retry
 - **ReAct mode** — Structured Thought/Action/Observation reasoning
 - **Planning system** — Task decomposition with dependency ordering and verification
 - **Session persistence** — SQLite-backed, forkable, compactable sessions
 - **MCP support** — Model Context Protocol with SSE/stdio/HTTP transports, auto-discovery, and 16 pre-configured templates
+- **Design check** — Scan CSS/React code for hardcoded colors, spacing, accessibility violations
+- **i18n** — 11 languages (English, Chinese, Japanese, Korean, Spanish, French, German, Portuguese, Thai, Vietnamese)
+- **Context stats** — Token usage breakdown, cost estimation, context window monitoring
 - **25+ built-in tools** — File ops, search, bash, LSP, web fetch, tasks, todos
-- **API key encryption** — AES-256-GCM encrypted key storage at rest, with input validation and path traversal protection
+- **API key encryption** — AES-256-GCM encrypted key storage at rest
 - **Grok server-side tools** — x_search, code_execution, parallel function calling
-- **Fast provider login** — Quick API key setup via `ax-code providers login <provider-name>`
 
 ---
 
@@ -51,11 +55,10 @@ bun run setup:cli
 
 # Set an API key (pick one)
 export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Google Gemini
-export OPENAI_API_KEY="your-key"                  # OpenAI
 export XAI_API_KEY="your-key"                     # Grok
-export OPENROUTER_API_KEY="your-key"              # OpenRouter
+export GROQ_API_KEY="your-key"                    # Groq (free)
 
-# Run (either way works)
+# Run
 ax-code                # Global command (after setup:cli)
 bun run dev            # Direct from repo root
 ```
@@ -64,14 +67,13 @@ bun run dev            # Direct from repo root
 
 ```powershell
 # Set API key
-$env:GOOGLE_GENERATIVE_AI_API_KEY="your-key"
+$env:XAI_API_KEY="your-key"
 
 # Set up global command
 bun run setup:cli
 
 # Run
-ax-code                # Global command
-bun run dev            # Or from repo root
+ax-code
 ```
 
 ---
@@ -80,26 +82,22 @@ bun run dev            # Or from repo root
 
 | Provider | Models | Setup |
 |----------|--------|-------|
-| **Google** | Gemini 2.5, 2.0 | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| **OpenAI** | GPT-4, GPT-4o, GPT-5 | `OPENAI_API_KEY` |
-| **XAI/Grok** | Grok-4, Grok-3 | `XAI_API_KEY` |
-| **OpenRouter** | 100+ models | `OPENROUTER_API_KEY` |
-| **Google Vertex** | Gemini (cloud) | `GOOGLE_CLOUD_PROJECT` |
-| **Mistral** | Mistral models | `MISTRAL_API_KEY` |
-| **Groq** | Fast inference | `GROQ_API_KEY` |
-| **GitHub Copilot** | Via Copilot API | OAuth login |
-| **OpenAI-Compatible** | Ollama, LM Studio, vLLM | Config in `ax-code.json` |
+| **Google Gemini** | Gemini 1.5, 2.0, 2.5, 3.0, 3.1 | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| **xAI/Grok** | Grok-2, Grok-3, Grok-4 | `XAI_API_KEY` |
+| **Groq** | Llama 4, Llama 3.3, Qwen, Gemma, DeepSeek | `GROQ_API_KEY` (free) |
+| **Z.AI** | GLM-4.6, GLM-4.7, Kimi | `ax-code providers login` |
+| **Local models** | Ollama, LM Studio, vLLM, any OpenAI-compatible | Config in `ax-code.json` |
 
-### Using Local Models (LM Studio / Ollama)
+### Using Local Models (Ollama / LM Studio)
 
-Create `.ax-code/ax-code.json` in your project:
+Create `ax-code.json` in your project root:
 
 ```json
 {
   "provider": {
-    "lmstudio": {
+    "ollama": {
       "api": "@ai-sdk/openai-compatible",
-      "baseURL": "http://localhost:1234/v1",
+      "baseURL": "http://localhost:11434/v1",
       "models": {
         "*": true
       }
@@ -112,19 +110,57 @@ Create `.ax-code/ax-code.json` in your project:
 
 ## Commands
 
+### Core
 ```bash
-ax-code                         # Launch TUI (default)
-ax-code init                    # Generate AX.md project context
-ax-code init --depth full       # Deep analysis with code patterns
-ax-code providers list          # List available providers
-ax-code providers login openai  # Quick API key setup for a provider
-ax-code models                  # List available models
-ax-code mcp list                # List configured MCP servers
-ax-code mcp list --discover     # Detect available MCP servers
-ax-code mcp add                 # Add MCP server (from template or custom)
-ax-code run "message"           # Non-interactive mode
-ax-code serve                   # Headless API server
-ax-code --help                  # All commands
+ax-code                          # Launch TUI (default)
+ax-code run "message"            # Non-interactive mode
+ax-code serve                    # Headless API server
+ax-code --help                   # All commands
+```
+
+### Providers & Models
+```bash
+ax-code providers list           # List available providers
+ax-code providers login          # Add provider credential (interactive)
+ax-code providers login groq     # Quick API key setup for specific provider
+ax-code providers logout         # Remove a credential
+ax-code models                   # List all available models
+```
+
+### Project Context
+```bash
+ax-code init                     # Generate AX.md project context
+ax-code init --depth full        # Deep analysis with code patterns
+ax-code memory warmup            # Pre-cache project context for AI
+ax-code memory warmup --dry-run  # Preview without saving
+ax-code memory warmup --max-tokens 2000  # Limit context size
+ax-code memory status            # Show cached memory info
+ax-code memory clear             # Delete cached memory
+```
+
+### MCP Servers
+```bash
+ax-code mcp list                 # List configured MCP servers
+ax-code mcp list --discover      # Detect available servers
+ax-code mcp add                  # Add server (from template or custom)
+ax-code mcp auth <name>          # Authenticate OAuth server
+ax-code mcp debug <name>         # Debug connection issues
+```
+
+### Analysis
+```bash
+ax-code design-check src/        # Scan for design violations
+ax-code design-check src/ --rule no-inline-styles=off  # Disable a rule
+ax-code context                  # Show context window usage + cost
+ax-code context <sessionID>      # Show stats for specific session
+ax-code stats                    # Show token usage statistics
+```
+
+### Sessions
+```bash
+ax-code session list             # List all sessions
+ax-code export <sessionID>       # Export session as JSON
+ax-code import <file>            # Import session from JSON
 ```
 
 ---
@@ -151,64 +187,129 @@ When you send a message, ax-code analyzes the content and automatically switches
 
 ---
 
-## Configuration
+## Programmatic SDK
 
-Create `ax-code.json` in your project root or `~/.config/ax-code/ax-code.json` for global config:
+Use ax-code as a library in your own apps — no HTTP server needed:
 
-```json
-{
-  "provider": {
-    "google": {
-      "options": {
-        "apiKey": "your-key"
-      }
-    }
-  }
-}
+```typescript
+import { createAgent } from "@ax-code/sdk/programmatic"
+
+// Create agent (in-process, <1s startup)
+const agent = await createAgent({
+  directory: process.cwd(),
+  auth: { provider: "xai", apiKey: "your-key" },
+})
+
+// One-shot
+const result = await agent.run("Fix the login bug")
+console.log(result.text, result.usage.totalTokens)
+
+// Streaming
+const text = await agent.stream("Explain this code").text()
+
+// Streaming with callbacks
+const stream = agent.stream("Refactor this function")
+stream.on("text", (t) => process.stdout.write(t))
+stream.on("tool-call", (tool) => console.log("Using:", tool))
+await stream.done()
+
+// Multi-turn session
+const session = await agent.session()
+await session.run("Read src/auth/index.ts")
+await session.run("Now add input validation")
+
+// Discovery
+const models = await agent.models()   // 78+ models
+const tools = await agent.tools()     // 15 built-in tools
+
+// Cleanup
+await agent.dispose()
 ```
 
-### Environment Variables
-
-| Variable | Purpose |
-|----------|---------|
-| `AX_CODE_CONFIG` | Custom config file path |
-| `AX_CODE_CONFIG_DIR` | Custom config directory |
-| `AX_CODE_DISABLE_MODELS_FETCH` | Disable model registry fetch |
-| `AX_CODE_ENABLE_EXPERIMENTAL_MODELS` | Show experimental models |
+### SDK Features
+- **Typed errors** — `ProviderError`, `TimeoutError`, `ToolError`, `DisposedError`, `AgentNotFoundError`
+- **Stream helpers** — `.text()`, `.result()`, `.on()`, `.done()`
+- **Auto-retry** — `maxRetries` with exponential backoff on transient errors (429, 500)
+- **Timeout** — on `createAgent()` and `agent.run()`
+- **Direct API key** — `auth: { provider, apiKey }` — no local setup needed
+- **Env var detection** — auto-reads `XAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`
+- **Hooks** — `onToolCall`, `onToolResult`, `onPermissionRequest`, `onError`
+- **Agent auto-routing** — works through SDK (security, architect, debug, perf)
 
 ---
 
-## Project Structure
+## Design Check
 
+Scan CSS/React code for design violations:
+
+```bash
+ax-code design-check src/
 ```
-ax-code/
-├── packages/
-│   ├── ax-code/           # Core CLI application
-│   │   └── src/
-│   │       ├── agent/     # Agent system (build, security, architect, debug, perf, plan, react)
-│   │       │   ├── router.ts    # Auto-routing engine (keyword + regex matching)
-│   │       │   └── prompt/      # Agent-specific system prompts
-│   │       ├── auth/      # Authentication + API key encryption + input validation
-│   │       ├── cli/       # CLI commands and TUI
-│   │       ├── config/    # Hierarchical config system
-│   │       ├── context/   # AX.md context generation
-│   │       ├── lsp/       # Language server integration
-│   │       ├── mcp/       # Model Context Protocol
-│   │       │   ├── discovery.ts   # Auto-discovery of MCP servers
-│   │       │   └── templates/     # 16 pre-configured server templates
-│   │       ├── planner/   # Task decomposition + verification
-│   │       ├── provider/  # LLM provider abstraction
-│   │       ├── session/   # Session persistence + correction + agent auto-routing
-│   │       └── tool/      # 25+ built-in tools
-│   ├── app/               # Shared UI components
-│   ├── ui/                # UI component library
-│   ├── plugin/            # Plugin system
-│   ├── sdk/               # JavaScript SDK
-│   └── util/              # Shared utilities
-├── docs/                  # PRD, ADR, migration review
-├── sdks/vscode/           # VSCode extension
-└── patches/               # Dependency patches
+
+### Rules
+
+| Rule | Severity | What It Detects |
+|------|----------|-----------------|
+| `no-hardcoded-colors` | ERROR | Hex (#fff), rgb(), hsl() not using tokens |
+| `no-raw-spacing` | WARN | px values not using spacing tokens |
+| `no-inline-styles` | WARN | Inline style attributes in JSX/HTML |
+| `missing-alt-text` | ERROR | `<img>` without alt attribute |
+| `missing-form-labels` | ERROR | `<input>` without associated label |
+
+Disable rules: `ax-code design-check src/ --rule no-inline-styles=off`
+
+---
+
+## Memory Warmup
+
+Pre-cache project context for faster, more accurate AI responses:
+
+```bash
+ax-code memory warmup            # Scan and cache project context
+ax-code memory status            # Show what's cached
+ax-code memory clear             # Delete cache
 ```
+
+Caches directory structure, README summary, config files, and detected tech stack in `.ax-code/memory.json`.
+
+---
+
+## Context Stats
+
+Monitor context window usage and costs:
+
+```bash
+ax-code context                  # Latest session breakdown
+ax-code context <sessionID>      # Specific session
+```
+
+Shows: token breakdown (system prompt, tools, history), usage percentage, status (GOOD/MODERATE/HIGH/CRITICAL), and estimated cost per provider.
+
+---
+
+## i18n (Internationalization)
+
+Supports 11 languages. Set in `ax-code.json`:
+
+```json
+{
+  "language": "ja"
+}
+```
+
+| Code | Language |
+|------|----------|
+| `en` | English |
+| `zh-CN` | 简体中文 (Simplified Chinese) |
+| `zh-TW` | 繁體中文 (Traditional Chinese) |
+| `ja` | 日本語 (Japanese) |
+| `ko` | 한국어 (Korean) |
+| `es` | Español (Spanish) |
+| `fr` | Français (French) |
+| `de` | Deutsch (German) |
+| `pt` | Português (Portuguese) |
+| `th` | ไทย (Thai) |
+| `vi` | Tiếng Việt (Vietnamese) |
 
 ---
 
@@ -228,6 +329,77 @@ Add pre-configured MCP servers instantly with `ax-code mcp add`:
 | **Communication** | Slack |
 
 Auto-discovery (`ax-code mcp list --discover`) detects locally available servers based on environment variables and installed tools.
+
+---
+
+## Configuration
+
+Create `ax-code.json` in your project root or `~/.config/ax-code/ax-code.json` for global config:
+
+```json
+{
+  "language": "en",
+  "provider": {
+    "google": {
+      "options": {
+        "apiKey": "your-key"
+      }
+    }
+  }
+}
+```
+
+### Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Google Gemini API key |
+| `XAI_API_KEY` | xAI Grok API key |
+| `GROQ_API_KEY` | Groq API key (free) |
+| `AX_CODE_CONFIG` | Custom config file path |
+| `AX_CODE_CONFIG_DIR` | Custom config directory |
+
+---
+
+## Project Structure
+
+```
+ax-code/
+├── packages/
+│   ├── ax-code/           # Core CLI application
+│   │   └── src/
+│   │       ├── agent/     # Agent system (9 agents + auto-routing)
+│   │       │   ├── router.ts    # Auto-routing engine
+│   │       │   └── prompt/      # Agent-specific system prompts
+│   │       ├── auth/      # Authentication + API key encryption
+│   │       ├── cli/       # CLI commands and TUI
+│   │       ├── config/    # Hierarchical config system
+│   │       ├── context/   # AX.md context generation
+│   │       ├── design-check/  # CSS/React design linting (5 rules)
+│   │       ├── i18n/      # Internationalization (11 languages)
+│   │       ├── lsp/       # Language server integration
+│   │       ├── mcp/       # Model Context Protocol
+│   │       │   ├── discovery.ts   # Auto-discovery of MCP servers
+│   │       │   └── templates/     # 16 pre-configured templates
+│   │       ├── memory/    # Project memory warmup + cache
+│   │       ├── planner/   # Task decomposition + verification
+│   │       ├── provider/  # LLM provider abstraction
+│   │       ├── sdk/       # Programmatic SDK entry point
+│   │       ├── session/   # Session persistence + correction
+│   │       ├── stats/     # Context stats + cost estimation
+│   │       └── tool/      # 25+ built-in tools
+│   ├── app/               # Shared web UI (SolidJS)
+│   ├── ui/                # UI component library
+│   ├── plugin/            # Plugin system
+│   ├── sdk/js/            # JavaScript SDK
+│   │   └── src/programmatic/  # Programmatic SDK
+│   ├── util/              # Shared utilities
+│   ├── script/            # Build/release scripts
+│   └── desktop/           # Tauri desktop app (v2)
+├── scripts/               # CLI setup scripts
+├── docs/                  # PRDs, ADRs, status docs
+└── patches/               # Dependency patches
+```
 
 ---
 
