@@ -12,6 +12,7 @@ import { Log } from "../util/log"
 import { bootstrap } from "../cli/bootstrap"
 import { Server } from "../server/server"
 import { Auth } from "../auth"
+import { setLanguage, t } from "../i18n"
 import { createOpencodeClient } from "@ax-code/sdk/v2/client"
 import type { OpencodeClient } from "@ax-code/sdk/v2/client"
 import type {
@@ -226,15 +227,27 @@ function classifyError(errMsg: string, rawError?: any): Error {
     return new AgentNotFoundError(agentMatch[1], agentMatch[2].split(", "))
   }
 
-  // Provider errors
+  // Provider errors (with i18n messages)
   if (lower.includes("rate limit") || lower.includes("429")) {
-    return new ProviderError(errMsg, { status: 429 })
+    return new ProviderError(t("errors.rateLimited"), { status: 429 })
   }
   if (lower.includes("unauthorized") || lower.includes("401") || lower.includes("invalid api key")) {
-    return new ProviderError(errMsg, { status: 401 })
+    return new ProviderError(t("errors.apiError"), { status: 401 })
   }
   if (lower.includes("500") || lower.includes("internal server error")) {
-    return new ProviderError(errMsg, { status: 500 })
+    return new ProviderError(t("errors.apiError"), { status: 500 })
+  }
+  if (lower.includes("timeout") || lower.includes("timed out")) {
+    return new ProviderError(t("errors.timeout"), { status: 408 })
+  }
+  if (lower.includes("permission") || lower.includes("forbidden")) {
+    return new ProviderError(t("errors.permissionDenied"), { status: 403 })
+  }
+  if (lower.includes("not found") && lower.includes("file")) {
+    return new ProviderError(t("errors.fileNotFound"), { status: 404 })
+  }
+  if (lower.includes("connection") || lower.includes("econnrefused")) {
+    return new ProviderError(t("errors.connectionFailed"), { status: 0 })
   }
 
   // Tool errors
@@ -567,6 +580,11 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
 
   const initPromise = new Promise<void>((resolve, reject) => {
     bootstrap(options.directory, async () => {
+      // Set language for error messages
+      if (options.language) {
+        setLanguage(options.language)
+      }
+
       // Enhancement #5: Direct API key auth
       if (options.auth) {
         await Auth.set(options.auth.provider, { type: "api", key: options.auth.apiKey })

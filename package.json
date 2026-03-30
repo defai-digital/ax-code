@@ -18,7 +18,7 @@
   "workspaces": {
     "packages": [
       "packages/*",
-      "packages/sdk/js",
+      "packages/sdk/js"
     ],
     "catalog": {
       "@effect/platform-node": "4.0.0-beta.35",
@@ -97,7 +97,7 @@
     "protobufjs",
     "tree-sitter",
     "tree-sitter-bash",
-    "web-tree-sitter",
+    "web-tree-sitter"
   ],
   "overrides": {
     "@types/bun": "catalog:",

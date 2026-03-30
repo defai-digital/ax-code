@@ -1,9 +1,9 @@
 {
   "name": "ax-code",
-  "displayName": "opencode",
-  "description": "opencode for VS Code",
-  "version": "1.3.2",
-  "publisher": "sst-dev",
+  "displayName": "ax-code",
+  "description": "AI coding agent for VS Code — powered by ax-code",
+  "version": "1.4.0",
+  "publisher": "defai-digital",
   "repository": {
     "type": "git",
     "url": "https://github.com/defai-digital/ax-code"
@@ -18,15 +18,55 @@
     "vscode": "^1.94.0"
   },
   "categories": [
-    "Other"
+    "AI",
+    "Chat",
+    "Programming Languages"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ax-code",
+          "title": "ax-code",
+          "icon": "images/button-dark.svg"
+        }
+      ]
+    },
+    "views": {
+      "ax-code": [
+        {
+          "type": "webview",
+          "id": "ax-code.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
     "commands": [
       {
+        "command": "ax-code.openChat",
+        "title": "ax-code: Open Chat"
+      },
+      {
+        "command": "ax-code.askAboutFile",
+        "title": "ax-code: Explain This File"
+      },
+      {
+        "command": "ax-code.fixFile",
+        "title": "ax-code: Fix This File"
+      },
+      {
+        "command": "ax-code.explainSelection",
+        "title": "ax-code: Explain Selection"
+      },
+      {
+        "command": "ax-code.reviewSelection",
+        "title": "ax-code: Review Selection"
+      },
+      {
         "command": "ax-code.openTerminal",
-        "title": "Open opencode",
+        "title": "ax-code: Open Terminal",
         "icon": {
           "light": "images/button-dark.svg",
           "dark": "images/button-light.svg"
@@ -34,49 +74,57 @@
       },
       {
         "command": "ax-code.openNewTerminal",
-        "title": "Open opencode in new tab",
+        "title": "ax-code: Open Terminal (New Tab)",
         "icon": {
           "light": "images/button-dark.svg",
           "dark": "images/button-light.svg"
         }
-      },
-      {
-        "command": "ax-code.addFilepathToTerminal",
-        "title": "Add Filepath to Terminal"
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "ax-code.openNewTerminal",
+          "command": "ax-code.openChat",
           "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ax-code.explainSelection",
+          "group": "ax-code",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "ax-code.reviewSelection",
+          "group": "ax-code",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "ax-code.askAboutFile",
+          "group": "ax-code"
+        },
+        {
+          "command": "ax-code.fixFile",
+          "group": "ax-code"
         }
       ]
     },
     "keybindings": [
       {
+        "command": "ax-code.openChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      },
+      {
+        "command": "ax-code.explainSelection",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      },
+      {
         "command": "ax-code.openTerminal",
-        "title": "Run opencode",
-        "key": "cmd+escape",
-        "mac": "cmd+escape",
-        "win": "ctrl+escape",
-        "linux": "ctrl+escape"
-      },
-      {
-        "command": "ax-code.openNewTerminal",
-        "title": "Run opencode",
-        "key": "cmd+shift+escape",
-        "mac": "cmd+shift+escape",
-        "win": "ctrl+shift+escape",
-        "linux": "ctrl+shift+escape"
-      },
-      {
-        "command": "ax-code.addFilepathToTerminal",
-        "title": "opencode: Insert At-Mentioned",
-        "key": "cmd+alt+k",
-        "mac": "cmd+alt+k",
-        "win": "ctrl+alt+K",
-        "linux": "ctrl+alt+K"
+        "key": "ctrl+escape",
+        "mac": "cmd+escape"
       }
     ]
   },
