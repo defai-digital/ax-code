@@ -235,6 +235,45 @@ await agent.dispose()
 - **Env var detection** — auto-reads `XAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`
 - **Hooks** — `onToolCall`, `onToolResult`, `onPermissionRequest`, `onError`
 - **Agent auto-routing** — works through SDK (security, architect, debug, perf)
+- **Language** — `language: "ja"` for translated error messages (11 languages)
+
+---
+
+## VS Code Extension
+
+Use ax-code directly inside VS Code with a sidebar chat panel.
+
+### Install
+
+1. Open VS Code
+2. `Ctrl+Shift+P` → **"Install from VSIX"**
+3. Select `sdks/vscode/ax-code-1.4.0.vsix`
+4. Restart VS Code
+
+### Features
+
+| Feature | How |
+|---|---|
+| **Chat panel** | Click AX icon in sidebar, or `Ctrl+Shift+A` |
+| **Select model** | Click "Model" button in chat panel |
+| **Explain selection** | Select code → right-click → "ax-code: Explain Selection" |
+| **Review selection** | Select code → right-click → "ax-code: Review Selection" |
+| **Fix file** | Right-click → "ax-code: Fix This File" |
+| **Explain file** | Right-click → "ax-code: Explain This File" |
+| **Open terminal** | `Ctrl+Escape` or command palette → "ax-code: Open Terminal" |
+| **Status bar** | Shows AX icon in bottom-right, click to open chat |
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Shift+A` | Open chat panel |
+| `Ctrl+Shift+E` | Explain selected code |
+| `Ctrl+Escape` | Open ax-code terminal |
+
+### How It Works
+
+The extension spawns `ax-code serve` in the background and communicates via HTTP. First message takes ~20-30s (server startup), subsequent messages are 3-10s.
 
 ---
 
@@ -289,12 +328,13 @@ Shows: token breakdown (system prompt, tools, history), usage percentage, status
 
 ## i18n (Internationalization)
 
-Supports 11 languages. Set in `ax-code.json`:
+Supports 11 languages for SDK error messages. Set via SDK:
 
-```json
-{
-  "language": "ja"
-}
+```typescript
+const agent = await createAgent({
+  directory: ".",
+  language: "ja",  // Error messages in Japanese
+})
 ```
 
 | Code | Language |
