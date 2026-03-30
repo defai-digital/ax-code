@@ -1,0 +1,46 @@
+{
+  "session": {
+    "welcome": "欢迎使用 ax-code",
+    "thinking": "思考中...",
+    "generating": "生成中...",
+    "goodbye": "再见！",
+    "sessionEnded": "会话已结束"
+  },
+  "tools": {
+    "executing": "执行中",
+    "completed": "已完成",
+    "failed": "失败",
+    "readingFile": "正在读取文件",
+    "writingFile": "正在写入文件",
+    "searchingFiles": "正在搜索文件",
+    "commandRunning": "正在运行命令",
+    "commandCompleted": "命令已完成"
+  },
+  "errors": {
+    "connectionFailed": "连接失败",
+    "apiError": "API 错误",
+    "rateLimited": "请求过于频繁，请稍后再试",
+    "timeout": "请求超时",
+    "permissionDenied": "权限被拒绝",
+    "fileNotFound": "文件未找到",
+    "invalidInput": "输入无效",
+    "unknown": "发生未知错误"
+  },
+  "toast": {
+    "copiedToClipboard": "已复制到剪贴板",
+    "changesSaved": "更改已保存",
+    "operationCancelled": "操作已取消",
+    "agentSwitched": "已切换到代理"
+  },
+  "usage": {
+    "tokens": "令牌",
+    "tokensIn": "输入令牌",
+    "tokensOut": "输出令牌",
+    "estimatedCost": "预估费用"
+  },
+  "status": {
+    "thinking": "思考中",
+    "context": "上下文",
+    "contextWarning": "上下文窗口即将用完"
+  }
+}

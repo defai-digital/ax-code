@@ -68,6 +68,7 @@
     "@actions/github": "6.0.1",
     "@agentclientprotocol/sdk": "0.14.1",
     "@ai-sdk/google": "2.0.54",
+    "@ai-sdk/groq": "2.0.34",
     "@ai-sdk/openai-compatible": "1.0.32",
     "@ai-sdk/provider": "2.0.1",
     "@ai-sdk/provider-utils": "3.0.21",

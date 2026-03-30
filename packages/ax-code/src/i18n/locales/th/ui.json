@@ -1,0 +1,8 @@
+{
+  "session": { "welcome": "ยินดีต้อนรับสู่ ax-code", "thinking": "กำลังคิด...", "generating": "กำลังสร้าง...", "goodbye": "ลาก่อน!", "sessionEnded": "เซสชันสิ้นสุดแล้ว" },
+  "tools": { "executing": "กำลังดำเนินการ", "completed": "เสร็จสิ้น", "failed": "ล้มเหลว", "readingFile": "กำลังอ่านไฟล์", "writingFile": "กำลังเขียนไฟล์", "searchingFiles": "กำลังค้นหาไฟล์", "commandRunning": "กำลังรันคำสั่ง", "commandCompleted": "คำสั่งเสร็จสิ้น" },
+  "errors": { "connectionFailed": "เชื่อมต่อล้มเหลว", "apiError": "ข้อผิดพลาด API", "rateLimited": "ถึงขีดจำกัดแล้ว กรุณารอสักครู่", "timeout": "หมดเวลาร้องขอ", "permissionDenied": "ไม่ได้รับอนุญาต", "fileNotFound": "ไม่พบไฟล์", "invalidInput": "ข้อมูลไม่ถูกต้อง", "unknown": "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ" },
+  "toast": { "copiedToClipboard": "คัดลอกไปยังคลิปบอร์ดแล้ว", "changesSaved": "บันทึกการเปลี่ยนแปลงแล้ว", "operationCancelled": "ยกเลิกการดำเนินการแล้ว", "agentSwitched": "เปลี่ยนเอเจนต์เป็น" },
+  "usage": { "tokens": "โทเค็น", "tokensIn": "โทเค็นขาเข้า", "tokensOut": "โทเค็นขาออก", "estimatedCost": "ค่าใช้จ่ายโดยประมาณ" },
+  "status": { "thinking": "กำลังคิด", "context": "บริบท", "contextWarning": "หน้าต่างบริบทใกล้เต็มแล้ว" }
+}

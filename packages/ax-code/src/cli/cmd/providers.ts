@@ -323,7 +323,7 @@ export const ProvidersLoginCommand = cmd({
         const config = await Config.get()
 
         // Only show providers with bundled SDK support (+ any user-enabled via config)
-        const SUPPORTED_PROVIDERS = new Set(["ax-code", "google", "xai", "zai", "zai-coding-plan"])
+        const SUPPORTED_PROVIDERS = new Set(["ax-code", "google", "groq", "xai", "zai", "zai-coding-plan"])
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 

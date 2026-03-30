@@ -1,0 +1,8 @@
+{
+  "session": { "welcome": "Bienvenue sur ax-code", "thinking": "Réflexion...", "generating": "Génération...", "goodbye": "Au revoir !", "sessionEnded": "Session terminée" },
+  "tools": { "executing": "Exécution", "completed": "Terminé", "failed": "Échoué", "readingFile": "Lecture du fichier", "writingFile": "Écriture du fichier", "searchingFiles": "Recherche de fichiers", "commandRunning": "Exécution de la commande", "commandCompleted": "Commande terminée" },
+  "errors": { "connectionFailed": "Connexion échouée", "apiError": "Erreur API", "rateLimited": "Limite de débit atteinte. Veuillez patienter.", "timeout": "Délai d'attente dépassé", "permissionDenied": "Permission refusée", "fileNotFound": "Fichier non trouvé", "invalidInput": "Entrée invalide", "unknown": "Une erreur inconnue s'est produite" },
+  "toast": { "copiedToClipboard": "Copié dans le presse-papiers", "changesSaved": "Modifications enregistrées", "operationCancelled": "Opération annulée", "agentSwitched": "Agent changé pour" },
+  "usage": { "tokens": "jetons", "tokensIn": "Jetons d'entrée", "tokensOut": "Jetons de sortie", "estimatedCost": "Coût estimé" },
+  "status": { "thinking": "Réflexion", "context": "Contexte", "contextWarning": "La fenêtre de contexte est presque pleine" }
+}

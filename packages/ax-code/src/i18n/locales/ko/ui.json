@@ -1,0 +1,46 @@
+{
+  "session": {
+    "welcome": "ax-code에 오신 것을 환영합니다",
+    "thinking": "생각 중...",
+    "generating": "생성 중...",
+    "goodbye": "안녕히 가세요!",
+    "sessionEnded": "세션이 종료되었습니다"
+  },
+  "tools": {
+    "executing": "실행 중",
+    "completed": "완료",
+    "failed": "실패",
+    "readingFile": "파일 읽는 중",
+    "writingFile": "파일 쓰는 중",
+    "searchingFiles": "파일 검색 중",
+    "commandRunning": "명령 실행 중",
+    "commandCompleted": "명령 완료"
+  },
+  "errors": {
+    "connectionFailed": "연결에 실패했습니다",
+    "apiError": "API 오류",
+    "rateLimited": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+    "timeout": "요청 시간이 초과되었습니다",
+    "permissionDenied": "권한이 거부되었습니다",
+    "fileNotFound": "파일을 찾을 수 없습니다",
+    "invalidInput": "잘못된 입력입니다",
+    "unknown": "알 수 없는 오류가 발생했습니다"
+  },
+  "toast": {
+    "copiedToClipboard": "클립보드에 복사되었습니다",
+    "changesSaved": "변경사항이 저장되었습니다",
+    "operationCancelled": "작업이 취소되었습니다",
+    "agentSwitched": "에이전트가 전환되었습니다"
+  },
+  "usage": {
+    "tokens": "토큰",
+    "tokensIn": "입력 토큰",
+    "tokensOut": "출력 토큰",
+    "estimatedCost": "예상 비용"
+  },
+  "status": {
+    "thinking": "생각 중",
+    "context": "컨텍스트",
+    "contextWarning": "컨텍스트 창이 거의 가득 찼습니다"
+  }
+}

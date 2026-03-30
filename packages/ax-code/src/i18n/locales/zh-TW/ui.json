@@ -1,0 +1,8 @@
+{
+  "session": { "welcome": "歡迎使用 ax-code", "thinking": "思考中...", "generating": "生成中...", "goodbye": "再見！", "sessionEnded": "工作階段已結束" },
+  "tools": { "executing": "執行中", "completed": "已完成", "failed": "失敗", "readingFile": "正在讀取檔案", "writingFile": "正在寫入檔案", "searchingFiles": "正在搜尋檔案", "commandRunning": "正在執行命令", "commandCompleted": "命令已完成" },
+  "errors": { "connectionFailed": "連線失敗", "apiError": "API 錯誤", "rateLimited": "請求過於頻繁，請稍後再試", "timeout": "請求逾時", "permissionDenied": "權限被拒絕", "fileNotFound": "找不到檔案", "invalidInput": "輸入無效", "unknown": "發生未知錯誤" },
+  "toast": { "copiedToClipboard": "已複製到剪貼簿", "changesSaved": "變更已儲存", "operationCancelled": "操作已取消", "agentSwitched": "已切換到代理" },
+  "usage": { "tokens": "令牌", "tokensIn": "輸入令牌", "tokensOut": "輸出令牌", "estimatedCost": "預估費用" },
+  "status": { "thinking": "思考中", "context": "上下文", "contextWarning": "上下文視窗即將用完" }
+}

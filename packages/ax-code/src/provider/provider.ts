@@ -21,6 +21,7 @@ import { Filesystem } from "../util/filesystem"
 
 // Direct imports for bundled providers
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { createGroq } from "@ai-sdk/groq"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
@@ -81,6 +82,7 @@ export namespace Provider {
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
     "@ai-sdk/google": createGoogleGenerativeAI,
+    "@ai-sdk/groq": createGroq,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
   }
@@ -437,7 +439,7 @@ export namespace Provider {
     const database = mapValues(modelsDev, fromModelsDevProvider)
 
     // Providers without bundled SDK support are always disabled
-    const UNSUPPORTED_PROVIDERS = ["openai", "openrouter", "mistral", "groq", "vercel", "google-vertex", "github-copilot"]
+    const UNSUPPORTED_PROVIDERS = ["openai", "openrouter", "mistral", "vercel", "google-vertex", "github-copilot"]
     const disabled = new Set([...UNSUPPORTED_PROVIDERS, ...(config.disabled_providers ?? [])])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
 

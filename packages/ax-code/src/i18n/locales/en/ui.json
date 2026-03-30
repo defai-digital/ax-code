@@ -1,0 +1,46 @@
+{
+  "session": {
+    "welcome": "Welcome to ax-code",
+    "thinking": "Thinking...",
+    "generating": "Generating...",
+    "goodbye": "Goodbye!",
+    "sessionEnded": "Session ended"
+  },
+  "tools": {
+    "executing": "Executing",
+    "completed": "Completed",
+    "failed": "Failed",
+    "readingFile": "Reading file",
+    "writingFile": "Writing file",
+    "searchingFiles": "Searching files",
+    "commandRunning": "Running command",
+    "commandCompleted": "Command completed"
+  },
+  "errors": {
+    "connectionFailed": "Connection failed",
+    "apiError": "API error",
+    "rateLimited": "Rate limited. Please wait and try again.",
+    "timeout": "Request timed out",
+    "permissionDenied": "Permission denied",
+    "fileNotFound": "File not found",
+    "invalidInput": "Invalid input",
+    "unknown": "An unknown error occurred"
+  },
+  "toast": {
+    "copiedToClipboard": "Copied to clipboard",
+    "changesSaved": "Changes saved",
+    "operationCancelled": "Operation cancelled",
+    "agentSwitched": "Agent switched to"
+  },
+  "usage": {
+    "tokens": "tokens",
+    "tokensIn": "Input tokens",
+    "tokensOut": "Output tokens",
+    "estimatedCost": "Estimated cost"
+  },
+  "status": {
+    "thinking": "Thinking",
+    "context": "Context",
+    "contextWarning": "Context window running low"
+  }
+}
