@@ -327,7 +327,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
 
     const headers: Record<string, string> = {
-      "x-opencode-directory": workspaceFolder,
+      "x-ax-code-directory": workspaceFolder,
     }
     let requestBody: string | undefined
     if (method === "POST" || method === "PUT" || method === "PATCH") {
