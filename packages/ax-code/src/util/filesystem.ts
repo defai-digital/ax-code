@@ -126,6 +126,15 @@ export namespace Filesystem {
     }
   }
 
+  /**
+   * Returns the caller's original working directory, even when the process
+   * was launched with --cwd pointing to the ax-code package root.
+   * The global CLI wrapper sets AX_CODE_ORIGINAL_CWD before --cwd takes effect.
+   */
+  export function callerCwd(): string {
+    return process.env.AX_CODE_ORIGINAL_CWD || process.env.PWD || process.cwd()
+  }
+
   export function windowsPath(p: string): string {
     if (process.platform !== "win32") return p
     return (

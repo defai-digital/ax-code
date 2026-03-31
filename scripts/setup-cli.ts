@@ -31,12 +31,12 @@ if (!fs.existsSync(binDir)) {
 }
 
 const cwdPath = path.join(ROOT, "packages", "ax-code")
-const shContent = `#!/bin/sh\nexec bun run --cwd "${cwdPath.replace(/\\/g, "/")}" --conditions=browser "${ENTRY.replace(/\\/g, "/")}" "$@"\n`
+const shContent = `#!/bin/sh\nAX_CODE_ORIGINAL_CWD="\$(pwd)" exec bun run --cwd "${cwdPath.replace(/\\/g, "/")}" --conditions=browser "${ENTRY.replace(/\\/g, "/")}" "$@"\n`
 
 if (isWindows) {
   // Create .cmd file for Windows (PowerShell/cmd.exe)
   const cmdPath = path.join(binDir, "ax-code.cmd")
-  const cmdContent = `@echo off\nbun run --cwd "${cwdPath}" --conditions=browser "${ENTRY}" %*\n`
+  const cmdContent = `@echo off\nset AX_CODE_ORIGINAL_CWD=%CD%\nbun run --cwd "${cwdPath}" --conditions=browser "${ENTRY}" %*\n`
   fs.writeFileSync(cmdPath, cmdContent)
   console.log(`Created: ${cmdPath}`)
 

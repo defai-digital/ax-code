@@ -114,12 +114,13 @@ export const TuiThreadCommand = cmd({
         return
       }
 
-      // Resolve relative --project paths from PWD, then use the real cwd after
-      // chdir so the thread and worker share the same directory key.
-      const root = Filesystem.resolve(process.env.PWD ?? process.cwd())
+      // Resolve relative --project paths from the caller's original cwd, then
+      // use the real cwd after chdir so the thread and worker share the same
+      // directory key. Filesystem.callerCwd() handles the --cwd offset.
+      const root = Filesystem.resolve(Filesystem.callerCwd())
       const next = args.project
         ? Filesystem.resolve(path.isAbsolute(args.project) ? args.project : path.join(root, args.project))
-        : Filesystem.resolve(process.cwd())
+        : root
       const file = await target()
       try {
         process.chdir(next)
