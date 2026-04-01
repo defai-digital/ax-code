@@ -82,92 +82,60 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.sessionId = session.id
       }
 
-      // Subscribe to events first
-      const eventUrl = `${this.serverUrl}/event`
-      const eventResponse = await fetch(eventUrl, {
-        headers: { Accept: "text/event-stream" },
-      })
+      // Send prompt (blocking — waits for full response)
+      // Use AbortController for 3 minute timeout
+      this.postMessage({ type: "status", status: "thinking" })
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 180000) // 3 minutes
 
-      // Send prompt
-      await this.apiCall("POST", `/session/${this.sessionId}/message`, {
-        parts: [{ type: "text", text }],
-        ...(this.selectedModel ? { model: this.selectedModel } : {}),
-      })
+      try {
+        const response = await fetch(`${this.serverUrl}/session/${this.sessionId}/message`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-ax-code-directory": vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd(),
+          },
+          body: JSON.stringify({
+            parts: [{ type: "text", text }],
+            ...(this.selectedModel ? { model: this.selectedModel } : {}),
+          }),
+          signal: controller.signal,
+        })
 
-      // Process SSE events
-      if (eventResponse.body) {
-        const reader = eventResponse.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ""
-        let currentText = ""
+        clearTimeout(timeoutId)
 
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
+        const responseText = await response.text()
+        if (!responseText) {
+          this.postMessage({ type: "error", message: "Empty response from server" })
+          return
+        }
 
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split("\n")
-          buffer = lines.pop() ?? ""
+        const result = JSON.parse(responseText)
+        const info = result?.info
+        const parts = result?.parts ?? []
+        const textPart = parts.findLast((p: any) => p.type === "text" && p.text)
+        const toolParts = parts.filter((p: any) => p.type === "tool")
+        const finalText = textPart?.text ?? ""
+        const agent = info?.agent ?? "build"
+        const tokens = info?.tokens?.total ?? 0
 
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue
-            try {
-              const event = JSON.parse(line.slice(6))
+        for (const tool of toolParts) {
+          this.postMessage({
+            type: "toolResult",
+            tool: tool.tool,
+            status: tool.state?.status ?? "completed",
+            output: "",
+          })
+        }
 
-              if (event.type === "message.part.updated") {
-                const part = event.properties?.part
-                if (part?.sessionID !== this.sessionId) continue
-
-                if (part?.type === "text" && part.text) {
-                  const newText = part.text
-                  if (newText.length > currentText.length) {
-                    const delta = newText.slice(currentText.length)
-                    currentText = newText
-                    this.postMessage({ type: "textChunk", text: delta })
-                  }
-                }
-
-                if (part?.type === "tool" && part.state?.status === "running" && !part.state?.output) {
-                  this.postMessage({ type: "toolCall", tool: part.tool, input: "" })
-                }
-
-                if (part?.type === "tool" && (part.state?.status === "completed" || part.state?.status === "error")) {
-                  this.postMessage({ type: "toolResult", tool: part.tool, status: part.state.status, output: "" })
-                }
-              }
-
-              if (event.type === "message.updated" && event.properties?.info?.role === "assistant") {
-                const info = event.properties.info
-                this.postMessage({ type: "agentInfo", agent: info.agent, modelID: info.modelID })
-              }
-
-              if (event.type === "session.status") {
-                if (event.properties?.sessionID === this.sessionId && event.properties?.status?.type === "idle") {
-                  // Get final text from message
-                  const msgs = await this.apiCall<any[]>("GET", `/session/${this.sessionId}/message`)
-                  const lastAssistant = [...(msgs ?? [])].reverse().find((m: any) => m.info?.role === "assistant")
-                  const finalText = lastAssistant?.parts?.findLast((p: any) => p.type === "text")?.text
-                  const tokens = lastAssistant?.info?.tokens?.total ?? 0
-                  const agent = lastAssistant?.info?.agent ?? "build"
-
-                  this.postMessage({
-                    type: "done",
-                    text: finalText ?? currentText,
-                    agent,
-                    tokens,
-                  })
-                  reader.cancel()
-                  break
-                }
-              }
-
-              if (event.type === "session.error") {
-                this.postMessage({ type: "error", message: event.properties?.error?.message ?? "Unknown error" })
-                reader.cancel()
-                break
-              }
-            } catch {}
-          }
+        this.postMessage({ type: "textChunk", text: finalText })
+        this.postMessage({ type: "done", text: finalText, agent, tokens })
+      } catch (e: any) {
+        clearTimeout(timeoutId)
+        if (e.name === "AbortError") {
+          this.postMessage({ type: "error", message: "Request timed out (3 minutes). Try a simpler prompt." })
+        } else {
+          throw e
         }
       }
     } catch (error: any) {
@@ -246,23 +214,29 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const axCodePath = this.findAxCodePath()
 
     return new Promise((resolve, reject) => {
+      const env = {
+        ...process.env,
+        AX_CODE_CALLER: "vscode",
+        AX_CODE_ORIGINAL_CWD: workspaceFolder,
+      }
+
       const proc = axCodePath.useBun
         ? spawn("bun", ["run", "--cwd", axCodePath.cwd, "--conditions=browser", axCodePath.entry, "serve", `--hostname=127.0.0.1`, `--port=${port}`], {
             cwd: workspaceFolder,
-            env: { ...process.env, AX_CODE_CALLER: "vscode" },
+            env,
             shell: true,
           })
         : spawn(axCodePath.command, ["serve", `--hostname=127.0.0.1`, `--port=${port}`], {
             cwd: workspaceFolder,
-            env: { ...process.env, AX_CODE_CALLER: "vscode" },
+            env,
             shell: true,
           })
 
       this.serverProcess = proc
 
       const timeout = setTimeout(() => {
-        reject(new Error("Server start timeout (30s)"))
-      }, 30000)
+        reject(new Error("Server start timeout (90s). Try again — first launch is slow due to TypeScript compilation."))
+      }, 90000)
 
       let output = ""
       proc.stdout?.on("data", (chunk: Buffer) => {
@@ -299,7 +273,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const path = require("path")
     const fs = require("fs")
 
-    // Try 1: Extension is inside sdks/vscode — go up to find packages/ax-code
+    // Try 1: Extension is inside sdks/vscode in monorepo (dev mode)
     const extensionDir = this.context.extensionPath
     const monorepoRoot = path.resolve(extensionDir, "..", "..")
     const axCodeEntry = path.join(monorepoRoot, "packages", "ax-code", "src", "index.ts")
@@ -309,7 +283,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return { useBun: true, command: "bun", cwd: axCodeCwd, entry: axCodeEntry }
     }
 
-    // Try 2: ax-code command is available globally
+    // Try 2: Known install location (from setup:cli)
+    const knownEntry = "C:\\ax-code\\ax-code\\packages\\ax-code\\src\\index.ts"
+    const knownCwd = "C:\\ax-code\\ax-code\\packages\\ax-code"
+    if (fs.existsSync(knownEntry)) {
+      return { useBun: true, command: "bun", cwd: knownCwd, entry: knownEntry }
+    }
+
+    // Try 3: ax-code command globally
     return { useBun: false, command: "ax-code", cwd: "", entry: "" }
   }
 
@@ -346,7 +327,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       throw new Error(`API error ${response.status}: ${text.slice(0, 200)}`)
     }
 
-    return response.json() as Promise<T>
+    const text = await response.text()
+    if (!text) return undefined as T
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      return undefined as T
+    }
   }
 
   private postMessage(message: any) {
