@@ -296,11 +296,27 @@ export namespace SessionPrompt {
     let structuredOutput: unknown | undefined
 
     let step = 0
+    let consecutiveErrors = 0
+    const MAX_CONSECUTIVE_ERRORS = 3
+    const GLOBAL_STEP_LIMIT = 200 // absolute safety limit for any agent
     const session = await Session.get(sessionID)
     while (true) {
       await SessionStatus.set(sessionID, { type: "busy" })
-      log.info("loop", { step, sessionID })
+      log.info("loop", { step, sessionID, consecutiveErrors })
+      if (step > 0 && step % 10 === 0) {
+        log.warn("long-running task", { step, sessionID, message: `Agent has been working for ${step} steps` })
+      }
       if (abort.aborted) break
+
+      // Safety: prevent infinite loops
+      if (step >= GLOBAL_STEP_LIMIT) {
+        log.warn("global step limit reached", { step, sessionID })
+        Bus.publish(Session.Event.Error, {
+          sessionID,
+          error: { message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT}). Stopping to prevent infinite loop. Try breaking the task into smaller parts.` },
+        })
+        break
+      }
       let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
 
       let lastUser: MessageV2.User | undefined
@@ -734,6 +750,23 @@ export namespace SessionPrompt {
       }
 
       if (result === "stop") break
+
+      // Track consecutive errors — break if agent is stuck
+      if (processor.message.error) {
+        consecutiveErrors++
+        log.warn("consecutive error", { consecutiveErrors, step, sessionID, error: processor.message.error })
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          log.warn("too many consecutive errors, stopping", { consecutiveErrors, sessionID })
+          Bus.publish(Session.Event.Error, {
+            sessionID,
+            error: { message: `Agent encountered ${consecutiveErrors} consecutive errors. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.` },
+          })
+          break
+        }
+      } else {
+        consecutiveErrors = 0 // Reset on success
+      }
+
       if (result === "compact") {
         await SessionCompaction.create({
           sessionID,
