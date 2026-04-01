@@ -68,6 +68,13 @@ export function Header() {
     if (model?.limit.context) {
       result += "  " + Math.round((total / model.limit.context) * 100) + "%"
     }
+    if (last.time.completed && last.time.created && last.tokens.output > 0) {
+      const durationSecs = (last.time.completed - last.time.created) / 1000
+      if (durationSecs > 0) {
+        const tps = Math.round(last.tokens.output / durationSecs)
+        result += "  " + tps + " tok/s"
+      }
+    }
     return result
   })
 
