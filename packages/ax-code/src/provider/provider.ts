@@ -592,7 +592,7 @@ export namespace Provider {
       if (!apiKey) continue
       mergeProvider(providerID, {
         source: "env",
-        key: provider.env.length === 1 ? apiKey : undefined,
+        key: apiKey,
       })
     }
 
