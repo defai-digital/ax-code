@@ -367,10 +367,11 @@ export namespace Ripgrep {
     const lines = result.text.trim().split(/\r?\n/).filter(Boolean)
     // Parse JSON lines from ripgrep output
 
-    return lines
-      .map((line) => JSON.parse(line))
-      .map((parsed) => Result.parse(parsed))
-      .filter((r) => r.type === "match")
-      .map((r) => r.data)
+    const matches = []
+    for (const line of lines) {
+      const parsed = Result.parse(JSON.parse(line))
+      if (parsed.type === "match") matches.push(parsed.data)
+    }
+    return matches
   }
 }

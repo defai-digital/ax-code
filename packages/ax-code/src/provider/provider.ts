@@ -601,22 +601,24 @@ export namespace Provider {
       }
     }
 
-    for (const plugin of await Plugin.list()) {
-      if (!plugin.auth) continue
-      const providerID = ProviderID.make(plugin.auth.provider)
-      if (disabled.has(providerID)) continue
-
-      const auth = await Auth.get(providerID)
-      if (!auth) continue
-      if (!plugin.auth.loader) continue
-
-      if (auth) {
-        const options = await plugin.auth.loader(() => Auth.get(providerID) as any, database[plugin.auth.provider])
-        const opts = options ?? {}
-        const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
-        mergeProvider(providerID, patch)
-      }
-    }
+    await Promise.all(
+      (await Plugin.list())
+        .filter((plugin) => {
+          if (!plugin.auth) return false
+          const providerID = ProviderID.make(plugin.auth.provider)
+          return !disabled.has(providerID)
+        })
+        .map(async (plugin) => {
+          const providerID = ProviderID.make(plugin.auth!.provider)
+          const auth = await Auth.get(providerID)
+          if (!auth) return
+          if (!plugin.auth!.loader) return
+          const options = await plugin.auth!.loader(() => Auth.get(providerID) as any, database[plugin.auth!.provider])
+          const opts = options ?? {}
+          const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
+          mergeProvider(providerID, patch)
+        }),
+    )
 
     for (const [id, fn] of Object.entries(CUSTOM_LOADERS)) {
       const providerID = ProviderID.make(id)

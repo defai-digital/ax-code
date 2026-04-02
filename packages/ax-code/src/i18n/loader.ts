@@ -9,6 +9,7 @@ import type { SupportedLanguage, Translations } from "./types"
 
 const cache = new Map<string, Translations>()
 let currentLanguage: SupportedLanguage = "en"
+let availableLanguagesCache: SupportedLanguage[] | null = null
 
 function getLocalePath(lang: SupportedLanguage): string {
   return path.join(import.meta.dir, "locales", lang, "ui.json")
@@ -91,11 +92,13 @@ export function getLanguage(): SupportedLanguage {
  * Get list of available languages
  */
 export function getAvailableLanguages(): SupportedLanguage[] {
+  if (availableLanguagesCache) return availableLanguagesCache
   const localesDir = path.join(import.meta.dir, "locales")
   try {
-    return fs.readdirSync(localesDir).filter((dir) => {
+    availableLanguagesCache = fs.readdirSync(localesDir).filter((dir) => {
       return fs.existsSync(path.join(localesDir, dir, "ui.json"))
     }) as SupportedLanguage[]
+    return availableLanguagesCache
   } catch {
     return ["en"]
   }

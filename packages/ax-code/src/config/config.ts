@@ -122,8 +122,10 @@ export namespace Config {
 
     // Project config overrides global and remote config.
     if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
-      for (const file of await ConfigPaths.projectFiles("ax-code", Instance.directory, Instance.worktree)) {
-        result = mergeConfigConcatArrays(result, await loadFile(file))
+      const projectFiles = await ConfigPaths.projectFiles("ax-code", Instance.directory, Instance.worktree)
+      const loaded = await Promise.all(projectFiles.map((file) => loadFile(file)))
+      for (const config of loaded) {
+        result = mergeConfigConcatArrays(result, config)
       }
     }
 
