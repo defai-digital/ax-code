@@ -1,6 +1,9 @@
 [install]
 exact = true
 
+[install.security]
+scanner = "socket"
+
 [test]
 root = "./do-not-run-tests-from-root"
 

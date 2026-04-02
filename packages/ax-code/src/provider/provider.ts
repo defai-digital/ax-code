@@ -813,6 +813,17 @@ export namespace Provider {
         return loaded as SDK
       }
 
+      // Security: only allow known-safe scoped packages for dynamic install.
+      // Prevents supply-chain attacks where compromised remote data (ModelsDev)
+      // or a malicious config could trigger installation of arbitrary packages.
+      const NPM_ALLOWLIST = /^@ai-sdk\//
+      if (!model.api.npm.startsWith("file://") && !NPM_ALLOWLIST.test(model.api.npm)) {
+        throw new InitError(
+          { providerID: model.providerID },
+          { cause: new Error(`Package '${model.api.npm}' is not an allowed provider SDK. Only @ai-sdk/* packages are permitted.`) },
+        )
+      }
+
       let installedPath: string
       if (!model.api.npm.startsWith("file://")) {
         installedPath = await BunProc.install(model.api.npm, "latest")

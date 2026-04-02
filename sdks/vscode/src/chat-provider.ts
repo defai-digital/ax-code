@@ -557,21 +557,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           currentText += msg.text; el.textContent = currentText;
           messagesEl.scrollTop = messagesEl.scrollHeight;
           break;
-        case 'toolCall':
+        case 'toolCall': {
           const tc = document.createElement('div'); tc.className = 'tool-call';
-          tc.innerHTML = '<span class="tool-name">' + msg.tool + '</span>';
+          const tcSpan = document.createElement('span'); tcSpan.className = 'tool-name'; tcSpan.textContent = msg.tool;
+          tc.appendChild(tcSpan);
           messagesEl.appendChild(tc); messagesEl.scrollTop = messagesEl.scrollHeight;
           break;
-        case 'toolResult':
+        }
+        case 'toolResult': {
           const tr = document.createElement('div'); tr.className = 'tool-call ' + msg.status;
-          tr.innerHTML = '<span class="tool-name">' + msg.tool + '</span> ' + msg.status;
+          const trSpan = document.createElement('span'); trSpan.className = 'tool-name'; trSpan.textContent = msg.tool;
+          tr.appendChild(trSpan);
+          tr.appendChild(document.createTextNode(' ' + msg.status));
           messagesEl.appendChild(tr); messagesEl.scrollTop = messagesEl.scrollHeight;
           break;
+        }
         case 'done':
           if (msg.text && currentAssistantEl) currentAssistantEl.textContent = msg.text;
           if (currentAssistantEl) {
             const badge = document.createElement('div');
-            badge.innerHTML = '<span class="agent-badge">' + (msg.agent || 'build') + '</span>';
+            const agentSpan = document.createElement('span'); agentSpan.className = 'agent-badge'; agentSpan.textContent = msg.agent || 'build';
+            badge.appendChild(agentSpan);
             currentAssistantEl.prepend(badge);
             if (msg.tokens > 0) {
               const tok = document.createElement('div'); tok.className = 'tokens';
