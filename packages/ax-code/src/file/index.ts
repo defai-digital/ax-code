@@ -469,18 +469,23 @@ export namespace File {
           ).text()
 
           if (untrackedOutput.trim()) {
-            for (const file of untrackedOutput.trim().split("\n")) {
-              try {
-                const content = await Filesystem.readText(path.join(Instance.directory, file))
-                changed.push({
-                  path: file,
-                  added: content.split("\n").length,
-                  removed: 0,
-                  status: "added",
-                })
-              } catch {
-                continue
-              }
+            const untrackedFiles = untrackedOutput
+              .trim()
+              .split("\n")
+              .map((f) => f.trim())
+              .filter(Boolean)
+            const untrackedResults = await Promise.all(
+              untrackedFiles.map(async (file) => {
+                try {
+                  const content = await Filesystem.readText(path.join(Instance.directory, file))
+                  return { path: file, added: content.split("\n").length, removed: 0, status: "added" } as File.Info
+                } catch {
+                  return null
+                }
+              }),
+            )
+            for (const result of untrackedResults) {
+              if (result) changed.push(result)
             }
           }
 
@@ -503,13 +508,8 @@ export namespace File {
           ).text()
 
           if (deletedOutput.trim()) {
-            for (const file of deletedOutput.trim().split("\n")) {
-              changed.push({
-                path: file,
-                added: 0,
-                removed: 0,
-                status: "deleted",
-              })
+            for (const file of deletedOutput.trim().split("\n").map((f) => f.trim()).filter(Boolean)) {
+              changed.push({ path: file, added: 0, removed: 0, status: "deleted" })
             }
           }
 
