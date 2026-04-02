@@ -228,7 +228,6 @@ function remapOpenCodeProviderKey(msgs: ModelMessage[], options: Record<string, 
         )
 
       case "@ai-sdk/google":
-      case "@ai-sdk/google-vertex":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai
         if (id.includes("2.5")) {
           return {

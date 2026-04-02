@@ -430,10 +430,6 @@ export const ProvidersLoginCommand = cmd({
           prompts.log.info("Create an api key at https://ax-code.ai/auth")
         }
 
-        if (provider === "vercel") {
-          prompts.log.info("You can create an api key at https://vercel.link/ai-gateway-token")
-        }
-
         if (["cloudflare", "cloudflare-ai-gateway"].includes(provider)) {
           prompts.log.info(
             "Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables. Read more: https://ax-code.ai/docs/providers/#cloudflare-ai-gateway",

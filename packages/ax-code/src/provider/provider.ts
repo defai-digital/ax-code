@@ -453,13 +453,6 @@ export namespace Provider {
     // Providers without bundled SDK support are always disabled
     const UNSUPPORTED_PROVIDERS = [
       "openai",
-      "openrouter",
-      "mistral",
-      "vercel",
-      "google-vertex",
-      "github-copilot",
-      "anthropic",
-
     ]
     const disabled = new Set([...UNSUPPORTED_PROVIDERS, ...(config.disabled_providers ?? [])])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
