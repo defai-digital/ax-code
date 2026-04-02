@@ -48,7 +48,7 @@ export async function tmpdir<T>(options?: TmpDirOptions<T>) {
   }
   if (options?.config) {
     await Bun.write(
-      path.join(dirpath, "opencode.json"),
+      path.join(dirpath, "ax-code.json"),
       JSON.stringify({
         $schema: "https://opencode.ai/config.json",
         ...options.config,

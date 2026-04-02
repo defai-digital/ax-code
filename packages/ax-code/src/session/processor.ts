@@ -150,17 +150,17 @@ export namespace SessionProcessor {
                     })
                     toolcalls[value.toolCallId] = part as MessageV2.ToolPart
 
-                    const parts = await MessageV2.parts(input.assistantMessage.id)
-                    const lastThree = parts.slice(-DOOM_LOOP_THRESHOLD)
-
+                    // Use local toolcalls record instead of DB query for doom loop detection
+                    const recentTools = Object.values(toolcalls).slice(-DOOM_LOOP_THRESHOLD)
+                    const inputStr = JSON.stringify(value.input)
                     if (
-                      lastThree.length === DOOM_LOOP_THRESHOLD &&
-                      lastThree.every(
+                      recentTools.length === DOOM_LOOP_THRESHOLD &&
+                      recentTools.every(
                         (p) =>
                           p.type === "tool" &&
                           p.tool === value.toolName &&
                           p.state.status !== "pending" &&
-                          JSON.stringify(p.state.input) === JSON.stringify(value.input),
+                          JSON.stringify(p.state.input) === inputStr,
                       )
                     ) {
                       const agent = await Agent.get(input.assistantMessage.agent)
@@ -415,8 +415,8 @@ export namespace SessionProcessor {
             }
             snapshot = undefined
           }
-          const p = await MessageV2.parts(input.assistantMessage.id)
-          for (const part of p) {
+          // Use local toolcalls record instead of DB query to find incomplete tools
+          for (const part of Object.values(toolcalls)) {
             if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
               await Session.updatePart({
                 ...part,

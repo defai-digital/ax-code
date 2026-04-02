@@ -399,7 +399,7 @@ export namespace ProviderTransform {
       input.model.providerID === "alibaba-cn" &&
       input.model.capabilities.reasoning &&
       input.model.api.npm === "@ai-sdk/openai-compatible" &&
-      !modelId.includes("kimi-k2-thinking")
+      !input.model.api.id.includes("kimi-k2-thinking")
     ) {
       result["enable_thinking"] = true
     }

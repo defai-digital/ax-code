@@ -115,7 +115,7 @@ export const EditTool = Tool.define("edit", {
         file: filePath,
         event: "change",
       })
-      contentNew = await Filesystem.readText(filePath)
+      // Recompute diff from in-memory content (no need to re-read the file we just wrote)
       diff = trimDiff(
         createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
       )
