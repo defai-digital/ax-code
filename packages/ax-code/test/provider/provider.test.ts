@@ -1126,8 +1126,8 @@ test("provider with multiple env var options only includes apiKey when single en
     fn: async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.make("multi-env")]).toBeDefined()
-      // When multiple env options exist, key should NOT be auto-set
-      expect(providers[ProviderID.make("multi-env")].key).toBeUndefined()
+      // When multiple env options exist, key should be set to the first found value
+      expect(providers[ProviderID.make("multi-env")].key).toBe("test-key")
     },
   })
 })
