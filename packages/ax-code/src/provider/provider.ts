@@ -20,7 +20,6 @@ import path from "path"
 import { Filesystem } from "../util/filesystem"
 
 // Direct imports for bundled providers
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createGroq } from "@ai-sdk/groq"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
@@ -28,6 +27,18 @@ import type { LanguageModelV2 } from "@ai-sdk/provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { ModelID, ProviderID } from "./schema"
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+    }
+  }
+  return dp[m][n]
+}
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -81,7 +92,6 @@ export namespace Provider {
   }
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
-    "@ai-sdk/google": createGoogleGenerativeAI,
     "@ai-sdk/groq": createGroq,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
@@ -439,7 +449,16 @@ export namespace Provider {
     const database = mapValues(modelsDev, fromModelsDevProvider)
 
     // Providers without bundled SDK support are always disabled
-    const UNSUPPORTED_PROVIDERS = ["openai", "openrouter", "mistral", "vercel", "google-vertex", "github-copilot"]
+    const UNSUPPORTED_PROVIDERS = [
+      "openai",
+      "openrouter",
+      "mistral",
+      "vercel",
+      "google-vertex",
+      "github-copilot",
+      "anthropic",
+      "amazon-bedrock",
+    ]
     const disabled = new Set([...UNSUPPORTED_PROVIDERS, ...(config.disabled_providers ?? [])])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
 
@@ -653,7 +672,7 @@ export namespace Provider {
       const configProvider = config.provider?.[providerID]
 
       for (const [modelID, model] of Object.entries(provider.models)) {
-        model.api.id = model.api.id ?? model.id ?? modelID
+        model.api = { ...model.api, id: model.api.id ?? model.id ?? modelID }
         if (modelID === "gpt-5-chat-latest")
           delete provider.models[modelID]
         if (model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
@@ -809,7 +828,9 @@ export namespace Provider {
 
       const mod = await import(installedPath)
 
-      const fn = mod[Object.keys(mod).find((key) => key.startsWith("create"))!]
+      const createKey = Object.keys(mod).find((key) => key.startsWith("create"))
+      if (!createKey) throw new InitError({ providerID: model.providerID }, { cause: new Error(`No 'create*' export found in package ${model.api.npm}`) })
+      const fn = mod[createKey]
       const loaded = fn({
         name: model.providerID,
         ...options,
@@ -830,8 +851,17 @@ export namespace Provider {
     const provider = s.providers[providerID]
     if (!provider) {
       const availableProviders = Object.keys(s.providers)
-      const matches = fuzzysort.go(providerID, availableProviders, { limit: 3, threshold: -10000 })
-      const suggestions = matches.map((m) => m.target)
+      const fuzzyMatches = fuzzysort.go(providerID, availableProviders, { limit: 3, threshold: -10000 })
+      let suggestions = fuzzyMatches.map((m) => m.target)
+      // Fallback to Levenshtein distance for typos fuzzysort can't handle (e.g. "xia" → "xai")
+      if (suggestions.length === 0) {
+        suggestions = availableProviders
+          .map((p) => ({ p, d: levenshtein(providerID, p) }))
+          .filter(({ d }) => d <= 2)
+          .sort((a, b) => a.d - b.d)
+          .slice(0, 3)
+          .map(({ p }) => p)
+      }
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
 
@@ -898,19 +928,20 @@ export namespace Provider {
     const provider = await state().then((state) => state.providers[providerID])
     if (provider) {
       let priority = [
-        "claude-haiku-4-5",
-        "claude-haiku-4.5",
-        "3-5-haiku",
-        "3.5-haiku",
-        "gemini-3-flash",
+        "gemini-2.0-flash",
         "gemini-2.5-flash",
-        "gpt-5-nano",
+        "gemini-flash",
+        "llama-3.1-8b",
+        "llama3-8b",
       ]
       if (providerID.startsWith("ax-code")) {
-        priority = ["gpt-5-nano"]
+        priority = ["gemini-2.0-flash", "gemini-flash"]
+      }
+      if (providerID === ProviderID.xai) {
+        priority = ["grok-3-mini-fast", "grok-3-mini", "grok-4"]
       }
       for (const item of priority) {
-        if (providerID === ProviderID.amazonBedrock) {
+        if (providerID === ProviderID.make("amazon-bedrock")) {
           const crossRegionPrefixes = ["global.", "us.", "eu."]
           const candidates = Object.keys(provider.models).filter((m) => m.includes(item))
 

@@ -377,7 +377,7 @@ export namespace Project {
       })
 
       const initGit = Effect.fn("Project.initGit")(function* (input: { directory: string; project: Info }) {
-        if (input.project.vcs === "git") return input.project
+        if (input.project.vcs === "git" && input.project.worktree === input.directory) return input.project
         if (!(yield* Effect.sync(() => which("git")))) throw new Error("Git is not installed")
         const result = yield* git(["init", "--quiet"], { cwd: input.directory })
         if (result.code !== 0) {

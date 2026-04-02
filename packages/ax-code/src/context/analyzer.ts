@@ -7,6 +7,7 @@
  */
 
 import path from "path"
+import fs from "fs"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
 export type DepthLevel = "basic" | "standard" | "full" | "security"
@@ -120,7 +121,12 @@ async function readJson<T>(filepath: string): Promise<T | null> {
 }
 
 function exists(filepath: string): boolean {
-  return Bun.file(filepath).size > 0
+  try {
+    fs.statSync(filepath)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function pathExists(root: string, ...segments: string[]): boolean {
@@ -359,7 +365,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
     {
       ...(await readJson<PackageJson>(path.join(root, "package.json")))?.dependencies,
       ...(await readJson<PackageJson>(path.join(root, "package.json")))?.devDependencies,
-    } ?? {},
+    },
   ).length
 
   const score = Math.min(100, fileCount * 0.05 + loc * 0.001 + depCount * 0.5)

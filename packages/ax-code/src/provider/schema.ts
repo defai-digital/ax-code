@@ -15,6 +15,7 @@ export const ProviderID = providerIdSchema.pipe(
     axCode: schema.makeUnsafe("ax-code"),
     google: schema.makeUnsafe("google"),
     xai: schema.makeUnsafe("xai"),
+    groq: schema.makeUnsafe("groq"),
   })),
 )
 

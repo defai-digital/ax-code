@@ -788,18 +788,25 @@ export namespace Session {
       const reasoningTokens = safe(input.usage.reasoningTokens ?? 0)
 
       const cacheReadInputTokens = safe(input.usage.cachedInputTokens ?? 0)
+
+      const anthropicMeta = (input.metadata as any)?.["anthropic"] as Record<string, number> | undefined
       const cacheWriteInputTokens = safe(
-        (// @ts-expect-error
+        (anthropicMeta?.["cacheCreationInputTokens"] ??
+          // @ts-expect-error
           input.metadata?.["venice"]?.["usage"]?.["cacheCreationInputTokens"] ??
           0) as number,
       )
 
-      // Most providers return inputTokens as the total count of input tokens (including cached).
-      const adjustedInputTokens = safe(
-        inputTokens - cacheReadInputTokens - cacheWriteInputTokens,
-      )
+      // Anthropic already reports NET input tokens (excluding cached). Other providers report
+      // total (including cached), so we subtract cache tokens to get net for those.
+      // Also, Anthropic's totalTokens excludes cache tokens, so we add them back.
+      const adjustedInputTokens = anthropicMeta
+        ? safe(inputTokens)
+        : safe(inputTokens - cacheReadInputTokens - cacheWriteInputTokens)
 
-      const total = input.usage.totalTokens
+      const total = anthropicMeta
+        ? safe((input.usage.totalTokens ?? 0) + cacheReadInputTokens + cacheWriteInputTokens)
+        : input.usage.totalTokens
 
       const tokens = {
         total,

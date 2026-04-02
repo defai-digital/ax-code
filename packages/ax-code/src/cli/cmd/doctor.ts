@@ -71,10 +71,7 @@ export const DoctorCommand: CommandModule = {
     // 6. API keys
     const keyChecks: [string, string][] = [
       ["GOOGLE_GENERATIVE_AI_API_KEY", "Google"],
-      ["OPENAI_API_KEY", "OpenAI"],
       ["XAI_API_KEY", "XAI/Grok"],
-      ["OPENROUTER_API_KEY", "OpenRouter"],
-      ["MISTRAL_API_KEY", "Mistral"],
       ["GROQ_API_KEY", "Groq"],
     ]
 
@@ -113,7 +110,6 @@ export const DoctorCommand: CommandModule = {
     // 9. Feature flags
     const flags: string[] = []
     if (Flag.AX_CODE_DISABLE_MODELS_FETCH) flags.push("DISABLE_MODELS_FETCH")
-    if (Flag.AX_CODE_DISABLE_SHARE) flags.push("DISABLE_SHARE")
     if (flags.length > 0) {
       checks.push({ name: "Feature flags", status: "ok", detail: flags.join(", ") })
     }

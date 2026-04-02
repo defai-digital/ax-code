@@ -528,7 +528,7 @@ export namespace File {
           using _ = log.time("read", { file })
           const full = path.join(Instance.directory, file)
 
-          if (!Instance.containsPath(full)) {
+          if (!Filesystem.contains(Instance.directory, full)) {
             throw new Error("Access denied: path escapes project directory")
           }
 
@@ -622,7 +622,7 @@ export namespace File {
           }
 
           const resolved = dir ? path.join(Instance.directory, dir) : Instance.directory
-          if (!Instance.containsPath(resolved)) {
+          if (!Filesystem.contains(Instance.directory, resolved)) {
             throw new Error("Access denied: path escapes project directory")
           }
 

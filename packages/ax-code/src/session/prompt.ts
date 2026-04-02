@@ -267,6 +267,10 @@ export namespace SessionPrompt {
       await SessionStatus.set(sessionID, { type: "idle" })
       return
     }
+    for (const cb of match.callbacks) {
+      cb.reject(new Error("Session ended"))
+    }
+    match.callbacks.length = 0
     match.abort.abort()
     delete s[sessionID]
     await SessionStatus.set(sessionID, { type: "idle" })
@@ -313,7 +317,7 @@ export namespace SessionPrompt {
         log.warn("global step limit reached", { step, sessionID })
         Bus.publish(Session.Event.Error, {
           sessionID,
-          error: { message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT}). Stopping to prevent infinite loop. Try breaking the task into smaller parts.` },
+          error: new NamedError.Unknown({ message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT}). Stopping to prevent infinite loop. Try breaking the task into smaller parts.` }).toObject(),
         })
         break
       }
@@ -759,7 +763,7 @@ export namespace SessionPrompt {
           log.warn("too many consecutive errors, stopping", { consecutiveErrors, sessionID })
           Bus.publish(Session.Event.Error, {
             sessionID,
-            error: { message: `Agent encountered ${consecutiveErrors} consecutive errors. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.` },
+            error: new NamedError.Unknown({ message: `Agent encountered ${consecutiveErrors} consecutive errors. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.` }).toObject(),
           })
           break
         }
@@ -1055,7 +1059,7 @@ export namespace SessionPrompt {
       !input.variant && agent.variant
         ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined)
         : undefined
-    const variant = input.variant ?? (agent.variant && full?.variants?.[agent.variant] ? agent.variant : undefined)
+    const variant = input.variant ?? (!input.model && agent.variant && (!full || full.variants?.[agent.variant]) ? agent.variant : undefined)
 
     const info: MessageV2.Info = {
       id: input.messageID ?? MessageID.ascending(),

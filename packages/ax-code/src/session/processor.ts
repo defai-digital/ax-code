@@ -32,6 +32,7 @@ export namespace SessionProcessor {
     abort: AbortSignal
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
+    const recentToolRing: { tool: string; input: string }[] = []
     let snapshot: string | undefined
     let blocked = false
     let attempt = 0
@@ -150,17 +151,13 @@ export namespace SessionProcessor {
                     })
                     toolcalls[value.toolCallId] = part as MessageV2.ToolPart
 
-                    // Use local toolcalls record instead of DB query for doom loop detection
-                    const recentTools = Object.values(toolcalls).slice(-DOOM_LOOP_THRESHOLD)
+                    // Doom loop detection: check ring buffer of recently completed tools plus current call
                     const inputStr = JSON.stringify(value.input)
+                    const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
                     if (
-                      recentTools.length === DOOM_LOOP_THRESHOLD &&
-                      recentTools.every(
-                        (p) =>
-                          p.type === "tool" &&
-                          p.tool === value.toolName &&
-                          p.state.status !== "pending" &&
-                          JSON.stringify(p.state.input) === inputStr,
+                      allRecent.length >= DOOM_LOOP_THRESHOLD &&
+                      allRecent.slice(-DOOM_LOOP_THRESHOLD).every(
+                        (p) => p.tool === value.toolName && p.input === inputStr,
                       )
                     ) {
                       const agent = await Agent.get(input.assistantMessage.agent)
@@ -199,8 +196,10 @@ export namespace SessionProcessor {
                     })
 
                     // Self-correction: clear retry budget on success
-                    SelfCorrection.recordSuccess(match.state.tool)
+                    SelfCorrection.recordSuccess(match.tool)
 
+                    recentToolRing.push({ tool: match.tool, input: JSON.stringify(value.input ?? match.state.input) })
+                    if (recentToolRing.length > DOOM_LOOP_THRESHOLD) recentToolRing.shift()
                     delete toolcalls[value.toolCallId]
                   }
                   break
@@ -231,15 +230,17 @@ export namespace SessionProcessor {
                       blocked = shouldBreak
                     } else {
                       // Self-correction: analyze failure and log recovery hint
-                      const correction = SelfCorrection.analyze(match.state.tool, errorMsg)
+                      const correction = SelfCorrection.analyze(match.tool, errorMsg)
                       if (correction) {
                         log.info("self-correction active", {
-                          tool: match.state.tool,
+                          tool: match.tool,
                           strategy: correction.signal.strategy,
                           attempt: correction.signal.attempt,
                         })
                       }
                     }
+                    recentToolRing.push({ tool: match.tool, input: JSON.stringify(value.input ?? match.state.input) })
+                    if (recentToolRing.length > DOOM_LOOP_THRESHOLD) recentToolRing.shift()
                     delete toolcalls[value.toolCallId]
                   }
                   break
@@ -347,7 +348,7 @@ export namespace SessionProcessor {
                     )
                     currentText.text = textOutput.text
                     currentText.time = {
-                      start: Date.now(),
+                      start: currentText.time?.start ?? Date.now(),
                       end: Date.now(),
                     }
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
@@ -425,7 +426,9 @@ export namespace SessionProcessor {
                   status: "error",
                   error: "Tool execution aborted",
                   time: {
-                    start: Date.now(),
+                    start: part.state.status === "running" && "time" in part.state
+                      ? part.state.time.start
+                      : Date.now(),
                     end: Date.now(),
                   },
                 },

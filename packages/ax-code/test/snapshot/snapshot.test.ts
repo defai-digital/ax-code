@@ -166,7 +166,7 @@ test("binary file handling", async () => {
   })
 })
 
-test("symlink handling", async () => {
+test.skipIf(process.platform === "win32")("symlink handling", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,
@@ -436,7 +436,7 @@ test("hidden files", async () => {
   })
 })
 
-test("nested symlinks", async () => {
+test.skipIf(process.platform === "win32")("nested symlinks", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,

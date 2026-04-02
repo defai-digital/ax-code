@@ -21,15 +21,14 @@ test("provider loaded from env variable", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
+      expect(providers[ProviderID.xai]).toBeDefined()
       // Provider should retain its connection source even if custom loaders
       // merge additional options.
-      expect(providers[ProviderID.anthropic].source).toBe("env")
-      expect(providers[ProviderID.anthropic].options.headers["anthropic-beta"]).toBeDefined()
+      expect(providers[ProviderID.xai].source).toBe("env")
     },
   })
 })
@@ -42,7 +41,7 @@ test("provider loaded from config with apiKey option", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               options: {
                 apiKey: "config-api-key",
               },
@@ -56,7 +55,7 @@ test("provider loaded from config with apiKey option", async () => {
     directory: tmp.path,
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
+      expect(providers[ProviderID.xai]).toBeDefined()
     },
   })
 })
@@ -68,7 +67,7 @@ test("disabled_providers excludes provider", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
-          disabled_providers: ["anthropic"],
+          disabled_providers: ["xai"],
         }),
       )
     },
@@ -76,11 +75,11 @@ test("disabled_providers excludes provider", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeUndefined()
+      expect(providers[ProviderID.xai]).toBeUndefined()
     },
   })
 })
@@ -92,7 +91,7 @@ test("enabled_providers restricts to only listed providers", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
-          enabled_providers: ["anthropic"],
+          enabled_providers: ["xai"],
         }),
       )
     },
@@ -100,13 +99,13 @@ test("enabled_providers restricts to only listed providers", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
-      Env.set("OPENAI_API_KEY", "test-openai-key")
+      Env.set("XAI_API_KEY", "test-openai-key")
+      Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
-      expect(providers[ProviderID.openai]).toBeUndefined()
+      expect(providers[ProviderID.xai]).toBeDefined()
+      expect(providers[ProviderID.google]).toBeUndefined()
     },
   })
 })
@@ -119,8 +118,8 @@ test("model whitelist filters models for provider", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
-              whitelist: ["claude-sonnet-4-20250514"],
+            xai: {
+              whitelist: ["grok-4"],
             },
           },
         }),
@@ -130,13 +129,13 @@ test("model whitelist filters models for provider", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
-      const models = Object.keys(providers[ProviderID.anthropic].models)
-      expect(models).toContain("claude-sonnet-4-20250514")
+      expect(providers[ProviderID.xai]).toBeDefined()
+      const models = Object.keys(providers[ProviderID.xai].models)
+      expect(models).toContain("grok-4")
       expect(models.length).toBe(1)
     },
   })
@@ -150,8 +149,8 @@ test("model blacklist excludes specific models", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
-              blacklist: ["claude-sonnet-4-20250514"],
+            xai: {
+              blacklist: ["grok-4"],
             },
           },
         }),
@@ -161,13 +160,13 @@ test("model blacklist excludes specific models", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
-      const models = Object.keys(providers[ProviderID.anthropic].models)
-      expect(models).not.toContain("claude-sonnet-4-20250514")
+      expect(providers[ProviderID.xai]).toBeDefined()
+      const models = Object.keys(providers[ProviderID.xai].models)
+      expect(models).not.toContain("grok-4")
     },
   })
 })
@@ -180,10 +179,10 @@ test("custom model alias via config", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
                 "my-alias": {
-                  id: "claude-sonnet-4-20250514",
+                  id: "grok-4",
                   name: "My Custom Alias",
                 },
               },
@@ -196,13 +195,13 @@ test("custom model alias via config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
-      expect(providers[ProviderID.anthropic].models["my-alias"]).toBeDefined()
-      expect(providers[ProviderID.anthropic].models["my-alias"].name).toBe("My Custom Alias")
+      expect(providers[ProviderID.xai]).toBeDefined()
+      expect(providers[ProviderID.xai].models["my-alias"]).toBeDefined()
+      expect(providers[ProviderID.xai].models["my-alias"].name).toBe("My Custom Alias")
     },
   })
 })
@@ -258,7 +257,7 @@ test("env variable takes precedence, config merges options", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               options: {
                 timeout: 60000,
                 chunkTimeout: 15000,
@@ -272,14 +271,14 @@ test("env variable takes precedence, config merges options", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "env-api-key")
+      Env.set("XAI_API_KEY", "env-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
+      expect(providers[ProviderID.xai]).toBeDefined()
       // Config options should be merged
-      expect(providers[ProviderID.anthropic].options.timeout).toBe(60000)
-      expect(providers[ProviderID.anthropic].options.chunkTimeout).toBe(15000)
+      expect(providers[ProviderID.xai].options.timeout).toBe(60000)
+      expect(providers[ProviderID.xai].options.chunkTimeout).toBe(15000)
     },
   })
 })
@@ -298,13 +297,13 @@ test("getModel returns model for valid provider/model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getModel(ProviderID.anthropic, ModelID.make("claude-sonnet-4-20250514"))
+      const model = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4"))
       expect(model).toBeDefined()
-      expect(String(model.providerID)).toBe("anthropic")
-      expect(String(model.id)).toBe("claude-sonnet-4-20250514")
+      expect(String(model.providerID)).toBe("xai")
+      expect(String(model.id)).toBe("grok-4")
       const language = await Provider.getLanguage(model)
       expect(language).toBeDefined()
     },
@@ -325,10 +324,10 @@ test("getModel throws ModelNotFoundError for invalid model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      expect(Provider.getModel(ProviderID.anthropic, ModelID.make("nonexistent-model"))).rejects.toThrow()
+      expect(Provider.getModel(ProviderID.xai, ModelID.make("nonexistent-model"))).rejects.toThrow()
     },
   })
 })
@@ -353,15 +352,15 @@ test("getModel throws ModelNotFoundError for invalid provider", async () => {
 })
 
 test("parseModel correctly parses provider/model string", () => {
-  const result = Provider.parseModel("anthropic/claude-sonnet-4")
-  expect(String(result.providerID)).toBe("anthropic")
-  expect(String(result.modelID)).toBe("claude-sonnet-4")
+  const result = Provider.parseModel("xai/grok-4")
+  expect(String(result.providerID)).toBe("xai")
+  expect(String(result.modelID)).toBe("grok-4")
 })
 
 test("parseModel handles model IDs with slashes", () => {
-  const result = Provider.parseModel("openrouter/anthropic/claude-3-opus")
-  expect(String(result.providerID)).toBe("openrouter")
-  expect(String(result.modelID)).toBe("anthropic/claude-3-opus")
+  const result = Provider.parseModel("lmstudio/openai/gpt-oss-20b")
+  expect(String(result.providerID)).toBe("lmstudio")
+  expect(String(result.modelID)).toBe("openai/gpt-oss-20b")
 })
 
 test("defaultModel returns first available model when no config set", async () => {
@@ -378,7 +377,7 @@ test("defaultModel returns first available model when no config set", async () =
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const model = await Provider.defaultModel()
@@ -395,7 +394,7 @@ test("defaultModel respects config model setting", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
-          model: "anthropic/claude-sonnet-4-20250514",
+          model: "xai/grok-4",
         }),
       )
     },
@@ -403,12 +402,12 @@ test("defaultModel respects config model setting", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const model = await Provider.defaultModel()
-      expect(String(model.providerID)).toBe("anthropic")
-      expect(String(model.modelID)).toBe("claude-sonnet-4-20250514")
+      expect(String(model.providerID)).toBe("xai")
+      expect(String(model.modelID)).toBe("grok-4")
     },
   })
 })
@@ -501,9 +500,9 @@ test("model options are merged from existing model", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "claude-sonnet-4-20250514": {
+                "grok-4": {
                   options: {
                     customOption: "custom-value",
                   },
@@ -518,11 +517,11 @@ test("model options are merged from existing model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.options.customOption).toBe("custom-value")
     },
   })
@@ -536,7 +535,7 @@ test("provider removed when all models filtered out", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               whitelist: ["nonexistent-model"],
             },
           },
@@ -547,11 +546,11 @@ test("provider removed when all models filtered out", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeUndefined()
+      expect(providers[ProviderID.xai]).toBeUndefined()
     },
   })
 })
@@ -570,13 +569,13 @@ test("closest finds model by partial match", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const result = await Provider.closest(ProviderID.anthropic, ["sonnet-4"])
+      const result = await Provider.closest(ProviderID.xai, ["grok-4"])
       expect(result).toBeDefined()
-      expect(String(result?.providerID)).toBe("anthropic")
-      expect(String(result?.modelID)).toContain("sonnet-4")
+      expect(String(result?.providerID)).toBe("xai")
+      expect(String(result?.modelID)).toContain("grok-4")
     },
   })
 })
@@ -609,11 +608,11 @@ test("getModel uses realIdByKey for aliased models", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "my-sonnet": {
-                  id: "claude-sonnet-4-20250514",
-                  name: "My Sonnet Alias",
+                "my-gpt4o": {
+                  id: "grok-4",
+                  name: "My GPT-4o Alias",
                 },
               },
             },
@@ -625,16 +624,16 @@ test("getModel uses realIdByKey for aliased models", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic].models["my-sonnet"]).toBeDefined()
+      expect(providers[ProviderID.xai].models["my-gpt4o"]).toBeDefined()
 
-      const model = await Provider.getModel(ProviderID.anthropic, ModelID.make("my-sonnet"))
+      const model = await Provider.getModel(ProviderID.xai, ModelID.make("my-gpt4o"))
       expect(model).toBeDefined()
-      expect(String(model.id)).toBe("my-sonnet")
-      expect(model.name).toBe("My Sonnet Alias")
+      expect(String(model.id)).toBe("my-gpt4o")
+      expect(model.name).toBe("My GPT-4o Alias")
     },
   })
 })
@@ -725,10 +724,10 @@ test("model inherits properties from existing database model", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "claude-sonnet-4-20250514": {
-                  name: "Custom Name for Sonnet",
+                "grok-4": {
+                  name: "Custom Name for GPT-4o",
                 },
               },
             },
@@ -740,14 +739,13 @@ test("model inherits properties from existing database model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
-      expect(model.name).toBe("Custom Name for Sonnet")
+      const model = providers[ProviderID.xai].models["grok-4"]
+      expect(model.name).toBe("Custom Name for GPT-4o")
       expect(model.capabilities.toolcall).toBe(true)
-      expect(model.capabilities.attachment).toBe(true)
       expect(model.limit.context).toBeGreaterThan(0)
     },
   })
@@ -760,7 +758,7 @@ test("disabled_providers prevents loading even with env var", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
-          disabled_providers: ["openai"],
+          disabled_providers: ["xai"],
         }),
       )
     },
@@ -768,11 +766,11 @@ test("disabled_providers prevents loading even with env var", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("OPENAI_API_KEY", "test-openai-key")
+      Env.set("XAI_API_KEY", "test-openai-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.openai]).toBeUndefined()
+      expect(providers[ProviderID.xai]).toBeUndefined()
     },
   })
 })
@@ -792,8 +790,8 @@ test("enabled_providers with empty array allows no providers", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
-      Env.set("OPENAI_API_KEY", "test-openai-key")
+      Env.set("XAI_API_KEY", "test-openai-key")
+      Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google-key")
     },
     fn: async () => {
       const providers = await Provider.list()
@@ -810,9 +808,9 @@ test("whitelist and blacklist can be combined", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
-              whitelist: ["claude-sonnet-4-20250514", "claude-opus-4-20250514"],
-              blacklist: ["claude-opus-4-20250514"],
+            xai: {
+              whitelist: ["grok-4", "grok-3-fast"],
+              blacklist: ["grok-3-fast"],
             },
           },
         }),
@@ -822,14 +820,14 @@ test("whitelist and blacklist can be combined", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
-      const models = Object.keys(providers[ProviderID.anthropic].models)
-      expect(models).toContain("claude-sonnet-4-20250514")
-      expect(models).not.toContain("claude-opus-4-20250514")
+      expect(providers[ProviderID.xai]).toBeDefined()
+      const models = Object.keys(providers[ProviderID.xai].models)
+      expect(models).toContain("grok-4")
+      expect(models).not.toContain("grok-3-fast")
       expect(models.length).toBe(1)
     },
   })
@@ -931,12 +929,12 @@ test("getSmallModel returns appropriate small model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.anthropic)
+      const model = await Provider.getSmallModel(ProviderID.xai)
       expect(model).toBeDefined()
-      expect(model?.id).toContain("haiku")
+      expect(model?.id).toBeDefined()
     },
   })
 })
@@ -948,7 +946,7 @@ test("getSmallModel respects config small_model override", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
-          small_model: "anthropic/claude-sonnet-4-20250514",
+          small_model: "xai/grok-4",
         }),
       )
     },
@@ -956,13 +954,13 @@ test("getSmallModel respects config small_model override", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.anthropic)
+      const model = await Provider.getSmallModel(ProviderID.xai)
       expect(model).toBeDefined()
-      expect(String(model?.providerID)).toBe("anthropic")
-      expect(String(model?.id)).toBe("claude-sonnet-4-20250514")
+      expect(String(model?.providerID)).toBe("xai")
+      expect(String(model?.id)).toBe("grok-4")
     },
   })
 })
@@ -978,7 +976,7 @@ test("provider.sort prioritizes preferred models", () => {
   const sorted = Provider.sort(models)
   expect(sorted[0].id).toContain("sonnet-4")
   expect(sorted[0].id).toContain("latest")
-  expect(sorted[sorted.length - 1].id).not.toContain("gpt-5")
+  expect(sorted[sorted.length - 1].id).not.toContain("grok-4")
   expect(sorted[sorted.length - 1].id).not.toContain("sonnet-4")
 })
 
@@ -990,10 +988,10 @@ test("multiple providers can be configured simultaneously", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               options: { timeout: 30000 },
             },
-            openai: {
+            groq: {
               options: { timeout: 60000 },
             },
           },
@@ -1004,15 +1002,15 @@ test("multiple providers can be configured simultaneously", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-anthropic-key")
-      Env.set("OPENAI_API_KEY", "test-openai-key")
+      Env.set("XAI_API_KEY", "test-openai-key")
+      Env.set("GROQ_API_KEY", "test-openrouter-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic]).toBeDefined()
-      expect(providers[ProviderID.openai]).toBeDefined()
-      expect(providers[ProviderID.anthropic].options.timeout).toBe(30000)
-      expect(providers[ProviderID.openai].options.timeout).toBe(60000)
+      expect(providers[ProviderID.xai]).toBeDefined()
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
+      expect(providers[ProviderID.xai].options.timeout).toBe(30000)
+      expect(providers[ProviderID.make("groq")].options.timeout).toBe(60000)
     },
   })
 })
@@ -1067,11 +1065,11 @@ test("model alias name defaults to alias key when id differs", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                sonnet: {
-                  id: "claude-sonnet-4-20250514",
-                  // no name specified - should default to "sonnet" (the key)
+                gpt4: {
+                  id: "grok-4",
+                  // no name specified - should default to "gpt4" (the key)
                 },
               },
             },
@@ -1083,11 +1081,11 @@ test("model alias name defaults to alias key when id differs", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.anthropic].models["sonnet"].name).toBe("sonnet")
+      expect(providers[ProviderID.xai].models["gpt4"].name).toBe("gpt4")
     },
   })
 })
@@ -1184,9 +1182,9 @@ test("model cost overrides existing cost values", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "claude-sonnet-4-20250514": {
+                "grok-4": {
                   cost: {
                     input: 999,
                     output: 888,
@@ -1202,11 +1200,11 @@ test("model cost overrides existing cost values", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.cost.input).toBe(999)
       expect(model.cost.output).toBe(888)
     },
@@ -1271,9 +1269,9 @@ test("disabled_providers and enabled_providers interaction", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           // enabled_providers takes precedence - only these are considered
-          enabled_providers: ["anthropic", "openai"],
+          enabled_providers: ["xai", "groq"],
           // Then disabled_providers filters from the enabled set
-          disabled_providers: ["openai"],
+          disabled_providers: ["groq"],
         }),
       )
     },
@@ -1281,16 +1279,16 @@ test("disabled_providers and enabled_providers interaction", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-anthropic")
-      Env.set("OPENAI_API_KEY", "test-openai")
+      Env.set("XAI_API_KEY", "test-openai")
+      Env.set("GROQ_API_KEY", "test-openrouter")
       Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google")
     },
     fn: async () => {
       const providers = await Provider.list()
-      // anthropic: in enabled, not in disabled = allowed
-      expect(providers[ProviderID.anthropic]).toBeDefined()
-      // openai: in enabled, but also in disabled = NOT allowed
-      expect(providers[ProviderID.openai]).toBeUndefined()
+      // xai: in enabled, not in disabled = allowed
+      expect(providers[ProviderID.xai]).toBeDefined()
+      // groq: in enabled, but also in disabled = NOT allowed
+      expect(providers[ProviderID.make("groq")]).toBeUndefined()
       // google: not in enabled = NOT allowed (even though not disabled)
       expect(providers[ProviderID.google]).toBeUndefined()
     },
@@ -1464,11 +1462,11 @@ test("getModel returns consistent results", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model1 = await Provider.getModel(ProviderID.anthropic, ModelID.make("claude-sonnet-4-20250514"))
-      const model2 = await Provider.getModel(ProviderID.anthropic, ModelID.make("claude-sonnet-4-20250514"))
+      const model1 = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4"))
+      const model2 = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4"))
       expect(model1.providerID).toEqual(model2.providerID)
       expect(model1.id).toEqual(model2.id)
       expect(model1).toEqual(model2)
@@ -1525,11 +1523,11 @@ test("ModelNotFoundError includes suggestions for typos", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       try {
-        await Provider.getModel(ProviderID.anthropic, ModelID.make("claude-sonet-4")) // typo: sonet instead of sonnet
+        await Provider.getModel(ProviderID.xai, ModelID.make("gro")) // partial/typo model
         expect(true).toBe(false) // Should not reach here
       } catch (e: any) {
         expect(e.data.suggestions).toBeDefined()
@@ -1553,15 +1551,15 @@ test("ModelNotFoundError for provider includes suggestions", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       try {
-        await Provider.getModel(ProviderID.make("antropic"), ModelID.make("claude-sonnet-4")) // typo: antropic
+        await Provider.getModel(ProviderID.make("xia"), ModelID.make("grok-4")) // typo: xia → xai
         expect(true).toBe(false) // Should not reach here
       } catch (e: any) {
         expect(e.data.suggestions).toBeDefined()
-        expect(e.data.suggestions).toContain("anthropic")
+        expect(e.data.suggestions).toContain("xai")
       }
     },
   })
@@ -1601,12 +1599,12 @@ test("getProvider returns provider info", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const provider = await Provider.getProvider(ProviderID.anthropic)
+      const provider = await Provider.getProvider(ProviderID.xai)
       expect(provider).toBeDefined()
-      expect(String(provider?.id)).toBe("anthropic")
+      expect(String(provider?.id)).toBe("xai")
     },
   })
 })
@@ -1625,10 +1623,10 @@ test("closest returns undefined when no partial match found", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const result = await Provider.closest(ProviderID.anthropic, ["nonexistent-xyz-model"])
+      const result = await Provider.closest(ProviderID.xai, ["nonexistent-xyz-model"])
       expect(result).toBeUndefined()
     },
   })
@@ -1648,13 +1646,13 @@ test("closest checks multiple query terms in order", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       // First term won't match, second will
-      const result = await Provider.closest(ProviderID.anthropic, ["nonexistent", "haiku"])
+      const result = await Provider.closest(ProviderID.xai, ["nonexistent", "grok-4"])
       expect(result).toBeDefined()
-      expect(result?.modelID).toContain("haiku")
+      expect(result?.modelID).toContain("grok-4")
     },
   })
 })
@@ -1704,7 +1702,7 @@ test("provider options are deeply merged", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               options: {
                 headers: {
                   "X-Custom": "custom-value",
@@ -1720,15 +1718,13 @@ test("provider options are deeply merged", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
       // Custom options should be merged
-      expect(providers[ProviderID.anthropic].options.timeout).toBe(30000)
-      expect(providers[ProviderID.anthropic].options.headers["X-Custom"]).toBe("custom-value")
-      // anthropic custom loader adds its own headers, they should coexist
-      expect(providers[ProviderID.anthropic].options.headers["anthropic-beta"]).toBeDefined()
+      expect(providers[ProviderID.xai].options.timeout).toBe(30000)
+      expect(providers[ProviderID.xai].options.headers["X-Custom"]).toBe("custom-value")
     },
   })
 })
@@ -1741,7 +1737,7 @@ test("custom model inherits npm package from models.dev provider config", async 
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            openai: {
+            xai: {
               models: {
                 "my-custom-model": {
                   name: "My Custom Model",
@@ -1758,13 +1754,13 @@ test("custom model inherits npm package from models.dev provider config", async 
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("OPENAI_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.openai].models["my-custom-model"]
+      const model = providers[ProviderID.xai].models["my-custom-model"]
       expect(model).toBeDefined()
-      expect(model.api.npm).toBe("@ai-sdk/openai")
+      expect(model.api.npm).toBe("@ai-sdk/xai")
     },
   })
 })
@@ -1777,11 +1773,11 @@ test("custom model inherits api.url from models.dev provider", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            openrouter: {
+            lmstudio: {
               models: {
-                "prime-intellect/intellect-3": {},
-                "deepseek/deepseek-r1-0528": {
-                  name: "DeepSeek R1",
+                "my-custom-model": {},
+                "another-custom-model": {
+                  name: "Custom Model",
                 },
               },
             },
@@ -1793,22 +1789,22 @@ test("custom model inherits api.url from models.dev provider", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("OPENROUTER_API_KEY", "test-api-key")
+      Env.set("LMSTUDIO_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.openrouter]).toBeDefined()
+      expect(providers[ProviderID.make("lmstudio")]).toBeDefined()
 
       // New model not in database should inherit api.url from provider
-      const intellect = providers[ProviderID.openrouter].models["prime-intellect/intellect-3"]
-      expect(intellect).toBeDefined()
-      expect(intellect.api.url).toBe("https://openrouter.ai/api/v1")
+      const custom = providers[ProviderID.make("lmstudio")].models["my-custom-model"]
+      expect(custom).toBeDefined()
+      expect(custom.api.url).toBe("http://127.0.0.1:1234/v1")
 
       // Another new model should also inherit api.url
-      const deepseek = providers[ProviderID.openrouter].models["deepseek/deepseek-r1-0528"]
-      expect(deepseek).toBeDefined()
-      expect(deepseek.api.url).toBe("https://openrouter.ai/api/v1")
-      expect(deepseek.name).toBe("DeepSeek R1")
+      const another = providers[ProviderID.make("lmstudio")].models["another-custom-model"]
+      expect(another).toBeDefined()
+      expect(another.api.url).toBe("http://127.0.0.1:1234/v1")
+      expect(another.name).toBe("Custom Model")
     },
   })
 })
@@ -1827,12 +1823,12 @@ test("model variants are generated for reasoning models", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      // Claude sonnet 4 has reasoning capability
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
+      // grok-4 has reasoning capability
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.capabilities.reasoning).toBe(true)
       expect(model.variants).toBeDefined()
       expect(Object.keys(model.variants!).length).toBeGreaterThan(0)
@@ -1848,9 +1844,9 @@ test("model variants can be disabled via config", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "claude-sonnet-4-20250514": {
+                "grok-4": {
                   variants: {
                     high: { disabled: true },
                   },
@@ -1865,15 +1861,15 @@ test("model variants can be disabled via config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
-      // max variant should still exist
-      expect(model.variants!["max"]).toBeDefined()
+      // medium variant should still exist
+      expect(model.variants!["medium"]).toBeDefined()
     },
   })
 })
@@ -1886,15 +1882,13 @@ test("model variants can be customized via config", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "claude-sonnet-4-20250514": {
+                "grok-4": {
                   variants: {
                     high: {
-                      thinking: {
-                        type: "enabled",
-                        budgetTokens: 20000,
-                      },
+                      reasoningEffort: "high",
+                      budgetTokens: 20000,
                     },
                   },
                 },
@@ -1908,13 +1902,13 @@ test("model variants can be customized via config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants!["high"]).toBeDefined()
-      expect(model.variants!["high"].thinking.budgetTokens).toBe(20000)
+      expect(model.variants!["high"].budgetTokens).toBe(20000)
     },
   })
 })
@@ -1927,9 +1921,9 @@ test("disabled key is stripped from variant config", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "claude-sonnet-4-20250514": {
+                "grok-4": {
                   variants: {
                     max: {
                       disabled: false,
@@ -1947,11 +1941,11 @@ test("disabled key is stripped from variant config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants!["max"]).toBeDefined()
       expect(model.variants!["max"].disabled).toBeUndefined()
       expect(model.variants!["max"].customField).toBe("test")
@@ -1967,11 +1961,12 @@ test("all variants can be disabled via config", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "claude-sonnet-4-20250514": {
+                "grok-4": {
                   variants: {
                     high: { disabled: true },
+                    medium: { disabled: true },
                     max: { disabled: true },
                   },
                 },
@@ -1985,11 +1980,11 @@ test("all variants can be disabled via config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants).toBeDefined()
       expect(Object.keys(model.variants!).length).toBe(0)
     },
@@ -2004,9 +1999,9 @@ test("variant config merges with generated variants", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            anthropic: {
+            xai: {
               models: {
-                "claude-sonnet-4-20250514": {
+                "grok-4": {
                   variants: {
                     high: {
                       extraOption: "custom-value",
@@ -2023,14 +2018,14 @@ test("variant config merges with generated variants", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.anthropic].models["claude-sonnet-4-20250514"]
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants!["high"]).toBeDefined()
-      // Should have both the generated thinking config and the custom option
-      expect(model.variants!["high"].thinking).toBeDefined()
+      // Should have both the generated reasoning config and the custom option
+      expect(model.variants!["high"].reasoningEffort).toBeDefined()
       expect(model.variants!["high"].extraOption).toBe("custom-value")
     },
   })
@@ -2044,9 +2039,9 @@ test("variants filtered in second pass for database models", async () => {
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           provider: {
-            openai: {
+            xai: {
               models: {
-                "gpt-5": {
+                "grok-4": {
                   variants: {
                     high: { disabled: true },
                   },
@@ -2061,11 +2056,11 @@ test("variants filtered in second pass for database models", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("OPENAI_API_KEY", "test-api-key")
+      Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.openai].models["gpt-5"]
+      const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
       // Other variants should still exist

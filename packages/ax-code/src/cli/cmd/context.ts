@@ -23,7 +23,7 @@ export const ContextCommand = cmd({
       // Get sessions from database directly (like stats command does)
       const sessions = Database.use((db) =>
         db.select().from(SessionTable).all(),
-      ).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+      ).sort((a, b) => (b.time_updated ?? 0) - (a.time_updated ?? 0))
 
       if (sessions.length === 0) {
         prompts.log.warn("No sessions found. Start a conversation first.")
@@ -45,7 +45,7 @@ export const ContextCommand = cmd({
       prompts.log.info(`Title: ${sessionRow.title ?? "untitled"}`)
 
       // Get messages for this session
-      const messages = await Session.messages({ sessionID: targetID })
+      const messages = await Session.messages({ sessionID: sessionRow.id })
 
       let inputTokens = 0
       let outputTokens = 0
@@ -78,8 +78,8 @@ export const ContextCommand = cmd({
       // Build breakdown
       const breakdown = calculateBreakdown({
         modelID,
-        systemPromptLength: 5000,
-        toolCount: 15,
+        systemPromptLength: 0,
+        toolCount: toolCalls,
         memoryTokens: 0,
         historyTokens: inputTokens,
       })

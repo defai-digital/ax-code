@@ -75,7 +75,8 @@ describe("Truncate", () => {
     })
 
     test("large single-line file truncates with byte message", async () => {
-      const content = await Filesystem.readText(path.join(FIXTURES_DIR, "models-api.json"))
+      // Construct a truly single-line large string (> MAX_BYTES = 50KB, < MAX_LINES = 2000 lines)
+      const content = "x".repeat(Truncate.MAX_BYTES + 1)
       const result = await Truncate.output(content)
 
       expect(result.truncated).toBe(true)

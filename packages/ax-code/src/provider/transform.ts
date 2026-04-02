@@ -1,5 +1,4 @@
 import type { ModelMessage } from "ai"
-import { mergeDeep, unique } from "remeda"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { JSONSchema } from "zod/v4/core"
 import type { Provider } from "./provider"
@@ -34,22 +33,6 @@ export namespace ProviderTransform {
     model: Provider.Model,
     options: Record<string, unknown>,
   ): ModelMessage[] {
-    if (model.api.id.includes("claude")) {
-      return msgs.map((msg) => {
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              return {
-                ...part,
-                toolCallId: part.toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_"),
-              }
-            }
-            return part
-          })
-        }
-        return msg
-      })
-    }
     if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field) {
       const field = model.capabilities.interleaved.field
       return msgs.map((msg) => {
@@ -83,33 +66,6 @@ export namespace ProviderTransform {
 
         return msg
       })
-    }
-
-    return msgs
-  }
-
-  function applyCaching(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
-    const system = msgs.filter((msg) => msg.role === "system").slice(0, 2)
-    const final = msgs.filter((msg) => msg.role !== "system").slice(-2)
-
-    const providerOptions = {
-      openaiCompatible: {
-        cache_control: { type: "ephemeral" },
-      },
-    }
-
-    for (const msg of unique([...system, ...final])) {
-      const shouldUseContentOptions = Array.isArray(msg.content) && msg.content.length > 0
-
-      if (shouldUseContentOptions) {
-        const lastContent = msg.content[msg.content.length - 1]
-        if (lastContent && typeof lastContent === "object") {
-          lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, providerOptions)
-          continue
-        }
-      }
-
-      msg.providerOptions = mergeDeep(msg.providerOptions ?? {}, providerOptions)
     }
 
     return msgs
@@ -153,47 +109,41 @@ export namespace ProviderTransform {
     })
   }
 
+function remapOpenCodeProviderKey(msgs: ModelMessage[], options: Record<string, unknown>): ModelMessage[] {
+    if (options.store !== false) return msgs
+
+    const remap = (po: Record<string, any> | undefined): Record<string, any> | undefined => {
+      if (!po || !("opencode" in po)) return po
+      const { opencode, ...rest } = po
+      return { ...rest, "ax-code": opencode }
+    }
+
+    return msgs.map((msg) => {
+      const remappedMsgPo = remap((msg as any).providerOptions)
+      const newMsg =
+        remappedMsgPo !== (msg as any).providerOptions ? { ...msg, providerOptions: remappedMsgPo } : msg
+
+      if (!Array.isArray(newMsg.content)) return newMsg
+
+      const newContent = (newMsg.content as any[]).map((part) => {
+        const remapped = remap(part.providerOptions)
+        return remapped !== part.providerOptions ? { ...part, providerOptions: remapped } : part
+      })
+
+      return { ...newMsg, content: newContent }
+    }) as ModelMessage[]
+  }
+
   export function message(msgs: ModelMessage[], model: Provider.Model, options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
     msgs = normalizeMessages(msgs, model, options)
-    if (
-      model.api.id.includes("anthropic") ||
-        model.api.id.includes("claude") ||
-        model.id.includes("anthropic") ||
-        model.id.includes("claude")
-    ) {
-      msgs = applyCaching(msgs, model)
-    }
-
-    // Remap providerOptions keys from stored providerID to expected SDK key
-    const key = sdkKey(model.api.npm)
-    if (key && key !== model.providerID) {
-      const remap = (opts: Record<string, any> | undefined) => {
-        if (!opts) return opts
-        if (!(model.providerID in opts)) return opts
-        const result = { ...opts }
-        result[key] = result[model.providerID]
-        delete result[model.providerID]
-        return result
-      }
-
-      msgs = msgs.map((msg) => {
-        if (!Array.isArray(msg.content)) return { ...msg, providerOptions: remap(msg.providerOptions) }
-        return {
-          ...msg,
-          providerOptions: remap(msg.providerOptions),
-          content: msg.content.map((part) => ({ ...part, providerOptions: remap(part.providerOptions) })),
-        } as typeof msg
-      })
-    }
-
+    msgs = remapOpenCodeProviderKey(msgs, options)
     return msgs
   }
 
   export function temperature(model: Provider.Model) {
     const id = model.id.toLowerCase()
     if (id.includes("qwen")) return 0.55
-    if (id.includes("claude")) return undefined
     if (id.includes("gemini")) return 1.0
     if (id.includes("glm-4.6")) return 1.0
     if (id.includes("glm-4.7")) return 1.0
@@ -233,10 +183,6 @@ export namespace ProviderTransform {
     if (!model.capabilities.reasoning) return {}
 
     const id = model.id.toLowerCase()
-    const isAnthropicAdaptive = ["opus-4-6", "opus-4.6", "sonnet-4-6", "sonnet-4.6"].some((v) =>
-      model.api.id.includes(v),
-    )
-    const adaptiveEfforts = ["low", "medium", "high", "max"]
     if (
       id.includes("deepseek") ||
       id.includes("minimax") ||
@@ -249,13 +195,23 @@ export namespace ProviderTransform {
       return {}
 
     // see: https://docs.x.ai/docs/guides/reasoning#control-how-hard-the-model-thinks
-    if (id.includes("grok") && id.includes("grok-3-mini")) {
-      return {
-        low: { reasoningEffort: "low" },
-        high: { reasoningEffort: "high" },
+    // XAI-specific grok handling (not for openrouter/other providers)
+    if (model.api.npm === "@ai-sdk/xai") {
+      if (id.includes("grok-3-mini")) {
+        return {
+          low: { reasoningEffort: "low" },
+          high: { reasoningEffort: "high" },
+        }
       }
+      if (id.includes("grok-4")) {
+        return {
+          medium: { reasoningEffort: "medium" },
+          high: { reasoningEffort: "high" },
+        }
+      }
+      // older grok models (not grok-4, not grok-3-mini) do not support reasoning effort
+      if (id.includes("grok")) return {}
     }
-    if (id.includes("grok")) return {}
 
     switch (model.api.npm) {
       case "@ai-sdk/xai":
@@ -265,7 +221,14 @@ export namespace ProviderTransform {
       case "@ai-sdk/openai-compatible":
         return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
 
+      case "@ai-sdk/groq":
+        // https://console.groq.com/docs/reasoning
+        return Object.fromEntries(
+          ["none", ...WIDELY_SUPPORTED_EFFORTS].map((effort) => [effort, { reasoningEffort: effort }]),
+        )
+
       case "@ai-sdk/google":
+      case "@ai-sdk/google-vertex":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai
         if (id.includes("2.5")) {
           return {
@@ -283,73 +246,23 @@ export namespace ProviderTransform {
             },
           }
         }
-        let levels = ["low", "high"]
-        if (id.includes("3.1")) {
-          levels = ["low", "medium", "high"]
-        }
-
-        return Object.fromEntries(
-          levels.map((effort) => [
-            effort,
-            {
-              thinkingConfig: {
-                includeThoughts: true,
-                thinkingLevel: effort,
-              },
-            },
-          ]),
-        )
-
-      case "@jerome-benoit/sap-ai-provider-v2":
-        if (model.api.id.includes("anthropic")) {
-          if (isAnthropicAdaptive) {
-            return Object.fromEntries(
-              adaptiveEfforts.map((effort) => [
-                effort,
-                {
-                  thinking: {
-                    type: "adaptive",
-                  },
-                  effort,
+        {
+          let levels = ["low", "high"]
+          if (id.includes("3.1")) {
+            levels = ["low", "medium", "high"]
+          }
+          return Object.fromEntries(
+            levels.map((effort) => [
+              effort,
+              {
+                thinkingConfig: {
+                  includeThoughts: true,
+                  thinkingLevel: effort,
                 },
-              ]),
-            )
-          }
-          return {
-            high: {
-              thinking: {
-                type: "enabled",
-                budgetTokens: 16000,
               },
-            },
-            max: {
-              thinking: {
-                type: "enabled",
-                budgetTokens: 31999,
-              },
-            },
-          }
+            ]),
+          )
         }
-        if (model.api.id.includes("gemini") && id.includes("2.5")) {
-          return {
-            high: {
-              thinkingConfig: {
-                includeThoughts: true,
-                thinkingBudget: 16000,
-              },
-            },
-            max: {
-              thinkingConfig: {
-                includeThoughts: true,
-                thinkingBudget: 24576,
-              },
-            },
-          }
-        }
-        if (model.api.id.includes("gpt") || /\bo[1-9]/.test(model.api.id)) {
-          return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
-        }
-        return {}
     }
     return {}
   }
@@ -421,29 +334,6 @@ export namespace ProviderTransform {
       }
     }
 
-    if (input.model.api.id.includes("gpt-5") && !input.model.api.id.includes("gpt-5-chat")) {
-      if (!input.model.api.id.includes("gpt-5-pro")) {
-        result["reasoningEffort"] = "medium"
-        result["reasoningSummary"] = "auto"
-      }
-
-      // Only set textVerbosity for non-chat gpt-5.x models
-      // Chat models (e.g. gpt-5.2-chat-latest) only support "medium" verbosity
-      if (
-        input.model.api.id.includes("gpt-5.") &&
-        !input.model.api.id.includes("codex") &&
-        !input.model.api.id.includes("-chat")
-      ) {
-        result["textVerbosity"] = "low"
-      }
-
-      if (input.model.providerID.startsWith("ax-code")) {
-        result["promptCacheKey"] = input.sessionID
-        result["include"] = ["reasoning.encrypted_content"]
-        result["reasoningSummary"] = "auto"
-      }
-    }
-
     if (input.model.providerID === "venice") {
       result["promptCacheKey"] = input.sessionID
     }
@@ -465,10 +355,6 @@ export namespace ProviderTransform {
 
     return {}
   }
-
-  // Maps model ID prefix to provider slug used in providerOptions.
-  // Example: "amazon/nova-2-lite" → "bedrock"
-  const SLUG_OVERRIDES: Record<string, string> = {}
 
   export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
     const key = sdkKey(model.api.npm) ?? model.providerID

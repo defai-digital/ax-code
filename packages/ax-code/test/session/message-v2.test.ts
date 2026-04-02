@@ -346,14 +346,18 @@ describe("session.message-v2.toModelMessage", () => {
             toolCallId: "call-1",
             toolName: "bash",
             output: {
-              type: "content",
-              value: [
-                { type: "text", text: "ok" },
-                { type: "media", mediaType: "image/png", data: "Zm9v" },
-              ],
+              type: "text",
+              value: "ok",
             },
             providerOptions: { openai: { tool: "meta" } },
           },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Attached image(s) from tool result:" },
+          { type: "file", data: "data:image/png;base64,Zm9v", filename: undefined, mediaType: "image/png" },
         ],
       },
     ])

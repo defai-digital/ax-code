@@ -84,7 +84,7 @@ export namespace Auth {
       })
 
       const set = Effect.fn("Auth.set")(function* (key: string, info: Info) {
-        const norm = key.replace(/[^\w\-./]/g, "").replace(/\/+$/, "")
+        const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
         if (!norm || norm.includes("..")) return yield* new AuthError({ message: "Invalid provider ID" })
         const data = yield* all()
         if (norm !== key) delete data[key]

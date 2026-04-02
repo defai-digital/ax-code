@@ -172,6 +172,8 @@ export namespace LLM {
     }
 
     return streamText({
+      // @ts-expect-error
+      maxDuration: 300_000,
       onError(error) {
         l.error("stream error", {
           error,

@@ -65,8 +65,6 @@ const ENV_VAR_MAP: Record<string, string> = {
   GOOGLE_GENERATIVE_AI_API_KEY: "google",
   GOOGLE_API_KEY: "google",
   GROQ_API_KEY: "groq",
-  OPENAI_API_KEY: "openai",
-  OPENAI_BASE_URL: "openai",
 }
 
 async function autoDetectAuth(): Promise<void> {
@@ -190,19 +188,21 @@ async function withRetry<T>(
       return await fn()
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e))
-      const isRetryable =
-        lastError.message.includes("429") ||
-        lastError.message.includes("500") ||
-        lastError.message.includes("502") ||
-        lastError.message.includes("503") ||
-        lastError.message.includes("504") ||
-        lastError.message.includes("ECONNRESET") ||
-        lastError.message.includes("ECONNREFUSED") ||
-        lastError.message.includes("ENOTFOUND") ||
-        lastError.message.includes("ETIMEDOUT") ||
-        lastError.message.includes("rate limit") ||
-        lastError.message.includes("network") ||
-        lastError.message.includes("socket hang up")
+      const isRetryable = (() => {
+        if (e instanceof ProviderError) {
+          return e.status !== undefined && [429, 500, 502, 503, 504].includes(e.status)
+        }
+        // Fallback string matching for non-classified errors
+        return (
+          lastError!.message.includes("ECONNRESET") ||
+          lastError!.message.includes("ECONNREFUSED") ||
+          lastError!.message.includes("ENOTFOUND") ||
+          lastError!.message.includes("ETIMEDOUT") ||
+          lastError!.message.includes("rate limit") ||
+          lastError!.message.includes("network") ||
+          lastError!.message.includes("socket hang up")
+        )
+      })()
 
       if (!isRetryable || attempt === maxRetries) throw lastError
 
@@ -340,9 +340,10 @@ async function collectResult(
     if (event.type === "permission.asked") {
       const perm = (event as any).properties
       if (perm.sessionID !== sessionID) continue
-      const reply = hooks?.onPermissionRequest
+      const hookReply = hooks?.onPermissionRequest
         ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
         : "deny"
+      const reply = hookReply === "allow" ? "once" : "reject"
       await sdk.permission.reply({ requestID: perm.id, reply })
     }
 
@@ -446,9 +447,10 @@ async function* streamEvents(
     if (event.type === "permission.asked") {
       const perm = (event as any).properties
       if (perm.sessionID !== sessionID) continue
-      const reply = hooks?.onPermissionRequest
+      const hookReply = hooks?.onPermissionRequest
         ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
         : "deny"
+      const reply = hookReply === "allow" ? "once" : "reject"
       await sdk.permission.reply({ requestID: perm.id, reply })
     }
 

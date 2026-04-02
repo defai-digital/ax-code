@@ -706,13 +706,18 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
       agent: {
         build: { disable: true },
         plan: { disable: true },
+        react: { disable: true },
+        security: { disable: true },
+        architect: { disable: true },
+        debug: { disable: true },
+        perf: { disable: true },
       },
     },
   })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      // build and plan are disabled, no primary-capable agents remain
+      // all primary visible agents are disabled
       await expect(Agent.defaultAgent()).rejects.toThrow("no primary visible agent found")
     },
   })

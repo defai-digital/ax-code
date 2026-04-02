@@ -116,9 +116,9 @@ describe("installation", () => {
       const layer = testLayer(
         () => jsonResponse({ versions: { stable: "2.0.0" } }),
         (cmd, args) => {
-          // getBrewFormula: return core formula (no tap)
-          if (cmd === "brew" && args.includes("--formula") && args.includes("anomalyco/tap/opencode")) return ""
-          if (cmd === "brew" && args.includes("--formula") && args.includes("opencode")) return "opencode"
+          // getBrewFormula: no tap formula, falls back to core formula HTTP lookup
+          if (cmd === "brew" && args.includes("--formula") && args.includes("defai-digital/tap/ax-code")) return ""
+          if (cmd === "brew" && args.includes("--formula") && args.includes("ax-code")) return ""
           return ""
         },
       )
@@ -136,7 +136,8 @@ describe("installation", () => {
       const layer = testLayer(
         () => jsonResponse({}), // HTTP not used for tap formula
         (cmd, args) => {
-          if (cmd === "brew" && args.includes("anomalyco/tap/opencode") && args.includes("--formula")) return "opencode"
+          if (cmd === "brew" && args.includes("defai-digital/tap/ax-code") && args.includes("--formula"))
+            return "ax-code"
           if (cmd === "brew" && args.includes("--json=v2")) return brewInfoJson
           return ""
         },

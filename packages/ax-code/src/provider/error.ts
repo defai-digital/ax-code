@@ -171,11 +171,17 @@ export namespace ProviderError {
     }
 
     const metadata = input.error.url ? { url: input.error.url } : undefined
+
+    // OpenAI uses 404 for some temporary errors (model not found due to capacity/routing)
+    const isRetryable =
+      input.error.isRetryable ||
+      (input.providerID === "openai" && input.error.statusCode === 404)
+
     return {
       type: "api_error",
       message: m,
       statusCode: input.error.statusCode,
-      isRetryable: input.error.isRetryable,
+      isRetryable,
       responseHeaders: input.error.responseHeaders,
       responseBody: input.error.responseBody,
       metadata,
