@@ -459,7 +459,7 @@ export namespace Provider {
       "google-vertex",
       "github-copilot",
       "anthropic",
-      "amazon-bedrock",
+
     ]
     const disabled = new Set([...UNSUPPORTED_PROVIDERS, ...(config.disabled_providers ?? [])])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
@@ -943,32 +943,8 @@ export namespace Provider {
         priority = ["grok-3-mini-fast", "grok-3-mini", "grok-4"]
       }
       for (const item of priority) {
-        if (providerID === ProviderID.make("amazon-bedrock")) {
-          const crossRegionPrefixes = ["global.", "us.", "eu."]
-          const candidates = Object.keys(provider.models).filter((m) => m.includes(item))
-
-          // Model selection priority:
-          // 1. global. prefix (works everywhere)
-          // 2. User's region prefix (us., eu.)
-          // 3. Unprefixed model
-          const globalMatch = candidates.find((m) => m.startsWith("global."))
-          if (globalMatch) return getModel(providerID, ModelID.make(globalMatch))
-
-          const region = provider.options?.region
-          if (region) {
-            const regionPrefix = region.split("-")[0]
-            if (regionPrefix === "us" || regionPrefix === "eu") {
-              const regionalMatch = candidates.find((m) => m.startsWith(`${regionPrefix}.`))
-              if (regionalMatch) return getModel(providerID, ModelID.make(regionalMatch))
-            }
-          }
-
-          const unprefixed = candidates.find((m) => !crossRegionPrefixes.some((p) => m.startsWith(p)))
-          if (unprefixed) return getModel(providerID, ModelID.make(unprefixed))
-        } else {
-          for (const model of Object.keys(provider.models)) {
-            if (model.includes(item)) return getModel(providerID, ModelID.make(model))
-          }
+        for (const model of Object.keys(provider.models)) {
+          if (model.includes(item)) return getModel(providerID, ModelID.make(model))
         }
       }
     }
