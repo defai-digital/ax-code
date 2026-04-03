@@ -18,6 +18,7 @@ import { Question } from "@/question"
 import { SelfCorrection } from "./correction"
 import { PartID } from "./schema"
 import type { SessionID, MessageID } from "./schema"
+import { NamedError } from "@ax-code/util/error"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
@@ -414,17 +415,33 @@ export namespace SessionProcessor {
               const retry = SessionRetry.retryable(error)
               if (retry !== undefined) {
                 attempt++
-                const delay = SessionRetry.delay(attempt, error.name === "APIError" ? error : undefined)
-                await SessionStatus.set(input.sessionID, {
-                  type: "retry",
-                  attempt,
-                  message: retry,
-                  next: Date.now() + delay,
+                if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS) {
+                  const delay = SessionRetry.delay(attempt, error.name === "APIError" ? error : undefined)
+                  await SessionStatus.set(input.sessionID, {
+                    type: "retry",
+                    attempt,
+                    message: retry,
+                    next: Date.now() + delay,
+                  })
+                  await SessionRetry.sleep(delay, input.abort).catch(() => {})
+                  continue
+                }
+                input.assistantMessage.error = MessageV2.APIError.isInstance(error)
+                  ? new MessageV2.APIError({
+                      ...error.data,
+                      isRetryable: false,
+                      message: `${error.data.message} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                    }).toObject()
+                  : new NamedError.Unknown({
+                      message: `${retry} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                    }).toObject()
+                Bus.publish(Session.Event.Error, {
+                  sessionID: input.assistantMessage.sessionID,
+                  error: input.assistantMessage.error,
                 })
-                await SessionRetry.sleep(delay, input.abort).catch(() => {})
-                continue
+                await SessionStatus.set(input.sessionID, { type: "idle" })
               }
-              input.assistantMessage.error = error
+              input.assistantMessage.error ??= error
               Bus.publish(Session.Event.Error, {
                 sessionID: input.assistantMessage.sessionID,
                 error: input.assistantMessage.error,
