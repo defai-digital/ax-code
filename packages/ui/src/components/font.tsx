@@ -4,6 +4,7 @@ import inter from "../assets/fonts/inter.woff2"
 import geistMonoBold from "../assets/fonts/geist-mono-bold.woff2"
 import geistMonoMedium from "../assets/fonts/geist-mono-medium.woff2"
 import geistMonoRegular from "../assets/fonts/geist-mono.woff2"
+import ibmPlexMonoRegular from "../assets/fonts/ibm-plex-mono.woff2"
 
 export const Font = () => {
   return (
