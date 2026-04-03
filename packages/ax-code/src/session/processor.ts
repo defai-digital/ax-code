@@ -83,6 +83,7 @@ export namespace SessionProcessor {
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
+            let usedTools = false
             const stream = await LLM.stream(streamInput)
 
             for await (const value of stream.fullStream) {
@@ -137,6 +138,7 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-input-start":
+                  usedTools = true
                   const part = await Session.updatePart({
                     id: toolcalls[value.id]?.id ?? PartID.ascending(),
                     messageID: input.assistantMessage.id,
@@ -160,6 +162,7 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-call": {
+                  usedTools = true
                   const match = toolcalls[value.toolCallId]
                   if (match) {
                     const part = await Session.updatePart({
@@ -202,6 +205,7 @@ export namespace SessionProcessor {
                   break
                 }
                 case "tool-result": {
+                  usedTools = true
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     await Session.updatePart({
@@ -231,6 +235,7 @@ export namespace SessionProcessor {
                 }
 
                 case "tool-error": {
+                  usedTools = true
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const errorMsg = value.error instanceof Error ? value.error.message : String(value.error)
@@ -274,6 +279,7 @@ export namespace SessionProcessor {
                   throw value.error
 
                 case "start-step":
+                  usedTools = false
                   snapshot = await Snapshot.track()
                   await Session.updatePart({
                     id: PartID.ascending(),
@@ -293,12 +299,12 @@ export namespace SessionProcessor {
                   const finishReason = typeof value.finishReason === "string"
                     ? value.finishReason
                     : (value.finishReason as any)?.type ?? String(value.finishReason ?? "stop")
-                  input.assistantMessage.finish = finishReason
+                  input.assistantMessage.finish = usedTools ? "tool-calls" : finishReason
                   input.assistantMessage.cost += usage.cost
                   input.assistantMessage.tokens = usage.tokens
                   await Session.updatePart({
                     id: PartID.ascending(),
-                    reason: finishReason,
+                    reason: usedTools ? "tool-calls" : finishReason,
                     snapshot: await Snapshot.track(),
                     messageID: input.assistantMessage.id,
                     sessionID: input.assistantMessage.sessionID,
