@@ -2,7 +2,6 @@ import type { ChildProcessWithoutNullStreams } from "child_process"
 import path from "path"
 import os from "os"
 import { Global } from "../global"
-import { Log } from "../util/log"
 import { BunProc } from "../bun"
 import { text } from "node:stream/consumers"
 import fs from "fs/promises"
@@ -15,53 +14,25 @@ import { which } from "../util/which"
 import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
 import { JS_LOCKFILES } from "@/constants/lsp"
+import {
+  log,
+  pathExists,
+  run,
+  output,
+  NearestRoot,
+} from "./server-helpers"
 
 export namespace LSPServer {
-  const log = Log.create({ service: "lsp.server" })
-  const pathExists = async (p: string) =>
-    fs
-      .stat(p)
-      .then(() => true)
-      .catch(() => false)
-  const run = (cmd: string[], opts: Process.RunOptions = {}) => Process.run(cmd, { ...opts, nothrow: true })
-  const output = (cmd: string[], opts: Process.RunOptions = {}) => Process.text(cmd, { ...opts, nothrow: true })
-
   export interface Handle {
     process: ChildProcessWithoutNullStreams
     initialization?: Record<string, any>
-  }
-
-  type RootFunction = (file: string) => Promise<string | undefined>
-
-  const NearestRoot = (includePatterns: string[], excludePatterns?: string[]): RootFunction => {
-    return async (file) => {
-      if (excludePatterns) {
-        const excludedFiles = Filesystem.up({
-          targets: excludePatterns,
-          start: path.dirname(file),
-          stop: Instance.directory,
-        })
-        const excluded = await excludedFiles.next()
-        await excludedFiles.return()
-        if (excluded.value) return undefined
-      }
-      const files = Filesystem.up({
-        targets: includePatterns,
-        start: path.dirname(file),
-        stop: Instance.directory,
-      })
-      const first = await files.next()
-      await files.return()
-      if (!first.value) return Instance.directory
-      return path.dirname(first.value)
-    }
   }
 
   export interface Info {
     id: string
     extensions: string[]
     global?: boolean
-    root: RootFunction
+    root: (file: string) => Promise<string | undefined>
     spawn(root: string): Promise<Handle | undefined>
   }
 
