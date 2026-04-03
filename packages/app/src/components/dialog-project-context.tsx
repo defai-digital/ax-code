@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/solid-query"
 import { DateTime } from "luxon"
 import { createMemo, createResource, For, Match, Show, Switch, type Component } from "solid-js"
+import { useParams } from "@solidjs/router"
 import { Button } from "@ax-code/ui/button"
 import { Dialog } from "@ax-code/ui/dialog"
 import { Tag } from "@ax-code/ui/tag"
@@ -12,13 +13,20 @@ import {
   useProjectContextRequest,
 } from "@/components/project-context-data"
 import { useLanguage } from "@/context/language"
+import { type AutoAcceptRule, usePermission } from "@/context/permission"
 import { usePlatform } from "@/context/platform"
 import { useServer } from "@/context/server"
+import { useSDK } from "@/context/sdk"
+import { useSync } from "@/context/sync"
 
 export const DialogProjectContext: Component = () => {
+  const params = useParams()
   const server = useServer()
   const platform = usePlatform()
   const language = useLanguage()
+  const permission = usePermission()
+  const sdk = useSDK()
+  const sync = useSync()
   const request = useProjectContextRequest()
   const [info, actions] = createResource(() => request<ProjectContextInfo>("/context"))
 
@@ -80,6 +88,7 @@ export const DialogProjectContext: Component = () => {
 
   const pending = createMemo(() => refresh.isPending || clear.isPending || create.isPending)
   const canOpen = createMemo(() => !!platform.openPath && server.isLocal())
+  const rules = createMemo(() => permission.rules(sdk.directory))
 
   const relative = (value: string) => {
     const time = DateTime.fromISO(value)
@@ -89,6 +98,23 @@ export const DialogProjectContext: Component = () => {
 
   const scopeLabel = (scope: ProjectContextFile["scope"]) =>
     language.t(scope === "project" ? "session.context.scope.project" : "session.context.scope.global")
+
+  const ruleTitle = (item: AutoAcceptRule) => {
+    if (item.scope === "workspace") return language.t("session.context.permissions.rule.workspace")
+    if (item.sessionID === params.id) return language.t("session.context.permissions.rule.current")
+    const title = item.sessionID ? sync.session.get(item.sessionID)?.title : undefined
+    if (title) return title
+    return language.t("session.context.permissions.rule.session", { id: item.sessionID?.slice(0, 8) ?? "" })
+  }
+
+  const ruleScope = (item: AutoAcceptRule) =>
+    language.t(
+      item.scope === "workspace"
+        ? "session.context.permissions.scope.workspace"
+        : item.sessionID === params.id
+          ? "session.context.permissions.scope.current"
+          : "session.context.permissions.scope.session",
+    )
 
   const write = async (value: string) => {
     const body = typeof document === "undefined" ? undefined : document.body
@@ -136,6 +162,16 @@ export const DialogProjectContext: Component = () => {
     } catch (err) {
       fail(err)
     }
+  }
+
+  const revoke = (item: AutoAcceptRule) => {
+    permission.revokeRule(item)
+    showToast({
+      variant: "success",
+      icon: "circle-check",
+      title: language.t("session.context.permissions.revoked.title"),
+      description: ruleTitle(item),
+    })
   }
 
   return (
@@ -211,6 +247,54 @@ export const DialogProjectContext: Component = () => {
                         </div>
                       </div>
                     )}
+                  </Show>
+                </div>
+
+                <div class="rounded-xl border border-border-weak-base bg-background-base p-3 flex flex-col gap-3">
+                  <div class="flex flex-col gap-1">
+                    <div class="text-14-medium text-text-strong">{language.t("session.context.permissions.title")}</div>
+                    <div class="text-12-regular text-text-weak">
+                      {language.t("session.context.permissions.description")}
+                    </div>
+                  </div>
+                  <Show
+                    when={rules().length > 0}
+                    fallback={
+                      <div class="text-12-regular text-text-weak">
+                        {language.t("session.context.permissions.empty")}
+                      </div>
+                    }
+                  >
+                    <div class="flex flex-col gap-2">
+                      <For each={rules()}>
+                        {(item) => (
+                          <div class="rounded-lg border border-border-weaker-base px-3 py-2 flex items-start justify-between gap-3">
+                            <div class="min-w-0 flex flex-col gap-1">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <div class="text-12-medium text-text-strong">{ruleTitle(item)}</div>
+                                <Tag>{ruleScope(item)}</Tag>
+                                <Show when={item.legacy}>
+                                  <Tag>{language.t("session.context.permissions.legacy")}</Tag>
+                                </Show>
+                              </div>
+                              <div class="text-12-regular text-text-base">
+                                {language.t("session.context.permissions.auto")}
+                              </div>
+                              <Show when={item.sessionID}>
+                                <div class="text-12-regular text-text-weak break-all">
+                                  {language.t("session.context.permissions.sessionID", { id: item.sessionID! })}
+                                </div>
+                              </Show>
+                            </div>
+                            <div class="shrink-0 flex items-center gap-2">
+                              <Button type="button" size="small" variant="ghost" onClick={() => revoke(item)}>
+                                {language.t("session.context.permissions.revoke")}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </div>
                   </Show>
                 </div>
 

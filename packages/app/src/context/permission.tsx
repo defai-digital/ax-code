@@ -1,6 +1,7 @@
 import { createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "@ax-code/ui/context"
+import { base64Encode } from "@ax-code/util/encode"
 import type { PermissionRequest } from "@ax-code/sdk/v2/client"
 import { Persist, persisted } from "@/utils/persist"
 import { useGlobalSDK } from "@/context/global-sdk"
@@ -20,6 +21,14 @@ type PermissionRespondFn = (input: {
   response: "once" | "always" | "reject"
   directory?: string
 }) => void
+
+export type AutoAcceptRule = {
+  id: string
+  directory: string
+  scope: "workspace" | "session"
+  sessionID?: string
+  legacy?: boolean
+}
 
 function isNonAllowRule(rule: unknown) {
   if (!rule) return false
@@ -236,6 +245,43 @@ export const { use: usePermission, provider: PermissionProvider } = createSimple
       )
     }
 
+    function rules(directory: string) {
+      const prefix = `${base64Encode(directory)}/`
+      const sessions = globalSync.child(directory, { bootstrap: false })[0].session
+      const entries = Object.entries(store.autoAccept) as [string, boolean][]
+      return entries
+        .flatMap<AutoAcceptRule>(([key, value]) => {
+          if (value !== true) return []
+
+          if (key === directoryAcceptKey(directory)) {
+            return [{ id: key, directory, scope: "workspace" }]
+          }
+
+          if (key.startsWith(prefix)) {
+            const sessionID = key.slice(prefix.length)
+            if (!sessionID || sessionID === "*") return []
+            return [{ id: key, directory, scope: "session", sessionID }]
+          }
+
+          if (!sessions.find((item) => item.id === key)) return []
+          return [{ id: key, directory, scope: "session", sessionID: key, legacy: true }]
+        })
+        .sort((a: AutoAcceptRule, b: AutoAcceptRule) => {
+          if (a.scope !== b.scope) return a.scope === "workspace" ? -1 : 1
+          if (a.sessionID && b.sessionID) return a.sessionID < b.sessionID ? -1 : a.sessionID > b.sessionID ? 1 : 0
+          return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+        })
+    }
+
+    function revokeRule(rule: AutoAcceptRule) {
+      if (rule.scope === "workspace") {
+        disableDirectory(rule.directory)
+        return
+      }
+      if (!rule.sessionID) return
+      disable(rule.sessionID, rule.legacy ? undefined : rule.directory)
+    }
+
     return {
       ready,
       respond,
@@ -266,6 +312,11 @@ export const { use: usePermission, provider: PermissionProvider } = createSimple
       disableAutoAccept(sessionID: string, directory?: string) {
         disable(sessionID, directory)
       },
+      disableAutoAcceptDirectory(directory: string) {
+        disableDirectory(directory)
+      },
+      rules,
+      revokeRule,
       permissionsEnabled,
       isPermissionAllowAll(directory: string) {
         const [childStore] = globalSync.child(directory)
