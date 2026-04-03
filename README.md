@@ -430,11 +430,7 @@ ax-code/
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-- Bug fixes welcome
-- Feature PRs need design review
-- Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`
+AX Code is developed internally. We do not accept pull requests, but we welcome bug reports and feature requests through [GitHub Issues](https://github.com/defai-digital/ax-code/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
