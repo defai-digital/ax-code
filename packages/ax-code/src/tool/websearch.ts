@@ -1,34 +1,8 @@
 import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./websearch.txt"
-import { abortAfterAny } from "../util/abort"
-import { EXA_BASE_URL, EXA_ENDPOINT, EXA_DEFAULT_NUM_RESULTS } from "@/constants/network"
-
-interface McpSearchRequest {
-  jsonrpc: string
-  id: number
-  method: string
-  params: {
-    name: string
-    arguments: {
-      query: string
-      numResults?: number
-      livecrawl?: "fallback" | "preferred"
-      type?: "auto" | "fast" | "deep"
-      contextMaxCharacters?: number
-    }
-  }
-}
-
-interface McpSearchResponse {
-  jsonrpc: string
-  result: {
-    content: Array<{
-      type: string
-      text: string
-    }>
-  }
-}
+import { EXA_DEFAULT_NUM_RESULTS } from "@/constants/network"
+import { fetchExaTool } from "./exa-fetch"
 
 export const WebSearchTool = Tool.define("websearch", async () => {
   return {
@@ -69,75 +43,28 @@ export const WebSearchTool = Tool.define("websearch", async () => {
         },
       })
 
-      const searchRequest: McpSearchRequest = {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: {
-          name: "web_search_exa",
-          arguments: {
-            query: params.query,
-            type: params.type || "auto",
-            numResults: params.numResults || EXA_DEFAULT_NUM_RESULTS,
-            livecrawl: params.livecrawl || "fallback",
-            contextMaxCharacters: params.contextMaxCharacters,
+      return fetchExaTool({
+        request: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "web_search_exa",
+            arguments: {
+              query: params.query,
+              type: params.type || "auto",
+              numResults: params.numResults || EXA_DEFAULT_NUM_RESULTS,
+              livecrawl: params.livecrawl || "fallback",
+              contextMaxCharacters: params.contextMaxCharacters,
+            },
           },
         },
-      }
-
-      const { signal, clearTimeout } = abortAfterAny(25000, ctx.abort)
-
-      try {
-        const headers: Record<string, string> = {
-          accept: "application/json, text/event-stream",
-          "content-type": "application/json",
-        }
-
-        const response = await fetch(`${EXA_BASE_URL}${EXA_ENDPOINT}`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(searchRequest),
-          signal,
-        })
-
-        clearTimeout()
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`Search error (${response.status}): ${errorText}`)
-        }
-
-        const responseText = await response.text()
-
-        // Parse SSE response
-        const lines = responseText.split("\n")
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data: McpSearchResponse = JSON.parse(line.substring(6))
-            if (data.result && data.result.content && data.result.content.length > 0) {
-              return {
-                output: data.result.content[0].text,
-                title: `Web search: ${params.query}`,
-                metadata: {},
-              }
-            }
-          }
-        }
-
-        return {
-          output: "No search results found. Please try a different query.",
-          title: `Web search: ${params.query}`,
-          metadata: {},
-        }
-      } catch (error) {
-        clearTimeout()
-
-        if (error instanceof Error && error.name === "AbortError") {
-          throw new Error("Search request timed out")
-        }
-
-        throw error
-      }
+        timeout: 25000,
+        errorPrefix: "Search error",
+        noResultsMessage: "No search results found. Please try a different query.",
+        title: `Web search: ${params.query}`,
+        abort: ctx.abort,
+      })
     },
   }
 })
