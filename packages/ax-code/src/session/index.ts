@@ -804,9 +804,10 @@ export namespace Session {
         ? safe(inputTokens)
         : safe(inputTokens - cacheReadInputTokens - cacheWriteInputTokens)
 
-      const total = anthropicMeta
-        ? safe((input.usage.totalTokens ?? 0) + cacheReadInputTokens + cacheWriteInputTokens)
+      const rawTotal = anthropicMeta
+        ? (input.usage.totalTokens ?? 0) + cacheReadInputTokens + cacheWriteInputTokens
         : input.usage.totalTokens
+      const total = rawTotal != null && Number.isFinite(rawTotal) ? rawTotal : undefined
 
       const tokens = {
         total,

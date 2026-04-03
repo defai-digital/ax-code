@@ -263,15 +263,16 @@ export namespace SessionProcessor {
                 case "finish-step":
                   const usage = Session.getUsage({
                     model: input.model,
-                    usage: value.usage,
+                    usage: value.usage ?? { inputTokens: 0, outputTokens: 0 },
                     metadata: value.providerMetadata,
                   })
-                  input.assistantMessage.finish = value.finishReason
+                  const finishReason = typeof value.finishReason === "string" ? value.finishReason : "stop"
+                  input.assistantMessage.finish = finishReason
                   input.assistantMessage.cost += usage.cost
                   input.assistantMessage.tokens = usage.tokens
                   await Session.updatePart({
                     id: PartID.ascending(),
-                    reason: value.finishReason,
+                    reason: finishReason,
                     snapshot: await Snapshot.track(),
                     messageID: input.assistantMessage.id,
                     sessionID: input.assistantMessage.sessionID,

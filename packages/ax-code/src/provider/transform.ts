@@ -4,7 +4,6 @@ import type { JSONSchema } from "zod/v4/core"
 import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { Flag } from "@/flag/flag"
-import { supportsServerTools, supportsReasoning, buildToolsArray, buildToolConfig, DEFAULT_CONFIG as XAI_SERVER_TOOLS } from "./xai/server-tools"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -119,8 +118,7 @@ export namespace ProviderTransform {
     const id = model.id.toLowerCase()
     if (id.includes("qwen")) return 0.55
     if (id.includes("gemini")) return 1.0
-    if (id.includes("glm-4.6")) return 1.0
-    if (id.includes("glm-4.7")) return 1.0
+    if (id.includes("glm")) return 1.0
     if (id.includes("minimax-m2")) return 1.0
     if (id.includes("kimi-k2")) {
       // kimi-k2-thinking & kimi-k2.5 && kimi-k2p5 && kimi-k2-5
@@ -168,28 +166,10 @@ export namespace ProviderTransform {
     )
       return {}
 
-    // see: https://docs.x.ai/docs/guides/reasoning#control-how-hard-the-model-thinks
-    // XAI-specific grok handling (not for openrouter/other providers)
-    if (model.api.npm === "@ai-sdk/xai") {
-      if (id.includes("grok-3-mini")) {
-        return {
-          low: { reasoningEffort: "low" },
-          high: { reasoningEffort: "high" },
-        }
-      }
-      if (id.includes("grok-4")) {
-        return {
-          medium: { reasoningEffort: "medium" },
-          high: { reasoningEffort: "high" },
-        }
-      }
-      // older grok models (not grok-4, not grok-3-mini) do not support reasoning effort
-      if (id.includes("grok")) return {}
-    }
+    // XAI: @ai-sdk/xai v3 Responses API does not support reasoningEffort parameter
+    if (model.api.npm === "@ai-sdk/xai") return {}
 
     switch (model.api.npm) {
-      case "@ai-sdk/xai":
-      // https://v5.ai-sdk.dev/providers/ai-sdk-providers/xai
       case "venice-ai-sdk-provider":
       // https://docs.venice.ai/overview/guides/reasoning-models#reasoning-effort
       case "@ai-sdk/openai-compatible":
@@ -249,17 +229,11 @@ export namespace ProviderTransform {
     const result: Record<string, any> = {}
 
     if (
-      input.model.providerID === "baseten" ||
-      (input.model.providerID === "ax-code" && ["kimi-k2-thinking", "glm-4.6"].includes(input.model.api.id))
+      input.model.providerID.startsWith("zai") &&
+      input.model.api.npm === "@ai-sdk/openai-compatible" &&
+      input.model.capabilities.reasoning
     ) {
-      result["chat_template_args"] = { enable_thinking: true }
-    }
-
-    if (["zai", "zhipuai"].includes(input.model.providerID) && input.model.api.npm === "@ai-sdk/openai-compatible") {
-      result["thinking"] = {
-        type: "enabled",
-        clear_thinking: false,
-      }
+      result["enable_thinking"] = true
     }
 
     if (input.providerOptions?.setCacheKey) {
@@ -277,35 +251,15 @@ export namespace ProviderTransform {
       }
     }
 
-    // Enable thinking for reasoning models on alibaba-cn (DashScope).
+    // Enable thinking for reasoning models on Alibaba Cloud (DashScope).
     // DashScope's OpenAI-compatible API requires `enable_thinking: true` in the request body
-    // to return reasoning_content. Without it, models like kimi-k2.5, qwen-plus, qwen3, qwq,
-    // deepseek-r1, etc. never output thinking/reasoning tokens.
-    // Note: kimi-k2-thinking is excluded as it returns reasoning_content by default.
+    // to return reasoning_content. Without it, reasoning models never output thinking tokens.
     if (
-      input.model.providerID === "alibaba-cn" &&
+      input.model.providerID.startsWith("alibaba") &&
       input.model.capabilities.reasoning &&
-      input.model.api.npm === "@ai-sdk/openai-compatible" &&
-      !input.model.api.id.includes("kimi-k2-thinking")
+      input.model.api.npm === "@ai-sdk/openai-compatible"
     ) {
       result["enable_thinking"] = true
-    }
-
-    // XAI/Grok: Inject server-side tools (x_search, code_execution) and parallel calling
-    if (input.model.api.npm === "@ai-sdk/xai" && supportsServerTools(input.model.api.id)) {
-      const tools = buildToolsArray(XAI_SERVER_TOOLS)
-      if (tools.length > 0) {
-        result["server_tools"] = tools
-        result["server_tool_config"] = buildToolConfig(XAI_SERVER_TOOLS)
-      }
-      result["parallel_function_calling"] = true
-    }
-
-    // XAI/Grok: Set default reasoning effort for reasoning-capable models
-    if (input.model.api.npm === "@ai-sdk/xai" && supportsReasoning(input.model.api.id)) {
-      if (!result["reasoningEffort"]) {
-        result["reasoningEffort"] = "high"
-      }
     }
 
     if (input.model.providerID === "venice") {

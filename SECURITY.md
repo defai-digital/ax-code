@@ -53,9 +53,13 @@ The isolation sandbox operates at the application layer (tool permission checks)
 - **Basic auth enforced** — when `AX_CODE_SERVER_PASSWORD` is set, HTTP Basic Auth is required on all API endpoints
 - **CORS configurable** — additional allowed origins can be specified via `--cors`
 
-### API Key Storage
+### Credential Storage
 
-API keys are encrypted at rest using AES-256-GCM with a machine-derived key. Keys are stored in `~/.local/share/ax-code/auth.json` and are never sent anywhere other than the configured LLM provider.
+Provider API keys are encrypted at rest using AES-256-GCM with PBKDF2 key derivation and stored in the local AX Code data directory (`~/.local/share/ax-code/`) with user-only file permissions (`0600`).
+
+The encryption key is derived from local machine attributes (hostname, platform, architecture). This protects against casual offline disclosure (e.g., accidental file sharing) but does **not** protect against a determined attacker with access to the host. It is not equivalent to OS keychain or hardware-backed secret storage.
+
+MCP OAuth tokens and client secrets are also encrypted at rest using the same mechanism. Non-sensitive metadata (server URLs, expiry timestamps) remains in plaintext.
 
 ---
 

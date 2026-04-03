@@ -95,6 +95,7 @@ export function merge(partial: Partial<ServerToolsConfig>): ServerToolsConfig {
  */
 export function supportsServerTools(modelId: string): boolean {
   const id = modelId.toLowerCase()
+  if (id.includes("multi-agent")) return false
   return id.includes("grok-4") || id.includes("grok-3") || id.includes("grok-code")
 }
 
@@ -104,6 +105,6 @@ export function supportsServerTools(modelId: string): boolean {
 export function supportsReasoning(modelId: string): boolean {
   const id = modelId.toLowerCase()
   if (id.includes("non-reasoning")) return false
-  if (id.includes("fast") && !id.includes("fast-reasoning")) return false
+  if (id.includes("fast")) return false
   return id.includes("grok-4") || id.includes("grok-3-mini") || id.includes("grok-code")
 }

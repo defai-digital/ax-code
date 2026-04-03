@@ -743,8 +743,8 @@ export namespace Provider {
         "llama-3.1-8b",
         "llama3-8b",
       ]
-      if (providerID.startsWith("ax-code")) {
-        priority = ["gemini-2.0-flash", "gemini-flash"]
+      if (providerID.startsWith("zai")) {
+        priority = ["glm-4.7-flash", "glm-4.5-flash", "glm-5-turbo"]
       }
       if (providerID === ProviderID.xai) {
         priority = ["grok-3-mini-fast", "grok-3-mini", "grok-4"]
