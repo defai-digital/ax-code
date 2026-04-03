@@ -1,213 +1,246 @@
 # AX Code
 
-The open source, provider-agnostic AI coding agent.
+**The open source AI coding agent that works with any model.**
+
+Use Claude, GPT, Gemini, Grok, DeepSeek, or run models locally — ax-code gives you full AI-powered development without vendor lock-in.
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
----
-
-## What is ax-code?
-
-ax-code is a terminal-based AI coding assistant that works with **any LLM provider** — not locked to a single vendor. It features LSP integration, session persistence, MCP support, a rich terminal UI, and a programmatic SDK for building custom AI apps.
-
-### Key Features
-
-- **Provider-agnostic** — Google Gemini, xAI Grok, Groq, Z.AI (GLM), local models (Ollama, LM Studio, vLLM)
-- **Programmatic SDK** — Direct agent instantiation without HTTP server (`createAgent()` → `agent.run()`)
-- **Specialized AI agents** — Security auditor, architecture analyst, debugger, performance profiler — auto-selected based on your prompt
-- **Agent auto-routing** — Automatically switches to the best agent for each task with toast notifications
-- **LSP-first** — Real language server integration (Pyright, TypeScript, Go), not regex hacks
-- **AX.md context system** — `/init` generates AI-optimized project context with depth levels
-- **Memory warmup** — Pre-cache project context for faster, more accurate AI responses
-- **Self-correction** — Automatic failure detection, reflection, and retry
-- **ReAct mode** — Structured Thought/Action/Observation reasoning
-- **Planning system** — Task decomposition with dependency ordering and verification
-- **Session persistence** — SQLite-backed, forkable, compactable sessions
-- **MCP support** — Model Context Protocol with SSE/stdio/HTTP transports, auto-discovery, and 16 pre-configured templates
-- **Design check** — Scan CSS/React code for hardcoded colors, spacing, accessibility violations
-- **Context stats** — Token usage breakdown, cost estimation, context window monitoring
-- **25+ built-in tools** — File ops, search, bash, LSP, web fetch, tasks, todos
-- **Credential encryption** — All credentials (provider API keys, MCP OAuth tokens, account tokens) encrypted at rest with AES-256-GCM
-- **Grok server-side tools** — x_search, code_execution, parallel function calling
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
-## Quick Start
+## Why AX Code?
 
-### Prerequisites
+Most AI coding tools lock you into a single provider. AX Code doesn't.
 
-- [pnpm](https://pnpm.io) v9.15.9+
-- [Bun](https://bun.sh) v1.3.11+
-- An API key from any supported provider
+**Switch models freely.** Use Claude for complex reasoning, Gemini for long context, Grok for real-time web knowledge, or run Llama locally for privacy — all with the same workflow, the same agents, the same tools.
 
-### Install & Run
+**Specialized agents, not a generic chatbot.** AX Code ships with 9 purpose-built agents (security auditor, architect, debugger, performance profiler, and more) that auto-activate based on what you're working on. Ask about a vulnerability and the security agent takes over. Hit a crash and the debug agent steps in. No manual switching needed.
+
+**Real code intelligence.** AX Code connects to language servers (TypeScript, Python, Go, Rust, and more) for actual go-to-definition, find-references, and diagnostics — not regex pattern matching.
+
+**Use it everywhere.** Terminal, desktop app, web browser, VS Code sidebar, or embed it in your own apps via the programmatic SDK.
+
+---
+
+## Who Is AX Code For?
+
+- **Developers who use multiple AI models** and want one tool that works with all of them
+- **Teams that can't commit to a single vendor** due to cost, compliance, or capability needs
+- **Engineers building AI-powered tools** who need a programmatic SDK, not just a chat UI
+- **Security-conscious developers** who want encrypted credentials, execution sandboxing, and the ability to run models locally
+- **Open source advocates** who want full transparency and customization
+
+---
+
+## Get Started in 60 Seconds
 
 ```bash
-# Clone the repo
+# Install
 git clone https://github.com/defai-digital/ax-code.git
-cd ax-code
+cd ax-code && pnpm install && pnpm run setup:cli
 
-# Install dependencies with pnpm
-pnpm install
-
-# Set up the global `ax-code` command
-pnpm run setup:cli
-
-# Set an API key (pick one)
-export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Google Gemini
+# Set any provider key (pick one)
+export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Gemini
 export XAI_API_KEY="your-key"                     # Grok
-export GROQ_API_KEY="your-key"                    # Groq (free)
+export GROQ_API_KEY="your-key"                    # Groq (free tier)
 
-# Run
-ax-code                # Global command (after setup:cli)
-pnpm run dev           # Direct from repo root (uses Bun runtime)
-```
-
-### Windows (PowerShell)
-
-```powershell
-# Set API key
-$env:XAI_API_KEY="your-key"
-
-# Set up global command
-pnpm run setup:cli
-
-# Run
+# Launch
 ax-code
 ```
+
+**Prerequisites:** [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.11+
 
 ---
 
 ## Supported Providers
 
-### Online
+### Cloud
 
 | Provider | Models | Setup |
 |----------|--------|-------|
-| **Anthropic (Claude)** | Claude Opus, Sonnet, Haiku | `ANTHROPIC_API_KEY` |
-| **OpenAI (GPT)** | GPT-5, GPT-4, o3, o4 | `OPENAI_API_KEY` |
-| **Google (Gemini)** | Gemini 2.5, 3.0, 3.1, Gemma | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| **xAI (Grok)** | Grok-2, Grok-3, Grok-4 | `XAI_API_KEY` |
-| **DeepSeek** | DeepSeek Chat, Reasoner | `DEEPSEEK_API_KEY` |
+| **Anthropic** | Claude Opus, Sonnet, Haiku | `ANTHROPIC_API_KEY` |
+| **OpenAI** | GPT-5, GPT-4, o3, o4 | `OPENAI_API_KEY` |
+| **Google** | Gemini 3.0, 3.1 | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| **xAI** | Grok-2, Grok-3, Grok-4 | `XAI_API_KEY` |
+| **DeepSeek** | Chat, Reasoner | `DEEPSEEK_API_KEY` |
 | **Groq** | Llama, Qwen, Gemma, DeepSeek | `GROQ_API_KEY` (free) |
 | **GitHub Copilot** | Claude, GPT, Gemini via Copilot | `ax-code providers login` |
-| **Alibaba Cloud (Qwen)** | Qwen3, Qwen3-Coder | `DASHSCOPE_API_KEY` |
+| **Alibaba Cloud** | Qwen3, Qwen3-Coder | `DASHSCOPE_API_KEY` |
 | **Azure** | GPT, Claude, Llama, Phi | `AZURE_API_KEY` |
-| **Perplexity (Sonar)** | Sonar, Sonar Pro, Deep Research | `PERPLEXITY_API_KEY` |
-| **Z.AI Coding Plan (GLM)** | GLM-4.5, GLM-4.7, GLM-5 | `ax-code providers login` |
+| **Perplexity** | Sonar, Sonar Pro, Deep Research | `PERPLEXITY_API_KEY` |
+| **Z.AI** | GLM-4.5, GLM-4.7, GLM-5 | `ax-code providers login` |
 
-### Offline (Local Inference)
+### Local (Offline, Private)
 
 | Provider | Setup |
 |----------|-------|
 | **AX Studio** | Auto-detected at `localhost:11434` or `AX_STUDIO_HOST` |
 | **Ollama** | Auto-detected at `localhost:11434` or `OLLAMA_HOST` |
-| **LMStudio** | Configure in `ax-code.json` |
+| **LM Studio** | Configure in `ax-code.json` |
 
-Offline providers auto-discover locally running models — no API key needed.
-
----
-
-## Commands
-
-### Core
-```bash
-ax-code                          # Launch TUI (default)
-ax-code run "message"            # Non-interactive mode
-ax-code serve                    # Headless API server (localhost only)
-ax-code restart                  # Restart running server instance
-ax-code --sandbox read-only      # Launch in read-only sandbox mode
-ax-code --help                   # All commands
-```
-
-### Providers & Models
-```bash
-ax-code providers list           # List available providers
-ax-code providers login          # Add provider credential (interactive)
-ax-code providers login groq     # Quick API key setup for specific provider
-ax-code providers logout         # Remove a credential
-ax-code models                   # List all available models
-```
-
-### Project Context
-```bash
-ax-code init                     # Generate AX.md project context
-ax-code init --depth full        # Deep analysis with code patterns
-ax-code memory warmup            # Pre-cache project context for AI
-ax-code memory warmup --dry-run  # Preview without saving
-ax-code memory warmup --max-tokens 2000  # Limit context size
-ax-code memory status            # Show cached memory info
-ax-code memory clear             # Delete cached memory
-```
-
-### MCP Servers
-```bash
-ax-code mcp list                 # List configured MCP servers
-ax-code mcp list --discover      # Detect available servers
-ax-code mcp add                  # Add server (from template or custom)
-ax-code mcp auth <name>          # Authenticate OAuth server
-ax-code mcp debug <name>         # Debug connection issues
-```
-
-### Analysis
-```bash
-ax-code design-check src/        # Scan for design violations
-ax-code design-check src/ --rule no-inline-styles=off  # Disable a rule
-ax-code context                  # Show context window usage + cost
-ax-code context <sessionID>      # Show stats for specific session
-ax-code stats                    # Show token usage statistics
-```
-
-### Sessions
-```bash
-ax-code session list             # List all sessions
-ax-code export <sessionID>       # Export session as JSON
-ax-code import <file>            # Import session from JSON
-```
+Local providers auto-discover running models — no API key needed. Your code never leaves your machine.
 
 ---
 
-## Agents
+## Core Features
 
-Switch between agents in the TUI using **Tab**, or let auto-routing pick the best agent for your task:
+### Specialized AI Agents
 
-| Agent | Mode | Purpose | Auto-routes on |
-|-------|------|---------|----------------|
-| **build** | Primary | Default — full tool access for development | (default) |
-| **security** | Primary | Scans for vulnerabilities, secrets, OWASP issues | "scan for vulnerabilities", "security audit" |
-| **architect** | Primary | Analyzes system design, dependencies, coupling | "analyze architecture", "project structure" |
-| **debug** | Primary | Investigates bugs, traces root cause, fixes issues | "debug this", "why is it crashing" |
-| **perf** | Primary | Finds bottlenecks, memory issues, optimizations | "performance", "slow", "optimize" |
-| **plan** | Primary | Read-only analysis and planning | Manual switch only |
-| **react** | Primary | Structured Thought/Action/Observation reasoning | Manual switch only |
-| **general** | Subagent | Parallel multi-step task execution | — |
-| **explore** | Subagent | Fast codebase search and analysis | — |
+AX Code doesn't use a single generic assistant. It ships with **9 purpose-built agents**, each with tailored system prompts, tool access, and permission boundaries.
 
-### Agent Auto-Routing
+| Agent | What It Does | Auto-routes When You Say... |
+|-------|-------------|---------------------------|
+| **build** | General development — full tool access | *(default agent)* |
+| **security** | Vulnerability scanning, secrets detection, OWASP analysis | "scan for vulnerabilities", "security audit" |
+| **architect** | System design analysis, dependency review, coupling detection | "analyze architecture", "review structure" |
+| **debug** | Bug investigation, root cause analysis, systematic fixes | "debug this", "why is it crashing" |
+| **perf** | Bottleneck detection, memory profiling, optimization | "too slow", "optimize", "performance" |
+| **plan** | Read-only task decomposition and planning | *(manual switch via Tab)* |
+| **react** | Structured Thought/Action/Observation reasoning | *(manual switch via Tab)* |
+| **general** | Parallel multi-step task execution | *(subagent)* |
+| **explore** | Fast codebase search and navigation | *(subagent)* |
 
-When you send a message, ax-code analyzes the content and automatically switches to the most appropriate agent. A toast notification appears when switching occurs. Domain agents (security, architect, debug, perf) are auto-routed; mode agents (plan, react) require manual switching via Tab.
+**Agent auto-routing** analyzes your message and switches to the right agent automatically. A toast notification tells you when it happens. You can also switch manually with **Tab**.
+
+### Language Server Integration (LSP)
+
+AX Code talks to real language servers — the same ones your IDE uses.
+
+- **Go to definition** — Jump to where a function/type is defined
+- **Find references** — See every usage across the codebase
+- **Hover info** — Get type signatures and documentation
+- **Call hierarchy** — Trace incoming and outgoing calls
+- **Diagnostics** — Surface real compiler errors and warnings
+
+Supports TypeScript, Python (Pyright), Go (gopls), Rust (rust-analyzer), Ruby (Solargraph), C/C++ (clangd), and more.
+
+### 25+ Built-in Tools
+
+| Category | Tools |
+|----------|-------|
+| **File operations** | read, write, edit, glob, ls, multiedit |
+| **Code search** | grep (regex), codesearch (web), websearch |
+| **Shell execution** | bash (with timeout and sandboxing), pty (interactive) |
+| **LSP queries** | definition, references, hover, symbols, call hierarchy, diagnostics |
+| **Planning** | task, todo, plan enter/exit |
+| **Web** | webfetch (URL to markdown), websearch |
+| **Batch** | Parallel tool execution |
+
+### Session Persistence
+
+Every conversation is stored in SQLite. You can:
+
+- **Resume** any previous session
+- **Fork** a session to explore different approaches
+- **Compact** sessions to reduce token usage
+- **Export/Import** sessions as JSON
+
+### MCP (Model Context Protocol)
+
+Connect to external tools and services via MCP with 16 pre-configured templates:
+
+| Category | Servers |
+|----------|---------|
+| **Search & Web** | Exa, Brave Search |
+| **Developer Tools** | GitHub, GitLab, Linear, Sentry |
+| **Databases** | PostgreSQL, SQLite |
+| **Browser** | Puppeteer, Playwright |
+| **Cloud** | Vercel, Cloudflare |
+| **Design** | Figma |
+| **Communication** | Slack |
+
+```bash
+ax-code mcp add              # Add from template or custom
+ax-code mcp list --discover  # Auto-detect available servers
+```
+
+Supports SSE, HTTP, and stdio transports with OAuth authentication.
+
+### AX.md Context System
+
+Generate AI-optimized project context that helps every conversation start informed:
+
+```bash
+ax-code init                 # Generate AX.md context
+ax-code init --depth full    # Deep analysis with code patterns
+ax-code memory warmup        # Pre-cache for faster responses
+```
+
+### Design Check
+
+Scan CSS/React code for design system violations:
+
+```bash
+ax-code design-check src/
+```
+
+Catches hardcoded colors, raw spacing values, inline styles, missing alt text, and missing form labels.
+
+### Self-Correction & ReAct Reasoning
+
+- **Self-correction** — Detects failures, reflects on what went wrong, and retries with a different approach
+- **ReAct mode** — Structured Thought → Action → Observation loops for complex multi-step problems
+- **Planning system** — Decomposes large tasks into dependency-ordered steps with verification
 
 ---
 
-## Programmatic SDK
+## Use It Your Way
 
-Use ax-code as a library in your own apps — no HTTP server needed:
+### Terminal (TUI)
+
+```bash
+ax-code                      # Launch interactive TUI
+ax-code run "fix the login bug"  # One-shot non-interactive mode
+```
+
+The terminal UI features a customizable theme system (GitHub default), context stats, agent switching, and real-time streaming.
+
+### Desktop App
+
+Native cross-platform desktop app built with Tauri:
+
+```bash
+pnpm --dir packages/desktop tauri dev
+```
+
+Available for macOS (Apple Silicon & Intel), Windows, and Linux.
+
+### Web App
+
+```bash
+ax-code serve --port 4096          # Start the backend
+pnpm --dir packages/app dev        # Start the web UI
+```
+
+Full-featured web interface with chat, file explorer, terminal emulator, and model selection.
+
+### VS Code Extension
+
+Use ax-code directly inside VS Code:
+
+1. `Ctrl+Shift+P` → **"Install from VSIX"** → select `sdks/vscode/ax-code-1.4.0.vsix`
+2. Open the sidebar panel with `Ctrl+Shift+A`
+
+**Features:** chat panel, explain/review/fix via right-click, code selection actions, integrated terminal.
+
+### Programmatic SDK
+
+Build AI-powered applications with the SDK — no HTTP server needed:
 
 ```typescript
 import { createAgent } from "@ax-code/sdk/programmatic"
 
-// Create agent (in-process, <1s startup)
 const agent = await createAgent({
   directory: process.cwd(),
   auth: { provider: "xai", apiKey: "your-key" },
 })
 
-// One-shot
+// One-shot execution
 const result = await agent.run("Fix the login bug")
 console.log(result.text, result.usage.totalTokens)
-
-// Streaming
-const text = await agent.stream("Explain this code").text()
 
 // Streaming with callbacks
 const stream = agent.stream("Refactor this function")
@@ -215,7 +248,7 @@ stream.on("text", (t) => process.stdout.write(t))
 stream.on("tool-call", (tool) => console.log("Using:", tool))
 await stream.done()
 
-// Multi-turn session
+// Multi-turn sessions
 const session = await agent.session()
 await session.run("Read src/auth/index.ts")
 await session.run("Now add input validation")
@@ -224,160 +257,113 @@ await session.run("Now add input validation")
 const models = await agent.models()   // 78+ models
 const tools = await agent.tools()     // 15 built-in tools
 
-// Cleanup
 await agent.dispose()
 ```
 
-### SDK Features
-- **Typed errors** — `ProviderError`, `TimeoutError`, `ToolError`, `DisposedError`, `AgentNotFoundError`
-- **Stream helpers** — `.text()`, `.result()`, `.on()`, `.done()`
-- **Auto-retry** — `maxRetries` with exponential backoff on transient errors (429, 500)
-- **Timeout** — on `createAgent()` and `agent.run()`
-- **Direct API key** — `auth: { provider, apiKey }` — no local setup needed
-- **Env var detection** — auto-reads `XAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`
-- **Hooks** — `onToolCall`, `onToolResult`, `onPermissionRequest`, `onError`
-- **Agent auto-routing** — works through SDK (security, architect, debug, perf)
-
+**SDK highlights:**
+- In-process execution (< 1s startup, no server)
+- Typed errors: `ProviderError`, `TimeoutError`, `ToolError`, `DisposedError`
+- Stream helpers: `.text()`, `.result()`, `.on()`, `.done()`
+- Auto-retry with exponential backoff
+- Agent auto-routing works through SDK
+- Hooks: `onToolCall`, `onToolResult`, `onPermissionRequest`, `onError`
 
 ---
 
-## VS Code Extension
+## Security
 
-Use ax-code directly inside VS Code with a sidebar chat panel.
+### Execution Sandbox
 
-### Install
+Control what the AI agent can access with three isolation modes:
 
-1. Open VS Code
-2. `Ctrl+Shift+P` → **"Install from VSIX"**
-3. Select `sdks/vscode/ax-code-1.4.0.vsix`
-4. Restart VS Code
-
-### Features
-
-| Feature | How |
-|---|---|
-| **Chat panel** | Click AX icon in sidebar, or `Ctrl+Shift+A` |
-| **Select model** | Click "Model" button in chat panel |
-| **Explain selection** | Select code → right-click → "ax-code: Explain Selection" |
-| **Review selection** | Select code → right-click → "ax-code: Review Selection" |
-| **Fix file** | Right-click → "ax-code: Fix This File" |
-| **Explain file** | Right-click → "ax-code: Explain This File" |
-| **Open terminal** | `Ctrl+Escape` or command palette → "ax-code: Open Terminal" |
-| **Status bar** | Shows AX icon in bottom-right, click to open chat |
-
-### Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl+Shift+A` | Open chat panel |
-| `Ctrl+Shift+E` | Explain selected code |
-| `Ctrl+Escape` | Open ax-code terminal |
-
-### How It Works
-
-The extension spawns `ax-code serve` in the background and communicates via HTTP. First message takes ~20-30s (server startup), subsequent messages are 3-10s.
-
----
-
-## Design Check
-
-Scan CSS/React code for design violations:
+| Mode | Behavior |
+|------|----------|
+| **Read-only** | Blocks all file mutations and shell commands |
+| **Workspace write** *(default)* | Allows writes only inside the workspace; `.git` and `.ax-code` always protected |
+| **Full access** | Disables isolation (explicit opt-in) |
 
 ```bash
-ax-code design-check src/
+ax-code --sandbox read-only
 ```
 
-### Rules
+Network access for tools is disabled by default in read-only and workspace-write modes. Isolation violations trigger an approval prompt.
 
-| Rule | Severity | What It Detects |
-|------|----------|-----------------|
-| `no-hardcoded-colors` | ERROR | Hex (#fff), rgb(), hsl() not using tokens |
-| `no-raw-spacing` | WARN | px values not using spacing tokens |
-| `no-inline-styles` | WARN | Inline style attributes in JSX/HTML |
-| `missing-alt-text` | ERROR | `<img>` without alt attribute |
-| `missing-form-labels` | ERROR | `<input>` without associated label |
+### Credential Encryption
 
-Disable rules: `ax-code design-check src/ --rule no-inline-styles=off`
+All API keys, OAuth tokens, and account credentials are encrypted at rest with **AES-256-GCM**. See [SECURITY.md](SECURITY.md) for the full threat model.
 
----
+### Server Security
 
-## Memory Warmup
-
-Pre-cache project context for faster, more accurate AI responses:
-
-```bash
-ax-code memory warmup            # Scan and cache project context
-ax-code memory status            # Show what's cached
-ax-code memory clear             # Delete cache
-```
-
-Caches directory structure, README summary, config files, and detected tech stack in `.ax-code/memory.json`.
-
----
-
-## Context Stats
-
-Monitor context window usage and costs:
-
-```bash
-ax-code context                  # Latest session breakdown
-ax-code context <sessionID>      # Specific session
-```
-
-Shows: token breakdown (system prompt, tools, history), usage percentage, status (GOOD/MODERATE/HIGH/CRITICAL), and estimated cost per provider.
-
----
-
-## MCP Server Templates
-
-Add pre-configured MCP servers instantly with `ax-code mcp add`:
-
-| Category | Servers |
-|----------|---------|
-| **Search & Web** | Exa, Brave Search |
-| **Developer Tools** | GitHub, GitLab, Linear, Sentry |
-| **Databases** | PostgreSQL, SQLite |
-| **File System** | Filesystem, Google Drive |
-| **Browser & Testing** | Puppeteer, Playwright |
-| **Cloud** | Vercel, Cloudflare |
-| **Design** | Figma |
-| **Communication** | Slack |
-
-Auto-discovery (`ax-code mcp list --discover`) detects locally available servers based on environment variables and installed tools.
+- Binds to **localhost only** by default
+- Network binding requires `AX_CODE_SERVER_PASSWORD`
+- CORS and authentication enforced
 
 ---
 
 ## Configuration
 
-Create `ax-code.json` in your project root or `~/.config/ax-code/ax-code.json` for global config:
+Create `ax-code.json` in your project root or `~/.config/ax-code/ax-code.json` for global settings:
 
 ```json
 {
-  "language": "en",
   "provider": {
     "google": {
-      "options": {
-        "apiKey": "your-key"
-      }
+      "options": { "apiKey": "your-key" }
     }
   }
 }
 ```
 
-### Environment Variables
+Config is hierarchical: remote org defaults → global → custom path → project → `.ax-code/` directory → managed overrides.
+
+### Key Environment Variables
 
 | Variable | Purpose |
 |----------|---------|
-| `ANTHROPIC_API_KEY` | Anthropic Claude API key |
-| `OPENAI_API_KEY` | OpenAI GPT API key |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Google Gemini API key |
-| `XAI_API_KEY` | xAI Grok API key |
-| `DEEPSEEK_API_KEY` | DeepSeek API key |
-| `GROQ_API_KEY` | Groq API key (free) |
-| `AX_CODE_CONFIG` | Custom config file path |
-| `AX_CODE_CONFIG_DIR` | Custom config directory |
-| `AX_CODE_ISOLATION_MODE` | Sandbox mode: `read-only`, `workspace-write`, `full-access` |
-| `AX_CODE_SERVER_PASSWORD` | Required when server binds to network addresses |
+| `ANTHROPIC_API_KEY` | Claude |
+| `OPENAI_API_KEY` | GPT |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini |
+| `XAI_API_KEY` | Grok |
+| `DEEPSEEK_API_KEY` | DeepSeek |
+| `GROQ_API_KEY` | Groq (free) |
+| `AX_CODE_ISOLATION_MODE` | Sandbox: `read-only`, `workspace-write`, `full-access` |
+| `AX_CODE_SERVER_PASSWORD` | Required for network-bound server |
+
+---
+
+## CLI Reference
+
+```bash
+# Core
+ax-code                              # Launch TUI
+ax-code run "message"                # Non-interactive mode
+ax-code serve                        # Headless API server
+ax-code --sandbox read-only          # Read-only mode
+
+# Providers & Models
+ax-code providers list               # List providers
+ax-code providers login              # Add credential
+ax-code providers login groq         # Quick setup
+ax-code models                       # List models
+
+# Project Context
+ax-code init                         # Generate AX.md
+ax-code init --depth full            # Full analysis
+ax-code memory warmup                # Pre-cache context
+
+# MCP
+ax-code mcp add                      # Add MCP server
+ax-code mcp list --discover          # Auto-detect servers
+
+# Analysis
+ax-code design-check src/            # Design violations
+ax-code context                      # Token usage & cost
+ax-code stats                        # Usage statistics
+
+# Sessions
+ax-code session list                 # List sessions
+ax-code export <sessionID>           # Export as JSON
+```
 
 ---
 
@@ -386,106 +372,22 @@ Create `ax-code.json` in your project root or `~/.config/ax-code/ax-code.json` f
 ```
 ax-code/
 ├── packages/
-│   ├── ax-code/           # Core CLI application
-│   │   └── src/
-│   │       ├── agent/     # Agent system (9 agents + auto-routing)
-│   │       │   ├── router.ts    # Auto-routing engine
-│   │       │   └── prompt/      # Agent-specific system prompts
-│   │       ├── auth/      # Authentication + API key encryption
-│   │       ├── cli/       # CLI commands and TUI
-│   │       ├── config/    # Hierarchical config system
-│   │       ├── context/   # AX.md context generation
-│   │       ├── design-check/  # CSS/React design linting (5 rules)
-│   │       ├── i18n/      # Internationalization (UI strings, English)
-│   │       ├── lsp/       # Language server integration
-│   │       ├── mcp/       # Model Context Protocol
-│   │       │   ├── discovery.ts   # Auto-discovery of MCP servers
-│   │       │   └── templates/     # 16 pre-configured templates
-│   │       ├── memory/    # Project memory warmup + cache
-│   │       ├── planner/   # Task decomposition + verification
-│   │       ├── provider/  # LLM provider abstraction
-│   │       ├── sdk/       # Programmatic SDK entry point
-│   │       ├── session/   # Session persistence + correction
-│   │       ├── stats/     # Context stats + cost estimation
-│   │       └── tool/      # 25+ built-in tools
-│   ├── app/               # Shared web UI (SolidJS)
-│   ├── ui/                # UI component library
+│   ├── ax-code/           # Core CLI — agents, tools, providers, server
+│   ├── app/               # Web UI (SolidJS)
+│   ├── desktop/           # Desktop app (Tauri)
+│   ├── sdk/js/            # JavaScript/TypeScript SDK
 │   ├── plugin/            # Plugin system
-│   ├── sdk/js/            # JavaScript SDK
-│   │   └── src/programmatic/  # Programmatic SDK
+│   ├── ui/                # Shared UI components
 │   ├── util/              # Shared utilities
-│   ├── script/            # Build/release scripts
-│   └── desktop/           # Tauri desktop app (v2)
-├── scripts/               # CLI setup scripts
-├── docs/                  # PRDs, ADRs, status docs
-└── patches/               # Dependency patches
+│   └── script/            # Build & release scripts
+└── docs/                  # Documentation
 ```
-
----
-
-## Security
-
-### Execution Isolation Sandbox
-
-ax-code includes a built-in execution isolation sandbox that controls what the AI agent can access. Three modes are available:
-
-| Mode | Behavior |
-|------|----------|
-| **Read-only** | Blocks all file mutations and shell commands |
-| **Workspace write** (default) | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
-| **Full access** | Disables isolation (explicit opt-in) |
-
-Configure via CLI flag, environment variable, settings UI, or session command palette:
-
-```bash
-ax-code --sandbox read-only              # CLI flag
-AX_CODE_ISOLATION_MODE=read-only ax-code # Environment variable
-```
-
-Network access for tools (webfetch, websearch) is **disabled by default** in read-only and workspace-write modes. Isolation violations present an approval prompt — users can allow a blocked operation once without changing their config.
-
-### Server Security
-
-- **Localhost only by default** — the server binds to `127.0.0.1`, inaccessible from the network
-- **Password required for network access** — binding to `0.0.0.0` or any non-localhost address requires `AX_CODE_SERVER_PASSWORD`
-- **Credential encryption** — all credentials encrypted at rest with AES-256-GCM (see [SECURITY.md](SECURITY.md) for threat model)
-
-```bash
-# Localhost only (default, no password needed)
-ax-code serve
-
-# Network access (password required)
-export AX_CODE_SERVER_PASSWORD=your-secret
-ax-code serve --hostname 0.0.0.0
-```
-
-### Reporting Vulnerabilities
-
-If you discover a security vulnerability, please report it privately via [GitHub Security Advisories](https://github.com/defai-digital/ax-code/security/advisories/new). Do not open a public issue.
 
 ---
 
 ## Built With
 
-- **Runtime:** [Bun](https://bun.sh)
-- **Language:** TypeScript
-- **AI SDK:** [Vercel AI SDK](https://sdk.vercel.ai)
-- **UI:** [SolidJS](https://solidjs.com) + opentui
-- **Database:** SQLite ([Drizzle ORM](https://orm.drizzle.team))
-- **Server:** [Hono](https://hono.dev)
-- **Effects:** [Effect](https://effect.website)
-
----
-
-## Contributing
-
-AX Code is developed internally. We do not accept pull requests, but we welcome bug reports and feature requests through [GitHub Issues](https://github.com/defai-digital/ax-code/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
----
-
-## Community
-
-Find us on Discord: [https://discord.gg/cTavsMgu](https://discord.gg/cTavsMgu)
+[Bun](https://bun.sh) | [TypeScript](https://typescriptlang.org) | [Vercel AI SDK](https://sdk.vercel.ai) | [SolidJS](https://solidjs.com) | [Hono](https://hono.dev) | [Drizzle ORM](https://orm.drizzle.team) | [Effect](https://effect.website) | [Tauri](https://tauri.app)
 
 ---
 
@@ -493,33 +395,31 @@ Find us on Discord: [https://discord.gg/cTavsMgu](https://discord.gg/cTavsMgu)
 
 AX Code was built by combining two open source projects:
 
-1. **[ax-cli](https://github.com/defai-digital/ax-cli)** — The original AI coding CLI by DEFAI Digital, featuring specialized agents, agent auto-routing, design checking, memory warmup, and the programmatic SDK.
+1. **[ax-cli](https://github.com/defai-digital/ax-cli)** — DEFAI Digital's original AI coding CLI with specialized agents, auto-routing, design checking, memory warmup, and the programmatic SDK.
 2. **[OpenCode](https://github.com/anomalyco/opencode)** — A provider-agnostic, LSP-first AI coding assistant with a rich terminal UI, session persistence, and MCP support.
 
-AX Code merges the agent intelligence and SDK capabilities of ax-cli with the robust TUI, provider abstraction, and tool ecosystem of OpenCode into a single unified project.
-
 ---
 
-## Changelog
+## Contributing
 
-See [GitHub Releases](https://github.com/defai-digital/ax-code/releases) for version history and release notes.
+We welcome bug reports and feature requests through [GitHub Issues](https://github.com/defai-digital/ax-code/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
----
+## Community
+
+Join us on [Discord](https://discord.gg/cTavsMgu).
 
 ## Language
 
-AX Code's UI (menus, toasts, status messages) is **English only**. However, the underlying LLM providers fully support multilingual interaction — you can prompt and receive responses in any language your chosen model supports. Community-contributed UI translations may be added in the future.
+The UI is English only. AI responses support any language your chosen model supports.
 
----
+## Changelog
+
+See [GitHub Releases](https://github.com/defai-digital/ax-code/releases).
 
 ## License
 
-[MIT](LICENSE)
-
-Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). Portions of this software are derived from [OpenCode](https://github.com/anomalyco/opencode), Copyright (c) 2025 opencode.
-
----
+[MIT](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). Portions derived from [OpenCode](https://github.com/anomalyco/opencode), Copyright (c) 2025 opencode.
 
 ## Credits
 
-ax-code is built by [DEFAI Digital](https://github.com/defai-digital), with thanks to the [OpenCode](https://github.com/anomalyco/opencode) project and its contributors.
+Built by [DEFAI Digital](https://github.com/defai-digital), with thanks to the [OpenCode](https://github.com/anomalyco/opencode) project and its contributors.
