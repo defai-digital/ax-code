@@ -38,36 +38,34 @@ Most AI coding tools are **clients of someone else's API**. Claude Code requires
 AX Code is the coding surface of a vertically integrated sovereign AI platform:
 
 ```text
-                    ╔══════════════════════════════════════════════════════════╗
-                    ║                    USER  ENDPOINTS                      ║
-                    ╠═══════════════════════════╦══════════════════════════════╣
-                    ║                           ║                              ║
-                    ║   AX Studio               ║   AX Code  ◄── you are here ║
-                    ║   General GenAI            ║   AI Coding & Automation    ║
-                    ║   Workspace                ║   CLI · Web · Desktop · SDK ║
-                    ║                           ║                              ║
-                    ╚═════════════╦═════════════╩══════════════╦═══════════════╝
-                                  ║                            ║
-                                  ╚══════════╦═════════════════╝
-                                             ║
-                    ╔════════════════════════════════════════════════════════════╗
-                    ║                     GOVERNANCE                             ║
-                    ║                                                            ║
-                    ║   AX Trust — deterministic execution · policy-as-code     ║
-                    ║   guardrails · audit trail · explainability                ║
-                    ║                                                            ║
-                    ╚═══════╦════════════════════╦═══════════════════╦═══════════╝
-                            ║                    ║                   ║
-                    ╔═══════╩════════╗   ╔═══════╩════════╗   ╔═════╩══════════╗
-                    ║                ║   ║                ║   ║                ║
-                    ║  AX Serving    ║   ║  AX Fabric     ║   ║  AX Engine     ║
-                    ║                ║   ║                ║   ║                ║
-                    ║  Orchestration ║   ║  Knowledge     ║   ║  Mac-Native    ║
-                    ║  Multi-node    ║   ║  RAG           ║   ║  Inference     ║
-                    ║  Routing       ║   ║  Distillation  ║   ║  Apple Silicon ║
-                    ║                ║   ║                ║   ║                ║
-                    ╚════════════════╝   ╚════════════════╝   ╚════════════════╝
-                             INFRASTRUCTURE
+╔════════════════════════════════════════════════════════╗
+║                   USER ENDPOINTS                       ║
+╠══════════════════════════╦═════════════════════════════╣
+║                          ║                             ║
+║  AX Studio               ║  AX Code ◄── you are here  ║
+║  General GenAI            ║  AI Coding & Automation    ║
+║  Workspace                ║  CLI · Web · Desktop · SDK ║
+║                          ║                             ║
+╚════════════╦═════════════╩═════════════╦═══════════════╝
+             ╚═══════════╦═══════════════╝
+                         ║
+╔════════════════════════════════════════════════════════╗
+║                    GOVERNANCE                          ║
+║                                                        ║
+║  AX Trust — deterministic execution · policy-as-code  ║
+║  guardrails · audit trail · explainability             ║
+║                                                        ║
+╚══════╦═════════════════════╦══════════════════╦════════╝
+       ║                     ║                  ║
+╔══════╩═══════╗  ╔══════════╩═════════╗  ╔════╩═════════╗
+║              ║  ║                    ║  ║              ║
+║  AX Serving  ║  ║  AX Fabric        ║  ║  AX Engine   ║
+║              ║  ║                    ║  ║              ║
+║  Multi-node  ║  ║  Knowledge / RAG  ║  ║  Mac-Native  ║
+║  Routing     ║  ║  Distillation     ║  ║  Inference   ║
+║              ║  ║                    ║  ║  Apple Si    ║
+╚══════════════╝  ╚════════════════════╝  ╚══════════════╝
+                    INFRASTRUCTURE
 ```
 
 | Component | Repository | Role |
