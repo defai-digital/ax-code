@@ -1,8 +1,8 @@
 # AX Code
 
-**The open source AI coding agent that works with any model.**
+**Sovereign AI coding infrastructure — enterprise-grade, provider-agnostic, air-gap ready.**
 
-Use Claude, GPT, Gemini, Grok, DeepSeek, or run models locally — ax-code gives you full AI-powered development without vendor lock-in.
+The developer-facing entrypoint to the [AutomatosX](https://github.com/defai-digital) sovereign AI ecosystem. Use any LLM — cloud, on-prem, or air-gapped — with 9 specialized coding agents, governed by contract-first deterministic execution.
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
@@ -13,25 +13,103 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ## Why AX Code?
 
-Most AI coding tools lock you into a single provider. AX Code doesn't.
+Most AI coding tools are **clients of someone else's API**. Claude Code requires Anthropic. Copilot requires OpenAI. Cursor requires cloud. None of them let you own the full stack.
 
-**Switch models freely.** Use Claude for complex reasoning, Gemini for long context, Grok for real-time web knowledge, or run Llama locally for privacy — all with the same workflow, the same agents, the same tools.
+**AX Code is different.** It sits on top of a vertically integrated sovereign AI stack — with its own governance layer ([AX Trust](https://github.com/defai-digital/ax-trust)), orchestration engine ([AX Serving](https://github.com/defai-digital/ax-serving)), knowledge infrastructure ([AX Fabric](https://github.com/defai-digital/ax-fabric)), and native inference engine ([AX Engine](https://github.com/defai-digital/ax-engine)). Your code never has to leave your network.
 
-**Specialized agents, not a generic chatbot.** AX Code ships with 9 purpose-built agents (security auditor, architect, debugger, performance profiler, and more) that auto-activate based on what you're working on. Ask about a vulnerability and the security agent takes over. Hit a crash and the debug agent steps in. No manual switching needed.
+### What Makes It Sovereign
 
-**Real code intelligence.** AX Code connects to language servers (TypeScript, Python, Go, Rust, and more) for actual go-to-definition, find-references, and diagnostics — not regex pattern matching.
+- **Provider-agnostic.** Use Claude, GPT, Gemini, Grok, DeepSeek, or run models locally with [AX Engine](https://github.com/defai-digital/ax-engine) / [AX Studio](https://github.com/defai-digital/ax-studio) / Ollama. Switch freely. No vendor lock-in.
+- **Air-gap ready.** Run 100% offline on Mac Studio, Jetson Thor, or any local hardware. Zero cloud dependency. Defence and classified environments supported.
+- **Contract-first governance.** Every agent action flows through AX Trust for policy enforcement, audit trail, and deterministic execution. Same input, same output.
+- **Full audit trail.** Every tool call, every file change, every LLM interaction — traceable, explainable, exportable.
 
-**Use it everywhere.** Terminal, desktop app, web browser, VS Code sidebar, or embed it in your own apps via the programmatic SDK.
+### What Makes It Better for Coding
+
+- **9 specialized agents.** Not a generic chatbot. Security auditor, architect, debugger, performance profiler, planner, and more — auto-routing based on what you're working on.
+- **Real code intelligence.** LSP integration with TypeScript, Python, Go, Rust, and more. Actual go-to-definition, find-references, and diagnostics.
+- **25+ built-in tools.** File operations, shell execution, code search, web fetch, batch processing, task management.
+- **Use it everywhere.** Terminal, desktop app, web browser, VS Code, headless API, or embed via SDK.
+
+---
+
+## The AutomatosX Stack
+
+AX Code is the coding surface of a vertically integrated sovereign AI platform:
+
+```text
+                    ╔══════════════════════════════════════════════════════════╗
+                    ║                    USER  ENDPOINTS                      ║
+                    ╠═══════════════════════════╦══════════════════════════════╣
+                    ║                           ║                              ║
+                    ║   AX Studio               ║   AX Code  ◄── you are here ║
+                    ║   General GenAI            ║   AI Coding & Automation    ║
+                    ║   Workspace                ║   CLI · Web · Desktop · SDK ║
+                    ║                           ║                              ║
+                    ╚═════════════╦═════════════╩══════════════╦═══════════════╝
+                                  ║                            ║
+                                  ╚══════════╦═════════════════╝
+                                             ║
+                    ╔════════════════════════════════════════════════════════════╗
+                    ║                     GOVERNANCE                             ║
+                    ║                                                            ║
+                    ║   AX Trust — deterministic execution · policy-as-code     ║
+                    ║   guardrails · audit trail · explainability                ║
+                    ║                                                            ║
+                    ╚═══════╦════════════════════╦═══════════════════╦═══════════╝
+                            ║                    ║                   ║
+                    ╔═══════╩════════╗   ╔═══════╩════════╗   ╔═════╩══════════╗
+                    ║                ║   ║                ║   ║                ║
+                    ║  AX Serving    ║   ║  AX Fabric     ║   ║  AX Engine     ║
+                    ║                ║   ║                ║   ║                ║
+                    ║  Orchestration ║   ║  Knowledge     ║   ║  Mac-Native    ║
+                    ║  Multi-node    ║   ║  RAG           ║   ║  Inference     ║
+                    ║  Routing       ║   ║  Distillation  ║   ║  Apple Silicon ║
+                    ║                ║   ║                ║   ║                ║
+                    ╚════════════════╝   ╚════════════════╝   ╚════════════════╝
+                             INFRASTRUCTURE
+```
+
+| Component | Repository | Role |
+|-----------|-----------|------|
+| **AX Studio** | [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio) | General GenAI workspace — enterprise knowledge + agentic workflows |
+| **AX Code** | [defai-digital/ax-code](https://github.com/defai-digital/ax-code) | AI coding & automation — developer-optimized entrypoint |
+| **AX Trust** | — | Deterministic AI pipeline — contract-based execution, guardrails, audit |
+| **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Enterprise orchestration — multi-node routing, heterogeneous compute |
+| **AX Fabric** | [defai-digital/ax-fabric](https://github.com/defai-digital/ax-fabric) | Knowledge infrastructure — RAG, distillation, knowledge lifecycle |
+| **AX Engine** | [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) | Mac-native inference — Apple Silicon optimized, 30B-70B+ models |
 
 ---
 
 ## Who Is AX Code For?
 
-- **Developers who use multiple AI models** and want one tool that works with all of them
-- **Teams that can't commit to a single vendor** due to cost, compliance, or capability needs
-- **Engineers building AI-powered tools** who need a programmatic SDK, not just a chat UI
-- **Security-conscious developers** who want encrypted credentials, execution sandboxing, and the ability to run models locally
-- **Open source advocates** who want full transparency and customization
+### Enterprise Engineering Teams
+
+- Need AI coding without surrendering code sovereignty
+- Run multiple AI providers — can't standardize on one vendor
+- Security team requires full audit trail of what the AI did
+- Need governance, cost control, and compliance reporting
+
+### Defence & Government
+
+- Classified environments that cannot send code to external APIs
+- Air-gapped deployment on Mac Studio Grid / Jetson Thor Grid
+- Reproducible, deterministic AI execution for compliance
+- No foreign cloud dependency
+
+### Platform Engineering Teams
+
+- Embed AI coding into CI/CD pipelines via headless API
+- Build internal developer platforms with the programmatic SDK
+- Cost-aware model routing across multiple providers
+- Custom enterprise agents via plugin system
+
+### Individual Developers
+
+- Use Claude, GPT, Gemini, Grok, local models — switch freely
+- 9 specialized agents vs. a generic chatbot
+- Open source and free
+- Not locked into any vendor's ecosystem
 
 ---
 
@@ -73,11 +151,12 @@ ax-code
 | **Perplexity** | Sonar, Sonar Pro, Deep Research | `PERPLEXITY_API_KEY` |
 | **Z.AI** | GLM-4.5, GLM-4.7, GLM-5 | `ax-code providers login` |
 
-### Local (Offline, Private)
+### Local / Sovereign (Offline, Air-Gapped)
 
 | Provider | Setup |
 |----------|-------|
-| **AX Studio** | Auto-detected at `localhost:11434` or `AX_STUDIO_HOST` |
+| **AX Engine** | Apple Silicon optimized inference — [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) |
+| **AX Studio** | Auto-detected at `localhost:11434` or `AX_STUDIO_HOST` — [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio) |
 | **Ollama** | Auto-detected at `localhost:11434` or `OLLAMA_HOST` |
 | **LM Studio** | Configure in `ax-code.json` |
 
@@ -182,8 +261,56 @@ Catches hardcoded colors, raw spacing values, inline styles, missing alt text, a
 ### Self-Correction & ReAct Reasoning
 
 - **Self-correction** — Detects failures, reflects on what went wrong, and retries with a different approach
-- **ReAct mode** — Structured Thought → Action → Observation loops for complex multi-step problems
+- **ReAct mode** — Structured Thought -> Action -> Observation loops for complex multi-step problems
 - **Planning system** — Decomposes large tasks into dependency-ordered steps with verification
+
+---
+
+## Security & Governance
+
+### Execution Sandbox
+
+Control what the AI agent can access with three isolation modes:
+
+| Mode | Behavior |
+|------|----------|
+| **Read-only** | Blocks all file mutations and shell commands |
+| **Workspace write** *(default)* | Allows writes only inside the workspace; `.git` and `.ax-code` always protected |
+| **Full access** | Disables isolation (explicit opt-in) |
+
+```bash
+ax-code --sandbox read-only
+```
+
+Network access for tools is disabled by default in read-only and workspace-write modes. Isolation violations trigger an approval prompt.
+
+### Permission System
+
+Fine-grained, per-agent, per-tool, per-file-pattern permission rules:
+
+- **Pattern-based rules** — glob patterns for file paths (e.g., allow read on `src/**`, deny write on `.env`)
+- **Agent-scoped permissions** — security agent gets read-only by default, build agent gets full access
+- **Bash command analysis** — tree-sitter parsing detects rm, cp, mv, mkdir and enforces workspace boundaries
+- **Three-state model** — allow (auto), deny (block), ask (prompt user)
+
+### Credential Encryption
+
+All API keys, OAuth tokens, and account credentials are encrypted at rest with **AES-256-GCM**. See [SECURITY.md](SECURITY.md) for the full threat model.
+
+### Server Security
+
+- Binds to **localhost only** by default
+- Network binding requires `AX_CODE_SERVER_PASSWORD`
+- CORS and authentication enforced
+
+### AX Trust Integration (Roadmap)
+
+When connected to the AutomatosX stack, ax-code gains enterprise governance through [AX Trust](https://github.com/defai-digital/ax-trust):
+
+- **Contract-based deterministic execution** — same input, same output
+- **Policy-as-code** — declarative YAML policies for what agents can do
+- **Full audit trail** — every action cryptographically anchored, exportable to SIEM
+- **Explainability** — complete reasoning chain for every decision
 
 ---
 
@@ -221,10 +348,20 @@ Full-featured web interface with chat, file explorer, terminal emulator, and mod
 
 Use ax-code directly inside VS Code:
 
-1. `Ctrl+Shift+P` → **"Install from VSIX"** → select `sdks/vscode/ax-code-1.4.0.vsix`
+1. `Ctrl+Shift+P` -> **"Install from VSIX"** -> select `sdks/vscode/ax-code-1.4.0.vsix`
 2. Open the sidebar panel with `Ctrl+Shift+A`
 
 **Features:** chat panel, explain/review/fix via right-click, code selection actions, integrated terminal.
+
+### Headless API
+
+Run ax-code as a server for CI/CD pipelines, internal platforms, or automated workflows:
+
+```bash
+ax-code serve --port 4096    # Start headless API server
+```
+
+Integrates with CI/CD for automated code review, security scanning, and code generation.
 
 ### Programmatic SDK
 
@@ -270,36 +407,6 @@ await agent.dispose()
 
 ---
 
-## Security
-
-### Execution Sandbox
-
-Control what the AI agent can access with three isolation modes:
-
-| Mode | Behavior |
-|------|----------|
-| **Read-only** | Blocks all file mutations and shell commands |
-| **Workspace write** *(default)* | Allows writes only inside the workspace; `.git` and `.ax-code` always protected |
-| **Full access** | Disables isolation (explicit opt-in) |
-
-```bash
-ax-code --sandbox read-only
-```
-
-Network access for tools is disabled by default in read-only and workspace-write modes. Isolation violations trigger an approval prompt.
-
-### Credential Encryption
-
-All API keys, OAuth tokens, and account credentials are encrypted at rest with **AES-256-GCM**. See [SECURITY.md](SECURITY.md) for the full threat model.
-
-### Server Security
-
-- Binds to **localhost only** by default
-- Network binding requires `AX_CODE_SERVER_PASSWORD`
-- CORS and authentication enforced
-
----
-
 ## Configuration
 
 Create `ax-code.json` in your project root or `~/.config/ax-code/ax-code.json` for global settings:
@@ -314,7 +421,7 @@ Create `ax-code.json` in your project root or `~/.config/ax-code/ax-code.json` f
 }
 ```
 
-Config is hierarchical: remote org defaults → global → custom path → project → `.ax-code/` directory → managed overrides.
+Config is hierarchical: remote org defaults -> global -> custom path -> project -> `.ax-code/` directory -> managed overrides.
 
 ### Key Environment Variables
 
@@ -397,6 +504,8 @@ AX Code was built by combining two open source projects:
 
 1. **[ax-cli](https://github.com/defai-digital/ax-cli)** — DEFAI Digital's original AI coding CLI with specialized agents, auto-routing, design checking, memory warmup, and the programmatic SDK.
 2. **[OpenCode](https://github.com/anomalyco/opencode)** — A provider-agnostic, LSP-first AI coding assistant with a rich terminal UI, session persistence, and MCP support.
+
+AX Code is now the developer-facing entrypoint to the [AutomatosX](https://github.com/defai-digital) sovereign AI ecosystem.
 
 ---
 
