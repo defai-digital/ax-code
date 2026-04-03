@@ -47,6 +47,7 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
     const FLUSH_FRAME_MS = 16
     const STREAM_YIELD_MS = 8
     const RECONNECT_DELAY_MS = 250
+    const MAX_QUEUE = 1024
 
     let queue: Queued[] = []
     let buffer: Queued[] = []
@@ -150,6 +151,7 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
             streamErrorLogged = false
             const directory = event.directory ?? "global"
             const payload = event.payload
+            if (queue.length > MAX_QUEUE && payload.type === "message.part.delta") continue
             const k = key(directory, payload)
             if (k) {
               const i = coalesced.get(k)

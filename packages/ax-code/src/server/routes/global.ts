@@ -72,31 +72,34 @@ export const GlobalRoutes = lazy(() =>
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
           const q = new AsyncQueue<string | null>()
+          const MAX_QUEUE = 1024
           let done = false
 
-          q.push(
-            JSON.stringify({
-              payload: {
-                type: "server.connected",
-                properties: {},
-              },
-            }),
-          )
+          const push = (event: any) => {
+            if (done) return
+            if (q.size > MAX_QUEUE && event.payload?.type === "message.part.delta") return
+            q.push(JSON.stringify(event))
+          }
+
+          push({
+            payload: {
+              type: "server.connected",
+              properties: {},
+            },
+          })
 
           // Send heartbeat every 10s to prevent stalled proxy streams.
           const heartbeat = setInterval(() => {
-            q.push(
-              JSON.stringify({
-                payload: {
-                  type: "server.heartbeat",
-                  properties: {},
-                },
-              }),
-            )
+            push({
+              payload: {
+                type: "server.heartbeat",
+                properties: {},
+              },
+            })
           }, 10_000)
 
-          async function handler(event: any) {
-            q.push(JSON.stringify(event))
+          function handler(event: any) {
+            push(event)
           }
           GlobalBus.on("event", handler)
 
@@ -106,7 +109,7 @@ export const GlobalRoutes = lazy(() =>
             clearInterval(heartbeat)
             GlobalBus.off("event", handler)
             q.push(null)
-            log.info("event disconnected")
+            log.info("global event disconnected")
           }
 
           stream.onAbort(stop)
