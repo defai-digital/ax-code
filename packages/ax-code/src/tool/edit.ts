@@ -6,18 +6,14 @@
 import z from "zod"
 import * as path from "path"
 import { Tool } from "./tool"
-import { LSP } from "../lsp"
 import { createTwoFilesPatch, diffLines } from "diff"
 import DESCRIPTION from "./edit.txt"
-import { File } from "../file"
-import { FileWatcher } from "../file/watcher"
-import { Bus } from "../bus"
 import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
 import { assertExternalDirectory } from "./external-directory"
-import { renderDiagnostics } from "./diagnostics"
+import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
 
 function normalizeLineEndings(text: string): string {
@@ -72,13 +68,7 @@ export const EditTool = Tool.define("edit", {
           },
         })
         await Filesystem.write(filePath, params.newString)
-        await Bus.publish(File.Event.Edited, {
-          file: filePath,
-        })
-        await Bus.publish(FileWatcher.Event.Updated, {
-          file: filePath,
-          event: existed ? "change" : "add",
-        })
+        await notifyFileEdited(filePath, existed ? "change" : "add")
         await FileTime.read(ctx.sessionID, filePath)
         return
       }
@@ -109,13 +99,7 @@ export const EditTool = Tool.define("edit", {
       })
 
       await Filesystem.write(filePath, contentNew)
-      await Bus.publish(File.Event.Edited, {
-        file: filePath,
-      })
-      await Bus.publish(FileWatcher.Event.Updated, {
-        file: filePath,
-        event: "change",
-      })
+      await notifyFileEdited(filePath, "change")
       // Recompute diff from in-memory content (no need to re-read the file we just wrote)
       diff = trimDiff(
         createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
@@ -143,10 +127,8 @@ export const EditTool = Tool.define("edit", {
       },
     })
 
-    let output = "Edit applied successfully."
-    await LSP.touchFile(filePath, false)
-    const diagnostics = await LSP.diagnostics()
-    output += renderDiagnostics(diagnostics, [filePath])
+    const { diagnostics, output: diagOutput } = await collectDiagnostics([filePath])
+    let output = "Edit applied successfully." + diagOutput
 
     return {
       metadata: {

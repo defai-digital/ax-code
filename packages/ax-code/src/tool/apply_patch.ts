@@ -3,6 +3,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { Tool } from "./tool"
 import { Bus } from "../bus"
+import { File } from "../file"
 import { FileWatcher } from "../file/watcher"
 import { Instance } from "../project/instance"
 import { Patch } from "../patch"
@@ -10,11 +11,9 @@ import { createTwoFilesPatch, diffLines } from "diff"
 import { assertExternalDirectory } from "./external-directory"
 import { trimDiff } from "./edit"
 import { Isolation } from "@/isolation"
-import { LSP } from "../lsp"
 import { Filesystem } from "../util/filesystem"
 import DESCRIPTION from "./apply_patch.txt"
-import { File } from "../file"
-import { renderDiagnostics } from "./diagnostics"
+import { collectDiagnostics } from "./diagnostics"
 
 const PatchParams = z.object({
   patchText: z.string().describe("The full patch text that describes all changes to be made"),
@@ -236,14 +235,6 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       await Bus.publish(FileWatcher.Event.Updated, update)
     }
 
-    // Notify LSP of file changes and collect diagnostics
-    for (const change of fileChanges) {
-      if (change.type === "delete") continue
-      const target = change.movePath ?? change.filePath
-      await LSP.touchFile(target, false)
-    }
-    const diagnostics = await LSP.diagnostics()
-
     // Generate output summary
     const summaryLines = fileChanges.map((change) => {
       if (change.type === "add") {
@@ -255,13 +246,12 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       const target = change.movePath ?? change.filePath
       return `M ${path.relative(Instance.worktree, target).replaceAll("\\", "/")}`
     })
-    let output = `Success. Updated the following files:\n${summaryLines.join("\n")}`
 
-    // Report LSP errors for changed files
     const changedFiles = fileChanges
       .filter((c) => c.type !== "delete")
       .map((c) => c.movePath ?? c.filePath)
-    output += renderDiagnostics(diagnostics, changedFiles)
+    const { diagnostics, output: diagOutput } = await collectDiagnostics(changedFiles)
+    let output = `Success. Updated the following files:\n${summaryLines.join("\n")}` + diagOutput
 
     return {
       title: output,

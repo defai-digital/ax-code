@@ -63,6 +63,11 @@ export namespace SessionProcessor {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const recentToolRing: { tool: string; input: string }[] = []
     const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
+    const partBase = () => ({
+      id: PartID.ascending(),
+      messageID: input.assistantMessage.id,
+      sessionID: input.assistantMessage.sessionID,
+    })
     let cachedShouldBreak: boolean | undefined
     let snapshot: string | undefined
     let blocked = false
@@ -99,9 +104,7 @@ export namespace SessionProcessor {
                     continue
                   }
                   const reasoningPart = {
-                    id: PartID.ascending(),
-                    messageID: input.assistantMessage.id,
-                    sessionID: input.assistantMessage.sessionID,
+                    ...partBase(),
                     type: "reasoning" as const,
                     text: "",
                     time: {
@@ -140,10 +143,10 @@ export namespace SessionProcessor {
 
                 case "tool-input-start":
                   usedTools = true
+                  const base = partBase()
                   const part = await Session.updatePart({
-                    id: toolcalls[value.id]?.id ?? PartID.ascending(),
-                    messageID: input.assistantMessage.id,
-                    sessionID: input.assistantMessage.sessionID,
+                    ...base,
+                    id: toolcalls[value.id]?.id ?? base.id,
                     type: "tool",
                     tool: value.toolName,
                     callID: value.id,
@@ -283,9 +286,7 @@ export namespace SessionProcessor {
                   usedTools = false
                   snapshot = undefined
                   await Session.updatePart({
-                    id: PartID.ascending(),
-                    messageID: input.assistantMessage.id,
-                    sessionID: input.sessionID,
+                    ...partBase(),
                     snapshot,
                     type: "step-start",
                   })
@@ -330,9 +331,7 @@ export namespace SessionProcessor {
                     const patch = await Snapshot.patch(snapshot)
                     if (patch.files.length) {
                       await Session.updatePart({
-                        id: PartID.ascending(),
-                        messageID: input.assistantMessage.id,
-                        sessionID: input.sessionID,
+                        ...partBase(),
                         type: "patch",
                         hash: patch.hash,
                         files: patch.files,
@@ -354,9 +353,7 @@ export namespace SessionProcessor {
 
                 case "text-start":
                   currentText = {
-                    id: PartID.ascending(),
-                    messageID: input.assistantMessage.id,
-                    sessionID: input.assistantMessage.sessionID,
+                    ...partBase(),
                     type: "text",
                     text: "",
                     time: {

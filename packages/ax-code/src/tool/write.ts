@@ -1,18 +1,14 @@
 import z from "zod"
 import * as path from "path"
 import { Tool } from "./tool"
-import { LSP } from "../lsp"
 import { createTwoFilesPatch } from "diff"
 import DESCRIPTION from "./write.txt"
-import { Bus } from "../bus"
-import { File } from "../file"
-import { FileWatcher } from "../file/watcher"
 import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { trimDiff } from "./edit"
 import { assertExternalDirectory } from "./external-directory"
-import { renderDiagnostics } from "./diagnostics"
+import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
 
 export const WriteTool = Tool.define("write", {
@@ -43,20 +39,12 @@ export const WriteTool = Tool.define("write", {
 
     await FileTime.withLock(filepath, async () => {
       await Filesystem.write(filepath, params.content)
-      await Bus.publish(File.Event.Edited, {
-        file: filepath,
-      })
-      await Bus.publish(FileWatcher.Event.Updated, {
-        file: filepath,
-        event: exists ? "change" : "add",
-      })
+      await notifyFileEdited(filepath, exists ? "change" : "add")
       await FileTime.read(ctx.sessionID, filepath)
     })
 
-    let output = "Wrote file successfully."
-    await LSP.touchFile(filepath, false)
-    const diagnostics = await LSP.diagnostics()
-    output += renderDiagnostics(diagnostics, [filepath], { includeProjectDiagnostics: true })
+    const { diagnostics, output: diagOutput } = await collectDiagnostics([filepath], { includeProjectDiagnostics: true })
+    let output = "Wrote file successfully." + diagOutput
 
     return {
       title: path.relative(Instance.worktree, filepath),
