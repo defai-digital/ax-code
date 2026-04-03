@@ -150,14 +150,18 @@ export namespace ToolRegistry {
         ]
       }
 
+      let toolCache: { key: string; result: any[] } | undefined
+
       const register = Effect.fn("ToolRegistry.register")(function* (tool: Tool.Info) {
         const state = yield* InstanceState.get(cache)
         const idx = state.custom.findIndex((t) => t.id === tool.id)
         if (idx >= 0) {
           state.custom.splice(idx, 1, tool)
+          toolCache = undefined
           return
         }
         state.custom.push(tool)
+        toolCache = undefined
       })
 
       const ids = Effect.fn("ToolRegistry.ids")(function* () {
@@ -170,9 +174,12 @@ export namespace ToolRegistry {
         model: { providerID: ProviderID; modelID: ModelID },
         agent?: Agent.Info,
       ) {
+        const key = `${agent?.name ?? ""}:${model.providerID}:${model.modelID}`
+        if (toolCache?.key === key) return toolCache.result
+
         const state = yield* InstanceState.get(cache)
         const allTools = yield* Effect.promise(() => all(state.custom))
-        return yield* Effect.promise(() =>
+        const result = yield* Effect.promise(() =>
           Promise.all(
             allTools
               .filter((tool) => {
@@ -206,6 +213,8 @@ export namespace ToolRegistry {
               }),
           ),
         )
+        toolCache = { key, result }
+        return result
       })
 
       return Service.of({ register, ids, tools })

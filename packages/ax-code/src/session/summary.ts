@@ -68,25 +68,19 @@ export namespace SessionSummary {
     return Buffer.from(bytes).toString()
   }
 
-  export const summarize = fn(
-    z.object({
-      sessionID: SessionID.zod,
-      messageID: MessageID.zod,
-    }),
-    async (input) => {
-      await Session.messages({ sessionID: input.sessionID })
-        .then((all) =>
-          Promise.all([
-            summarizeSession({ sessionID: input.sessionID, messages: all }),
-            summarizeMessage({ messageID: input.messageID, messages: all }),
-          ]),
-        )
-        .catch((err) => {
-          if (NotFoundError.isInstance(err)) return
-          throw err
-        })
-    },
-  )
+  export async function summarize(
+    input: { sessionID: SessionID; messageID: MessageID },
+    messages?: MessageV2.WithParts[],
+  ) {
+    const all = messages ?? await Session.messages({ sessionID: input.sessionID })
+    await Promise.all([
+      summarizeSession({ sessionID: input.sessionID, messages: all }),
+      summarizeMessage({ messageID: input.messageID, messages: all }),
+    ]).catch((err) => {
+      if (NotFoundError.isInstance(err)) return
+      throw err
+    })
+  }
 
   async function summarizeSession(input: { sessionID: SessionID; messages: MessageV2.WithParts[] }) {
     const diffs = await computeDiff({ messages: input.messages })

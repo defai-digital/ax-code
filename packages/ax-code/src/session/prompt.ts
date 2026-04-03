@@ -662,7 +662,7 @@ export namespace SessionPrompt {
         SessionSummary.summarize({
           sessionID: sessionID,
           messageID: lastUser.id,
-        })
+        }, msgs)
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
