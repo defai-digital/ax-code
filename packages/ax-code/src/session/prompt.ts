@@ -52,6 +52,12 @@ import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncate"
 import { decodeDataUrl } from "@/util/data-url"
 import { Process } from "@/util/process"
+import {
+  resolvePromptParts as _resolvePromptParts,
+  createStructuredOutputTool as _createStructuredOutputTool,
+  lastModel as _lastModel,
+  ensureTitle as _ensureTitle,
+} from "./prompt-helpers"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -191,56 +197,7 @@ export namespace SessionPrompt {
     return loop({ sessionID: input.sessionID })
   })
 
-  export async function resolvePromptParts(template: string): Promise<PromptInput["parts"]> {
-    const parts: PromptInput["parts"] = [
-      {
-        type: "text",
-        text: template,
-      },
-    ]
-    const files = ConfigMarkdown.files(template)
-    const seen = new Set<string>()
-    await Promise.all(
-      files.map(async (match) => {
-        const name = match[1]
-        if (seen.has(name)) return
-        seen.add(name)
-        const filepath = name.startsWith("~/")
-          ? path.join(os.homedir(), name.slice(2))
-          : path.resolve(Instance.worktree, name)
-
-        const stats = await fs.stat(filepath).catch(() => undefined)
-        if (!stats) {
-          const agent = await Agent.get(name)
-          if (agent) {
-            parts.push({
-              type: "agent",
-              name: agent.name,
-            })
-          }
-          return
-        }
-
-        if (stats.isDirectory()) {
-          parts.push({
-            type: "file",
-            url: pathToFileURL(filepath).href,
-            filename: name,
-            mime: "application/x-directory",
-          })
-          return
-        }
-
-        parts.push({
-          type: "file",
-          url: pathToFileURL(filepath).href,
-          filename: name,
-          mime: "text/plain",
-        })
-      }),
-    )
-    return parts
-  }
+  export const resolvePromptParts = _resolvePromptParts
 
   function start(sessionID: SessionID) {
     const s = state()
@@ -795,12 +752,7 @@ export namespace SessionPrompt {
     throw new Error("Impossible")
   })
 
-  async function lastModel(sessionID: SessionID) {
-    for await (const item of MessageV2.stream(sessionID)) {
-      if (item.info.role === "user" && item.info.model) return item.info.model
-    }
-    return Provider.defaultModel()
-  }
+  const lastModel = _lastModel
 
   /** @internal Exported for testing */
   export async function resolveTools(input: {
@@ -994,34 +946,7 @@ export namespace SessionPrompt {
   }
 
   /** @internal Exported for testing */
-  export function createStructuredOutputTool(input: {
-    schema: Record<string, any>
-    onSuccess: (output: unknown) => void
-  }): AITool {
-    // Remove $schema property if present (not needed for tool input)
-    const { $schema, ...toolSchema } = input.schema
-
-    return tool({
-      id: "StructuredOutput" as any,
-      description: STRUCTURED_OUTPUT_DESCRIPTION,
-      inputSchema: jsonSchema(toolSchema as any),
-      async execute(args) {
-        // AI SDK validates args against inputSchema before calling execute()
-        input.onSuccess(args)
-        return {
-          output: "Structured output captured successfully.",
-          title: "Structured Output",
-          metadata: { valid: true },
-        }
-      },
-      toModelOutput(result) {
-        return {
-          type: "text",
-          value: result.output,
-        }
-      },
-    })
-  }
+  export const createStructuredOutputTool = _createStructuredOutputTool
 
   async function createUserMessage(input: PromptInput) {
     // Auto-route: select the best agent for each message based on content
@@ -2030,78 +1955,5 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     return result
   }
 
-  async function ensureTitle(input: {
-    session: Session.Info
-    history: MessageV2.WithParts[]
-    providerID: ProviderID
-    modelID: ModelID
-  }) {
-    if (input.session.parentID) return
-    if (!Session.isDefaultTitle(input.session.title)) return
-
-    // Find first non-synthetic user message
-    const firstRealUserIdx = input.history.findIndex(
-      (m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic),
-    )
-    if (firstRealUserIdx === -1) return
-
-    const isFirst =
-      input.history.filter((m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic))
-        .length === 1
-    if (!isFirst) return
-
-    // Gather all messages up to and including the first real user message for context
-    // This includes any shell/subtask executions that preceded the user's first prompt
-    const contextMessages = input.history.slice(0, firstRealUserIdx + 1)
-    const firstRealUser = contextMessages[firstRealUserIdx]
-
-    // For subtask-only messages (from command invocations), extract the prompt directly
-    // since toModelMessage converts subtask parts to generic "The following tool was executed by the user"
-    const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as MessageV2.SubtaskPart[]
-    const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every((p) => p.type === "subtask")
-
-    const agent = await Agent.get("title")
-    if (!agent) return
-    const model = await iife(async () => {
-      if (agent.model) return await Provider.getModel(agent.model.providerID, agent.model.modelID)
-      return (
-        (await Provider.getSmallModel(input.providerID)) ?? (await Provider.getModel(input.providerID, input.modelID))
-      )
-    })
-    const result = await LLM.stream({
-      agent,
-      user: firstRealUser.info as MessageV2.User,
-      system: [],
-      small: true,
-      tools: {},
-      model,
-      abort: new AbortController().signal,
-      sessionID: input.session.id,
-      retries: 2,
-      messages: [
-        {
-          role: "user",
-          content: "Generate a title for this conversation:\n",
-        },
-        ...(hasOnlySubtaskParts
-          ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-          : MessageV2.toModelMessages(contextMessages, model)),
-      ],
-    })
-    const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))
-    if (text) {
-      const cleaned = text
-        .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
-        .split("\n")
-        .map((line) => line.trim())
-        .find((line) => line.length > 0)
-      if (!cleaned) return
-
-      const title = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
-      return Session.setTitle({ sessionID: input.session.id, title }).catch((err) => {
-        if (NotFoundError.isInstance(err)) return
-        throw err
-      })
-    }
-  }
+  const ensureTitle = _ensureTitle
 }
