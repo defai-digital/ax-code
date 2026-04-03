@@ -3,10 +3,7 @@ import { Tool } from "./tool"
 import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
 import { abortAfterAny } from "../util/abort"
-
-const MAX_RESPONSE_SIZE = 5 * 1024 * 1024 // 5MB
-const DEFAULT_TIMEOUT = 30 * 1000 // 30 seconds
-const MAX_TIMEOUT = 120 * 1000 // 2 minutes
+import { WEBFETCH_MAX_RESPONSE_SIZE as MAX_RESPONSE_SIZE, WEBFETCH_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT, WEBFETCH_MAX_TIMEOUT as MAX_TIMEOUT } from "@/constants/network"
 
 export const WebFetchTool = Tool.define("webfetch", {
   description: DESCRIPTION,

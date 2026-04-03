@@ -9,8 +9,7 @@ import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
 import path from "path"
 import { assertExternalDirectory } from "./external-directory"
-
-const MAX_LINE_LENGTH = 2000
+import { MAX_LINE_LENGTH } from "@/constants/tool"
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,

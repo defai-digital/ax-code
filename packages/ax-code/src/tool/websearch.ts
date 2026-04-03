@@ -2,14 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./websearch.txt"
 import { abortAfterAny } from "../util/abort"
-
-const API_CONFIG = {
-  BASE_URL: "https://mcp.exa.ai",
-  ENDPOINTS: {
-    SEARCH: "/mcp",
-  },
-  DEFAULT_NUM_RESULTS: 8,
-} as const
+import { EXA_BASE_URL, EXA_ENDPOINT, EXA_DEFAULT_NUM_RESULTS } from "@/constants/network"
 
 interface McpSearchRequest {
   jsonrpc: string
@@ -85,7 +78,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
           arguments: {
             query: params.query,
             type: params.type || "auto",
-            numResults: params.numResults || API_CONFIG.DEFAULT_NUM_RESULTS,
+            numResults: params.numResults || EXA_DEFAULT_NUM_RESULTS,
             livecrawl: params.livecrawl || "fallback",
             contextMaxCharacters: params.contextMaxCharacters,
           },
@@ -100,7 +93,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
           "content-type": "application/json",
         }
 
-        const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SEARCH}`, {
+        const response = await fetch(`${EXA_BASE_URL}${EXA_ENDPOINT}`, {
           method: "POST",
           headers,
           body: JSON.stringify(searchRequest),

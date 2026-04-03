@@ -13,6 +13,7 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
+import { COMPACTION_BUFFER as _COMPACTION_BUFFER, PRUNE_MINIMUM as _PRUNE_MINIMUM, PRUNE_PROTECT as _PRUNE_PROTECT } from "@/constants/session"
 import { ProviderTransform } from "@/provider/transform"
 import { ModelID, ProviderID } from "@/provider/schema"
 
@@ -28,7 +29,7 @@ export namespace SessionCompaction {
     ),
   }
 
-  const COMPACTION_BUFFER = 20_000
+  const COMPACTION_BUFFER = _COMPACTION_BUFFER
 
   export async function isOverflow(input: { tokens: MessageV2.Assistant["tokens"]; model: Provider.Model }) {
     const config = await Config.get()
@@ -48,8 +49,8 @@ export namespace SessionCompaction {
     return count >= usable
   }
 
-  export const PRUNE_MINIMUM = 20_000
-  export const PRUNE_PROTECT = 40_000
+  export const PRUNE_MINIMUM = _PRUNE_MINIMUM
+  export const PRUNE_PROTECT = _PRUNE_PROTECT
 
   const PRUNE_PROTECTED_TOOLS = ["skill"]
 

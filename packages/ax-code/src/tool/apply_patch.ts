@@ -13,6 +13,7 @@ import { LSP } from "../lsp"
 import { Filesystem } from "../util/filesystem"
 import DESCRIPTION from "./apply_patch.txt"
 import { File } from "../file"
+import { MAX_DIAGNOSTICS_PER_FILE } from "@/constants/tool"
 
 const PatchParams = z.object({
   patchText: z.string().describe("The full patch text that describes all changes to be made"),
@@ -253,7 +254,6 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     let output = `Success. Updated the following files:\n${summaryLines.join("\n")}`
 
     // Report LSP errors for changed files
-    const MAX_DIAGNOSTICS_PER_FILE = 20
     for (const change of fileChanges) {
       if (change.type === "delete") continue
       const target = change.movePath ?? change.filePath

@@ -12,9 +12,7 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { trimDiff } from "./edit"
 import { assertExternalDirectory } from "./external-directory"
-
-const MAX_DIAGNOSTICS_PER_FILE = 20
-const MAX_PROJECT_DIAGNOSTICS_FILES = 5
+import { MAX_DIAGNOSTICS_PER_FILE, MAX_PROJECT_DIAGNOSTICS_FILES } from "@/constants/tool"
 
 export const WriteTool = Tool.define("write", {
   description: DESCRIPTION,

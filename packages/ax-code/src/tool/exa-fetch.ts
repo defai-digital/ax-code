@@ -1,7 +1,5 @@
 import { abortAfterAny } from "../util/abort"
-
-const EXA_BASE_URL = "https://mcp.exa.ai"
-const EXA_ENDPOINT = "/mcp"
+import { EXA_BASE_URL, EXA_ENDPOINT } from "@/constants/network"
 
 interface McpResponse {
   jsonrpc: string

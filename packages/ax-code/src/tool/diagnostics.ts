@@ -1,6 +1,6 @@
 import { LSP } from "../lsp"
 import { Filesystem } from "../util/filesystem"
-import { MAX_DIAGNOSTICS_PER_FILE, MAX_PROJECT_DIAGNOSTICS_FILES } from "./constants"
+import { MAX_DIAGNOSTICS_PER_FILE, MAX_PROJECT_DIAGNOSTICS_FILES } from "@/constants/tool"
 
 /**
  * Render LSP diagnostic errors for changed files.

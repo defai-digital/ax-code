@@ -8,6 +8,7 @@ import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
+import { DOOM_LOOP_THRESHOLD as _DOOM_LOOP_THRESHOLD } from "@/constants/session"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
@@ -19,7 +20,7 @@ import { PartID } from "./schema"
 import type { SessionID, MessageID } from "./schema"
 
 export namespace SessionProcessor {
-  const DOOM_LOOP_THRESHOLD = 3
+  const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
   const log = Log.create({ service: "session.processor" })
 
   export type Info = Awaited<ReturnType<typeof create>>

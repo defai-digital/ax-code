@@ -9,13 +9,14 @@ import { Identifier } from "../id/id"
 import { Log } from "../util/log"
 import { ToolID } from "./schema"
 import { TRUNCATION_DIR } from "./truncation-dir"
+import { MAX_LINES as _MAX_LINES, MAX_BYTES as _MAX_BYTES } from "@/constants/tool"
 
 export namespace Truncate {
   const log = Log.create({ service: "truncation" })
   const RETENTION = Duration.days(7)
 
-  export const MAX_LINES = 2000
-  export const MAX_BYTES = 50 * 1024
+  export const MAX_LINES = _MAX_LINES
+  export const MAX_BYTES = _MAX_BYTES
   export const DIR = TRUNCATION_DIR
   export const GLOB = path.join(TRUNCATION_DIR, "*")
 

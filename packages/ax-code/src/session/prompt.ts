@@ -13,6 +13,7 @@ import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
 import { SessionCompaction } from "./compaction"
+import { MAX_CONSECUTIVE_ERRORS as _MAX_CONSECUTIVE_ERRORS, GLOBAL_STEP_LIMIT as _GLOBAL_STEP_LIMIT } from "@/constants/session"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
@@ -301,8 +302,8 @@ export namespace SessionPrompt {
 
     let step = 0
     let consecutiveErrors = 0
-    const MAX_CONSECUTIVE_ERRORS = 3
-    const GLOBAL_STEP_LIMIT = 200 // absolute safety limit for any agent
+    const MAX_CONSECUTIVE_ERRORS = _MAX_CONSECUTIVE_ERRORS
+    const GLOBAL_STEP_LIMIT = _GLOBAL_STEP_LIMIT
     const session = await Session.get(sessionID)
     while (true) {
       await SessionStatus.set(sessionID, { type: "busy" })

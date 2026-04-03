@@ -11,12 +11,7 @@ import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
 import { InstructionPrompt } from "../session/instruction"
 import { Filesystem } from "../util/filesystem"
-
-const DEFAULT_READ_LIMIT = 2000
-const MAX_LINE_LENGTH = 2000
-const MAX_LINE_SUFFIX = `... (line truncated to ${MAX_LINE_LENGTH} chars)`
-const MAX_BYTES = 50 * 1024
-const MAX_BYTES_LABEL = `${MAX_BYTES / 1024} KB`
+import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "@/constants/tool"
 
 export const ReadTool = Tool.define("read", {
   description: DESCRIPTION,
