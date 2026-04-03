@@ -1342,8 +1342,16 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
 
   const keybind = useKeybind()
 
+  const hasParts = createMemo(() => props.parts.length > 0)
+  const isThinking = createMemo(() => !hasParts() && !final() && props.last)
+
   return (
     <>
+      <Show when={isThinking()}>
+        <box paddingLeft={3} marginTop={1} flexDirection="row" gap={1}>
+          <text fg={theme.textMuted}>⋯ Thinking</text>
+        </box>
+      </Show>
       <For each={props.parts}>
         {(part, index) => {
           const component = createMemo(() => PART_MAPPING[part.type as keyof typeof PART_MAPPING])
