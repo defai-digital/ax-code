@@ -965,6 +965,92 @@ test("getSmallModel respects config small_model override", async () => {
   })
 })
 
+test("google provider only exposes Gemini 3 or later models", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          enabled_providers: ["google"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google-key")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const google = providers[ProviderID.google]
+      expect(google).toBeDefined()
+      const ids = Object.keys(google.models)
+      expect(ids.length).toBeGreaterThan(0)
+      expect(ids.some((id) => id.includes("gemini-2"))).toBe(false)
+      expect(ids.some((id) => id.includes("gemini-1"))).toBe(false)
+    },
+  })
+})
+
+test("getSmallModel prefers a Gemini 3 model for google", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          enabled_providers: ["google"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.google)
+      expect(model).toBeDefined()
+      expect(String(model?.id)).toContain("gemini-3")
+    },
+  })
+})
+
+test("openai provider only exposes GPT-4 or later models", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          enabled_providers: ["openai"],
+          provider: {
+            openai: {
+              options: {
+                apiKey: "test-openai-key",
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      const openai = providers[ProviderID.make("openai")]
+      expect(openai).toBeDefined()
+      const ids = Object.keys(openai.models)
+      expect(ids.length).toBeGreaterThan(0)
+      expect(ids.some((id) => id.includes("gpt-3"))).toBe(false)
+    },
+  })
+})
+
 test("provider.sort prioritizes preferred models", () => {
   const models = [
     { id: "random-model", name: "Random" },

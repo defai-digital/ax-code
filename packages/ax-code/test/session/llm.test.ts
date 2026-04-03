@@ -14,6 +14,7 @@ import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { SessionPrompt } from "../../src/session/prompt"
 
 describe("session.llm.hasToolCalls", () => {
   test("returns false for empty messages array", () => {
@@ -406,9 +407,279 @@ describe("session.llm.stream", () => {
     })
   })
 
+  test("sends required StructuredOutput tool schema for json_schema output", async () => {
+    const providerID = "alibaba"
+    const modelID = "qwen-plus"
+    const fixture = await loadFixture(providerID, modelID)
+    const provider = fixture.provider
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://opencode.ai/config.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-test-structured")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const user = {
+          id: MessageID.make("user-structured"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["Return valid structured output."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Share a structured answer" }],
+          toolChoice: "required",
+          tools: {
+            StructuredOutput: SessionPrompt.createStructuredOutputTool({
+              schema: {
+                $schema: "http://json-schema.org/draft-07/schema#",
+                type: "object",
+                properties: {
+                  answer: { type: "string" },
+                  score: { type: "number" },
+                },
+                required: ["answer"],
+              },
+              onSuccess() {},
+            }),
+          },
+        })
+
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        const body = capture.body
+        const tools = body.tools as Array<{ function?: { name?: string; parameters?: Record<string, unknown> } }>
+        const item = tools.find((tool) => tool.function?.name === "StructuredOutput")
+        expect(body.tool_choice).toBe("required")
+        expect(item).toBeDefined()
+        expect(item?.function?.parameters?.["$schema"]).toBeUndefined()
+        expect((item?.function?.parameters?.properties as Record<string, unknown>)?.["answer"]).toBeDefined()
+        expect((item?.function?.parameters?.properties as Record<string, unknown>)?.["score"]).toBeDefined()
+      },
+    })
+  })
+
+  test("normalizes interleaved reasoning into provider request payload", async () => {
+    const providerID = "moonshotai-cn"
+    const modelID = "kimi-k2-thinking"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://opencode.ai/config.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-test-reasoning")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const user = {
+          id: MessageID.make("user-reasoning"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["Continue from the prior step."],
+          abort: new AbortController().signal,
+          messages: [
+            { role: "user", content: "Use the previous result." },
+            {
+              role: "assistant",
+              content: [
+                { type: "reasoning", text: "Let me think through the prior tool result." },
+                { type: "tool-call", toolCallId: "call-1", toolName: "bash", input: { command: "pwd" } },
+              ],
+            } as any,
+            { role: "user", content: "Continue." },
+          ],
+          tools: {},
+        })
+
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        const text = JSON.stringify(capture.body.messages)
+        expect(text).toContain("reasoning_content")
+        expect(text).toContain("Let me think through the prior tool result.")
+        expect(text).not.toContain("\"type\":\"reasoning\"")
+      },
+    })
+  })
+
+  test("adds noop tool for LiteLLM-compatible histories with prior tool calls", async () => {
+    const providerID = "alibaba"
+    const modelID = "qwen-plus"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://opencode.ai/config.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                  litellmProxy: true,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-test-image")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const user = {
+          id: MessageID.make("user-image"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["Continue the tool-assisted exchange."],
+          abort: new AbortController().signal,
+          messages: [
+            { role: "user", content: "Run the command." },
+            {
+              role: "assistant",
+              content: [
+                { type: "tool-call", toolCallId: "call-1", toolName: "bash", input: { command: "pwd" } },
+              ],
+            } as any,
+          ],
+          tools: {},
+        })
+
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        const tools = capture.body.tools as Array<{ function?: { name?: string } }> | undefined
+        expect(tools?.some((item) => item.function?.name === "_noop")).toBe(true)
+      },
+    })
+  })
+
   test("sends Google API payload for Gemini models", async () => {
     const providerID = "google"
-    const modelID = "gemini-2.5-flash"
+    const modelID = "gemini-3-flash-preview"
     const fixture = await loadFixture(providerID, modelID)
     const provider = fixture.provider
     const model = fixture.model
@@ -500,7 +771,102 @@ describe("session.llm.stream", () => {
         expect(config?.temperature).toBe(0.3)
         expect(config?.topP).toBe(0.8)
         expect(config?.maxOutputTokens).toBe(ProviderTransform.maxOutputTokens(resolved))
+        expect((config as any)?.thinkingConfig?.includeThoughts).toBe(true)
+        expect((config as any)?.thinkingConfig?.thinkingLevel).toBe("high")
       },
     })
   })
+
+  test("uses minimal Gemini thinking config for small-model requests", async () => {
+    const providerID = "google"
+    const modelID = "gemini-3-pro-preview"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+    const pathSuffix = `/v1beta/models/${model.id}:streamGenerateContent`
+
+    const chunks = [
+      {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: "Short title" }],
+            },
+            finishReason: "STOP",
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 1,
+          candidatesTokenCount: 1,
+          totalTokenCount: 2,
+        },
+      },
+    ]
+    const request = waitRequest(pathSuffix, createEventResponse(chunks))
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://opencode.ai/config.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-google-key",
+                  baseURL: `${state.server.url.origin}/v1beta`,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-test-google-small")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const user = {
+          id: MessageID.make("user-google-small"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          small: true,
+          system: ["Generate a short title."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Summarize this conversation." }],
+          tools: {},
+        })
+
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        const config = (capture.body.generationConfig as { thinkingConfig?: Record<string, unknown> } | undefined)
+          ?.thinkingConfig
+
+        expect(capture.url.pathname).toBe(pathSuffix)
+        expect(config?.["thinkingLevel"]).toBe("minimal")
+      },
+    })
+  })
+
 })

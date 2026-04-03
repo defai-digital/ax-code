@@ -1,12 +1,10 @@
 import type { MiddlewareHandler } from "hono"
 
 import { Context } from "@/util/context"
-import { Database } from "@/storage/db"
 import { Flag } from "@/flag/flag"
-import { eq } from "drizzle-orm"
 import { getAdaptor } from "./adaptors"
 import { WorkspaceContext } from "./workspace-context"
-import { WorkspaceTable } from "./workspace.sql"
+import { Workspace } from "./workspace"
 
 export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
   if (!Flag.AX_CODE_EXPERIMENTAL_WORKSPACES) return next()
@@ -21,7 +19,7 @@ export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
     throw error
   }
 
-  const row = Database.use((db) => db.select().from(WorkspaceTable).where(eq(WorkspaceTable.id, workspaceID as any)).get())
+  const row = Workspace.get(workspaceID as any)
   if (!row || row.type === "worktree") return next()
 
   const adaptor = getAdaptor(row.type)

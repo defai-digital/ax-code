@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
+import { BunProc } from "../src/bun"
 
-describe("BunProc registry configuration", () => {
+describe("BunProc registry structural guard", () => {
   test("should not contain hardcoded registry parameters", async () => {
     // Read the bun/index.ts file
     const bunIndexPath = path.join(__dirname, "../src/bun/index.ts")
@@ -38,16 +39,35 @@ describe("BunProc registry configuration", () => {
       const installFunction = installFunctionMatch[0]
 
       // Verify expected arguments are present
-      expect(installFunction).toContain('"add"')
-      expect(installFunction).toContain('"--force"')
-      expect(installFunction).toContain('"--exact"')
-      expect(installFunction).toContain('"--cwd"')
+      expect(installFunction).toContain("installArgs(pkg, version)")
       expect(installFunction).toContain("Global.Path.cache")
-      expect(installFunction).toContain('pkg + "@" + version')
 
       // Verify no registry argument is added
       expect(installFunction).not.toContain('"--registry"')
       expect(installFunction).not.toContain('args.push("--registry')
     }
+  })
+})
+
+describe("BunProc registry behavior", () => {
+  test("builds install args without registry flags", () => {
+    const args = BunProc.installArgs("foo", "1.2.3", {
+      proxied: false,
+      ci: false,
+      cwd: "/tmp/cache",
+    })
+
+    expect(args).toEqual(["add", "--force", "--exact", "--cwd", "/tmp/cache", "foo@1.2.3"])
+    expect(args).not.toContain("--registry")
+  })
+
+  test("adds no-cache when proxied", () => {
+    const args = BunProc.installArgs("foo", "latest", {
+      proxied: true,
+      ci: false,
+      cwd: "/tmp/cache",
+    })
+
+    expect(args).toContain("--no-cache")
   })
 })

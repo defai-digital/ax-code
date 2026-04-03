@@ -9,6 +9,13 @@
     "prepare": "effect-language-service patch || true",
     "typecheck": "tsgo --noEmit",
     "test": "bun test --timeout 30000",
+    "test:unit": "bun run script/test-groups.ts unit",
+    "test:recovery": "bun run script/test-groups.ts recovery",
+    "test:e2e": "bun run script/test-groups.ts e2e",
+    "test:deterministic": "bun run script/test-groups.ts deterministic",
+    "test:live": "bun run script/test-groups.ts live",
+    "test:ci": "bun run script/test-ci.ts",
+    "test:risk": "bun run script/test-risk.ts",
     "build": "bun run script/build.ts",
     "dev": "bun run --conditions=browser ./src/index.ts",
     "db": "bun drizzle-kit"

@@ -8,11 +8,8 @@ import type { ContextBreakdown, ContextStatus } from "./types"
 // Model context window sizes (tokens)
 const MODEL_LIMITS: Record<string, number> = {
   // Google Gemini
-  "gemini-2.5-pro": 1048576,
-  "gemini-2.5-flash": 1048576,
-  "gemini-2.0-flash": 1048576,
-  "gemini-1.5-pro": 2097152,
-  "gemini-1.5-flash": 1048576,
+  "gemini-3-pro": 1000000,
+  "gemini-3-flash": 1000000,
   // xAI Grok
   "grok-4": 131072,
   // Groq models

@@ -2,8 +2,6 @@ import { cmd } from "./cmd"
 import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { bootstrap } from "../bootstrap"
-import { Database } from "../../storage/db"
-import { SessionTable } from "../../session/session.sql"
 import { Session } from "../../session"
 import { calculateBreakdown, formatBreakdown, estimateCost } from "../../stats"
 
@@ -20,10 +18,7 @@ export const ContextCommand = cmd({
     prompts.intro("Context Stats")
 
     await bootstrap(process.cwd(), async () => {
-      // Get sessions from database directly (like stats command does)
-      const sessions = Database.use((db) =>
-        db.select().from(SessionTable).all(),
-      ).sort((a, b) => (b.time_updated ?? 0) - (a.time_updated ?? 0))
+      const sessions = [...Session.list({ limit: 1000 })].sort((a, b) => b.time.updated - a.time.updated)
 
       if (sessions.length === 0) {
         prompts.log.warn("No sessions found. Start a conversation first.")
@@ -33,19 +28,19 @@ export const ContextCommand = cmd({
 
       // Find target session
       const targetID = args.sessionID ?? sessions[0]?.id
-      const sessionRow = sessions.find((s) => s.id === targetID)
+      const session = sessions.find((s) => s.id === targetID)
 
-      if (!sessionRow) {
+      if (!session) {
         prompts.log.error(`Session "${targetID}" not found`)
         prompts.outro("Done")
         return
       }
 
-      prompts.log.info(`Session: ${sessionRow.id}`)
-      prompts.log.info(`Title: ${sessionRow.title ?? "untitled"}`)
+      prompts.log.info(`Session: ${session.id}`)
+      prompts.log.info(`Title: ${session.title || "untitled"}`)
 
       // Get messages for this session
-      const messages = await Session.messages({ sessionID: sessionRow.id })
+      const messages = await Session.messages({ sessionID: session.id })
 
       let inputTokens = 0
       let outputTokens = 0

@@ -87,9 +87,9 @@ export namespace SessionProcessor {
         const shouldBreak = cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true
         while (true) {
           blocked = false
+          let currentText: MessageV2.TextPart | undefined
+          let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
           try {
-            let currentText: MessageV2.TextPart | undefined
-            let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
             let usedTools = false
             const stream = await LLM.stream(streamInput)
 
@@ -410,6 +410,22 @@ export namespace SessionProcessor {
             }
           } catch (e: any) {
             deltaBatcher.flush()
+            if (currentText) {
+              currentText.text = currentText.text.trimEnd()
+              currentText.time = {
+                start: currentText.time?.start ?? Date.now(),
+                end: Date.now(),
+              }
+              await Session.updatePart(currentText)
+            }
+            for (const part of Object.values(reasoningMap)) {
+              part.text = part.text.trimEnd()
+              part.time = {
+                start: part.time?.start ?? Date.now(),
+                end: Date.now(),
+              }
+              await Session.updatePart(part)
+            }
             log.error("process", {
               error: e,
               stack: JSON.stringify(e.stack),

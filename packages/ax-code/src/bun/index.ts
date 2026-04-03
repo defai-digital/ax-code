@@ -50,6 +50,27 @@ export namespace BunProc {
     }),
   )
 
+  export function installArgs(
+    pkg: string,
+    version: string,
+    dep = {
+      proxied: proxied(),
+      ci: !!process.env.CI,
+      cwd: Global.Path.cache,
+    },
+  ) {
+    return [
+      "add",
+      "--force",
+      "--exact",
+      // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
+      ...(dep.proxied || dep.ci ? ["--no-cache"] : []),
+      "--cwd",
+      dep.cwd,
+      pkg + "@" + version,
+    ]
+  }
+
   export async function install(pkg: string, version = "latest") {
     // Use lock to ensure only one install at a time
     using _ = await Lock.write("bun-install")
@@ -77,16 +98,7 @@ export namespace BunProc {
     }
 
     // Build command arguments
-    const args = [
-      "add",
-      "--force",
-      "--exact",
-      // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
-      ...(proxied() || process.env.CI ? ["--no-cache"] : []),
-      "--cwd",
-      Global.Path.cache,
-      pkg + "@" + version,
-    ]
+    const args = installArgs(pkg, version)
 
     // Let Bun handle registry resolution:
     // - If .npmrc files exist, Bun will use them automatically

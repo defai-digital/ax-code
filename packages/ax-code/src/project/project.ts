@@ -54,15 +54,31 @@ export namespace Project {
 
   type Row = typeof ProjectTable.$inferSelect
 
-  export function fromRow(row: Row): Info {
+  function parseRow(row: Row) {
     const icon =
       row.icon_url || row.icon_color
         ? { url: row.icon_url ?? undefined, color: row.icon_color ?? undefined }
         : undefined
-    return {
+    const vcs = (() => {
+      const next = Info.shape.vcs.safeParse(row.vcs ?? undefined)
+      if (next.success) return next.data
+      log.warn("invalid project vcs", { projectID: row.id })
+    })()
+    const sandboxes = (() => {
+      const next = z.array(z.string()).safeParse(row.sandboxes)
+      if (next.success) return next.data
+      log.warn("invalid project sandboxes", { projectID: row.id })
+      return []
+    })()
+    const commands = (() => {
+      const next = Info.shape.commands.safeParse(row.commands ?? undefined)
+      if (next.success) return next.data
+      log.warn("invalid project commands", { projectID: row.id })
+    })()
+    const next = Info.safeParse({
       id: row.id,
       worktree: row.worktree,
-      vcs: row.vcs ? Info.shape.vcs.parse(row.vcs) : undefined,
+      vcs,
       name: row.name ?? undefined,
       icon,
       time: {
@@ -70,9 +86,24 @@ export namespace Project {
         updated: row.time_updated,
         initialized: row.time_initialized ?? undefined,
       },
-      sandboxes: row.sandboxes,
-      commands: row.commands ?? undefined,
-    }
+      sandboxes,
+      commands,
+    })
+    if (next.success) return next.data
+    log.warn("invalid project row", {
+      projectID: row.id,
+      issue: next.error.issues.length,
+    })
+  }
+
+  export function fromRow(row: Row): Info {
+    const next = parseRow(row)
+    if (next) return next
+    throw new Error(`Invalid project row: ${row.id}`)
+  }
+
+  export function safe(row: Row) {
+    return parseRow(row)
   }
 
   export const UpdateInput = z.object({
@@ -246,24 +277,24 @@ export namespace Project {
 
         // Phase 2: upsert
         const row = yield* db((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())
-        const existing = row
-          ? fromRow(row)
-          : {
-              id: data.id,
-              worktree: data.worktree,
-              vcs: data.vcs,
-              sandboxes: [] as string[],
-              time: { created: Date.now(), updated: Date.now() },
-            }
+        const existing = row ? safe(row) : undefined
+        const prev =
+          existing ?? {
+            id: data.id,
+            worktree: data.worktree,
+            vcs: data.vcs,
+            sandboxes: [] as string[],
+            time: { created: Date.now(), updated: Date.now() },
+          }
 
         if (Flag.AX_CODE_EXPERIMENTAL_ICON_DISCOVERY)
-          yield* discover(existing).pipe(Effect.ignore, Effect.forkIn(scope))
+          yield* discover(prev).pipe(Effect.ignore, Effect.forkIn(scope))
 
         const result: Info = {
-          ...existing,
+          ...prev,
           worktree: data.worktree,
           vcs: data.vcs,
-          time: { ...existing.time, updated: Date.now() },
+          time: { ...prev.time, updated: Date.now() },
         }
         if (data.sandbox !== result.worktree && !result.sandboxes.includes(data.sandbox))
           result.sandboxes.push(data.sandbox)
@@ -347,12 +378,22 @@ export namespace Project {
       })
 
       const list = Effect.fn("Project.list")(function* () {
-        return yield* db((d) => d.select().from(ProjectTable).all().map(fromRow))
+        return yield* db((d) =>
+          d
+            .select()
+            .from(ProjectTable)
+            .all()
+            .flatMap((row) => {
+              const next = safe(row)
+              return next ? [next] : []
+            }),
+        )
       })
 
       const get = Effect.fn("Project.get")(function* (id: ProjectID) {
         const row = yield* db((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
-        return row ? fromRow(row) : undefined
+        if (!row) return
+        return safe(row)
       })
 
       const update = Effect.fn("Project.update")(function* (input: UpdateInput) {
@@ -396,7 +437,8 @@ export namespace Project {
       const sandboxes = Effect.fn("Project.sandboxes")(function* (id: ProjectID) {
         const row = yield* db((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
         if (!row) return []
-        const data = fromRow(row)
+        const data = safe(row)
+        if (!data) return []
         return yield* Effect.forEach(
           data.sandboxes,
           (dir) =>
@@ -411,7 +453,7 @@ export namespace Project {
       const addSandbox = Effect.fn("Project.addSandbox")(function* (id: ProjectID, directory: string) {
         const row = yield* db((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
         if (!row) throw new Error(`Project not found: ${id}`)
-        const sboxes = [...row.sandboxes]
+        const sboxes = [...(safe(row)?.sandboxes ?? [])]
         if (!sboxes.includes(directory)) sboxes.push(directory)
         const result = yield* db((d) =>
           d
@@ -428,7 +470,7 @@ export namespace Project {
       const removeSandbox = Effect.fn("Project.removeSandbox")(function* (id: ProjectID, directory: string) {
         const row = yield* db((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
         if (!row) throw new Error(`Project not found: ${id}`)
-        const sboxes = row.sandboxes.filter((s) => s !== directory)
+        const sboxes = (safe(row)?.sandboxes ?? []).filter((s) => s !== directory)
         const result = yield* db((d) =>
           d
             .update(ProjectTable)
@@ -482,14 +524,17 @@ export namespace Project {
         .select()
         .from(ProjectTable)
         .all()
-        .map((row) => fromRow(row)),
+        .flatMap((row) => {
+          const next = safe(row)
+          return next ? [next] : []
+        }),
     )
   }
 
   export function get(id: ProjectID): Info | undefined {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) return undefined
-    return fromRow(row)
+    return safe(row)
   }
 
   export function setInitialized(id: ProjectID) {

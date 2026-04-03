@@ -324,3 +324,63 @@ it.effect("getRow returns none for nonexistent account", () =>
     expect(Option.isNone(row)).toBe(true)
   }),
 )
+
+it.effect("list skips malformed account rows", () =>
+  Effect.gen(function* () {
+    const id1 = AccountID.make("user-1")
+    const id2 = AccountID.make("user-2")
+
+    yield* AccountRepo.use((r) =>
+      r.persistAccount({
+        id: id1,
+        email: "first@example.com",
+        url: "https://control.example.com",
+        accessToken: AccessToken.make("at_1"),
+        refreshToken: RefreshToken.make("rt_1"),
+        expiry: Date.now() + 3600_000,
+        orgID: Option.none(),
+      }),
+    )
+
+    yield* AccountRepo.use((r) =>
+      r.persistAccount({
+        id: id2,
+        email: "second@example.com",
+        url: "https://control.example.com",
+        accessToken: AccessToken.make("at_2"),
+        refreshToken: RefreshToken.make("rt_2"),
+        expiry: Date.now() + 3600_000,
+        orgID: Option.none(),
+      }),
+    )
+
+    Database.Client().run(`UPDATE account SET url = CAST(x'0011' AS BLOB) WHERE id = '${id2}'`)
+
+    const accounts = yield* AccountRepo.use((r) => r.list())
+    expect(accounts.map((item) => item.id)).toEqual([id1])
+  }),
+)
+
+it.effect("active returns none for malformed active account rows", () =>
+  Effect.gen(function* () {
+    const id = AccountID.make("user-1")
+
+    yield* AccountRepo.use((r) =>
+      r.persistAccount({
+        id,
+        email: "test@example.com",
+        url: "https://control.example.com",
+        accessToken: AccessToken.make("at_1"),
+        refreshToken: RefreshToken.make("rt_1"),
+        expiry: Date.now() + 3600_000,
+        orgID: Option.some(OrgID.make("org-1")),
+      }),
+    )
+
+    Database.Client().run(`UPDATE account SET url = CAST(x'0011' AS BLOB) WHERE id = '${id}'`)
+    Database.Client().run(`UPDATE account_state SET active_account_id = '${id}' WHERE id = 1`)
+
+    const active = yield* AccountRepo.use((r) => r.active())
+    expect(Option.isNone(active)).toBe(true)
+  }),
+)

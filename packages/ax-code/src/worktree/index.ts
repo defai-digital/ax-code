@@ -312,8 +312,7 @@ export namespace Worktree {
   }
 
   async function runStartScripts(directory: string, input: { projectID: ProjectID; extra?: string }) {
-    const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, input.projectID)).get())
-    const project = row ? Project.fromRow(row) : undefined
+    const project = Project.get(input.projectID)
     const startup = project?.commands?.start?.trim() ?? ""
     const ok = await runStartScript(directory, startup, "project")
     if (!ok) return false

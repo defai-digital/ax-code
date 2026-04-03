@@ -9,8 +9,11 @@ import { WorkspaceID } from "./schema"
 import { WorkspaceTable } from "./workspace.sql"
 import { getAdaptor } from "./adaptors"
 import { parseSSE } from "./sse"
+import { Log } from "@/util/log"
 
 export namespace Workspace {
+  const log = Log.create({ service: "workspace" })
+
   export const Info = z.object({
     id: WorkspaceID.zod,
     projectID: z.string(),
@@ -23,15 +26,22 @@ export namespace Workspace {
 
   export type Info = z.infer<typeof Info>
 
-  const toInfo = (row: typeof WorkspaceTable.$inferSelect): Info => ({
-    id: row.id,
-    projectID: row.project_id,
-    branch: row.branch,
-    type: row.type,
-    name: row.name,
-    directory: row.directory,
-    extra: row.extra ?? undefined,
-  })
+  const toInfo = (row: typeof WorkspaceTable.$inferSelect): Info => {
+    const extra = (() => {
+      const next = Info.shape.extra.safeParse(row.extra ?? undefined)
+      if (next.success) return next.data
+      log.warn("invalid workspace extra", { workspaceID: row.id })
+    })()
+    return Info.parse({
+      id: row.id,
+      projectID: row.project_id,
+      branch: row.branch,
+      type: row.type,
+      name: row.name,
+      directory: row.directory,
+      extra,
+    })
+  }
 
   const CreateInput = z.object({
     projectID: ProjectID.zod,

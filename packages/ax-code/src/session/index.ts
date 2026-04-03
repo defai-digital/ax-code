@@ -48,7 +48,7 @@ export namespace Session {
 
   type SessionRow = typeof SessionTable.$inferSelect
 
-  export function fromRow(row: SessionRow): Info {
+  function parseRow(row: SessionRow) {
     const summary =
       row.summary_additions !== null || row.summary_deletions !== null || row.summary_files !== null
         ? {
@@ -60,7 +60,7 @@ export namespace Session {
         : undefined
     const share = row.share_url ? { url: row.share_url } : undefined
     const revert = row.revert ?? undefined
-    return {
+    const next = Info.safeParse({
       id: row.id,
       slug: row.slug,
       projectID: row.project_id,
@@ -78,7 +78,22 @@ export namespace Session {
         compacting: row.time_compacting ?? undefined,
         archived: row.time_archived ?? undefined,
       },
-    }
+    })
+    if (next.success) return next.data
+    log.warn("invalid session row", {
+      sessionID: row.id,
+      issue: next.error.issues.length,
+    })
+  }
+
+  export function fromRow(row: SessionRow): Info {
+    const next = parseRow(row)
+    if (next) return next
+    throw new Error(`Invalid session row: ${row.id}`)
+  }
+
+  export function safe(row: SessionRow) {
+    return parseRow(row)
   }
 
   export function toRow(info: Info) {
@@ -341,7 +356,9 @@ export namespace Session {
   export const get = fn(SessionID.zod, async (id) => {
     const row = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, id)).get())
     if (!row) throw new NotFoundError({ message: `Session not found: ${id}` })
-    return fromRow(row)
+    const next = parseRow(row)
+    if (!next) throw new NotFoundError({ message: `Session not found: ${id}` })
+    return next
   })
 
   export const share = fn(SessionID.zod, async (id) => {
@@ -432,7 +449,11 @@ export namespace Session {
   export const diff = fn(SessionID.zod, async (sessionID) => {
     try {
       return await Storage.read<Snapshot.FileDiff[]>(["session_diff", sessionID])
-    } catch {
+    } catch (err) {
+      if (Storage.NotFoundError.isInstance(err)) {
+        return []
+      }
+      await Storage.write(["session_diff", sessionID], []).catch(() => {})
       return []
     }
   })
@@ -487,7 +508,8 @@ export namespace Session {
         .all(),
     )
     for (const row of rows) {
-      yield fromRow(row)
+      const next = parseRow(row)
+      if (next) yield next
     }
   }
 
@@ -555,8 +577,10 @@ export namespace Session {
     }
 
     for (const row of rows) {
+      const next = parseRow(row)
+      if (!next) continue
       const project = projects.get(row.project_id) ?? null
-      yield { ...fromRow(row), project }
+      yield { ...next, project }
     }
   }
 
@@ -569,7 +593,10 @@ export namespace Session {
         .where(and(eq(SessionTable.project_id, project.id), eq(SessionTable.parent_id, parentID)))
         .all(),
     )
-    return rows.map(fromRow)
+    return rows.flatMap((row) => {
+      const next = parseRow(row)
+      return next ? [next] : []
+    })
   })
 
   export const remove = fn(SessionID.zod, async (sessionID) => {

@@ -13,11 +13,14 @@ import { STATUS_CODES } from "http"
 import { Storage } from "@/storage/storage"
 import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
+import { Log } from "@/util/log"
 import type { SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 
 export namespace MessageV2 {
+  const log = Log.create({ service: "session.message" })
+
   export function isMedia(mime: string) {
     return mime.startsWith("image/") || mime === "application/pdf"
   }
@@ -509,20 +512,35 @@ export namespace MessageV2 {
     },
   }
 
-  const info = (row: typeof MessageTable.$inferSelect) =>
-    ({
+  const info = (row: typeof MessageTable.$inferSelect) => {
+    const next = MessageV2.Info.safeParse({
       ...row.data,
       id: row.id,
       sessionID: row.session_id,
-    }) as MessageV2.Info
+    })
+    if (next.success) return next.data
+    log.warn("invalid message row", {
+      messageID: row.id,
+      sessionID: row.session_id,
+      issue: next.error.issues.length,
+    })
+  }
 
-  const part = (row: typeof PartTable.$inferSelect) =>
-    ({
+  const part = (row: typeof PartTable.$inferSelect) => {
+    const next = MessageV2.Part.safeParse({
       ...row.data,
       id: row.id,
       sessionID: row.session_id,
       messageID: row.message_id,
-    }) as MessageV2.Part
+    })
+    if (next.success) return next.data
+    log.warn("invalid part row", {
+      partID: row.id,
+      messageID: row.message_id,
+      sessionID: row.session_id,
+      issue: next.error.issues.length,
+    })
+  }
 
   const older = (row: Cursor) =>
     or(
@@ -544,16 +562,23 @@ export namespace MessageV2 {
       )
       for (const row of partRows) {
         const next = part(row)
+        if (!next) continue
         const list = partByMessage.get(row.message_id)
         if (list) list.push(next)
         else partByMessage.set(row.message_id, [next])
       }
     }
 
-    return rows.map((row) => ({
-      info: info(row),
-      parts: partByMessage.get(row.id) ?? [],
-    }))
+    return rows.flatMap((row) => {
+      const next = info(row)
+      if (!next) return []
+      return [
+        {
+          info: next,
+          parts: partByMessage.get(row.id) ?? [],
+        },
+      ]
+    })
   }
 
   export function toModelMessages(
@@ -836,7 +861,6 @@ export namespace MessageV2 {
     let before: string | undefined
     while (true) {
       const next = await page({ sessionID, limit: size, before })
-      if (next.items.length === 0) break
       for (let i = next.items.length - 1; i >= 0; i--) {
         yield next.items[i]
       }
@@ -849,9 +873,10 @@ export namespace MessageV2 {
     const rows = Database.use((db) =>
       db.select().from(PartTable).where(eq(PartTable.message_id, message_id)).orderBy(PartTable.id).all(),
     )
-    return rows.map(
-      (row) => ({ ...row.data, id: row.id, sessionID: row.session_id, messageID: row.message_id }) as MessageV2.Part,
-    )
+    return rows.flatMap((row) => {
+      const next = part(row)
+      return next ? [next] : []
+    })
   })
 
   export const get = fn(
@@ -868,8 +893,10 @@ export namespace MessageV2 {
           .get(),
       )
       if (!row) throw new NotFoundError({ message: `Message not found: ${input.messageID}` })
+      const next = info(row)
+      if (!next) throw new NotFoundError({ message: `Message not found: ${input.messageID}` })
       return {
-        info: info(row),
+        info: next,
         parts: await parts(input.messageID),
       }
     },

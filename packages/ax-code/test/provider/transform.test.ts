@@ -77,10 +77,10 @@ describe("ProviderTransform.options - google thinkingConfig gating", () => {
 
   const createGoogleModel = (reasoning: boolean, npm: "@ai-sdk/google" | "@ai-sdk/google-vertex") =>
     ({
-      id: `${npm === "@ai-sdk/google" ? "google" : "google-vertex"}/gemini-2.0-flash`,
+      id: `${npm === "@ai-sdk/google" ? "google" : "google-vertex"}/gemini-3-flash`,
       providerID: npm === "@ai-sdk/google" ? "google" : "google-vertex",
       api: {
-        id: "gemini-2.0-flash",
+        id: "gemini-3-flash",
         url: npm === "@ai-sdk/google" ? "https://generativelanguage.googleapis.com" : "https://vertexai.googleapis.com",
         npm,
       },
@@ -125,6 +125,7 @@ describe("ProviderTransform.options - google thinkingConfig gating", () => {
     })
     expect(result.thinkingConfig).toEqual({
       includeThoughts: true,
+      thinkingLevel: "high",
     })
   })
 
@@ -887,38 +888,12 @@ describe("ProviderTransform.variants", () => {
   })
 
   describe("@ai-sdk/google", () => {
-    test("gemini-2.5 returns high and max with thinkingConfig and thinkingBudget", () => {
+    test("gemini-3 returns low and high with thinkingLevel", () => {
       const model = createMockModel({
-        id: "google/gemini-2.5-pro",
+        id: "google/gemini-3-pro",
         providerID: "google",
         api: {
-          id: "gemini-2.5-pro",
-          url: "https://generativelanguage.googleapis.com",
-          npm: "@ai-sdk/google",
-        },
-      })
-      const result = ProviderTransform.variants(model)
-      expect(Object.keys(result)).toEqual(["high", "max"])
-      expect(result.high).toEqual({
-        thinkingConfig: {
-          includeThoughts: true,
-          thinkingBudget: 16000,
-        },
-      })
-      expect(result.max).toEqual({
-        thinkingConfig: {
-          includeThoughts: true,
-          thinkingBudget: 24576,
-        },
-      })
-    })
-
-    test("other gemini models return low and high with thinkingLevel", () => {
-      const model = createMockModel({
-        id: "google/gemini-2.0-pro",
-        providerID: "google",
-        api: {
-          id: "gemini-2.0-pro",
+          id: "gemini-3-pro",
           url: "https://generativelanguage.googleapis.com",
           npm: "@ai-sdk/google",
         },
@@ -938,35 +913,49 @@ describe("ProviderTransform.variants", () => {
         },
       })
     })
-  })
 
-  describe("@ai-sdk/google-vertex", () => {
-    test("gemini-2.5 returns high and max with thinkingConfig and thinkingBudget", () => {
+    test("gemini-3.1 adds medium thinking level", () => {
       const model = createMockModel({
-        id: "google-vertex/gemini-2.5-pro",
-        providerID: "google-vertex",
+        id: "google/gemini-3.1-pro",
+        providerID: "google",
         api: {
-          id: "gemini-2.5-pro",
-          url: "https://vertexai.googleapis.com",
-          npm: "@ai-sdk/google-vertex",
+          id: "gemini-3.1-pro",
+          url: "https://generativelanguage.googleapis.com",
+          npm: "@ai-sdk/google",
         },
       })
       const result = ProviderTransform.variants(model)
-      expect(Object.keys(result)).toEqual(["high", "max"])
+      expect(Object.keys(result)).toEqual(["low", "medium", "high"])
     })
+  })
 
-    test("other vertex models return low and high with thinkingLevel", () => {
+  describe("@ai-sdk/google-vertex", () => {
+    test("gemini-3 returns low and high with thinkingLevel", () => {
       const model = createMockModel({
-        id: "google-vertex/gemini-2.0-pro",
+        id: "google-vertex/gemini-3-pro",
         providerID: "google-vertex",
         api: {
-          id: "gemini-2.0-pro",
+          id: "gemini-3-pro",
           url: "https://vertexai.googleapis.com",
           npm: "@ai-sdk/google-vertex",
         },
       })
       const result = ProviderTransform.variants(model)
       expect(Object.keys(result)).toEqual(["low", "high"])
+    })
+
+    test("gemini-3.1 vertex adds medium thinking level", () => {
+      const model = createMockModel({
+        id: "google-vertex/gemini-3.1-pro",
+        providerID: "google-vertex",
+        api: {
+          id: "gemini-3.1-pro",
+          url: "https://vertexai.googleapis.com",
+          npm: "@ai-sdk/google-vertex",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["low", "medium", "high"])
     })
   })
 

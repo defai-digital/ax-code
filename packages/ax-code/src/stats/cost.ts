@@ -49,7 +49,7 @@ export function estimateCost(
   cachedTokens: number = 0,
 ): CostEstimate {
   const pricing = getPricing(providerID)
-  const nonCachedInput = inputTokens - cachedTokens
+  const nonCachedInput = Math.max(0, inputTokens - cachedTokens)
   const inputCost = (nonCachedInput / 1000) * pricing.inputPer1kTokens
     + (cachedTokens / 1000) * (pricing.cachedPer1kTokens ?? pricing.inputPer1kTokens)
   const outputCost = (outputTokens / 1000) * pricing.outputPer1kTokens

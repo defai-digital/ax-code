@@ -1,5 +1,13 @@
-import { test, expect } from "bun:test"
+import path from "path"
+import { afterEach, expect, test } from "bun:test"
 import { Auth } from "../../src/auth"
+import { Global } from "../../src/global"
+
+const file = path.join(Global.Path.data, "auth.json")
+
+afterEach(async () => {
+  await Bun.write(file, "{}")
+})
 
 test("set normalizes trailing slashes in keys", async () => {
   await Auth.set("https://example.com/", {
@@ -55,4 +63,25 @@ test("set and remove are no-ops on keys without trailing slashes", async () => {
   await Auth.remove("anthropic")
   const after = await Auth.all()
   expect(after["anthropic"]).toBeUndefined()
+})
+
+test("all returns empty for corrupted auth file", async () => {
+  await Bun.write(file, "{ invalid json")
+
+  expect(await Auth.all()).toEqual({})
+  expect(await Auth.get("anthropic")).toBeUndefined()
+})
+
+test("all filters invalid auth entries and keeps valid ones", async () => {
+  await Bun.write(
+    file,
+    JSON.stringify({
+      anthropic: { type: "api", key: "sk-test" },
+      broken: { type: "api", key: 1 },
+    }),
+  )
+
+  const data = await Auth.all()
+  expect(data["anthropic"]).toMatchObject({ type: "api", key: "sk-test" })
+  expect(data["broken"]).toBeUndefined()
 })

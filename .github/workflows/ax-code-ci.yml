@@ -1,0 +1,109 @@
+name: ax-code
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ax-code-ci.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "packages/ax-code/**"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/ax-code-ci.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "packages/ax-code/**"
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Run live ax-code tests
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck ax-code
+        run: pnpm --dir packages/ax-code run typecheck
+
+      - name: Run deterministic ax-code tests
+        run: pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 1
+
+      - name: Summarize ax-code risk map
+        if: always()
+        run: pnpm --dir packages/ax-code run test:risk
+
+      - name: Upload deterministic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax-code-deterministic-report
+          path: |
+            packages/ax-code/.tmp/test-report/*.xml
+            packages/ax-code/.tmp/test-risk.md
+          if-no-files-found: ignore
+
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run live ax-code tests
+        run: pnpm --dir packages/ax-code run test:ci -- live
+
+      - name: Upload live reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax-code-live-report
+          path: packages/ax-code/.tmp/test-report/*.xml
+          if-no-files-found: ignore

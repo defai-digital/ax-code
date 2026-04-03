@@ -89,7 +89,10 @@ async function getCurrentProject(): Promise<Project.Info> {
 
 async function getAllSessions(): Promise<Session.Info[]> {
   const rows = Database.use((db) => db.select().from(SessionTable).all())
-  return rows.map((row) => Session.fromRow(row))
+  return rows.flatMap((row) => {
+    const next = Session.safe(row)
+    return next ? [next] : []
+  })
 }
 
 export async function aggregateSessionStats(days?: number, projectFilter?: string): Promise<SessionStats> {

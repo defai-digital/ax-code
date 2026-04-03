@@ -5,6 +5,7 @@ import { Database } from "@/storage/db"
 import { encrypt, isEncrypted, decrypt, type EncryptedValue } from "@/auth/encryption"
 import { AccountStateTable, AccountTable } from "./account.sql"
 import { AccessToken, AccountID, AccountRepoError, Info, OrgID, RefreshToken } from "./schema"
+import { Log } from "@/util/log"
 
 function encryptToken(token: string): string {
   return JSON.stringify(encrypt(token))
@@ -25,37 +26,44 @@ export type AccountRow = (typeof AccountTable)["$inferSelect"]
 type DbClient = Parameters<typeof Database.use>[0] extends (db: infer T) => unknown ? T : never
 
 const ACCOUNT_STATE_ID = 1
+const log = Log.create({ service: "account.repo" })
 
-export namespace AccountRepo {
-  export interface Service {
-    readonly active: () => Effect.Effect<Option.Option<Info>, AccountRepoError>
-    readonly list: () => Effect.Effect<Info[], AccountRepoError>
-    readonly remove: (accountID: AccountID) => Effect.Effect<void, AccountRepoError>
-    readonly use: (accountID: AccountID, orgID: Option.Option<OrgID>) => Effect.Effect<void, AccountRepoError>
-    readonly getRow: (accountID: AccountID) => Effect.Effect<Option.Option<AccountRow>, AccountRepoError>
-    readonly persistToken: (input: {
-      accountID: AccountID
-      accessToken: AccessToken
-      refreshToken: RefreshToken
-      expiry: Option.Option<number>
-    }) => Effect.Effect<void, AccountRepoError>
-    readonly persistAccount: (input: {
-      id: AccountID
-      email: string
-      url: string
-      accessToken: AccessToken
-      refreshToken: RefreshToken
-      expiry: number
-      orgID: Option.Option<OrgID>
-    }) => Effect.Effect<void, AccountRepoError>
-  }
+export interface AccountRepoService {
+  readonly active: () => Effect.Effect<Option.Option<Info>, AccountRepoError>
+  readonly list: () => Effect.Effect<Info[], AccountRepoError>
+  readonly remove: (accountID: AccountID) => Effect.Effect<void, AccountRepoError>
+  readonly use: (accountID: AccountID, orgID: Option.Option<OrgID>) => Effect.Effect<void, AccountRepoError>
+  readonly getRow: (accountID: AccountID) => Effect.Effect<Option.Option<AccountRow>, AccountRepoError>
+  readonly persistToken: (input: {
+    accountID: AccountID
+    accessToken: AccessToken
+    refreshToken: RefreshToken
+    expiry: Option.Option<number>
+  }) => Effect.Effect<void, AccountRepoError>
+  readonly persistAccount: (input: {
+    id: AccountID
+    email: string
+    url: string
+    accessToken: AccessToken
+    refreshToken: RefreshToken
+    expiry: number
+    orgID: Option.Option<OrgID>
+  }) => Effect.Effect<void, AccountRepoError>
 }
 
-export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepo.Service>()("@ax-code/AccountRepo") {
+export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepoService>()("@ax-code/AccountRepo") {
   static readonly layer: Layer.Layer<AccountRepo> = Layer.effect(
     AccountRepo,
     Effect.gen(function* () {
       const decode = Schema.decodeUnknownSync(Info)
+      const safe = (row: unknown) => {
+        try {
+          return decode(row)
+        } catch {
+          const id = row && typeof row === "object" && "id" in row ? row.id : undefined
+          log.warn("invalid account row", { accountID: id })
+        }
+      }
 
       const query = <A>(f: (db: DbClient) => A) =>
         Effect.try({
@@ -90,7 +98,13 @@ export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepo.Ser
       }
 
       const active = Effect.fn("AccountRepo.active")(() =>
-        query((db) => current(db)).pipe(Effect.map((row) => (row ? Option.some(decode(row)) : Option.none()))),
+        query((db) => current(db)).pipe(
+          Effect.map((row) => {
+            if (!row) return Option.none()
+            const next = safe(row)
+            return next ? Option.some(next) : Option.none()
+          }),
+        ),
       )
 
       const list = Effect.fn("AccountRepo.list")(() =>
@@ -99,7 +113,10 @@ export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepo.Ser
             .select()
             .from(AccountTable)
             .all()
-            .map((row: AccountRow) => decode({ ...row, active_org_id: null })),
+            .flatMap((row: AccountRow) => {
+              const next = safe({ ...row, active_org_id: null })
+              return next ? [next] : []
+            }),
         ),
       )
 

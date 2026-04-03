@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { WorkspaceID } from "../../src/control-plane/schema"
 import { Hono } from "hono"
 import { tmpdir } from "../fixture/fixture"
@@ -11,6 +11,7 @@ import { resetDatabase } from "../fixture/db"
 import * as adaptors from "../../src/control-plane/adaptors"
 import type { Adaptor } from "../../src/control-plane/types"
 import { Flag } from "../../src/flag/flag"
+import { eq } from "drizzle-orm"
 
 afterEach(async () => {
   mock.restore()
@@ -21,6 +22,11 @@ const original = Flag.AX_CODE_EXPERIMENTAL_WORKSPACES
 // @ts-expect-error don't do this normally, but it works
 Flag.AX_CODE_EXPERIMENTAL_WORKSPACES = true
 
+beforeEach(() => {
+  // @ts-expect-error don't do this normally, but it works
+  Flag.AX_CODE_EXPERIMENTAL_WORKSPACES = true
+})
+
 afterEach(() => {
   // @ts-expect-error don't do this normally, but it works
   Flag.AX_CODE_EXPERIMENTAL_WORKSPACES = original
@@ -29,6 +35,7 @@ afterEach(() => {
 type State = {
   workspace?: "first" | "second"
   calls: Array<{ method: string; url: string; body?: string }>
+  configs?: unknown[]
 }
 
 const remote = { type: "testing", name: "remote-a" } as unknown as typeof WorkspaceTable.$inferInsert
@@ -43,7 +50,8 @@ async function setup(state: State) {
     },
     async remove() {},
 
-    async fetch(_config: unknown, input: RequestInfo | URL, init?: RequestInit) {
+    async fetch(config: unknown, input: RequestInfo | URL, init?: RequestInit) {
+      state.configs?.push(config)
       const url =
         input instanceof Request || input instanceof URL
           ? input.toString()
@@ -137,6 +145,30 @@ describe("control-plane/session-proxy-middleware", () => {
         body: '{"hello":"world"}',
       },
     ])
+  })
+
+  test("sanitizes malformed workspace config before proxying", async () => {
+    const state: State = {
+      workspace: "first",
+      calls: [],
+      configs: [],
+    }
+
+    const ctx = await setup(state)
+
+    Database.use((db) => {
+      db.update(WorkspaceTable).set({ extra: ["bad"] as any }).where(eq(WorkspaceTable.id, ctx.id1)).run()
+    })
+
+    ctx.app.post("/session/foo", (c) => c.text("local", 200))
+    const response = await ctx.request("http://workspace.test/session/foo", {
+      method: "POST",
+      body: "x",
+    })
+
+    expect(response.status).toBe(202)
+    expect(await response.text()).toBe("proxied")
+    expect(state.configs).toEqual([undefined])
   })
 
   // It will behave this way when we have syncing

@@ -33,6 +33,19 @@ import { CUSTOM_LOADERS, type CustomModelLoader, type CustomVarsLoader, type Cus
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
+  function supported(providerID: string, modelID: string) {
+    const lower = modelID.toLowerCase()
+    if (providerID === "google" || providerID === "google-vertex") {
+      if (!lower.includes("gemini")) return true
+      return lower.includes("gemini-3")
+    }
+    if (providerID === "openai") {
+      if (!lower.includes("gpt")) return true
+      if (lower.includes("gpt-oss")) return true
+      return lower.includes("gpt-4") || lower.includes("gpt-5")
+    }
+    return true
+  }
   type Lang = Exclude<LanguageModel, string>
   type SDK = {
     languageModel(modelID: string): unknown
@@ -322,6 +335,8 @@ export namespace Provider {
       }
 
       for (const [modelID, model] of Object.entries(provider.models ?? {})) {
+        const nextID = model.id ?? modelID
+        if (!supported(providerID, nextID)) continue
         const existingModel = parsed.models[model.id ?? modelID]
         const name = iife(() => {
           if (model.name) return model.name
@@ -748,8 +763,7 @@ export namespace Provider {
     const provider = await state().then((state) => state.providers[providerID])
     if (provider) {
       let priority = [
-        "gemini-2.0-flash",
-        "gemini-2.5-flash",
+        "gemini-3-flash",
         "gemini-flash",
         "llama-3.1-8b",
         "llama3-8b",

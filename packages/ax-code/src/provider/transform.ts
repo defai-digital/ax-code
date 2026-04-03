@@ -193,27 +193,9 @@ export namespace ProviderTransform {
       case "@ai-sdk/google-vertex":
       case "@ai-sdk/google":
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai
-        if (id.includes("2.5")) {
-          return {
-            high: {
-              thinkingConfig: {
-                includeThoughts: true,
-                thinkingBudget: 16000,
-              },
-            },
-            max: {
-              thinkingConfig: {
-                includeThoughts: true,
-                thinkingBudget: 24576,
-              },
-            },
-          }
-        }
         {
           let levels = ["low", "high"]
-          if (id.includes("3.1")) {
-            levels = ["low", "medium", "high"]
-          }
+          if (id.includes("3.1")) levels = ["low", "medium", "high"]
           return Object.fromEntries(
             levels.map((effort) => [
               effort,
@@ -255,9 +237,7 @@ export namespace ProviderTransform {
       if (input.model.capabilities.reasoning) {
         result["thinkingConfig"] = {
           includeThoughts: true,
-        }
-        if (input.model.api.id.includes("gemini-3")) {
-          result["thinkingConfig"]["thinkingLevel"] = "high"
+          thinkingLevel: "high",
         }
       }
     }
@@ -282,11 +262,7 @@ export namespace ProviderTransform {
 
   export function smallOptions(model: Provider.Model) {
     if (model.providerID === "google") {
-      // gemini-3 uses thinkingLevel, gemini-2.5 uses thinkingBudget
-      if (model.api.id.includes("gemini-3")) {
-        return { thinkingConfig: { thinkingLevel: "minimal" } }
-      }
-      return { thinkingConfig: { thinkingBudget: 0 } }
+      return { thinkingConfig: { thinkingLevel: "minimal" } }
     }
     if (model.providerID === "venice") {
       return { veniceParameters: { disableThinking: true } }

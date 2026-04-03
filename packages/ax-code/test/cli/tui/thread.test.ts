@@ -110,6 +110,7 @@ describe("tui thread", () => {
     await using tmp = await tmpdir({ git: true })
     const cwd = process.cwd()
     const pwd = process.env.PWD
+    const origCwd = process.env.AX_CODE_ORIGINAL_CWD
     const worker = globalThis.Worker
     const tty = Object.getOwnPropertyDescriptor(process.stdin, "isTTY")
     const link = path.join(path.dirname(tmp.path), path.basename(tmp.path) + "-link")
@@ -133,6 +134,7 @@ describe("tui thread", () => {
     try {
       process.chdir(tmp.path)
       process.env.PWD = link
+      delete process.env.AX_CODE_ORIGINAL_CWD
       await expect(call(project)).rejects.toBe(stop)
       expect(seen.inst[0]).toBe(tmp.path)
       expect(seen.tui[0]).toBe(tmp.path)
@@ -140,6 +142,8 @@ describe("tui thread", () => {
       process.chdir(cwd)
       if (pwd === undefined) delete process.env.PWD
       else process.env.PWD = pwd
+      if (origCwd === undefined) delete process.env.AX_CODE_ORIGINAL_CWD
+      else process.env.AX_CODE_ORIGINAL_CWD = origCwd
       if (tty) Object.defineProperty(process.stdin, "isTTY", tty)
       else delete (process.stdin as { isTTY?: boolean }).isTTY
       globalThis.Worker = worker

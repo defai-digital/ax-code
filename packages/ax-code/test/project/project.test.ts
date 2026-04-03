@@ -11,6 +11,9 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { AppFileSystem } from "../../src/filesystem"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
+import { Database } from "../../src/storage/db"
+import { ProjectTable } from "../../src/project/project.sql"
+import { eq } from "drizzle-orm"
 
 Log.init({ print: false })
 
@@ -408,6 +411,34 @@ describe("Project.list and Project.get", () => {
   test("get returns undefined for unknown id", () => {
     const found = Project.get(ProjectID.make("nonexistent"))
     expect(found).toBeUndefined()
+  })
+
+  test("drops malformed project fields in get and list", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { project } = await Project.fromDirectory(tmp.path)
+
+    Database.use((db) => {
+      db.update(ProjectTable).set({ sandboxes: { nope: true } as any }).where(eq(ProjectTable.id, project.id)).run()
+    })
+
+    expect(Project.get(project.id)?.id).toBe(project.id)
+    expect(Project.get(project.id)?.sandboxes).toEqual([])
+    expect(Project.list().some((item) => item.id === project.id)).toBe(true)
+  })
+
+  test("fromDirectory recovers from malformed stored project rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { project } = await Project.fromDirectory(tmp.path)
+
+    Database.use((db) => {
+      db.update(ProjectTable).set({ commands: { start: 1 } as any }).where(eq(ProjectTable.id, project.id)).run()
+    })
+
+    const next = await Project.fromDirectory(tmp.path)
+    expect(next.project.id).toBe(project.id)
+    expect(Array.isArray(next.project.sandboxes)).toBe(true)
+    expect(next.project.commands).toBeUndefined()
+    expect(Project.get(project.id)?.id).toBe(project.id)
   })
 })
 
