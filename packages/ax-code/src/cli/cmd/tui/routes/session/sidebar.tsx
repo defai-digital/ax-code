@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Show, Switch, Match } from "solid-js"
+import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import { Locale } from "@/util/locale"
@@ -12,6 +12,20 @@ import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
 
+function bar(input: { pct?: number | null; busy: boolean; tick: number }) {
+  const width = 20
+  const pct = Math.max(0, Math.min(100, input.pct ?? 0))
+  const fill = Math.max(0, Math.min(width, Math.round((pct / 100) * width)))
+  const cells: string[] = Array.from({ length: width }, (_, i) => (i < fill ? "█" : "░"))
+
+  if (input.busy) {
+    const pos = input.tick % width
+    cells[pos] = pos < fill ? "▓" : "▒"
+  }
+
+  return cells.join("")
+}
+
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
   const { theme } = useTheme()
@@ -19,6 +33,17 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
+  const status = createMemo(() => sync.data.session_status?.[props.sessionID] ?? { type: "idle" as const })
+  const [tick, setTick] = createSignal(0)
+
+  onMount(() => {
+    const id = setInterval(() => {
+      if (status().type === "idle") return
+      setTick((x) => x + 1)
+    }, 120)
+
+    onCleanup(() => clearInterval(id))
+  })
 
   const [expanded, setExpanded] = createStore({
     mcp: true,
@@ -61,6 +86,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       percentage: model?.limit.context ? Math.round((total / model.limit.context) * 100) : null,
     }
   })
+  const usageBar = createMemo(() =>
+    bar({
+      pct: context()?.percentage,
+      busy: status().type !== "idle",
+      tick: tick(),
+    }),
+  )
 
   const directory = useDirectory()
   const kv = useKV()
@@ -106,6 +138,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
               </text>
               <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens</text>
               <text fg={theme.textMuted}>{context()?.percentage ?? 0}% used</text>
+              <text fg={status().type === "idle" ? theme.textMuted : theme.primary}>{usageBar()}</text>
               <text fg={theme.textMuted}>{cost()} spent</text>
             </box>
             <Show when={mcpEntries().length > 0}>
