@@ -43,6 +43,12 @@ auth.json
 CLAUDE.md
 AGENTS.md
 
+# Internal planning (kept locally, not in public repo)
+TODOS/
+BUGS/
+PRDS/
+ADRS/
+
 # Local dev files
 opencode-dev
 logs/
