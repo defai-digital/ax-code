@@ -15,9 +15,19 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+## Why AI Coding Breaks Down
+
+AI coding becomes hard to trust when execution is opaque, unsafe, and difficult to reproduce in real environments.
+
+- **Opaque execution** makes it hard to understand what the agent actually did
+- **Unbounded tool access** makes real repositories and production-adjacent systems risky
+- **Ephemeral workflows** make it difficult to resume, audit, or operationalize coding work across teams
+
+AX Code addresses that with explicit tools, session-backed workflows, sandboxed execution, and a runtime designed for controlled automation instead of unstructured chat alone.
+
 ## What AX Code Is
 
-Most AI coding products stop at chat plus tool calls. AX Code is designed as a runtime layer for coding workflows:
+Most AI coding products stop at chat plus tool calls. AX Code is designed as a runtime layer for coding workflows. It is more than a coding assistant: it is a controlled execution runtime for software development.
 
 - **More controllable than chat-first coding tools.** Tool use is explicit, permissioned, and sandbox-aware.
 - **More composable than a single CLI.** The same runtime can back the TUI, the SDK, headless automation, MCP-connected workflows, and internal developer platforms.
@@ -25,6 +35,8 @@ Most AI coding products stop at chat plus tool calls. AX Code is designed as a r
 - **More operationally useful for teams.** Sessions, storage, policy boundaries, and provider abstraction are built into the core runtime rather than bolted on later.
 
 ## Why Teams Choose AX Code
+
+Teams adopt `ax-code` when they need AI coding to behave like an execution system they can reason about, integrate, and operate, rather than a suggestion layer they can only observe after the fact.
 
 | Requirement | Typical AI coding tooling | AX Code |
 |-----------|---------------------------|---------|
@@ -74,6 +86,13 @@ The important distinction is that `ax-code` is not just a chat UI. It is a runti
 3. **Secure enterprise coding workflows** where sandboxing, policy, and auditability matter
 4. **Offline or air-gapped development environments** using local or sovereign model backends
 
+## When To Use AX Code
+
+- You need AI to modify large codebases without giving it unrestricted execution
+- You need coding workflows that can be resumed, reviewed, and operationalized across sessions
+- You want AI agents inside internal platforms, CI pipelines, or enterprise development environments
+- You need clear control over files, tools, permissions, network access, and model providers
+
 ## The AutomatosX Ecosystem
 
 AX Code is the coding surface of a vertically integrated sovereign AI platform:
@@ -83,6 +102,8 @@ AX Code is the coding surface of a vertically integrated sovereign AI platform:
 </p>
 
 Source: [docs/automatosx-stack.mmd](docs/automatosx-stack.mmd)
+
+Within AutomatosX, `ax-code` is the developer-facing execution layer. `AX Engine` handles inference, `AX Serving` handles orchestration, `AX Fabric` handles knowledge, and `AX Trust` provides governance and policy boundaries.
 
 | Component | Repository | Role |
 |-----------|-----------|------|
