@@ -449,6 +449,12 @@ AX Code merges the agent intelligence and SDK capabilities of ax-cli with the ro
 
 ---
 
+## Changelog
+
+See [GitHub Releases](https://github.com/defai-digital/ax-code/releases) for version history and release notes.
+
+---
+
 ## Language
 
 AX Code is **English only**. We removed multi-language support to focus on delivering higher quality documentation, error messages, and support. Community-contributed translations may return in the future.
