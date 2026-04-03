@@ -1,10 +1,17 @@
-# Security
+# Security Policy
 
-## IMPORTANT
+## Reporting a Vulnerability
 
-We do not accept AI generated security reports. We receive a large number of
-these and we absolutely do not have the resources to review them all. If you
-submit one that will be an automatic ban from the project.
+We take security seriously. If you discover a vulnerability, please report it responsibly:
+
+1. **GitHub Advisory** (preferred): Use the ["Report a Vulnerability"](https://github.com/defai-digital/ax-code/security/advisories/new) tab.
+2. **Email**: Send details to **security@defai.digital**.
+
+We will acknowledge your report within **6 business days** and keep you informed of progress toward a fix.
+
+> **Note:** We do not accept AI-generated security reports. Submitting one will result in a ban from the project. Please ensure your report includes specific reproduction steps and demonstrates a real impact.
+
+---
 
 ## Threat Model
 
@@ -14,34 +21,39 @@ ax-code is an AI-powered coding assistant that runs locally on your machine. It 
 
 ### No Sandbox
 
-ax-code does **not** sandbox the agent. The permission system exists as a UX feature to help users stay aware of what actions the agent is taking - it prompts for confirmation before executing commands, writing files, etc. However, it is not designed to provide security isolation.
+ax-code does **not** sandbox the agent. The permission system is a UX feature that prompts for confirmation before executing commands, writing files, etc. It is not designed to provide security isolation.
 
 If you need true isolation, run ax-code inside a Docker container or VM.
 
 ### Server Mode
 
-Server mode is opt-in only. When enabled, set `AX_CODE_SERVER_PASSWORD` to require HTTP Basic Auth. Without this, the server runs unauthenticated (with a warning). It is the end user's responsibility to secure the server - any functionality it provides is not a vulnerability.
+Server mode is opt-in. When enabled, set `AX_CODE_SERVER_PASSWORD` to require HTTP Basic Auth. Without this, the server runs unauthenticated (with a warning). Securing the server is the end user's responsibility.
 
-### Out of Scope
+### API Key Storage
 
-| Category                        | Rationale                                                               |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| **Server access when opted-in** | If you enable server mode, API access is expected behavior              |
-| **Sandbox escapes**             | The permission system is not a sandbox (see above)                      |
-| **LLM provider data handling**  | Data sent to your configured LLM provider is governed by their policies |
-| **MCP server behavior**         | External MCP servers you configure are outside our trust boundary       |
-| **Malicious config files**      | Users control their own config; modifying it is not an attack vector    |
+API keys are encrypted at rest using AES-256-GCM with a machine-derived key. Keys are stored in the user's config directory and are never sent anywhere other than the configured LLM provider.
 
 ---
 
-# Reporting Security Issues
+## Scope
 
-We appreciate your efforts to responsibly disclose your findings, and will make every effort to acknowledge your contributions.
+### In Scope
 
-To report a security issue, please use the GitHub Security Advisory ["Report a Vulnerability"](https://github.com/defai-digital/ax-code/security/advisories/new) tab.
+| Category | Examples |
+| --- | --- |
+| **Remote code execution** | Crafted input that executes arbitrary commands without user confirmation |
+| **Authentication bypass** | Circumventing `AX_CODE_SERVER_PASSWORD` in server mode |
+| **Key exfiltration** | Extracting stored API keys without local machine access |
+| **Path traversal** | Tools reading/writing outside the intended working directory |
+| **Dependency vulnerabilities** | Known CVEs in bundled dependencies with a viable attack path |
 
-The team will send a response indicating the next steps in handling your report. After the initial reply to your report, the security team will keep you informed of the progress towards a fix and full announcement, and may ask for additional information or guidance.
+### Out of Scope
 
-## Escalation
-
-If you do not receive an acknowledgement of your report within 6 business days, you may send an email to security@defai.digital
+| Category | Rationale |
+| --- | --- |
+| **Server access when opted-in** | If you enable server mode without a password, open access is expected |
+| **Sandbox escapes** | The permission system is not a sandbox (see above) |
+| **LLM provider data handling** | Data sent to your configured provider is governed by their policies |
+| **MCP server behavior** | External MCP servers you configure are outside our trust boundary |
+| **Malicious config files** | Users control their own config; modifying it requires local access |
+| **Social engineering** | Prompt injection via untrusted repos is a known LLM-agent limitation |
