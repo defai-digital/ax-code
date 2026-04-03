@@ -304,9 +304,10 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
     const actualBlockSize = endLine - startLine + 1
 
     let similarity = 0
-    let linesToCheck = Math.min(searchBlockSize - 2, actualBlockSize - 2) // Middle lines only
+    const linesToCheck = Math.min(searchBlockSize - 2, actualBlockSize - 2) // Middle lines only
 
     if (linesToCheck > 0) {
+      let linesChecked = 0
       for (let j = 1; j < searchBlockSize - 1 && j < actualBlockSize - 1; j++) {
         const originalLine = originalLines[startLine + j].trim()
         const searchLine = searchLines[j].trim()
@@ -314,10 +315,11 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
         if (maxLen === 0) {
           continue
         }
+        linesChecked++
         const distance = levenshtein(originalLine, searchLine)
         similarity += 1 - distance / maxLen
       }
-      similarity /= linesToCheck // Average similarity
+      similarity = linesChecked > 0 ? similarity / linesChecked : 1.0
     } else {
       // No middle lines to compare, just accept based on anchors
       similarity = 1.0

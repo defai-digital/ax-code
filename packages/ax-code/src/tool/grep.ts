@@ -87,6 +87,7 @@ export const GrepTool = Tool.define("grep", {
       if (!filePath || !lineNumStr || lineTextParts.length === 0) continue
 
       const lineNum = parseInt(lineNumStr, 10)
+      if (isNaN(lineNum)) continue
       const lineText = lineTextParts.join("|")
 
       const stats = Filesystem.stat(filePath)

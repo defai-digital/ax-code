@@ -41,15 +41,17 @@ export const WriteTool = Tool.define("write", {
       },
     })
 
-    await Filesystem.write(filepath, params.content)
-    await Bus.publish(File.Event.Edited, {
-      file: filepath,
+    await FileTime.withLock(filepath, async () => {
+      await Filesystem.write(filepath, params.content)
+      await Bus.publish(File.Event.Edited, {
+        file: filepath,
+      })
+      await Bus.publish(FileWatcher.Event.Updated, {
+        file: filepath,
+        event: exists ? "change" : "add",
+      })
+      await FileTime.read(ctx.sessionID, filepath)
     })
-    await Bus.publish(FileWatcher.Event.Updated, {
-      file: filepath,
-      event: exists ? "change" : "add",
-    })
-    await FileTime.read(ctx.sessionID, filepath)
 
     let output = "Wrote file successfully."
     await LSP.touchFile(filepath, true)

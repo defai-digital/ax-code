@@ -342,7 +342,7 @@ export namespace SessionProcessor {
                   SessionSummary.summarize({
                     sessionID: input.sessionID,
                     messageID: input.assistantMessage.parentID,
-                  })
+                  }).catch((e) => log.warn("summarize failed", { error: e }))
                   if (
                     !input.assistantMessage.summary &&
                     (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model }))
@@ -451,13 +451,14 @@ export namespace SessionProcessor {
                   error: input.assistantMessage.error,
                 })
                 await SessionStatus.set(input.sessionID, { type: "idle" })
+              } else {
+                input.assistantMessage.error ??= error
+                Bus.publish(Session.Event.Error, {
+                  sessionID: input.assistantMessage.sessionID,
+                  error: input.assistantMessage.error,
+                })
+                await SessionStatus.set(input.sessionID, { type: "idle" })
               }
-              input.assistantMessage.error ??= error
-              Bus.publish(Session.Event.Error, {
-                sessionID: input.assistantMessage.sessionID,
-                error: input.assistantMessage.error,
-              })
-              await SessionStatus.set(input.sessionID, { type: "idle" })
             }
           }
           if (snapshot) {

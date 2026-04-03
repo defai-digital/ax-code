@@ -1191,8 +1191,10 @@ export namespace SessionPrompt {
                 }
                 if (range.start != null) {
                   const filePathURI = part.url.split("?")[0]
-                  let start = parseInt(range.start)
-                  let end = range.end ? parseInt(range.end) : undefined
+                  let start = parseInt(range.start, 10)
+                  if (isNaN(start)) start = 1
+                  let end = range.end ? parseInt(range.end, 10) : undefined
+                  if (end !== undefined && isNaN(end)) end = undefined
                   // some LSP servers (eg, gopls) don't give full range in
                   // workspace/symbol searches, so we'll try to find the
                   // symbol in the document to get the full range
@@ -1801,11 +1803,16 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
     abort.addEventListener("abort", abortHandler, { once: true })
 
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
       proc.on("close", () => {
         exited = true
         abort.removeEventListener("abort", abortHandler)
         resolve()
+      })
+      proc.once("error", (err) => {
+        exited = true
+        abort.removeEventListener("abort", abortHandler)
+        reject(err)
       })
     })
 
