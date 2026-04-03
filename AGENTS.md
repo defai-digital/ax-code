@@ -1,4 +1,4 @@
-# AGENTS.md — ax-code monorepo
+# AGENTS.md — AX Code monorepo
 
 ## Repository Overview
 

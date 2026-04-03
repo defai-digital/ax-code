@@ -1,8 +1,8 @@
-# ax-code
+# AX Code
 
 The open source, provider-agnostic AI coding agent.
 
-An AI coding agent by [DEFAI Digital](https://github.com/defai-digital).
+Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 

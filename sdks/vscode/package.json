@@ -1,7 +1,7 @@
 {
   "name": "ax-code",
-  "displayName": "ax-code",
-  "description": "AI coding agent for VS Code — powered by ax-code",
+  "displayName": "AX Code",
+  "description": "AI coding agent for VS Code — powered by AX Code",
   "version": "1.4.0",
   "publisher": "defai-digital",
   "repository": {

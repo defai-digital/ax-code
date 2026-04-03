@@ -1,5 +1,5 @@
 name: "AX Code GitHub Action"
-description: "Run ax-code in GitHub Actions workflows"
+description: "Run AX Code in GitHub Actions workflows"
 branding:
   icon: "code"
   color: "orange"

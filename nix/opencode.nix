@@ -88,7 +88,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   };
 
   meta = {
-    description = "The open source coding agent";
+    description = "AX Code — the open source AI coding agent";
     homepage = "https://ax-code.ai/";
     license = lib.licenses.mit;
     mainProgram = "ax-code";
