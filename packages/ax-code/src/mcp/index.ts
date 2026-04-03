@@ -606,9 +606,13 @@ export namespace MCP {
   }
 
   let cachedTools: Record<string, Tool> | undefined
-  Bus.subscribe(ToolsChanged, () => { cachedTools = undefined })
+  let toolsCacheSubscribed = false
 
   export async function tools() {
+    if (!toolsCacheSubscribed) {
+      toolsCacheSubscribed = true
+      Bus.subscribe(ToolsChanged, () => { cachedTools = undefined })
+    }
     if (cachedTools) return cachedTools
     const result: Record<string, Tool> = {}
     const s = await state()
