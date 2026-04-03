@@ -2,7 +2,7 @@ import path from "path"
 import z from "zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
-import { encrypt, decrypt, isEncrypted } from "../auth/encryption"
+import { encryptField, decryptField } from "../auth/encryption"
 
 export namespace McpAuth {
   export const Tokens = z.object({
@@ -32,50 +32,26 @@ export namespace McpAuth {
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
-  function decryptField(val: unknown): string | unknown {
-    if (isEncrypted(val)) {
-      try {
-        return decrypt(val)
-      } catch {
-        return val // preserve original encrypted value if decryption fails
-      }
-    }
-    return val as string
-  }
-
   function decryptEntry(raw: Record<string, unknown>): Entry {
     const entry = { ...raw } as Record<string, unknown>
     if (entry.tokens && typeof entry.tokens === "object") {
-      const tok = { ...(entry.tokens as Record<string, unknown>) }
-      if (tok.accessToken) tok.accessToken = decryptField(tok.accessToken)
-      if (tok.refreshToken) tok.refreshToken = decryptField(tok.refreshToken)
-      entry.tokens = tok
+      entry.tokens = decryptField(decryptField({ ...(entry.tokens as Record<string, unknown>) }, "accessToken"), "refreshToken")
     }
     if (entry.clientInfo && typeof entry.clientInfo === "object") {
-      const ci = { ...(entry.clientInfo as Record<string, unknown>) }
-      if (ci.clientSecret) ci.clientSecret = decryptField(ci.clientSecret)
-      entry.clientInfo = ci
+      entry.clientInfo = decryptField({ ...(entry.clientInfo as Record<string, unknown>) }, "clientSecret")
     }
-    if (entry.codeVerifier) entry.codeVerifier = decryptField(entry.codeVerifier)
-    return entry as unknown as Entry
+    return decryptField(entry, "codeVerifier") as unknown as Entry
   }
 
   function encryptEntry(entry: Entry): Record<string, unknown> {
     const out = { ...entry } as Record<string, unknown>
     if (entry.tokens) {
-      const tok = { ...entry.tokens } as Record<string, unknown>
-      // Skip fields that are already encrypted (failed to decrypt on read)
-      if (typeof tok.accessToken === "string" && tok.accessToken) tok.accessToken = encrypt(tok.accessToken)
-      if (typeof tok.refreshToken === "string" && tok.refreshToken) tok.refreshToken = encrypt(tok.refreshToken)
-      out.tokens = tok
+      out.tokens = encryptField(encryptField({ ...entry.tokens } as Record<string, unknown>, "accessToken"), "refreshToken")
     }
     if (entry.clientInfo) {
-      const ci = { ...entry.clientInfo } as Record<string, unknown>
-      if (typeof ci.clientSecret === "string" && ci.clientSecret) ci.clientSecret = encrypt(ci.clientSecret)
-      out.clientInfo = ci
+      out.clientInfo = encryptField({ ...entry.clientInfo } as Record<string, unknown>, "clientSecret")
     }
-    if (typeof entry.codeVerifier === "string" && entry.codeVerifier) out.codeVerifier = encrypt(entry.codeVerifier)
-    return out
+    return encryptField(out, "codeVerifier")
   }
 
   export async function get(mcpName: string): Promise<Entry | undefined> {

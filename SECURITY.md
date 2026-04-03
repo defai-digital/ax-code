@@ -59,7 +59,7 @@ Provider API keys are encrypted at rest using AES-256-GCM with PBKDF2 key deriva
 
 The encryption key is derived from local machine attributes (hostname, platform, architecture). This protects against casual offline disclosure (e.g., accidental file sharing) but does **not** protect against a determined attacker with access to the host. It is not equivalent to OS keychain or hardware-backed secret storage.
 
-MCP OAuth tokens and client secrets are also encrypted at rest using the same mechanism. Non-sensitive metadata (server URLs, expiry timestamps) remains in plaintext.
+MCP OAuth tokens, client secrets, and account access/refresh tokens are also encrypted at rest using the same mechanism. Non-sensitive metadata (server URLs, expiry timestamps, email, account IDs) remains in plaintext.
 
 ---
 

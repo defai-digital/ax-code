@@ -27,7 +27,7 @@ ax-code is a terminal-based AI coding assistant that works with **any LLM provid
 - **Design check** — Scan CSS/React code for hardcoded colors, spacing, accessibility violations
 - **Context stats** — Token usage breakdown, cost estimation, context window monitoring
 - **25+ built-in tools** — File ops, search, bash, LSP, web fetch, tasks, todos
-- **Credential encryption** — Provider API keys and MCP OAuth tokens encrypted at rest with AES-256-GCM
+- **Credential encryption** — All credentials (provider API keys, MCP OAuth tokens, account tokens) encrypted at rest with AES-256-GCM
 - **Grok server-side tools** — x_search, code_execution, parallel function calling
 
 ---
@@ -448,7 +448,7 @@ Network access for tools (webfetch, websearch) is **disabled by default** in rea
 
 - **Localhost only by default** — the server binds to `127.0.0.1`, inaccessible from the network
 - **Password required for network access** — binding to `0.0.0.0` or any non-localhost address requires `AX_CODE_SERVER_PASSWORD`
-- **Credential encryption** — provider API keys and MCP OAuth tokens encrypted at rest with AES-256-GCM (see [SECURITY.md](SECURITY.md) for threat model)
+- **Credential encryption** — all credentials encrypted at rest with AES-256-GCM (see [SECURITY.md](SECURITY.md) for threat model)
 
 ```bash
 # Localhost only (default, no password needed)
