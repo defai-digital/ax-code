@@ -168,12 +168,6 @@ export namespace ProviderTransform {
 
     // XAI supports different effort sets across grok reasoning families.
     if (model.api.npm === "@ai-sdk/xai") {
-      if (id.includes("grok-3-mini")) {
-        return {
-          low: { reasoningEffort: "low" },
-          high: { reasoningEffort: "high" },
-        }
-      }
       if (id.includes("grok-4") || id.includes("grok-code")) {
         return {
           medium: { reasoningEffort: "medium" },

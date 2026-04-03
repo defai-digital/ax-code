@@ -396,7 +396,7 @@ ax-code/
 │   │       ├── config/    # Hierarchical config system
 │   │       ├── context/   # AX.md context generation
 │   │       ├── design-check/  # CSS/React design linting (5 rules)
-│   │       ├── i18n/      # Internationalization (11 languages)
+│   │       ├── i18n/      # Internationalization (UI strings, English)
 │   │       ├── lsp/       # Language server integration
 │   │       ├── mcp/       # Model Context Protocol
 │   │       │   ├── discovery.ts   # Auto-discovery of MCP servers
@@ -508,7 +508,7 @@ See [GitHub Releases](https://github.com/defai-digital/ax-code/releases) for ver
 
 ## Language
 
-AX Code is **English only**. We removed multi-language support to focus on delivering higher quality documentation, error messages, and support. Community-contributed translations may return in the future.
+AX Code's UI (menus, toasts, status messages) is **English only**. However, the underlying LLM providers fully support multilingual interaction — you can prompt and receive responses in any language your chosen model supports. Community-contributed UI translations may be added in the future.
 
 ---
 

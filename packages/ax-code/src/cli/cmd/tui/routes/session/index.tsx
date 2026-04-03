@@ -7,7 +7,7 @@ import {
   For,
   Match,
   on,
-  onMount,
+
   Show,
   Switch,
   useContext,
@@ -123,7 +123,9 @@ export function Session() {
   const promptRef = usePromptRef()
   const session = createMemo(() => sync.session.get(route.sessionID))
   const children = createMemo(() => {
-    const parentID = session()?.parentID ?? session()?.id
+    const s = session()
+    if (!s) return []
+    const parentID = s.parentID ?? s.id
     return sync.data.session
       .filter((x) => x.parentID === parentID || x.id === parentID)
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
@@ -1984,10 +1986,14 @@ function Task(props: ToolProps<typeof TaskTool>) {
   const local = useLocal()
   const sync = useSync()
 
-  onMount(() => {
-    if (props.metadata.sessionId && !sync.data.message[props.metadata.sessionId]?.length)
-      sync.session.sync(props.metadata.sessionId)
-  })
+  createEffect(
+    on(
+      () => props.metadata.sessionId,
+      (id) => {
+        if (id && !sync.data.message[id]?.length) sync.session.sync(id)
+      },
+    ),
+  )
 
   const messages = createMemo(() => sync.data.message[props.metadata.sessionId ?? ""] ?? [])
 

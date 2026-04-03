@@ -758,7 +758,7 @@ export namespace Provider {
         priority = ["glm-4.7-flash", "glm-4.5-flash", "glm-5-turbo"]
       }
       if (providerID === ProviderID.xai) {
-        priority = ["grok-3-mini-fast", "grok-3-mini", "grok-4"]
+        priority = ["grok-4-fast", "grok-4"]
       }
       for (const item of priority) {
         for (const model of Object.keys(provider.models)) {

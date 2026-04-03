@@ -28,6 +28,7 @@ import { useArgs } from "./args"
 import { batch, onMount } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@ax-code/sdk"
+import { upsert, mergeSorted } from "./sync-util"
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
@@ -213,16 +214,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           }
           break
         }
+        case "session.created":
         case "session.updated": {
-          const result = Binary.search(store.session, event.properties.info.id, (s) => s.id)
-          if (result.found) {
-            setStore("session", result.index, reconcile(event.properties.info))
-            break
-          }
           setStore(
             "session",
             produce((draft) => {
-              draft.splice(result.index, 0, event.properties.info)
+              upsert(draft, event.properties.info)
             }),
           )
           break
@@ -274,6 +271,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         }
         case "message.removed": {
           const messages = store.message[event.properties.sessionID]
+          if (!messages) break
           const result = Binary.search(messages, event.properties.messageID, (m) => m.id)
           if (result.found) {
             setStore(
@@ -327,6 +325,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
         case "message.part.removed": {
           const parts = store.part[event.properties.messageID]
+          if (!parts) break
           const result = Binary.search(parts, event.properties.partID, (p) => p.id)
           if (result.found)
             setStore(
@@ -355,6 +354,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const args = useArgs()
 
     async function bootstrap() {
+      fullSyncedSessions.clear()
       console.log("bootstrapping")
       const start = Date.now() - 30 * 24 * 60 * 60 * 1000
       const sessionListPromise = sdk.client.session
@@ -401,15 +401,16 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
               setStore("provider_next", reconcile(providerList))
               setStore("agent", reconcile(agents))
               setStore("config", reconcile(config))
-              if (sessions !== undefined) setStore("session", reconcile(sessions))
+              if (sessions !== undefined) setStore("session", reconcile(mergeSorted(store.session, sessions)))
             })
           })
         })
         .then(() => {
           if (store.status !== "complete") setStore("status", "partial")
-          // non-blocking
-          Promise.all([
-            ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(sessions)))]),
+          // non-blocking — each call is individually guarded so one failure
+          // doesn't prevent the rest from completing or status from advancing.
+          Promise.allSettled([
+            ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(mergeSorted(store.session, sessions))))]),
             sdk.client.command.list().then((x) => setStore("command", reconcile(x.data ?? []))),
             sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data!))),
             sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))),
@@ -422,7 +423,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
             sdk.client.path.get().then((x) => setStore("path", reconcile(x.data!))),
             syncWorkspaces(),
-          ]).then(() => {
+          ]).then((results) => {
+            for (const r of results) {
+              if (r.status === "rejected") Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
+            }
             setStore("status", "complete")
           })
         })

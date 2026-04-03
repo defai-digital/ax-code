@@ -809,8 +809,8 @@ test("whitelist and blacklist can be combined", async () => {
           $schema: "https://opencode.ai/config.json",
           provider: {
             xai: {
-              whitelist: ["grok-4", "grok-3-fast"],
-              blacklist: ["grok-3-fast"],
+              whitelist: ["grok-4", "grok-4-fast"],
+              blacklist: ["grok-4-fast"],
             },
           },
         }),
@@ -827,7 +827,7 @@ test("whitelist and blacklist can be combined", async () => {
       expect(providers[ProviderID.xai]).toBeDefined()
       const models = Object.keys(providers[ProviderID.xai].models)
       expect(models).toContain("grok-4")
-      expect(models).not.toContain("grok-3-fast")
+      expect(models).not.toContain("grok-4-fast")
       expect(models.length).toBe(1)
     },
   })

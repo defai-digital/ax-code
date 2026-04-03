@@ -15,8 +15,6 @@ const MODEL_LIMITS: Record<string, number> = {
   "gemini-1.5-flash": 1048576,
   // xAI Grok
   "grok-4": 131072,
-  "grok-3": 131072,
-  "grok-2": 131072,
   // Groq models
   "llama-3.3-70b-versatile": 32768,
   "llama-3.1-8b-instant": 8192,
