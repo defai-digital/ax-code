@@ -32,6 +32,11 @@ auth.json
 
 # Local config
 .ax-code/
+.automatosx/
+.ax-grok/
+.cursor/
+.gemini/
+.mcp.json
 
 # Claude Code
 .claude/
