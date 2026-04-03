@@ -1,5 +1,5 @@
 ax-code
-Copyright 2026 DEFAI Private Limited
+Copyright 2025 DEFAI Private Limited
 
 This product includes software developed by third parties under the following licenses:
 
@@ -11,16 +11,12 @@ The following dependencies are licensed under the Apache License, Version 2.0:
 
 - ai (Vercel AI SDK) - Copyright Vercel, Inc.
 - @ai-sdk/google - Copyright Vercel, Inc.
-- @ai-sdk/google-vertex - Copyright Vercel, Inc.
 - @ai-sdk/openai - Copyright Vercel, Inc.
 - @ai-sdk/openai-compatible - Copyright Vercel, Inc.
 - @ai-sdk/xai - Copyright Vercel, Inc.
-- @ai-sdk/mistral - Copyright Vercel, Inc.
 - @ai-sdk/groq - Copyright Vercel, Inc.
-- @ai-sdk/vercel - Copyright Vercel, Inc.
 - @ai-sdk/provider - Copyright Vercel, Inc.
 - @ai-sdk/provider-utils - Copyright Vercel, Inc.
-- @openrouter/ai-sdk-provider - Copyright OpenRouter
 - drizzle-orm - Copyright Drizzle Team
 - drizzle-kit - Copyright Drizzle Team
 - typescript - Copyright Microsoft Corporation
@@ -32,7 +28,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 MIT License
 ========================================================================
 
-The majority of dependencies used by ax-code are licensed under the MIT License,
+The majority of dependencies used by AX Code are licensed under the MIT License,
 including but not limited to:
 
 - effect - Copyright Effect-TS Contributors
@@ -60,8 +56,8 @@ ISC License
 Base Project
 ========================================================================
 
-ax-code is based on OpenCode (https://github.com/anomalyco/opencode),
-licensed under the MIT License. Copyright anomalyco.
+AX Code is based on OpenCode (https://github.com/anomalyco/opencode),
+licensed under the MIT License. Copyright opencode.
 
 Selected features ported from ax-cli (https://github.com/defai-digital/ax-cli),
 licensed under the MIT License. Copyright DEFAI Private Limited.
