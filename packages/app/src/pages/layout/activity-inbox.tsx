@@ -66,11 +66,11 @@ export function ActivityInbox(props: {
   const rows = createMemo(() => {
     if (!props.project()?.worktree) return [] as Row[]
 
-    return props.dirs().flatMap((dir) => {
+    return props.dirs().flatMap((dir): Row[] => {
       const [sync] = globalSync.child(dir, { bootstrap: false })
       const list = sortedRootSessions({ session: sync.session, path: { directory: dir } }, Date.now())
 
-      return list.flatMap((session) => {
+      return list.flatMap((session): Row[] => {
         const perm = sessionPermissionRequest(sync.session, sync.permission, session.id, (item) => {
           return !permission.autoResponds(item, dir)
         })

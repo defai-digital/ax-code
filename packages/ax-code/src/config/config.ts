@@ -713,6 +713,7 @@ export namespace Config {
 
   export async function update(config: Info) {
     const filepath = path.join(Instance.directory, "config.json")
+    using _ = await Lock.write(filepath)
     const existing = await loadFile(filepath)
     await Filesystem.writeJson(filepath, mergeDeep(existing, config))
     await Instance.dispose()
@@ -785,6 +786,7 @@ export namespace Config {
 
   export async function updateGlobal(config: Info) {
     const filepath = globalConfigFile()
+    using _ = await Lock.write(filepath)
     const before = await Filesystem.readText(filepath).catch((err: any) => {
       if (err.code === "ENOENT") return "{}"
       throw new JsonError({ path: filepath }, { cause: err })

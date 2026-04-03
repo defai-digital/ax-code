@@ -68,7 +68,7 @@ export const DialogSelectProvider: Component = () => {
               <Tag>{language.t("settings.providers.tag.custom")}</Tag>
             </Show>
             <Show when={connectedSet().has(i.id)}>
-              <Tag variant="success">Connected</Tag>
+              <Tag>Connected</Tag>
             </Show>
             <Show when={note(i.id)}>{(value) => <div class="text-14-regular text-text-weak">{value()}</div>}</Show>
           </div>

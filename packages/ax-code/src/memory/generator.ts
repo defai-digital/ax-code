@@ -11,6 +11,10 @@ import type { ProjectMemory, MemorySection, WarmupOptions } from "./types"
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
 
+function isFileNotFound(e: unknown): boolean {
+  return (e as any)?.code === "ENOENT"
+}
+
 // Approximate token count (1 token ≈ 4 chars)
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
@@ -93,25 +97,25 @@ async function scanConfig(root: string): Promise<MemorySection> {
     if (pkg.dependencies) {
       parts.push(`Dependencies: ${Object.keys(pkg.dependencies).length} packages`)
     }
-  } catch {}
+  } catch (e) { if (!isFileNotFound(e)) throw e }
 
   // tsconfig.json
   try {
     const text = await fs.readFile(path.join(root, "tsconfig.json"), "utf-8")
     parts.push(`TypeScript: configured`)
-  } catch {}
+  } catch (e) { if (!isFileNotFound(e)) throw e }
 
   // Docker
   try {
     await fs.access(path.join(root, "Dockerfile"))
     parts.push(`Docker: configured`)
-  } catch {}
+  } catch (e) { if (!isFileNotFound(e)) throw e }
 
   // Git
   try {
     await fs.access(path.join(root, ".git"))
     parts.push(`Git: initialized`)
-  } catch {}
+  } catch (e) { if (!isFileNotFound(e)) throw e }
 
   const content = parts.join("\n")
   return { content, tokens: estimateTokens(content) }
@@ -144,25 +148,25 @@ async function scanPatterns(root: string): Promise<MemorySection> {
     if (deps.includes("zod")) patterns.push("Validation: Zod")
     if (deps.includes("tailwindcss")) patterns.push("CSS: Tailwind")
     if (deps.includes("vitest") || deps.includes("jest")) patterns.push("Testing: configured")
-  } catch {}
+  } catch (e) { if (!isFileNotFound(e)) throw e }
 
   // Check for Python
   try {
     await fs.access(path.join(root, "pyproject.toml"))
     patterns.push("Language: Python")
-  } catch {}
+  } catch (e) { if (!isFileNotFound(e)) throw e }
 
   // Check for Go
   try {
     await fs.access(path.join(root, "go.mod"))
     patterns.push("Language: Go")
-  } catch {}
+  } catch (e) { if (!isFileNotFound(e)) throw e }
 
   // Check for Rust
   try {
     await fs.access(path.join(root, "Cargo.toml"))
     patterns.push("Language: Rust")
-  } catch {}
+  } catch (e) { if (!isFileNotFound(e)) throw e }
 
   const content = patterns.join("\n")
   return { content, tokens: estimateTokens(content) }

@@ -1763,27 +1763,23 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     })
 
     let output = ""
+    let pending = Promise.resolve()
+    const flush = () => {
+      if (part.state.status !== "running") return
+      part.state.metadata = { output, description: "" }
+      pending = pending
+        .then(async () => { await Session.updatePart(part) })
+        .catch((e) => log.warn("shell metadata write failed", { error: e }))
+    }
 
     proc.stdout?.on("data", (chunk) => {
       output += chunk.toString()
-      if (part.state.status === "running") {
-        part.state.metadata = {
-          output: output,
-          description: "",
-        }
-        Session.updatePart(part)
-      }
+      flush()
     })
 
     proc.stderr?.on("data", (chunk) => {
       output += chunk.toString()
-      if (part.state.status === "running") {
-        part.state.metadata = {
-          output: output,
-          description: "",
-        }
-        Session.updatePart(part)
-      }
+      flush()
     })
 
     let aborted = false
