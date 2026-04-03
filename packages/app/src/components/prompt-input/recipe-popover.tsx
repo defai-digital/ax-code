@@ -2,24 +2,18 @@ import { Button } from "@ax-code/ui/button"
 import { Icon } from "@ax-code/ui/icon"
 import { List } from "@ax-code/ui/list"
 import { Popover } from "@ax-code/ui/popover"
-import { createSignal, type ComponentProps } from "solid-js"
-import type { SlashCommand } from "./slash-popover"
+import { Show, createSignal, type ComponentProps } from "solid-js"
+import { slashGroup, slashGroupRank, type SlashCommand } from "./slash-popover"
 
 type PromptRecipePopoverProps = {
   items: SlashCommand[]
   onSelect: (item: SlashCommand) => void
+  pinned?: (id: string) => boolean
+  onTogglePin?: (id: string) => void
   commandKeybind: (id: string) => string | undefined
   t: (key: string) => string
   triggerStyle?: ComponentProps<"button">["style"]
   disabled?: boolean
-}
-
-function group(cmd: SlashCommand, t: (key: string) => string) {
-  if (cmd.category) return cmd.category
-  if (cmd.type === "builtin") return t("prompt.recipe.group.builtin")
-  if (cmd.source === "skill") return t("prompt.recipe.group.skill")
-  if (cmd.source === "mcp") return t("prompt.recipe.group.mcp")
-  return t("prompt.recipe.group.project")
 }
 
 export function PromptRecipePopover(props: PromptRecipePopoverProps) {
@@ -58,7 +52,37 @@ export function PromptRecipePopover(props: PromptRecipePopoverProps) {
         key={(item) => item.id}
         items={props.items}
         filterKeys={["trigger", "title", "description"]}
-        groupBy={(item) => group(item, props.t)}
+        groupBy={(item) => slashGroup(item, props.t)}
+        sortGroupsBy={(a, b) => slashGroupRank(a.category, props.t) - slashGroupRank(b.category, props.t)}
+        itemWrapper={(item, node) => (
+          <div class="relative">
+            {node}
+            <Show when={props.onTogglePin}>
+              <button
+                type="button"
+                classList={{
+                  "absolute right-2 top-1/2 -translate-y-1/2 z-10 h-6 rounded px-2 text-11-medium transition-colors": true,
+                  "bg-surface-base text-text-strong": !!props.pinned?.(item.id),
+                  "text-text-subtle hover:text-text-strong hover:bg-surface-base": !props.pinned?.(item.id),
+                }}
+                aria-label={
+                  props.pinned?.(item.id) ? props.t("prompt.recipe.action.unpin") : props.t("prompt.recipe.action.pin")
+                }
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                }}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  props.onTogglePin?.(item.id)
+                }}
+              >
+                {props.pinned?.(item.id) ? props.t("prompt.recipe.action.unpin") : props.t("prompt.recipe.action.pin")}
+              </button>
+            </Show>
+          </div>
+        )}
         onSelect={(item) => {
           if (!item) return
           setOpen(false)
@@ -66,7 +90,7 @@ export function PromptRecipePopover(props: PromptRecipePopoverProps) {
         }}
       >
         {(item) => (
-          <div class="w-full flex items-center justify-between gap-3">
+          <div class="w-full flex items-center justify-between gap-3 pr-14">
             <div class="min-w-0 flex items-center gap-2">
               <code class="text-12-medium text-text-strong whitespace-nowrap">/{item.trigger}</code>
               <div class="min-w-0 flex flex-col">

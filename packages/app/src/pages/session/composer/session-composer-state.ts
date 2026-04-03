@@ -9,7 +9,7 @@ import { usePermission } from "@/context/permission"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { composerDriver, composerEnabled, composerEvent } from "@/testing/session-composer"
-import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
+import { sessionPermissionRequest, sessionPermissionRequests, sessionQuestionRequest } from "./session-request-tree"
 
 export const todoState = (input: {
   count: number
@@ -40,6 +40,16 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     return sessionPermissionRequest(sync.data.session, sync.data.permission, params.id, (item) => {
       return !permission.autoResponds(item, sdk.directory)
     })
+  })
+  const permissionRequests = createMemo(() => {
+    return sessionPermissionRequests(sync.data.session, sync.data.permission, params.id, (item) => {
+      return !permission.autoResponds(item, sdk.directory)
+    })
+  })
+  const permissionBatch = createMemo(() => {
+    const current = permissionRequest()
+    if (!current) return []
+    return permissionRequests().filter((item) => item.permission === current.permission)
   })
 
   const blocked = createMemo(() => {
@@ -114,7 +124,7 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   })
 
   const [store, setStore] = createStore({
-    responding: undefined as string | undefined,
+    responding: [] as string[],
     dock: todos().length > 0 && live(),
     closing: false,
     opening: false,
@@ -123,24 +133,44 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   const permissionResponding = createMemo(() => {
     const perm = permissionRequest()
     if (!perm) return false
-    return store.responding === perm.id
+    return store.responding.includes(perm.id)
   })
+  const permissionBatchResponding = createMemo(() =>
+    permissionBatch().some((item) => store.responding.includes(item.id)),
+  )
+
+  const decideList = (list: PermissionRequest[], response: "once" | "always" | "reject") => {
+    const next = list.filter((item, index, all) => all.findIndex((entry) => entry.id === item.id) === index)
+    const send = next.filter((item) => !store.responding.includes(item.id))
+    if (send.length === 0) return
+
+    setStore("responding", (list) => [...new Set([...list, ...send.map((item) => item.id)])])
+    Promise.allSettled(
+      send.map((item) => sdk.client.permission.respond({ sessionID: item.sessionID, permissionID: item.id, response })),
+    )
+      .then((out) => {
+        const fail = out.find((item): item is PromiseRejectedResult => item.status === "rejected")
+        if (!fail) return
+        const reason = fail.reason
+        const description = reason instanceof Error ? reason.message : String(reason)
+        showToast({ title: language.t("common.requestFailed"), description })
+      })
+      .finally(() => {
+        const done = new Set(send.map((item) => item.id))
+        setStore("responding", (list) => list.filter((id) => !done.has(id)))
+      })
+  }
 
   const decide = (response: "once" | "always" | "reject") => {
     const perm = permissionRequest()
     if (!perm) return
-    if (store.responding === perm.id) return
+    decideList([perm], response)
+  }
 
-    setStore("responding", perm.id)
-    sdk.client.permission
-      .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
-      .catch((err: unknown) => {
-        const description = err instanceof Error ? err.message : String(err)
-        showToast({ title: language.t("common.requestFailed"), description })
-      })
-      .finally(() => {
-        setStore("responding", (id) => (id === perm.id ? undefined : id))
-      })
+  const decideBatch = (response: "once" | "reject") => {
+    const list = permissionBatch()
+    if (list.length === 0) return
+    decideList(list, response)
   }
 
   let timer: number | undefined
@@ -237,8 +267,11 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     blocked,
     questionRequest,
     permissionRequest,
+    permissionBatch,
     permissionResponding,
+    permissionBatchResponding,
     decide,
+    decideBatch,
     todos,
     dock: () => store.dock,
     closing: () => store.closing,

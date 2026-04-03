@@ -1,4 +1,4 @@
-import { Component, For, Match, Show, Switch } from "solid-js"
+import { Component, For, Match, Show, Switch, createMemo } from "solid-js"
 import { FileIcon } from "@ax-code/ui/file-icon"
 import { Icon } from "@ax-code/ui/icon"
 import { getDirectory, getFilename } from "@ax-code/util/path"
@@ -18,6 +18,25 @@ export interface SlashCommand {
   source?: "command" | "mcp" | "skill"
 }
 
+export function slashGroup(cmd: SlashCommand, t: (key: string) => string) {
+  if (cmd.category) return cmd.category
+  if (cmd.type === "builtin") return t("prompt.recipe.group.builtin")
+  if (cmd.source === "skill") return t("prompt.recipe.group.skill")
+  if (cmd.source === "mcp") return t("prompt.recipe.group.mcp")
+  return t("prompt.recipe.group.project")
+}
+
+export function slashGroupRank(category: string, t: (key: string) => string) {
+  if (category === t("prompt.recipe.group.pinned")) return 0
+  if (category === t("prompt.recipe.group.recent")) return 1
+  if (category === t("prompt.recipe.group.recommended")) return 2
+  if (category === t("prompt.recipe.group.builtin")) return 3
+  if (category === t("prompt.recipe.group.project")) return 4
+  if (category === t("prompt.recipe.group.skill")) return 5
+  if (category === t("prompt.recipe.group.mcp")) return 6
+  return 7
+}
+
 type PromptPopoverProps = {
   popover: "at" | "slash" | null
   setSlashPopoverRef: (el: HTMLDivElement) => void
@@ -35,6 +54,19 @@ type PromptPopoverProps = {
 }
 
 export const PromptPopover: Component<PromptPopoverProps> = (props) => {
+  const slashRows = createMemo(() =>
+    props.slashFlat.map((cmd, index, list) => {
+      const category = slashGroup(cmd, props.t)
+      const prev = list[index - 1]
+      const next = prev ? slashGroup(prev, props.t) : undefined
+      return {
+        cmd,
+        category,
+        showGroup: category !== next,
+      }
+    }),
+  )
+
   return (
     <Show when={props.popover}>
       <div
@@ -99,38 +131,45 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
               when={props.slashFlat.length > 0}
               fallback={<div class="text-text-weak px-2 py-1">{props.t("prompt.popover.emptyCommands")}</div>}
             >
-              <For each={props.slashFlat}>
-                {(cmd) => (
-                  <button
-                    data-slash-id={cmd.id}
-                    classList={{
-                      "w-full flex items-center justify-between gap-4 rounded-md px-2 py-1": true,
-                      "bg-surface-raised-base-hover": props.slashActive === cmd.id,
-                    }}
-                    onClick={() => props.onSlashSelect(cmd)}
-                    onMouseEnter={() => props.setSlashActive(cmd.id)}
-                  >
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span class="text-14-regular text-text-strong whitespace-nowrap">/{cmd.trigger}</span>
-                      <Show when={cmd.description}>
-                        <span class="text-14-regular text-text-weak truncate">{cmd.description}</span>
-                      </Show>
-                    </div>
-                    <div class="flex items-center gap-2 shrink-0">
-                      <Show when={cmd.type === "custom" && cmd.source !== "command"}>
-                        <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">
-                          {cmd.source === "skill"
-                            ? props.t("prompt.slash.badge.skill")
-                            : cmd.source === "mcp"
-                              ? props.t("prompt.slash.badge.mcp")
-                              : props.t("prompt.slash.badge.custom")}
-                        </span>
-                      </Show>
-                      <Show when={props.commandKeybind(cmd.id)}>
-                        <span class="text-12-regular text-text-subtle">{props.commandKeybind(cmd.id)}</span>
-                      </Show>
-                    </div>
-                  </button>
+              <For each={slashRows()}>
+                {(item) => (
+                  <div class="flex flex-col">
+                    <Show when={item.showGroup}>
+                      <div class="px-2 pt-1.5 pb-1 text-11-medium uppercase tracking-[0.08em] text-text-weak">
+                        {item.category}
+                      </div>
+                    </Show>
+                    <button
+                      data-slash-id={item.cmd.id}
+                      classList={{
+                        "w-full flex items-center justify-between gap-4 rounded-md px-2 py-1": true,
+                        "bg-surface-raised-base-hover": props.slashActive === item.cmd.id,
+                      }}
+                      onClick={() => props.onSlashSelect(item.cmd)}
+                      onMouseEnter={() => props.setSlashActive(item.cmd.id)}
+                    >
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-14-regular text-text-strong whitespace-nowrap">/{item.cmd.trigger}</span>
+                        <Show when={item.cmd.description}>
+                          <span class="text-14-regular text-text-weak truncate">{item.cmd.description}</span>
+                        </Show>
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <Show when={item.cmd.type === "custom" && item.cmd.source !== "command"}>
+                          <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">
+                            {item.cmd.source === "skill"
+                              ? props.t("prompt.slash.badge.skill")
+                              : item.cmd.source === "mcp"
+                                ? props.t("prompt.slash.badge.mcp")
+                                : props.t("prompt.slash.badge.custom")}
+                          </span>
+                        </Show>
+                        <Show when={props.commandKeybind(item.cmd.id)}>
+                          <span class="text-12-regular text-text-subtle">{props.commandKeybind(item.cmd.id)}</span>
+                        </Show>
+                      </div>
+                    </button>
+                  </div>
                 )}
               </For>
             </Show>

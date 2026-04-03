@@ -6,7 +6,7 @@ import { IconButton } from "@ax-code/ui/icon-button"
 import { useSpring } from "@ax-code/ui/motion-spring"
 import { TextReveal } from "@ax-code/ui/text-reveal"
 import { TextStrikethrough } from "@ax-code/ui/text-strikethrough"
-import { Index, createEffect, createMemo, on, onCleanup } from "solid-js"
+import { Index, Show, createEffect, createMemo, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { composerEnabled, composerProbe } from "@/testing/session-composer"
 import { useLanguage } from "@/context/language"
@@ -44,12 +44,22 @@ export function SessionTodoDock(props: {
   todos: Todo[]
   collapseLabel: string
   expandLabel: string
+  currentLabel: string
+  currentOnlyLabel: string
+  allStepsLabel: string
+  askLabel: string
+  explainLabel: string
+  queueLabel?: string
+  onAsk?: (todo: Todo) => void
+  onExplain?: (todo: Todo) => void
+  onQueue?: (todo: Todo) => void
   dockProgress: number
 }) {
   const language = useLanguage()
   const [store, setStore] = createStore({
     collapsed: false,
     height: 320,
+    currentOnly: false,
   })
 
   const toggle = () => setStore("collapsed", (value) => !value)
@@ -70,6 +80,14 @@ export function SessionTodoDock(props: {
       props.todos.filter((todo) => todo.status === "completed").at(-1) ??
       props.todos[0],
   )
+  const current = createMemo(() =>
+    props.todos.find((todo) => todo.status === "in_progress" || todo.status === "pending"),
+  )
+  const items = createMemo(() => {
+    if (!store.currentOnly) return props.todos
+    const todo = current()
+    return todo ? [todo] : props.todos
+  })
 
   const preview = createMemo(() => active()?.content ?? "")
   const collapse = useSpring(() => (store.collapsed ? 1 : 0), { visualDuration: 0.3, bounce: 0 })
@@ -211,7 +229,59 @@ export function SessionTodoDock(props: {
             opacity: `${Math.max(0, Math.min(1, 1 - hide()))}`,
           }}
         >
-          <TodoList todos={props.todos} open={!store.collapsed} />
+          <div class="px-3 pb-2 flex flex-col gap-2">
+            <div class="rounded-lg border border-border-weaker-base bg-surface-base/70 px-3 py-2.5 flex flex-col gap-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="text-11-medium uppercase tracking-[0.08em] text-text-weak">{props.currentLabel}</div>
+                <Show when={current()}>
+                  <button
+                    type="button"
+                    class="text-12-medium text-text-weak hover:text-text-base transition-colors"
+                    onClick={() => setStore("currentOnly", (value) => !value)}
+                  >
+                    {store.currentOnly ? props.allStepsLabel : props.currentOnlyLabel}
+                  </button>
+                </Show>
+              </div>
+              <div class="text-13-regular text-text-strong break-words">
+                {current()?.content || preview() || language.t("session.todo.done")}
+              </div>
+              <Show when={current()}>
+                {(todo) => (
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      class="text-12-medium text-text-base hover:text-text-strong transition-colors"
+                      onClick={() => props.onAsk?.(todo())}
+                    >
+                      {props.askLabel}
+                    </button>
+                    <div class="h-3.5 w-px bg-border-weaker-base" />
+                    <button
+                      type="button"
+                      class="text-12-medium text-text-base hover:text-text-strong transition-colors"
+                      onClick={() => props.onExplain?.(todo())}
+                    >
+                      {props.explainLabel}
+                    </button>
+                    <Show when={props.onQueue && props.queueLabel}>
+                      <>
+                        <div class="h-3.5 w-px bg-border-weaker-base" />
+                        <button
+                          type="button"
+                          class="text-12-medium text-text-base hover:text-text-strong transition-colors"
+                          onClick={() => props.onQueue?.(todo())}
+                        >
+                          {props.queueLabel}
+                        </button>
+                      </>
+                    </Show>
+                  </div>
+                )}
+              </Show>
+            </div>
+          </div>
+          <TodoList todos={items()} open={!store.collapsed} />
         </div>
       </div>
     </DockTray>

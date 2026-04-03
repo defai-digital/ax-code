@@ -10,6 +10,7 @@ import { SessionPermissionDock } from "@/pages/session/composer/session-permissi
 import { SessionQuestionDock } from "@/pages/session/composer/session-question-dock"
 import { SessionFollowupDock } from "@/pages/session/composer/session-followup-dock"
 import { SessionRevertDock } from "@/pages/session/composer/session-revert-dock"
+import { SessionStatusLine } from "@/pages/session/composer/session-status-line"
 import type { SessionComposerState } from "@/pages/session/composer/session-composer-state"
 import { SessionTodoDock } from "@/pages/session/composer/session-todo-dock"
 import type { FollowupDraft } from "@/components/prompt-input/submit"
@@ -23,15 +24,22 @@ export function SessionComposerRegion(props: {
   onNewSessionWorktreeReset: () => void
   onSubmit: () => void
   onResponseSubmit: () => void
+  onTodoAsk: (text: string) => void
+  onTodoExplain: (text: string) => void
+  onTodoQueue?: (text: string) => void
   followup?: {
     queue: () => boolean
     items: { id: string; text: string }[]
     sending?: string
+    paused?: boolean
+    failed?: string
     edit?: { id: string; prompt: FollowupDraft["prompt"]; context: FollowupDraft["context"] }
     onQueue: (draft: FollowupDraft) => void
     onAbort: () => void
+    onResume: () => void
     onSend: (id: string) => void
     onEdit: (id: string) => void
+    onRemove: (id: string) => void
     onEditLoaded: () => void
   }
   revert?: {
@@ -150,9 +158,15 @@ export function SessionComposerRegion(props: {
               <SessionPermissionDock
                 request={request}
                 responding={props.state.permissionResponding()}
+                batchCount={props.state.permissionBatch().length}
+                batchResponding={props.state.permissionBatchResponding()}
                 onDecide={(response) => {
                   props.onResponseSubmit()
                   props.state.decide(response)
+                }}
+                onDecideBatch={(response) => {
+                  props.onResponseSubmit()
+                  props.state.decideBatch(response)
                 }}
               />
             </div>
@@ -198,6 +212,15 @@ export function SessionComposerRegion(props: {
                     todos={props.state.todos()}
                     collapseLabel={language.t("session.todo.collapse")}
                     expandLabel={language.t("session.todo.expand")}
+                    currentLabel={language.t("session.todo.current")}
+                    currentOnlyLabel={language.t("session.todo.currentOnly")}
+                    allStepsLabel={language.t("session.todo.allSteps")}
+                    askLabel={language.t("session.todo.ask")}
+                    explainLabel={language.t("session.todo.explain")}
+                    queueLabel={props.followup?.queue() ? language.t("session.todo.queue") : undefined}
+                    onAsk={(todo) => props.onTodoAsk(todo.content)}
+                    onExplain={(todo) => props.onTodoExplain(todo.content)}
+                    onQueue={props.followup?.queue() ? (todo) => props.onTodoQueue?.(todo.content) : undefined}
                     dockProgress={value()}
                   />
                 </div>
@@ -231,10 +254,27 @@ export function SessionComposerRegion(props: {
                 <SessionFollowupDock
                   items={props.followup!.items}
                   sending={props.followup!.sending}
+                  paused={props.followup!.paused}
+                  failed={props.followup!.failed}
+                  onResume={props.followup!.onResume}
                   onSend={props.followup!.onSend}
                   onEdit={props.followup!.onEdit}
+                  onRemove={props.followup!.onRemove}
                 />
               </Show>
+              <SessionStatusLine
+                state={props.state}
+                followup={
+                  props.followup
+                    ? {
+                        count: props.followup.items.length,
+                        paused: props.followup.paused,
+                        failed: !!props.followup.failed,
+                        sending: !!props.followup.sending,
+                      }
+                    : undefined
+                }
+              />
               <PromptInput
                 ref={props.inputRef}
                 newSessionWorktree={props.newSessionWorktree}

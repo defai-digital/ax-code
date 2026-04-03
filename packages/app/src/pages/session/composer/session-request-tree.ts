@@ -1,12 +1,7 @@
 import type { PermissionRequest, QuestionRequest, Session } from "@ax-code/sdk/v2/client"
 
-function sessionTreeRequest<T>(
-  session: Session[],
-  request: Record<string, T[] | undefined>,
-  sessionID?: string,
-  include: (item: T) => boolean = () => true,
-) {
-  if (!sessionID) return
+function sessionTreeIDs(session: Session[], sessionID?: string) {
+  if (!sessionID) return []
 
   const map = session.reduce((acc, item) => {
     if (!item.parentID) return acc
@@ -27,10 +22,30 @@ function sessionTreeRequest<T>(
       ids.push(child)
     }
   }
+  return ids
+}
+
+function sessionTreeRequest<T>(
+  session: Session[],
+  request: Record<string, T[] | undefined>,
+  sessionID?: string,
+  include: (item: T) => boolean = () => true,
+) {
+  const ids = sessionTreeIDs(session, sessionID)
+  if (ids.length === 0) return
 
   const id = ids.find((id) => request[id]?.some(include))
   if (!id) return
   return request[id]?.find(include)
+}
+
+function sessionTreeRequests<T>(
+  session: Session[],
+  request: Record<string, T[] | undefined>,
+  sessionID?: string,
+  include: (item: T) => boolean = () => true,
+) {
+  return sessionTreeIDs(session, sessionID).flatMap((id) => (request[id] ?? []).filter(include))
 }
 
 export function sessionPermissionRequest(
@@ -40,6 +55,15 @@ export function sessionPermissionRequest(
   include?: (item: PermissionRequest) => boolean,
 ) {
   return sessionTreeRequest(session, request, sessionID, include)
+}
+
+export function sessionPermissionRequests(
+  session: Session[],
+  request: Record<string, PermissionRequest[] | undefined>,
+  sessionID?: string,
+  include?: (item: PermissionRequest) => boolean,
+) {
+  return sessionTreeRequests(session, request, sessionID, include)
 }
 
 export function sessionQuestionRequest(

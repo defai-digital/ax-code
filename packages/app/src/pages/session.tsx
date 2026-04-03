@@ -1,4 +1,4 @@
-import type { Project, UserMessage } from "@ax-code/sdk/v2"
+import type { AssistantMessage, Project, UserMessage } from "@ax-code/sdk/v2"
 import { useDialog } from "@ax-code/ui/context/dialog"
 import { useMutation } from "@tanstack/solid-query"
 import {
@@ -52,6 +52,7 @@ import {
 } from "@/pages/session/helpers"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
+import { SessionReviewHandoffCard } from "@/pages/session/session-review-handoff-card"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
@@ -482,6 +483,42 @@ export default function Page() {
     },
   )
   const lastUserMessage = createMemo(() => visibleUserMessages().at(-1))
+  const lastAssistantMessage = createMemo(() => {
+    const parent = lastUserMessage()?.id
+    let fallback: AssistantMessage | undefined
+
+    for (let i = messages().length - 1; i >= 0; i--) {
+      const item = messages()[i]
+      if (item.role !== "assistant") continue
+      if (typeof item.time.completed !== "number" || item.error) continue
+      if (!fallback) fallback = item
+      if (parent && item.parentID === parent) return item
+    }
+
+    return fallback
+  })
+
+  const firstLine = (value: string | undefined) => {
+    const text = value?.replace(/\s+/g, " ").trim()
+    if (!text) return
+    return text.length > 220 ? `${text.slice(0, 219).trimEnd()}...` : text
+  }
+
+  const assistantSummary = createMemo(() => {
+    const item = lastAssistantMessage()
+    if (!item) return
+    const text = (sync.data.part[item.id] ?? [])
+      .flatMap((part) => (part.type === "text" && !part.synthetic && !part.ignored ? [part.text] : []))
+      .join("\n")
+      .trim()
+
+    if (!text) return
+    const paragraph = text
+      .split(/\n\s*\n/)
+      .map((part) => part.replace(/\s+/g, " ").trim())
+      .find((part) => !!part)
+    return firstLine(paragraph ?? text)
+  })
 
   createEffect(() => {
     const tab = activeFileTab()
@@ -566,6 +603,7 @@ export default function Page() {
 
   const turnDiffs = createMemo(() => lastUserMessage()?.summary?.diffs ?? [])
   const reviewDiffs = createMemo(() => (store.changes === "session" ? diffs() : turnDiffs()))
+  const handoffDiffs = createMemo(() => (diffs().length > 0 ? diffs() : turnDiffs()))
   const diffKind = (diff: { status?: ReviewKind; before?: string; after?: string }): ReviewKind => {
     if (diff.status) return diff.status
     if (!diff.before && diff.after) return "added"
@@ -1490,6 +1528,188 @@ export default function Page() {
     )
   }
 
+  const handoffVisible = createMemo(() => {
+    const id = params.id
+    if (!id) return false
+    if (!messagesReady()) return false
+    if (!lastUserMessage()) return false
+    if (!hasReview()) return false
+    return !busy(id)
+  })
+
+  const handoffTitle = createMemo(() => {
+    const title = firstLine(lastUserMessage()?.summary?.title)
+    if (title) return title
+    const body = firstLine(lastUserMessage()?.summary?.body)
+    if (body) return body
+    const id = lastUserMessage()?.id
+    if (id) return line(id)
+    return info()?.title || language.t("session.handoff.title")
+  })
+
+  const handoffSummary = createMemo(() => {
+    const body = firstLine(lastUserMessage()?.summary?.body)
+    if (body && body !== handoffTitle()) return body
+    const assistant = assistantSummary()
+    if (assistant && assistant !== handoffTitle()) return assistant
+    return undefined
+  })
+
+  const handoffFlags = createMemo(() => {
+    const files = handoffDiffs().map((item) => item.file)
+    const config = files.some((file) =>
+      /(^|\/)(package\.json|pnpm-lock\.yaml|bun\.lockb?|tsconfig.*\.json|eslint.*|prettier.*|vite\.config.*|vitest\.config.*|playwright\.config.*|turbo\.json|tailwind\.config.*|ax-code\.json)$/i.test(
+        file,
+      ),
+    )
+    const deleted = handoffDiffs().some((diff) => diffKind(diff) === "deleted")
+    const added = handoffDiffs().some((diff) => diffKind(diff) === "added")
+    return { config, deleted, added }
+  })
+
+  const handoffOpen = createMemo(() => {
+    const id = params.id
+    if (!id) return []
+    return (sync.data.todo[id] ?? globalSync.data.session_todo[id] ?? [])
+      .filter((item) => item.status !== "completed" && item.status !== "cancelled")
+      .map((item) => item.content.trim())
+      .filter((item) => !!item)
+  })
+
+  const handoffRisks = createMemo(() => {
+    const out = [...handoffOpen()]
+    const flags = handoffFlags()
+
+    if (flags.deleted) out.push(language.t("session.handoff.open.deleted"))
+    if (flags.config) out.push(language.t("session.handoff.open.config"))
+    if (out.length === 0 && flags.added) out.push(language.t("session.handoff.open.added"))
+    if (out.length === 0) out.push(language.t("session.handoff.open.generic"))
+
+    return [...new Set(out)].slice(0, 3)
+  })
+
+  const handoffSteps = createMemo(() => {
+    const out = []
+    const flags = handoffFlags()
+
+    out.push(language.t("session.handoff.verify.review"))
+    if (flags.deleted) out.push(language.t("session.handoff.verify.deleted"))
+    if (flags.config) out.push(language.t("session.handoff.verify.config"))
+    out.push(language.t("session.handoff.verify.checks"))
+
+    return [...new Set(out)].slice(0, 3)
+  })
+
+  const handoffText = createMemo(() => {
+    const lines = [
+      `${language.t("session.handoff.eyebrow")}: ${handoffTitle()}`,
+      handoffSummary(),
+      language.t("session.handoff.copy.files", {
+        count: Math.max(info()?.summary?.files ?? 0, handoffDiffs().length),
+        additions: info()?.summary?.additions ?? 0,
+        deletions: info()?.summary?.deletions ?? 0,
+      }),
+      `${language.t("session.handoff.open.title")}:`,
+      ...handoffRisks().map((item) => `- ${item}`),
+      `${language.t("session.handoff.verify.title")}:`,
+      ...handoffSteps().map((item) => `- ${item}`),
+    ].filter((item): item is string => !!item)
+
+    return lines.join("\n")
+  })
+
+  const write = async (value: string) => {
+    const body = typeof document === "undefined" ? undefined : document.body
+    if (body) {
+      const area = document.createElement("textarea")
+      area.value = value
+      area.setAttribute("readonly", "")
+      area.style.position = "fixed"
+      area.style.opacity = "0"
+      area.style.pointerEvents = "none"
+      body.appendChild(area)
+      area.select()
+      const copied = document.execCommand("copy")
+      body.removeChild(area)
+      if (copied) return true
+    }
+
+    const clip = typeof navigator === "undefined" ? undefined : navigator.clipboard
+    if (!clip?.writeText) return false
+    return clip.writeText(value).then(
+      () => true,
+      () => false,
+    )
+  }
+
+  const copyHandoff = async () => {
+    const value = handoffText()
+    const ok = await write(value)
+    if (!ok) {
+      fail(new Error(language.t("toast.session.share.copyFailed.title")))
+      return
+    }
+
+    showToast({
+      variant: "success",
+      icon: "circle-check",
+      title: language.t("session.share.copy.copied"),
+      description: handoffTitle(),
+    })
+  }
+
+  const openHandoffReview = () => {
+    if (!isDesktop()) {
+      setStore("mobileTab", "changes")
+      return
+    }
+    const file = handoffDiffs()[0]?.file
+    if (file) {
+      focusReviewDiff(file)
+      return
+    }
+    openReviewPanel()
+  }
+
+  const runHandoffChecks = () => {
+    const text = language.t("session.handoff.action.checks.prompt")
+    prompt.set(quickPrompt(text), text.length)
+    requestAnimationFrame(() => focusInput())
+  }
+
+  const askTodoStep = (step: string) => {
+    const text = language.t("session.todo.ask.prompt", { step })
+    prompt.set(quickPrompt(text), text.length)
+    requestAnimationFrame(() => focusInput())
+  }
+
+  const explainTodoStep = (step: string) => {
+    const text = language.t("session.todo.explain.prompt", { step })
+    prompt.set(quickPrompt(text), text.length)
+    requestAnimationFrame(() => focusInput())
+  }
+
+  const queueTodoStep = (step: string) => {
+    const id = params.id
+    const model = local.model.current()
+    const agent = local.agent.current()
+    if (!id || !queueEnabled() || !model || !agent) return
+
+    const text = language.t("session.todo.queue.prompt", { step })
+    queueFollowup({
+      sessionID: id,
+      sessionDirectory: sdk.directory,
+      prompt: quickPrompt(text),
+      context: [],
+      agent: agent.name,
+      model: {
+        providerID: model.provider.id,
+        modelID: model.id,
+      },
+      variant: local.model.variant.current(),
+    })
+  }
+
   const queuedFollowups = createMemo(() => {
     const id = params.id
     if (!id) return emptyFollowups
@@ -1500,6 +1720,16 @@ export default function Page() {
     const id = params.id
     if (!id) return
     return followup.edit[id]
+  })
+  const pausedFollowup = createMemo(() => {
+    const id = params.id
+    if (!id) return false
+    return !!followup.paused[id]
+  })
+  const failedFollowup = createMemo(() => {
+    const id = params.id
+    if (!id) return
+    return followup.failed[id]
   })
 
   const followupMutation = useMutation(() => ({
@@ -1601,6 +1831,20 @@ export default function Page() {
     const id = params.id
     if (!id) return
     setFollowup("edit", id, undefined)
+  }
+
+  const removeFollowup = (id: string) => {
+    const sessionID = params.id
+    if (!sessionID) return
+    if (followupBusy(sessionID) && sendingFollowup() === id) return
+    setFollowup("items", sessionID, (items) => (items ?? []).filter((entry) => entry.id !== id))
+    setFollowup("failed", sessionID, (value) => (value === id ? undefined : value))
+  }
+
+  const resumeFollowups = () => {
+    const id = params.id
+    if (!id) return
+    setFollowup("paused", id, undefined)
   }
 
   const halt = (sessionID: string) =>
@@ -1885,10 +2129,29 @@ export default function Page() {
             </Switch>
           </div>
 
+          <Show when={handoffVisible()}>
+            <SessionReviewHandoffCard
+              centered={centered()}
+              title={handoffTitle()}
+              summary={handoffSummary()}
+              files={Math.max(info()?.summary?.files ?? 0, handoffDiffs().length)}
+              additions={info()?.summary?.additions ?? 0}
+              deletions={info()?.summary?.deletions ?? 0}
+              risks={handoffRisks()}
+              steps={handoffSteps()}
+              onOpenReview={openHandoffReview}
+              onRunChecks={runHandoffChecks}
+              onCopySummary={copyHandoff}
+            />
+          </Show>
+
           <SessionComposerRegion
             state={composer}
             ready={!store.deferRender && messagesReady()}
             centered={centered()}
+            onTodoAsk={askTodoStep}
+            onTodoExplain={explainTodoStep}
+            onTodoQueue={queueTodoStep}
             inputRef={(el) => {
               inputRef = el
             }}
@@ -1905,6 +2168,8 @@ export default function Page() {
                     queue: queueEnabled,
                     items: followupDock(),
                     sending: sendingFollowup(),
+                    paused: pausedFollowup(),
+                    failed: failedFollowup(),
                     edit: editingFollowup(),
                     onQueue: queueFollowup,
                     onAbort: () => {
@@ -1912,10 +2177,12 @@ export default function Page() {
                       if (!id) return
                       setFollowup("paused", id, true)
                     },
+                    onResume: resumeFollowups,
                     onSend: (id) => {
                       void sendFollowup(params.id!, id, { manual: true })
                     },
                     onEdit: editFollowup,
+                    onRemove: removeFollowup,
                     onEditLoaded: clearFollowupEdit,
                   }
                 : undefined

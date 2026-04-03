@@ -64,13 +64,140 @@ const AppContextMemory = z.object({
   sections: z.array(z.string()),
 })
 
+const AppContextTemplate = z.object({
+  key: z.enum(["repo-rules", "dir-rules", "review-checklist", "frontend-style-guide", "release-checklist"]),
+  title: z.string(),
+  description: z.string(),
+  path: z.string(),
+  exists: z.boolean(),
+  kind: z.enum(["instruction", "checklist"]),
+})
+
 const AppContextInfo = z.object({
   directory: z.string(),
   worktree: z.string(),
   files: z.array(AppContextFile),
   instructions: z.array(AppContextFile),
+  templates: z.array(AppContextTemplate),
   memory: AppContextMemory.nullable(),
 })
+
+const AppContextTemplateRequest = z.object({
+  key: AppContextTemplate.shape.key,
+})
+
+type AppContextTemplateData = Omit<z.infer<typeof AppContextTemplate>, "exists">
+
+function contextTemplates(input: { root: string; dir: string }) {
+  const list: AppContextTemplateData[] = [
+    {
+      key: "repo-rules" as const,
+      title: "Repo rules",
+      description: "Default instructions for this repository.",
+      path: path.join(input.root, "AGENTS.md"),
+      kind: "instruction" as const,
+    },
+    {
+      key: "review-checklist" as const,
+      title: "Review checklist",
+      description: "A reusable checklist for code review and verification.",
+      path: path.join(input.root, "docs", "review-checklist.md"),
+      kind: "checklist" as const,
+    },
+    {
+      key: "frontend-style-guide" as const,
+      title: "Frontend style guide",
+      description: "UI and UX guidance for interface changes.",
+      path: path.join(input.root, "docs", "frontend-style-guide.md"),
+      kind: "checklist" as const,
+    },
+    {
+      key: "release-checklist" as const,
+      title: "Release checklist",
+      description: "Pre-release verification steps and rollout notes.",
+      path: path.join(input.root, "docs", "release-checklist.md"),
+      kind: "checklist" as const,
+    },
+  ]
+
+  if (path.resolve(input.dir) !== path.resolve(input.root)) {
+    list.splice(1, 0, {
+      key: "dir-rules" as const,
+      title: "Directory rules",
+      description: "Instructions scoped to the current working directory.",
+      path: path.join(input.dir, "AGENTS.md"),
+      kind: "instruction" as const,
+    })
+  }
+
+  return list
+}
+
+function templateBody(input: { key: z.infer<typeof AppContextTemplateRequest>["key"]; root: string; dir: string }) {
+  switch (input.key) {
+    case "repo-rules":
+      return [
+        "# Project Instructions",
+        "",
+        "## Workflow",
+        "- Inspect the existing code before changing it.",
+        "- Keep changes scoped to the request.",
+        "- Run the relevant checks before finishing.",
+        "",
+        "## Review",
+        "- Prioritize bugs, regressions, and missing tests.",
+        "- Call out risky assumptions and follow-up work.",
+        "",
+        "## Style",
+        "- Match the existing patterns in this repository.",
+        "- Prefer clear labels, safe defaults, and concise explanations.",
+      ].join("\n")
+    case "dir-rules":
+      return [
+        "# Directory Instructions",
+        "",
+        `Scope: \`${path.relative(input.root, input.dir) || "."}\``,
+        "",
+        "## Focus",
+        "- Keep changes in this directory aligned with the local patterns.",
+        "- Reuse nearby components, helpers, and naming conventions first.",
+        "",
+        "## Checks",
+        "- Run the narrowest relevant checks for this area before finishing.",
+        "- Note any file-specific risks or follow-up items in the summary.",
+      ].join("\n")
+    case "review-checklist":
+      return [
+        "# Review Checklist",
+        "",
+        "- [ ] Confirm the changed files match the request.",
+        "- [ ] Check loading, empty, and error states.",
+        "- [ ] Verify renamed or deleted imports, routes, and references.",
+        "- [ ] Run the relevant tests, lint, and build checks.",
+        "- [ ] Note follow-up risks, assumptions, or rollout concerns.",
+      ].join("\n")
+    case "frontend-style-guide":
+      return [
+        "# Frontend Style Guide",
+        "",
+        "- Reuse shared components, tokens, and layout patterns before adding new ones.",
+        "- Keep primary actions obvious and labels specific.",
+        "- Cover empty, loading, and error states for new UI.",
+        "- Verify responsive layout, keyboard flow, and text truncation.",
+        "- Prefer low-risk presentation changes over new runtime behavior unless necessary.",
+      ].join("\n")
+    case "release-checklist":
+      return [
+        "# Release Checklist",
+        "",
+        "- [ ] Review user-facing changes and migration notes.",
+        "- [ ] Run tests, lint, and build checks for the affected packages.",
+        "- [ ] Confirm config, dependency, or env changes are documented.",
+        "- [ ] Verify monitoring, rollback, or support notes if risk is non-trivial.",
+        "- [ ] Capture any follow-up work that should not block release.",
+      ].join("\n")
+  }
+}
 
 export namespace Server {
   const log = Log.create({ service: "server" })
@@ -495,13 +622,59 @@ export namespace Server {
               exists: true,
               scope: scope(file),
             }))
+          const templates = await Promise.all(
+            contextTemplates({ root, dir: Instance.directory }).map(async (item) => ({
+              ...item,
+              exists: await Filesystem.exists(item.path),
+            })),
+          )
           const memory = await getMemoryMetadata(root)
           return c.json({
             directory: Instance.directory,
             worktree: root,
             files,
             instructions,
+            templates,
             memory,
+          })
+        },
+      )
+      .post(
+        "/context/template",
+        describeRoute({
+          summary: "Create project context template",
+          description: "Create a recommended rules or checklist file for the current project context.",
+          operationId: "app.contextTemplateCreate",
+          responses: {
+            200: {
+              description: "Template file metadata",
+              content: {
+                "application/json": {
+                  schema: resolver(AppContextTemplate),
+                },
+              },
+            },
+          },
+        }),
+        validator("json", AppContextTemplateRequest),
+        async (c) => {
+          const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+          const dir = Instance.directory
+          const key = c.req.valid("json").key
+          const item = contextTemplates({ root, dir }).find((template) => template.key === key)
+          if (!item) {
+            throw new NamedError.Unknown({
+              message: `Unknown project context template: ${key}`,
+            })
+          }
+
+          if (!(await Filesystem.exists(item.path))) {
+            await Filesystem.write(item.path, templateBody({ key, root, dir }))
+          }
+
+          return c.json({
+            ...item,
+            exists: true,
           })
         },
       )

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { PermissionRequest, QuestionRequest, Session } from "@ax-code/sdk/v2/client"
 import { todoState } from "./session-composer-state"
-import { sessionPermissionRequest, sessionQuestionRequest } from "./session-request-tree"
+import { sessionPermissionRequest, sessionPermissionRequests, sessionQuestionRequest } from "./session-request-tree"
 
 const session = (input: { id: string; parentID?: string }) =>
   ({
@@ -77,6 +77,41 @@ describe("sessionPermissionRequest", () => {
     }
 
     expect(sessionPermissionRequest(sessions, permissions, "root", () => false)).toBeUndefined()
+  })
+})
+
+describe("sessionPermissionRequests", () => {
+  test("returns all matching permissions in session-tree order", () => {
+    const sessions = [
+      session({ id: "root" }),
+      session({ id: "child", parentID: "root" }),
+      session({ id: "grand", parentID: "child" }),
+      session({ id: "other" }),
+    ]
+    const permissions = {
+      root: [permission("perm-root", "root")],
+      child: [permission("perm-child", "child")],
+      grand: [permission("perm-grand", "grand")],
+      other: [permission("perm-other", "other")],
+    }
+
+    expect(sessionPermissionRequests(sessions, permissions, "root").map((item) => item.id)).toEqual([
+      "perm-root",
+      "perm-child",
+      "perm-grand",
+    ])
+  })
+
+  test("filters request lists the same way as the single-request selector", () => {
+    const sessions = [session({ id: "root" }), session({ id: "child", parentID: "root" })]
+    const permissions = {
+      root: [permission("perm-root", "root")],
+      child: [permission("perm-child", "child")],
+    }
+
+    expect(sessionPermissionRequests(sessions, permissions, "root", (item) => item.id !== "perm-root")).toEqual([
+      permissions.child[0],
+    ])
   })
 })
 

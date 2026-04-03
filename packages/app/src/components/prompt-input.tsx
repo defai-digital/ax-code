@@ -51,7 +51,13 @@ import {
   promptLength,
 } from "./prompt-input/history"
 import { createPromptSubmit, type FollowupDraft } from "./prompt-input/submit"
-import { PromptPopover, type AtOption, type SlashCommand } from "./prompt-input/slash-popover"
+import {
+  PromptPopover,
+  slashGroup,
+  slashGroupRank,
+  type AtOption,
+  type SlashCommand,
+} from "./prompt-input/slash-popover"
 import { PromptRecipePopover } from "./prompt-input/recipe-popover"
 import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
@@ -331,9 +337,20 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       entries: [],
     }),
   )
+  const [recipes, setRecipes] = persisted(
+    Persist.global("prompt-recipes", ["prompt-recipes.v1"]),
+    createStore<{
+      pin: string[]
+      recent: string[]
+    }>({
+      pin: [],
+      recent: [],
+    }),
+  )
 
   const suggest = createMemo(() => !hasUserPrompt())
   const starts = createMemo(() => quickStarts((key, params) => language.t(key as never, params as never)))
+  const pins = createMemo(() => new Set(recipes.pin))
   const seedable = createMemo(
     () =>
       store.mode === "normal" &&
@@ -621,6 +638,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
 
   const slashCommands = createMemo<SlashCommand[]>(() => {
+    const label = (key: string) => language.t(key as Parameters<typeof language.t>[0])
+    const pin = new Map(recipes.pin.map((id, index) => [id, index] as const))
+    const recent = new Map(recipes.recent.map((id, index) => [id, index] as const))
     const builtin = command.options
       .filter((opt) => !opt.disabled && !opt.id.startsWith("suggested.") && opt.slash)
       .map((opt) => ({
@@ -643,11 +663,58 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }))
 
     return [...custom, ...builtin]
+      .map((cmd, index) => {
+        if (pins().has(cmd.id)) {
+          return {
+            ...cmd,
+            category: label("prompt.recipe.group.pinned"),
+            order: pin.get(cmd.id) ?? index,
+            index,
+          }
+        }
+
+        if (recipes.recent.includes(cmd.id)) {
+          return {
+            ...cmd,
+            category: label("prompt.recipe.group.recent"),
+            order: recent.get(cmd.id) ?? index,
+            index,
+          }
+        }
+
+        if (cmd.type === "custom" && cmd.source === "command") {
+          return {
+            ...cmd,
+            category: label("prompt.recipe.group.recommended"),
+            order: index,
+            index,
+          }
+        }
+
+        return {
+          ...cmd,
+          order: index,
+          index,
+        }
+      })
+      .sort((a, b) => a.order - b.order || a.index - b.index)
+      .map(({ order, index, ...cmd }) => cmd)
   })
+
+  const touchRecipe = (id: string) => {
+    setRecipes("recent", (list) => [id, ...list.filter((item) => item !== id)].slice(0, 6))
+  }
+
+  const togglePin = (id: string) => {
+    setRecipes("pin", (list) =>
+      list.includes(id) ? list.filter((item) => item !== id) : [id, ...list.filter((item) => item !== id)],
+    )
+  }
 
   const handleSlashSelect = (cmd: SlashCommand | undefined) => {
     if (!cmd) return
     promptProbe.select(cmd.id)
+    touchRecipe(cmd.id)
     closePopover()
 
     if (cmd.type === "custom") {
@@ -672,7 +739,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   } = useFilteredList<SlashCommand>({
     items: slashCommands,
     key: (x) => x?.id,
-    filterKeys: ["trigger", "title"],
+    filterKeys: ["trigger", "title", "description"],
+    groupBy: (item) => slashGroup(item, (key) => language.t(key as Parameters<typeof language.t>[0])),
+    sortGroupsBy: (a, b) =>
+      slashGroupRank(a.category, (key) => language.t(key as Parameters<typeof language.t>[0])) -
+      slashGroupRank(b.category, (key) => language.t(key as Parameters<typeof language.t>[0])),
     onSelect: handleSlashSelect,
   })
 
@@ -1490,6 +1561,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <PromptRecipePopover
                     items={slashCommands()}
                     onSelect={handleSlashSelect}
+                    pinned={(id) => pins().has(id)}
+                    onTogglePin={togglePin}
                     commandKeybind={command.keybind}
                     t={(key) => language.t(key as Parameters<typeof language.t>[0])}
                     triggerStyle={control()}

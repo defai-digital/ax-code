@@ -8,8 +8,12 @@ import { useLanguage } from "@/context/language"
 export function SessionFollowupDock(props: {
   items: { id: string; text: string }[]
   sending?: string
+  paused?: boolean
+  failed?: string
   onSend: (id: string) => void
   onEdit: (id: string) => void
+  onRemove: (id: string) => void
+  onResume?: () => void
 }) {
   const language = useLanguage()
   const [store, setStore] = createStore({
@@ -24,6 +28,11 @@ export function SessionFollowupDock(props: {
     }),
   )
   const preview = createMemo(() => props.items[0]?.text ?? "")
+  const state = createMemo(() => {
+    if (props.failed) return language.t("session.followupDock.state.failed")
+    if (props.paused) return language.t("session.followupDock.state.paused")
+    return undefined
+  })
 
   return (
     <DockTray
@@ -46,6 +55,13 @@ export function SessionFollowupDock(props: {
         }}
       >
         <span class="shrink-0 text-13-medium text-text-strong cursor-default">{label()}</span>
+        <Show when={state()}>
+          {(value) => (
+            <span class="shrink-0 rounded-full bg-surface-base px-2 py-0.5 text-11-medium text-text-base cursor-default">
+              {value()}
+            </span>
+          )}
+        </Show>
         <Show when={store.collapsed && preview()}>
           <span class="min-w-0 flex-1 truncate text-13-regular text-text-base cursor-default">{preview()}</span>
         </Show>
@@ -77,10 +93,31 @@ export function SessionFollowupDock(props: {
 
       <Show when={!store.collapsed}>
         <div class="px-3 pb-7 flex flex-col gap-1.5 max-h-42 overflow-y-auto no-scrollbar">
+          <Show when={props.paused || props.failed}>
+            <div class="pb-1 flex flex-wrap items-center gap-2">
+              <Show when={props.paused && props.onResume}>
+                <Button size="small" variant="secondary" class="shrink-0" onClick={() => props.onResume?.()}>
+                  {language.t("session.followupDock.resume")}
+                </Button>
+              </Show>
+              <Show when={props.failed}>
+                {(id) => (
+                  <Button size="small" variant="ghost" class="shrink-0" onClick={() => props.onSend(id())}>
+                    {language.t("session.followupDock.retry")}
+                  </Button>
+                )}
+              </Show>
+            </div>
+          </Show>
           <For each={props.items}>
             {(item) => (
               <div class="flex items-center gap-2 min-w-0 py-1">
                 <span class="min-w-0 flex-1 truncate text-13-regular text-text-strong">{item.text}</span>
+                <Show when={props.failed === item.id}>
+                  <span class="shrink-0 rounded-full bg-surface-base px-2 py-0.5 text-11-medium text-text-base">
+                    {language.t("session.followupDock.failed")}
+                  </span>
+                </Show>
                 <Button
                   size="small"
                   variant="secondary"
@@ -88,7 +125,9 @@ export function SessionFollowupDock(props: {
                   disabled={!!props.sending}
                   onClick={() => props.onSend(item.id)}
                 >
-                  {language.t("session.followupDock.sendNow")}
+                  {language.t(
+                    props.failed === item.id ? "session.followupDock.retryNow" : "session.followupDock.sendNow",
+                  )}
                 </Button>
                 <Button
                   size="small"
@@ -98,6 +137,15 @@ export function SessionFollowupDock(props: {
                   onClick={() => props.onEdit(item.id)}
                 >
                   {language.t("session.followupDock.edit")}
+                </Button>
+                <Button
+                  size="small"
+                  variant="ghost"
+                  class="shrink-0"
+                  disabled={!!props.sending}
+                  onClick={() => props.onRemove(item.id)}
+                >
+                  {language.t("session.followupDock.remove")}
                 </Button>
               </div>
             )}
