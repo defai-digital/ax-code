@@ -1,4 +1,4 @@
-import { createMemo, For, Match, Switch } from "solid-js"
+import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { Button } from "@ax-code/ui/button"
 import { Logo } from "@ax-code/ui/logo"
 import { useLayout } from "@/context/layout"
@@ -10,6 +10,7 @@ import { DateTime } from "luxon"
 import { useDialog } from "@ax-code/ui/context/dialog"
 import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 import { DialogSelectServer } from "@/components/dialog-select-server"
+import { QuickStarts, quickStarts } from "@/components/quick-starts"
 import { useServer } from "@/context/server"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
@@ -29,6 +30,8 @@ export default function Home() {
       .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
       .slice(0, 5)
   })
+  const starts = createMemo(() => quickStarts((key, params) => language.t(key as never, params as never)))
+  const latest = createMemo(() => recent()[0])
 
   const serverDotClass = createMemo(() => {
     const healthy = server.healthy()
@@ -41,6 +44,12 @@ export default function Home() {
     layout.projects.open(directory)
     server.projects.touch(directory)
     navigate(`/${base64Encode(directory)}`)
+  }
+
+  function openStart(directory: string, text: string) {
+    layout.projects.open(directory)
+    server.projects.touch(directory)
+    navigate(`/${base64Encode(directory)}/session?prompt=${encodeURIComponent(text)}`)
   }
 
   async function chooseProject() {
@@ -111,6 +120,19 @@ export default function Home() {
                 )}
               </For>
             </ul>
+            <Show when={latest()}>
+              {(project) => (
+                <QuickStarts
+                  title={language.t("quickstart.title")}
+                  note={language.t("quickstart.home.description", {
+                    project: project().worktree.replace(homedir(), "~"),
+                  })}
+                  list={starts()}
+                  compact
+                  onPick={(item) => openStart(project().worktree, item.text)}
+                />
+              )}
+            </Show>
           </div>
         </Match>
         <Match when={!sync.ready}>

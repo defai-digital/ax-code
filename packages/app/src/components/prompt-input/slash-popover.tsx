@@ -12,6 +12,7 @@ export interface SlashCommand {
   trigger: string
   title: string
   description?: string
+  category?: string
   keybind?: string
   type: "builtin" | "custom"
   source?: "command" | "mcp" | "skill"

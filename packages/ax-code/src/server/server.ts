@@ -4,6 +4,7 @@ import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { proxy } from "hono/proxy"
 import { basicAuth } from "hono/basic-auth"
+import path from "path"
 import z from "zod"
 import { Provider } from "../provider/provider"
 import { NamedError } from "@ax-code/util/error"
@@ -39,9 +40,37 @@ import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
+import { Filesystem } from "@/util/filesystem"
+import { InstructionPrompt } from "@/session/instruction"
+import * as MemoryStore from "@/memory/store"
+import { getMetadata as getMemoryMetadata } from "@/memory/injector"
+import { generate as generateMemory } from "@/memory/generator"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
+
+const AppContextFile = z.object({
+  name: z.string(),
+  path: z.string(),
+  exists: z.boolean(),
+  scope: z.enum(["project", "global"]),
+})
+
+const AppContextMemory = z.object({
+  exists: z.boolean(),
+  totalTokens: z.number(),
+  lastUpdated: z.string(),
+  contentHash: z.string(),
+  sections: z.array(z.string()),
+})
+
+const AppContextInfo = z.object({
+  directory: z.string(),
+  worktree: z.string(),
+  files: z.array(AppContextFile),
+  instructions: z.array(AppContextFile),
+  memory: AppContextMemory.nullable(),
+})
 
 export namespace Server {
   const log = Log.create({ service: "server" })
@@ -419,6 +448,119 @@ export namespace Server {
           }
 
           return c.json(true)
+        },
+      )
+      .get(
+        "/context",
+        describeRoute({
+          summary: "Get project context",
+          description: "Get instruction-file and cached-memory metadata for the current project context.",
+          operationId: "app.context",
+          responses: {
+            200: {
+              description: "Current project context information",
+              content: {
+                "application/json": {
+                  schema: resolver(AppContextInfo),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+          const scope = (p: string) => {
+            if (Filesystem.contains(root, p)) return "project"
+            if (Filesystem.contains(Instance.directory, p)) return "project"
+            return "global"
+          }
+          const names = ["AGENTS.md", "CLAUDE.md", "AX.md"]
+          const files = await Promise.all(
+            names.map(async (name) => {
+              const found = (await Filesystem.findUp(name, Instance.directory, root))[0]
+              const file = found ?? path.join(root, name)
+              return {
+                name,
+                path: file,
+                exists: !!found,
+                scope: scope(file),
+              }
+            }),
+          )
+          const instructions = Array.from(await InstructionPrompt.systemPaths())
+            .sort((a, b) => a.localeCompare(b))
+            .map((file) => ({
+              name: path.basename(file),
+              path: file,
+              exists: true,
+              scope: scope(file),
+            }))
+          const memory = await getMemoryMetadata(root)
+          return c.json({
+            directory: Instance.directory,
+            worktree: root,
+            files,
+            instructions,
+            memory,
+          })
+        },
+      )
+      .post(
+        "/context/memory/warmup",
+        describeRoute({
+          summary: "Refresh project memory",
+          description: "Generate and cache fresh project memory for the current context.",
+          operationId: "app.contextMemoryWarmup",
+          responses: {
+            200: {
+              description: "Refreshed project memory metadata",
+              content: {
+                "application/json": {
+                  schema: resolver(AppContextMemory),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+          const memory = await generateMemory(root, {
+            maxTokens: 4000,
+            depth: 3,
+          })
+          await MemoryStore.save(root, memory)
+          return c.json({
+            exists: true,
+            totalTokens: memory.totalTokens,
+            lastUpdated: memory.updated,
+            contentHash: memory.contentHash,
+            sections: Object.keys(memory.sections).filter((key) => {
+              const section = memory.sections[key as keyof typeof memory.sections]
+              return !!section && section.tokens > 0
+            }),
+          })
+        },
+      )
+      .delete(
+        "/context/memory",
+        describeRoute({
+          summary: "Clear project memory",
+          description: "Delete cached project memory for the current context.",
+          operationId: "app.contextMemoryClear",
+          responses: {
+            200: {
+              description: "Whether cached memory was cleared",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const root = Instance.worktree === "/" ? Instance.directory : Instance.worktree
+          return c.json(await MemoryStore.clear(root))
         },
       )
       .get(

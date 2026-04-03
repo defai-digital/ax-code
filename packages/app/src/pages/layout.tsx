@@ -86,6 +86,7 @@ import {
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { SidebarContent } from "./layout/sidebar-shell"
+import { ActivityInbox } from "./layout/activity-inbox"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
@@ -2224,6 +2225,7 @@ export default function Layout(props: ParentProps) {
             </div>
 
             <div class="flex-1 min-h-0 flex flex-col">
+              <ActivityInbox project={project} dirs={workspaces} onClear={clearNotifications} />
               <Show
                 when={workspacesEnabled()}
                 fallback={

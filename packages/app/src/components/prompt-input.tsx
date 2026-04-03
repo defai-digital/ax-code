@@ -28,6 +28,7 @@ import { Select } from "@ax-code/ui/select"
 import { useDialog } from "@ax-code/ui/context/dialog"
 import { ModelSelectorPopover } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaid } from "@/components/dialog-select-model-unpaid"
+import { QuickStarts, quickPrompt, quickStarts } from "@/components/quick-starts"
 import { useProviders } from "@/hooks/use-providers"
 import { useCommand } from "@/context/command"
 import { Persist, persisted } from "@/utils/persist"
@@ -51,6 +52,7 @@ import {
 } from "./prompt-input/history"
 import { createPromptSubmit, type FollowupDraft } from "./prompt-input/submit"
 import { PromptPopover, type AtOption, type SlashCommand } from "./prompt-input/slash-popover"
+import { PromptRecipePopover } from "./prompt-input/recipe-popover"
 import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
 import { PromptDragOverlay } from "./prompt-input/drag-overlay"
@@ -331,6 +333,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   )
 
   const suggest = createMemo(() => !hasUserPrompt())
+  const starts = createMemo(() => quickStarts((key, params) => language.t(key as never, params as never)))
+  const seedable = createMemo(
+    () =>
+      store.mode === "normal" &&
+      suggest() &&
+      !prompt.dirty() &&
+      !working() &&
+      imageAttachments().length === 0 &&
+      contextItems().length === 0,
+  )
 
   const placeholder = createMemo(() =>
     promptPlaceholder({
@@ -436,6 +448,17 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     setStore("mode", mode)
     setStore("popover", null)
     requestAnimationFrame(() => editorRef?.focus())
+  }
+
+  const seed = (text: string) => {
+    prompt.set(quickPrompt(text), text.length)
+    requestAnimationFrame(() => {
+      const el = editorRef
+      if (!el) return
+      el.focus()
+      setCursorPosition(el, text.length)
+      queueScroll()
+    })
   }
 
   const shellModeKey = "mod+shift+x"
@@ -605,6 +628,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         trigger: opt.slash!,
         title: opt.title,
         description: opt.description,
+        category: opt.category,
         keybind: opt.keybind,
         type: "builtin" as const,
       }))
@@ -1442,6 +1466,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           </div>
         </div>
       </DockShellForm>
+      <Show when={seedable()}>
+        <div class="px-2 pt-2">
+          <QuickStarts list={starts()} compact onPick={(item) => seed(item.text)} />
+        </div>
+      </Show>
       <Show when={store.mode === "normal" || store.mode === "shell"}>
         <DockTray attach="top">
           <div class="px-1.75 pt-5.5 pb-2 flex items-center gap-2 min-w-0">
@@ -1457,6 +1486,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 <div class="size-4 shrink-0" />
               </div>
               <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                <div data-component="prompt-recipes-control">
+                  <PromptRecipePopover
+                    items={slashCommands()}
+                    onSelect={handleSlashSelect}
+                    commandKeybind={command.keybind}
+                    t={(key) => language.t(key as Parameters<typeof language.t>[0])}
+                    triggerStyle={control()}
+                    disabled={store.mode !== "normal"}
+                  />
+                </div>
                 <div data-component="prompt-agent-control">
                   <TooltipKeybind
                     placement="top"

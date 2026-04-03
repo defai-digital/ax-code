@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/solid-query"
 import {
   batch,
   onCleanup,
+  For,
   Show,
   Match,
   Switch,
@@ -28,6 +29,7 @@ import { Button } from "@ax-code/ui/button"
 import { showToast } from "@ax-code/ui/toast"
 import { base64Encode, checksum } from "@ax-code/util/encode"
 import { useNavigate, useSearchParams } from "@solidjs/router"
+import { quickPrompt } from "@/components/quick-starts"
 import { NewSessionView, SessionHeader } from "@/components/session"
 import { useComments } from "@/context/comments"
 import { getSessionPrefetch, SESSION_PREFETCH_TTL } from "@/context/global-sync/session-prefetch"
@@ -63,6 +65,10 @@ import { formatServerError } from "@/utils/server-errors"
 
 const emptyUserMessages: UserMessage[] = []
 const emptyFollowups: (FollowupDraft & { id: string })[] = []
+const picks = ["all", "added", "modified", "deleted"] as const
+
+type ReviewPick = (typeof picks)[number]
+type ReviewKind = Exclude<ReviewPick, "all">
 
 type SessionHistoryWindowInput = {
   sessionID: () => string | undefined
@@ -335,8 +341,9 @@ export default function Page() {
       if (params.id || !prompt.ready()) return
       const text = searchParams.prompt
       if (!text) return
-      prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+      prompt.set(quickPrompt(text), text.length)
       setSearchParams({ ...searchParams, prompt: undefined })
+      requestAnimationFrame(() => focusInput())
     })
   })
 
@@ -511,6 +518,7 @@ export default function Page() {
     messageId: undefined as string | undefined,
     mobileTab: "session" as "session" | "changes",
     changes: "session" as "session" | "turn",
+    pick: "all" as ReviewPick,
     newSessionWorktree: "main",
     deferRender: false,
   })
@@ -529,6 +537,7 @@ export default function Page() {
     const key = sessionKey()
     if (key !== prev) {
       setStore("deferRender", true)
+      setStore("pick", "all")
       requestAnimationFrame(() => {
         setTimeout(() => setStore("deferRender", false), 0)
       })
@@ -557,6 +566,30 @@ export default function Page() {
 
   const turnDiffs = createMemo(() => lastUserMessage()?.summary?.diffs ?? [])
   const reviewDiffs = createMemo(() => (store.changes === "session" ? diffs() : turnDiffs()))
+  const diffKind = (diff: { status?: ReviewKind; before?: string; after?: string }): ReviewKind => {
+    if (diff.status) return diff.status
+    if (!diff.before && diff.after) return "added"
+    if (diff.before && !diff.after) return "deleted"
+    return "modified"
+  }
+  const stats = createMemo(() => {
+    const out = {
+      all: reviewDiffs().length,
+      added: 0,
+      modified: 0,
+      deleted: 0,
+    }
+
+    for (const diff of reviewDiffs()) {
+      out[diffKind(diff)]++
+    }
+
+    return out
+  })
+  const shown = createMemo(() => {
+    if (store.pick === "all") return reviewDiffs()
+    return reviewDiffs().filter((diff) => diffKind(diff) === store.pick)
+  })
 
   const newSessionWorktree = createMemo(() => {
     if (store.newSessionWorktree === "create") return "create"
@@ -927,24 +960,93 @@ export default function Page() {
 
   const changesOptions = ["session", "turn"] as const
   const changesOptionsList = [...changesOptions]
+  const shownFile = createMemo(() => {
+    const file = tree.activeDiff
+    if (file && shown().some((diff) => diff.file === file)) return file
+    return shown()[0]?.file
+  })
+  const shownDiff = createMemo(() => shown().find((diff) => diff.file === shownFile()))
+  const canOpenShown = createMemo(() => {
+    const diff = shownDiff()
+    return !!diff && diffKind(diff) !== "deleted"
+  })
 
   const changesTitle = () => {
     if (!hasReview()) {
       return null
     }
 
+    const next = () => {
+      const list = shown()
+      if (list.length === 0) return
+
+      const file = shownFile()
+      const idx = file ? list.findIndex((diff) => diff.file === file) : -1
+      const item = list[(idx + 1) % list.length] ?? list[0]
+      focusReviewDiff(item.file)
+    }
+
+    const open = () => {
+      const diff = shownDiff()
+      if (!diff || diffKind(diff) === "deleted") return
+      setTree("activeDiff", diff.file)
+      openReviewFile(diff.file)
+    }
+
     return (
-      <Select
-        options={changesOptionsList}
-        current={store.changes}
-        label={(option) =>
-          option === "session" ? language.t("ui.sessionReview.title") : language.t("ui.sessionReview.title.lastTurn")
-        }
-        onSelect={(option) => option && setStore("changes", option)}
-        variant="ghost"
-        size="small"
-        valueClass="text-14-medium"
-      />
+      <div class="min-w-0 flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <Select
+            options={changesOptionsList}
+            current={store.changes}
+            label={(option) =>
+              option === "session"
+                ? language.t("ui.sessionReview.title")
+                : language.t("ui.sessionReview.title.lastTurn")
+            }
+            onSelect={(option) => option && setStore("changes", option)}
+            variant="ghost"
+            size="small"
+            valueClass="text-14-medium"
+          />
+          <Show when={shown().length !== reviewDiffs().length}>
+            <div class="text-12-regular text-text-weak">
+              {language.t("session.review.visible", {
+                visible: shown().length,
+                total: reviewDiffs().length,
+              })}
+            </div>
+          </Show>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <For each={picks}>
+            {(pick) => (
+              <Button
+                size="small"
+                variant={store.pick === pick ? "secondary" : "ghost"}
+                class="h-6 px-2"
+                onClick={() => setStore("pick", pick)}
+              >
+                {language.t(`session.review.filter.${pick}`)} {stats()[pick]}
+              </Button>
+            )}
+          </For>
+          <div class="mx-1 h-4 w-px shrink-0 bg-border-weaker-base" />
+          <Button size="small" variant="ghost" class="h-6 px-2" disabled={shown().length === 0} onClick={next}>
+            {language.t("session.review.action.next")}
+          </Button>
+          <Button
+            size="small"
+            variant="ghost"
+            icon="open-file"
+            class="h-6 px-2"
+            disabled={!canOpenShown()}
+            onClick={open}
+          >
+            {language.t("session.review.action.open")}
+          </Button>
+        </div>
+      </div>
     )
   }
 
@@ -955,10 +1057,20 @@ export default function Page() {
   )
 
   const reviewEmpty = (input: { loadingClass: string; emptyClass: string }) => {
-    if (store.changes === "turn") return emptyTurn()
+    if (store.changes === "turn" && reviewDiffs().length === 0) return emptyTurn()
 
     if (hasReview() && !diffsReady()) {
       return <div class={input.loadingClass}>{language.t("session.review.loadingChanges")}</div>
+    }
+
+    if (reviewDiffs().length > 0 && shown().length === 0) {
+      return (
+        <div class={input.emptyClass}>
+          <div class="text-14-regular text-text-weak max-w-56">
+            {language.t(`session.review.empty.filtered.${store.pick}`)}
+          </div>
+        </div>
+      )
     }
 
     if (reviewEmptyKey() === "session.review.noVcs") {
@@ -997,12 +1109,12 @@ export default function Page() {
       <SessionReviewTab
         title={changesTitle()}
         empty={reviewEmpty(input)}
-        diffs={reviewDiffs}
+        diffs={shown}
         view={view}
         diffStyle={input.diffStyle}
         onDiffStyleChange={input.onDiffStyleChange}
         onScrollRef={(el) => setTree("reviewScroll", el)}
-        focusedFile={tree.activeDiff}
+        focusedFile={shownFile()}
         onLineComment={(comment) => addCommentToContext({ ...comment, origin: "review" })}
         onLineCommentUpdate={updateCommentInContext}
         onLineCommentDelete={removeCommentFromContext}
@@ -1011,7 +1123,11 @@ export default function Page() {
         focusedComment={comments.focus()}
         onFocusedCommentChange={comments.setFocus}
         onViewFile={openReviewFile}
-        classes={input.classes}
+        classes={{
+          root: input.classes?.root,
+          header: `${input.classes?.header ?? "px-3"} !h-auto min-h-10 py-2 items-start gap-3`,
+          container: input.classes?.container,
+        }}
       />
     </Show>
   )
@@ -1758,7 +1874,13 @@ export default function Page() {
                 </Show>
               </Match>
               <Match when={true}>
-                <NewSessionView worktree={newSessionWorktree()} />
+                <NewSessionView
+                  worktree={newSessionWorktree()}
+                  onQuickStart={(item) => {
+                    prompt.set(quickPrompt(item.text), item.text.length)
+                    requestAnimationFrame(() => focusInput())
+                  }}
+                />
               </Match>
             </Switch>
           </div>

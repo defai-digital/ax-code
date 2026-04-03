@@ -3,6 +3,8 @@ import { DateTime } from "luxon"
 import { useSync } from "@/context/sync"
 import { useSDK } from "@/context/sdk"
 import { useLanguage } from "@/context/language"
+import { QuickStarts, quickStarts } from "@/components/quick-starts"
+import type { QuickStart } from "@/components/quick-starts"
 import { Icon } from "@ax-code/ui/icon"
 import { Mark } from "@ax-code/ui/logo"
 import { getDirectory, getFilename } from "@ax-code/util/path"
@@ -13,6 +15,7 @@ const ROOT_CLASS = "size-full flex flex-col"
 
 interface NewSessionViewProps {
   worktree: string
+  onQuickStart: (item: QuickStart) => void
 }
 
 export function NewSessionView(props: NewSessionViewProps) {
@@ -22,6 +25,7 @@ export function NewSessionView(props: NewSessionViewProps) {
 
   const sandboxes = createMemo(() => sync.project?.sandboxes ?? [])
   const options = createMemo(() => [MAIN_WORKTREE, ...sandboxes(), CREATE_WORKTREE])
+  const starts = createMemo(() => quickStarts((key, params) => language.t(key as never, params as never)))
   const current = createMemo(() => {
     const selection = props.worktree
     if (options().includes(selection)) return selection
@@ -83,6 +87,12 @@ export function NewSessionView(props: NewSessionViewProps) {
                 </div>
               )}
             </Show>
+            <QuickStarts
+              title={language.t("quickstart.title")}
+              note={language.t("quickstart.session.description")}
+              list={starts()}
+              onPick={props.onQuickStart}
+            />
           </div>
         </div>
       </div>

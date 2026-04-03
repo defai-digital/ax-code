@@ -11,6 +11,7 @@ import { getFilename } from "@ax-code/util/path"
 import { createEffect, createMemo, For, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
+import { useDialog } from "@ax-code/ui/context/dialog"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
@@ -24,6 +25,7 @@ import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
 import { Persist, persisted } from "@/utils/persist"
 import { StatusPopover } from "../status-popover"
+import { DialogProjectContext } from "../dialog-project-context"
 
 const OPEN_APPS = [
   "vscode",
@@ -136,6 +138,7 @@ export function SessionHeader() {
   const language = useLanguage()
   const sync = useSync()
   const terminal = useTerminal()
+  const dialog = useDialog()
   const { params, view } = useSessionLayout()
 
   const projectDirectory = createMemo(() => decode64(params.dir) ?? "")
@@ -415,6 +418,16 @@ export function SessionHeader() {
                 </div>
               </Show>
               <div class="flex items-center gap-1">
+                <Tooltip placement="bottom" value={language.t("session.context.open")}>
+                  <Button
+                    variant="ghost"
+                    class="titlebar-icon w-8 h-6 p-0 box-border shrink-0"
+                    onClick={() => dialog.show(() => <DialogProjectContext />)}
+                    aria-label={language.t("session.context.open")}
+                  >
+                    <Icon size="small" name="brain" />
+                  </Button>
+                </Tooltip>
                 <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
                   <StatusPopover />
                 </Tooltip>
