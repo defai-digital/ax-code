@@ -530,6 +530,10 @@ export namespace Provider {
     }
   })
 
+  export function warmup() {
+    state().catch(() => {})
+  }
+
   export async function list() {
     return state().then((state) => state.providers)
   }

@@ -54,7 +54,7 @@ export const WriteTool = Tool.define("write", {
     })
 
     let output = "Wrote file successfully."
-    await LSP.touchFile(filepath, true)
+    await LSP.touchFile(filepath, false)
     const diagnostics = await LSP.diagnostics()
     output += renderDiagnostics(diagnostics, [filepath], { includeProjectDiagnostics: true })
 

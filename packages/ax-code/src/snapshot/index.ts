@@ -153,6 +153,8 @@ export namespace Snapshot {
               log.info("cleanup", { prune })
             })
 
+            let prevHash: string | undefined
+
             const track = Effect.fnUntraced(function* () {
               if (!(yield* enabled())) return
               const existed = yield* exists(state.gitdir)
@@ -167,9 +169,18 @@ export namespace Snapshot {
                 yield* git(["--git-dir", state.gitdir, "config", "core.fsmonitor", "false"])
                 log.info("initialized")
               }
+              // Skip git add + write-tree if nothing changed
+              if (prevHash) {
+                const status = yield* git([...cfg, ...args(["status", "--porcelain"])], { cwd: state.directory })
+                if (status.text.trim() === "") {
+                  log.info("tracking (unchanged)", { hash: prevHash })
+                  return prevHash
+                }
+              }
               yield* add()
               const result = yield* git(args(["write-tree"]), { cwd: state.directory })
               const hash = result.text.trim()
+              prevHash = hash
               log.info("tracking", { hash, cwd: state.directory, git: state.gitdir })
               return hash
             })

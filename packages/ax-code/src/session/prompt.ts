@@ -440,6 +440,7 @@ export namespace SessionPrompt {
     }
 
     await using _ = defer(() => cancel(sessionID))
+    Provider.warmup()
 
     // Structured output state
     // Note: On session resumption, state is reset but outputFormat is preserved

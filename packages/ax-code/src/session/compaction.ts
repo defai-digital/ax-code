@@ -57,11 +57,11 @@ export namespace SessionCompaction {
   // goes backwards through parts until there are 40_000 tokens worth of tool
   // calls. then erases output of previous tool calls. idea is to throw away old
   // tool calls that are no longer relevant.
-  export async function prune(input: { sessionID: SessionID }) {
+  export async function prune(input: { sessionID: SessionID; messages?: MessageV2.WithParts[] }) {
     const config = await Config.get()
     if (config.compaction?.prune === false) return
     log.info("pruning")
-    const msgs = await Session.messages({ sessionID: input.sessionID })
+    const msgs = input.messages ?? await Session.messages({ sessionID: input.sessionID })
     let total = 0
     let pruned = 0
     const toPrune = []

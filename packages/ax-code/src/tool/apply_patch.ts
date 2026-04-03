@@ -240,7 +240,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     for (const change of fileChanges) {
       if (change.type === "delete") continue
       const target = change.movePath ?? change.filePath
-      await LSP.touchFile(target, true)
+      await LSP.touchFile(target, false)
     }
     const diagnostics = await LSP.diagnostics()
 
