@@ -553,6 +553,7 @@ export namespace MCP {
   }
 
   export async function connect(name: string) {
+    cachedTools = undefined
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
     const mcp = config[name]
@@ -592,6 +593,7 @@ export namespace MCP {
   }
 
   export async function disconnect(name: string) {
+    cachedTools = undefined
     const s = await state()
     const client = s.clients[name]
     if (client) {
@@ -603,7 +605,11 @@ export namespace MCP {
     s.status[name] = { status: "disabled" }
   }
 
+  let cachedTools: Record<string, Tool> | undefined
+  Bus.subscribe(ToolsChanged, () => { cachedTools = undefined })
+
   export async function tools() {
+    if (cachedTools) return cachedTools
     const result: Record<string, Tool> = {}
     const s = await state()
     const cfg = await Config.get()
@@ -642,6 +648,7 @@ export namespace MCP {
         result[sanitizedClientName + "_" + sanitizedToolName] = await convertMcpTool(mcpTool, client, timeout)
       }
     }
+    cachedTools = result
     return result
   }
 

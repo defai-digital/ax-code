@@ -436,24 +436,26 @@ export namespace Provider {
         }),
     )
 
-    for (const [id, fn] of Object.entries(CUSTOM_LOADERS)) {
-      const providerID = ProviderID.make(id)
-      if (disabled.has(providerID)) continue
-      const data = database[providerID]
-      if (!data) {
-        log.error("Provider does not exist in model list " + providerID)
-        continue
-      }
-      const result = await fn(data)
-      if (result && (result.autoload || providers[providerID])) {
-        if (result.getModel) modelLoaders[providerID] = result.getModel
-        if (result.vars) varsLoaders[providerID] = result.vars
-        if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels
-        const opts = result.options ?? {}
-        const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
-        mergeProvider(providerID, patch)
-      }
-    }
+    await Promise.all(
+      Object.entries(CUSTOM_LOADERS).map(async ([id, fn]) => {
+        const providerID = ProviderID.make(id)
+        if (disabled.has(providerID)) return
+        const data = database[providerID]
+        if (!data) {
+          log.error("Provider does not exist in model list " + providerID)
+          return
+        }
+        const result = await fn(data)
+        if (result && (result.autoload || providers[providerID])) {
+          if (result.getModel) modelLoaders[providerID] = result.getModel
+          if (result.vars) varsLoaders[providerID] = result.vars
+          if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels
+          const opts = result.options ?? {}
+          const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
+          mergeProvider(providerID, patch)
+        }
+      }),
+    )
 
     // load config
     for (const [id, provider] of configProviders) {

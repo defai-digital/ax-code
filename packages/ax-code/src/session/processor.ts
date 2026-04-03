@@ -281,7 +281,7 @@ export namespace SessionProcessor {
 
                 case "start-step":
                   usedTools = false
-                  snapshot = await Snapshot.track()
+                  snapshot = undefined
                   await Session.updatePart({
                     id: PartID.ascending(),
                     messageID: input.assistantMessage.id,
@@ -314,10 +314,11 @@ export namespace SessionProcessor {
                       write: usage.tokens.cache.write + input.assistantMessage.tokens.cache.write,
                     },
                   }
+                  if (usedTools) snapshot = await Snapshot.track()
                   await Session.updatePart({
                     id: PartID.ascending(),
                     reason: usedTools ? "tool-calls" : finishReason,
-                    snapshot: await Snapshot.track(),
+                    snapshot,
                     messageID: input.assistantMessage.id,
                     sessionID: input.assistantMessage.sessionID,
                     type: "step-finish",
