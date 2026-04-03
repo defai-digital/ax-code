@@ -53,7 +53,10 @@ export const EventRoutes = lazy(() =>
           )
         }, 10_000)
 
+        const MAX_QUEUE = 1024
         const unsub = Bus.subscribeAll((event) => {
+          // Drop delta events when queue is backlogged — full parts will catch up
+          if (q.size > MAX_QUEUE && event.type === "message.part.delta") return
           q.push(JSON.stringify(event))
           if (event.type === Bus.InstanceDisposed.type) {
             stop()

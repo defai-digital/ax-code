@@ -2,6 +2,10 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
   private queue: T[] = []
   private resolvers: ((value: T) => void)[] = []
 
+  get size() {
+    return this.queue.length
+  }
+
   push(item: T) {
     const resolve = this.resolvers.shift()
     if (resolve) resolve(item)

@@ -6,7 +6,7 @@ import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessag
 import { LSP } from "../lsp"
 import { Snapshot } from "@/snapshot"
 import { fn } from "@/util/fn"
-import { Database, NotFoundError, and, desc, eq, inArray, lt, or } from "@/storage/db"
+import { Database, NotFoundError, and, desc, eq, gt, inArray, lt, or } from "@/storage/db"
 import { MessageTable, PartTable, SessionTable } from "./session.sql"
 import { ProviderTransform } from "@/provider/transform"
 import { STATUS_CODES } from "http"
@@ -874,6 +874,19 @@ export namespace MessageV2 {
       }
     },
   )
+
+  /** Fetch messages created after the given message ID, ordered oldest first */
+  export async function after(sessionID: SessionID, afterID: string): Promise<WithParts[]> {
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(MessageTable)
+        .where(and(eq(MessageTable.session_id, sessionID), gt(MessageTable.id, afterID)))
+        .orderBy(MessageTable.id)
+        .all(),
+    )
+    return hydrate(rows)
+  }
 
   export async function filterCompacted(stream: AsyncIterable<MessageV2.WithParts>) {
     const result = [] as MessageV2.WithParts[]

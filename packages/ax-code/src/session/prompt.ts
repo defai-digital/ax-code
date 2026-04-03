@@ -264,6 +264,8 @@ export namespace SessionPrompt {
     const MAX_CONSECUTIVE_ERRORS = _MAX_CONSECUTIVE_ERRORS
     const GLOBAL_STEP_LIMIT = _GLOBAL_STEP_LIMIT
     const session = await Session.get(sessionID)
+    // Cache session history — only load from DB on first step, refresh on subsequent steps
+    let cachedMsgs: MessageV2.WithParts[] | undefined
     while (true) {
       await SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID, consecutiveErrors })
@@ -281,7 +283,18 @@ export namespace SessionPrompt {
         })
         break
       }
-      let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+      // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
+      let msgs: MessageV2.WithParts[]
+      if (!cachedMsgs) {
+        msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+        cachedMsgs = msgs
+      } else {
+        // Fetch only messages newer than the last cached message
+        const lastID = cachedMsgs[cachedMsgs.length - 1]?.info.id
+        const newer = await MessageV2.after(sessionID, lastID)
+        if (newer.length > 0) cachedMsgs.push(...newer)
+        msgs = cachedMsgs
+      }
 
       let lastUser: MessageV2.User | undefined
       let lastAssistant: MessageV2.Assistant | undefined
@@ -532,6 +545,7 @@ export namespace SessionPrompt {
           overflow: task.overflow,
         })
         if (result === "stop") break
+        cachedMsgs = undefined // invalidate cache after compaction
         continue
       }
 
@@ -547,6 +561,7 @@ export namespace SessionPrompt {
           model: lastUser.model,
           auto: true,
         })
+        cachedMsgs = undefined // invalidate cache after compaction
         continue
       }
 

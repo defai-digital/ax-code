@@ -36,8 +36,16 @@ const roots = (store: SessionStore) =>
 
 export const sortedRootSessions = (store: SessionStore, now: number) => roots(store).sort(sortSessions(now))
 
-export const latestRootSession = (stores: SessionStore[], now: number) =>
-  stores.flatMap(roots).sort(sortSessions(now))[0]
+export const latestRootSession = (stores: SessionStore[], now: number) => {
+  const cmp = sortSessions(now)
+  let best: Session | undefined
+  for (const store of stores) {
+    for (const session of roots(store)) {
+      if (!best || cmp(session, best) < 0) best = session
+    }
+  }
+  return best
+}
 
 export function hasProjectPermissions<T>(
   request: Record<string, T[] | undefined> | undefined,

@@ -22,6 +22,33 @@ import type { SessionID, MessageID } from "./schema"
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
   const log = Log.create({ service: "session.processor" })
+  const DELTA_BATCH_MS = 16
+
+  /** Batches delta events by time window to reduce event fan-out */
+  function createDeltaBatcher(sessionID: SessionID, messageID: MessageID) {
+    const pending = new Map<string, string>() // partID -> accumulated delta
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const flush = () => {
+      timer = undefined
+      for (const [partID, delta] of pending) {
+        Bus.publish(MessageV2.Event.PartDelta, { sessionID, messageID, partID, field: "text", delta })
+      }
+      pending.clear()
+    }
+
+    return {
+      push(partID: string, delta: string) {
+        const existing = pending.get(partID)
+        pending.set(partID, existing ? existing + delta : delta)
+        if (!timer) timer = setTimeout(flush, DELTA_BATCH_MS)
+      },
+      flush() {
+        if (timer) clearTimeout(timer)
+        if (pending.size > 0) flush()
+      },
+    }
+  }
 
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
@@ -34,6 +61,7 @@ export namespace SessionProcessor {
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const recentToolRing: { tool: string; input: string }[] = []
+    const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
     let snapshot: string | undefined
     let blocked = false
     let attempt = 0
@@ -87,18 +115,13 @@ export namespace SessionProcessor {
                     const part = reasoningMap[value.id]
                     part.text += value.text
                     if (value.providerMetadata) part.metadata = value.providerMetadata
-                    await Session.updatePartDelta({
-                      sessionID: part.sessionID,
-                      messageID: part.messageID,
-                      partID: part.id,
-                      field: "text",
-                      delta: value.text,
-                    })
+                    deltaBatcher.push(part.id, value.text)
                   }
                   break
 
                 case "reasoning-end":
                   if (value.id in reasoningMap) {
+                    deltaBatcher.flush()
                     const part = reasoningMap[value.id]
                     part.text = part.text.trimEnd()
 
@@ -326,18 +349,13 @@ export namespace SessionProcessor {
                   if (currentText) {
                     currentText.text += value.text
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
-                    await Session.updatePartDelta({
-                      sessionID: currentText.sessionID,
-                      messageID: currentText.messageID,
-                      partID: currentText.id,
-                      field: "text",
-                      delta: value.text,
-                    })
+                    deltaBatcher.push(currentText.id, value.text)
                   }
                   break
 
                 case "text-end":
                   if (currentText) {
+                    deltaBatcher.flush()
                     currentText.text = currentText.text.trimEnd()
                     const textOutput = await Plugin.trigger(
                       "experimental.text.complete",
@@ -371,6 +389,7 @@ export namespace SessionProcessor {
               if (needsCompaction) break
             }
           } catch (e: any) {
+            deltaBatcher.flush()
             log.error("process", {
               error: e,
               stack: JSON.stringify(e.stack),
