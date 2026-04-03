@@ -43,7 +43,7 @@ auth.json
 CLAUDE.md
 AGENTS.md
 
-# Project Docs (tracked via git add -f)
+# Internal project docs (not for public)
 ADRS/
 BUGS/
 PRDS/
