@@ -174,7 +174,8 @@ function createSessionHistoryWindow(input: SessionHistoryWindowInput) {
     let afterVisible = beforeVisible
     let added = 0
 
-    while (true) {
+    const MAX_FETCH_ROUNDS = 3
+    for (let round = 0; round < MAX_FETCH_ROUNDS; round++) {
       await input.loadMore(id)
       if (input.sessionID() !== id) return
 
@@ -220,7 +221,8 @@ function createSessionHistoryWindow(input: SessionHistoryWindowInput) {
     let added = 0
     let growth = 0
 
-    while (true) {
+    const MAX_FETCH_ROUNDS = 3
+    for (let round = 0; round < MAX_FETCH_ROUNDS; round++) {
       await input.loadMore(id)
       if (input.sessionID() !== id) return
 

@@ -28,7 +28,7 @@ import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
-import { messageAgentColor } from "@/utils/agent"
+import { agentColor } from "@/utils/agent"
 import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
 import { makeTimer } from "@solid-primitives/timer"
 
@@ -238,18 +238,33 @@ export function MessageTimeline(props: {
     if (!id) return emptyMessages
     return sync.data.message[id] ?? emptyMessages
   })
-  const pending = createMemo(() =>
-    sessionMessages().findLast(
-      (item): item is AssistantMessage => item.role === "assistant" && typeof item.time.completed !== "number",
-    ),
-  )
+  // Single backward scan for pending message, agent color, and last user — avoids 3 separate O(n) scans
+  const derived = createMemo(() => {
+    const msgs = sessionMessages()
+    let pendingMsg: AssistantMessage | undefined
+    let agentTint: string | undefined
+    let lastUserID: string | undefined
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const item = msgs[i]
+      if (!pendingMsg && item.role === "assistant" && typeof item.time.completed !== "number")
+        pendingMsg = item as AssistantMessage
+      if (!agentTint && item.role === "user" && item.agent) {
+        const agent = sync.data.agent.find((a) => a.name === item.agent)
+        agentTint = agentColor(item.agent, agent?.color)
+      }
+      if (!lastUserID && item.role === "user") lastUserID = item.id
+      if (pendingMsg && agentTint && lastUserID) break
+    }
+    return { pending: pendingMsg, tint: agentTint, lastUserID }
+  })
+  const pending = createMemo(() => derived().pending)
   const sessionStatus = createMemo(() => {
     const id = sessionID()
     if (!id) return idle
     return sync.data.session_status[id] ?? idle
   })
   const working = createMemo(() => !!pending() || sessionStatus().type !== "idle")
-  const tint = createMemo(() => messageAgentColor(sessionMessages(), sync.data.agent))
+  const tint = createMemo(() => derived().tint)
 
   const [timeoutDone, setTimeoutDone] = createSignal(true)
 
@@ -275,13 +290,7 @@ export function MessageTimeline(props: {
       if (message && message.role === "user") return message.id
     }
 
-    const status = sessionStatus()
-    if (status.type !== "idle") {
-      const messages = sessionMessages()
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === "user") return messages[i].id
-      }
-    }
+    if (sessionStatus().type !== "idle") return derived().lastUserID
 
     return undefined
   })

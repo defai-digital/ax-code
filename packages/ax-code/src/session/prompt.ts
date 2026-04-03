@@ -305,12 +305,16 @@ export namespace SessionPrompt {
       }
 
       let lastUser: MessageV2.User | undefined
+      let lastUserParts: MessageV2.Part[] | undefined
       let lastAssistant: MessageV2.Assistant | undefined
       let lastFinished: MessageV2.Assistant | undefined
       let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
       for (let i = msgs.length - 1; i >= 0; i--) {
         const msg = msgs[i]
-        if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
+        if (!lastUser && msg.info.role === "user") {
+          lastUser = msg.info as MessageV2.User
+          lastUserParts = msg.parts
+        }
         if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
         if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
           lastFinished = msg.info as MessageV2.Assistant
@@ -627,8 +631,7 @@ export namespace SessionPrompt {
       using _ = defer(() => InstructionPrompt.clear(processor.message.id))
 
       // Check if user explicitly invoked an agent via @ in this turn
-      const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-      const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+      const bypassAgentCheck = lastUserParts?.some((p) => p.type === "agent") ?? false
 
       const tools = await resolveTools({
         agent,
