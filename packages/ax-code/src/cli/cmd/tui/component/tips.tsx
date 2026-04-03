@@ -114,7 +114,7 @@ const TIPS = [
   "Run {highlight}ax-code upgrade{/highlight} to update to the latest version",
   "Run {highlight}ax-code auth list{/highlight} to see all configured providers",
   "Run {highlight}ax-code agent create{/highlight} for guided agent creation",
-  "Use {highlight}/opencode{/highlight} in GitHub issues/PRs to trigger AI actions",
+  "Use {highlight}/ax-code{/highlight} in GitHub issues/PRs to trigger AI actions",
   "Run {highlight}ax-code github install{/highlight} to set up the GitHub workflow",
   "Comment {highlight}/ax-code fix this{/highlight} on issues to auto-create PRs",
   "Comment {highlight}/oc{/highlight} on PR code lines for targeted code reviews",
