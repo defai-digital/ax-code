@@ -37,36 +37,11 @@ Most AI coding tools are **clients of someone else's API**. Claude Code requires
 
 AX Code is the coding surface of a vertically integrated sovereign AI platform:
 
-```text
-╔════════════════════════════════════════════════════════╗
-║                   USER ENDPOINTS                       ║
-╠══════════════════════════╦═════════════════════════════╣
-║                          ║                             ║
-║  AX Studio               ║  AX Code ◄── you are here  ║
-║  General GenAI            ║  AI Coding & Automation    ║
-║  Workspace                ║  CLI · Web · Desktop · SDK ║
-║                          ║                             ║
-╚════════════╦═════════════╩═════════════╦═══════════════╝
-             ╚═══════════╦═══════════════╝
-                         ║
-╔════════════════════════════════════════════════════════╗
-║                    GOVERNANCE                          ║
-║                                                        ║
-║  AX Trust — deterministic execution · policy-as-code  ║
-║  guardrails · audit trail · explainability             ║
-║                                                        ║
-╚══════╦═════════════════════╦══════════════════╦════════╝
-       ║                     ║                  ║
-╔══════╩═══════╗  ╔══════════╩═════════╗  ╔════╩═════════╗
-║              ║  ║                    ║  ║              ║
-║  AX Serving  ║  ║  AX Fabric        ║  ║  AX Engine   ║
-║              ║  ║                    ║  ║              ║
-║  Multi-node  ║  ║  Knowledge / RAG  ║  ║  Mac-Native  ║
-║  Routing     ║  ║  Distillation     ║  ║  Inference   ║
-║              ║  ║                    ║  ║  Apple Si    ║
-╚══════════════╝  ╚════════════════════╝  ╚══════════════╝
-                    INFRASTRUCTURE
-```
+<p align="center">
+  <img src="docs/images/automatosx-stack.png" alt="AutomatosX stack diagram" width="860" />
+</p>
+
+Source: [docs/automatosx-stack.mmd](docs/automatosx-stack.mmd)
 
 | Component | Repository | Role |
 |-----------|-----------|------|

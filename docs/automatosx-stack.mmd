@@ -1,0 +1,55 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#ffffff",
+    "primaryColor": "#f6f8fa",
+    "primaryTextColor": "#0f172a",
+    "primaryBorderColor": "#0f172a",
+    "lineColor": "#475569",
+    "secondaryColor": "#e2e8f0",
+    "secondaryTextColor": "#0f172a",
+    "secondaryBorderColor": "#334155",
+    "tertiaryColor": "#dbeafe",
+    "tertiaryTextColor": "#0f172a",
+    "tertiaryBorderColor": "#2563eb",
+    "fontFamily": "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif",
+    "fontSize": "18px"
+  },
+  "flowchart": {
+    "curve": "linear",
+    "htmlLabels": true,
+    "nodeSpacing": 36,
+    "rankSpacing": 54,
+    "padding": 18
+  }
+}}%%
+
+flowchart TB
+  subgraph U["User Endpoints"]
+    direction LR
+    S["AX Studio<br/>General GenAI Workspace"]
+    C["AX Code<br/>AI Coding and Automation<br/>CLI · Web · Desktop · SDK"]
+  end
+
+  T["AX Trust<br/>Deterministic execution · policy-as-code<br/>Guardrails · audit trail · explainability"]
+
+  subgraph I["Infrastructure"]
+    direction LR
+    V["AX Serving<br/>Multi-node routing"]
+    F["AX Fabric<br/>Knowledge / RAG<br/>Distillation"]
+    E["AX Engine<br/>Mac-native inference<br/>Apple Silicon"]
+  end
+
+  S --> T
+  C --> T
+  T --> V
+  T --> F
+  T --> E
+
+  classDef core fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#0f172a
+  classDef surface fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+  classDef infra fill:#f6f8fa,stroke:#475569,stroke-width:1.5px,color:#0f172a
+
+  class C core
+  class S,T surface
+  class V,F,E infra
