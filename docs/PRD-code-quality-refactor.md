@@ -549,15 +549,44 @@ Deleted: `tool/constants.ts` (superseded). Updated 15 consumer files.
 Extracted `CUSTOM_LOADERS` (7 provider-specific loaders, 182 LOC) from `provider/provider.ts` to `provider/loaders.ts`.
 Reduced `provider.ts` from 1,010 → 834 LOC.
 
-### Phase 2b-d: Remaining File Decomposition — DEFERRED
+### Phase 2b: LSP Server Helpers Extraction — COMPLETE
 
-**Reason:** The remaining large files (`session/prompt.ts`, `config/config.ts`, `lsp/server.ts`, TUI session route) use TypeScript `export namespace` extensively. Functions within each namespace share closure state, helpers, and types that make extraction complex:
+**Completed 2026-04-02 (v1.5.2)**
 
-- `session/prompt.ts`: `shell()`, `command()`, `createUserMessage()` all reference shared namespace state (`start()`, `cancel()`, `state()`, `loop()`)
-- `config/config.ts`: 675 LOC of Zod schemas are inside the `Config` namespace, referenced as `Config.McpLocal`, `Config.Info`, etc.
-- `lsp/server.ts`: 37 LSP server definitions reference namespace-scoped helpers (`NearestRoot`, `pathExists`, `run`, `output`, `which`, `log`)
+Extracted shared helpers (`log`, `pathExists`, `run`, `output`, `NearestRoot`) from `lsp/server.ts` namespace to `lsp/server-helpers.ts`. Made helpers importable for further splitting.
 
-**Prerequisite:** Build/test tooling (`bun typecheck` + `bun test`) must be available to safely verify these refactors. Each extraction requires resolving namespace closure dependencies.
+### Phase 2c: Config Schema Extraction — COMPLETE
+
+**Completed 2026-04-02 (v1.5.2)**
+
+Moved 675 LOC of Zod schema definitions from `config/config.ts` to `config/schema.ts`. Config namespace re-exports all schemas for backward compatibility.
+
+`config.ts`: 1,472 → 827 LOC
+
+### Phase 2d: LSP Server Definitions Extraction — COMPLETE
+
+**Completed 2026-04-02 (v1.5.2)**
+
+Moved 37 language server definitions (2,026 LOC) from `lsp/server.ts` to `lsp/server-defs.ts`. `server.ts` is now a 79-line namespace shell with type definitions and re-exports.
+
+`lsp/server.ts`: 2,065 → 79 LOC
+
+### Phase 2e: Session Prompt Helpers Extraction — COMPLETE
+
+**Completed 2026-04-02 (v1.5.2)**
+
+Extracted 4 standalone functions from `session/prompt.ts` to `session/prompt-helpers.ts`:
+- `resolvePromptParts()`, `createStructuredOutputTool()`, `lastModel()`, `ensureTitle()`
+
+`prompt.ts`: 2,107 → 1,959 LOC
+
+### Phase 2 — Remaining (deferred)
+
+The following files remain over 1,000 LOC with deeply coupled namespace internals:
+- `tui/routes/session/index.tsx` (2,284) — UI component, needs visual testing
+- `session/prompt.ts` (1,959) — remaining functions share `state()`, `start()`, `cancel()`, `loop()`
+- `acp/agent.ts` (1,743) — ACP protocol implementation
+- `cli/cmd/github.ts` (1,633) — types tightly coupled between install/run commands
 
 ### Phase 3a: Shared Diagnostic Rendering — COMPLETE
 
@@ -571,6 +600,17 @@ Reduced `provider.ts` from 1,010 → 834 LOC.
 
 `websearch.ts` and `codesearch.ts` now use the shared `fetchExaTool()` from `exa-fetch.ts` instead of duplicating the fetch + SSE parse + error handling pattern. Eliminated ~150 lines across 2 files. Also removed `codesearch.ts` hardcoded `API_CONFIG` (now uses centralized constants) and removed unused `log` export from `bash.ts`.
 
-### Phase 3c-d & Phase 4: Remaining — DEFERRED
+### Phase 3c: Agent Permission Presets — COMPLETE
 
-Tool factory, agent builder, session cache abstraction, and directory flattening depend on build verification infrastructure (`bun typecheck` + `bun test`).
+**Completed 2026-04-02 (v1.5.2)**
+
+Created `agent/permission-presets.ts` with 3 reusable presets:
+- `readOnlyWithWeb()`: for explore, security, architect agents
+- `readOnlyNoWeb()`: for perf agent
+- `denyAll`: for compaction, title, summary agents
+
+Replaced 7 inline `Permission.fromConfig` blocks. `agent.ts`: 521 → 450 LOC.
+
+### Phase 3-4 — Remaining (deferred)
+
+Tool factory, session cache abstraction, and directory flattening are deferred to future sprints.
