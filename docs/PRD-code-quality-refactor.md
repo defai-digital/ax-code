@@ -559,6 +559,18 @@ Reduced `provider.ts` from 1,010 → 834 LOC.
 
 **Prerequisite:** Build/test tooling (`bun typecheck` + `bun test`) must be available to safely verify these refactors. Each extraction requires resolving namespace closure dependencies.
 
-### Phases 3-4: Pattern Reduction & Directory Flattening — NOT STARTED
+### Phase 3a: Shared Diagnostic Rendering — COMPLETE
 
-Depends on Phase 2 completion and build verification infrastructure.
+**Completed 2026-04-02 (v1.5.2)**
+
+`write.ts`, `edit.ts`, and `apply_patch.ts` now use the shared `renderDiagnostics()` function from `tool/diagnostics.ts` instead of 3 separate inline implementations. Eliminated ~32 lines of duplicated diagnostic limiting, formatting, and rendering logic.
+
+### Phase 3b: Consolidated Exa Fetch Logic — COMPLETE
+
+**Completed 2026-04-02 (v1.5.2)**
+
+`websearch.ts` and `codesearch.ts` now use the shared `fetchExaTool()` from `exa-fetch.ts` instead of duplicating the fetch + SSE parse + error handling pattern. Eliminated ~150 lines across 2 files. Also removed `codesearch.ts` hardcoded `API_CONFIG` (now uses centralized constants) and removed unused `log` export from `bash.ts`.
+
+### Phase 3c-d & Phase 4: Remaining — DEFERRED
+
+Tool factory, agent builder, session cache abstraction, and directory flattening depend on build verification infrastructure (`bun typecheck` + `bun test`).
