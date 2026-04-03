@@ -879,6 +879,23 @@ describe("ProviderTransform.variants", () => {
       expect(result.low).toEqual({ reasoningEffort: "low" })
       expect(result.high).toEqual({ reasoningEffort: "high" })
     })
+
+    test("grok-4 returns medium, high, and max with reasoningEffort", () => {
+      const model = createMockModel({
+        id: "xai/grok-4",
+        providerID: "xai",
+        api: {
+          id: "grok-4",
+          url: "https://api.x.ai",
+          npm: "@ai-sdk/xai",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["medium", "high", "max"])
+      expect(result.medium).toEqual({ reasoningEffort: "medium" })
+      expect(result.high).toEqual({ reasoningEffort: "high" })
+      expect(result.max).toEqual({ reasoningEffort: "max" })
+    })
   })
 
   describe("@ai-sdk/openai-compatible", () => {

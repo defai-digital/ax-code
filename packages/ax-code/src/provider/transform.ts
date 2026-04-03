@@ -166,12 +166,19 @@ export namespace ProviderTransform {
     )
       return {}
 
-    // XAI: only grok-3-mini supports reasoningEffort; all other grok models don't
+    // XAI supports different effort sets across grok reasoning families.
     if (model.api.npm === "@ai-sdk/xai") {
       if (id.includes("grok-3-mini")) {
         return {
           low: { reasoningEffort: "low" },
           high: { reasoningEffort: "high" },
+        }
+      }
+      if (id.includes("grok-4") || id.includes("grok-code")) {
+        return {
+          medium: { reasoningEffort: "medium" },
+          high: { reasoningEffort: "high" },
+          max: { reasoningEffort: "max" },
         }
       }
       return {}
