@@ -480,11 +480,11 @@ export namespace MCP {
           key,
           command: mcp.command,
           cwd,
-          error: error instanceof Error ? error.message : String(error),
+          error: NamedError.message(error),
         })
         status = {
           status: "failed" as const,
-          error: error instanceof Error ? error.message : String(error),
+          error: NamedError.message(error),
         }
       }
     }
@@ -631,7 +631,7 @@ export namespace MCP {
           log.error("failed to get tools", { clientName, error: e.message })
           const failedStatus = {
             status: "failed" as const,
-            error: e instanceof Error ? e.message : String(e),
+            error: NamedError.message(e),
           }
           s.status[clientName] = failedStatus
           delete s.clients[clientName]
@@ -943,7 +943,7 @@ export namespace MCP {
       log.error("failed to finish oauth", { mcpName, error })
       return {
         status: "failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: NamedError.message(error),
       }
     }
   }

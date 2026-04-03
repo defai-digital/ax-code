@@ -45,6 +45,11 @@ export abstract class NamedError extends Error {
     return result
   }
 
+  static message(error: unknown): string {
+    if (error instanceof Error) return error.message
+    return String(error)
+  }
+
   public static readonly Unknown = NamedError.create(
     "UnknownError",
     z.object({

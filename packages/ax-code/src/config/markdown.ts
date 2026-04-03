@@ -81,7 +81,7 @@ export namespace ConfigMarkdown {
         throw new FrontmatterError(
           {
             path: filePath,
-            message: `${filePath}: Failed to parse YAML frontmatter: ${err instanceof Error ? err.message : String(err)}`,
+            message: `${filePath}: Failed to parse YAML frontmatter: ${NamedError.message(err)}`,
           },
           { cause: err },
         )

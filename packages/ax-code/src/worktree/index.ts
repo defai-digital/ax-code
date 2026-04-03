@@ -385,7 +385,7 @@ export namespace Worktree {
         })
           .then(() => true)
           .catch((error) => {
-            const message = error instanceof Error ? error.message : String(error)
+            const message = NamedError.message(error)
             log.error("worktree bootstrap failed", { directory: info.directory, message })
             GlobalBus.emit("event", {
               directory: info.directory,
@@ -473,7 +473,7 @@ export namespace Worktree {
           retryDelay: 100,
         })
         .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
+          const message = NamedError.message(error)
           throw new RemoveFailedError({ message: message || "Failed to remove git worktree directory" })
         })
 

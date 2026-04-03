@@ -1133,7 +1133,7 @@ export namespace SessionPrompt {
               })
             } catch (error: unknown) {
               log.error("failed to read MCP resource", { error, clientName, uri })
-              const message = error instanceof Error ? error.message : String(error)
+              const message = NamedError.message(error)
               pieces.push({
                 messageID: info.id,
                 sessionID: input.sessionID,

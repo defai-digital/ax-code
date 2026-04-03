@@ -121,7 +121,7 @@ export namespace Plugin {
                   }
                 })
                 .catch((err) => {
-                  const message = err instanceof Error ? err.message : String(err)
+                  const message = NamedError.message(err)
                   log.error("failed to load plugin", { path: plugin, error: message })
                   Bus.publish(Session.Event.Error, {
                     error: new NamedError.Unknown({

@@ -372,105 +372,11 @@ export namespace Session {
     })
   })
 
-  export const setTitle = fn(
-    z.object({
-      sessionID: SessionID.zod,
-      title: z.string(),
-    }),
-    async (input) => {
-      return Database.use((db) => {
-        const row = db
-          .update(SessionTable)
-          .set({ title: input.title })
-          .where(eq(SessionTable.id, input.sessionID))
-          .returning()
-          .get()
-        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
-        const info = fromRow(row)
-        Database.effect(() => Bus.publish(Event.Updated, { info }))
-        return info
-      })
-    },
-  )
-
-  export const setArchived = fn(
-    z.object({
-      sessionID: SessionID.zod,
-      time: z.number().optional(),
-    }),
-    async (input) => {
-      return Database.use((db) => {
-        const row = db
-          .update(SessionTable)
-          .set({ time_archived: input.time })
-          .where(eq(SessionTable.id, input.sessionID))
-          .returning()
-          .get()
-        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
-        const info = fromRow(row)
-        Database.effect(() => Bus.publish(Event.Updated, { info }))
-        return info
-      })
-    },
-  )
-
-  export const setPermission = fn(
-    z.object({
-      sessionID: SessionID.zod,
-      permission: Permission.Ruleset,
-    }),
-    async (input) => {
-      return Database.use((db) => {
-        const row = db
-          .update(SessionTable)
-          .set({ permission: input.permission, time_updated: Date.now() })
-          .where(eq(SessionTable.id, input.sessionID))
-          .returning()
-          .get()
-        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
-        const info = fromRow(row)
-        Database.effect(() => Bus.publish(Event.Updated, { info }))
-        return info
-      })
-    },
-  )
-
-  export const setRevert = fn(
-    z.object({
-      sessionID: SessionID.zod,
-      revert: Info.shape.revert,
-      summary: Info.shape.summary,
-    }),
-    async (input) => {
-      return Database.use((db) => {
-        const row = db
-          .update(SessionTable)
-          .set({
-            revert: input.revert ?? null,
-            summary_additions: input.summary?.additions,
-            summary_deletions: input.summary?.deletions,
-            summary_files: input.summary?.files,
-            time_updated: Date.now(),
-          })
-          .where(eq(SessionTable.id, input.sessionID))
-          .returning()
-          .get()
-        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
-        const info = fromRow(row)
-        Database.effect(() => Bus.publish(Event.Updated, { info }))
-        return info
-      })
-    },
-  )
-
-  export const clearRevert = fn(SessionID.zod, async (sessionID) => {
+  function updateAndPublish(sessionID: SessionID, fields: Record<string, unknown>): Info {
     return Database.use((db) => {
       const row = db
         .update(SessionTable)
-        .set({
-          revert: null,
-          time_updated: Date.now(),
-        })
+        .set(fields)
         .where(eq(SessionTable.id, sessionID))
         .returning()
         .get()
@@ -479,32 +385,48 @@ export namespace Session {
       Database.effect(() => Bus.publish(Event.Updated, { info }))
       return info
     })
-  })
+  }
+
+  export const setTitle = fn(
+    z.object({ sessionID: SessionID.zod, title: z.string() }),
+    async (input) => updateAndPublish(input.sessionID, { title: input.title }),
+  )
+
+  export const setArchived = fn(
+    z.object({ sessionID: SessionID.zod, time: z.number().optional() }),
+    async (input) => updateAndPublish(input.sessionID, { time_archived: input.time }),
+  )
+
+  export const setPermission = fn(
+    z.object({ sessionID: SessionID.zod, permission: Permission.Ruleset }),
+    async (input) => updateAndPublish(input.sessionID, { permission: input.permission, time_updated: Date.now() }),
+  )
+
+  export const setRevert = fn(
+    z.object({ sessionID: SessionID.zod, revert: Info.shape.revert, summary: Info.shape.summary }),
+    async (input) =>
+      updateAndPublish(input.sessionID, {
+        revert: input.revert ?? null,
+        summary_additions: input.summary?.additions,
+        summary_deletions: input.summary?.deletions,
+        summary_files: input.summary?.files,
+        time_updated: Date.now(),
+      }),
+  )
+
+  export const clearRevert = fn(SessionID.zod, async (sessionID) =>
+    updateAndPublish(sessionID, { revert: null, time_updated: Date.now() }),
+  )
 
   export const setSummary = fn(
-    z.object({
-      sessionID: SessionID.zod,
-      summary: Info.shape.summary,
-    }),
-    async (input) => {
-      return Database.use((db) => {
-        const row = db
-          .update(SessionTable)
-          .set({
-            summary_additions: input.summary?.additions,
-            summary_deletions: input.summary?.deletions,
-            summary_files: input.summary?.files,
-            time_updated: Date.now(),
-          })
-          .where(eq(SessionTable.id, input.sessionID))
-          .returning()
-          .get()
-        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
-        const info = fromRow(row)
-        Database.effect(() => Bus.publish(Event.Updated, { info }))
-        return info
-      })
-    },
+    z.object({ sessionID: SessionID.zod, summary: Info.shape.summary }),
+    async (input) =>
+      updateAndPublish(input.sessionID, {
+        summary_additions: input.summary?.additions,
+        summary_deletions: input.summary?.deletions,
+        summary_files: input.summary?.files,
+        time_updated: Date.now(),
+      }),
   )
 
   export const diff = fn(SessionID.zod, async (sessionID) => {
