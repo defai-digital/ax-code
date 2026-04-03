@@ -11,7 +11,7 @@
     "setup:cli": "bun run scripts/setup-cli.ts",
     "dev:desktop": "pnpm --dir packages/desktop run tauri dev",
     "dev:web": "pnpm --dir packages/app run dev",
-    "typecheck": "turbo typecheck",
+    "typecheck": "pnpm -r --if-present run typecheck",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"
   },

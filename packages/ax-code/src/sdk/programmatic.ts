@@ -8,11 +8,11 @@
  *   import { createAgent } from "ax-code/sdk/programmatic"
  */
 
-import { Log } from "../util/log"
-import { bootstrap } from "../cli/bootstrap"
-import { Server } from "../server/server"
-import { Auth } from "../auth"
-import { setLanguage, t } from "../i18n"
+import { Log } from "../util/log.js"
+import { bootstrap } from "../cli/bootstrap.js"
+import { Server } from "../server/server.js"
+import { Auth } from "../auth/index.js"
+import { setLanguage, t } from "../i18n/index.js"
 import { createOpencodeClient } from "@ax-code/sdk/v2/client"
 import type { OpencodeClient } from "@ax-code/sdk/v2/client"
 import type {
@@ -24,14 +24,14 @@ import type {
   StreamHandle,
   SessionHandle,
   ToolCallInfo,
-} from "../../../sdk/js/src/programmatic/types.ts"
+} from "../../../sdk/js/src/programmatic/types.js"
 import {
   DisposedError,
   TimeoutError,
   AgentNotFoundError,
   ProviderError,
   ToolError,
-} from "../../../sdk/js/src/programmatic/types.ts"
+} from "../../../sdk/js/src/programmatic/types.js"
 
 // Re-export error classes so they can be imported from this module
 export {
@@ -42,7 +42,13 @@ export {
   PermissionError,
   AgentNotFoundError,
   DisposedError,
-} from "../../../sdk/js/src/programmatic/types.ts"
+} from "../../../sdk/js/src/programmatic/types.js"
+
+function last<T>(list: T[], test: (item: T) => boolean): T | undefined {
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (test(list[i]!)) return list[i]
+  }
+}
 
 let logInitialized = false
 
@@ -351,7 +357,7 @@ async function collectResult(
       const props = (event as any).properties
       if (props.sessionID === sessionID && props.status.type === "idle") {
         const msgs = await sdk.session.messages({ sessionID })
-        const lastAssistant = (msgs.data as any[])?.findLast((m: any) => m.info?.role === "assistant")
+        const lastAssistant = last((msgs.data as any[]) ?? [], (m: any) => m.info?.role === "assistant")
         if (lastAssistant?.info?.tokens) {
           const t = lastAssistant.info.tokens
           usage = {
@@ -458,7 +464,7 @@ async function* streamEvents(
       const props = (event as any).properties
       if (props.sessionID === sessionID && props.status.type === "idle") {
         const msgs = await sdk.session.messages({ sessionID })
-        const lastAssistant = (msgs.data as any[])?.findLast((m: any) => m.info?.role === "assistant")
+        const lastAssistant = last((msgs.data as any[]) ?? [], (m: any) => m.info?.role === "assistant")
         if (lastAssistant?.info?.tokens) {
           const t = lastAssistant.info.tokens
           usage = {
@@ -469,7 +475,7 @@ async function* streamEvents(
         }
         // Get the final text from the stored message parts (not streamed text which may have echoes)
         if (lastAssistant?.parts) {
-          const textPart = (lastAssistant.parts as any[]).findLast((p: any) => p.type === "text" && p.text)
+          const textPart = last((lastAssistant.parts as any[]) ?? [], (p: any) => p.type === "text" && p.text)
           if (textPart?.text) text = textPart.text
         }
         yield { type: "done", result: { text, agent, model: modelInfo, usage, toolCalls, sessionID, messageID } }

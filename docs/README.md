@@ -17,6 +17,7 @@ Architecture Decision Records (ADRs) and Product Requirements Documents (PRDs) f
 | [PRD — Features 5-8](PRD-features-5-8.md) | Specifications for i18n, Design Check, Memory Warmup, Context Stats |
 | [PRD — Programmatic SDK](PRD-programmatic-sdk.md) | Direct agent instantiation API without HTTP server |
 | [PRD — pnpm Migration](PRD-pnpm-migration.md) | Migration from Bun-only to pnpm as package manager |
+| [PRD — Code Quality Refactor](PRD-code-quality-refactor.md) | Centralize constants, eliminate duplication, break large files, YAML configs |
 
 ## Reference
 

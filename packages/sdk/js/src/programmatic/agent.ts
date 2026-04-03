@@ -1,8 +1,12 @@
-/**
- * Programmatic SDK — Re-exports from ax-code's internal implementation
- *
- * The actual implementation lives in packages/ax-code/src/sdk/programmatic.ts
- * to avoid import resolution issues with ax-code's module system.
- */
+import type { Agent, AgentOptions } from "./types.js"
 
-export { createAgent } from "../../../../ax-code/src/sdk/programmatic.ts"
+type Mod = {
+  createAgent(options: AgentOptions): Promise<Agent>
+}
+
+const load = Function('return import("ax-code/sdk/programmatic")') as () => Promise<Mod>
+
+export async function createAgent(options: AgentOptions): Promise<Agent> {
+  const mod = await load()
+  return mod.createAgent(options)
+}
