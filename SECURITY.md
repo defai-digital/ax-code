@@ -5,13 +5,13 @@
 We take security seriously. If you discover a vulnerability, please report it responsibly:
 
 1. **GitHub Advisory** (preferred): Use the ["Report a Vulnerability"](https://github.com/defai-digital/ax-code/security/advisories/new) tab.
-2. **Email**: Send details to **security@defai.digital**.
+2. **Discord**: Report it in our Discord: https://discord.gg/cTavsMgu
 
 We will acknowledge your report within **6 business days** and keep you informed of progress toward a fix.
 
 > **Note:** We do not accept AI-generated security reports. Submitting one will result in a ban from the project. Please ensure your report includes specific reproduction steps and demonstrates a real impact.
 >
-> For general discussion, support, or non-sensitive security questions, find us on Discord: https://discord.gg/cTavsMgu
+> Use Discord for security reports, support, and general discussion: https://discord.gg/cTavsMgu
 
 ---
 
