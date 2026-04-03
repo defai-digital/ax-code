@@ -1081,7 +1081,7 @@ export namespace Config {
         .describe(
           "Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications",
         ),
-      language: z.enum(["en", "zh-CN", "zh-TW", "ja", "ko", "es", "fr", "de", "pt", "th", "vi"]).optional().describe("UI language (default: en)"),
+      language: z.literal("en").optional().describe("UI language (English only)"),
       disabled_providers: z.array(z.string()).optional().describe("Disable providers that are loaded automatically"),
       enabled_providers: z
         .array(z.string())

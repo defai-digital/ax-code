@@ -25,7 +25,6 @@ ax-code is a terminal-based AI coding assistant that works with **any LLM provid
 - **Session persistence** — SQLite-backed, forkable, compactable sessions
 - **MCP support** — Model Context Protocol with SSE/stdio/HTTP transports, auto-discovery, and 16 pre-configured templates
 - **Design check** — Scan CSS/React code for hardcoded colors, spacing, accessibility violations
-- **i18n** — 11 languages (English, Chinese, Japanese, Korean, Spanish, French, German, Portuguese, Thai, Vietnamese)
 - **Context stats** — Token usage breakdown, cost estimation, context window monitoring
 - **25+ built-in tools** — File ops, search, bash, LSP, web fetch, tasks, todos
 - **API key encryption** — AES-256-GCM encrypted key storage at rest
@@ -236,7 +235,7 @@ await agent.dispose()
 - **Env var detection** — auto-reads `XAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`
 - **Hooks** — `onToolCall`, `onToolResult`, `onPermissionRequest`, `onError`
 - **Agent auto-routing** — works through SDK (security, architect, debug, perf)
-- **Language** — `language: "ja"` for translated error messages (11 languages)
+
 
 ---
 
@@ -324,33 +323,6 @@ ax-code context <sessionID>      # Specific session
 ```
 
 Shows: token breakdown (system prompt, tools, history), usage percentage, status (GOOD/MODERATE/HIGH/CRITICAL), and estimated cost per provider.
-
----
-
-## i18n (Internationalization)
-
-Supports 11 languages for SDK error messages. Set via SDK:
-
-```typescript
-const agent = await createAgent({
-  directory: ".",
-  language: "ja",  // Error messages in Japanese
-})
-```
-
-| Code | Language |
-|------|----------|
-| `en` | English |
-| `zh-CN` | 简体中文 (Simplified Chinese) |
-| `zh-TW` | 繁體中文 (Traditional Chinese) |
-| `ja` | 日本語 (Japanese) |
-| `ko` | 한국어 (Korean) |
-| `es` | Español (Spanish) |
-| `fr` | Français (French) |
-| `de` | Deutsch (German) |
-| `pt` | Português (Portuguese) |
-| `th` | ไทย (Thai) |
-| `vi` | Tiếng Việt (Vietnamese) |
 
 ---
 
@@ -474,6 +446,12 @@ AX Code was built by combining two open source projects:
 2. **[OpenCode](https://github.com/anomalyco/opencode)** — A provider-agnostic, LSP-first AI coding assistant with a rich terminal UI, session persistence, and MCP support.
 
 AX Code merges the agent intelligence and SDK capabilities of ax-cli with the robust TUI, provider abstraction, and tool ecosystem of OpenCode into a single unified project.
+
+---
+
+## Language
+
+AX Code is **English only**. We removed multi-language support to focus on delivering higher quality documentation, error messages, and support. Community-contributed translations may return in the future.
 
 ---
 

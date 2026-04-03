@@ -2,7 +2,7 @@
  * i18n Type Definitions
  */
 
-export type SupportedLanguage = "en" | "zh-CN" | "zh-TW" | "ja" | "ko" | "es" | "fr" | "de" | "pt" | "th" | "vi"
+export type SupportedLanguage = "en"
 
 export interface Translations {
   session: {
@@ -52,15 +52,5 @@ export interface Translations {
 }
 
 export const LANGUAGE_NAMES: Record<SupportedLanguage, string> = {
-  "en": "English",
-  "zh-CN": "简体中文 (Simplified Chinese)",
-  "zh-TW": "繁體中文 (Traditional Chinese)",
-  "ja": "日本語 (Japanese)",
-  "ko": "한국어 (Korean)",
-  "es": "Español (Spanish)",
-  "fr": "Français (French)",
-  "de": "Deutsch (German)",
-  "pt": "Português (Portuguese)",
-  "th": "ไทย (Thai)",
-  "vi": "Tiếng Việt (Vietnamese)",
+  en: "English",
 }

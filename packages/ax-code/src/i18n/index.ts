@@ -1,12 +1,8 @@
 /**
- * i18n Module — Internationalization
+ * i18n Module
  *
- * Supports 11 languages with English fallback.
- *
- * Usage:
- *   import { t, setLanguage } from "../i18n"
- *   setLanguage("zh-CN")
- *   console.log(t("session.thinking")) // "思考中..."
+ * English only. The language infrastructure is retained for future use
+ * but all non-English locales have been removed.
  */
 
 export { getTranslations, t, setLanguage, getLanguage, getAvailableLanguages } from "./loader"

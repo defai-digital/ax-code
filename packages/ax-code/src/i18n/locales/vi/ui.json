@@ -1,8 +1,0 @@
-{
-  "session": { "welcome": "Chào mừng đến với ax-code", "thinking": "Đang suy nghĩ...", "generating": "Đang tạo...", "goodbye": "Tạm biệt!", "sessionEnded": "Phiên đã kết thúc" },
-  "tools": { "executing": "Đang thực thi", "completed": "Hoàn thành", "failed": "Thất bại", "readingFile": "Đang đọc tệp", "writingFile": "Đang ghi tệp", "searchingFiles": "Đang tìm kiếm tệp", "commandRunning": "Đang chạy lệnh", "commandCompleted": "Lệnh đã hoàn thành" },
-  "errors": { "connectionFailed": "Kết nối thất bại", "apiError": "Lỗi API", "rateLimited": "Đã đạt giới hạn tốc độ. Vui lòng đợi.", "timeout": "Hết thời gian chờ", "permissionDenied": "Từ chối quyền truy cập", "fileNotFound": "Không tìm thấy tệp", "invalidInput": "Đầu vào không hợp lệ", "unknown": "Đã xảy ra lỗi không xác định" },
-  "toast": { "copiedToClipboard": "Đã sao chép vào bảng nhớ tạm", "changesSaved": "Đã lưu thay đổi", "operationCancelled": "Đã hủy thao tác", "agentSwitched": "Đã chuyển agent sang" },
-  "usage": { "tokens": "token", "tokensIn": "Token đầu vào", "tokensOut": "Token đầu ra", "estimatedCost": "Chi phí ước tính" },
-  "status": { "thinking": "Đang suy nghĩ", "context": "Ngữ cảnh", "contextWarning": "Cửa sổ ngữ cảnh gần đầy" }
-}
