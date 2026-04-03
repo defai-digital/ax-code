@@ -12,8 +12,8 @@ describe("Database.Path", () => {
         ? db
         : path.join(Global.Path.data, db)
       : ["latest", "beta"].includes(Installation.CHANNEL)
-        ? path.join(Global.Path.data, "opencode.db")
-        : path.join(Global.Path.data, `opencode-${Installation.CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`)
+        ? path.join(Global.Path.data, "ax-code.db")
+        : path.join(Global.Path.data, `ax-code-${Installation.CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`)
     expect(Database.Path).toBe(expected)
   })
 })

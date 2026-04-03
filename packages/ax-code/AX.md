@@ -6,13 +6,13 @@ Refresh: Run `/init` or `ax-code init --refresh` to update
 -->
 
 # ax-code
-**Type:** cli | **Language:** TypeScript | **PM:** bun | **Version:** 1.3.2
+**Type:** cli | **Language:** TypeScript | **PM:** pnpm | **Version:** 1.3.2
 
 **Stack:** SolidJS, Hono, Zod, Drizzle, Effect, Vercel AI SDK, ESM, TypeScript
 
 ## Build & Development
 ```bash
-bun install    # Install dependencies
+pnpm install   # Install dependencies
 bun build   # Build project
 bun test    # Run tests
 bun lint    # Lint code
@@ -44,7 +44,7 @@ bun typecheck  # Type check
 - ESM imports require `.js` extension: `import { x } from './y.js'`
 - Use ES module syntax (`import`/`export`), not CommonJS (`require`)
 - Use `zod` for runtime validation
-- Use `bun` as the package manager (not npm)
+- Use `pnpm` as the package manager while retaining Bun as the runtime
 
 ## Code Patterns
 ### TypeScript

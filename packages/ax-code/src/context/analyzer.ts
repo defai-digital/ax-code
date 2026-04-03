@@ -361,12 +361,11 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
     }
   }
 
-  const depCount = Object.keys(
-    {
-      ...(await readJson<PackageJson>(path.join(root, "package.json")))?.dependencies,
-      ...(await readJson<PackageJson>(path.join(root, "package.json")))?.devDependencies,
-    },
-  ).length
+  const pkg = await readJson<PackageJson>(path.join(root, "package.json"))
+  const depCount = Object.keys({
+    ...pkg?.dependencies,
+    ...pkg?.devDependencies,
+  }).length
 
   const score = Math.min(100, fileCount * 0.05 + loc * 0.001 + depCount * 0.5)
 

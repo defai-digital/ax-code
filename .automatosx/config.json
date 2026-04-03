@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "productVersion": "14.0.0",
+  "defaultProvider": "claude",
+  "workflowArtifactDir": ".automatosx/workflows",
+  "runtimeStoreDir": ".automatosx/runtime",
+  "createdBy": "ax setup"
+}

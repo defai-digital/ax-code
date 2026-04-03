@@ -78,9 +78,9 @@ export namespace Config {
   export const state = Instance.state(async () => {
     const auth = await Auth.all()
 
-    // Config loading order (low -> high precedence): https://opencode.ai/docs/config#precedence-order
-    // 1) Remote .well-known/opencode (org defaults)
-    // 2) Global config (~/.config/opencode/ax-code.json{,c})
+    // Config loading order (low -> high precedence): https://ax-code.ai/docs/config#precedence-order
+    // 1) Remote .well-known/ax-code (org defaults, with legacy .well-known/opencode fallback)
+    // 2) Global config (~/.config/ax-code/ax-code.json{,c})
     // 3) Custom config (AX_CODE_CONFIG)
     // 4) Project config (ax-code.json{,c})
     // 5) .ax-code directories (.ax-code/agents/, .ax-code/commands/, .ax-code/plugins/, .ax-code/ax-code.json{,c})
@@ -91,20 +91,25 @@ export namespace Config {
       if (value.type === "wellknown") {
         const url = key.replace(/\/+$/, "")
         process.env[value.key] = value.token
-        log.debug("fetching remote config", { url: `${url}/.well-known/opencode` })
-        const response = await fetch(`${url}/.well-known/opencode`)
+        const endpoint = `${url}/.well-known/ax-code`
+        const legacy = `${url}/.well-known/opencode`
+        log.debug("fetching remote config", { url: endpoint, legacy })
+        const response = await fetch(endpoint).then((res) => {
+          if (res.ok || res.status !== 404) return res
+          return fetch(legacy)
+        })
         if (!response.ok) {
           throw new Error(`failed to fetch remote config from ${url}: ${response.status}`)
         }
         const wellknown = (await response.json()) as any
         const remoteConfig = wellknown.config ?? {}
         // Add $schema to prevent load() from trying to write back to a non-existent file
-        if (!remoteConfig.$schema) remoteConfig.$schema = "https://opencode.ai/config.json"
+        if (!remoteConfig.$schema) remoteConfig.$schema = "https://ax-code.ai/config.json"
         result = mergeConfigConcatArrays(
           result,
           await load(JSON.stringify(remoteConfig), {
-            dir: path.dirname(`${url}/.well-known/opencode`),
-            source: `${url}/.well-known/opencode`,
+            dir: path.dirname(response.url || endpoint),
+            source: response.url || endpoint,
           }),
         )
         log.debug("loaded remote config from well-known", { url })
@@ -1046,7 +1051,7 @@ export namespace Config {
       command: z
         .record(z.string(), Command)
         .optional()
-        .describe("Command configuration, see https://opencode.ai/docs/commands"),
+        .describe("Command configuration, see https://ax-code.ai/docs/commands"),
       skills: Skills.optional().describe("Additional skill folder paths"),
       watcher: z
         .object({
@@ -1119,7 +1124,7 @@ export namespace Config {
         })
         .catchall(Agent)
         .optional()
-        .describe("Agent configuration, see https://opencode.ai/docs/agents"),
+        .describe("Agent configuration, see https://ax-code.ai/docs/agents"),
       provider: z
         .record(z.string(), Provider)
         .optional()
@@ -1256,7 +1261,7 @@ export namespace Config {
         .then(async (mod) => {
           const { provider, model, ...rest } = mod.default
           if (provider && model) result.model = `${provider}/${model}`
-          result["$schema"] = "https://opencode.ai/config.json"
+          result["$schema"] = "https://ax-code.ai/config.json"
           result = mergeDeep(result, rest)
           await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
           await fs.unlink(legacy)
@@ -1300,8 +1305,8 @@ export namespace Config {
     const parsed = Info.safeParse(normalized)
     if (parsed.success) {
       if (!parsed.data.$schema && isFile) {
-        parsed.data.$schema = "https://opencode.ai/config.json"
-        const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://opencode.ai/config.json",')
+        parsed.data.$schema = "https://ax-code.ai/config.json"
+        const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://ax-code.ai/config.json",')
         await Filesystem.write(options.path, updated).catch(() => {})
       }
       const data = parsed.data

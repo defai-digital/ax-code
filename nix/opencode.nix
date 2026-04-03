@@ -41,7 +41,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   buildPhase = ''
     runHook preBuild
 
-    cd ./packages/opencode
+    cd ./packages/ax-code
     bun --bun ./script/build.ts --single --skip-install
     bun --bun ./script/schema.ts schema.json
 
@@ -51,10 +51,10 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
 
-    install -Dm755 dist/opencode-*/bin/opencode $out/bin/opencode
-    install -Dm644 schema.json $out/share/opencode/schema.json
+    install -Dm755 dist/ax-code-*/bin/ax-code $out/bin/ax-code
+    install -Dm644 schema.json $out/share/ax-code/schema.json
 
-    wrapProgram $out/bin/opencode \
+    wrapProgram $out/bin/ax-code \
       --prefix PATH : ${
         lib.makeBinPath (
           [
@@ -70,9 +70,9 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   postInstall = lib.optionalString (stdenvNoCC.buildPlatform.canExecute stdenvNoCC.hostPlatform) ''
     # trick yargs into also generating zsh completions
-    installShellCompletion --cmd opencode \
-      --bash <($out/bin/opencode completion) \
-      --zsh <(SHELL=/bin/zsh $out/bin/opencode completion)
+    installShellCompletion --cmd ax-code \
+      --bash <($out/bin/ax-code completion) \
+      --zsh <(SHELL=/bin/zsh $out/bin/ax-code completion)
   '';
 
   nativeInstallCheckInputs = [
@@ -84,14 +84,14 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   versionCheckProgramArg = "--version";
 
   passthru = {
-    jsonschema = "${placeholder "out"}/share/opencode/schema.json";
+    jsonschema = "${placeholder "out"}/share/ax-code/schema.json";
   };
 
   meta = {
     description = "The open source coding agent";
-    homepage = "https://opencode.ai/";
+    homepage = "https://ax-code.ai/";
     license = lib.licenses.mit;
-    mainProgram = "opencode";
+    mainProgram = "ax-code";
     inherit (node_modules.meta) platforms;
   };
 })

@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://opencode.ai">
+  <a href="https://ax-code.ai">
     <picture>
       <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
       <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
@@ -9,7 +9,7 @@
 </p>
 <p align="center">L'agent de codage IA open source.</p>
 <p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
+  <a href="https://ax-code.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/ax-code-ai"><img alt="npm" src="https://img.shields.io/npm/v/ax-code-ai?style=flat-square" /></a>
   <a href="https://github.com/defai-digital/ax-code/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/defai-digital/ax-code/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
@@ -39,7 +39,7 @@
   <a href="README.vi.md">Tiếng Việt</a>
 </p>
 
-[![ax-code Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+[![ax-code Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://ax-code.ai)
 
 ---
 
@@ -47,18 +47,18 @@
 
 ```bash
 # YOLO
-curl -fsSL https://opencode.ai/install | bash
+curl -fsSL https://ax-code.ai/install | bash
 
 # Gestionnaires de paquets
 npm i -g ax-code-ai@latest        # ou bun/pnpm/yarn
 scoop install ax-code             # Windows
 choco install ax-code             # Windows
-brew install anomalyco/tap/opencode # macOS et Linux (recommandé, toujours à jour)
+brew install anomalyco/tap/ax-code # macOS et Linux (recommandé, toujours à jour)
 brew install ax-code              # macOS et Linux (formule officielle brew, mise à jour moins fréquente)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # n'importe quel OS
-nix run nixpkgs#opencode           # ou github:defai-digital/ax-code pour la branche dev la plus récente
+sudo pacman -S ax-code            # Arch Linux (Stable)
+paru -S ax-code-bin               # Arch Linux (Latest from AUR)
+mise use -g ax-code               # n'importe quel OS
+nix run nixpkgs#ax-code           # ou github:defai-digital/ax-code pour la branche dev la plus récente
 ```
 
 > [!TIP]
@@ -66,20 +66,20 @@ nix run nixpkgs#opencode           # ou github:defai-digital/ax-code pour la bra
 
 ### Application de bureau (BETA)
 
-ax-code est aussi disponible en application de bureau. Téléchargez-la directement depuis la [page des releases](https://github.com/defai-digital/ax-code/releases) ou [opencode.ai/download](https://opencode.ai/download).
+ax-code est aussi disponible en application de bureau. Téléchargez-la directement depuis la [page des releases](https://github.com/defai-digital/ax-code/releases) ou [ax-code.ai/download](https://ax-code.ai/download).
 
 | Plateforme            | Téléchargement                        |
 | --------------------- | ------------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `opencode-desktop-darwin-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe`    |
+| macOS (Apple Silicon) | `ax-code-desktop-darwin-aarch64.dmg` |
+| macOS (Intel)         | `ax-code-desktop-darwin-x64.dmg`     |
+| Windows               | `ax-code-desktop-windows-x64.exe`    |
 | Linux                 | `.deb`, `.rpm`, ou AppImage           |
 
 ```bash
 # macOS (Homebrew)
-brew install --cask opencode-desktop
+brew install --cask ax-code-desktop
 # Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+scoop bucket add extras; scoop install extras/ax-code-desktop
 ```
 
 #### Répertoire d'installation
@@ -93,8 +93,8 @@ Le script d'installation respecte l'ordre de priorité suivant pour le chemin d'
 
 ```bash
 # Exemples
-AX_CODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+AX_CODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://ax-code.ai/install | bash
+XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://ax-code.ai/install | bash
 ```
 
 ### Agents
@@ -110,11 +110,11 @@ ax-code inclut deux agents intégrés que vous pouvez basculer avec la touche `T
 Un sous-agent **general** est aussi inclus pour les recherches complexes et les tâches en plusieurs étapes.
 Il est utilisé en interne et peut être invoqué via `@general` dans les messages.
 
-En savoir plus sur les [agents](https://opencode.ai/docs/agents).
+En savoir plus sur les [agents](https://ax-code.ai/docs/agents).
 
 ### Documentation
 
-Pour plus d'informations sur la configuration d'ax-code, [**consultez notre documentation**](https://opencode.ai/docs).
+Pour plus d'informations sur la configuration d'ax-code, [**consultez notre documentation**](https://ax-code.ai/docs).
 
 ### Contribuer
 
@@ -122,7 +122,7 @@ Si vous souhaitez contribuer à ax-code, lisez nos [docs de contribution](./CONT
 
 ### Construire avec ax-code
 
-Si vous travaillez sur un projet lié à ax-code et que vous utilisez "ax-code" dans le nom du projet (par exemple, "opencode-dashboard" ou "opencode-mobile"), ajoutez une note dans votre README pour préciser qu'il n'est pas construit par l'équipe ax-code et qu'il n'est pas affilié à nous.
+Si vous travaillez sur un projet lié à ax-code et que vous utilisez "ax-code" dans le nom du projet (par exemple, "ax-code-dashboard" ou "ax-code-mobile"), ajoutez une note dans votre README pour préciser qu'il n'est pas construit par l'équipe ax-code et qu'il n'est pas affilié à nous.
 
 ### FAQ
 
@@ -131,11 +131,11 @@ Si vous travaillez sur un projet lié à ax-code et que vous utilisez "ax-code" 
 C'est très similaire à Claude Code en termes de capacités. Voici les principales différences :
 
 - 100% open source
-- Pas couplé à un fournisseur. Nous recommandons les modèles proposés via [ax-code Zen](https://opencode.ai/zen) ; ax-code peut être utilisé avec Claude, OpenAI, Google ou même des modèles locaux. Au fur et à mesure que les modèles évoluent, les écarts se réduiront et les prix baisseront, donc être agnostique au fournisseur est important.
+- Pas couplé à un fournisseur. Nous recommandons les modèles proposés via [ax-code Zen](https://ax-code.ai/zen) ; ax-code peut être utilisé avec Claude, OpenAI, Google ou même des modèles locaux. Au fur et à mesure que les modèles évoluent, les écarts se réduiront et les prix baisseront, donc être agnostique au fournisseur est important.
 - Support LSP prêt à l'emploi
 - Un focus sur la TUI. ax-code est construit par des utilisateurs de neovim et les créateurs de [terminal.shop](https://terminal.shop) ; nous allons repousser les limites de ce qui est possible dans le terminal.
 - Architecture client/serveur. Cela permet par exemple de faire tourner ax-code sur votre ordinateur tout en le pilotant à distance depuis une application mobile. Cela signifie que la TUI n'est qu'un des clients possibles.
 
 ---
 
-**Rejoignez notre communauté** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**Rejoignez notre communauté** [Discord](https://discord.gg/ax-code) | [X.com](https://x.com/ax-code)

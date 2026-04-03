@@ -67,7 +67,7 @@ const notify: Platform["notify"] = async (title, description, href) => {
 
   const notification = new Notification(title, {
     body: description ?? "",
-    icon: "https://opencode.ai/favicon-96x96-v3.png",
+    icon: "https://ax-code.ai/favicon-96x96-v3.png",
   })
 
   notification.onclick = () => {
@@ -103,7 +103,7 @@ const localUrl = () =>
 const isLocalHost = () => ["localhost", "127.0.0.1", "0.0.0.0"].includes(location.hostname)
 
 const getCurrentUrl = () => {
-  if (location.hostname.includes("opencode.ai")) return localUrl()
+  if (location.hostname.includes("ax-code.ai")) return localUrl()
   if (import.meta.env.DEV) return localUrl()
   if (isLocalHost()) return localUrl()
   return location.origin

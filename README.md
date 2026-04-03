@@ -37,6 +37,7 @@ ax-code is a terminal-based AI coding assistant that works with **any LLM provid
 
 ### Prerequisites
 
+- [pnpm](https://pnpm.io) v9.15.9+
 - [Bun](https://bun.sh) v1.3.11+
 - An API key from any supported provider
 
@@ -47,11 +48,11 @@ ax-code is a terminal-based AI coding assistant that works with **any LLM provid
 git clone https://github.com/defai-digital/ax-code.git
 cd ax-code
 
-# Install dependencies
-bun install
+# Install dependencies with pnpm
+pnpm install
 
 # Set up the global `ax-code` command
-bun run setup:cli
+pnpm run setup:cli
 
 # Set an API key (pick one)
 export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Google Gemini
@@ -60,7 +61,7 @@ export GROQ_API_KEY="your-key"                    # Groq (free)
 
 # Run
 ax-code                # Global command (after setup:cli)
-bun run dev            # Direct from repo root
+pnpm run dev           # Direct from repo root (uses Bun runtime)
 ```
 
 ### Windows (PowerShell)
@@ -70,7 +71,7 @@ bun run dev            # Direct from repo root
 $env:XAI_API_KEY="your-key"
 
 # Set up global command
-bun run setup:cli
+pnpm run setup:cli
 
 # Run
 ax-code
@@ -465,12 +466,25 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
+## Project History
+
+AX Code was built by combining two open source projects:
+
+1. **[ax-cli](https://github.com/defai-digital/ax-cli)** — The original AI coding CLI by DEFAI Digital, featuring specialized agents, agent auto-routing, design checking, memory warmup, and the programmatic SDK.
+2. **[OpenCode](https://github.com/anomalyco/opencode)** — A provider-agnostic, LSP-first AI coding assistant with a rich terminal UI, session persistence, and MCP support.
+
+AX Code merges the agent intelligence and SDK capabilities of ax-cli with the robust TUI, provider abstraction, and tool ecosystem of OpenCode into a single unified project.
+
+---
+
 ## License
 
 [MIT](LICENSE)
+
+Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). Portions of this software are derived from [OpenCode](https://github.com/anomalyco/opencode), Copyright (c) 2025 opencode.
 
 ---
 
 ## Credits
 
-ax-code is built by [DEFAI Digital](https://github.com/defai-digital).
+ax-code is built by [DEFAI Digital](https://github.com/defai-digital), with thanks to the [OpenCode](https://github.com/anomalyco/opencode) project and its contributors.

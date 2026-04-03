@@ -111,7 +111,7 @@ export namespace Server {
               return input
 
             // *.ax-code.ai (https only, adjust if needed)
-            if (/^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/.test(input)) {
+            if (/^https:\/\/([a-z0-9-]+\.)*(ax-code|opencode)\.ai$/.test(input)) {
               return input
             }
             if (opts?.cors?.includes(input)) {
@@ -187,7 +187,11 @@ export namespace Server {
       )
       .use(async (c, next) => {
         if (c.req.path === "/log") return next()
-        const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || c.req.header("x-ax-code-directory") || process.cwd()
+        const raw =
+          c.req.query("directory") ||
+          c.req.header("x-ax-code-directory") ||
+          c.req.header("x-opencode-directory") ||
+          process.cwd()
         const directory = (() => {
           try {
             return decodeURIComponent(raw)
@@ -208,9 +212,9 @@ export namespace Server {
         openAPIRouteHandler(app, {
           documentation: {
             info: {
-              title: "ax-code",
+              title: "AX Code",
               version: "0.0.3",
-              description: "ax-code api",
+              description: "AX Code API",
             },
             openapi: "3.1.1",
           },

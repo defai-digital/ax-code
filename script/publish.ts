@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Script } from "@opencode-ai/script"
+import { Script } from "@ax-code/script"
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 
@@ -54,7 +54,7 @@ toml = toml.replaceAll(/releases\/download\/v[^/]+\//g, `releases/download/v${Sc
 console.log("updated:", extensionToml)
 await Bun.file(extensionToml).write(toml)
 
-await $`bun install`
+await $`pnpm install`
 await import(`../packages/sdk/js/script/build.ts`)
 
 if (Script.release) {
@@ -73,7 +73,7 @@ if (Script.release) {
 }
 
 console.log("\n=== cli ===\n")
-await import(`../packages/opencode/script/publish.ts`)
+await import(`../packages/ax-code/script/publish.ts`)
 
 console.log("\n=== sdk ===\n")
 await import(`../packages/sdk/js/script/publish.ts`)

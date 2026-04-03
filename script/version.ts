@@ -1,18 +1,18 @@
 #!/usr/bin/env bun
 
-import { Script } from "@opencode-ai/script"
+import { Script } from "@ax-code/script"
 import { $ } from "bun"
 
 const output = [`version=${Script.version}`]
 
 if (!Script.preview) {
-  await $`opencode run --command changelog`.cwd(process.cwd())
+  await $`ax-code run --command changelog`.cwd(process.cwd())
   const file = `${process.cwd()}/UPCOMING_CHANGELOG.md`
   const body = await Bun.file(file)
     .text()
     .catch(() => "No notable changes")
   const dir = process.env.RUNNER_TEMP ?? "/tmp"
-  const notesFile = `${dir}/opencode-release-notes.txt`
+  const notesFile = `${dir}/ax-code-release-notes.txt`
   await Bun.write(notesFile, body)
   await $`gh release create v${Script.version} -d --title "v${Script.version}" --notes-file ${notesFile}`
   const release = await $`gh release view v${Script.version} --json tagName,databaseId`.json()

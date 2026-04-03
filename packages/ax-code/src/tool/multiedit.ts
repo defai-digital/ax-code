@@ -18,6 +18,7 @@ export const MultiEditTool = Tool.define("multiedit", {
           replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),
         }),
       )
+      .min(1)
       .describe("Array of edit operations to perform sequentially on the file"),
   }),
   async execute(params, ctx) {
@@ -26,7 +27,7 @@ export const MultiEditTool = Tool.define("multiedit", {
     for (const [, edit] of params.edits.entries()) {
       const result = await tool.execute(
         {
-          filePath: params.filePath,
+          filePath: edit.filePath || params.filePath,
           oldString: edit.oldString,
           newString: edit.newString,
           replaceAll: edit.replaceAll,

@@ -1,15 +1,23 @@
-# js
+# ax-code CLI
 
-To install dependencies:
+This package contains the main AX Code CLI and backend.
 
-```bash
-bun install
-```
+## Development
 
-To run:
+Install dependencies from the repo root:
 
 ```bash
-bun run index.ts
+pnpm install
 ```
 
-This project was created using `bun init` in bun v1.2.12. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+Run the CLI from this package with Bun:
+
+```bash
+bun run ./src/index.ts
+```
+
+Or use the root workspace wrapper:
+
+```bash
+pnpm dev
+```

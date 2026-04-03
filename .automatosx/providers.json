@@ -1,0 +1,69 @@
+{
+  "generatedBy": "ax setup",
+  "basePath": "/Users/akiralam/code/ax-code",
+  "providers": [
+    {
+      "providerId": "claude",
+      "cli": "claude",
+      "installed": true,
+      "enabled": true,
+      "paths": [
+        "/Users/akiralam/code/ax-code/.mcp.json",
+        "/Users/akiralam/code/ax-code/.claude/settings.json",
+        "/Users/akiralam/code/ax-code/.claude/hooks/session-start.sh",
+        "/Users/akiralam/code/ax-code/.claude/hooks/session-end.sh"
+      ],
+      "notes": [
+        "Project-level Claude Code MCP registration and local hooks were generated."
+      ]
+    },
+    {
+      "providerId": "cursor",
+      "cli": "cursor",
+      "installed": false,
+      "enabled": true,
+      "paths": [
+        "/Users/akiralam/code/ax-code/.cursor/mcp.json"
+      ],
+      "notes": [
+        "Cursor can discover the project-local MCP config automatically."
+      ]
+    },
+    {
+      "providerId": "gemini",
+      "cli": "gemini",
+      "installed": true,
+      "enabled": true,
+      "paths": [
+        "/Users/akiralam/code/ax-code/.gemini/settings.json"
+      ],
+      "notes": [
+        "Gemini project settings were updated with an mcpServers entry."
+      ]
+    },
+    {
+      "providerId": "grok",
+      "cli": "ax-grok",
+      "installed": true,
+      "enabled": true,
+      "paths": [
+        "/Users/akiralam/code/ax-code/.ax-grok/settings.json"
+      ],
+      "notes": [
+        "Grok uses the ax-wrapper project settings file."
+      ]
+    },
+    {
+      "providerId": "codex",
+      "cli": "codex",
+      "installed": true,
+      "enabled": true,
+      "paths": [
+        "/Users/akiralam/code/ax-code/.automatosx/providers/codex.config.toml"
+      ],
+      "notes": [
+        "Codex still needs the snippet copied into ~/.codex/config.toml for global registration."
+      ]
+    }
+  ]
+}

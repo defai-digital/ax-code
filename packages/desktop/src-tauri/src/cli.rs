@@ -40,8 +40,8 @@ impl CommandWrapper for WinCreationFlags {
     }
 }
 
-const CLI_INSTALL_DIR: &str = ".opencode/bin";
-const CLI_BINARY_NAME: &str = "opencode";
+const CLI_INSTALL_DIR: &str = ".ax-code/bin";
+const CLI_BINARY_NAME: &str = "ax-code";
 const SHELL_ENV_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(serde::Deserialize, Debug)]
@@ -115,7 +115,7 @@ pub fn get_sidecar_path(app: &tauri::AppHandle) -> std::path::PathBuf {
         .expect("Failed to get current binary")
         .parent()
         .expect("Failed to get parent dir")
-        .join("opencode-cli")
+        .join("ax-code-cli")
 }
 
 fn is_cli_installed() -> bool {
@@ -138,7 +138,7 @@ pub fn install_cli(app: tauri::AppHandle) -> Result<String, String> {
         return Err("Sidecar binary not found".to_string());
     }
 
-    let temp_script = std::env::temp_dir().join("opencode-install.sh");
+    let temp_script = std::env::temp_dir().join("ax-code-install.sh");
     std::fs::write(&temp_script, INSTALL_SCRIPT)
         .map_err(|e| format!("Failed to write install script: {}", e))?;
 
@@ -375,14 +375,14 @@ pub fn spawn_command(
 
     let mut envs = vec![
         (
-            "OPENCODE_EXPERIMENTAL_ICON_DISCOVERY".to_string(),
+            "AX_CODE_EXPERIMENTAL_ICON_DISCOVERY".to_string(),
             "true".to_string(),
         ),
         (
-            "OPENCODE_EXPERIMENTAL_FILEWATCHER".to_string(),
+            "AX_CODE_EXPERIMENTAL_FILEWATCHER".to_string(),
             "true".to_string(),
         ),
-        ("OPENCODE_CLIENT".to_string(), "desktop".to_string()),
+        ("AX_CODE_CLIENT".to_string(), "desktop".to_string()),
         (
             "XDG_STATE_HOME".to_string(),
             state_dir.to_string_lossy().to_string(),
@@ -400,26 +400,26 @@ pub fn spawn_command(
             let version = app.package_info().version.to_string();
             let mut script = vec![
                 "set -e".to_string(),
-                "BIN=\"$HOME/.opencode/bin/opencode\"".to_string(),
+                "BIN=\"$HOME/.ax-code/bin/ax-code\"".to_string(),
                 "if [ ! -x \"$BIN\" ]; then".to_string(),
                 format!(
-                    "  curl -fsSL https://opencode.ai/install | bash -s -- --version {} --no-modify-path",
+                    "  curl -fsSL https://ax-code.ai/install | bash -s -- --version {} --no-modify-path",
                     shell_escape(&version)
                 ),
                 "fi".to_string(),
             ];
 
             let mut env_prefix = vec![
-                "OPENCODE_EXPERIMENTAL_ICON_DISCOVERY=true".to_string(),
-                "OPENCODE_EXPERIMENTAL_FILEWATCHER=true".to_string(),
-                "OPENCODE_CLIENT=desktop".to_string(),
+                "AX_CODE_EXPERIMENTAL_ICON_DISCOVERY=true".to_string(),
+                "AX_CODE_EXPERIMENTAL_FILEWATCHER=true".to_string(),
+                "AX_CODE_CLIENT=desktop".to_string(),
                 "XDG_STATE_HOME=\"$HOME/.local/state\"".to_string(),
             ];
             env_prefix.extend(
                 envs.iter()
-                    .filter(|(key, _)| key != "OPENCODE_EXPERIMENTAL_ICON_DISCOVERY")
-                    .filter(|(key, _)| key != "OPENCODE_EXPERIMENTAL_FILEWATCHER")
-                    .filter(|(key, _)| key != "OPENCODE_CLIENT")
+                    .filter(|(key, _)| key != "AX_CODE_EXPERIMENTAL_ICON_DISCOVERY")
+                    .filter(|(key, _)| key != "AX_CODE_EXPERIMENTAL_FILEWATCHER")
+                    .filter(|(key, _)| key != "AX_CODE_CLIENT")
                     .filter(|(key, _)| key != "XDG_STATE_HOME")
                     .map(|(key, value)| format!("{}={}", key, shell_escape(value))),
             );
@@ -560,8 +560,8 @@ pub fn serve(
     tracing::info!(port, "Spawning sidecar");
 
     let envs = [
-        ("OPENCODE_SERVER_USERNAME", "opencode".to_string()),
-        ("OPENCODE_SERVER_PASSWORD", password.to_string()),
+        ("AX_CODE_SERVER_USERNAME", "ax-code".to_string()),
+        ("AX_CODE_SERVER_PASSWORD", password.to_string()),
     ];
 
     let (events, child) = spawn_command(
@@ -569,7 +569,7 @@ pub fn serve(
         format!("--print-logs --log-level WARN serve --hostname {hostname} --port {port}").as_str(),
         &envs,
     )
-    .expect("Failed to spawn opencode");
+    .expect("Failed to spawn ax-code");
 
     let mut exit_tx = Some(exit_tx);
     tokio::spawn(
@@ -720,7 +720,7 @@ mod tests {
             Some(shell_env),
             vec![
                 ("PATH".to_string(), "/desktop/path".to_string()),
-                ("OPENCODE_CLIENT".to_string(), "desktop".to_string()),
+                ("AX_CODE_CLIENT".to_string(), "desktop".to_string()),
             ],
         )
         .into_iter()
@@ -728,7 +728,7 @@ mod tests {
 
         assert_eq!(merged.get("PATH"), Some(&"/desktop/path".to_string()));
         assert_eq!(merged.get("HOME"), Some(&"/tmp/home".to_string()));
-        assert_eq!(merged.get("OPENCODE_CLIENT"), Some(&"desktop".to_string()));
+        assert_eq!(merged.get("AX_CODE_CLIENT"), Some(&"desktop".to_string()));
     }
 
     #[test]

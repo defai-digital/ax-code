@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>ai.opencode.opencode</id>
+  <id>ai.axcode.desktop</id>
 
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
-  <name>OpenCode</name>
+  <name>AX Code</name>
   <summary>Open source AI coding agent</summary>
 
   <developer id="ly.anoma">
@@ -14,21 +14,21 @@
 
   <description>
     <p>
-      OpenCode is an open source agent that helps you write and run code with any AI model.
+      AX Code is an open source agent that helps you write and run code with any AI model.
     </p>
   </description>
 
-  <launchable type="desktop-id">ai.opencode.opencode.desktop</launchable>
+  <launchable type="desktop-id">ai.axcode.desktop.desktop</launchable>
 
   <content_rating type="oars-1.1" />
 
   <url type="bugtracker">https://github.com/defai-digital/ax-code/issues</url>
-  <url type="homepage">https://opencode.ai</url>
+  <url type="homepage">https://ax-code.ai</url>
   <url type="vcs-browser">https://github.com/defai-digital/ax-code</url>
 
   <screenshots>
     <screenshot type="default">
-      <image>https://opencode.ai/docs/_astro/screenshot.Bs5D4atL_ZvsvFu.webp</image>
+      <image>https://ax-code.ai/docs/_astro/screenshot.Bs5D4atL_ZvsvFu.webp</image>
     </screenshot>
   </screenshots>
 

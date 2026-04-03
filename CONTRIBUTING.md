@@ -31,26 +31,26 @@ https://github.com/anomalyco/models.dev
 
 ## Developing ax-code
 
-- Requirements: Bun 1.3+
+- Requirements: pnpm 9.15.9+, Bun 1.3+
 - Install dependencies and start the dev server from the repo root:
 
   ```bash
-  bun install
-  bun dev
+  pnpm install
+  pnpm dev
   ```
 
 ### Running against a different directory
 
-By default, `bun dev` runs ax-code in the `packages/ax-code` directory. To run it against a different directory or repository:
+By default, `pnpm dev` runs ax-code in the `packages/ax-code` directory. To run it against a different directory or repository:
 
 ```bash
-bun dev <directory>
+pnpm dev <directory>
 ```
 
 To run ax-code in the root of the ax-code repo itself:
 
 ```bash
-bun dev .
+pnpm dev .
 ```
 
 ### Building a "localcode"
@@ -76,16 +76,16 @@ Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
   - `packages/desktop`: The native desktop app, built with Tauri (wraps `packages/app`)
   - `packages/plugin`: Source for `@ax-code-ai/plugin`
 
-### Understanding bun dev vs ax-code
+### Understanding pnpm dev vs ax-code
 
-During development, `bun dev` is the local equivalent of the built `ax-code` command. Both run the same CLI interface:
+During development, `pnpm dev` is the local equivalent of the built `ax-code` command. Both run the same CLI interface:
 
 ```bash
 # Development (from project root)
-bun dev --help           # Show all available commands
-bun dev serve            # Start headless API server
-bun dev web              # Start server + open web interface
-bun dev <directory>      # Start TUI in specific directory
+pnpm dev --help          # Show all available commands
+pnpm dev serve           # Start headless API server
+pnpm dev web             # Start server + open web interface
+pnpm dev <directory>     # Start TUI in specific directory
 
 # Production
 ax-code --help          # Show all available commands
@@ -99,13 +99,13 @@ ax-code <directory>     # Start TUI in specific directory
 To start the ax-code headless API server:
 
 ```bash
-bun dev serve
+pnpm dev serve
 ```
 
 This starts the headless server on port 4096 by default. You can specify a different port:
 
 ```bash
-bun dev serve --port 8080
+pnpm dev serve --port 8080
 ```
 
 ### Running the Web App
@@ -116,7 +116,7 @@ To test UI changes during development:
 2. **Then run the web app:**
 
 ```bash
-bun run --cwd packages/app dev
+pnpm --dir packages/app run dev
 ```
 
 This starts a local dev server at http://localhost:5173 (or similar port shown in output). Most UI changes can be tested here, but the server must be running for full functionality.
@@ -128,7 +128,7 @@ The desktop app is a native Tauri application that wraps the web UI.
 To run the native desktop app:
 
 ```bash
-bun run --cwd packages/desktop tauri dev
+pnpm --dir packages/desktop run tauri dev
 ```
 
 This starts the web dev server on http://localhost:1420 and opens the native window.
@@ -136,16 +136,16 @@ This starts the web dev server on http://localhost:1420 and opens the native win
 If you only want the web dev server (no native shell):
 
 ```bash
-bun run --cwd packages/desktop dev
+pnpm --dir packages/desktop run dev
 ```
 
 To create a production `dist/` and build the native app bundle:
 
 ```bash
-bun run --cwd packages/desktop tauri build
+pnpm --dir packages/desktop run tauri build
 ```
 
-This runs `bun run --cwd packages/desktop build` automatically via Tauri’s `beforeBuildCommand`.
+This runs `pnpm run build` automatically via Tauri’s `beforeBuildCommand`.
 
 > [!NOTE]
 > Running the desktop app requires additional Tauri dependencies (Rust toolchain, platform-specific libraries). See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for setup instructions.

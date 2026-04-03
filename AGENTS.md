@@ -2,9 +2,9 @@
 
 ## Repository Overview
 
-- **Monorepo** managed with Bun workspaces + Turborepo.
+- **Monorepo** managed with pnpm workspaces + Turborepo.
 - **Packages**: `packages/ax-code` (CLI/backend), `packages/app` (web UI, SolidJS), `packages/desktop` (Tauri), `packages/sdk/js`, `packages/plugin`, `packages/util`, `packages/ui`, `packages/script`.
-- **Runtime**: Bun. Package manager: Bun (lockfile: `bun.lock`).
+- **Runtime**: Bun. Package manager: pnpm (lockfile: `pnpm-lock.yaml`).
 - **Default branch**: `dev`. Local `main` may not exist; use `dev` or `origin/dev` for diffs.
 - **Language**: TypeScript with `@tsconfig/bun`. JSX via `@opentui/solid` in ax-code.
 - ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
@@ -24,7 +24,7 @@ bun run build                     # production build
 bun run db generate --name <slug> # generate a Drizzle migration
 
 # ── monorepo-wide ──
-bun turbo typecheck               # typecheck all packages
+pnpm typecheck                    # typecheck all packages
 ```
 
 ### SDK regeneration

@@ -72,7 +72,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     patchShebangs packages/desktop/node_modules
 
     mkdir -p packages/desktop/src-tauri/sidecars
-    cp ${opencode}/bin/opencode packages/desktop/src-tauri/sidecars/opencode-cli-${stdenv.hostPlatform.rust.rustcTarget}
+    cp ${opencode}/bin/ax-code packages/desktop/src-tauri/sidecars/ax-code-cli-${stdenv.hostPlatform.rust.rustcTarget}
   '';
 
   # see publish-tauri job in .github/workflows/publish.yml
@@ -86,13 +86,13 @@ rustPlatform.buildRustPackage (finalAttrs: {
   # should be removed once binary is renamed or decided otherwise
   # darwin output is a .app bundle so no conflict
   postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
-    mv $out/bin/OpenCode $out/bin/ax-code-desktop
-    sed -i 's|^Exec=OpenCode$|Exec=ax-code-desktop|' $out/share/applications/OpenCode.desktop
+    mv "$out/bin/AX Code" $out/bin/ax-code-desktop
+    sed -i 's|^Exec=AX Code$|Exec=ax-code-desktop|' "$out/share/applications/AX Code.desktop"
   '';
 
   meta = {
-    description = "OpenCode Desktop App";
-    homepage = "https://opencode.ai";
+    description = "AX Code Desktop App";
+    homepage = "https://ax-code.ai";
     license = lib.licenses.mit;
     mainProgram = "ax-code-desktop";
     inherit (opencode.meta) platforms;

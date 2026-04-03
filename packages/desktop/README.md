@@ -1,6 +1,6 @@
-# OpenCode Desktop
+# AX Code Desktop
 
-Native OpenCode desktop app, built with Tauri v2.
+Native AX Code desktop app, built with Tauri v2.
 
 ## Prerequisites
 
@@ -11,14 +11,14 @@ Building the desktop app requires additional Tauri dependencies (Rust toolchain,
 From the repo root:
 
 ```bash
-bun install
-bun run --cwd packages/desktop tauri dev
+pnpm install
+pnpm --dir packages/desktop run tauri dev
 ```
 
 ## Build
 
 ```bash
-bun run --cwd packages/desktop tauri build
+pnpm --dir packages/desktop run tauri build
 ```
 
 ## Troubleshooting

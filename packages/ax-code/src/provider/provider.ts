@@ -175,7 +175,7 @@ export namespace Provider {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://ax-code.ai/",
             "X-Title": "ax-code",
           },
         },
@@ -272,7 +272,7 @@ export namespace Provider {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://ax-code.ai/",
             "X-Title": "ax-code",
           },
         },

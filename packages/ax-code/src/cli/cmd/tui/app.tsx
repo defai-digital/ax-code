@@ -281,7 +281,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
       // Truncate title to 40 chars max
       const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-      renderer.setTerminalTitle(`OC | ${title}`)
+      renderer.setTerminalTitle(`ax-code | ${title}`)
     }
   })
 
@@ -591,7 +591,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Open docs",
       value: "docs.open",
       onSelect: () => {
-        open("https://opencode.ai/docs").catch(() => {})
+        open("https://ax-code.ai/docs").catch(() => {})
         dialog.clear()
       },
       category: "System",

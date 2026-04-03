@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "automatosx": {
+      "command": "ax",
+      "args": [
+        "mcp",
+        "serve"
+      ],
+      "env": {
+        "AUTOMATOSX_BASE_PATH": "/Users/akiralam/code/ax-code"
+      },
+      "type": "stdio"
+    }
+  }
+}

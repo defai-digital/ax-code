@@ -1,7 +1,7 @@
 /**
  * Sets up the `ax-code` command globally so it can be run from anywhere.
  *
- * Usage: bun run setup:cli
+ * Usage: pnpm run setup:cli
  *
  * Creates a shell script/batch file in Bun's global bin directory
  * that forwards all arguments to the ax-code CLI via bun.

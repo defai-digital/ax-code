@@ -1,4 +1,4 @@
-@import "@opencode-ai/ui/styles/tailwind";
+@import "@ax-code/ui/styles/tailwind";
 
 @layer components {
   [data-component="getting-started"] {

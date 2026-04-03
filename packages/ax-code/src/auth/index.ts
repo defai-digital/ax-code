@@ -100,10 +100,11 @@ export namespace Auth {
       })
 
       const remove = Effect.fn("Auth.remove")(function* (key: string) {
-        const norm = key.replace(/\/+$/, "")
+        const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
         const data = yield* all()
         delete data[key]
         delete data[norm]
+        delete data[norm + "/"]
         yield* Effect.tryPromise({
           try: () => Filesystem.writeJson(file, data, 0o600),
           catch: fail("Failed to write auth data"),
