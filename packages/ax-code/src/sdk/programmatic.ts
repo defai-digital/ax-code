@@ -57,6 +57,7 @@ async function ensureLog() {
   logInitialized = true
   await Log.init({ print: false, dev: false, level: "ERROR" })
   process.env.AGENT = "1"
+  process.env.AX_CODE = "1"
   process.env.OPENCODE = "1"
   process.env.AX_CODE_PID ??= String(process.pid)
 }

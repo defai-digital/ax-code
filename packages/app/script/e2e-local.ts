@@ -145,6 +145,7 @@ try {
   } else {
     Object.assign(process.env, serverEnv)
     process.env.AGENT = "1"
+    process.env.AX_CODE = "1"
     process.env.OPENCODE = "1"
     process.env.AX_CODE_PID = String(process.pid)
 
