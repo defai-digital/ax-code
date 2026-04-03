@@ -32,12 +32,12 @@ export namespace McpAuth {
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
-  function decryptField(val: unknown): string {
+  function decryptField(val: unknown): string | unknown {
     if (isEncrypted(val)) {
       try {
         return decrypt(val)
       } catch {
-        return "" // decryption failed (e.g., different machine)
+        return val // preserve original encrypted value if decryption fails
       }
     }
     return val as string
@@ -64,6 +64,7 @@ export namespace McpAuth {
     const out = { ...entry } as Record<string, unknown>
     if (entry.tokens) {
       const tok = { ...entry.tokens } as Record<string, unknown>
+      // Skip fields that are already encrypted (failed to decrypt on read)
       if (typeof tok.accessToken === "string" && tok.accessToken) tok.accessToken = encrypt(tok.accessToken)
       if (typeof tok.refreshToken === "string" && tok.refreshToken) tok.refreshToken = encrypt(tok.refreshToken)
       out.tokens = tok
