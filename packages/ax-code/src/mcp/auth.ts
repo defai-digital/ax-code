@@ -2,6 +2,7 @@ import path from "path"
 import z from "zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
+import { encrypt, decrypt, isEncrypted } from "../auth/encryption"
 
 export namespace McpAuth {
   export const Tokens = z.object({
@@ -31,6 +32,51 @@ export namespace McpAuth {
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
+  function decryptField(val: unknown): string {
+    if (isEncrypted(val)) {
+      try {
+        return decrypt(val)
+      } catch {
+        return "" // decryption failed (e.g., different machine)
+      }
+    }
+    return val as string
+  }
+
+  function decryptEntry(raw: Record<string, unknown>): Entry {
+    const entry = { ...raw } as Record<string, unknown>
+    if (entry.tokens && typeof entry.tokens === "object") {
+      const tok = { ...(entry.tokens as Record<string, unknown>) }
+      if (tok.accessToken) tok.accessToken = decryptField(tok.accessToken)
+      if (tok.refreshToken) tok.refreshToken = decryptField(tok.refreshToken)
+      entry.tokens = tok
+    }
+    if (entry.clientInfo && typeof entry.clientInfo === "object") {
+      const ci = { ...(entry.clientInfo as Record<string, unknown>) }
+      if (ci.clientSecret) ci.clientSecret = decryptField(ci.clientSecret)
+      entry.clientInfo = ci
+    }
+    if (entry.codeVerifier) entry.codeVerifier = decryptField(entry.codeVerifier)
+    return entry as unknown as Entry
+  }
+
+  function encryptEntry(entry: Entry): Record<string, unknown> {
+    const out = { ...entry } as Record<string, unknown>
+    if (entry.tokens) {
+      const tok = { ...entry.tokens } as Record<string, unknown>
+      if (typeof tok.accessToken === "string" && tok.accessToken) tok.accessToken = encrypt(tok.accessToken)
+      if (typeof tok.refreshToken === "string" && tok.refreshToken) tok.refreshToken = encrypt(tok.refreshToken)
+      out.tokens = tok
+    }
+    if (entry.clientInfo) {
+      const ci = { ...entry.clientInfo } as Record<string, unknown>
+      if (typeof ci.clientSecret === "string" && ci.clientSecret) ci.clientSecret = encrypt(ci.clientSecret)
+      out.clientInfo = ci
+    }
+    if (typeof entry.codeVerifier === "string" && entry.codeVerifier) out.codeVerifier = encrypt(entry.codeVerifier)
+    return out
+  }
+
   export async function get(mcpName: string): Promise<Entry | undefined> {
     const data = await all()
     return data[mcpName]
@@ -54,22 +100,27 @@ export namespace McpAuth {
   }
 
   export async function all(): Promise<Record<string, Entry>> {
-    return Filesystem.readJson<Record<string, Entry>>(filepath).catch(() => ({}))
+    const raw = await Filesystem.readJson<Record<string, Record<string, unknown>>>(filepath).catch(() => ({}))
+    const result: Record<string, Entry> = {}
+    for (const [key, val] of Object.entries(raw)) {
+      result[key] = decryptEntry(val)
+    }
+    return result
   }
 
   export async function set(mcpName: string, entry: Entry, serverUrl?: string): Promise<void> {
-    const data = await all()
-    // Always update serverUrl if provided
+    const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(() => ({}))
     if (serverUrl) {
       entry.serverUrl = serverUrl
     }
-    await Filesystem.writeJson(filepath, { ...data, [mcpName]: entry }, 0o600)
+    raw[mcpName] = encryptEntry(entry)
+    await Filesystem.writeJson(filepath, raw, 0o600)
   }
 
   export async function remove(mcpName: string): Promise<void> {
-    const data = await all()
-    delete data[mcpName]
-    await Filesystem.writeJson(filepath, data, 0o600)
+    const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(() => ({}))
+    delete raw[mcpName]
+    await Filesystem.writeJson(filepath, raw, 0o600)
   }
 
   export async function updateTokens(mcpName: string, tokens: Tokens, serverUrl?: string): Promise<void> {
