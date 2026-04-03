@@ -40,6 +40,8 @@ auth.json
 
 # Claude Code
 .claude/
+CLAUDE.md
+AGENTS.md
 
 # Local dev files
 opencode-dev
