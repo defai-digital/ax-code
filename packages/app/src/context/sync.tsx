@@ -352,7 +352,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
               cursor: next.cursor,
               complete: next.complete,
             })
+            })
           })
+        .catch((error) => {
+          console.error("Failed to load messages", error)
         })
         .finally(() => {
           setMeta(
@@ -508,10 +511,14 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
           const key = keyFor(directory, sessionID)
           return runInflight(inflightDiff, key, () =>
-            retry(() => client.session.diff({ sessionID })).then((diff) => {
-              if (!tracked(directory, sessionID)) return
-              setStore("session_diff", sessionID, reconcile(diff.data ?? [], { key: "file" }))
-            }),
+            retry(() => client.session.diff({ sessionID }))
+              .then((diff) => {
+                if (!tracked(directory, sessionID)) return
+                setStore("session_diff", sessionID, reconcile(diff.data ?? [], { key: "file" }))
+              })
+              .catch((error) => {
+                console.error("Failed to load session diff", error)
+              }),
           )
         },
         async todo(sessionID: string, opts?: { force?: boolean }) {
@@ -588,13 +595,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           const client = sdk.client
           const [store, setStore] = globalSync.child(directory)
           setStore("limit", (x) => x + count)
-          await client.session.list().then((x) => {
-            const sessions = (x.data ?? [])
-              .filter((s) => !!s?.id)
-              .sort((a, b) => cmp(a.id, b.id))
-              .slice(0, store.limit)
-            setStore("session", reconcile(sessions, { key: "id" }))
-          })
+          await client.session.list()
+            .then((x) => {
+              const sessions = (x.data ?? [])
+                .filter((s) => !!s?.id)
+                .sort((a, b) => cmp(a.id, b.id))
+                .slice(0, store.limit)
+              setStore("session", reconcile(sessions, { key: "id" }))
+            })
+            .catch((error) => {
+              console.error("Failed to fetch sessions", error)
+            })
         },
         more: createMemo(() => current()[0].session.length >= current()[0].limit),
         archive: async (sessionID: string) => {

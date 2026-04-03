@@ -118,22 +118,37 @@ export namespace Planner {
     plan.status = "executing"
     log.info("plan execution started", { planId: plan.id, batches: resolution.batches.length })
 
+    let aborted = false
     for (const batch of resolution.batches) {
+      if (aborted) break
       if (batch.canRunInParallel && batch.phases.length > 1) {
         // Parallel execution
-        const batchResults = await Promise.allSettled(
-          batch.phases.slice(0, options.maxParallelPhases).map((phase) => executePhase(plan, phase, executor, options)),
-        )
+        for (let i = 0; i < batch.phases.length; i += options.maxParallelPhases) {
+          const phases = batch.phases.slice(i, i + options.maxParallelPhases)
+          const batchResults = await Promise.allSettled(
+            phases.map((phase) => executePhase(plan, phase, executor, options)),
+          )
 
-        for (const result of batchResults) {
-          if (result.status === "fulfilled") {
-            results.push(result.value)
-            if (result.value.success) plan.phasesCompleted++
-            else plan.phasesFailed++
-          } else {
-            plan.phasesFailed++
-            warnings.push(`Phase failed: ${result.reason}`)
+          for (const [idx, result] of batchResults.entries()) {
+            const phase = phases[idx]
+            if (result.status === "fulfilled") {
+              results.push(result.value)
+              if (result.value.success) {
+                plan.phasesCompleted++
+                continue
+              }
+              plan.phasesFailed++
+            } else {
+              plan.phasesFailed++
+              warnings.push(`Phase "${phase.name}" failed: ${result.reason}`)
+            }
+
+            if (phase.fallbackStrategy === "abort") {
+              warnings.push(`Phase "${phase.name}" failed with abort strategy — stopping plan`)
+              aborted = true
+            }
           }
+          if (aborted) break
         }
       } else {
         // Sequential execution
@@ -149,6 +164,7 @@ export namespace Planner {
             // Check fallback strategy
             if (phase.fallbackStrategy === "abort") {
               warnings.push(`Phase "${phase.name}" failed with abort strategy — stopping plan`)
+              aborted = true
               break
             }
             if (phase.fallbackStrategy === "skip") {

@@ -24,6 +24,15 @@ const HTML_SUCCESS = `<!DOCTYPE html>
 </body>
 </html>`
 
+function escape(text: string) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+}
+
 const HTML_ERROR = (error: string) => `<!DOCTYPE html>
 <html>
 <head>
@@ -40,7 +49,7 @@ const HTML_ERROR = (error: string) => `<!DOCTYPE html>
   <div class="container">
     <h1>Authorization Failed</h1>
     <p>An error occurred during authorization.</p>
-    <div class="error">${error}</div>
+    <div class="error">${escape(error)}</div>
   </div>
 </body>
 </html>`
@@ -54,6 +63,7 @@ interface PendingAuth {
 export namespace McpOAuthCallback {
   let server: ReturnType<typeof Bun.serve> | undefined
   const pendingAuths = new Map<string, PendingAuth>()
+  const pendingStates = new Map<string, string>()
 
   const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -98,6 +108,9 @@ export namespace McpOAuthCallback {
             const pending = pendingAuths.get(state)!
             clearTimeout(pending.timeout)
             pendingAuths.delete(state)
+            for (const [name, value] of pendingStates) {
+              if (value === state) pendingStates.delete(name)
+            }
             pending.reject(new Error(errorMsg))
           }
           return new Response(HTML_ERROR(errorMsg), {
@@ -126,6 +139,9 @@ export namespace McpOAuthCallback {
 
         clearTimeout(pending.timeout)
         pendingAuths.delete(state)
+        for (const [name, value] of pendingStates) {
+          if (value === state) pendingStates.delete(name)
+        }
         pending.resolve(code)
 
         return new Response(HTML_SUCCESS, {
@@ -137,11 +153,13 @@ export namespace McpOAuthCallback {
     log.info("oauth callback server started", { port: OAUTH_CALLBACK_PORT })
   }
 
-  export function waitForCallback(oauthState: string): Promise<string> {
+  export function waitForCallback(oauthState: string, mcpName?: string): Promise<string> {
     return new Promise((resolve, reject) => {
+      if (mcpName) pendingStates.set(mcpName, oauthState)
       const timeout = setTimeout(() => {
         if (pendingAuths.has(oauthState)) {
           pendingAuths.delete(oauthState)
+          if (mcpName) pendingStates.delete(mcpName)
           reject(new Error("OAuth callback timeout - authorization took too long"))
         }
       }, CALLBACK_TIMEOUT_MS)
@@ -151,10 +169,13 @@ export namespace McpOAuthCallback {
   }
 
   export function cancelPending(mcpName: string): void {
-    const pending = pendingAuths.get(mcpName)
+    const oauthState = pendingStates.get(mcpName)
+    if (!oauthState) return
+    const pending = pendingAuths.get(oauthState)
     if (pending) {
       clearTimeout(pending.timeout)
-      pendingAuths.delete(mcpName)
+      pendingAuths.delete(oauthState)
+      pendingStates.delete(mcpName)
       pending.reject(new Error("Authorization cancelled"))
     }
   }
@@ -184,6 +205,7 @@ export namespace McpOAuthCallback {
       pending.reject(new Error("OAuth callback server stopped"))
     }
     pendingAuths.clear()
+    pendingStates.clear()
   }
 
   export function isRunning(): boolean {

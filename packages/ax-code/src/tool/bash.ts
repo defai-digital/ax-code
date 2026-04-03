@@ -234,7 +234,7 @@ export const BashTool = Tool.define("bash", async () => {
           ctx.abort.removeEventListener("abort", abortHandler)
         }
 
-        proc.once("exit", () => {
+        proc.once("close", () => {
           exited = true
           cleanup()
           resolve()

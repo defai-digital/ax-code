@@ -2,9 +2,11 @@ import z from "zod"
 import { Tool } from "./tool"
 import { ProviderID, ModelID } from "../provider/schema"
 import DESCRIPTION from "./batch.txt"
+import { Log } from "@/util/log"
 
 const DISALLOWED = new Set(["batch"])
 const FILTERED_FROM_SUGGESTIONS = new Set(["invalid", "patch", ...DISALLOWED])
+const log = Log.create({ service: "tool.batch" })
 
 export const BatchTool = Tool.define("batch", async () => {
   return {
@@ -124,6 +126,8 @@ export const BatchTool = Tool.define("batch", async () => {
                 end: Date.now(),
               },
             },
+          }).catch((cause) => {
+            log.warn("failed to record batch tool error", { tool: call.tool, error: cause })
           })
 
           return { success: false as const, tool: call.tool, error }

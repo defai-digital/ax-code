@@ -110,7 +110,9 @@ export namespace SessionCompaction {
     auto: boolean
     overflow?: boolean
   }) {
-    const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
+    const parent = input.messages.findLast((m) => m.info.id === input.parentID)
+    if (!parent) throw new Error(`Compaction failed: parent message ${input.parentID} not found`)
+    const userMessage = parent.info as MessageV2.User
 
     let messages = input.messages
     let replay: MessageV2.WithParts | undefined
@@ -237,6 +239,7 @@ When constructing the summary, try to stick to this template:
       await Session.updateMessage(processor.message)
       return "stop"
     }
+    if (result === "stop") return "stop"
 
     if (result === "continue" && input.auto) {
       if (replay) {

@@ -95,6 +95,7 @@ export namespace SessionRevert {
     const messageID = session.revert.messageID
     const preserve = [] as MessageV2.WithParts[]
     const remove = [] as MessageV2.WithParts[]
+    const removedParts = [] as MessageV2.Part[]
     let target: MessageV2.WithParts | undefined
     for (const msg of msgs) {
       if (msg.info.id < messageID) {
@@ -112,10 +113,6 @@ export namespace SessionRevert {
       }
       remove.push(msg)
     }
-    for (const msg of remove) {
-      Database.use((db) => db.delete(MessageTable).where(eq(MessageTable.id, msg.info.id)).run())
-      await Bus.publish(MessageV2.Event.Removed, { sessionID: sessionID, messageID: msg.info.id })
-    }
     if (session.revert.partID && target) {
       const partID = session.revert.partID
       const removeStart = target.parts.findIndex((part) => part.id === partID)
@@ -123,14 +120,27 @@ export namespace SessionRevert {
         const preserveParts = target.parts.slice(0, removeStart)
         const removeParts = target.parts.slice(removeStart)
         target.parts = preserveParts
-        for (const part of removeParts) {
-          Database.use((db) => db.delete(PartTable).where(eq(PartTable.id, part.id)).run())
-          await Bus.publish(MessageV2.Event.PartRemoved, {
-            sessionID: sessionID,
-            messageID: target.info.id,
-            partID: part.id,
-          })
-        }
+        removedParts.push(...removeParts)
+      }
+    }
+    Database.transaction((db) => {
+      for (const msg of remove) {
+        db.delete(MessageTable).where(eq(MessageTable.id, msg.info.id)).run()
+      }
+      for (const part of removedParts) {
+        db.delete(PartTable).where(eq(PartTable.id, part.id)).run()
+      }
+    })
+    for (const msg of remove) {
+      await Bus.publish(MessageV2.Event.Removed, { sessionID: sessionID, messageID: msg.info.id })
+    }
+    if (target) {
+      for (const part of removedParts) {
+        await Bus.publish(MessageV2.Event.PartRemoved, {
+          sessionID: sessionID,
+          messageID: target.info.id,
+          partID: part.id,
+        })
       }
     }
     await Session.clearRevert(sessionID)

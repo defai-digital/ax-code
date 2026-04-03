@@ -2,6 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
 import type { Provider } from "../../src/provider/provider"
 import { Instance } from "../../src/project/instance"
+import { Bus } from "../../src/bus"
 import { Session } from "../../src/session"
 import { LLM } from "../../src/session/llm"
 import { SessionProcessor } from "../../src/session/processor"
@@ -296,6 +297,86 @@ describe("session.processor", () => {
         expect(streamSpy.mock.calls.length).toBe(SessionRetry.RETRY_MAX_ATTEMPTS + 1)
         expect(sleepSpy.mock.calls.length).toBe(SessionRetry.RETRY_MAX_ATTEMPTS)
         expect(processor.message.error).toBeDefined()
+      },
+    })
+  })
+
+  test("publishes one error event after retry exhaustion", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: model.providerID, modelID: model.id },
+          tools: {},
+          mode: "build",
+        } as MessageV2.User)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: session.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: model.id,
+          providerID: model.providerID,
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const err = new MessageV2.APIError({
+          message: "Rate Limited",
+          isRetryable: true,
+        }).toObject()
+
+        const events: string[] = []
+        const unsub = Bus.subscribe(Session.Event.Error, () => {
+          events.push("error")
+        })
+
+        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+          throw err
+        })
+        sleepSpy = spyOn(SessionRetry, "sleep").mockResolvedValue()
+
+        try {
+          const processor = SessionProcessor.create({
+            assistantMessage: assistant as MessageV2.Assistant,
+            sessionID: session.id,
+            model,
+            abort: AbortSignal.any([]),
+          })
+
+          const result = await processor.process({
+            user: user as MessageV2.User,
+            agent: await Agent.get("build"),
+            abort: AbortSignal.any([]),
+            sessionID: session.id,
+            system: [],
+            messages: [],
+            tools: {},
+            model,
+          })
+
+          expect(result).toBe("stop")
+          expect(events).toHaveLength(1)
+        } finally {
+          unsub()
+        }
       },
     })
   })

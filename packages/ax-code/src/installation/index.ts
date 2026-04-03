@@ -285,6 +285,9 @@ export namespace Installation {
             case "npm":
               result = yield* run(["npm", "install", "-g", `ax-code-ai@${target}`])
               break
+            case "yarn":
+              result = yield* run(["yarn", "global", "add", `ax-code-ai@${target}`])
+              break
             case "pnpm":
               result = yield* run(["pnpm", "install", "-g", `ax-code-ai@${target}`])
               break

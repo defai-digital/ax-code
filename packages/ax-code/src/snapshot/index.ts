@@ -179,6 +179,14 @@ export namespace Snapshot {
               }
               yield* add()
               const result = yield* git(args(["write-tree"]), { cwd: state.directory })
+              if (result.code !== 0) {
+                log.error("failed to write snapshot tree", {
+                  cwd: state.directory,
+                  exitCode: result.code,
+                  stderr: result.stderr,
+                })
+                return prevHash
+              }
               const hash = result.text.trim()
               prevHash = hash
               log.info("tracking", { hash, cwd: state.directory, git: state.gitdir })

@@ -65,23 +65,28 @@ export namespace ShareNext {
 
   export async function init() {
     if (disabled) return
+    const safeSync = async (sessionID: SessionID, data: Data[], source: string) => {
+      await sync(sessionID, data).catch((error) => {
+        log.warn("share sync failed", { sessionID, source, error })
+      })
+    }
     Bus.subscribe(Session.Event.Updated, async (evt) => {
-      await sync(evt.properties.info.id, [
+      await safeSync(evt.properties.info.id, [
         {
           type: "session",
           data: evt.properties.info,
         },
-      ])
+      ], "session.updated")
     })
     Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
-      await sync(evt.properties.info.sessionID, [
+      await safeSync(evt.properties.info.sessionID, [
         {
           type: "message",
           data: evt.properties.info,
         },
-      ])
+      ], "message.updated")
       if (evt.properties.info.role === "user") {
-        await sync(evt.properties.info.sessionID, [
+        await safeSync(evt.properties.info.sessionID, [
           {
             type: "model",
             data: [
@@ -90,24 +95,24 @@ export namespace ShareNext {
               ),
             ],
           },
-        ])
+        ], "message.updated.model")
       }
     })
     Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-      await sync(evt.properties.part.sessionID, [
+      await safeSync(evt.properties.part.sessionID, [
         {
           type: "part",
           data: evt.properties.part,
         },
-      ])
+      ], "part.updated")
     })
     Bus.subscribe(Session.Event.Diff, async (evt) => {
-      await sync(evt.properties.sessionID, [
+      await safeSync(evt.properties.sessionID, [
         {
           type: "session_diff",
           data: evt.properties.diff,
         },
-      ])
+      ], "session.diff")
     })
   }
 
@@ -138,7 +143,9 @@ export namespace ShareNext {
         })
         .run(),
     )
-    fullSync(sessionID)
+    void fullSync(sessionID).catch((error) => {
+      log.warn("full share sync failed", { sessionID, error })
+    })
     return result
   }
 
@@ -203,26 +210,31 @@ export namespace ShareNext {
       dataMap.set(key(item), item)
     }
 
-    const timeout = setTimeout(async () => {
-      const queued = queue.get(sessionID)
-      if (!queued) return
-      queue.delete(sessionID)
-      const share = get(sessionID)
-      if (!share) return
+    const timeout = setTimeout(() => {
+      void (async () => {
+        const queued = queue.get(sessionID)
+        if (!queued) return
+        queue.delete(sessionID)
+        const share = get(sessionID)
+        if (!share) return
 
-      const req = await request()
-      const response = await fetch(`${req.baseUrl}${req.api.sync(share.id)}`, {
-        method: "POST",
-        headers: { ...req.headers, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          secret: share.secret,
-          data: Array.from(queued.data.values()),
-        }),
+        const req = await request()
+        const response = await fetch(`${req.baseUrl}${req.api.sync(share.id)}`, {
+          method: "POST",
+          headers: { ...req.headers, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            secret: share.secret,
+            data: Array.from(queued.data.values()),
+          }),
+        })
+
+        if (!response.ok) {
+          log.warn("failed to sync share", { sessionID, shareID: share.id, status: response.status })
+        }
+      })().catch((error) => {
+        queue.delete(sessionID)
+        log.warn("share sync timer failed", { sessionID, error })
       })
-
-      if (!response.ok) {
-        log.warn("failed to sync share", { sessionID, shareID: share.id, status: response.status })
-      }
     }, 1000)
     queue.set(sessionID, { timeout, data: dataMap })
   }

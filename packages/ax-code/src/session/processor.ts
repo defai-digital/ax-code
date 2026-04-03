@@ -86,6 +86,7 @@ export namespace SessionProcessor {
         needsCompaction = false
         const shouldBreak = cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true
         while (true) {
+          blocked = false
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
@@ -444,19 +445,14 @@ export namespace SessionProcessor {
                   : new NamedError.Unknown({
                       message: `${retry} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
                     }).toObject()
-                Bus.publish(Session.Event.Error, {
-                  sessionID: input.assistantMessage.sessionID,
-                  error: input.assistantMessage.error,
-                })
-                await SessionStatus.set(input.sessionID, { type: "idle" })
               } else {
                 input.assistantMessage.error ??= error
-                Bus.publish(Session.Event.Error, {
-                  sessionID: input.assistantMessage.sessionID,
-                  error: input.assistantMessage.error,
-                })
-                await SessionStatus.set(input.sessionID, { type: "idle" })
               }
+              Bus.publish(Session.Event.Error, {
+                sessionID: input.assistantMessage.sessionID,
+                error: input.assistantMessage.error,
+              })
+              await SessionStatus.set(input.sessionID, { type: "idle" })
             }
           }
           if (snapshot) {

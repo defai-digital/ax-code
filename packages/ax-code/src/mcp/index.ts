@@ -298,7 +298,7 @@ export namespace MCP {
       }
       s.status[name] = status
       return {
-        status,
+        status: s.status,
       }
     }
     if (!result.mcpClient) {
@@ -855,7 +855,7 @@ export namespace MCP {
 
     // Register the callback BEFORE opening the browser to avoid race condition
     // when the IdP has an active SSO session and redirects immediately
-    const callbackPromise = McpOAuthCallback.waitForCallback(oauthState)
+    const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, mcpName)
 
     try {
       const subprocess = await open(authorizationUrl)

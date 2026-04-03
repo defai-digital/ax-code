@@ -6,6 +6,11 @@ export async function parseSSE(
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buf = ""
+  const cancel = () => {
+    void reader.cancel().catch(() => {})
+  }
+
+  signal.addEventListener("abort", cancel, { once: true })
 
   const emit = (block: string) => {
     const data: string[] = []
@@ -49,22 +54,26 @@ export async function parseSSE(
     })
   }
 
-  while (!signal.aborted) {
-    const next = await reader.read()
-    if (next.done) break
-    buf += decoder.decode(next.value, { stream: true })
+  try {
+    while (!signal.aborted) {
+      const next = await reader.read()
+      if (next.done) break
+      buf += decoder.decode(next.value, { stream: true })
 
-    while (true) {
-      const idx = buf.search(/\r?\n\r?\n/)
-      if (idx === -1) break
-      const block = buf.slice(0, idx)
-      const gap = buf.slice(idx).match(/^\r?\n\r?\n/)?.[0].length ?? 2
-      buf = buf.slice(idx + gap)
-      emit(block)
+      while (true) {
+        const idx = buf.search(/\r?\n\r?\n/)
+        if (idx === -1) break
+        const block = buf.slice(0, idx)
+        const gap = buf.slice(idx).match(/^\r?\n\r?\n/)?.[0].length ?? 2
+        buf = buf.slice(idx + gap)
+        emit(block)
+      }
     }
-  }
 
-  buf += decoder.decode()
-  if (buf.trim()) emit(buf)
-  await reader.cancel().catch(() => {})
+    buf += decoder.decode()
+    if (buf.trim()) emit(buf)
+  } finally {
+    signal.removeEventListener("abort", cancel)
+    await reader.cancel().catch(() => {})
+  }
 }

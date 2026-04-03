@@ -52,9 +52,14 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       env: { ...process.env },
     })
 
-    const timer = setTimeout(() => proc.kill(), timeout)
-    const code = await proc.exited
-    clearTimeout(timer)
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      proc.kill()
+    }, timeout)
+    const code = await proc.exited.finally(() => {
+      clearTimeout(timer)
+    })
 
     const stdout = await new Response(proc.stdout).text()
     const stderr = await new Response(proc.stderr).text()
@@ -68,7 +73,7 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       name,
       type: "typecheck",
       passed,
-      status: passed ? "passed" : "failed",
+      status: timedOut ? "timeout" : passed ? "passed" : "failed",
       issues,
       duration: Date.now() - start,
       output,
@@ -101,9 +106,14 @@ export async function custom(cmd: string, cwd: string, timeout = 60_000): Promis
       env: { ...process.env, CI: "true" },
     })
 
-    const timer = setTimeout(() => proc.kill(), timeout)
-    const code = await proc.exited
-    clearTimeout(timer)
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      proc.kill()
+    }, timeout)
+    const code = await proc.exited.finally(() => {
+      clearTimeout(timer)
+    })
 
     const stdout = await new Response(proc.stdout).text()
     const stderr = await new Response(proc.stderr).text()
@@ -113,7 +123,7 @@ export async function custom(cmd: string, cwd: string, timeout = 60_000): Promis
       name: cmd,
       type: "custom",
       passed,
-      status: passed ? "passed" : "failed",
+      status: timedOut ? "timeout" : passed ? "passed" : "failed",
       issues: [],
       duration: Date.now() - start,
       output: (stdout + stderr).trim(),

@@ -591,6 +591,15 @@ export function replace(content: string, oldString: string, newString: string, r
     throw new Error("No changes to apply: oldString and newString are identical.")
   }
 
+  if (replaceAll) {
+    if (!content.includes(oldString)) {
+      throw new Error(
+        "Could not find oldString in the file. It must match exactly when replaceAll is enabled.",
+      )
+    }
+    return content.replaceAll(oldString, newString)
+  }
+
   let notFound = true
 
   for (const replacer of [
@@ -608,9 +617,6 @@ export function replace(content: string, oldString: string, newString: string, r
       const index = content.indexOf(search)
       if (index === -1) continue
       notFound = false
-      if (replaceAll) {
-        return content.replaceAll(search, newString)
-      }
       const lastIndex = content.lastIndexOf(search)
       if (index !== lastIndex) continue
       return content.substring(0, index) + newString + content.substring(index + search.length)
