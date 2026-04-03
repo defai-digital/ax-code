@@ -264,19 +264,24 @@ export const make = Effect.gen(function* () {
   const spawn = (command: ChildProcess.StandardCommand, opts: NodeChildProcess.SpawnOptions) =>
     Effect.callback<readonly [NodeChildProcess.ChildProcess, ExitSignal], PlatformError.PlatformError>((resume) => {
       const signal = Deferred.makeUnsafe<readonly [code: number | null, signal: NodeJS.Signals | null]>()
-      const proc = launch(command.command, command.args, opts)
+      const proc = launch(command.command, command.args, opts) as unknown as NodeChildProcess.ChildProcess & {
+        on(event: "error", listener: (err: Error) => void): void
+        on(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): void
+        on(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): void
+        on(event: "spawn", listener: () => void): void
+      }
       let end = false
       let exit: readonly [code: number | null, signal: NodeJS.Signals | null] | undefined
       proc.on("error", (err) => {
         resume(Effect.fail(toPlatformError("spawn", err, command)))
       })
-      proc.on("exit", (...args) => {
-        exit = args
+      proc.on("exit", (code, signal2) => {
+        exit = [code, signal2]
       })
-      proc.on("close", (...args) => {
+      proc.on("close", (code, signal2) => {
         if (end) return
         end = true
-        Deferred.doneUnsafe(signal, Exit.succeed(exit ?? args))
+        Deferred.doneUnsafe(signal, Exit.succeed(exit ?? [code, signal2]))
       })
       proc.on("spawn", () => {
         resume(Effect.succeed([proc, signal]))

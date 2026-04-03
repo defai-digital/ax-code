@@ -21,6 +21,8 @@ import { createSessionTabs } from "@/pages/session/helpers"
 import { extractPromptFromParts } from "@/utils/prompt"
 import { UserMessage } from "@ax-code/sdk/v2"
 import { useSessionLayout } from "@/pages/session/session-layout"
+import { useGlobalSync } from "@/context/global-sync"
+import type { IsolationMode } from "@ax-code/sdk/v2/client"
 
 export type SessionCommandContext = {
   navigateMessageByOffset: (offset: number) => void
@@ -40,6 +42,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const command = useCommand()
   const dialog = useDialog()
   const file = useFile()
+  const globalSync = useGlobalSync()
   const language = useLanguage()
   const local = useLocal()
   const permission = usePermission()
@@ -126,6 +129,43 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const mcpCommand = withCategory(language.t("command.category.mcp"))
   const agentCommand = withCategory(language.t("command.category.agent"))
   const permissionsCommand = withCategory(language.t("command.category.permissions"))
+
+  const currentIsolationMode = (): IsolationMode =>
+    globalSync.data.config.isolation?.mode ?? "workspace-write"
+
+  const currentIsolationNetwork = (): boolean => {
+    const mode = currentIsolationMode()
+    if (mode === "full-access") return true
+    return globalSync.data.config.isolation?.network ?? false
+  }
+
+  const setIsolationMode = async (mode: IsolationMode) => {
+    const current = globalSync.data.config.isolation ?? {}
+    await globalSync.updateConfig({ isolation: { ...current, mode } })
+    const descriptions: Record<IsolationMode, string> = {
+      "read-only": language.t("toast.isolation.mode.readonly"),
+      "workspace-write": language.t("toast.isolation.mode.workspace"),
+      "full-access": language.t("toast.isolation.mode.fullaccess"),
+    }
+    showToast({
+      title: language.t("toast.isolation.mode.title", { mode }),
+      description: descriptions[mode],
+    })
+  }
+
+  const toggleIsolationNetwork = async () => {
+    const current = globalSync.data.config.isolation ?? {}
+    const next = !currentIsolationNetwork()
+    await globalSync.updateConfig({ isolation: { ...current, network: next } })
+    showToast({
+      title: next
+        ? language.t("toast.isolation.network.on.title")
+        : language.t("toast.isolation.network.off.title"),
+      description: next
+        ? language.t("toast.isolation.network.on.description")
+        : language.t("toast.isolation.network.off.description"),
+    })
+  }
 
   const isAutoAcceptActive = () => {
     const sessionID = params.id
@@ -407,6 +447,34 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
               : language.t("toast.permissions.autoaccept.off.description"),
           })
         },
+      }),
+      permissionsCommand({
+        id: "isolation.mode.readonly",
+        title: language.t("command.isolation.mode.readonly"),
+        description: language.t("command.isolation.mode.readonly.description"),
+        disabled: currentIsolationMode() === "read-only",
+        onSelect: () => setIsolationMode("read-only"),
+      }),
+      permissionsCommand({
+        id: "isolation.mode.workspace",
+        title: language.t("command.isolation.mode.workspace"),
+        description: language.t("command.isolation.mode.workspace.description"),
+        disabled: currentIsolationMode() === "workspace-write",
+        onSelect: () => setIsolationMode("workspace-write"),
+      }),
+      permissionsCommand({
+        id: "isolation.mode.fullaccess",
+        title: language.t("command.isolation.mode.fullaccess"),
+        description: language.t("command.isolation.mode.fullaccess.description"),
+        disabled: currentIsolationMode() === "full-access",
+        onSelect: () => setIsolationMode("full-access"),
+      }),
+      permissionsCommand({
+        id: "isolation.network.toggle",
+        title: language.t("command.isolation.network.toggle"),
+        description: language.t("command.isolation.network.toggle.description"),
+        disabled: currentIsolationMode() === "full-access",
+        onSelect: toggleIsolationNetwork,
       }),
       sessionCommand({
         id: "session.undo",

@@ -406,7 +406,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         // Don't require focus - if there's any text, preserve it
         const currentPrompt = current?.current?.input ? current.current : undefined
         const workspaceID =
-          route.data.type === "session" ? sync.session.get(route.data.sessionID)?.workspaceID : undefined
+          route.data.type === "session" ? sync.session.get(route.data.sessionID)?.directory : undefined
         route.navigate({
           type: "home",
           initialPrompt: currentPrompt,

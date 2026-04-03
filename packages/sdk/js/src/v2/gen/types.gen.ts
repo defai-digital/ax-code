@@ -1291,6 +1291,26 @@ export type McpRemoteConfig = {
  */
 export type LayoutConfig = "auto" | "stretch"
 
+/**
+ * Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation
+ */
+export type IsolationMode = "read-only" | "workspace-write" | "full-access"
+
+/**
+ * Execution isolation configuration
+ */
+export type IsolationConfig = {
+  mode?: IsolationMode
+  /**
+   * Allow network access from tools. Defaults to false in read-only and workspace-write modes
+   */
+  network?: boolean
+  /**
+   * Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected
+   */
+  protected?: Array<string>
+}
+
 export type Config = {
   /**
    * JSON schema reference for configuration validation
@@ -1440,6 +1460,7 @@ export type Config = {
   instructions?: Array<string>
   layout?: LayoutConfig
   permission?: PermissionConfig
+  isolation?: IsolationConfig
   tools?: {
     [key: string]: boolean
   }

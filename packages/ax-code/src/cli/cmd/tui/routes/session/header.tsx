@@ -79,11 +79,11 @@ export function Header() {
   })
 
   const workspace = createMemo(() => {
-    const id = session()?.workspaceID
-    if (!id) return "Workspace local"
+    const id = session()?.directory
+    if (!id || id === sync.data.path.directory) return "Workspace local"
     const info = sync.workspace.get(id)
     if (!info) return `Workspace ${id}`
-    return `Workspace ${id} (${info.type})`
+    return `Workspace ${info}`
   })
 
   const { theme } = useTheme()

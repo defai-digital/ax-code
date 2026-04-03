@@ -25,10 +25,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       return createOpencodeClient({
         baseUrl: props.url,
         signal: abort.signal,
-        directory: props.directory,
+        directory: workspaceID ?? props.directory,
         fetch: props.fetch,
         headers: props.headers,
-        experimental_workspaceID: workspaceID,
       })
     }
 

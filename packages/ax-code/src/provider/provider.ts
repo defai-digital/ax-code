@@ -808,7 +808,13 @@ export namespace Provider {
     }
   }
 
-  export function parseModel(model: string) {
+  export function parseModel(model: string | { providerID: string; modelID?: string; id?: string }) {
+    if (typeof model !== "string") {
+      return {
+        providerID: ProviderID.make(model.providerID),
+        modelID: ModelID.make(model.modelID ?? model.id ?? ""),
+      }
+    }
     const [providerID, ...rest] = model.split("/")
     return {
       providerID: ProviderID.make(providerID),

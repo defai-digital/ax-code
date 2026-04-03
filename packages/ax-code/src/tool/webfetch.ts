@@ -4,6 +4,7 @@ import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
 import { abortAfterAny } from "../util/abort"
 import { WEBFETCH_MAX_RESPONSE_SIZE as MAX_RESPONSE_SIZE, WEBFETCH_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT, WEBFETCH_MAX_TIMEOUT as MAX_TIMEOUT } from "@/constants/network"
+import { Isolation } from "@/isolation"
 
 export const WebFetchTool = Tool.define("webfetch", {
   description: DESCRIPTION,
@@ -20,6 +21,8 @@ export const WebFetchTool = Tool.define("webfetch", {
     if (!params.url.startsWith("http://") && !params.url.startsWith("https://")) {
       throw new Error("URL must start with http:// or https://")
     }
+
+    Isolation.assertNetwork(ctx.extra?.isolation)
 
     await ctx.ask({
       permission: "webfetch",

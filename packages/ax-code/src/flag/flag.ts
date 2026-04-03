@@ -40,6 +40,8 @@ export namespace Flag {
   export const AX_CODE_SERVER_PASSWORD = process.env["AX_CODE_SERVER_PASSWORD"]
   export const AX_CODE_SERVER_USERNAME = process.env["AX_CODE_SERVER_USERNAME"]
   export const AX_CODE_ENABLE_QUESTION_TOOL = truthy("AX_CODE_ENABLE_QUESTION_TOOL")
+  export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
+  export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
 
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")
@@ -122,6 +124,31 @@ Object.defineProperty(Flag, "AX_CODE_CONFIG_DIR", {
 Object.defineProperty(Flag, "AX_CODE_CLIENT", {
   get() {
     return process.env["AX_CODE_CLIENT"] ?? "cli"
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_ISOLATION_MODE
+// Must be evaluated at access time because --sandbox CLI flag
+// sets the env var in yargs middleware after module load
+Object.defineProperty(Flag, "AX_CODE_ISOLATION_MODE", {
+  get() {
+    const v = process.env["AX_CODE_ISOLATION_MODE"]
+    if (v === "read-only" || v === "workspace-write" || v === "full-access") return v
+    return undefined
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_ISOLATION_NETWORK
+Object.defineProperty(Flag, "AX_CODE_ISOLATION_NETWORK", {
+  get() {
+    const v = process.env["AX_CODE_ISOLATION_NETWORK"]?.toLowerCase()
+    if (v === "true" || v === "1") return true
+    if (v === "false" || v === "0") return false
+    return undefined
   },
   enumerable: true,
   configurable: false,

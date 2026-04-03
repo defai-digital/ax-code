@@ -3,6 +3,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./websearch.txt"
 import { EXA_DEFAULT_NUM_RESULTS } from "@/constants/network"
 import { fetchExaTool } from "./exa-fetch"
+import { Isolation } from "@/isolation"
 
 export const WebSearchTool = Tool.define("websearch", async () => {
   return {
@@ -30,6 +31,8 @@ export const WebSearchTool = Tool.define("websearch", async () => {
         .describe("Maximum characters for context string optimized for LLMs (default: 10000)"),
     }),
     async execute(params, ctx) {
+      Isolation.assertNetwork(ctx.extra?.isolation)
+
       await ctx.ask({
         permission: "websearch",
         patterns: [params.query],

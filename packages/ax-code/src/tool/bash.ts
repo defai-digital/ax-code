@@ -17,6 +17,7 @@ import { Shell } from "@/shell/shell"
 import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncate"
 import { Plugin } from "@/plugin"
+import { Isolation } from "@/isolation"
 
 import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/network"
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -87,6 +88,7 @@ export const BashTool = Tool.define("bash", async () => {
       }
       const directories = new Set<string>()
       if (!Instance.containsPath(cwd)) directories.add(cwd)
+      const resolvedPaths = new Set<string>()
       const patterns = new Set<string>()
       const always = new Set<string>()
 
@@ -121,6 +123,7 @@ export const BashTool = Tool.define("bash", async () => {
             if (resolved) {
               const normalized =
                 process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
+              resolvedPaths.add(normalized)
               if (!Instance.containsPath(normalized)) {
                 const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
                 directories.add(dir)
@@ -135,6 +138,8 @@ export const BashTool = Tool.define("bash", async () => {
           always.add(BashArity.prefix(command).join(" ") + " *")
         }
       }
+
+      Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
 
       if (directories.size > 0) {
         const globs = Array.from(directories).map((dir) => {

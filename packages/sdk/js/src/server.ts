@@ -1,6 +1,11 @@
 import { spawn } from "node:child_process"
 import { type Config } from "./gen/types.gen.js"
 
+type Proc = ReturnType<typeof spawn> & {
+  on(event: "exit", listener: (code: number | null) => void): void
+  on(event: "error", listener: (error: Error) => void): void
+}
+
 export type ServerOptions = {
   hostname?: string
   port?: number
@@ -37,7 +42,7 @@ export async function createAxCodeServer(options?: ServerOptions) {
       ...process.env,
       AX_CODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
     },
-  })
+  }) as Proc
 
   const url = await new Promise<string>((resolve, reject) => {
     const id = setTimeout(() => {
@@ -115,7 +120,7 @@ export function createAxCodeTui(options?: TuiOptions) {
       ...process.env,
       AX_CODE_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
     },
-  })
+  }) as Proc
 
   return {
     close() {

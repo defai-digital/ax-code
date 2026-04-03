@@ -853,13 +853,17 @@ export namespace MCP {
       // - "error" event: command not found (ENOENT)
       // - "exit" with non-zero code: command exists but failed (e.g., no display)
       await new Promise<void>((resolve, reject) => {
+        const proc = subprocess as unknown as {
+          on(event: "error", listener: (error: Error) => void): void
+          on(event: "exit", listener: (code: number | null) => void): void
+        }
         // Give the process a moment to fail if it's going to
         const timeout = setTimeout(() => resolve(), 500)
-        subprocess.on("error", (error) => {
+        proc.on("error", (error) => {
           clearTimeout(timeout)
           reject(error)
         })
-        subprocess.on("exit", (code) => {
+        proc.on("exit", (code) => {
           if (code !== null && code !== 0) {
             clearTimeout(timeout)
             reject(new Error(`Browser open failed with exit code ${code}`))

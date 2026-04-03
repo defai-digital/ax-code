@@ -10,6 +10,7 @@ import { useKeybind } from "../context/keybind"
 import { DialogSessionList } from "./workspace/dialog-session-list"
 import { createOpencodeClient } from "@ax-code/sdk/v2"
 import { setTimeout as sleep } from "node:timers/promises"
+import path from "path"
 
 async function openWorkspace(input: {
   dialog: ReturnType<typeof useDialog>
@@ -32,8 +33,7 @@ async function openWorkspace(input: {
   const client = createOpencodeClient({
     baseUrl: input.sdk.url,
     fetch: input.sdk.fetch,
-    directory: input.sync.data.path.directory || input.sdk.directory,
-    experimental_workspaceID: input.workspaceID,
+    directory: input.workspaceID,
   })
   const listed = input.forceCreate ? undefined : await client.session.list({ roots: true, limit: 1 })
   const session = listed?.data?.[0]
@@ -48,7 +48,7 @@ async function openWorkspace(input: {
   }
   let created: Session | undefined
   while (!created) {
-    const result = await client.session.create({ workspaceID: input.workspaceID }).catch(() => undefined)
+    const result = await client.session.create({}).catch(() => undefined)
     if (!result) {
       input.toast.show({
         message: "Failed to open workspace",
@@ -112,7 +112,7 @@ function DialogWorkspaceCreate(props: { onSelect: (workspaceID: string) => Promi
     if (creating()) return
     setCreating(type)
 
-    const result = await sdk.client.experimental.workspace.create({ type, branch: null }).catch((err) => {
+    const result = await sdk.client.worktree.create({ worktreeCreateInput: {} }).catch((err: unknown) => {
       console.log(err)
       return undefined
     })
@@ -127,7 +127,7 @@ function DialogWorkspaceCreate(props: { onSelect: (workspaceID: string) => Promi
       return
     }
     await sync.workspace.sync()
-    await props.onSelect(workspace.id)
+    await props.onSelect(workspace.directory)
     setCreating(undefined)
   }
 
@@ -190,8 +190,7 @@ export function DialogWorkspaceList() {
     const client = createOpencodeClient({
       baseUrl: sdk.url,
       fetch: sdk.fetch,
-      directory: sync.data.path.directory || sdk.directory,
-      experimental_workspaceID: workspaceID,
+      directory: workspaceID,
     })
     const listed = await client.session.list({ roots: true, limit: 1 }).catch(() => undefined)
     if (listed?.data?.length) {
@@ -203,13 +202,18 @@ export function DialogWorkspaceList() {
 
   const currentWorkspaceID = createMemo(() => {
     if (route.data.type === "session") {
-      return sync.session.get(route.data.sessionID)?.workspaceID ?? "__local__"
+      const current = sync.session.get(route.data.sessionID)?.directory
+      const local = sync.data.path.directory || sdk.directory
+      if (!current || current === local) return "__local__"
+      return current
     }
     return "__local__"
   })
 
   const localCount = createMemo(
-    () => sync.data.session.filter((session) => !session.workspaceID && !session.parentID).length,
+    () =>
+      sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory) && !session.parentID)
+        .length,
   )
 
   let run = 0
@@ -220,17 +224,16 @@ export function DialogWorkspaceList() {
       setCounts({})
       return
     }
-    setCounts(Object.fromEntries(workspaces.map((workspace) => [workspace.id, undefined])))
+    setCounts(Object.fromEntries(workspaces.map((workspace) => [workspace, undefined])))
     void Promise.all(
       workspaces.map(async (workspace) => {
         const client = createOpencodeClient({
           baseUrl: sdk.url,
           fetch: sdk.fetch,
-          directory: sync.data.path.directory || sdk.directory,
-          experimental_workspaceID: workspace.id,
+          directory: workspace,
         })
         const result = await client.session.list({ roots: true }).catch(() => undefined)
-        return [workspace.id, result ? (result.data?.length ?? 0) : null] as const
+        return [workspace, result ? (result.data?.length ?? 0) : null] as const
       }),
     ).then((entries) => {
       if (run !== next) return
@@ -247,15 +250,14 @@ export function DialogWorkspaceList() {
       footer: `${localCount()} session${localCount() === 1 ? "" : "s"}`,
     },
     ...sync.data.workspaceList.map((workspace) => {
-      const count = counts()[workspace.id]
+      const count = counts()[workspace]
+      const name = path.basename(workspace) || workspace
       return {
         title:
-          toDelete() === workspace.id
-            ? `Delete ${workspace.id}? Press ${keybind.print("session_delete")} again`
-            : workspace.id,
-        value: workspace.id,
-        category: workspace.type,
-        description: workspace.branch ? `Branch ${workspace.branch}` : undefined,
+          toDelete() === workspace ? `Delete ${name}? Press ${keybind.print("session_delete")} again` : name,
+        value: workspace,
+        category: "Workspace",
+        description: workspace,
         footer:
           count === undefined
             ? "Loading sessions..."
@@ -304,7 +306,9 @@ export function DialogWorkspaceList() {
               setToDelete(option.value)
               return
             }
-            const result = await sdk.client.experimental.workspace.remove({ id: option.value }).catch(() => undefined)
+            const result = await sdk.client.worktree
+              .remove({ worktreeRemoveInput: { directory: option.value } })
+              .catch(() => undefined)
             setToDelete(undefined)
             if (result?.error) {
               toast.show({

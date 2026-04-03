@@ -29,7 +29,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
     () => props.workspaceID,
     async (workspaceID) => {
       if (!workspaceID) return undefined
-      const result = await sdk.client.session.list({ roots: true })
+      const result = await sdk.client.session.list({ directory: workspaceID, roots: true })
       return result.data ?? []
     },
   )
@@ -37,6 +37,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
   const [searchResults] = createResource(search, async (query) => {
     if (!query || props.localOnly) return undefined
     const result = await sdk.client.session.list({
+      directory: props.workspaceID,
       search: query,
       limit: 30,
       ...(props.workspaceID ? { roots: true } : {}),
@@ -49,7 +50,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
   const sessions = createMemo(() => {
     if (searchResults()) return searchResults()!
     if (props.workspaceID) return listed() ?? []
-    if (props.localOnly) return sync.data.session.filter((session) => !session.workspaceID)
+    if (props.localOnly) return sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory))
     return sync.data.session
   })
 
@@ -59,8 +60,8 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
       .filter((x) => {
         if (x.parentID !== undefined) return false
         if (props.workspaceID && listed()) return true
-        if (props.workspaceID) return x.workspaceID === props.workspaceID
-        if (props.localOnly) return !x.workspaceID
+        if (props.workspaceID) return x.directory === props.workspaceID
+        if (props.localOnly) return x.directory === (sync.data.path.directory || sdk.directory)
         return true
       })
       .toSorted((a, b) => b.time.updated - a.time.updated)

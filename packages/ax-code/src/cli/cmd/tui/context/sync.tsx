@@ -28,7 +28,6 @@ import { useArgs } from "./args"
 import { batch, onMount } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@ax-code/sdk"
-import type { Workspace } from "@ax-code/sdk/v2"
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
@@ -74,7 +73,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       formatter: FormatterStatus[]
       vcs: VcsInfo | undefined
       path: Path
-      workspaceList: Workspace[]
+      workspaceList: string[]
     }>({
       provider_next: {
         all: [],
@@ -108,7 +107,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const sdk = useSDK()
 
     async function syncWorkspaces() {
-      const result = await sdk.client.experimental.workspace.list().catch(() => undefined)
+      const result = await sdk.client.worktree.list().catch(() => undefined)
       if (!result?.data) return
       setStore("workspaceList", reconcile(result.data))
     }
@@ -493,7 +492,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       },
       workspace: {
         get(workspaceID: string) {
-          return store.workspaceList.find((workspace) => workspace.id === workspaceID)
+          return store.workspaceList.find((workspace) => workspace === workspaceID)
         },
         sync: syncWorkspaces,
       },

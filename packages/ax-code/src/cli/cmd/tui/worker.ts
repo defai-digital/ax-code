@@ -44,7 +44,7 @@ const eventStream = {
   abort: undefined as AbortController | undefined,
 }
 
-const startEventStream = (input: { directory: string; workspaceID?: string }) => {
+const startEventStream = (input: { directory?: string }) => {
   if (eventStream.abort) eventStream.abort.abort()
   const abort = new AbortController()
   eventStream.abort = abort
@@ -59,8 +59,7 @@ const startEventStream = (input: { directory: string; workspaceID?: string }) =>
 
   const sdk = createOpencodeClient({
     baseUrl: "http://opencode.internal",
-    directory: input.directory,
-    experimental_workspaceID: input.workspaceID,
+    directory: input.directory ?? process.cwd(),
     fetch: fetchFn,
     signal,
   })
@@ -141,7 +140,7 @@ export const rpc = {
     await Instance.disposeAll()
   },
   async setWorkspace(input: { workspaceID?: string }) {
-    startEventStream({ directory: process.cwd(), workspaceID: input.workspaceID })
+    startEventStream({ directory: input.workspaceID ?? process.cwd() })
   },
   async shutdown() {
     Log.Default.info("worker shutting down")

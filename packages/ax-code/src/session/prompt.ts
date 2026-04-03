@@ -37,7 +37,9 @@ import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
 import { pathToFileURL, fileURLToPath } from "url"
+import { Config } from "@/config/config"
 import { ConfigMarkdown } from "../config/markdown"
+import { Isolation } from "@/isolation"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@ax-code/util/error"
 import { fn } from "@/util/fn"
@@ -766,13 +768,15 @@ export namespace SessionPrompt {
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
+    const cfg = await Config.get()
+    const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
 
     const context = (args: any, options: ToolCallOptions): Tool.Context => ({
       sessionID: input.session.id,
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
-      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck },
+      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, isolation },
       agent: input.agent.name,
       messages: input.messages,
       metadata: async (val: { title?: string; metadata?: any }) => {
@@ -824,7 +828,24 @@ export namespace SessionPrompt {
               args,
             },
           )
-          const result = await item.execute(args, ctx)
+          let result: Awaited<ReturnType<typeof item.execute>>
+          try {
+            result = await item.execute(args, ctx)
+          } catch (e) {
+            if (e instanceof Isolation.DeniedError) {
+              await ctx.ask({
+                permission: "isolation_escalation",
+                patterns: [e.message],
+                always: [],
+                metadata: { reason: e.reason },
+              })
+              const bypassed = context(args, options)
+              bypassed.extra = { ...bypassed.extra, isolation: undefined }
+              result = await item.execute(args, bypassed)
+            } else {
+              throw e
+            }
+          }
           const output = {
             ...result,
             attachments: result.attachments?.map((attachment) => ({

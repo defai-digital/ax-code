@@ -13,6 +13,7 @@ import { Instance } from "../project/instance"
 import { trimDiff } from "./edit"
 import { assertExternalDirectory } from "./external-directory"
 import { renderDiagnostics } from "./diagnostics"
+import { Isolation } from "@/isolation"
 
 export const WriteTool = Tool.define("write", {
   description: DESCRIPTION,
@@ -23,6 +24,7 @@ export const WriteTool = Tool.define("write", {
   async execute(params, ctx) {
     const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     await assertExternalDirectory(ctx, filepath)
+    Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
 
     const exists = await Filesystem.exists(filepath)
     const contentOld = exists ? await Filesystem.readText(filepath) : ""

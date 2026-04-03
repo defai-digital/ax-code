@@ -21,6 +21,7 @@ import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { Permission } from "@/permission"
+import { Isolation } from "@/isolation"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -259,6 +260,16 @@ export namespace LLM {
         delete input.tools[tool]
       }
     }
+
+    const cfg = await Config.get()
+    const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
+    if (isolation.mode === "read-only") {
+      for (const t of ["edit", "write", "apply_patch", "multiedit", "bash"]) delete input.tools[t]
+    }
+    if (!isolation.network) {
+      for (const t of ["webfetch", "websearch", "codesearch"]) delete input.tools[t]
+    }
+
     return input.tools
   }
 

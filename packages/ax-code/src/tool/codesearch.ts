@@ -2,6 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./codesearch.txt"
 import { fetchExaTool } from "./exa-fetch"
+import { Isolation } from "@/isolation"
 
 export const CodeSearchTool = Tool.define("codesearch", {
   description: DESCRIPTION,
@@ -21,6 +22,8 @@ export const CodeSearchTool = Tool.define("codesearch", {
       ),
   }),
   async execute(params, ctx) {
+    Isolation.assertNetwork(ctx.extra?.isolation)
+
     await ctx.ask({
       permission: "codesearch",
       patterns: [params.query],

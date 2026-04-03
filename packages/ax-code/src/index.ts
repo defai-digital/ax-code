@@ -68,6 +68,11 @@ let cli = yargs(hideBin(process.argv))
     type: "string",
     choices: ["DEBUG", "INFO", "WARN", "ERROR"],
   })
+  .option("sandbox", {
+    describe: "isolation sandbox mode",
+    type: "string",
+    choices: ["read-only", "workspace-write", "full-access"],
+  })
   .middleware(async (opts) => {
     await Log.init({
       print: process.argv.includes("--print-logs"),
@@ -83,6 +88,10 @@ let cli = yargs(hideBin(process.argv))
     process.env.AX_CODE = "1"
     process.env.OPENCODE = "1"
     process.env.AX_CODE_PID = String(process.pid)
+
+    if (opts.sandbox) {
+      process.env.AX_CODE_ISOLATION_MODE = opts.sandbox as string
+    }
 
     Log.Default.info("ax-code", {
       version: Installation.VERSION,

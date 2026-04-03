@@ -9,6 +9,7 @@ import { Patch } from "../patch"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { assertExternalDirectory } from "./external-directory"
 import { trimDiff } from "./edit"
+import { Isolation } from "@/isolation"
 import { LSP } from "../lsp"
 import { Filesystem } from "../util/filesystem"
 import DESCRIPTION from "./apply_patch.txt"
@@ -61,6 +62,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     for (const hunk of hunks) {
       const filePath = path.resolve(Instance.directory, hunk.path)
       await assertExternalDirectory(ctx, filePath)
+      Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
 
       switch (hunk.type) {
         case "add": {
@@ -119,6 +121,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
           await assertExternalDirectory(ctx, movePath)
+          if (movePath) Isolation.assertWrite(ctx.extra?.isolation, movePath, Instance.directory, Instance.worktree)
 
           fileChanges.push({
             filePath,

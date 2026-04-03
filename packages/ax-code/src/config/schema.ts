@@ -103,6 +103,31 @@ const permissionTransform = (x: unknown): Record<string, PermissionRule> => {
   return result
 }
 
+export const IsolationMode = z.enum(["read-only", "workspace-write", "full-access"]).meta({
+  ref: "IsolationMode",
+})
+export type IsolationMode = z.infer<typeof IsolationMode>
+
+export const Isolation = z
+  .object({
+    mode: IsolationMode.default("workspace-write").describe(
+      "Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation",
+    ),
+    network: z
+      .boolean()
+      .default(false)
+      .describe("Allow network access from tools. Defaults to false in read-only and workspace-write modes"),
+    protected: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected",
+      ),
+  })
+  .strict()
+  .meta({ ref: "IsolationConfig" })
+export type Isolation = z.infer<typeof Isolation>
+
 export const Permission = z
   .preprocess(
     permissionPreprocess,
@@ -634,6 +659,7 @@ export const Info = z
     instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
     layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
     permission: Permission.optional(),
+    isolation: Isolation.optional().describe("Execution isolation configuration"),
     tools: z.record(z.string(), z.boolean()).optional(),
     enterprise: z
       .object({

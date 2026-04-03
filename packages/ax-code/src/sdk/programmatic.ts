@@ -590,7 +590,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
   const initPromise = new Promise<void>((resolve, reject) => {
     bootstrap(options.directory, async () => {
       // Set language for error messages
-      if (options.language) {
+      if (options.language === "en") {
         setLanguage(options.language)
       }
 
