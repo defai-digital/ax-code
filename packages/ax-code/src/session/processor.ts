@@ -290,7 +290,9 @@ export namespace SessionProcessor {
                     usage: value.usage ?? { inputTokens: 0, outputTokens: 0 },
                     metadata: value.providerMetadata,
                   })
-                  const finishReason = typeof value.finishReason === "string" ? value.finishReason : "stop"
+                  const finishReason = typeof value.finishReason === "string"
+                    ? value.finishReason
+                    : (value.finishReason as any)?.type ?? String(value.finishReason ?? "stop")
                   input.assistantMessage.finish = finishReason
                   input.assistantMessage.cost += usage.cost
                   input.assistantMessage.tokens = usage.tokens
