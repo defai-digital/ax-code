@@ -1,0 +1,63 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#0f172a",
+    "primaryBorderColor": "#0f172a",
+    "lineColor": "#475569",
+    "secondaryColor": "#e2e8f0",
+    "secondaryTextColor": "#0f172a",
+    "secondaryBorderColor": "#334155",
+    "tertiaryColor": "#dbeafe",
+    "tertiaryTextColor": "#0f172a",
+    "tertiaryBorderColor": "#2563eb",
+    "fontFamily": "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif",
+    "fontSize": "18px"
+  },
+  "flowchart": {
+    "curve": "linear",
+    "htmlLabels": true,
+    "nodeSpacing": 34,
+    "rankSpacing": 56,
+    "padding": 18
+  }
+}}%%
+
+flowchart TB
+  subgraph A["Interfaces"]
+    direction LR
+    CLI["CLI / TUI"]
+    SDK["SDK / Server"]
+    UX["Web / Desktop / VS Code"]
+  end
+
+  R["ax-code runtime<br/>Agent routing · planning · execution"]
+
+  subgraph C["Control Plane"]
+    direction LR
+    ST["Session · memory · storage"]
+    SG["Sandbox · permissions · policy"]
+  end
+
+  subgraph X["Execution Layer"]
+    direction LR
+    TL["Tools · MCP · LSP"]
+    PV["Providers · cloud · local"]
+  end
+
+  CLI --> R
+  SDK --> R
+  UX --> R
+  R --> TL
+  R --> PV
+  R --> ST
+  R --> SG
+
+  classDef runtime fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#0f172a
+  classDef surface fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+  classDef exec fill:#f6f8fa,stroke:#475569,stroke-width:1.5px,color:#0f172a
+
+  class R runtime
+  class CLI,SDK,UX,ST,SG surface
+  class TL,PV exec

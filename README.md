@@ -1,39 +1,80 @@
 # AX Code
 
-**Sovereign AI coding infrastructure — enterprise-grade, provider-agnostic, air-gap ready.**
+**AI coding runtime for teams that need control, auditability, and extensibility, not just code suggestions.**
 
-The developer-facing entrypoint to the [AutomatosX](https://github.com/defai-digital) sovereign AI ecosystem. Use any LLM — cloud, on-prem, or air-gapped — with 9 specialized coding agents, governed by contract-first deterministic execution.
+AX Code is an AI execution system for software development. It combines agent routing, planning, tool orchestration, provider abstraction, session state, and sandboxed execution into one runtime that can run in the terminal, through an SDK, or inside your internal platform.
+
+- **Controlled execution** through explicit tools, permissions, and sandbox modes
+- **Provider-agnostic runtime** across cloud, local, and air-gapped model backends
+- **Session-backed workflows** with persistence, replayable state, and memory
+- **Extensible surface** through SDK, MCP, plugins, and headless server mode
+- **Enterprise-ready posture** with localhost defaults, encryption at rest, and audit-friendly runtime structure
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+## What AX Code Is
+
+Most AI coding products stop at chat plus tool calls. AX Code is designed as a runtime layer for coding workflows:
+
+- **More controllable than chat-first coding tools.** Tool use is explicit, permissioned, and sandbox-aware.
+- **More composable than a single CLI.** The same runtime can back the TUI, the SDK, headless automation, MCP-connected workflows, and internal developer platforms.
+- **More deployable than cloud-only coding assistants.** It can run against hosted providers, local inference, or broader sovereign infrastructure.
+- **More operationally useful for teams.** Sessions, storage, policy boundaries, and provider abstraction are built into the core runtime rather than bolted on later.
+
+## Why Teams Choose AX Code
+
+| Requirement | Typical AI coding tooling | AX Code |
+|-----------|---------------------------|---------|
+| Use multiple model providers without rewriting the workflow | Often tied to one vendor or one API surface | Provider-agnostic runtime with cloud and local backends |
+| Keep tool execution controlled | Tooling is often implicit or loosely governed | Explicit tools, session state, sandbox, and permission boundaries |
+| Reuse the same coding engine across products | Usually bound to one UI | Same runtime can power CLI, TUI, server, SDK, and internal automation |
+| Operate in stricter environments | Cloud assumptions are common | Local-first, localhost defaults, and air-gap-friendly deployment model |
+| Build on top of it | Extensibility is limited or UI-specific | SDK, MCP, plugins, LSP, and headless server mode |
+
+## Primary Users
+
+### Primary
+
+- **Advanced developers** who want more control than suggestion-only coding tools
+- **Platform and infrastructure teams** building internal coding agents, CI workflows, or developer platforms
+- **AI-native engineering teams** that need provider flexibility, automation, and governed execution
+
+### Secondary
+
+- **General developers** who want a stronger local and multi-provider alternative to cloud-tied coding assistants
+
 ---
 
-## Why AX Code?
+## Runtime Architecture
 
-Most AI coding tools are **clients of someone else's API**. Claude Code requires Anthropic. Copilot requires OpenAI. Cursor requires cloud. None of them let you own the full stack.
+This is the product runtime itself, independent of the broader ecosystem:
 
-**AX Code is different.** It sits on top of a vertically integrated sovereign AI stack — with its own governance layer ([AX Trust](https://github.com/defai-digital/ax-trust)), orchestration engine ([AX Serving](https://github.com/defai-digital/ax-serving)), knowledge infrastructure ([AX Fabric](https://github.com/defai-digital/ax-fabric)), and native inference engine ([AX Engine](https://github.com/defai-digital/ax-engine)). Your code never has to leave your network.
+<p align="center">
+  <img src="docs/images/ax-code-runtime.png" alt="ax-code runtime architecture" width="860" />
+</p>
 
-### What Makes It Sovereign
+Source: [docs/ax-code-runtime.mmd](docs/ax-code-runtime.mmd)
 
-- **Provider-agnostic.** Use Claude, GPT, Gemini, Grok, DeepSeek, or run models locally with [AX Engine](https://github.com/defai-digital/ax-engine) / [AX Studio](https://github.com/defai-digital/ax-studio) / Ollama. Switch freely. No vendor lock-in.
-- **Air-gap ready.** Run 100% offline on Mac Studio, Jetson Thor, or any local hardware. Zero cloud dependency. Defence and classified environments supported.
-- **Contract-first governance.** Every agent action flows through AX Trust for policy enforcement, audit trail, and deterministic execution. Same input, same output.
-- **Full audit trail.** Every tool call, every file change, every LLM interaction — traceable, explainable, exportable.
+The important distinction is that `ax-code` is not just a chat UI. It is a runtime that coordinates:
 
-### What Makes It Better for Coding
+- interfaces such as CLI, TUI, SDK, and headless server mode
+- agent routing and planning
+- tool execution, MCP integrations, and LSP-backed code intelligence
+- session, memory, and storage state
+- sandbox, permission, and policy boundaries
+- provider abstraction across hosted and local inference
 
-- **9 specialized agents.** Not a generic chatbot. Security auditor, architect, debugger, performance profiler, planner, and more — auto-routing based on what you're working on.
-- **Real code intelligence.** LSP integration with TypeScript, Python, Go, Rust, and more. Actual go-to-definition, find-references, and diagnostics.
-- **25+ built-in tools.** File operations, shell execution, code search, web fetch, batch processing, task management.
-- **Use it everywhere.** Terminal, desktop app, web browser, VS Code, headless API, or embed via SDK.
+## High-Value Use Cases
 
----
+1. **Large-codebase refactoring** with session memory, LSP support, and controlled tool execution
+2. **Internal coding agents and CI pipelines** built on the server or SDK surface
+3. **Secure enterprise coding workflows** where sandboxing, policy, and auditability matter
+4. **Offline or air-gapped development environments** using local or sovereign model backends
 
-## The AutomatosX Stack
+## The AutomatosX Ecosystem
 
 AX Code is the coding surface of a vertically integrated sovereign AI platform:
 
@@ -51,38 +92,6 @@ Source: [docs/automatosx-stack.mmd](docs/automatosx-stack.mmd)
 | **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Enterprise orchestration — multi-node routing, heterogeneous compute |
 | **AX Fabric** | [defai-digital/ax-fabric](https://github.com/defai-digital/ax-fabric) | Knowledge infrastructure — RAG, distillation, knowledge lifecycle |
 | **AX Engine** | [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) | Mac-native inference — Apple Silicon optimized, 30B-70B+ models |
-
----
-
-## Who Is AX Code For?
-
-### Enterprise Engineering Teams
-
-- Need AI coding without surrendering code sovereignty
-- Run multiple AI providers — can't standardize on one vendor
-- Security team requires full audit trail of what the AI did
-- Need governance, cost control, and compliance reporting
-
-### Defence & Government
-
-- Classified environments that cannot send code to external APIs
-- Air-gapped deployment on Mac Studio Grid / Jetson Thor Grid
-- Reproducible, deterministic AI execution for compliance
-- No foreign cloud dependency
-
-### Platform Engineering Teams
-
-- Embed AI coding into CI/CD pipelines via headless API
-- Build internal developer platforms with the programmatic SDK
-- Cost-aware model routing across multiple providers
-- Custom enterprise agents via plugin system
-
-### Individual Developers
-
-- Use Claude, GPT, Gemini, Grok, local models — switch freely
-- 9 specialized agents vs. a generic chatbot
-- Open source and free
-- Not locked into any vendor's ecosystem
 
 ---
 
