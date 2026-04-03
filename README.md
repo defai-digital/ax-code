@@ -120,11 +120,31 @@ Within AutomatosX, `ax-code` is the developer-facing execution layer. `AX Engine
 
 ## Get Started in 60 Seconds
 
+### Install
+
 ```bash
-# Install
+# macOS (Homebrew)
+brew install defai-digital/ax-code/ax-code
+
+# npm (any platform)
+npm i -g ax-code-ai
+
+# or download a binary from GitHub Releases
+# https://github.com/defai-digital/ax-code/releases
+```
+
+### From Source (contributors)
+
+```bash
 git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
+```
 
+Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.11+
+
+### Run
+
+```bash
 # Set any provider key (pick one)
 export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Gemini
 export XAI_API_KEY="your-key"                     # Grok
@@ -133,8 +153,6 @@ export GROQ_API_KEY="your-key"                    # Groq (free tier)
 # Launch
 ax-code
 ```
-
-**Prerequisites:** [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.11+
 
 ---
 

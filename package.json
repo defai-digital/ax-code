@@ -6,6 +6,7 @@
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "dev": "bun run --env-file=../../.env --cwd packages/ax-code --conditions=browser src/index.ts",
     "cli": "bun run --cwd packages/ax-code --conditions=browser src/index.ts",
     "setup:cli": "bun run scripts/setup-cli.ts",
