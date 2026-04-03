@@ -49,7 +49,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   })
 
   const context = createMemo(() => {
-    const last = messages().findLast((x) => x.role === "assistant" && x.tokens.output > 0) as AssistantMessage
+    const last = messages().findLast(
+      (x) => x.role === "assistant" && (x.tokens.output > 0 || x.tokens.input > 0),
+    ) as AssistantMessage
     if (!last) return
     const total =
       last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
@@ -64,7 +66,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const kv = useKV()
 
   const hasProviders = createMemo(() =>
-    sync.data.provider.some((x) => x.id !== "opencode" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
+    sync.data.provider.length > 0,
   )
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
 
@@ -308,11 +310,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             <span style={{ fg: theme.text }}>{directory().split("/").at(-1)}</span>
           </text>
           <text fg={theme.textMuted}>
-            <span style={{ fg: theme.success }}>•</span> <b>Open</b>
+            <span style={{ fg: theme.success }}>•</span> <b>AX</b>
             <span style={{ fg: theme.text }}>
-              <b>Code</b>
+              <b> Code</b>
             </span>{" "}
-            <span>{Installation.VERSION}</span>
+            <span>v{Installation.VERSION}</span>
           </text>
         </box>
       </box>

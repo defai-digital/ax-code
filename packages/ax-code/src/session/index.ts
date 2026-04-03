@@ -779,9 +779,10 @@ export namespace Session {
       metadata: z.custom<ProviderMetadata>().optional(),
     }),
     (input) => {
-      const safe = (value: number) => {
-        if (!Number.isFinite(value)) return 0
-        return value
+      const safe = (value: unknown): number => {
+        if (typeof value === "number" && Number.isFinite(value)) return value
+        if (value && typeof value === "object" && "total" in value) return safe((value as any).total)
+        return 0
       }
       const inputTokens = safe(input.usage.inputTokens ?? 0)
       const outputTokens = safe(input.usage.outputTokens ?? 0)

@@ -5,6 +5,7 @@ import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/dialog-model"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
+import { Installation } from "@/installation"
 
 export function Footer() {
   const { theme } = useTheme()
@@ -85,6 +86,7 @@ export function Footer() {
             <text fg={theme.textMuted}>/status</text>
           </Match>
         </Switch>
+        <text fg={theme.textMuted}>v{Installation.VERSION}</text>
       </box>
     </box>
   )

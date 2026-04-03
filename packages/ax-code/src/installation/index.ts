@@ -61,7 +61,15 @@ export namespace Installation {
     })
   export type Info = z.infer<typeof Info>
 
-  export const VERSION = typeof AX_CODE_VERSION === "string" ? AX_CODE_VERSION : "local"
+  // Build-time version from AX_CODE_VERSION global, or read from package.json for dev mode
+  export const VERSION = (() => {
+    if (typeof AX_CODE_VERSION === "string") return AX_CODE_VERSION
+    try {
+      return require("../../package.json").version as string
+    } catch {
+      return "local"
+    }
+  })()
   export const CHANNEL = typeof AX_CODE_CHANNEL === "string" ? AX_CODE_CHANNEL : "local"
   export const USER_AGENT = `ax-code/${CHANNEL}/${VERSION}/${Flag.AX_CODE_CLIENT}`
 
