@@ -1,10 +1,10 @@
 # Product Requirements Document (PRD)
 # AX Code — Code Quality & Maintainability Refactor
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Date:** 2026-04-02
 **Author:** Engineering Team
-**Status:** Draft
+**Status:** In Progress — Phase 1 complete, Phase 2a complete
 
 ---
 
@@ -518,3 +518,47 @@ Each phase must pass before proceeding:
 | `agent/agent.ts` | 1,743 | 3 + definitions/ | ~200 |
 | TUI session route | 2,284 | 5 | ~400 |
 | `config/config.ts` | 1,472 | 3 | ~500 |
+
+---
+
+## 9. Implementation Progress
+
+### Phase 1: Constants & Deduplication — COMPLETE
+
+**Completed 2026-04-02 (v1.5.2)**
+
+Created `packages/ax-code/src/constants/` with TypeScript const objects (not YAML — Bun lacks native YAML import support):
+
+| File | Constants | Duplicates Eliminated |
+|------|-----------|----------------------|
+| `constants/tool.ts` | 8 | 12 across 6 files |
+| `constants/session.ts` | 6 | 6 across 4 files |
+| `constants/network.ts` | 7 | 9 across 4 files |
+| `constants/lsp.ts` | 1 (JS_LOCKFILES array) | 6 inline duplicates |
+| `constants/index.ts` | Barrel export | — |
+
+Deduplicated functions:
+- `levenshtein()` → `util/levenshtein.ts` (was in `provider/provider.ts` and `tool/edit.ts`)
+
+Deleted: `tool/constants.ts` (superseded). Updated 15 consumer files.
+
+### Phase 2a: Provider Loaders Extraction — COMPLETE
+
+**Completed 2026-04-02 (v1.5.2)**
+
+Extracted `CUSTOM_LOADERS` (7 provider-specific loaders, 182 LOC) from `provider/provider.ts` to `provider/loaders.ts`.
+Reduced `provider.ts` from 1,010 → 834 LOC.
+
+### Phase 2b-d: Remaining File Decomposition — DEFERRED
+
+**Reason:** The remaining large files (`session/prompt.ts`, `config/config.ts`, `lsp/server.ts`, TUI session route) use TypeScript `export namespace` extensively. Functions within each namespace share closure state, helpers, and types that make extraction complex:
+
+- `session/prompt.ts`: `shell()`, `command()`, `createUserMessage()` all reference shared namespace state (`start()`, `cancel()`, `state()`, `loop()`)
+- `config/config.ts`: 675 LOC of Zod schemas are inside the `Config` namespace, referenced as `Config.McpLocal`, `Config.Info`, etc.
+- `lsp/server.ts`: 37 LSP server definitions reference namespace-scoped helpers (`NearestRoot`, `pathExists`, `run`, `output`, `which`, `log`)
+
+**Prerequisite:** Build/test tooling (`bun typecheck` + `bun test`) must be available to safely verify these refactors. Each extraction requires resolving namespace closure dependencies.
+
+### Phases 3-4: Pattern Reduction & Directory Flattening — NOT STARTED
+
+Depends on Phase 2 completion and build verification infrastructure.
