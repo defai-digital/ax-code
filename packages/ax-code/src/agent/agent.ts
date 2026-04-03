@@ -24,6 +24,7 @@ import { Global } from "@/global"
 import path from "path"
 import { Plugin } from "@/plugin"
 import { Skill } from "../skill"
+import { readOnlyWithWeb, readOnlyNoWeb, denyAll } from "./permission-presets"
 import { Effect, ServiceMap, Layer } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
@@ -166,21 +167,7 @@ export namespace Agent {
               name: "explore",
               permission: Permission.merge(
                 defaults,
-                Permission.fromConfig({
-                  "*": "deny",
-                  grep: "allow",
-                  glob: "allow",
-                  list: "allow",
-                  bash: "allow",
-                  webfetch: "allow",
-                  websearch: "allow",
-                  codesearch: "allow",
-                  read: "allow",
-                  external_directory: {
-                    "*": "ask",
-                    ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
-                  },
-                }),
+                readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
               description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
@@ -214,21 +201,7 @@ export namespace Agent {
               prompt: PROMPT_SECURITY,
               permission: Permission.merge(
                 defaults,
-                Permission.fromConfig({
-                  "*": "deny",
-                  grep: "allow",
-                  glob: "allow",
-                  list: "allow",
-                  bash: "allow",
-                  read: "allow",
-                  codesearch: "allow",
-                  webfetch: "allow",
-                  websearch: "allow",
-                  external_directory: {
-                    "*": "ask",
-                    ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
-                  },
-                }),
+                readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
               options: {},
@@ -243,21 +216,7 @@ export namespace Agent {
               prompt: PROMPT_ARCHITECT,
               permission: Permission.merge(
                 defaults,
-                Permission.fromConfig({
-                  "*": "deny",
-                  grep: "allow",
-                  glob: "allow",
-                  list: "allow",
-                  bash: "allow",
-                  read: "allow",
-                  codesearch: "allow",
-                  webfetch: "allow",
-                  websearch: "allow",
-                  external_directory: {
-                    "*": "ask",
-                    ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
-                  },
-                }),
+                readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
               options: {},
@@ -289,19 +248,7 @@ export namespace Agent {
               prompt: PROMPT_PERF,
               permission: Permission.merge(
                 defaults,
-                Permission.fromConfig({
-                  "*": "deny",
-                  grep: "allow",
-                  glob: "allow",
-                  list: "allow",
-                  bash: "allow",
-                  read: "allow",
-                  codesearch: "allow",
-                  external_directory: {
-                    "*": "ask",
-                    ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
-                  },
-                }),
+                readOnlyNoWeb(whitelistedDirs),
                 user,
               ),
               options: {},
@@ -315,13 +262,7 @@ export namespace Agent {
               native: true,
               hidden: true,
               prompt: PROMPT_COMPACTION,
-              permission: Permission.merge(
-                defaults,
-                Permission.fromConfig({
-                  "*": "deny",
-                }),
-                user,
-              ),
+              permission: Permission.merge(defaults, denyAll, user),
               options: {},
             },
             title: {
@@ -331,13 +272,7 @@ export namespace Agent {
               native: true,
               hidden: true,
               temperature: 0.5,
-              permission: Permission.merge(
-                defaults,
-                Permission.fromConfig({
-                  "*": "deny",
-                }),
-                user,
-              ),
+              permission: Permission.merge(defaults, denyAll, user),
               prompt: PROMPT_TITLE,
             },
             summary: {
@@ -346,13 +281,7 @@ export namespace Agent {
               options: {},
               native: true,
               hidden: true,
-              permission: Permission.merge(
-                defaults,
-                Permission.fromConfig({
-                  "*": "deny",
-                }),
-                user,
-              ),
+              permission: Permission.merge(defaults, denyAll, user),
               prompt: PROMPT_SUMMARY,
             },
           }
