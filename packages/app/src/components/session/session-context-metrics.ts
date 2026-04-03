@@ -35,14 +35,17 @@ type Metrics = {
 }
 
 const tokenTotal = (msg: AssistantMessage) => {
-  return msg.tokens.input + msg.tokens.output + msg.tokens.reasoning + msg.tokens.cache.read + msg.tokens.cache.write
+  if (msg.tokens.total) return msg.tokens.total
+  return msg.tokens.input + msg.tokens.output + msg.tokens.cache.read + msg.tokens.cache.write
 }
+
+const hasUsage = (msg: AssistantMessage) => tokenTotal(msg) > 0 || msg.tokens.reasoning > 0
 
 const lastAssistantWithTokens = (messages: Message[]) => {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]
     if (msg.role !== "assistant") continue
-    if (tokenTotal(msg) <= 0) continue
+    if (!hasUsage(msg)) continue
     return msg
   }
 }

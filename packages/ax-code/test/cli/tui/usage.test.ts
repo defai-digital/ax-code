@@ -23,7 +23,7 @@ function assistant(input: {
 }
 
 describe("Usage.total", () => {
-  test("counts reasoning and cache tokens", () => {
+  test("counts input, output, and cache tokens (excludes reasoning)", () => {
     expect(
       Usage.total(
         assistant({
@@ -34,7 +34,13 @@ describe("Usage.total", () => {
           write: 5,
         }) as any,
       ),
-    ).toBe(190)
+    ).toBe(165)
+  })
+
+  test("uses tokens.total when available", () => {
+    const msg = assistant({ input: 100, output: 50 }) as any
+    msg.tokens.total = 200
+    expect(Usage.total(msg)).toBe(200)
   })
 })
 

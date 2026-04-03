@@ -304,7 +304,16 @@ export namespace SessionProcessor {
                     : (value.finishReason as any)?.type ?? String(value.finishReason ?? "stop")
                   input.assistantMessage.finish = usedTools ? "tool-calls" : finishReason
                   input.assistantMessage.cost += usage.cost
-                  input.assistantMessage.tokens = usage.tokens
+                  input.assistantMessage.tokens = {
+                    total: (usage.tokens.total ?? 0) + (input.assistantMessage.tokens.total ?? 0) || undefined,
+                    input: usage.tokens.input + input.assistantMessage.tokens.input,
+                    output: usage.tokens.output + input.assistantMessage.tokens.output,
+                    reasoning: usage.tokens.reasoning + input.assistantMessage.tokens.reasoning,
+                    cache: {
+                      read: usage.tokens.cache.read + input.assistantMessage.tokens.cache.read,
+                      write: usage.tokens.cache.write + input.assistantMessage.tokens.cache.write,
+                    },
+                  }
                   await Session.updatePart({
                     id: PartID.ascending(),
                     reason: usedTools ? "tool-calls" : finishReason,
