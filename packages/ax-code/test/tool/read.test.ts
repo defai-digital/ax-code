@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import path from "path"
 import { ReadTool } from "../../src/tool/read"
+import { LSP } from "../../src/lsp"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -9,6 +10,7 @@ import { Agent } from "../../src/agent/agent"
 import { SessionID, MessageID } from "../../src/session/schema"
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
+const LSP_FILE = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -444,6 +446,37 @@ root_type Monster;`
         expect(result.attachments).toBeUndefined()
         expect(result.output).toContain("namespace MyGame")
         expect(result.output).toContain("table Monster")
+      },
+    })
+  })
+})
+
+describe("tool.read lsp", () => {
+  test("activates lsp while reading a file", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        lsp: {
+          fake: {
+            command: [process.execPath, LSP_FILE],
+            extensions: [".txt"],
+          },
+        },
+      },
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "test.txt"), "hello world")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        await read.execute({ filePath: path.join(tmp.path, "test.txt") }, ctx)
+        expect(await LSP.status()).toContainEqual({
+          id: "fake",
+          name: "fake",
+          root: "",
+          status: "connected",
+        })
       },
     })
   })
