@@ -292,6 +292,8 @@ export namespace SessionProcessor {
                   break
 
                 case "finish-step":
+                  if (!value.usage || (value.usage.inputTokens === 0 && value.usage.outputTokens === 0))
+                    log.warn("provider returned no usage data", { provider: input.model.providerID, model: input.model.id })
                   const usage = Session.getUsage({
                     model: input.model,
                     usage: value.usage ?? { inputTokens: 0, outputTokens: 0 },
