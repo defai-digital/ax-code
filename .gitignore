@@ -43,14 +43,10 @@ auth.json
 CLAUDE.md
 AGENTS.md
 
-# Internal planning (kept locally, not in public repo)
-TODOS/
+# Project Docs (tracked via git add -f)
+ADRS/
 BUGS/
 PRDS/
-ADRS/
+TODOS/
 
 # Local dev files
-opencode-dev
-logs/
-*.bun-build
-tsconfig.tsbuildinfo
