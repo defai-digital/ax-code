@@ -28,9 +28,57 @@ export function createDialogProviderOptions() {
       map((provider) => ({
         title: provider.name,
         value: provider.id,
-        description: undefined as string | undefined,
+        description: sync.data.provider_next.connected.includes(provider.id) ? "Connected" : undefined,
         category: OFFLINE_PROVIDERS.has(provider.id) ? "Offline" : "Online",
         async onSelect() {
+          const isConnected = sync.data.provider_next.connected.includes(provider.id)
+
+          // If provider already has a saved key, offer to use it or replace it
+          if (isConnected) {
+            const action = await new Promise<"use" | "replace" | "remove" | null>((resolve) => {
+              dialog.replace(
+                () => (
+                  <DialogSelect
+                    title={`${provider.name} — already connected`}
+                    options={[
+                      {
+                        title: "Use saved key",
+                        value: "use" as const,
+                        description: "Select a model from this provider",
+                      },
+                      {
+                        title: "Replace key",
+                        value: "replace" as const,
+                        description: "Enter a new API key",
+                      },
+                      {
+                        title: "Disconnect",
+                        value: "remove" as const,
+                        description: "Remove saved credentials",
+                      },
+                    ]}
+                    onSelect={(option) => resolve(option.value)}
+                  />
+                ),
+                () => resolve(null),
+              )
+            })
+            if (action === null) return
+            if (action === "use") {
+              dialog.replace(() => <DialogModel providerID={provider.id} />)
+              return
+            }
+            if (action === "remove") {
+              await sdk.client.auth.remove({ providerID: provider.id })
+              await sdk.client.instance.dispose()
+              await sync.bootstrap()
+              toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
+              dialog.clear()
+              return
+            }
+            // action === "replace" → fall through to auth flow
+          }
+
           const methods = sync.data.provider_auth[provider.id] ?? [
             {
               type: "api",
@@ -104,7 +152,7 @@ export function createDialogProviderOptions() {
 
 export function DialogProvider() {
   const options = createDialogProviderOptions()
-  return <DialogSelect title="Connect a provider" options={options()} />
+  return <DialogSelect title="Providers" options={options()} />
 }
 
 interface AutoMethodProps {
@@ -224,30 +272,7 @@ function ApiMethod(props: ApiMethodProps) {
       title={props.title}
       placeholder="API key"
       description={
-        {
-          opencode: (
-            <box gap={1}>
-              <text fg={theme.textMuted}>
-                ax-code Zen gives you access to all the best coding models at the cheapest prices with a single API
-                key.
-              </text>
-              <text fg={theme.text}>
-                Go to <span style={{ fg: theme.primary }}>https://ax-code.ai/zen</span> to get a key
-              </text>
-            </box>
-          ),
-          "opencode-go": (
-            <box gap={1}>
-              <text fg={theme.textMuted}>
-                ax-code Go is a $10 per month subscription that provides reliable access to popular open coding models
-                with generous usage limits.
-              </text>
-              <text fg={theme.text}>
-                Go to <span style={{ fg: theme.primary }}>https://ax-code.ai/zen</span> and enable ax-code Go
-              </text>
-            </box>
-          ),
-        }[props.providerID] ?? undefined
+        undefined
       }
       onConfirm={async (value) => {
         if (!value) return

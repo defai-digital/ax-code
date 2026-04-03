@@ -1,4 +1,4 @@
-import { Component, Show } from "solid-js"
+import { Component, Show, createMemo } from "solid-js"
 import { useDialog } from "@ax-code/ui/context/dialog"
 import { isOfflineProvider, useProviders } from "@/hooks/use-providers"
 import { Dialog } from "@ax-code/ui/dialog"
@@ -8,6 +8,7 @@ import { ProviderIcon } from "@ax-code/ui/provider-icon"
 import { DialogConnectProvider } from "./dialog-connect-provider"
 import { useLanguage } from "@/context/language"
 import { DialogCustomProvider } from "./dialog-custom-provider"
+import { useGlobalSync } from "@/context/global-sync"
 
 const CUSTOM_ID = "_custom"
 
@@ -15,6 +16,8 @@ export const DialogSelectProvider: Component = () => {
   const dialog = useDialog()
   const providers = useProviders()
   const language = useLanguage()
+  const sync = useGlobalSync()
+  const connectedSet = createMemo(() => new Set(sync.data.provider.connected))
 
   const onlineGroup = () => language.t("dialog.provider.group.popular")
   const offlineGroup = () => language.t("dialog.provider.group.other")
@@ -63,6 +66,9 @@ export const DialogSelectProvider: Component = () => {
             <span>{i.name}</span>
             <Show when={i.id === CUSTOM_ID}>
               <Tag>{language.t("settings.providers.tag.custom")}</Tag>
+            </Show>
+            <Show when={connectedSet().has(i.id)}>
+              <Tag variant="success">Connected</Tag>
             </Show>
             <Show when={note(i.id)}>{(value) => <div class="text-14-regular text-text-weak">{value()}</div>}</Show>
           </div>
