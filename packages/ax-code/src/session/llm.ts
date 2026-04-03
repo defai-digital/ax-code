@@ -40,6 +40,7 @@ export namespace LLM {
     tools: Record<string, Tool>
     retries?: number
     toolChoice?: "auto" | "required" | "none"
+    config?: Awaited<ReturnType<typeof Config.get>>
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
@@ -59,7 +60,7 @@ export namespace LLM {
     })
     const [language, cfg, provider] = await Promise.all([
       Provider.getLanguage(input.model),
-      Config.get(),
+      input.config ?? Config.get(),
       Provider.getProvider(input.model.providerID),
     ])
 
@@ -150,7 +151,7 @@ export namespace LLM {
 
     const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
-    const tools = await resolveTools(input)
+    const tools = await resolveTools(input, cfg)
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
@@ -250,7 +251,7 @@ export namespace LLM {
     })
   }
 
-  async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">) {
+  async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">, cfg: Awaited<ReturnType<typeof Config.get>>) {
     const disabled = Permission.disabled(
       Object.keys(input.tools),
       Permission.merge(input.agent.permission, input.permission ?? []),
@@ -261,7 +262,6 @@ export namespace LLM {
       }
     }
 
-    const cfg = await Config.get()
     const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
     if (isolation.mode === "read-only") {
       for (const t of ["edit", "write", "apply_patch", "multiedit", "bash"]) delete input.tools[t]

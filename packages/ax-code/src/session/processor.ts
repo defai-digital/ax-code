@@ -62,6 +62,7 @@ export namespace SessionProcessor {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const recentToolRing: { tool: string; input: string }[] = []
     const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
+    let cachedShouldBreak: boolean | undefined
     let snapshot: string | undefined
     let blocked = false
     let attempt = 0
@@ -77,7 +78,7 @@ export namespace SessionProcessor {
       async process(streamInput: LLM.StreamInput) {
         log.info("process")
         needsCompaction = false
-        const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
+        const shouldBreak = cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true
         while (true) {
           try {
             let currentText: MessageV2.TextPart | undefined

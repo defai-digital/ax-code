@@ -264,6 +264,14 @@ export namespace SessionPrompt {
     const MAX_CONSECUTIVE_ERRORS = _MAX_CONSECUTIVE_ERRORS
     const GLOBAL_STEP_LIMIT = _GLOBAL_STEP_LIMIT
     const session = await Session.get(sessionID)
+    // Pre-load expensive resources once before the loop
+    const cfg = await Config.get()
+    const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
+    const cachedSystemPrompt = {
+      environment: undefined as string[] | undefined,
+      environmentModelKey: undefined as string | undefined,
+      instructions: undefined as string[] | undefined,
+    }
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
     while (true) {
@@ -629,6 +637,7 @@ export namespace SessionPrompt {
         processor,
         bypassAgentCheck,
         messages: msgs,
+        isolation,
       })
 
       // Inject StructuredOutput tool if JSON schema mode enabled
@@ -669,12 +678,18 @@ export namespace SessionPrompt {
 
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
-      // Build system prompt, adding structured output instruction if needed
+      // Build system prompt — cache environment and instructions across steps
       const skills = await SystemPrompt.skills(agent)
+      const modelKey = `${model.providerID}/${model.api.id}`
+      if (!cachedSystemPrompt.environment || cachedSystemPrompt.environmentModelKey !== modelKey) {
+        cachedSystemPrompt.environment = await SystemPrompt.environment(model)
+        cachedSystemPrompt.environmentModelKey = modelKey
+      }
+      if (!cachedSystemPrompt.instructions) cachedSystemPrompt.instructions = await InstructionPrompt.system()
       const system = [
-        ...(await SystemPrompt.environment(model)),
+        ...cachedSystemPrompt.environment,
         ...(skills ? [skills] : []),
-        ...(await InstructionPrompt.system()),
+        ...cachedSystemPrompt.instructions,
       ]
       const format = lastUser.format ?? { type: "text" }
       if (format.type === "json_schema") {
@@ -702,6 +717,7 @@ export namespace SessionPrompt {
         tools,
         model,
         toolChoice: format.type === "json_schema" ? "required" : undefined,
+        config: cfg,
       })
 
       // If structured output was captured, save it and exit immediately
@@ -770,6 +786,7 @@ export namespace SessionPrompt {
   })
 
   const lastModel = _lastModel
+  let _schemaCache: Map<string, any> | undefined
 
   /** @internal Exported for testing */
   export async function resolveTools(input: {
@@ -780,11 +797,14 @@ export namespace SessionPrompt {
     processor: SessionProcessor.Info
     bypassAgentCheck: boolean
     messages: MessageV2.WithParts[]
+    isolation?: Isolation.State
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
-    const cfg = await Config.get()
-    const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
+    const isolation = input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory)
+    // Cache transformed schemas across steps — key: "toolId:npm"
+    if (!_schemaCache) _schemaCache = new Map()
+    const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}`
 
     const context = (args: any, options: ToolCallOptions): Tool.Context => ({
       sessionID: input.session.id,
@@ -825,7 +845,12 @@ export namespace SessionPrompt {
       { modelID: ModelID.make(input.model.api.id), providerID: input.model.providerID },
       input.agent,
     )) {
-      const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      const cacheKey = schemaCacheKey(item.id)
+      const schema = _schemaCache!.get(cacheKey) ?? (() => {
+        const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+        _schemaCache!.set(cacheKey, s)
+        return s
+      })()
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
