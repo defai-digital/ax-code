@@ -11,8 +11,10 @@ export function SessionReviewHandoffCard(props: {
   deletions: number
   risks: string[]
   steps: string[]
+  checks?: { id: string; title: string; command: string; recent?: boolean }[]
   onOpenReview: () => void
   onRunChecks: () => void
+  onRunCheck?: (item: { id: string; title: string; command: string; recent?: boolean }) => void
   onCopySummary: () => void
 }) {
   const language = useLanguage()
@@ -62,6 +64,32 @@ export function SessionReviewHandoffCard(props: {
               {language.t("session.handoff.action.copy")}
             </Button>
           </div>
+
+          <Show when={props.checks?.length}>
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-col gap-1">
+                <div class="text-11-medium uppercase tracking-[0.08em] text-text-weak">
+                  {language.t("session.handoff.checks.title")}
+                </div>
+                <div class="text-12-regular text-text-weak">{language.t("session.handoff.checks.note")}</div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <For each={props.checks}>
+                  {(item) => (
+                    <Button
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      title={item.command}
+                      onClick={() => props.onRunCheck?.(item)}
+                    >
+                      {item.title}
+                    </Button>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
         </div>
       </div>
     </div>

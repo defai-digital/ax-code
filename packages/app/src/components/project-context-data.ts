@@ -16,6 +16,7 @@ export type ProjectContextInfo = {
   files: ProjectContextFile[]
   instructions: ProjectContextFile[]
   templates: ProjectContextTemplate[]
+  checks: ProjectContextCheck[]
   memory: {
     exists: boolean
     totalTokens: number
@@ -23,6 +24,14 @@ export type ProjectContextInfo = {
     contentHash: string
     sections: string[]
   } | null
+}
+
+export type ProjectContextCheck = {
+  id: string
+  title: string
+  command: string
+  cwd: string
+  source: "root" | "directory"
 }
 
 export type ProjectContextTemplate = {

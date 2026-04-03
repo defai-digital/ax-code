@@ -17,6 +17,7 @@ import { useTerminal } from "@/context/terminal"
 import { terminalTabLabel } from "@/pages/session/terminal-label"
 import { createSizing, focusTerminalById } from "@/pages/session/helpers"
 import { getTerminalHandoff, setTerminalHandoff } from "@/pages/session/handoff"
+import { SessionRecoveryBanner } from "@/pages/session/session-recovery-banner"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { terminalProbe } from "@/testing/terminal"
 
@@ -38,6 +39,15 @@ export function TerminalPanel() {
     autoCreated: false,
     activeDraggable: undefined as string | undefined,
     view: typeof window === "undefined" ? 1000 : (window.visualViewport?.height ?? window.innerHeight),
+    recovery: undefined as
+      | {
+          key: string
+          id: string
+          message: string
+          retrying?: boolean
+        }
+      | undefined,
+    hiddenRecovery: undefined as string | undefined,
   })
 
   const max = () => store.view * 0.6
@@ -153,6 +163,12 @@ export function TerminalPanel() {
 
   const all = terminal.all
   const ids = createMemo(() => all().map((pty) => pty.id))
+  const recovery = createMemo(() => {
+    const item = store.recovery
+    if (!item) return
+    if (store.hiddenRecovery === item.key) return
+    return item
+  })
 
   const handleTerminalDragStart = (event: unknown) => {
     const id = getDraggableId(event)
@@ -279,6 +295,53 @@ export function TerminalPanel() {
                 </Tabs.List>
               </Tabs>
               <div class="flex-1 min-h-0 relative">
+                <Show when={recovery()}>
+                  {(item) => (
+                    <div class="absolute inset-x-0 top-0 z-10 px-3 pt-3">
+                      <SessionRecoveryBanner
+                        title={language.t("terminal.recovery.title")}
+                        message={item().message}
+                        actionLabel={item().retrying ? undefined : language.t("terminal.recovery.retry")}
+                        onAction={() => {
+                          if (item().retrying) return
+                          setStore("hiddenRecovery", undefined)
+                          const current = item()
+                          setStore("recovery", (value) =>
+                            value?.key === current.key
+                              ? {
+                                  ...value,
+                                  retrying: true,
+                                }
+                              : value,
+                          )
+                          void terminal.clone(current.id).then((next) => {
+                            if (!next) {
+                              setStore("recovery", (value) =>
+                                value?.key === current.key
+                                  ? {
+                                      ...value,
+                                      retrying: false,
+                                    }
+                                  : value,
+                              )
+                              return
+                            }
+                            setStore("recovery", (value) =>
+                              value?.key === current.key
+                                ? {
+                                    ...value,
+                                    id: next,
+                                  }
+                                : value,
+                            )
+                          })
+                        }}
+                        dismissLabel={language.t("common.dismiss")}
+                        onDismiss={() => setStore("hiddenRecovery", item().key)}
+                      />
+                    </div>
+                  )}
+                </Show>
                 <Show when={terminal.active()} keyed>
                   {(id) => {
                     const ops = terminal.bind()
@@ -289,9 +352,45 @@ export function TerminalPanel() {
                             <Terminal
                               pty={pty()}
                               autoFocus={opened()}
-                              onConnect={() => ops.trim(id)}
+                              onConnect={() => {
+                                ops.trim(id)
+                                setStore("recovery", (item) => (item?.id === id ? undefined : item))
+                                setStore("hiddenRecovery", (key) => (key?.startsWith(`${id}:`) ? undefined : key))
+                              }}
                               onCleanup={ops.update}
-                              onConnectError={() => ops.clone(id)}
+                              onConnectError={(error) => {
+                                const key = `${id}:${Date.now()}`
+                                setStore("recovery", {
+                                  id,
+                                  key,
+                                  message:
+                                    error instanceof Error
+                                      ? error.message
+                                      : language.t("terminal.connectionLost.description"),
+                                  retrying: true,
+                                })
+                                void ops.clone(id).then((next) => {
+                                  if (!next) {
+                                    setStore("recovery", (item) =>
+                                      item?.key === key
+                                        ? {
+                                            ...item,
+                                            retrying: false,
+                                          }
+                                        : item,
+                                    )
+                                    return
+                                  }
+                                  setStore("recovery", (item) =>
+                                    item?.key === key
+                                      ? {
+                                          ...item,
+                                          id: next,
+                                        }
+                                      : item,
+                                  )
+                                })
+                              }}
                             />
                           </div>
                         )}

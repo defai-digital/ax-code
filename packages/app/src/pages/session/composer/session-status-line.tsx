@@ -158,7 +158,7 @@ export function SessionStatusLine(props: {
   })
 
   const approval = createMemo(() => {
-    const total = props.state.permissionRequest() ? 1 : 0
+    const total = props.state.permissionRequests().length
     if (total > 0) {
       return language.t(total === 1 ? "session.status.approval.pending.one" : "session.status.approval.pending.other", {
         count: total,
@@ -236,7 +236,7 @@ export function SessionStatusLine(props: {
       {
         label: language.t("session.status.approval"),
         value: approval(),
-        tone: props.state.permissionRequest() ? "warning" : auto() ? "success" : "base",
+        tone: props.state.permissionRequests().length > 0 ? "warning" : auto() ? "success" : "base",
       },
     )
 

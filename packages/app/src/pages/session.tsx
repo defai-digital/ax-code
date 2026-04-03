@@ -8,6 +8,7 @@ import {
   Show,
   Match,
   Switch,
+  createResource,
   createMemo,
   createEffect,
   createComputed,
@@ -29,6 +30,7 @@ import { Button } from "@ax-code/ui/button"
 import { showToast } from "@ax-code/ui/toast"
 import { base64Encode, checksum } from "@ax-code/util/encode"
 import { useNavigate, useSearchParams } from "@solidjs/router"
+import { type ProjectContextInfo, useProjectContextRequest } from "@/components/project-context-data"
 import { quickPrompt } from "@/components/quick-starts"
 import { NewSessionView, SessionHeader } from "@/components/session"
 import { useComments } from "@/context/comments"
@@ -38,6 +40,7 @@ import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
+import { useServer } from "@/context/server"
 import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { useTerminal } from "@/context/terminal"
@@ -60,6 +63,7 @@ import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
+import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
 import { same } from "@/utils/same"
 import { formatServerError } from "@/utils/server-errors"
@@ -328,12 +332,25 @@ export default function Page() {
   const language = useLanguage()
   const navigate = useNavigate()
   const sdk = useSDK()
+  const server = useServer()
   const settings = useSettings()
   const prompt = usePrompt()
   const comments = useComments()
   const terminal = useTerminal()
   const [searchParams, setSearchParams] = useSearchParams<{ prompt?: string }>()
   const { params, sessionKey, tabs, view } = useSessionLayout()
+  const request = useProjectContextRequest()
+
+  const [context] = createResource(
+    () => `${server.key}:${sdk.directory}`,
+    () => request<ProjectContextInfo>("/context"),
+  )
+  const [verify, setVerify] = persisted(
+    Persist.workspace(sdk.directory, "handoff-checks"),
+    createStore({
+      recent: [] as { command: string; title: string }[],
+    }),
+  )
 
   createEffect(() => {
     if (!untrack(() => prompt.ready())) return
@@ -1588,14 +1605,51 @@ export default function Page() {
     return [...new Set(out)].slice(0, 3)
   })
 
+  const handoffChecks = createMemo(() => {
+    const seen = new Set<string>()
+    const out: { id: string; title: string; command: string; recent?: boolean }[] = []
+
+    for (const item of verify.recent) {
+      const cmd = item.command.trim()
+      if (!cmd || seen.has(cmd)) continue
+      seen.add(cmd)
+      out.push({
+        id: `recent:${cmd}`,
+        title: item.title,
+        command: cmd,
+        recent: true,
+      })
+    }
+
+    for (const item of context()?.checks ?? []) {
+      const cmd = item.command.trim()
+      if (!cmd || seen.has(cmd)) continue
+      seen.add(cmd)
+      out.push({
+        id: item.id,
+        title: item.title,
+        command: cmd,
+      })
+    }
+
+    return out.slice(0, 4)
+  })
+
   const handoffSteps = createMemo(() => {
     const out = []
     const flags = handoffFlags()
+    const checks = handoffChecks()
 
     out.push(language.t("session.handoff.verify.review"))
     if (flags.deleted) out.push(language.t("session.handoff.verify.deleted"))
     if (flags.config) out.push(language.t("session.handoff.verify.config"))
-    out.push(language.t("session.handoff.verify.checks"))
+    if (checks.length > 0) {
+      out.push(
+        ...checks.slice(0, 2).map((item) => language.t("session.handoff.verify.command", { command: item.command })),
+      )
+    } else {
+      out.push(language.t("session.handoff.verify.checks"))
+    }
 
     return [...new Set(out)].slice(0, 3)
   })
@@ -1673,6 +1727,21 @@ export default function Page() {
 
   const runHandoffChecks = () => {
     const text = language.t("session.handoff.action.checks.prompt")
+    prompt.set(quickPrompt(text), text.length)
+    requestAnimationFrame(() => focusInput())
+  }
+
+  const runHandoffCheck = (item: { command: string; title?: string }) => {
+    const cmd = item.command.trim()
+    if (cmd) {
+      setVerify("recent", (list) =>
+        [{ command: cmd, title: item.title?.trim() || cmd }, ...list.filter((entry) => entry.command !== cmd)].slice(
+          0,
+          4,
+        ),
+      )
+    }
+    const text = language.t("session.handoff.action.command.prompt", { command: item.command })
     prompt.set(quickPrompt(text), text.length)
     requestAnimationFrame(() => focusInput())
   }
@@ -1797,7 +1866,6 @@ export default function Page() {
       { id: Identifier.ascending("message"), ...draft },
     ])
     setFollowup("failed", draft.sessionID, undefined)
-    setFollowup("paused", draft.sessionID, undefined)
   }
 
   const followupDock = createMemo(() => queuedFollowups().map((item) => ({ id: item.id, text: followupText(item) })))
@@ -2139,8 +2207,10 @@ export default function Page() {
               deletions={info()?.summary?.deletions ?? 0}
               risks={handoffRisks()}
               steps={handoffSteps()}
+              checks={handoffChecks()}
               onOpenReview={openHandoffReview}
               onRunChecks={runHandoffChecks}
+              onRunCheck={runHandoffCheck}
               onCopySummary={copyHandoff}
             />
           </Show>
@@ -2179,7 +2249,8 @@ export default function Page() {
                     },
                     onResume: resumeFollowups,
                     onSend: (id) => {
-                      void sendFollowup(params.id!, id, { manual: true })
+                      if (!params.id) return
+                      void sendFollowup(params.id, id, { manual: true })
                     },
                     onEdit: editFollowup,
                     onRemove: removeFollowup,

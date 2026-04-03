@@ -1,10 +1,14 @@
 import { Show, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSpring } from "@ax-code/ui/motion-spring"
+import { useDialog } from "@ax-code/ui/context/dialog"
 import { PromptInput } from "@/components/prompt-input"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
+import { useServer } from "@/context/server"
+import { useSync } from "@/context/sync"
 import { getSessionHandoff, setSessionHandoff } from "@/pages/session/handoff"
+import { SessionRecoveryBanner } from "@/pages/session/session-recovery-banner"
 import { useSessionKey } from "@/pages/session/session-layout"
 import { SessionPermissionDock } from "@/pages/session/composer/session-permission-dock"
 import { SessionQuestionDock } from "@/pages/session/composer/session-question-dock"
@@ -50,11 +54,15 @@ export function SessionComposerRegion(props: {
   }
   setPromptDockRef: (el: HTMLDivElement) => void
 }) {
+  const dialog = useDialog()
   const prompt = usePrompt()
   const language = useLanguage()
+  const server = useServer()
+  const sync = useSync()
   const route = useSessionKey()
 
   const handoffPrompt = createMemo(() => getSessionHandoff(route.sessionKey())?.prompt)
+  const status = createMemo(() => sync.data.session_status[route.params.id ?? ""] ?? { type: "idle" as const })
 
   const previewPrompt = () =>
     prompt
@@ -77,6 +85,7 @@ export function SessionComposerRegion(props: {
     ready: false,
     height: 320,
     body: undefined as HTMLDivElement | undefined,
+    hiddenRecovery: undefined as string | undefined,
   })
   let timer: number | undefined
   let frame: number | undefined
@@ -130,6 +139,41 @@ export function SessionComposerRegion(props: {
     const observer = new ResizeObserver(update)
     observer.observe(el)
     onCleanup(() => observer.disconnect())
+  })
+
+  const openServers = () => {
+    void import("@/components/dialog-select-server").then((x) => {
+      dialog.show(() => <x.DialogSelectServer />)
+    })
+  }
+
+  const recovery = createMemo(() => {
+    if (server.healthy() === false) {
+      return {
+        key: `server:${server.key}`,
+        title: language.t("session.recovery.server.title"),
+        message: language.t("session.recovery.server.message"),
+        actionLabel: language.t("status.popover.action.manageServers"),
+        onAction: openServers,
+      }
+    }
+
+    const current = status()
+    if (current.type === "retry") {
+      return {
+        key: `session:${route.params.id ?? "new"}:${current.attempt}`,
+        title: language.t("session.recovery.retry.title"),
+        message: language.t("session.recovery.retry.message", { attempt: current.attempt }),
+        actionLabel: language.t("status.popover.action.manageServers"),
+        onAction: openServers,
+      }
+    }
+  })
+
+  createEffect(() => {
+    if (recovery()) return
+    if (!store.hiddenRecovery) return
+    setStore("hiddenRecovery", undefined)
   })
 
   return (
@@ -260,6 +304,16 @@ export function SessionComposerRegion(props: {
                   onSend={props.followup!.onSend}
                   onEdit={props.followup!.onEdit}
                   onRemove={props.followup!.onRemove}
+                />
+              </Show>
+              <Show when={recovery() && store.hiddenRecovery !== recovery()!.key}>
+                <SessionRecoveryBanner
+                  title={recovery()!.title}
+                  message={recovery()!.message}
+                  actionLabel={recovery()!.actionLabel}
+                  onAction={recovery()!.onAction}
+                  dismissLabel={language.t("common.dismiss")}
+                  onDismiss={() => setStore("hiddenRecovery", recovery()!.key)}
                 />
               </Show>
               <SessionStatusLine

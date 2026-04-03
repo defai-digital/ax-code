@@ -711,6 +711,12 @@ export const dict = {
   "session.status.followup.paused": "Paused",
   "session.status.followup.failed": "Needs retry",
   "session.status.followup.sending": "Sending next",
+  "session.recovery.server.title": "Server unavailable",
+  "session.recovery.server.message":
+    "AX Code cannot reach the current server right now. You can switch servers now or wait for the automatic health check to recover.",
+  "session.recovery.retry.title": "Retrying this session",
+  "session.recovery.retry.message":
+    "The current session is retrying after a connection or server issue. Attempt {{attempt}} is in progress.",
   "session.handoff.title": "Review handoff",
   "session.handoff.eyebrow": "Review handoff",
   "session.handoff.metric.files.one": "{{count}} file changed",
@@ -728,11 +734,17 @@ export const dict = {
     "Exercise the affected flows and confirm removed files no longer have live references.",
   "session.handoff.verify.config": "Run dependency sync if needed, then rerun the relevant build or test commands.",
   "session.handoff.verify.checks": "Run the relevant tests, lint, or build checks for this workspace.",
+  "session.handoff.verify.command": "Run {{command}}",
   "session.handoff.action.review": "Open review",
   "session.handoff.action.checks": "Run checks",
   "session.handoff.action.copy": "Copy summary",
+  "session.handoff.checks.title": "Suggested commands",
+  "session.handoff.checks.note":
+    "AX Code remembers checks you run in this workspace and keeps repo suggestions nearby.",
   "session.handoff.action.checks.prompt":
     "Run the relevant tests, lint, and build checks for these changes. Summarize failures, or confirm the project is clean.",
+  "session.handoff.action.command.prompt":
+    "Run this verification command:\n\n{{command}}\n\nSummarize failures, or confirm it passed cleanly.",
   "session.handoff.copy.files": "{{count}} files changed (+{{additions}} / -{{deletions}})",
 
   "session.new.title": "Build anything",
@@ -841,6 +853,8 @@ export const dict = {
   "terminal.connectionLost.abnormalClose": "WebSocket closed abnormally: {{code}}",
   "terminal.connectionLost.description":
     "The terminal connection was interrupted. This can happen when the server restarts.",
+  "terminal.recovery.title": "Terminal disconnected",
+  "terminal.recovery.retry": "Retry now",
 
   "common.closeTab": "Close tab",
   "common.dismiss": "Dismiss",

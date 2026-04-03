@@ -237,6 +237,8 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
         setStore("active", next.data.id)
       }
     })
+
+    return next.data.id
   }
 
   return {
@@ -285,7 +287,7 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
       })
     },
     async clone(id: string) {
-      await clone(sdk.client, id)
+      return clone(sdk.client, id)
     },
     bind() {
       const client = sdk.client
@@ -299,7 +301,7 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
           update(client, pty)
         },
         async clone(id: string) {
-          await clone(client, id)
+          return clone(client, id)
         },
       }
     },

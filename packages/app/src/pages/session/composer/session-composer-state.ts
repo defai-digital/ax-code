@@ -267,6 +267,7 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     blocked,
     questionRequest,
     permissionRequest,
+    permissionRequests,
     permissionBatch,
     permissionResponding,
     permissionBatchResponding,
