@@ -233,7 +233,11 @@ export namespace Config {
     }
 
     if (Flag.AX_CODE_PERMISSION) {
-      result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.AX_CODE_PERMISSION))
+      try {
+        result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.AX_CODE_PERMISSION))
+      } catch {
+        log.warn("invalid AX_CODE_PERMISSION JSON, ignoring", { value: Flag.AX_CODE_PERMISSION })
+      }
     }
 
     // Backwards compatibility: legacy top-level `tools` config

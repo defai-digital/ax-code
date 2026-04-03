@@ -146,6 +146,8 @@ export namespace Planner {
             if (phase.fallbackStrategy === "abort") {
               warnings.push(`Phase "${phase.name}" failed with abort strategy — stopping plan`)
               aborted = true
+            } else if (phase.fallbackStrategy === "skip") {
+              warnings.push(`Phase "${phase.name}" failed — skipped`)
             }
           }
           if (aborted) break

@@ -73,12 +73,21 @@ const AppContextTemplate = z.object({
   kind: z.enum(["instruction", "checklist"]),
 })
 
+const AppContextCheck = z.object({
+  id: z.string(),
+  title: z.string(),
+  command: z.string(),
+  cwd: z.string(),
+  source: z.enum(["root", "directory"]),
+})
+
 const AppContextInfo = z.object({
   directory: z.string(),
   worktree: z.string(),
   files: z.array(AppContextFile),
   instructions: z.array(AppContextFile),
   templates: z.array(AppContextTemplate),
+  checks: z.array(AppContextCheck),
   memory: AppContextMemory.nullable(),
 })
 
@@ -87,6 +96,7 @@ const AppContextTemplateRequest = z.object({
 })
 
 type AppContextTemplateData = Omit<z.infer<typeof AppContextTemplate>, "exists">
+type AppContextCheckData = z.infer<typeof AppContextCheck>
 
 function contextTemplates(input: { root: string; dir: string }) {
   const list: AppContextTemplateData[] = [
@@ -197,6 +207,198 @@ function templateBody(input: { key: z.infer<typeof AppContextTemplateRequest>["k
         "- [ ] Capture any follow-up work that should not block release.",
       ].join("\n")
   }
+}
+
+function quote(value: string) {
+  return /\s/.test(value) ? JSON.stringify(value) : value
+}
+
+async function packageManager(root: string) {
+  if (await Filesystem.exists(path.join(root, "pnpm-lock.yaml"))) return "pnpm" as const
+  if (await Filesystem.exists(path.join(root, "bun.lockb"))) return "bun" as const
+  if (await Filesystem.exists(path.join(root, "bun.lock"))) return "bun" as const
+  if (await Filesystem.exists(path.join(root, "yarn.lock"))) return "yarn" as const
+  if (await Filesystem.exists(path.join(root, "package-lock.json"))) return "npm" as const
+  return "npm" as const
+}
+
+function checkLabel(name: string) {
+  switch (name) {
+    case "check":
+      return "Check"
+    case "typecheck":
+      return "Typecheck"
+    case "test":
+      return "Test"
+    case "lint":
+      return "Lint"
+    case "build":
+      return "Build"
+    case "verify":
+      return "Verify"
+    case "format":
+      return "Format"
+    default:
+      return name
+  }
+}
+
+function checkCommand(input: { manager: "pnpm" | "bun" | "yarn" | "npm"; root: string; cwd: string; name: string }) {
+  const rel = path.relative(input.root, input.cwd)
+  if (input.manager === "pnpm") {
+    if (!rel) return `pnpm ${input.name}`
+    return `pnpm --dir ${quote(rel)} ${input.name}`
+  }
+  if (input.manager === "bun") {
+    if (!rel) return `bun run ${input.name}`
+    return `bun --cwd ${quote(rel)} run ${input.name}`
+  }
+  if (input.manager === "yarn") {
+    if (!rel) return `yarn ${input.name}`
+    return `yarn --cwd ${quote(rel)} ${input.name}`
+  }
+  if (!rel) return `npm run ${input.name}`
+  return `npm --prefix ${quote(rel)} run ${input.name}`
+}
+
+function checkTitle(input: { root: string; cwd: string; name: string }) {
+  const rel = path.relative(input.root, input.cwd)
+  if (!rel) return checkLabel(input.name)
+  return `${rel} ${checkLabel(input.name).toLowerCase()}`
+}
+
+function inDir(root: string, cwd: string, command: string) {
+  const rel = path.relative(root, cwd)
+  if (!rel) return command
+  return `cd ${quote(rel)} && ${command}`
+}
+
+function addCheck(
+  out: AppContextCheckData[],
+  seen: Set<string>,
+  input: { root: string; cwd: string; name: string; command: string },
+) {
+  const command = input.command.trim()
+  if (!command || seen.has(command)) return false
+  seen.add(command)
+
+  const rel = path.relative(input.root, input.cwd)
+  out.push({
+    id: `${rel || "."}:${input.name}:${out.length}`,
+    title: checkTitle(input),
+    command,
+    cwd: input.cwd,
+    source: path.resolve(input.cwd) === path.resolve(input.root) ? ("root" as const) : ("directory" as const),
+  })
+  return out.length >= 4
+}
+
+function makeTargets(text: string) {
+  const out = new Set<string>()
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || /^\s/.test(line)) continue
+    if (line.startsWith("#")) continue
+    const match = line.match(/^([A-Za-z0-9_.-]+)\s*:/)
+    if (!match) continue
+    out.add(match[1])
+  }
+  return out
+}
+
+async function contextChecks(input: { root: string; dir: string }) {
+  const order = ["typecheck", "test", "lint", "build"] as const
+  const manager = await packageManager(input.root)
+  const rootPkg = path.join(input.root, "package.json")
+  const nearest = (await Filesystem.findUp("package.json", input.dir, input.root))[0]
+  const pkgs = Array.from(new Set([rootPkg, nearest].filter((item): item is string => !!item)))
+  const seen = new Set<string>()
+  const out: AppContextCheckData[] = []
+
+  for (const file of pkgs) {
+    const json = await Filesystem.readJson<{ scripts?: Record<string, string> }>(file).catch(() => null)
+    const scripts = json?.scripts
+    if (!scripts) continue
+
+    const cwd = path.dirname(file)
+
+    for (const name of order) {
+      if (!scripts[name]) continue
+      const command = checkCommand({ manager, root: input.root, cwd, name })
+      if (addCheck(out, seen, { root: input.root, cwd, name, command })) return out
+    }
+  }
+
+  const makeOrder = ["verify", "check", "test", "lint", "build", "typecheck"] as const
+  const makeFiles = Array.from(
+    new Set([path.join(input.root, "Makefile"), ...(await Filesystem.findUp("Makefile", input.dir, input.root))]),
+  )
+  for (const file of makeFiles) {
+    if (!(await Filesystem.exists(file))) continue
+    const text = await Filesystem.readText(file).catch(() => "")
+    const targets = makeTargets(text)
+    const cwd = path.dirname(file)
+    for (const name of makeOrder) {
+      if (!targets.has(name)) continue
+      if (addCheck(out, seen, { root: input.root, cwd, name, command: inDir(input.root, cwd, `make ${name}`) }))
+        return out
+    }
+  }
+
+  const denoFiles = Array.from(
+    new Set([
+      path.join(input.root, "deno.json"),
+      path.join(input.root, "deno.jsonc"),
+      ...(await Filesystem.findUp("deno.json", input.dir, input.root)),
+      ...(await Filesystem.findUp("deno.jsonc", input.dir, input.root)),
+    ]),
+  )
+  for (const file of denoFiles) {
+    if (!(await Filesystem.exists(file))) continue
+    const cwd = path.dirname(file)
+    if (addCheck(out, seen, { root: input.root, cwd, name: "check", command: inDir(input.root, cwd, "deno check .") }))
+      return out
+    if (addCheck(out, seen, { root: input.root, cwd, name: "test", command: inDir(input.root, cwd, "deno test") }))
+      return out
+    if (
+      addCheck(out, seen, {
+        root: input.root,
+        cwd,
+        name: "format",
+        command: inDir(input.root, cwd, "deno fmt --check"),
+      })
+    )
+      return out
+  }
+
+  const cargoFiles = Array.from(
+    new Set([path.join(input.root, "Cargo.toml"), ...(await Filesystem.findUp("Cargo.toml", input.dir, input.root))]),
+  )
+  for (const file of cargoFiles) {
+    if (!(await Filesystem.exists(file))) continue
+    const cwd = path.dirname(file)
+    if (addCheck(out, seen, { root: input.root, cwd, name: "test", command: inDir(input.root, cwd, "cargo test") }))
+      return out
+    if (addCheck(out, seen, { root: input.root, cwd, name: "check", command: inDir(input.root, cwd, "cargo check") }))
+      return out
+    if (addCheck(out, seen, { root: input.root, cwd, name: "build", command: inDir(input.root, cwd, "cargo build") }))
+      return out
+  }
+
+  const goFiles = Array.from(
+    new Set([path.join(input.root, "go.mod"), ...(await Filesystem.findUp("go.mod", input.dir, input.root))]),
+  )
+  for (const file of goFiles) {
+    if (!(await Filesystem.exists(file))) continue
+    const cwd = path.dirname(file)
+    if (addCheck(out, seen, { root: input.root, cwd, name: "test", command: inDir(input.root, cwd, "go test ./...") }))
+      return out
+    if (
+      addCheck(out, seen, { root: input.root, cwd, name: "build", command: inDir(input.root, cwd, "go build ./...") })
+    )
+      return out
+  }
+
+  return out
 }
 
 export namespace Server {
@@ -629,12 +831,14 @@ export namespace Server {
             })),
           )
           const memory = await getMemoryMetadata(root)
+          const checks = await contextChecks({ root, dir: Instance.directory })
           return c.json({
             directory: Instance.directory,
             worktree: root,
             files,
             instructions,
             templates,
+            checks,
             memory,
           })
         },
@@ -865,7 +1069,6 @@ export namespace Server {
     mdnsDomain?: string
     cors?: string[]
   }) {
-    url = new URL(`http://${opts.hostname}:${opts.port}`)
     const app = createApp(opts)
     const args = {
       hostname: opts.hostname,
@@ -882,6 +1085,7 @@ export namespace Server {
     }
     const server = opts.port === 0 ? (tryServe(4096) ?? tryServe(0)) : tryServe(opts.port)
     if (!server) throw new Error(`Failed to start server on port ${opts.port}`)
+    url = new URL(`http://${opts.hostname}:${server.port}`)
 
     const shouldPublishMDNS =
       opts.mdns &&

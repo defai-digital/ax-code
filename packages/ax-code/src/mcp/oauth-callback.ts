@@ -188,6 +188,7 @@ export namespace McpOAuthCallback {
         resolve(true)
       })
       socket.on("error", () => {
+        socket.destroy()
         resolve(false)
       })
     })

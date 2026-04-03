@@ -431,7 +431,7 @@ export namespace SessionPrompt {
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
 
-    const abort = resume_existing ? resume(sessionID) : start(sessionID)
+    const abort = resume_existing ? (resume(sessionID) ?? start(sessionID)) : start(sessionID)
     if (!abort) {
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
         const callbacks = state()[sessionID].callbacks
@@ -663,7 +663,7 @@ export namespace SessionPrompt {
         SessionSummary.summarize({
           sessionID: sessionID,
           messageID: lastUser.id,
-        }, msgs)
+        }, msgs).catch((e) => log.warn("summarize failed", { error: e }))
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
@@ -782,7 +782,7 @@ export namespace SessionPrompt {
       }
       continue
     }
-    SessionCompaction.prune({ sessionID })
+    SessionCompaction.prune({ sessionID }).catch((e) => log.warn("prune failed", { error: e }))
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       const queued = state()[sessionID]?.callbacks ?? []

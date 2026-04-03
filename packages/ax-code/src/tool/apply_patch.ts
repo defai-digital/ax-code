@@ -12,6 +12,7 @@ import { assertExternalDirectory } from "./external-directory"
 import { trimDiff } from "./edit"
 import { Isolation } from "@/isolation"
 import { Filesystem } from "../util/filesystem"
+import { FileTime } from "../file/time"
 import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
 
@@ -92,6 +93,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         }
 
         case "update": {
+          await FileTime.assert(ctx.sessionID, filePath)
           let oldContent: string
           try {
             const stats = await fs.stat(filePath)
@@ -139,6 +141,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         }
 
         case "delete": {
+          await FileTime.assert(ctx.sessionID, filePath)
           const contentToDelete = await fs.readFile(filePath, "utf-8").catch((error) => {
             throw new Error(`apply_patch verification failed: ${error}`)
           })
@@ -195,23 +198,24 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       const edited = change.type === "delete" ? undefined : (change.movePath ?? change.filePath)
       switch (change.type) {
         case "add":
-          // Create parent directories (recursive: true is safe on existing/root dirs)
           await fs.mkdir(path.dirname(change.filePath), { recursive: true })
           await fs.writeFile(change.filePath, change.newContent, "utf-8")
+          await FileTime.read(ctx.sessionID, change.filePath)
           updates.push({ file: change.filePath, event: "add" })
           break
 
         case "update":
           await fs.writeFile(change.filePath, change.newContent, "utf-8")
+          await FileTime.read(ctx.sessionID, change.filePath)
           updates.push({ file: change.filePath, event: "change" })
           break
 
         case "move":
           if (change.movePath) {
-            // Create parent directories (recursive: true is safe on existing/root dirs)
             await fs.mkdir(path.dirname(change.movePath), { recursive: true })
             await fs.writeFile(change.movePath, change.newContent, "utf-8")
             await fs.unlink(change.filePath)
+            await FileTime.read(ctx.sessionID, change.movePath)
             updates.push({ file: change.filePath, event: "unlink" })
             updates.push({ file: change.movePath, event: "add" })
           }

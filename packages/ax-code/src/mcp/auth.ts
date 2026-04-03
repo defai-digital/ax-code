@@ -32,6 +32,16 @@ export namespace McpAuth {
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
+  const locks = new Map<string, Promise<void>>()
+  async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = locks.get(key) ?? Promise.resolve()
+    let result: T
+    const next = prev.then(async () => { result = await fn() })
+    locks.set(key, next.catch(() => {}))
+    await next
+    return result!
+  }
+
   function decryptEntry(raw: Record<string, unknown>): Entry {
     const entry = { ...raw } as Record<string, unknown>
     if (entry.tokens && typeof entry.tokens === "object") {
@@ -101,35 +111,45 @@ export namespace McpAuth {
   }
 
   export async function updateTokens(mcpName: string, tokens: Tokens, serverUrl?: string): Promise<void> {
-    const entry = (await get(mcpName)) ?? {}
-    entry.tokens = tokens
-    await set(mcpName, entry, serverUrl)
+    await withLock(mcpName, async () => {
+      const entry = (await get(mcpName)) ?? {}
+      entry.tokens = tokens
+      await set(mcpName, entry, serverUrl)
+    })
   }
 
   export async function updateClientInfo(mcpName: string, clientInfo: ClientInfo, serverUrl?: string): Promise<void> {
-    const entry = (await get(mcpName)) ?? {}
-    entry.clientInfo = clientInfo
-    await set(mcpName, entry, serverUrl)
+    await withLock(mcpName, async () => {
+      const entry = (await get(mcpName)) ?? {}
+      entry.clientInfo = clientInfo
+      await set(mcpName, entry, serverUrl)
+    })
   }
 
   export async function updateCodeVerifier(mcpName: string, codeVerifier: string): Promise<void> {
-    const entry = (await get(mcpName)) ?? {}
-    entry.codeVerifier = codeVerifier
-    await set(mcpName, entry)
+    await withLock(mcpName, async () => {
+      const entry = (await get(mcpName)) ?? {}
+      entry.codeVerifier = codeVerifier
+      await set(mcpName, entry)
+    })
   }
 
   export async function clearCodeVerifier(mcpName: string): Promise<void> {
-    const entry = await get(mcpName)
-    if (entry) {
-      delete entry.codeVerifier
-      await set(mcpName, entry)
-    }
+    await withLock(mcpName, async () => {
+      const entry = await get(mcpName)
+      if (entry) {
+        delete entry.codeVerifier
+        await set(mcpName, entry)
+      }
+    })
   }
 
   export async function updateOAuthState(mcpName: string, oauthState: string): Promise<void> {
-    const entry = (await get(mcpName)) ?? {}
-    entry.oauthState = oauthState
-    await set(mcpName, entry)
+    await withLock(mcpName, async () => {
+      const entry = (await get(mcpName)) ?? {}
+      entry.oauthState = oauthState
+      await set(mcpName, entry)
+    })
   }
 
   export async function getOAuthState(mcpName: string): Promise<string | undefined> {
@@ -138,11 +158,13 @@ export namespace McpAuth {
   }
 
   export async function clearOAuthState(mcpName: string): Promise<void> {
-    const entry = await get(mcpName)
-    if (entry) {
-      delete entry.oauthState
-      await set(mcpName, entry)
-    }
+    await withLock(mcpName, async () => {
+      const entry = await get(mcpName)
+      if (entry) {
+        delete entry.oauthState
+        await set(mcpName, entry)
+      }
+    })
   }
 
   /**

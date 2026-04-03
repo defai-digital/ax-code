@@ -65,10 +65,12 @@ export namespace Clipboard {
         nothrow: true,
       })
       if (base64.text) {
-        const imageBuffer = Buffer.from(base64.text.trim(), "base64")
-        if (imageBuffer.length > 0) {
-          return { data: imageBuffer.toString("base64"), mime: "image/png" }
-        }
+        try {
+          const imageBuffer = Buffer.from(base64.text.trim(), "base64")
+          if (imageBuffer.length > 0) {
+            return { data: imageBuffer.toString("base64"), mime: "image/png" }
+          }
+        } catch {}
       }
     }
 
