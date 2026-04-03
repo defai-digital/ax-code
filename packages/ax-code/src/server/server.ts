@@ -213,12 +213,18 @@ function quote(value: string) {
   return /\s/.test(value) ? JSON.stringify(value) : value
 }
 
-async function packageManager(root: string) {
-  if (await Filesystem.exists(path.join(root, "pnpm-lock.yaml"))) return "pnpm" as const
-  if (await Filesystem.exists(path.join(root, "bun.lockb"))) return "bun" as const
-  if (await Filesystem.exists(path.join(root, "bun.lock"))) return "bun" as const
-  if (await Filesystem.exists(path.join(root, "yarn.lock"))) return "yarn" as const
-  if (await Filesystem.exists(path.join(root, "package-lock.json"))) return "npm" as const
+async function packageManager(cwd: string, root: string) {
+  for await (const file of Filesystem.up({
+    targets: ["pnpm-lock.yaml", "bun.lockb", "bun.lock", "yarn.lock", "package-lock.json"],
+    start: cwd,
+    stop: root,
+  })) {
+    const name = path.basename(file)
+    if (name === "pnpm-lock.yaml") return "pnpm" as const
+    if (name === "bun.lockb" || name === "bun.lock") return "bun" as const
+    if (name === "yarn.lock") return "yarn" as const
+    if (name === "package-lock.json") return "npm" as const
+  }
   return "npm" as const
 }
 
@@ -307,7 +313,6 @@ function makeTargets(text: string) {
 
 async function contextChecks(input: { root: string; dir: string }) {
   const order = ["typecheck", "test", "lint", "build"] as const
-  const manager = await packageManager(input.root)
   const rootPkg = path.join(input.root, "package.json")
   const nearest = (await Filesystem.findUp("package.json", input.dir, input.root))[0]
   const pkgs = Array.from(new Set([rootPkg, nearest].filter((item): item is string => !!item)))
@@ -320,6 +325,7 @@ async function contextChecks(input: { root: string; dir: string }) {
     if (!scripts) continue
 
     const cwd = path.dirname(file)
+    const manager = await packageManager(cwd, input.root)
 
     for (const name of order) {
       if (!scripts[name]) continue
