@@ -2,8 +2,23 @@ import { eq } from "drizzle-orm"
 import { Effect, Layer, Option, Schema, ServiceMap } from "effect"
 
 import { Database } from "@/storage/db"
+import { encrypt, isEncrypted, decrypt, type EncryptedValue } from "@/auth/encryption"
 import { AccountStateTable, AccountTable } from "./account.sql"
 import { AccessToken, AccountID, AccountRepoError, Info, OrgID, RefreshToken } from "./schema"
+
+function encryptToken(token: string): string {
+  return JSON.stringify(encrypt(token))
+}
+
+function decryptToken<T extends string>(raw: string, make: (s: string) => T): T {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (isEncrypted(parsed)) return make(decrypt(parsed as EncryptedValue))
+  } catch {
+    // not JSON or not encrypted — treat as plaintext
+  }
+  return make(raw)
+}
 
 export type AccountRow = (typeof AccountTable)["$inferSelect"]
 
@@ -102,9 +117,15 @@ export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepo.Ser
         query((db) => state(db, accountID, orgID)).pipe(Effect.asVoid),
       )
 
+      const decryptRow = (row: AccountRow): AccountRow => ({
+        ...row,
+        access_token: decryptToken(row.access_token, AccessToken.make),
+        refresh_token: decryptToken(row.refresh_token, RefreshToken.make),
+      })
+
       const getRow = Effect.fn("AccountRepo.getRow")((accountID: AccountID) =>
         query((db) => db.select().from(AccountTable).where(eq(AccountTable.id, accountID)).get()).pipe(
-          Effect.map(Option.fromNullishOr),
+          Effect.map((row) => Option.fromNullishOr(row ? decryptRow(row) : row)),
         ),
       )
 
@@ -113,8 +134,8 @@ export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepo.Ser
           db
             .update(AccountTable)
             .set({
-              access_token: input.accessToken,
-              refresh_token: input.refreshToken,
+              access_token: encryptToken(input.accessToken) as AccessToken,
+              refresh_token: encryptToken(input.refreshToken) as RefreshToken,
               token_expiry: Option.getOrNull(input.expiry),
             })
             .where(eq(AccountTable.id, input.accountID))
@@ -124,13 +145,15 @@ export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepo.Ser
 
       const persistAccount = Effect.fn("AccountRepo.persistAccount")((input) =>
         tx((db) => {
+          const encAccess = encryptToken(input.accessToken) as AccessToken
+          const encRefresh = encryptToken(input.refreshToken) as RefreshToken
           db.insert(AccountTable)
             .values({
               id: input.id,
               email: input.email,
               url: input.url,
-              access_token: input.accessToken,
-              refresh_token: input.refreshToken,
+              access_token: encAccess,
+              refresh_token: encRefresh,
               token_expiry: input.expiry,
             })
             .onConflictDoUpdate({
@@ -138,8 +161,8 @@ export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepo.Ser
               set: {
                 email: input.email,
                 url: input.url,
-                access_token: input.accessToken,
-                refresh_token: input.refreshToken,
+                access_token: encAccess,
+                refresh_token: encRefresh,
                 token_expiry: input.expiry,
               },
             })

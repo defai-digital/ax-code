@@ -159,7 +159,7 @@ function write(storage: Storage, key: string, value: string) {
 }
 
 function snapshot(value: unknown) {
-  return JSON.parse(JSON.stringify(value)) as unknown
+  return structuredClone(value)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

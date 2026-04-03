@@ -19,7 +19,7 @@ Use \`children\` to customize option rendering.
 - Uses Kobalte Select with optional item highlight callbacks.
 
 ### Accessibility
-- TODO: confirm keyboard navigation and aria attributes from Kobalte.
+- Keyboard navigation and ARIA attributes provided by Kobalte Select.
 
 ### Theming/tokens
 - Uses \`data-component="select"\` with slot attributes.

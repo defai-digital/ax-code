@@ -4,7 +4,7 @@ import { makeRunPromise } from "@/effect/run-service"
 import { zod } from "@/util/effect-zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
-import { encrypt, decrypt, isEncrypted, type EncryptedValue } from "./encryption"
+import { encryptField, decryptField } from "./encryption"
 
 export const OAUTH_DUMMY_KEY = "ax-code-oauth-dummy-key"
 
@@ -56,27 +56,36 @@ export namespace Auth {
     Effect.gen(function* () {
       const decode = Schema.decodeUnknownOption(Info)
 
-      const all = Effect.fn("Auth.all")(() =>
+      const readRaw = () =>
         Effect.tryPromise({
-          try: async () => {
-            const data = await Filesystem.readJson<Record<string, unknown>>(file).catch(() => ({}))
-            return Record.filterMap(data, (value) => {
-              // Decrypt API keys that were stored encrypted
-              if (value && typeof value === "object" && "type" in value && value.type === "api") {
-                const entry = value as Record<string, unknown>
-                if (isEncrypted(entry.key)) {
-                  try {
-                    entry.key = decrypt(entry.key as unknown as EncryptedValue)
-                  } catch {
-                    // leave as-is if decryption fails (e.g., different machine)
-                  }
-                }
-              }
-              return Result.fromOption(decode(value), () => undefined)
-            })
-          },
+          try: () => Filesystem.readJson<Record<string, unknown>>(file).catch(() => ({}) as Record<string, unknown>),
           catch: fail("Failed to read auth data"),
-        }),
+        })
+
+      function decryptEntry(value: unknown) {
+        if (value && typeof value === "object" && "type" in value) {
+          const v = value as Record<string, unknown>
+          if (v.type === "api") return decryptField(v, "key")
+          if (v.type === "wellknown") return decryptField(decryptField(v, "key"), "token")
+          if (v.type === "oauth") return decryptField(decryptField(v, "access"), "refresh")
+        }
+        return value
+      }
+
+      function encryptEntry(info: Info): unknown {
+        const raw = { ...info } as Record<string, unknown>
+        if (info.type === "api") return encryptField(raw, "key")
+        if (info.type === "wellknown") return encryptField(encryptField(raw, "key"), "token")
+        if (info.type === "oauth") return encryptField(encryptField(raw, "access"), "refresh")
+        return info
+      }
+
+      const all = Effect.fn("Auth.all")(() =>
+        readRaw().pipe(
+          Effect.map((data) =>
+            Record.filterMap(data, (value) => Result.fromOption(decode(decryptEntry(value)), () => undefined)),
+          ),
+        ),
       )
 
       const get = Effect.fn("Auth.get")(function* (providerID: string) {
@@ -86,22 +95,19 @@ export namespace Auth {
       const set = Effect.fn("Auth.set")(function* (key: string, info: Info) {
         const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
         if (!norm || norm.includes("..")) return yield* new AuthError({ message: "Invalid provider ID" })
-        const data = yield* all()
+        const data = yield* readRaw()
         if (norm !== key) delete data[key]
         delete data[norm + "/"]
 
-        // Encrypt API keys before writing to disk
-        const stored = info.type === "api" ? { ...info, key: encrypt(info.key) } : info
-
         yield* Effect.tryPromise({
-          try: () => Filesystem.writeJson(file, { ...data, [norm]: stored }, 0o600),
+          try: () => Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600),
           catch: fail("Failed to write auth data"),
         })
       })
 
       const remove = Effect.fn("Auth.remove")(function* (key: string) {
         const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
-        const data = yield* all()
+        const data = yield* readRaw()
         delete data[key]
         delete data[norm]
         delete data[norm + "/"]

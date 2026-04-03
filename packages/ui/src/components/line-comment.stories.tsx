@@ -20,7 +20,7 @@ Pair with \`Diff\` or \`Code\` to align comments to lines.
 - Editor submits on Enter (Shift+Enter for newline).
 
 ### Accessibility
-- TODO: confirm ARIA labeling for comment button and editor textarea.
+- ARIA labeling for comment button and editor textarea should be verified in integration.
 
 ### Theming/tokens
 - Uses \`data-component="line-comment"\` and related slots.

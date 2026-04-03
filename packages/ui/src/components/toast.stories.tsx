@@ -20,7 +20,7 @@ Use brief titles/descriptions; limit actions to 1-2.
 - Toasts render in a portal and auto-dismiss unless persistent.
 
 ### Accessibility
-- TODO: confirm aria-live behavior from Kobalte Toast.
+- aria-live region behavior provided by Kobalte Toast.
 
 ### Theming/tokens
 - Uses \`data-component="toast"\` and slot data attributes.

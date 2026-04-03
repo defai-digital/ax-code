@@ -20,7 +20,7 @@ Use within panels or popovers where keyboard navigation is expected.
 - Keyboard navigation via arrow keys; Enter selects.
 
 ### Accessibility
-- TODO: confirm ARIA roles for list items and search input.
+- ARIA roles for list items and search input should be verified in integration.
 
 ### Theming/tokens
 - Uses \`data-component="list"\` and data slots for structure.

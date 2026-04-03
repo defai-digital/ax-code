@@ -20,7 +20,7 @@ Use in forms and multi-select lists.
 - Controlled or uncontrolled usage.
 
 ### Accessibility
-- TODO: confirm aria attributes from Kobalte.
+- ARIA attributes (role, checked state) provided by Kobalte Checkbox.
 
 ### Theming/tokens
 - Uses \`data-component="checkbox"\` and related slots.

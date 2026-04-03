@@ -230,6 +230,11 @@ export namespace ShareNext {
   export async function remove(sessionID: SessionID) {
     if (disabled) return
     log.info("removing share", { sessionID })
+    const pending = queue.get(sessionID)
+    if (pending) {
+      clearTimeout(pending.timeout)
+      queue.delete(sessionID)
+    }
     const share = get(sessionID)
     if (!share) return
 
@@ -250,39 +255,49 @@ export namespace ShareNext {
     Database.use((db) => db.delete(SessionShareTable).where(eq(SessionShareTable.session_id, sessionID)).run())
   }
 
+  const FULL_SYNC_CHUNK_SIZE = 50
+
   async function fullSync(sessionID: SessionID) {
     log.info("full sync", { sessionID })
     const session = await Session.get(sessionID)
     const diffs = await Session.diff(sessionID)
-    const messages = await Array.fromAsync(MessageV2.stream(sessionID))
+
+    const modelMap = new Map<string, SDK.UserMessage["model"]>()
+    const chunks: Data[][] = []
+    let chunk: Data[] = []
+
+    for await (const msg of MessageV2.stream(sessionID)) {
+      if (msg.info.role === "user") {
+        const m = (msg.info as SDK.UserMessage).model
+        modelMap.set(`${m.providerID}/${m.modelID}`, m)
+      }
+      chunk.push({ type: "message", data: msg.info })
+      for (const part of msg.parts) chunk.push({ type: "part", data: part })
+      if (chunk.length >= FULL_SYNC_CHUNK_SIZE) {
+        chunks.push(chunk)
+        chunk = []
+      }
+    }
+    if (chunk.length > 0) chunks.push(chunk)
+
     const models = await Promise.all(
-      Array.from(
-        new Map(
-          messages
-            .filter((m) => m.info.role === "user")
-            .map((m) => (m.info as SDK.UserMessage).model)
-            .map((m) => [`${m.providerID}/${m.modelID}`, m] as const),
-        ).values(),
-      ).map((m) => Provider.getModel(ProviderID.make(m.providerID), ModelID.make(m.modelID)).then((item) => item)),
+      Array.from(modelMap.values()).map((m) =>
+        Provider.getModel(ProviderID.make(m.providerID), ModelID.make(m.modelID)).then((item) => item),
+      ),
     )
-    await sync(sessionID, [
-      {
-        type: "session",
-        data: session,
-      },
-      ...messages.map((x) => ({
-        type: "message" as const,
-        data: x.info,
-      })),
-      ...messages.flatMap((x) => x.parts.map((y) => ({ type: "part" as const, data: y }))),
-      {
-        type: "session_diff",
-        data: diffs,
-      },
-      {
-        type: "model",
-        data: models,
-      },
-    ])
+
+    // First chunk includes session metadata, models, and diffs
+    const first: Data[] = [
+      { type: "session", data: session },
+      { type: "model", data: models },
+      { type: "session_diff", data: diffs },
+    ]
+    if (chunks.length > 0) first.push(...chunks[0])
+    await sync(sessionID, first)
+
+    // Remaining chunks sent sequentially
+    for (let i = 1; i < chunks.length; i++) {
+      await sync(sessionID, chunks[i])
+    }
   }
 }

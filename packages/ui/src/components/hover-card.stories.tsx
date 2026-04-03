@@ -18,7 +18,7 @@ Use for short summaries; avoid dense interactive controls.
 - Opens on hover/focus over the trigger.
 
 ### Accessibility
-- TODO: confirm focus and hover intent behavior from Kobalte.
+- Focus and hover intent behavior provided by Kobalte HoverCard.
 
 ### Theming/tokens
 - Uses \`data-component="hover-card-content"\` and slots for styling.

@@ -18,7 +18,7 @@ Use for short status lines; avoid long paragraphs.
 - Types one character at a time with randomized delays.
 
 ### Accessibility
-- TODO: confirm if cursor should be aria-hidden in all contexts.
+- Cursor element is decorative and should use aria-hidden.
 
 ### Theming/tokens
 - Uses \`blinking-cursor\` class for cursor styling.

@@ -54,11 +54,6 @@ export namespace Skill {
   type State = {
     skills: Record<string, Info>
     dirs: Set<string>
-    task?: Promise<void>
-  }
-
-  type Cache = State & {
-    ensure: () => Promise<void>
   }
 
   export interface Interface {
@@ -68,115 +63,56 @@ export namespace Skill {
     readonly available: (agent?: Agent.Info) => Effect.Effect<Info[]>
   }
 
-  const add = async (state: State, match: string) => {
-    const md = await ConfigMarkdown.parse(match).catch(async (err) => {
-      const message = ConfigMarkdown.FrontmatterError.isInstance(err)
-        ? err.data.message
-        : `Failed to parse skill ${match}`
-      const { Session } = await import("@/session")
-      Bus.publish(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
-      log.error("failed to load skill", { skill: match, err })
-      return undefined
-    })
+  const addSkill = (state: State, match: string) =>
+    Effect.promise(async () => {
+      const md = await ConfigMarkdown.parse(match).catch(async (err) => {
+        const message = ConfigMarkdown.FrontmatterError.isInstance(err)
+          ? err.data.message
+          : `Failed to parse skill ${match}`
+        const { Session } = await import("@/session")
+        Bus.publish(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
+        log.error("failed to load skill", { skill: match, err })
+        return undefined
+      })
 
-    if (!md) return
+      if (!md) return
 
-    const parsed = Info.pick({ name: true, description: true }).safeParse(md.data)
-    if (!parsed.success) return
+      const parsed = Info.pick({ name: true, description: true }).safeParse(md.data)
+      if (!parsed.success) return
 
-    if (state.skills[parsed.data.name]) {
-      log.warn("duplicate skill name", {
+      if (state.skills[parsed.data.name]) {
+        log.warn("duplicate skill name", {
+          name: parsed.data.name,
+          existing: state.skills[parsed.data.name].location,
+          duplicate: match,
+        })
+      }
+
+      state.dirs.add(path.dirname(match))
+      state.skills[parsed.data.name] = {
         name: parsed.data.name,
-        existing: state.skills[parsed.data.name].location,
-        duplicate: match,
-      })
-    }
-
-    state.dirs.add(path.dirname(match))
-    state.skills[parsed.data.name] = {
-      name: parsed.data.name,
-      description: parsed.data.description,
-      location: match,
-      content: md.content,
-    }
-  }
-
-  const scan = async (state: State, root: string, pattern: string, opts?: { dot?: boolean; scope?: string }) => {
-    return Glob.scan(pattern, {
-      cwd: root,
-      absolute: true,
-      include: "file",
-      symlink: true,
-      dot: opts?.dot,
+        description: parsed.data.description,
+        location: match,
+        content: md.content,
+      }
     })
-      .then((matches) => Promise.all(matches.map((match) => add(state, match))))
-      .catch((error) => {
-        if (!opts?.scope) throw error
-        log.error(`failed to scan ${opts.scope} skills`, { dir: root, error })
-      })
-  }
 
-  // TODO: Migrate to Effect
-  const create = (discovery: Discovery.Interface, directory: string, worktree: string): Cache => {
-    const state: State = {
-      skills: {},
-      dirs: new Set<string>(),
-    }
-
-    const load = async () => {
-      if (!Flag.AX_CODE_DISABLE_EXTERNAL_SKILLS) {
-        for (const dir of EXTERNAL_DIRS) {
-          const root = path.join(Global.Path.home, dir)
-          if (!(await Filesystem.isDir(root))) continue
-          await scan(state, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "global" })
+  const scanDir = (state: State, root: string, pattern: string, opts?: { dot?: boolean; scope?: string }) =>
+    Effect.promise(() =>
+      Glob.scan(pattern, {
+        cwd: root,
+        absolute: true,
+        include: "file",
+        symlink: true,
+        dot: opts?.dot,
+      }).catch((error) => {
+        if (opts?.scope) {
+          log.error(`failed to scan ${opts.scope} skills`, { dir: root, error })
+          return [] as string[]
         }
-
-        for await (const root of Filesystem.up({
-          targets: EXTERNAL_DIRS,
-          start: directory,
-          stop: worktree,
-        })) {
-          await scan(state, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "project" })
-        }
-      }
-
-      for (const dir of await Config.directories()) {
-        await scan(state, dir, AX_CODE_SKILL_PATTERN)
-      }
-
-      const cfg = await Config.get()
-      for (const item of cfg.skills?.paths ?? []) {
-        const expanded = item.startsWith("~/") ? path.join(os.homedir(), item.slice(2)) : item
-        const dir = path.isAbsolute(expanded) ? expanded : path.join(directory, expanded)
-        if (!(await Filesystem.isDir(dir))) {
-          log.warn("skill path not found", { path: dir })
-          continue
-        }
-
-        await scan(state, dir, SKILL_PATTERN)
-      }
-
-      for (const url of cfg.skills?.urls ?? []) {
-        for (const dir of await Effect.runPromise(discovery.pull(url))) {
-          state.dirs.add(dir)
-          await scan(state, dir, SKILL_PATTERN)
-        }
-      }
-
-      log.info("init", { count: Object.keys(state.skills).length })
-    }
-
-    const ensure = () => {
-      if (state.task) return state.task
-      state.task = load().catch((err) => {
-        state.task = undefined
-        throw err
-      })
-      return state.task
-    }
-
-    return { ...state, ensure }
-  }
+        throw error
+      }),
+    ).pipe(Effect.flatMap((matches) => Effect.forEach(matches, (match) => addSkill(state, match), { discard: true })))
 
   export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Skill") {}
 
@@ -185,33 +121,80 @@ export namespace Skill {
     Effect.gen(function* () {
       const discovery = yield* Discovery.Service
       const state = yield* InstanceState.make(
-        Effect.fn("Skill.state")((ctx) => Effect.sync(() => create(discovery, ctx.directory, ctx.worktree))),
+        Effect.fn("Skill.state")(function* (ctx) {
+          const s: State = {
+            skills: {},
+            dirs: new Set<string>(),
+          }
+
+          if (!Flag.AX_CODE_DISABLE_EXTERNAL_SKILLS) {
+            for (const dir of EXTERNAL_DIRS) {
+              const root = path.join(Global.Path.home, dir)
+              const exists = yield* Effect.promise(() => Filesystem.isDir(root))
+              if (!exists) continue
+              yield* scanDir(s, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "global" })
+            }
+
+            const roots = yield* Effect.promise(async () => {
+              const result: string[] = []
+              for await (const root of Filesystem.up({
+                targets: EXTERNAL_DIRS,
+                start: ctx.directory,
+                stop: ctx.worktree,
+              })) {
+                result.push(root)
+              }
+              return result
+            })
+            yield* Effect.forEach(roots, (root) => scanDir(s, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "project" }), { discard: true })
+          }
+
+          const configDirs = yield* Effect.promise(() => Config.directories())
+          yield* Effect.forEach(configDirs, (dir) => scanDir(s, dir, AX_CODE_SKILL_PATTERN), { discard: true })
+
+          const cfg = yield* Effect.promise(() => Config.get())
+          for (const item of cfg.skills?.paths ?? []) {
+            const expanded = item.startsWith("~/") ? path.join(os.homedir(), item.slice(2)) : item
+            const dir = path.isAbsolute(expanded) ? expanded : path.join(ctx.directory, expanded)
+            const exists = yield* Effect.promise(() => Filesystem.isDir(dir))
+            if (!exists) {
+              log.warn("skill path not found", { path: dir })
+              continue
+            }
+            yield* scanDir(s, dir, SKILL_PATTERN)
+          }
+
+          for (const url of cfg.skills?.urls ?? []) {
+            const dirs = yield* discovery.pull(url)
+            for (const dir of dirs) {
+              s.dirs.add(dir)
+              yield* scanDir(s, dir, SKILL_PATTERN)
+            }
+          }
+
+          log.info("init", { count: Object.keys(s.skills).length })
+          return s
+        }),
       )
 
-      const ensure = Effect.fn("Skill.ensure")(function* () {
-        const cache = yield* InstanceState.get(state)
-        yield* Effect.promise(() => cache.ensure())
-        return cache
-      })
-
       const get = Effect.fn("Skill.get")(function* (name: string) {
-        const cache = yield* ensure()
-        return cache.skills[name]
+        const s = yield* InstanceState.get(state)
+        return s.skills[name]
       })
 
       const all = Effect.fn("Skill.all")(function* () {
-        const cache = yield* ensure()
-        return Object.values(cache.skills)
+        const s = yield* InstanceState.get(state)
+        return Object.values(s.skills)
       })
 
       const dirs = Effect.fn("Skill.dirs")(function* () {
-        const cache = yield* ensure()
-        return Array.from(cache.dirs)
+        const s = yield* InstanceState.get(state)
+        return Array.from(s.dirs)
       })
 
       const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info) {
-        const cache = yield* ensure()
-        const list = Object.values(cache.skills).toSorted((a, b) => a.name.localeCompare(b.name))
+        const s = yield* InstanceState.get(state)
+        const list = Object.values(s.skills).toSorted((a, b) => a.name.localeCompare(b.name))
         if (!agent) return list
         return list.filter((skill) => Permission.evaluate("skill", skill.name, agent.permission).action !== "deny")
       })

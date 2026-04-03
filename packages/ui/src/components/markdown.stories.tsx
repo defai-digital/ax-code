@@ -21,7 +21,7 @@ Pair with \`Code\` for standalone code views.
 
 ### Accessibility
 - Copy buttons include aria-labels from i18n.
-- TODO: confirm link target behavior in sanitized output.
+- Links in sanitized output open in new tabs with rel="noopener noreferrer".
 
 ### Theming/tokens
 - Uses \`data-component="markdown"\` and related slots for styling.

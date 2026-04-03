@@ -19,7 +19,7 @@ Use in settings panels or forms.
 - Controlled or uncontrolled usage via Kobalte props.
 
 ### Accessibility
-- TODO: confirm aria attributes from Kobalte.
+- ARIA attributes (role=switch, checked state) provided by Kobalte Switch.
 
 ### Theming/tokens
 - Uses \`data-component="switch"\` and slot attributes.

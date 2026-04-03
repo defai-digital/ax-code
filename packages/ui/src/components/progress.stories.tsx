@@ -19,7 +19,7 @@ Use in forms, uploads, or background tasks.
 - Uses Kobalte Progress for value calculation.
 
 ### Accessibility
-- TODO: confirm ARIA attributes from Kobalte.
+- ARIA attributes (role=progressbar, valuenow, valuemin, valuemax) provided by Kobalte Progress.
 
 ### Theming/tokens
 - Uses \`data-component="progress"\` with track/fill slots.

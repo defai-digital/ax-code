@@ -19,7 +19,7 @@ Use for small contextual details; avoid long forms.
 - Closes on outside click or Escape by default.
 
 ### Accessibility
-- TODO: confirm focus management from Kobalte.
+- Focus management provided by Kobalte Popover.
 
 ### Theming/tokens
 - Uses \`data-component="popover-content"\` and related slots.

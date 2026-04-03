@@ -17,7 +17,7 @@ Use only inside \`Accordion.Item\` with \`Accordion.Trigger\`.
 - Renders inside an Accordion item header.
 
 ### Accessibility
-- TODO: confirm semantics from Accordion.Header usage.
+- Heading semantics provided by Kobalte Accordion.Header.
 
 ### Theming/tokens
 - Uses \`data-component="sticky-accordion-header"\`.
