@@ -1,8 +1,7 @@
 import { Server } from "../../server/server"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
-import { withNetworkOptions, resolveNetworkOptions } from "../network"
-import { Flag } from "../../flag/flag"
+import { withNetworkOptions, resolveNetworkOptions, requireAuthForNetwork } from "../network"
 import open from "open"
 import { networkInterfaces } from "os"
 
@@ -33,10 +32,8 @@ export const WebCommand = cmd({
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "start ax-code server and open web interface",
   handler: async (args) => {
-    if (!Flag.AX_CODE_SERVER_PASSWORD) {
-      UI.println(UI.Style.TEXT_WARNING_BOLD + "!  " + "AX_CODE_SERVER_PASSWORD is not set; server is unsecured.")
-    }
     const opts = await resolveNetworkOptions(args)
+    requireAuthForNetwork(opts.hostname)
     const server = Server.listen(opts)
     UI.empty()
     UI.println(UI.logo("  "))

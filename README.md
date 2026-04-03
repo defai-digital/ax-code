@@ -80,31 +80,31 @@ ax-code
 
 ## Supported Providers
 
+### Online
+
 | Provider | Models | Setup |
 |----------|--------|-------|
-| **Google Gemini** | Gemini 1.5, 2.0, 2.5, 3.0, 3.1 | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| **xAI/Grok** | Grok-2, Grok-3, Grok-4 | `XAI_API_KEY` |
-| **Groq** | Llama 4, Llama 3.3, Qwen, Gemma, DeepSeek | `GROQ_API_KEY` (free) |
-| **Z.AI** | GLM-4.6, GLM-4.7, Kimi | `ax-code providers login` |
-| **Local models** | Ollama, LM Studio, vLLM, any OpenAI-compatible | Config in `ax-code.json` |
+| **Anthropic (Claude)** | Claude Opus, Sonnet, Haiku | `ANTHROPIC_API_KEY` |
+| **OpenAI (GPT)** | GPT-5, GPT-4, o3, o4 | `OPENAI_API_KEY` |
+| **Google (Gemini)** | Gemini 2.5, 3.0, 3.1, Gemma | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| **xAI (Grok)** | Grok-2, Grok-3, Grok-4 | `XAI_API_KEY` |
+| **DeepSeek** | DeepSeek Chat, Reasoner | `DEEPSEEK_API_KEY` |
+| **Groq** | Llama, Qwen, Gemma, DeepSeek | `GROQ_API_KEY` (free) |
+| **GitHub Copilot** | Claude, GPT, Gemini via Copilot | `ax-code providers login` |
+| **Alibaba Cloud (Qwen)** | Qwen3, Qwen3-Coder | `DASHSCOPE_API_KEY` |
+| **Azure** | GPT, Claude, Llama, Phi | `AZURE_API_KEY` |
+| **Perplexity (Sonar)** | Sonar, Sonar Pro, Deep Research | `PERPLEXITY_API_KEY` |
+| **Z.AI Coding Plan (GLM)** | GLM-4.5, GLM-4.7, GLM-5 | `ax-code providers login` |
 
-### Using Local Models (Ollama / LM Studio)
+### Offline (Local Inference)
 
-Create `ax-code.json` in your project root:
+| Provider | Setup |
+|----------|-------|
+| **AX Studio** | Auto-detected at `localhost:11434` or `AX_STUDIO_HOST` |
+| **Ollama** | Auto-detected at `localhost:11434` or `OLLAMA_HOST` |
+| **LMStudio** | Configure in `ax-code.json` |
 
-```json
-{
-  "provider": {
-    "ollama": {
-      "api": "@ai-sdk/openai-compatible",
-      "baseURL": "http://localhost:11434/v1",
-      "models": {
-        "*": true
-      }
-    }
-  }
-}
-```
+Offline providers auto-discover locally running models — no API key needed.
 
 ---
 
@@ -114,7 +114,9 @@ Create `ax-code.json` in your project root:
 ```bash
 ax-code                          # Launch TUI (default)
 ax-code run "message"            # Non-interactive mode
-ax-code serve                    # Headless API server
+ax-code serve                    # Headless API server (localhost only)
+ax-code restart                  # Restart running server instance
+ax-code --sandbox read-only      # Launch in read-only sandbox mode
 ax-code --help                   # All commands
 ```
 
@@ -366,11 +368,16 @@ Create `ax-code.json` in your project root or `~/.config/ax-code/ax-code.json` f
 
 | Variable | Purpose |
 |----------|---------|
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key |
+| `OPENAI_API_KEY` | OpenAI GPT API key |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Google Gemini API key |
 | `XAI_API_KEY` | xAI Grok API key |
+| `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `GROQ_API_KEY` | Groq API key (free) |
 | `AX_CODE_CONFIG` | Custom config file path |
 | `AX_CODE_CONFIG_DIR` | Custom config directory |
+| `AX_CODE_ISOLATION_MODE` | Sandbox mode: `read-only`, `workspace-write`, `full-access` |
+| `AX_CODE_SERVER_PASSWORD` | Required when server binds to network addresses |
 
 ---
 
@@ -413,6 +420,48 @@ ax-code/
 ├── docs/                  # PRDs, ADRs, status docs
 └── patches/               # Dependency patches
 ```
+
+---
+
+## Security
+
+### Execution Isolation Sandbox
+
+ax-code includes a built-in execution isolation sandbox that controls what the AI agent can access. Three modes are available:
+
+| Mode | Behavior |
+|------|----------|
+| **Read-only** | Blocks all file mutations and shell commands |
+| **Workspace write** (default) | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
+| **Full access** | Disables isolation (explicit opt-in) |
+
+Configure via CLI flag, environment variable, settings UI, or session command palette:
+
+```bash
+ax-code --sandbox read-only              # CLI flag
+AX_CODE_ISOLATION_MODE=read-only ax-code # Environment variable
+```
+
+Network access for tools (webfetch, websearch) is **disabled by default** in read-only and workspace-write modes. Isolation violations present an approval prompt — users can allow a blocked operation once without changing their config.
+
+### Server Security
+
+- **Localhost only by default** — the server binds to `127.0.0.1`, inaccessible from the network
+- **Password required for network access** — binding to `0.0.0.0` or any non-localhost address requires `AX_CODE_SERVER_PASSWORD`
+- **API key encryption** — provider credentials are encrypted at rest with AES-256-GCM
+
+```bash
+# Localhost only (default, no password needed)
+ax-code serve
+
+# Network access (password required)
+export AX_CODE_SERVER_PASSWORD=your-secret
+ax-code serve --hostname 0.0.0.0
+```
+
+### Reporting Vulnerabilities
+
+If you discover a security vulnerability, please report it privately via [GitHub Security Advisories](https://github.com/defai-digital/ax-code/security/advisories/new). Do not open a public issue.
 
 ---
 

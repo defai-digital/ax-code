@@ -109,35 +109,9 @@ export namespace ProviderTransform {
     })
   }
 
-function remapOpenCodeProviderKey(msgs: ModelMessage[], options: Record<string, unknown>): ModelMessage[] {
-    if (options.store !== false) return msgs
-
-    const remap = (po: Record<string, any> | undefined): Record<string, any> | undefined => {
-      if (!po || !("opencode" in po)) return po
-      const { opencode, ...rest } = po
-      return { ...rest, "ax-code": opencode }
-    }
-
-    return msgs.map((msg) => {
-      const remappedMsgPo = remap((msg as any).providerOptions)
-      const newMsg =
-        remappedMsgPo !== (msg as any).providerOptions ? { ...msg, providerOptions: remappedMsgPo } : msg
-
-      if (!Array.isArray(newMsg.content)) return newMsg
-
-      const newContent = (newMsg.content as any[]).map((part) => {
-        const remapped = remap(part.providerOptions)
-        return remapped !== part.providerOptions ? { ...part, providerOptions: remapped } : part
-      })
-
-      return { ...newMsg, content: newContent }
-    }) as ModelMessage[]
-  }
-
   export function message(msgs: ModelMessage[], model: Provider.Model, options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
     msgs = normalizeMessages(msgs, model, options)
-    msgs = remapOpenCodeProviderKey(msgs, options)
     return msgs
   }
 

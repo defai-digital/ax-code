@@ -113,7 +113,7 @@ export function DialogModel(props: { providerID?: string }) {
           providers(),
           map((option) => ({
             ...option,
-            category: "Popular providers",
+            category: "Connect a provider",
           })),
           take(6),
         )

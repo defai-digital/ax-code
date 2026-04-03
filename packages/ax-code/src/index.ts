@@ -34,6 +34,7 @@ import { DbCommand } from "./cli/cmd/db"
 import { MemoryCommand } from "./cli/cmd/memory"
 import { DesignCheckCommand } from "./cli/cmd/design-check"
 import { ContextCommand } from "./cli/cmd/context"
+import { RestartCommand } from "./cli/cmd/restart"
 import path from "path"
 import { Global } from "./global"
 import { JsonMigration } from "./storage/json-migration"
@@ -151,6 +152,7 @@ let cli = yargs(hideBin(process.argv))
   .command(UpgradeCommand)
   .command(UninstallCommand)
   .command(ServeCommand)
+  .command(RestartCommand)
   .command(WebCommand)
   .command(ModelsCommand)
   .command(StatsCommand)

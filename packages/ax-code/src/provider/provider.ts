@@ -22,6 +22,7 @@ import { Filesystem } from "../util/filesystem"
 // Direct imports for bundled providers
 import { createGroq } from "@ai-sdk/groq"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
@@ -85,6 +86,7 @@ export namespace Provider {
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
     "@ai-sdk/groq": createGroq,
     "@ai-sdk/google": createGoogleGenerativeAI,
+    "@ai-sdk/openai": createOpenAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
   }
@@ -263,11 +265,7 @@ export namespace Provider {
     const modelsDev = await ModelsDev.get()
     const database = mapValues(modelsDev, fromModelsDevProvider)
 
-    // Providers without bundled SDK support are always disabled
-    const UNSUPPORTED_PROVIDERS = [
-      "openai",
-    ]
-    const disabled = new Set([...UNSUPPORTED_PROVIDERS, ...(config.disabled_providers ?? [])])
+    const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
 
     function isProviderAllowed(providerID: ProviderID): boolean {
@@ -462,18 +460,8 @@ export namespace Provider {
       mergeProvider(providerID, partial)
     }
 
-    // Override display names for rebranded providers
-    const NAME_OVERRIDES: Record<string, string> = {
-      opencode: "ax-code",
-      "opencode-go": "ax-code-go",
-    }
-
     for (const [id, provider] of Object.entries(providers)) {
       const providerID = ProviderID.make(id)
-      const override = NAME_OVERRIDES[id] ?? NAME_OVERRIDES[providerID]
-      if (override) {
-        provider.name = override
-      }
       if (!isProviderAllowed(providerID)) {
         delete providers[providerID]
         continue

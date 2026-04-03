@@ -1,19 +1,13 @@
-import { Global } from "../global"
 import { Log } from "../util/log"
 import path from "path"
 import z from "zod"
-import { Installation } from "../installation"
-import { Flag } from "../flag/flag"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "../util/filesystem"
 
-// Try to import bundled snapshot (generated at build time)
-// Falls back to undefined in dev mode when snapshot doesn't exist
-/* @ts-ignore */
+const snapshotPath = path.join(import.meta.dirname, "models-snapshot.json")
 
 export namespace ModelsDev {
-  const log = Log.create({ service: "models.dev" })
-  const filepath = path.join(Global.Path.cache, "models.json")
+  const log = Log.create({ service: "models" })
 
   export const Model = z.object({
     id: z.string(),
@@ -81,52 +75,12 @@ export namespace ModelsDev {
 
   export type Provider = z.infer<typeof Provider>
 
-  function url() {
-    return Flag.AX_CODE_MODELS_URL || "https://models.dev"
-  }
-
   export const Data = lazy(async () => {
-    const result = await Filesystem.readJson(Flag.AX_CODE_MODELS_PATH ?? filepath).catch(() => {})
-    if (result) return result
-    // @ts-ignore
-    const snapshot = await import("./models-snapshot")
-      .then((m) => m.snapshot as Record<string, unknown>)
-      .catch(() => undefined)
-    if (snapshot) return snapshot
-    if (Flag.AX_CODE_DISABLE_MODELS_FETCH) return {}
-    const json = await fetch(`${url()}/api.json`).then((x) => x.text())
-    return JSON.parse(json)
+    log.info("loading bundled model snapshot")
+    return await Filesystem.readJson(snapshotPath) as Record<string, unknown>
   })
 
   export async function get() {
-    const result = await Data()
-    return result as Record<string, Provider>
+    return await Data() as Record<string, Provider>
   }
-
-  export async function refresh() {
-    const result = await fetch(`${url()}/api.json`, {
-      headers: {
-        "User-Agent": Installation.USER_AGENT,
-      },
-      signal: AbortSignal.timeout(10 * 1000),
-    }).catch((e) => {
-      log.error("Failed to fetch models.dev", {
-        error: e,
-      })
-    })
-    if (result && result.ok) {
-      await Filesystem.write(filepath, await result.text())
-      ModelsDev.Data.reset()
-    }
-  }
-}
-
-if (!Flag.AX_CODE_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
-  ModelsDev.refresh()
-  setInterval(
-    async () => {
-      await ModelsDev.refresh()
-    },
-    60 * 1000 * 60,
-  ).unref()
 }

@@ -318,8 +318,6 @@ export const ProvidersLoginCommand = cmd({
           prompts.outro("Done")
           return
         }
-        await ModelsDev.refresh().catch(() => {})
-
         const config = await Config.get()
 
         // Only show providers with bundled SDK support (+ any user-enabled via config)

@@ -122,6 +122,8 @@ export const rpc = {
     return result
   },
   async server(input: { port: number; hostname: string; mdns?: boolean; cors?: string[] }) {
+    const { requireAuthForNetwork } = await import("../../network")
+    requireAuthForNetwork(input.hostname)
     if (server) await server.stop(true)
     server = await Server.listen(input)
     return { url: server.url.toString() }

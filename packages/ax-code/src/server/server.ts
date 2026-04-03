@@ -262,6 +262,28 @@ export namespace Server {
           return c.json(true)
         },
       )
+      .post(
+        "/instance/restart",
+        describeRoute({
+          summary: "Restart instance",
+          description: "Dispose and reinitialize the ax-code instance, reloading all configuration and provider data.",
+          operationId: "instance.restart",
+          responses: {
+            200: {
+              description: "Instance restarted",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          await Instance.dispose()
+          return c.json(true)
+        },
+      )
       .get(
         "/path",
         describeRoute({

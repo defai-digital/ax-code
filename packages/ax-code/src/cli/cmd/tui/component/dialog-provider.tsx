@@ -14,11 +14,7 @@ import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
 
-const PROVIDER_PRIORITY: Record<string, number> = {
-  opencode: 0,
-  "opencode-go": 1,
-  google: 2,
-}
+const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama", "lmstudio"])
 
 export function createDialogProviderOptions() {
   const sync = useSync()
@@ -28,15 +24,12 @@ export function createDialogProviderOptions() {
   const options = createMemo(() => {
     return pipe(
       sync.data.provider_next.all,
-      sortBy((x) => PROVIDER_PRIORITY[x.id] ?? 99),
+      sortBy((x) => (OFFLINE_PROVIDERS.has(x.id) ? 0 : 1), (x) => x.name),
       map((provider) => ({
         title: provider.name,
         value: provider.id,
-        description: {
-          opencode: "(Recommended)",
-          "opencode-go": "Low cost subscription for everyone",
-        }[provider.id],
-        category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
+        description: undefined as string | undefined,
+        category: OFFLINE_PROVIDERS.has(provider.id) ? "Offline" : "Online",
         async onSelect() {
           const methods = sync.data.provider_auth[provider.id] ?? [
             {

@@ -1,5 +1,6 @@
 import type { Argv, InferredOptionTypes } from "yargs"
 import { Config } from "../config/config"
+import { Flag } from "../flag/flag"
 
 const options = {
   port: {
@@ -57,4 +58,24 @@ export async function resolveNetworkOptions(args: NetworkOptions) {
   const cors = [...configCors, ...argsCors]
 
   return { hostname, port, mdns, mdnsDomain, cors }
+}
+
+const LOCALHOST_ADDRESSES = new Set(["127.0.0.1", "localhost", "::1"])
+
+export function isLocalhostOnly(hostname: string) {
+  return LOCALHOST_ADDRESSES.has(hostname)
+}
+
+export function requireAuthForNetwork(hostname: string) {
+  if (isLocalhostOnly(hostname)) return
+  if (Flag.AX_CODE_SERVER_PASSWORD) return
+  console.error(
+    "Error: AX_CODE_SERVER_PASSWORD is required when binding to a network address.\n" +
+      `  hostname: ${hostname}\n\n` +
+      "Set a password to secure the server:\n" +
+      "  export AX_CODE_SERVER_PASSWORD=your-secret\n\n" +
+      "Or bind to localhost only (default):\n" +
+      "  ax-code serve",
+  )
+  process.exit(1)
 }

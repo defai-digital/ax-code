@@ -3,17 +3,14 @@ import { decode64 } from "@/utils/base64"
 import { useParams } from "@solidjs/router"
 import { createMemo } from "solid-js"
 
-export const popularProviders = [
-  "opencode",
-  "opencode-go",
-  "anthropic",
-  "github-copilot",
-  "openai",
-  "google",
-  "openrouter",
-  "vercel",
-]
-const popularProviderSet = new Set(popularProviders)
+export const offlineProviders = new Set(["ax-studio", "ollama", "lmstudio"])
+
+export function isOfflineProvider(id: string) {
+  return offlineProviders.has(id)
+}
+
+// kept for backwards compat — online providers listed first in UI
+export const popularProviders = ["anthropic", "openai", "google", "github-copilot", "groq", "xai", "deepseek"]
 
 export function useProviders() {
   const globalSync = useGlobalSync()
@@ -29,7 +26,7 @@ export function useProviders() {
   return {
     all: () => providers().all,
     default: () => providers().default,
-    popular: () => providers().all.filter((p) => popularProviderSet.has(p.id)),
+    popular: () => providers().all.filter((p) => !offlineProviders.has(p.id)),
     connected: () => {
       const connected = new Set(providers().connected)
       return providers().all.filter((p) => connected.has(p.id))
@@ -37,7 +34,7 @@ export function useProviders() {
     paid: () => {
       const connected = new Set(providers().connected)
       return providers().all.filter(
-        (p) => connected.has(p.id) && (p.id !== "opencode" || Object.values(p.models).some((m) => m.cost?.input)),
+        (p) => connected.has(p.id),
       )
     },
   }
