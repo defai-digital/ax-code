@@ -244,27 +244,32 @@ export namespace Session {
       const msgs = await messages({ sessionID: input.sessionID })
       const idMap = new Map<string, MessageID>()
 
-      for (const msg of msgs) {
-        if (input.messageID && msg.info.id >= input.messageID) break
-        const newID = MessageID.ascending()
-        idMap.set(msg.info.id, newID)
+      // Pre-compute all new IDs
+      const filtered = msgs.filter((msg) => !(input.messageID && msg.info.id >= input.messageID))
+      for (const msg of filtered) {
+        idMap.set(msg.info.id, MessageID.ascending())
+      }
 
+      // Batch write all messages and parts
+      for (const msg of filtered) {
+        const newID = idMap.get(msg.info.id)!
         const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
-        const cloned = await updateMessage({
+        await updateMessage({
           ...msg.info,
           sessionID: session.id,
           id: newID,
           ...(parentID && { parentID }),
         })
-
-        for (const part of msg.parts) {
-          await updatePart({
-            ...part,
-            id: PartID.ascending(),
-            messageID: cloned.id,
-            sessionID: session.id,
-          })
-        }
+        await Promise.all(
+          msg.parts.map((part) =>
+            updatePart({
+              ...part,
+              id: PartID.ascending(),
+              messageID: newID,
+              sessionID: session.id,
+            }),
+          ),
+        )
       }
       return session
     },
@@ -744,7 +749,7 @@ export namespace Session {
         .run()
       Database.effect(() =>
         Bus.publish(MessageV2.Event.PartUpdated, {
-          part: structuredClone(part),
+          part: { ...part },
         }),
       )
     })
