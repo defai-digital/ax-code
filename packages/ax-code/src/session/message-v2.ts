@@ -876,7 +876,7 @@ export namespace MessageV2 {
   )
 
   /** Fetch messages created after the given message ID, ordered oldest first */
-  export async function after(sessionID: SessionID, afterID: string): Promise<WithParts[]> {
+  export async function after(sessionID: SessionID, afterID: MessageID): Promise<WithParts[]> {
     const rows = Database.use((db) =>
       db
         .select()

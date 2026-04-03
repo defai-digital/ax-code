@@ -76,6 +76,18 @@ export namespace ModelsDev {
   export type Provider = z.infer<typeof Provider>
 
   export const Data = lazy(async () => {
+    const file = process.env["AX_CODE_MODELS_PATH"]
+    if (file) {
+      log.info("loading model data from file", { file })
+      return await Filesystem.readJson(file) as Record<string, unknown>
+    }
+
+    const url = process.env["AX_CODE_MODELS_URL"]
+    if (url) {
+      log.info("loading model data from url", { url })
+      return await fetch(url).then((res) => res.json()) as Record<string, unknown>
+    }
+
     log.info("loading bundled model snapshot")
     return await Filesystem.readJson(snapshotPath) as Record<string, unknown>
   })

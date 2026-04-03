@@ -26,7 +26,7 @@ export namespace SessionProcessor {
 
   /** Batches delta events by time window to reduce event fan-out */
   function createDeltaBatcher(sessionID: SessionID, messageID: MessageID) {
-    const pending = new Map<string, string>() // partID -> accumulated delta
+    const pending = new Map<PartID, string>() // partID -> accumulated delta
     let timer: ReturnType<typeof setTimeout> | undefined
 
     const flush = () => {
@@ -38,7 +38,7 @@ export namespace SessionProcessor {
     }
 
     return {
-      push(partID: string, delta: string) {
+      push(partID: PartID, delta: string) {
         const existing = pending.get(partID)
         pending.set(partID, existing ? existing + delta : delta)
         if (!timer) timer = setTimeout(flush, DELTA_BATCH_MS)

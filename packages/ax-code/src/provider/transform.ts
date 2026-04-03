@@ -166,8 +166,27 @@ export namespace ProviderTransform {
     )
       return {}
 
-    // XAI: @ai-sdk/xai v3 Responses API does not support reasoningEffort parameter
-    if (model.api.npm === "@ai-sdk/xai") return {}
+    if (model.api.npm === "@ai-sdk/xai") {
+      if (id.includes("grok-3-mini")) {
+        return {
+          low: { reasoningEffort: "low" },
+          high: { reasoningEffort: "high" },
+        }
+      }
+
+      if (id.includes("grok-4") || id.includes("grok-code")) {
+        return {
+          medium: { reasoningEffort: "medium" },
+          high: { reasoningEffort: "high" },
+          max: {
+            reasoningEffort: "high",
+            budgetTokens: OUTPUT_TOKEN_MAX,
+          },
+        }
+      }
+
+      return {}
+    }
 
     switch (model.api.npm) {
       case "venice-ai-sdk-provider":
@@ -230,10 +249,12 @@ export namespace ProviderTransform {
 
     if (
       input.model.providerID.startsWith("zai") &&
-      input.model.api.npm === "@ai-sdk/openai-compatible" &&
-      input.model.capabilities.reasoning
+      input.model.api.npm === "@ai-sdk/openai-compatible"
     ) {
-      result["enable_thinking"] = true
+      result["thinking"] = {
+        type: "enabled",
+        clear_thinking: false,
+      }
     }
 
     if (input.providerOptions?.setCacheKey) {

@@ -109,9 +109,12 @@ type Capture = {
 }
 
 const state = {
-  server: null as ReturnType<typeof Bun.serve> | null,
+  server: {
+    url: new URL("http://127.0.0.1"),
+  },
   queue: [] as Array<{ path: string; response: Response; resolve: (value: Capture) => void }>,
 }
+const originalFetch = globalThis.fetch
 
 function deferred<T>() {
   const result = {} as { promise: Promise<T>; resolve: (value: T) => void }
@@ -128,25 +131,23 @@ function waitRequest(pathname: string, response: Response) {
 }
 
 beforeAll(() => {
-  state.server = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      const next = state.queue.shift()
-      if (!next) {
-        return new Response("unexpected request", { status: 500 })
-      }
-
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = new Request(input, init)
       const url = new URL(req.url)
-      const body = (await req.json()) as Record<string, unknown>
-      next.resolve({ url, headers: req.headers, body })
-
-      if (!url.pathname.endsWith(next.path)) {
+      const idx = state.queue.findIndex((item) => url.pathname.endsWith(item.path))
+      if (idx === -1) {
         return new Response("not found", { status: 404 })
       }
 
+      const [next] = state.queue.splice(idx, 1)
+      const text = await req.text()
+      const body = text ? (JSON.parse(text) as Record<string, unknown>) : {}
+      next.resolve({ url, headers: req.headers, body })
       return next.response
     },
-  })
+    { preconnect: originalFetch.preconnect },
+  ) as typeof fetch
 })
 
 beforeEach(() => {
@@ -154,7 +155,7 @@ beforeEach(() => {
 })
 
 afterAll(() => {
-  state.server?.stop()
+  globalThis.fetch = originalFetch
 })
 
 function createChatStream(text: string) {
@@ -225,11 +226,6 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 
 describe("session.llm.stream", () => {
   test("sends temperature, tokens, and reasoning options for openai-compatible models", async () => {
-    const server = state.server
-    if (!server) {
-      throw new Error("Server not initialized")
-    }
-
     const providerID = "alibaba"
     const modelID = "qwen-plus"
     const fixture = await loadFixture(providerID, modelID)
@@ -255,7 +251,7 @@ describe("session.llm.stream", () => {
               [providerID]: {
                 options: {
                   apiKey: "test-key",
-                  baseURL: `${server.url.origin}/v1`,
+                  baseURL: `${state.server.url.origin}/v1`,
                 },
               },
             },
@@ -327,11 +323,6 @@ describe("session.llm.stream", () => {
   })
 
   test("keeps tools enabled by prompt permissions", async () => {
-    const server = state.server
-    if (!server) {
-      throw new Error("Server not initialized")
-    }
-
     const providerID = "alibaba"
     const modelID = "qwen-plus"
     const fixture = await loadFixture(providerID, modelID)
@@ -356,7 +347,7 @@ describe("session.llm.stream", () => {
               [providerID]: {
                 options: {
                   apiKey: "test-key",
-                  baseURL: `${server.url.origin}/v1`,
+                  baseURL: `${state.server.url.origin}/v1`,
                 },
               },
             },
@@ -416,11 +407,6 @@ describe("session.llm.stream", () => {
   })
 
   test("sends Google API payload for Gemini models", async () => {
-    const server = state.server
-    if (!server) {
-      throw new Error("Server not initialized")
-    }
-
     const providerID = "google"
     const modelID = "gemini-2.5-flash"
     const fixture = await loadFixture(providerID, modelID)
@@ -458,7 +444,7 @@ describe("session.llm.stream", () => {
               [providerID]: {
                 options: {
                   apiKey: "test-google-key",
-                  baseURL: `${server.url.origin}/v1beta`,
+                  baseURL: `${state.server.url.origin}/v1beta`,
                 },
               },
             },

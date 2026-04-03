@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { NamedError } from "@ax-code/util/error"
 import { APICallError } from "ai"
-import { setTimeout as sleep } from "node:timers/promises"
 import { SessionRetry } from "../../src/session/retry"
 import { MessageV2 } from "../../src/session/message-v2"
 import { ProviderID } from "../../src/provider/schema"
@@ -131,27 +130,10 @@ describe("session.message-v2.fromError", () => {
   test.concurrent(
     "converts ECONNRESET socket errors to retryable APIError",
     async () => {
-      using server = Bun.serve({
-        port: 0,
-        idleTimeout: 8,
-        async fetch(req) {
-          return new Response(
-            new ReadableStream({
-              async pull(controller) {
-                controller.enqueue("Hello,")
-                await sleep(10000)
-                controller.enqueue(" World!")
-                controller.close()
-              },
-            }),
-            { headers: { "Content-Type": "text/plain" } },
-          )
-        },
+      const error = Object.assign(new Error("The socket connection was closed unexpectedly"), {
+        code: "ECONNRESET",
+        syscall: "read",
       })
-
-      const error = await fetch(new URL("/", server.url.origin))
-        .then((res) => res.text())
-        .catch((e) => e)
 
       const result = MessageV2.fromError(error, { providerID })
 

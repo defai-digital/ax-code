@@ -3,7 +3,7 @@ import os from "os"
 import fuzzysort from "fuzzysort"
 import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
-import { NoSuchModelError, type Provider as SDK } from "ai"
+import { NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
 import { BunProc } from "../bun"
 import { Hash } from "../util/hash"
@@ -25,7 +25,6 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
-import type { LanguageModelV2 } from "@ai-sdk/provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { ModelID, ProviderID } from "./schema"
@@ -34,6 +33,12 @@ import { CUSTOM_LOADERS, type CustomModelLoader, type CustomVarsLoader, type Cus
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
+  type Lang = Exclude<LanguageModel, string>
+  type SDK = {
+    languageModel(modelID: string): unknown
+    responses?: (modelID: string) => unknown
+    chat?: (modelID: string) => unknown
+  }
 
   function wrapSSE(res: Response, ms: number, ctl: AbortController) {
     if (typeof ms !== "number" || ms <= 0) return res
@@ -275,7 +280,7 @@ export namespace Provider {
     }
 
     const providers: Record<ProviderID, Info> = {} as Record<ProviderID, Info>
-    const languages = new Map<string, LanguageModelV2>()
+    const languages = new Map<string, Lang>()
     const modelLoaders: {
       [providerID: string]: CustomModelLoader
     } = {}
@@ -613,7 +618,7 @@ export namespace Provider {
           ...options,
         })
         s.sdk.set(key, loaded)
-        return loaded as SDK
+        return loaded
       }
 
       // Security: only allow known-safe scoped packages for dynamic install.
@@ -684,7 +689,7 @@ export namespace Provider {
     return info
   }
 
-  export async function getLanguage(model: Model): Promise<LanguageModelV2> {
+  export async function getLanguage(model: Model): Promise<Lang> {
     const s = await state()
     const key = `${model.providerID}/${model.id}`
     if (s.models.has(key)) return s.models.get(key)!
@@ -696,8 +701,8 @@ export namespace Provider {
       const language = s.modelLoaders[model.providerID]
         ? await s.modelLoaders[model.providerID](sdk, model.api.id, { ...provider.options, ...model.options })
         : sdk.languageModel(model.api.id)
-      s.models.set(key, language)
-      return language
+      s.models.set(key, language as Lang)
+      return language as Lang
     } catch (e) {
       if (e instanceof NoSuchModelError)
         throw new ModelNotFoundError(
@@ -787,12 +792,30 @@ export namespace Provider {
     }
 
     const provider = Object.values(providers).find((p) => !cfg.provider || Object.keys(cfg.provider).includes(p.id))
-    if (!provider) throw new Error("no providers found")
-    const [model] = sort(Object.values(provider.models))
+    if (provider) {
+      const [model] = sort(Object.values(provider.models))
+      if (!model) throw new Error("no models found")
+      return {
+        providerID: provider.id,
+        modelID: model.id,
+      }
+    }
+
+    const disabled = new Set(cfg.disabled_providers ?? [])
+    const enabled = cfg.enabled_providers ? new Set(cfg.enabled_providers) : undefined
+    const fallback = Object.values(await ModelsDev.get()).find((item) => {
+      const id = ProviderID.make(item.id)
+      if (enabled && !enabled.has(id)) return false
+      if (disabled.has(id)) return false
+      if (cfg.provider && !Object.keys(cfg.provider).includes(item.id)) return false
+      return true
+    })
+    if (!fallback) throw new Error("no providers found")
+    const [model] = sort(Object.values(fallback.models))
     if (!model) throw new Error("no models found")
     return {
-      providerID: provider.id,
-      modelID: model.id,
+      providerID: ProviderID.make(fallback.id),
+      modelID: ModelID.make(model.id),
     }
   }
 

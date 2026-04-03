@@ -94,10 +94,12 @@ export namespace Config {
         const endpoint = `${url}/.well-known/ax-code`
         const legacy = `${url}/.well-known/opencode`
         log.debug("fetching remote config", { url: endpoint, legacy })
-        const response = await fetch(endpoint).then((res) => {
-          if (res.ok || res.status !== 404) return res
-          return fetch(legacy)
-        })
+        const response = await fetch(endpoint)
+          .then((res) => {
+            if (res.ok || res.status !== 404) return res
+            return fetch(legacy)
+          })
+          .catch(() => fetch(legacy))
         if (!response.ok) {
           throw new Error(`failed to fetch remote config from ${url}: ${response.status}`)
         }

@@ -1042,11 +1042,7 @@ export namespace SessionPrompt {
     }
 
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
-    const full =
-      !input.variant && agent.variant
-        ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined)
-        : undefined
-    const variant = input.variant ?? (!input.model && agent.variant && (!full || full.variants?.[agent.variant]) ? agent.variant : undefined)
+    const variant = input.variant ?? (!input.model && agent.variant ? agent.variant : undefined)
 
     const info: MessageV2.Info = {
       id: input.messageID ?? MessageID.ascending(),
@@ -1227,13 +1223,12 @@ export namespace SessionPrompt {
 
                 await ReadTool.init()
                   .then(async (t) => {
-                    const model = await Provider.getModel(info.model.providerID, info.model.modelID)
                     const readCtx: Tool.Context = {
                       sessionID: input.sessionID,
                       abort: new AbortController().signal,
                       agent: input.agent!,
                       messageID: info.id,
-                      extra: { bypassCwdCheck: true, model },
+                      extra: { bypassCwdCheck: true },
                       messages: [],
                       metadata: async () => {},
                       ask: async () => {},

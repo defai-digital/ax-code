@@ -2,7 +2,7 @@ import { Cause, Effect, Layer, Scope, ServiceMap } from "effect"
 // @ts-ignore
 import { createWrapper } from "@parcel/watcher/wrapper"
 import type ParcelWatcher from "@parcel/watcher"
-import { readdir } from "fs/promises"
+import { readdir, stat } from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Bus } from "@/bus"
@@ -23,6 +23,7 @@ declare const AX_CODE_LIBC: string | undefined
 export namespace FileWatcher {
   const log = Log.create({ service: "file.watcher" })
   const SUBSCRIBE_TIMEOUT_MS = 10_000
+  const POLL_MS = 100
 
   export const Event = {
     Updated: BusEvent.define(
@@ -46,17 +47,46 @@ export namespace FileWatcher {
     }
   })
 
-  function getBackend() {
-    if (process.platform === "win32") return "windows"
-    if (process.platform === "darwin") return "fs-events"
-    if (process.platform === "linux") return "inotify"
-  }
-
   function protecteds(dir: string) {
     return Protected.paths().filter((item) => {
       const rel = path.relative(dir, item)
       return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel)
     })
+  }
+
+  function ignored(dir: string, ignore: string[], file: string) {
+    const rel = path.relative(dir, file)
+    if (rel === "") return false
+
+    for (const item of ignore) {
+      if (path.isAbsolute(item)) {
+        const target = path.resolve(item)
+        if (file === target || file.startsWith(target + path.sep)) return true
+        continue
+      }
+      if (rel === item || rel.startsWith(item + path.sep)) return true
+    }
+
+    return FileIgnore.match(rel, {
+      extra: ignore.filter((item) => !path.isAbsolute(item)),
+    })
+  }
+
+  async function snapshot(dir: string, ignore: string[], root = dir, result = new Map<string, string>()) {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      const file = path.join(dir, entry.name)
+      if (ignored(root, ignore, file)) continue
+      if (entry.isDirectory()) {
+        await snapshot(file, ignore, root, result)
+        continue
+      }
+      if (!entry.isFile()) continue
+      const info = await stat(file).catch(() => undefined)
+      if (!info?.isFile()) continue
+      result.set(file, `${info.mtimeMs}:${info.size}`)
+    }
+    return result
   }
 
   export const hasNativeBinding = () => !!watcher()
@@ -77,20 +107,11 @@ export namespace FileWatcher {
 
             log.info("init", { directory: Instance.directory })
 
-            const backend = getBackend()
-            if (!backend) {
-              log.error("watcher backend not supported", { directory: Instance.directory, platform: process.platform })
-              return
-            }
+            const native = watcher()
 
-            const w = watcher()
-            if (!w) return
-
-            log.info("watcher backend", { directory: Instance.directory, platform: process.platform, backend })
-
-            const subs: ParcelWatcher.AsyncSubscription[] = []
+            const subs: Array<() => Promise<unknown>> = []
             yield* Effect.addFinalizer(() =>
-              Effect.promise(() => Promise.allSettled(subs.map((sub) => sub.unsubscribe()))),
+              Effect.promise(() => Promise.allSettled(subs.map((close) => close()))),
             )
 
             const cb: ParcelWatcher.SubscribeCallback = Instance.bind((err, evts) => {
@@ -103,15 +124,43 @@ export namespace FileWatcher {
             })
 
             const subscribe = (dir: string, ignore: string[]) => {
-              const pending = w.subscribe(dir, cb, { ignore, backend })
-              return Effect.gen(function* () {
-                const sub = yield* Effect.promise(() => pending)
-                subs.push(sub)
+              return Effect.tryPromise(async () => {
+                let prev = await snapshot(dir, ignore)
+                let busy = false
+                const tick = Instance.bind(async () => {
+                  if (busy) return
+                  busy = true
+                  try {
+                    const next = await snapshot(dir, ignore)
+                    for (const [file, hash] of next) {
+                      const last = prev.get(file)
+                      if (!last) Bus.publish(Event.Updated, { file, event: "add" })
+                      else if (last !== hash) Bus.publish(Event.Updated, { file, event: "change" })
+                    }
+                    for (const file of prev.keys()) {
+                      if (!next.has(file)) Bus.publish(Event.Updated, { file, event: "unlink" })
+                    }
+                    prev = next
+                  } finally {
+                    busy = false
+                  }
+                })
+
+                const id = setInterval(() => {
+                  void tick()
+                }, POLL_MS)
+
+                subs.push(async () => {
+                  clearInterval(id)
+                })
               }).pipe(
                 Effect.timeout(SUBSCRIBE_TIMEOUT_MS),
                 Effect.catchCause((cause) => {
-                  log.error("failed to subscribe", { dir, cause: Cause.pretty(cause) })
-                  pending.then((s) => s.unsubscribe()).catch(() => {})
+                  log.error("failed to subscribe", {
+                    dir,
+                    cause: Cause.pretty(cause),
+                    native: !!native,
+                  })
                   return Effect.void
                 }),
               )

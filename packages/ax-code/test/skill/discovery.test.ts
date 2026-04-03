@@ -7,8 +7,9 @@ import { rm } from "fs/promises"
 import path from "path"
 
 let CLOUDFLARE_SKILLS_URL: string
-let server: ReturnType<typeof Bun.serve>
 let downloadCount = 0
+const origin = "http://127.0.0.1"
+const originalFetch = globalThis.fetch
 
 const fixturePath = path.join(import.meta.dir, "../fixture/skills")
 const cacheDir = path.join(Global.Path.cache, "skills")
@@ -16,9 +17,8 @@ const cacheDir = path.join(Global.Path.cache, "skills")
 beforeAll(async () => {
   await rm(cacheDir, { recursive: true, force: true })
 
-  server = Bun.serve({
-    port: 0,
-    async fetch(req) {
+  globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = new Request(input, init)
       const url = new URL(req.url)
 
       // route /.well-known/skills/* to the fixture directory
@@ -35,14 +35,13 @@ beforeAll(async () => {
       }
 
       return new Response("Not Found", { status: 404 })
-    },
-  })
+  }, { preconnect: originalFetch.preconnect }) as typeof fetch
 
-  CLOUDFLARE_SKILLS_URL = `http://localhost:${server.port}/.well-known/skills/`
+  CLOUDFLARE_SKILLS_URL = `${origin}/.well-known/skills/`
 })
 
 afterAll(async () => {
-  server?.stop()
+  globalThis.fetch = originalFetch
   await rm(cacheDir, { recursive: true, force: true })
 })
 
@@ -70,13 +69,13 @@ describe("Discovery.pull", () => {
   })
 
   test("returns empty array for invalid url", async () => {
-    const dirs = await pull(`http://localhost:${server.port}/invalid-url/`)
+    const dirs = await pull(`${origin}/invalid-url/`)
     expect(dirs).toEqual([])
   })
 
   test("returns empty array for non-json response", async () => {
     // any url not explicitly handled in server returns 404 text "Not Found"
-    const dirs = await pull(`http://localhost:${server.port}/some-other-path/`)
+    const dirs = await pull(`${origin}/some-other-path/`)
     expect(dirs).toEqual([])
   })
 
