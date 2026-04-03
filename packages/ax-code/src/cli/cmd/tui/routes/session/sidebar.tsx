@@ -11,6 +11,7 @@ import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
+import { Usage } from "./usage"
 
 function bar(input: { pct?: number | null; busy: boolean; tick: number }) {
   const width = 20
@@ -74,12 +75,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   })
 
   const context = createMemo(() => {
-    const last = messages().findLast(
-      (x) => x.role === "assistant" && (x.tokens.output > 0 || x.tokens.input > 0),
-    ) as AssistantMessage
+    const last = Usage.last(messages()) as AssistantMessage
     if (!last) return
-    const total =
-      last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
+    const total = Usage.total(last)
     const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
     return {
       tokens: total.toLocaleString(),

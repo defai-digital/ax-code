@@ -9,6 +9,7 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { Flag } from "@/flag/flag"
 import { useTerminalDimensions } from "@opentui/solid"
+import { Usage } from "./usage"
 
 const Title = (props: { session: Accessor<Session> }) => {
   const { theme } = useTheme()
@@ -59,12 +60,9 @@ export function Header() {
   })
 
   const context = createMemo(() => {
-    const last = messages().findLast(
-      (x) => x.role === "assistant" && (x.tokens.output > 0 || x.tokens.input > 0),
-    ) as AssistantMessage
+    const last = Usage.last(messages()) as AssistantMessage
     if (!last) return
-    const total =
-      last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
+    const total = Usage.total(last)
     const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
     let result = total.toLocaleString()
     if (model?.limit.context) {

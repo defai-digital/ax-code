@@ -35,6 +35,7 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import { Usage } from "../../routes/session/usage"
 
 export type PromptProps = {
   sessionID?: string
@@ -794,12 +795,9 @@ export function Prompt(props: PromptProps) {
     if (!props.sessionID) return
     const msgs = sync.data.message[props.sessionID]
     if (!msgs) return
-    const last = msgs.findLast(
-      (x: any) => x.role === "assistant" && (x.tokens?.output > 0 || x.tokens?.input > 0),
-    ) as any
+    const last = Usage.last(msgs) as any
     if (!last?.tokens) return
-    const total = (last.tokens.input ?? 0) + (last.tokens.output ?? 0) + (last.tokens.reasoning ?? 0) +
-      (last.tokens.cache?.read ?? 0) + (last.tokens.cache?.write ?? 0)
+    const total = Usage.total(last)
     if (total === 0) return
     const model = sync.data.provider.find((x: any) => x.id === last.providerID)?.models?.[last.modelID]
     const pct = model?.limit?.context ? Math.round((total / model.limit.context) * 100) : undefined
