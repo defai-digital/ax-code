@@ -434,6 +434,12 @@ AX Code is developed internally. We do not accept pull requests, but we welcome 
 
 ---
 
+## Community
+
+Find us on Discord: [https://discord.gg/cTavsMgu](https://discord.gg/cTavsMgu)
+
+---
+
 ## Project History
 
 AX Code was built by combining two open source projects:
