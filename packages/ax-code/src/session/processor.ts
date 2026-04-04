@@ -19,6 +19,7 @@ import { SelfCorrection } from "./correction"
 import { PartID } from "./schema"
 import type { SessionID, MessageID } from "./schema"
 import { NamedError } from "@ax-code/util/error"
+import { Recorder } from "@/replay/recorder"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
@@ -91,6 +92,15 @@ export namespace SessionProcessor {
           let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
           try {
             let usedTools = false
+            let stepStartTime = Date.now()
+            Recorder.emit({
+              type: "llm.request",
+              sessionID: input.sessionID,
+              messageID: input.assistantMessage.id,
+              model: `${input.model.providerID}/${input.model.id}`,
+              messageCount: streamInput.messages.length,
+              stepIndex: attempt,
+            })
             const stream = await LLM.stream(streamInput)
 
             for await (const value of stream.fullStream) {
@@ -168,6 +178,15 @@ export namespace SessionProcessor {
 
                 case "tool-call": {
                   usedTools = true
+                  Recorder.emit({
+                    type: "tool.call",
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    tool: value.toolName,
+                    callID: value.toolCallId,
+                    input: value.input as Record<string, unknown>,
+                    stepIndex: attempt,
+                  })
                   const match = toolcalls[value.toolCallId]
                   if (match) {
                     const part = await Session.updatePart({
@@ -213,6 +232,7 @@ export namespace SessionProcessor {
                   usedTools = true
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
+                    const toolEndTime = Date.now()
                     await Session.updatePart({
                       ...match,
                       state: {
@@ -223,10 +243,21 @@ export namespace SessionProcessor {
                         title: value.output.title,
                         time: {
                           start: match.state.time.start,
-                          end: Date.now(),
+                          end: toolEndTime,
                         },
                         attachments: value.output.attachments,
                       },
+                    })
+                    Recorder.emit({
+                      type: "tool.result",
+                      sessionID: input.sessionID,
+                      messageID: input.assistantMessage.id,
+                      tool: match.tool,
+                      callID: value.toolCallId,
+                      status: "completed",
+                      output: typeof value.output.output === "string" ? value.output.output.slice(0, 1000) : undefined,
+                      durationMs: toolEndTime - match.state.time.start,
+                      stepIndex: attempt,
                     })
 
                     // Self-correction: clear retry budget on success
@@ -244,6 +275,7 @@ export namespace SessionProcessor {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const errorMsg = value.error instanceof Error ? value.error.message : String(value.error)
+                    const toolErrorEnd = Date.now()
 
                     await Session.updatePart({
                       ...match,
@@ -253,9 +285,20 @@ export namespace SessionProcessor {
                         error: errorMsg,
                         time: {
                           start: match.state.time.start,
-                          end: Date.now(),
+                          end: toolErrorEnd,
                         },
                       },
+                    })
+                    Recorder.emit({
+                      type: "tool.result",
+                      sessionID: input.sessionID,
+                      messageID: input.assistantMessage.id,
+                      tool: match.tool,
+                      callID: value.toolCallId,
+                      status: "error",
+                      error: errorMsg.slice(0, 1000),
+                      durationMs: toolErrorEnd - match.state.time.start,
+                      stepIndex: attempt,
                     })
 
                     if (
@@ -286,6 +329,13 @@ export namespace SessionProcessor {
                 case "start-step":
                   usedTools = false
                   snapshot = undefined
+                  stepStartTime = Date.now()
+                  Recorder.emit({
+                    type: "step.start",
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    stepIndex: attempt,
+                  })
                   await Session.updatePart({
                     ...partBase(),
                     snapshot,
@@ -328,6 +378,35 @@ export namespace SessionProcessor {
                     cost: usage.cost,
                   })
                   await Session.updateMessage(input.assistantMessage)
+                  Recorder.emit({
+                    type: "step.finish",
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    stepIndex: attempt,
+                    finishReason: usedTools ? "tool-calls" : finishReason,
+                    tokens: {
+                      input: usage.tokens.input,
+                      output: usage.tokens.output,
+                      reasoning: usage.tokens.reasoning,
+                      cache: usage.tokens.cache,
+                    },
+                    cost: usage.cost,
+                  })
+                  Recorder.emit({
+                    type: "llm.response",
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    finishReason: usedTools ? "tool-calls" : finishReason,
+                    tokens: {
+                      input: usage.tokens.input,
+                      output: usage.tokens.output,
+                      reasoning: usage.tokens.reasoning,
+                      cache: usage.tokens.cache,
+                    },
+                    cost: usage.cost,
+                    latencyMs: Date.now() - stepStartTime,
+                    stepIndex: attempt,
+                  })
                   if (snapshot) {
                     const patch = await Snapshot.patch(snapshot)
                     if (patch.files.length) {
@@ -429,6 +508,14 @@ export namespace SessionProcessor {
             log.error("process", {
               error: e,
               stack: JSON.stringify(e.stack),
+            })
+            Recorder.emit({
+              type: "error",
+              sessionID: input.sessionID,
+              messageID: input.assistantMessage.id,
+              errorType: e?.name ?? e?.constructor?.name ?? "Unknown",
+              message: (e?.message ?? String(e)).slice(0, 2000),
+              stepIndex: attempt,
             })
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             if (MessageV2.ContextOverflowError.isInstance(error)) {

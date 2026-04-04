@@ -1,6 +1,7 @@
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
+import { Recorder } from "@/replay/recorder"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
 import { ProjectID } from "@/project/schema"
@@ -192,6 +193,15 @@ export namespace Permission {
         const deferred = yield* Deferred.make<void, RejectedError | CorrectedError>()
         pending.set(id, { info, deferred })
         void Bus.publish(Event.Asked, info)
+        if (Recorder.active(info.sessionID)) {
+          Recorder.emit({
+            type: "permission.ask",
+            sessionID: info.sessionID,
+            permission: info.permission,
+            patterns: info.patterns,
+            tool: typeof info.metadata?.tool === "string" ? info.metadata.tool : undefined,
+          })
+        }
         return yield* Effect.ensuring(
           Deferred.await(deferred),
           Effect.sync(() => {
@@ -211,6 +221,14 @@ export namespace Permission {
           requestID: existing.info.id,
           reply: input.reply,
         })
+        if (Recorder.active(existing.info.sessionID)) {
+          Recorder.emit({
+            type: "permission.reply",
+            sessionID: existing.info.sessionID,
+            permission: existing.info.permission,
+            reply: input.reply,
+          })
+        }
 
         if (input.reply === "reject") {
           yield* Deferred.fail(
@@ -226,6 +244,14 @@ export namespace Permission {
               requestID: item.info.id,
               reply: "reject",
             })
+            if (Recorder.active(item.info.sessionID)) {
+              Recorder.emit({
+                type: "permission.reply",
+                sessionID: item.info.sessionID,
+                permission: item.info.permission,
+                reply: "reject",
+              })
+            }
             yield* Deferred.fail(item.deferred, new RejectedError())
           }
           return
@@ -254,6 +280,14 @@ export namespace Permission {
             requestID: item.info.id,
             reply: "always",
           })
+          if (Recorder.active(item.info.sessionID)) {
+            Recorder.emit({
+              type: "permission.reply",
+              sessionID: item.info.sessionID,
+              permission: item.info.permission,
+              reply: "always",
+            })
+          }
           yield* Deferred.succeed(item.deferred, undefined)
         }
       })

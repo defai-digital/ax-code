@@ -33,6 +33,7 @@ import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
 import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
+import { Recorder } from "../replay/recorder"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
@@ -440,6 +441,16 @@ export namespace SessionPrompt {
     }
 
     await using _ = defer(() => cancel(sessionID))
+    await using _recorder = defer(() => {
+      Recorder.emit({
+        type: "session.end",
+        sessionID,
+        reason,
+        totalSteps: step,
+      })
+      Recorder.end(sessionID)
+    })
+    Recorder.begin(sessionID)
     Provider.warmup()
 
     // Structured output state
@@ -448,6 +459,7 @@ export namespace SessionPrompt {
     let structuredOutput: unknown | undefined
 
     let step = 0
+    let reason: "completed" | "aborted" | "error" | "step_limit" = "completed"
     let consecutiveErrors = 0
     const MAX_CONSECUTIVE_ERRORS = _MAX_CONSECUTIVE_ERRORS
     const GLOBAL_STEP_LIMIT = _GLOBAL_STEP_LIMIT
@@ -468,7 +480,10 @@ export namespace SessionPrompt {
       if (step > 0 && step % 10 === 0) {
         log.warn("long-running task", { step, sessionID, message: `Agent has been working for ${step} steps` })
       }
-      if (abort.aborted) break
+      if (abort.aborted) {
+        reason = "aborted"
+        break
+      }
 
       // Safety: prevent infinite loops
       if (step >= GLOBAL_STEP_LIMIT) {
@@ -477,6 +492,7 @@ export namespace SessionPrompt {
           sessionID,
           error: new NamedError.Unknown({ message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT}). Stopping to prevent infinite loop. Try breaking the task into smaller parts.` }).toObject(),
         })
+        reason = "step_limit"
         break
       }
       // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
@@ -524,13 +540,21 @@ export namespace SessionPrompt {
       }
 
       step++
-      if (step === 1)
+      if (step === 1) {
         ensureTitle({
           session,
           modelID: lastUser.model.modelID,
           providerID: lastUser.model.providerID,
           history: msgs,
         })
+        Recorder.emit({
+          type: "session.start",
+          sessionID,
+          agent: lastUser.agent,
+          model: `${lastUser.model.providerID}/${lastUser.model.modelID}`,
+          directory: Instance.directory,
+        })
+      }
 
       const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID).catch((e) => {
         if (Provider.ModelNotFoundError.isInstance(e)) {
@@ -542,6 +566,7 @@ export namespace SessionPrompt {
             }).toObject(),
           })
         }
+        reason = "error"
         throw e
       })
       const task = tasks.pop()
@@ -593,6 +618,7 @@ export namespace SessionPrompt {
           sessionID,
           error: error.toObject(),
         })
+        reason = "error"
         throw error
       }
       const maxSteps = agent.steps ?? Infinity
@@ -765,6 +791,7 @@ export namespace SessionPrompt {
             sessionID,
             error: new NamedError.Unknown({ message: `Agent encountered ${consecutiveErrors} consecutive errors. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.` }).toObject(),
           })
+          reason = "error"
           break
         }
       } else {
@@ -1028,6 +1055,13 @@ export namespace SessionPrompt {
     if (messageText) {
       const routeResult = routeAgent(messageText, agentName)
       if (routeResult) {
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: input.sessionID,
+          fromAgent: agentName,
+          toAgent: routeResult.agent,
+          confidence: routeResult.confidence,
+        })
         agentName = routeResult.agent
         log.info("auto-routed to agent", { agent: routeResult.agent, confidence: routeResult.confidence })
         Bus.publish(TuiEvent.ToastShow, {
