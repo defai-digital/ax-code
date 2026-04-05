@@ -1,4 +1,4 @@
-import { Database, eq, and, or, inArray, desc, like } from "../storage/db"
+import { Database, eq, and, or, inArray, desc, lt, gte, sql } from "../storage/db"
 import {
   CodeNodeTable,
   CodeEdgeTable,
@@ -73,9 +73,17 @@ export namespace CodeGraphQuery {
     prefix: string,
     opts?: { kind?: CodeNodeKind; limit?: number },
   ): NodeRow[] {
+    // Use range comparison instead of `LIKE prefix%` so SQLite can use
+    // code_node_project_name_idx. LIKE with a parameter is opaque to the
+    // planner — it does a full scan even when an index on `name` exists.
+    // The range [prefix, prefix + U+FFFF) is identical in semantics for
+    // any realistic symbol name (no identifier contains U+FFFF, the
+    // Unicode "not a character" sentinel).
+    const upper = prefix + "\uFFFF"
     const filters = [
       eq(CodeNodeTable.project_id, projectID),
-      like(CodeNodeTable.name, `${prefix}%`),
+      gte(CodeNodeTable.name, prefix),
+      lt(CodeNodeTable.name, upper),
     ]
     if (opts?.kind) filters.push(eq(CodeNodeTable.kind, opts.kind))
     return Database.use((db) => {
@@ -109,9 +117,17 @@ export namespace CodeGraphQuery {
   }
 
   export function countNodes(projectID: ProjectID): number {
-    return Database.use((db) =>
-      db.select({ id: CodeNodeTable.id }).from(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).all(),
-    ).length
+    // Use `COUNT(*)` via `.get()` instead of loading all IDs with
+    // `.all().length`. For 200K nodes the previous implementation
+    // allocated ~8MB per call; this is O(1) memory and much faster.
+    const row = Database.use((db) =>
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(CodeNodeTable)
+        .where(eq(CodeNodeTable.project_id, projectID))
+        .get(),
+    )
+    return row?.count ?? 0
   }
 
   // ─── Edge CRUD ──────────────────────────────────────────────────────
@@ -205,9 +221,16 @@ export namespace CodeGraphQuery {
   }
 
   export function countEdges(projectID: ProjectID): number {
-    return Database.use((db) =>
-      db.select({ id: CodeEdgeTable.id }).from(CodeEdgeTable).where(eq(CodeEdgeTable.project_id, projectID)).all(),
-    ).length
+    // Same rationale as countNodes — use COUNT(*) via .get() instead of
+    // materializing every edge ID.
+    const row = Database.use((db) =>
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(CodeEdgeTable)
+        .where(eq(CodeEdgeTable.project_id, projectID))
+        .get(),
+    )
+    return row?.count ?? 0
   }
 
   // ─── File state ─────────────────────────────────────────────────────
@@ -304,7 +327,10 @@ export namespace CodeGraphQuery {
   // ─── Project-wide delete (used by tests and manual reset) ───────────
 
   export function clearProject(projectID: ProjectID): void {
-    Database.use((db) => {
+    // Use a transaction so a crash between any two deletes cannot leave
+    // the graph tables referentially inconsistent. `Database.use` with
+    // multiple `.run()` calls issues four auto-commits.
+    Database.transaction((db) => {
       db.delete(CodeEdgeTable).where(eq(CodeEdgeTable.project_id, projectID)).run()
       db.delete(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).run()
       db.delete(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).run()
@@ -324,5 +350,24 @@ export namespace CodeGraphQuery {
         .limit(limit)
         .all(),
     )
+  }
+
+  // ─── Planner statistics ─────────────────────────────────────────────
+
+  // Refresh SQLite's query planner statistics for the code_* tables.
+  // Without this, the planner picks plans based on heuristics instead of
+  // real row counts. Profiling showed edgesTo was hitting a 7-cardinality
+  // kind index instead of the unique-per-node to_node index — fixable
+  // by a single ANALYZE call. Cheap (~100ms on 450k edges) and the
+  // output persists across DB opens.
+  //
+  // Scoped to our tables via ANALYZE <table> to avoid touching other
+  // subsystems' indexes in the shared DB.
+  export function analyze(): void {
+    Database.use((db) => {
+      db.run(sql`ANALYZE code_node`)
+      db.run(sql`ANALYZE code_edge`)
+      db.run(sql`ANALYZE code_file`)
+    })
   }
 }

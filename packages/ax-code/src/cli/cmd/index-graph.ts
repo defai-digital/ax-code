@@ -68,7 +68,7 @@ export const IndexCommand = cmd({
         }
 
         const start = Date.now()
-        await CodeIntelligence.indexFiles(projectID, files, args.concurrency)
+        const result = await CodeIntelligence.indexFiles(projectID, files, args.concurrency)
         const elapsed = Date.now() - start
 
         const status = CodeIntelligence.status(projectID)
@@ -77,6 +77,23 @@ export const IndexCommand = cmd({
         UI.println(`  nodes:     ${status.nodeCount}`)
         UI.println(`  edges:     ${status.edgeCount}`)
         UI.println(`  elapsed:   ${elapsed}ms`)
+
+        // Per-phase breakdown — aggregated wall-clock across all files.
+        // Since files run in parallel (concurrency jobs at a time) the
+        // sum over-counts by up to a factor of `concurrency`. Ratios
+        // between phases are what matter for identifying bottlenecks.
+        const t = result.timings
+        const fmt = (ms: number) => `${(ms / 1000).toFixed(2)}s`
+        const pct = (ms: number) => (t.total > 0 ? ` (${((ms / t.total) * 100).toFixed(1)}%)` : "")
+        UI.println("")
+        UI.println(`  phase breakdown (parallel, ratios matter more than absolutes):`)
+        UI.println(`    lsp.references:     ${fmt(t.lspReferences).padStart(8)}${pct(t.lspReferences)}`)
+        UI.println(`    lsp.documentSymbol: ${fmt(t.lspDocumentSymbol).padStart(8)}${pct(t.lspDocumentSymbol)}`)
+        UI.println(`    lsp.touch:          ${fmt(t.lspTouch).padStart(8)}${pct(t.lspTouch)}`)
+        UI.println(`    edge.resolve:       ${fmt(t.edgeResolve).padStart(8)}${pct(t.edgeResolve)}`)
+        UI.println(`    db.transaction:     ${fmt(t.dbTransaction).padStart(8)}${pct(t.dbTransaction)}`)
+        UI.println(`    symbol.walk:        ${fmt(t.symbolWalk).padStart(8)}${pct(t.symbolWalk)}`)
+        UI.println(`    file.read:          ${fmt(t.readFile).padStart(8)}${pct(t.readFile)}`)
       },
     })
   },

@@ -233,29 +233,64 @@ export namespace CodeGraphBuilder {
   // (language not supported, LSP unavailable, empty symbol list). Never
   // throws on per-file errors; errors are logged and the builder
   // continues.
+  // Per-phase wall-clock breakdown returned alongside the index result.
+  // Consumers (the CLI index command, benchmarks, future profiling tools)
+  // can sum these across a batch to see where time actually goes. Kept
+  // always-on because performance.now() costs ~100ns and the visibility
+  // is worth it.
+  export type IndexTimings = {
+    readFile: number
+    lspTouch: number
+    lspDocumentSymbol: number
+    symbolWalk: number
+    lspReferences: number
+    edgeResolve: number
+    dbTransaction: number
+    total: number
+  }
+
   export async function indexFile(
     projectID: ProjectID,
     absPath: string,
-  ): Promise<{ nodes: number; edges: number; completeness: "full" | "partial" | "lsp-only" }> {
+  ): Promise<{ nodes: number; edges: number; completeness: "full" | "partial" | "lsp-only"; timings: IndexTimings }> {
+    const timings: IndexTimings = {
+      readFile: 0,
+      lspTouch: 0,
+      lspDocumentSymbol: 0,
+      symbolWalk: 0,
+      lspReferences: 0,
+      edgeResolve: 0,
+      dbTransaction: 0,
+      total: 0,
+    }
+    const tStart = performance.now()
+
     const lang = detectLanguage(absPath)
     if (lang === "plaintext") {
       log.info("skipping file, language not recognized", { file: absPath })
-      return { nodes: 0, edges: 0, completeness: "partial" }
+      timings.total = performance.now() - tStart
+      return { nodes: 0, edges: 0, completeness: "partial", timings }
     }
 
     // Read once for hash + size. If the file doesn't exist, caller
     // probably wants us to purge it — but that's the purge API, not
     // the index API, so we just return zero.
+    const tRead = performance.now()
     const exists = await Filesystem.exists(absPath)
     if (!exists) {
       log.info("skipping file, does not exist", { file: absPath })
-      return { nodes: 0, edges: 0, completeness: "partial" }
+      timings.total = performance.now() - tStart
+      return { nodes: 0, edges: 0, completeness: "partial", timings }
     }
     const text = await Filesystem.readText(absPath).catch((err) => {
       log.error("failed to read file for indexing", { file: absPath, err })
       return undefined
     })
-    if (text === undefined) return { nodes: 0, edges: 0, completeness: "partial" }
+    if (text === undefined) {
+      timings.total = performance.now() - tStart
+      return { nodes: 0, edges: 0, completeness: "partial", timings }
+    }
+    timings.readFile = performance.now() - tRead
 
     const sha = Bun.hash(text).toString()
     const size = text.length
@@ -263,15 +298,19 @@ export namespace CodeGraphBuilder {
     // Touch the file through LSP so the server has it open before we
     // query documentSymbol. This also ensures diagnostics arrive, but
     // we don't wait for them — we only need the symbol info.
+    const tTouch = performance.now()
     await LSP.touchFile(absPath, false)
+    timings.lspTouch = performance.now() - tTouch
 
     // Pull document symbols. LSP.documentSymbol returns a flat array
     // of results (one per matching client) that we flatten and walk.
     const uri = pathToFileURL(absPath).href
+    const tDocSym = performance.now()
     const raw = (await LSP.documentSymbol(uri).catch((err) => {
       log.error("LSP.documentSymbol failed", { file: absPath, err })
       return []
     })) as Array<LspDocumentSymbol | LspSymbolInformation>
+    timings.lspDocumentSymbol = performance.now() - tDocSym
 
     // Build the new node list outside the transaction so we don't hold
     // the DB lock while walking LSP output. The delete + insert + upsert
@@ -294,6 +333,7 @@ export namespace CodeGraphBuilder {
     const refBookmarks: ReferenceBookmark[] = []
     let nodeCount = 0
     const now = Date.now()
+    const tWalk = performance.now()
 
     if (raw.length > 0) {
       // LSP may return DocumentSymbol[] (hierarchical) or
@@ -392,6 +432,8 @@ export namespace CodeGraphBuilder {
     // LSP RPCs happen outside the transaction below so we don't hold the
     // DB lock on network I/O.
 
+    timings.symbolWalk = performance.now() - tWalk
+
     const edgeInserts: Parameters<typeof CodeGraphQuery.insertEdges>[0] = []
 
     // Sort bookmarks by range size descending — biggest (top-level)
@@ -413,6 +455,7 @@ export namespace CodeGraphBuilder {
       // which has its own concurrency limits). For very large files we
       // could limit further here, but 100 queries in parallel is
       // reasonable for typical projects.
+      const tRefs = performance.now()
       const refResults = await Promise.all(
         eligibleBookmarks.map(async (bookmark) => {
           const locations = (await LSP.references({
@@ -423,7 +466,9 @@ export namespace CodeGraphBuilder {
           return { bookmark, locations }
         }),
       )
+      timings.lspReferences = performance.now() - tRefs
 
+      const tResolve = performance.now()
       for (const { bookmark, locations } of refResults) {
         for (const loc of locations) {
           let refFile: string
@@ -498,6 +543,7 @@ export namespace CodeGraphBuilder {
       // it's still "lsp-only" — the server supports symbols but not
       // references (or there genuinely are none).
       if (edgeInserts.length > 0) completeness = "full"
+      timings.edgeResolve = performance.now() - tResolve
     }
 
     // All DB mutations for this file happen atomically. Without the
@@ -506,6 +552,7 @@ export namespace CodeGraphBuilder {
     // stale node rows underneath it. Transactions are cheap on SQLite
     // and the whole block is CPU-bound (no await inside), so wrapping
     // it has no latency cost.
+    const tTxn = performance.now()
     Database.transaction((_tx) => {
       CodeGraphQuery.deleteEdgesTouchingFile(projectID, absPath)
       CodeGraphQuery.deleteNodesInFile(projectID, absPath)
@@ -539,9 +586,11 @@ export namespace CodeGraphBuilder {
         time_updated: now,
       })
     })
+    timings.dbTransaction = performance.now() - tTxn
+    timings.total = performance.now() - tStart
 
     log.info("indexed file", { file: absPath, nodes: nodeCount, edges: edgeInserts.length, completeness })
-    return { nodes: nodeCount, edges: edgeInserts.length, completeness }
+    return { nodes: nodeCount, edges: edgeInserts.length, completeness, timings }
   }
 
   // Index a batch of files with a concurrency cap. Returns cumulative
@@ -552,11 +601,28 @@ export namespace CodeGraphBuilder {
     projectID: ProjectID,
     files: string[],
     concurrency = 4,
-  ): Promise<{ nodes: number; edges: number; files: number; skipped: number }> {
+  ): Promise<{
+    nodes: number
+    edges: number
+    files: number
+    skipped: number
+    timings: IndexTimings
+  }> {
     let nodes = 0
     let edges = 0
     let indexed = 0
     let skipped = 0
+    const aggregate: IndexTimings = {
+      readFile: 0,
+      lspTouch: 0,
+      lspDocumentSymbol: 0,
+      symbolWalk: 0,
+      lspReferences: 0,
+      edgeResolve: 0,
+      dbTransaction: 0,
+      total: 0,
+    }
+    const emptyTimings: IndexTimings = { ...aggregate }
 
     for (let i = 0; i < files.length; i += concurrency) {
       const batch = files.slice(i, i + concurrency)
@@ -564,7 +630,7 @@ export namespace CodeGraphBuilder {
         batch.map((file) =>
           indexFile(projectID, file).catch((err) => {
             log.error("indexFile failed", { file, err })
-            return { nodes: 0, edges: 0, completeness: "partial" as const }
+            return { nodes: 0, edges: 0, completeness: "partial" as const, timings: emptyTimings }
           }),
         ),
       )
@@ -573,6 +639,18 @@ export namespace CodeGraphBuilder {
         edges += r.edges
         if (r.nodes > 0 || r.completeness !== "partial") indexed++
         else skipped++
+        // Aggregate per-phase timings. These are wall-clock per file,
+        // so summing across a batch of size N that ran in parallel
+        // over-counts by up to N×. That's fine for identifying which
+        // phase dominates — the ratios are what matter.
+        aggregate.readFile += r.timings.readFile
+        aggregate.lspTouch += r.timings.lspTouch
+        aggregate.lspDocumentSymbol += r.timings.lspDocumentSymbol
+        aggregate.symbolWalk += r.timings.symbolWalk
+        aggregate.lspReferences += r.timings.lspReferences
+        aggregate.edgeResolve += r.timings.edgeResolve
+        aggregate.dbTransaction += r.timings.dbTransaction
+        aggregate.total += r.timings.total
       }
     }
 
@@ -580,7 +658,16 @@ export namespace CodeGraphBuilder {
     const totalEdges = CodeGraphQuery.countEdges(projectID)
     CodeGraphQuery.upsertCursor(projectID, null, totalNodes, totalEdges)
 
-    return { nodes, edges, files: indexed, skipped }
+    // Refresh SQLite planner statistics after a full indexing batch.
+    // Without this, the planner has no row counts and picks poor plans:
+    // e.g. edgesTo was using code_edge_project_kind_idx (7 distinct
+    // values) instead of code_edge_to_idx (unique per node) because it
+    // had no data to tell them apart. ANALYZE is cheap (~100ms on a
+    // 450k-edge graph) and its output persists in sqlite_stat1 across
+    // DB opens, so this one call per index pass is enough.
+    CodeGraphQuery.analyze()
+
+    return { nodes, edges, files: indexed, skipped, timings: aggregate }
   }
 
   // Remove all graph state for a single file. Used when a file is

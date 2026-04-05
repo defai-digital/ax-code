@@ -129,6 +129,83 @@ describe("CodeGraphQuery nodes", () => {
     })
   })
 
+  test("findNodesByNamePrefix includes exact-match of the prefix itself", async () => {
+    // Regression guard for the range-based prefix implementation:
+    // WHERE name >= 'handle' AND name < 'handle\uFFFF' must include
+    // a symbol literally named "handle" (equal to the lower bound).
+    // If the range were (prefix, upper) instead of [prefix, upper),
+    // this case would silently drop.
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "handle" }))
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "handleRequest" }))
+
+        const matches = CodeGraphQuery.findNodesByNamePrefix(projectID, "handle")
+        expect(matches.length).toBe(2)
+        expect(matches.map((n) => n.name).sort()).toEqual(["handle", "handleRequest"])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("findNodesByNamePrefix rejects names outside the prefix range", async () => {
+    // The upper bound is `prefix + "\uFFFF"`. Make sure a name that
+    // sorts after the upper bound is excluded — e.g. "handleX" should
+    // still match (< handle\uFFFF) but "handlez\uFFFF\uFFFF" would not.
+    // More importantly: names starting with characters alphabetically
+    // after the prefix's last character must be excluded.
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "handle" }))
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "handleFoo" }))
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "hanger" })) // after "handle" alphabetically
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "hand" })) // before "handle"
+
+        const matches = CodeGraphQuery.findNodesByNamePrefix(projectID, "handle")
+        const names = matches.map((n) => n.name).sort()
+        expect(names).toEqual(["handle", "handleFoo"])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("analyze() does not throw on empty or populated graphs", async () => {
+    // ANALYZE is cheap and its effect is purely statistical — there's
+    // no state to assert on directly. The test just guards against
+    // the SQL being malformed or the function name being wrong,
+    // both of which would be silent regressions otherwise.
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        // Empty graph
+        CodeGraphQuery.analyze()
+
+        // Populated graph
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "x" }))
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "y" }))
+        CodeGraphQuery.analyze()
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
   test("nodesInFile returns only the requested file", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
