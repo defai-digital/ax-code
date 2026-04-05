@@ -177,13 +177,21 @@ export const BashTool = Tool.define("bash", async () => {
       // An LLM prompt that instructs the shell to run `env` or
       // `echo $OPENAI_API_KEY` could otherwise exfiltrate provider
       // tokens, passwords, and other credentials held by the parent
-      // process. The pattern matches common secret-like names
-      // (KEY, SECRET, TOKEN, PASSWORD, CREDENTIAL) case-insensitively
-      // and excludes harmless session-local overrides (PATH, HOME,
-      // SHELL, etc.) by matching substrings rather than full names.
-      const SECRET_PATTERN = /(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)/i
+      // process. We match on _component_ boundaries (start/end of
+      // string or underscore) rather than raw substrings so that
+      // functional variables like `SSH_AUTH_SOCK` (auth agent socket)
+      // and `GIT_ASKPASS` (credential helper) aren't accidentally
+      // stripped, breaking SSH and Git over the bash tool. A small
+      // explicit allowlist covers the few legitimate cases where a
+      // secret-looking keyword IS a real substring we want to keep.
+      const SECRET_PATTERN = /(?:^|_)(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)(?:_|$)/i
+      const SAFE_ALLOWLIST = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS"])
       const sanitizedEnv: Record<string, string | undefined> = {}
       for (const [k, v] of Object.entries(process.env)) {
+        if (SAFE_ALLOWLIST.has(k)) {
+          sanitizedEnv[k] = v
+          continue
+        }
         if (SECRET_PATTERN.test(k)) continue
         sanitizedEnv[k] = v
       }

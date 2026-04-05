@@ -258,9 +258,15 @@ export namespace LSP {
     return state().then((x) => {
       const result: Status[] = []
       for (const client of x.clients) {
+        // Guard the server lookup. A client can linger briefly after
+        // its server was removed from the servers map (config reload,
+        // server disabled), and the previous `x.servers[client.serverID].id`
+        // would crash the whole status endpoint with a TypeError.
+        const server = x.servers[client.serverID]
+        if (!server) continue
         result.push({
           id: client.serverID,
-          name: x.servers[client.serverID].id,
+          name: server.id,
           root: path.relative(Instance.directory, client.root),
           status: "connected",
         })

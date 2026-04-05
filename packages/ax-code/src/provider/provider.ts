@@ -321,39 +321,51 @@ export namespace Provider {
           if (model.id && model.id !== modelID) return modelID
           return existingModel?.name ?? modelID
         })
+        // IMPORTANT: every access through `existingModel?.` must chain an
+        // additional `?.` for each nested property. `existingModel?.api.id`
+        // parses as `(existingModel?.api).id` — when existingModel is
+        // undefined, that evaluates to `undefined.id` and crashes. This
+        // happens whenever a user configures a custom model whose ID
+        // isn't in the built-in modelsDev database.
         const parsedModel: Model = {
           id: ModelID.make(modelID),
           api: {
-            id: model.id ?? existingModel?.api.id ?? modelID,
+            id: model.id ?? existingModel?.api?.id ?? modelID,
             npm:
               model.provider?.npm ??
               provider.npm ??
-              existingModel?.api.npm ??
+              existingModel?.api?.npm ??
               modelsDev[providerID]?.npm ??
               "@ai-sdk/openai-compatible",
-            url: model.provider?.api ?? provider?.api ?? existingModel?.api.url ?? modelsDev[providerID]?.api,
+            url: model.provider?.api ?? provider?.api ?? existingModel?.api?.url ?? modelsDev[providerID]?.api,
           },
           status: model.status ?? existingModel?.status ?? "active",
           name,
           providerID: ProviderID.make(providerID),
           capabilities: {
-            temperature: model.temperature ?? existingModel?.capabilities.temperature ?? false,
-            reasoning: model.reasoning ?? existingModel?.capabilities.reasoning ?? false,
-            attachment: model.attachment ?? existingModel?.capabilities.attachment ?? false,
-            toolcall: model.tool_call ?? existingModel?.capabilities.toolcall ?? true,
+            temperature: model.temperature ?? existingModel?.capabilities?.temperature ?? false,
+            reasoning: model.reasoning ?? existingModel?.capabilities?.reasoning ?? false,
+            attachment: model.attachment ?? existingModel?.capabilities?.attachment ?? false,
+            toolcall: model.tool_call ?? existingModel?.capabilities?.toolcall ?? true,
             input: {
-              text: model.modalities?.input?.includes("text") ?? existingModel?.capabilities.input.text ?? true,
-              audio: model.modalities?.input?.includes("audio") ?? existingModel?.capabilities.input.audio ?? false,
-              image: model.modalities?.input?.includes("image") ?? existingModel?.capabilities.input.image ?? false,
-              video: model.modalities?.input?.includes("video") ?? existingModel?.capabilities.input.video ?? false,
-              pdf: model.modalities?.input?.includes("pdf") ?? existingModel?.capabilities.input.pdf ?? false,
+              text: model.modalities?.input?.includes("text") ?? existingModel?.capabilities?.input?.text ?? true,
+              audio:
+                model.modalities?.input?.includes("audio") ?? existingModel?.capabilities?.input?.audio ?? false,
+              image:
+                model.modalities?.input?.includes("image") ?? existingModel?.capabilities?.input?.image ?? false,
+              video:
+                model.modalities?.input?.includes("video") ?? existingModel?.capabilities?.input?.video ?? false,
+              pdf: model.modalities?.input?.includes("pdf") ?? existingModel?.capabilities?.input?.pdf ?? false,
             },
             output: {
-              text: model.modalities?.output?.includes("text") ?? existingModel?.capabilities.output.text ?? true,
-              audio: model.modalities?.output?.includes("audio") ?? existingModel?.capabilities.output.audio ?? false,
-              image: model.modalities?.output?.includes("image") ?? existingModel?.capabilities.output.image ?? false,
-              video: model.modalities?.output?.includes("video") ?? existingModel?.capabilities.output.video ?? false,
-              pdf: model.modalities?.output?.includes("pdf") ?? existingModel?.capabilities.output.pdf ?? false,
+              text: model.modalities?.output?.includes("text") ?? existingModel?.capabilities?.output?.text ?? true,
+              audio:
+                model.modalities?.output?.includes("audio") ?? existingModel?.capabilities?.output?.audio ?? false,
+              image:
+                model.modalities?.output?.includes("image") ?? existingModel?.capabilities?.output?.image ?? false,
+              video:
+                model.modalities?.output?.includes("video") ?? existingModel?.capabilities?.output?.video ?? false,
+              pdf: model.modalities?.output?.includes("pdf") ?? existingModel?.capabilities?.output?.pdf ?? false,
             },
             interleaved: model.interleaved ?? false,
           },
@@ -363,11 +375,11 @@ export namespace Provider {
             output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
           },
           cost: {
-            input: model.cost?.input ?? existingModel?.cost.input ?? 0,
-            output: model.cost?.output ?? existingModel?.cost.output ?? 0,
-            cache_read: model.cost?.cache_read ?? existingModel?.cost.cache_read,
-            cache_write: model.cost?.cache_write ?? existingModel?.cost.cache_write,
-            reasoning: model.cost?.reasoning ?? existingModel?.cost.reasoning,
+            input: model.cost?.input ?? existingModel?.cost?.input ?? 0,
+            output: model.cost?.output ?? existingModel?.cost?.output ?? 0,
+            cache_read: model.cost?.cache_read ?? existingModel?.cost?.cache_read,
+            cache_write: model.cost?.cache_write ?? existingModel?.cost?.cache_write,
+            reasoning: model.cost?.reasoning ?? existingModel?.cost?.reasoning,
           },
           headers: mergeDeep(existingModel?.headers ?? {}, model.headers ?? {}),
           family: model.family ?? existingModel?.family ?? "",

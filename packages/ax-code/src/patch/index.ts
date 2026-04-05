@@ -499,14 +499,20 @@ export namespace Patch {
     let hasChanges = false
 
     for (let i = 0; i < maxLen; i++) {
-      const oldLine = oldLines[i] || ""
-      const newLine = newLines[i] || ""
+      const oldLine = oldLines[i] ?? ""
+      const newLine = newLines[i] ?? ""
+      const hasOld = i < oldLines.length
+      const hasNew = i < newLines.length
 
       if (oldLine !== newLine) {
-        if (oldLine) diff += `-${oldLine}\n`
-        if (newLine) diff += `+${newLine}\n`
+        // Use index checks, not truthiness. An empty-line removal or
+        // addition was previously dropped because `""` is falsy and
+        // the `if (oldLine)` / `if (newLine)` guards skipped it,
+        // leaving blank-line edits invisible in the diff output.
+        if (hasOld) diff += `-${oldLine}\n`
+        if (hasNew) diff += `+${newLine}\n`
         hasChanges = true
-      } else if (oldLine) {
+      } else if (hasOld) {
         diff += ` ${oldLine}\n`
       }
     }

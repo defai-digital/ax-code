@@ -1259,9 +1259,18 @@ export namespace SessionPrompt {
                       }
                     }
                   }
-                  offset = Math.max(start, 1)
+                  // Convert LSP 0-indexed line numbers to the Read tool's
+                  // 1-indexed offset. `Math.max(start, 1)` was wrong — it
+                  // clamped 0 → 1 but left every other value unchanged,
+                  // so 0-indexed line 5 became offset 5 instead of 6. The
+                  // Read tool starts one line too early for every symbol.
+                  offset = start + 1
                   if (end) {
-                    limit = end - (offset - 1)
+                    // `limit` counts lines starting from `offset`. For a
+                    // symbol spanning 0-indexed lines [start, end], the
+                    // number of lines is (end - start + 1), which
+                    // simplifies to `end - offset + 2` in 1-indexed terms.
+                    limit = end - start + 1
                   }
                 }
                 const args = { filePath: filepath, offset, limit }

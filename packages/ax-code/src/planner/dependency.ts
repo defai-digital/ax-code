@@ -51,7 +51,16 @@ export function resolve(phases: TaskPhase[]): ResolutionResult {
 
   for (const phase of phases) {
     for (const dep of phase.dependencies) {
-      adjacency.get(dep)!.push(phase.id)
+      // Validate that the referenced phase exists before pushing.
+      // Previously `adjacency.get(dep)!` crashed with a cryptic
+      // "Cannot read properties of undefined (reading 'push')" when
+      // a phase declared a misspelled or missing dependency. Fail
+      // loudly with a message that points at the actual mistake.
+      const deps = adjacency.get(dep)
+      if (!deps) {
+        throw new Error(`Phase "${phase.id}" depends on unknown phase "${dep}"`)
+      }
+      deps.push(phase.id)
       inDegree.set(phase.id, (inDegree.get(phase.id) ?? 0) + 1)
     }
   }

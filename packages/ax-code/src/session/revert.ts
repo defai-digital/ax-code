@@ -55,7 +55,16 @@ export namespace SessionRevert {
     }
 
     if (revert) {
-      const session = await Session.get(input.sessionID)
+      // Refresh the outer `session` rather than shadowing it with a new
+      // `const`. Previously a local `const session = await Session.get(...)`
+      // on this line shadowed the outer variable declared earlier, so the
+      // `return session` after this block returned the pre-revert
+      // snapshot — callers never observed the newly-applied revert state.
+      // (The hot path of this function ends with `return Session.setRevert(...)`
+      // so the stale-return only bites when the setRevert call is never
+      // reached; fixing the shadow keeps the function's two return paths
+      // semantically consistent.)
+      Object.assign(session, await Session.get(input.sessionID))
       revert.snapshot = session.revert?.snapshot ?? (await Snapshot.track())
       await Snapshot.revert(patches)
       if (revert.snapshot) revert.diff = await Snapshot.diff(revert.snapshot)

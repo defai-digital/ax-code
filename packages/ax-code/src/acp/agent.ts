@@ -179,6 +179,18 @@ export namespace ACP {
       }
     }
 
+    /**
+     * Stop the event subscription loop and release any in-flight stream
+     * resources. Call this when the ACP connection closes so the infinite
+     * `while (true)` retry loop in runEventSubscription doesn't keep
+     * spinning (and spamming error logs) after the agent is no longer
+     * needed. Safe to call multiple times.
+     */
+    dispose() {
+      if (this.eventAbort.signal.aborted) return
+      this.eventAbort.abort()
+    }
+
     private async handleEvent(event: Event) {
       switch (event.type) {
         case "permission.asked": {
@@ -373,8 +385,26 @@ export namespace ACP {
                         update: {
                           sessionUpdate: "plan",
                           entries: parsedTodos.data.map((todo) => {
-                            const status: PlanEntry["status"] =
-                              todo.status === "cancelled" ? "completed" : (todo.status as PlanEntry["status"])
+                            // Validate against the known PlanEntry["status"]
+                            // values instead of casting with `as`. An
+                            // internal todo can carry a status string that
+                            // isn't part of the ACP PlanEntry contract
+                            // (e.g. `"blocked"` or a typo), and forwarding
+                            // it raw violated the protocol. Map known
+                            // synonyms and fall back to "pending" for
+                            // anything else so the ACP client always
+                            // receives a valid value.
+                            const VALID_STATUSES: ReadonlyArray<PlanEntry["status"]> = [
+                              "pending",
+                              "in_progress",
+                              "completed",
+                            ]
+                            const raw = todo.status
+                            const status: PlanEntry["status"] = VALID_STATUSES.includes(raw as PlanEntry["status"])
+                              ? (raw as PlanEntry["status"])
+                              : raw === "cancelled"
+                                ? "completed"
+                                : "pending"
                             return {
                               priority: "medium",
                               status,
@@ -639,7 +669,11 @@ export namespace ACP {
             providerID: ProviderID.make(lastUser.model.providerID),
             modelID: ModelID.make(lastUser.model.modelID),
           })
-          if (result.modes?.availableModes.some((m) => m.id === lastUser.agent)) {
+          // Chain the `?.` through every step. `result.modes?.availableModes.some(...)`
+          // parses as `(result.modes?.availableModes).some(...)`, so when
+          // `result.modes` is undefined (default for sessions without
+          // explicit mode selection) `.some()` throws a TypeError.
+          if (result.modes?.availableModes?.some((m) => m.id === lastUser.agent)) {
             result.modes.currentModeId = lastUser.agent
             this.sessionManager.setMode(sessionId, lastUser.agent)
           }
