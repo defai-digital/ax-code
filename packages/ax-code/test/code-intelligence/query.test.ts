@@ -508,6 +508,148 @@ describe("CodeGraphQuery regression fixes", () => {
   })
 })
 
+describe("CodeGraphQuery.pruneOrphanFiles", () => {
+  // Helper: seed a file row + one node + zero or one outgoing edge.
+  // Returns the node id so cross-file edge tests can wire up a
+  // from/to pair.
+  function seed(projectID: ProjectID, p: string, sha = "seed") {
+    const t = now()
+    const nodeId = CodeNodeID.ascending()
+    CodeGraphQuery.insertNode(makeNode({ id: nodeId, project_id: projectID, name: `sym_${p}`, file: p }))
+    CodeGraphQuery.upsertFile({
+      id: CodeFileID.ascending(),
+      project_id: projectID,
+      path: p,
+      sha,
+      size: 10,
+      lang: "typescript",
+      indexed_at: t,
+      completeness: "full",
+      time_created: t,
+      time_updated: t,
+    })
+    return nodeId
+  }
+
+  test("removes files whose path is not in livePaths", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        seed(projectID, "/tmp/x/a.ts")
+        seed(projectID, "/tmp/x/b.ts")
+        seed(projectID, "/tmp/x/c.ts")
+        expect(CodeGraphQuery.listFiles(projectID).length).toBe(3)
+        expect(CodeGraphQuery.countNodes(projectID)).toBe(3)
+
+        const result = CodeGraphQuery.pruneOrphanFiles(projectID, new Set(["/tmp/x/a.ts"]), "/tmp/x")
+        expect(result.files).toBe(2)
+        expect(result.nodes).toBe(2)
+        expect(result.edges).toBe(0)
+
+        const remaining = CodeGraphQuery.listFiles(projectID)
+        expect(remaining.length).toBe(1)
+        expect(remaining[0].path).toBe("/tmp/x/a.ts")
+        expect(CodeGraphQuery.countNodes(projectID)).toBe(1)
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("scopePrefix protects sibling worktrees from being purged", async () => {
+    // The killer case: two worktrees of the same repo share a
+    // project id. Running `ax-code index` in worktree A walks only
+    // A's files. Without a scope prefix, the prune would delete
+    // every row for worktree B's paths. With the prefix, those
+    // rows are untouched.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        seed(projectID, "/Users/u/proj1/a.ts")
+        seed(projectID, "/Users/u/proj2/b.ts")
+
+        // Walking proj1 only; live set has just proj1's file. Scope
+        // is "/Users/u/proj1", so proj2's row is out of scope and
+        // must survive.
+        const result = CodeGraphQuery.pruneOrphanFiles(
+          projectID,
+          new Set(["/Users/u/proj1/a.ts"]),
+          "/Users/u/proj1",
+        )
+        expect(result.files).toBe(0)
+
+        const remaining = CodeGraphQuery.listFiles(projectID).map((f) => f.path).sort()
+        expect(remaining).toEqual(["/Users/u/proj1/a.ts", "/Users/u/proj2/b.ts"])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("is a no-op when every known file is live", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        seed(projectID, "/tmp/y/a.ts")
+        seed(projectID, "/tmp/y/b.ts")
+        const before = CodeGraphQuery.countNodes(projectID)
+
+        const result = CodeGraphQuery.pruneOrphanFiles(
+          projectID,
+          new Set(["/tmp/y/a.ts", "/tmp/y/b.ts"]),
+          "/tmp/y",
+        )
+        expect(result).toEqual({ files: 0, nodes: 0, edges: 0 })
+        expect(CodeGraphQuery.countNodes(projectID)).toBe(before)
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("cleans up cross-file edges that touch a purged file's nodes", async () => {
+    // Edge from A's node to B's node. Pruning B must remove the
+    // edge too — leaving it would make `findCallers`-style queries
+    // return dangling edge ids that can't resolve to a to-node.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        const a = seed(projectID, "/tmp/z/a.ts")
+        const b = seed(projectID, "/tmp/z/b.ts")
+        CodeGraphQuery.insertEdge(
+          makeEdge({ project_id: projectID, from_node: a, to_node: b, file: "/tmp/z/a.ts" }),
+        )
+        expect(CodeGraphQuery.countEdges(projectID)).toBe(1)
+
+        const result = CodeGraphQuery.pruneOrphanFiles(projectID, new Set(["/tmp/z/a.ts"]), "/tmp/z")
+        expect(result.files).toBe(1)
+        expect(result.edges).toBe(1)
+        expect(CodeGraphQuery.countEdges(projectID)).toBe(0)
+        // A's node remains; B's is gone.
+        expect(CodeGraphQuery.countNodes(projectID)).toBe(1)
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+})
+
 describe("CodeGraphQuery project isolation", () => {
   test("queries do not leak between projects", async () => {
     // Two separate git repos give us two distinct project IDs that

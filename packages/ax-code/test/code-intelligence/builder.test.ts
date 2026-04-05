@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 import { CodeIntelligence } from "../../src/code-intelligence"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import {
+  CodeGraphBuilder,
   __lookupCallerKind,
   __resolveContainingNodeFromDbForTests as resolveContainingNodeFromDb,
 } from "../../src/code-intelligence/builder"
@@ -309,6 +311,314 @@ describe("builder.resolveContainingNodeFromDb (name-based filtering)", () => {
 
         const resolved = resolveContainingNodeFromDb(projectID, file, 50, 0)
         expect(resolved).toBe(outerId)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+})
+
+// Pre-seed a code_file row for `filePath` whose sha and size match the
+// on-disk file. Returns the computed sha so tests can mutate it
+// afterwards if they want to break the match. Completeness defaults to
+// "full" (which is the only value that triggers the hash-skip fast
+// path).
+async function writeAndSeedFile(
+  projectID: ProjectID,
+  filePath: string,
+  content: string,
+  completeness: "full" | "partial" | "lsp-only" = "full",
+): Promise<string> {
+  await Bun.write(filePath, content)
+  const sha = Bun.hash(content).toString()
+  const t = Date.now()
+  CodeGraphQuery.upsertFile({
+    id: CodeFileID.ascending(),
+    project_id: projectID,
+    path: filePath,
+    sha,
+    size: content.length,
+    lang: "typescript",
+    indexed_at: t,
+    completeness,
+    time_created: t,
+    time_updated: t,
+  })
+  return sha
+}
+
+describe("builder.indexFile hash-skip fast path", () => {
+  // These tests exercise the "unchanged" return variant without
+  // requiring a live LSP server: they seed a `code_file` row whose
+  // sha matches the on-disk file, then confirm the builder short-
+  // circuits BEFORE touching LSP. The `timings.lspTouch === 0` check
+  // is the load-bearing assertion — if LSP had run, that phase would
+  // show non-zero wall clock.
+
+  test("returns unchanged when sha, size, and completeness all match", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const filePath = path.join(tmp.path, "a.ts")
+        await writeAndSeedFile(projectID, filePath, "export const foo = 1\n", "full")
+
+        const result = await CodeGraphBuilder.indexFile(projectID, filePath)
+        expect(result.completeness).toBe("unchanged")
+        expect(result.nodes).toBe(0)
+        expect(result.edges).toBe(0)
+        // Load-bearing: the fast path must not touch LSP.
+        expect(result.timings.lspTouch).toBe(0)
+        expect(result.timings.lspDocumentSymbol).toBe(0)
+        expect(result.timings.lspReferences).toBe(0)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("does NOT skip files previously indexed with partial completeness", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const filePath = path.join(tmp.path, "partial.ts")
+        await writeAndSeedFile(projectID, filePath, "export const x = 2\n", "partial")
+
+        const result = await CodeGraphBuilder.indexFile(projectID, filePath)
+        // We don't care what the real completeness ends up as here
+        // (it depends on whether an LSP server is available in the
+        // test env); we only care that the fast path did NOT fire.
+        expect(result.completeness).not.toBe("unchanged")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("does NOT skip files previously indexed with lsp-only completeness", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const filePath = path.join(tmp.path, "lsponly.ts")
+        await writeAndSeedFile(projectID, filePath, "export const y = 3\n", "lsp-only")
+
+        const result = await CodeGraphBuilder.indexFile(projectID, filePath)
+        expect(result.completeness).not.toBe("unchanged")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("does NOT skip when the stored sha differs from the file content", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const filePath = path.join(tmp.path, "drift.ts")
+        await Bun.write(filePath, "export const real = 4\n")
+        // Seed with a deliberately wrong sha to simulate a file that
+        // changed on disk since the last index run.
+        const t = Date.now()
+        CodeGraphQuery.upsertFile({
+          id: CodeFileID.ascending(),
+          project_id: projectID,
+          path: filePath,
+          sha: "stalehash",
+          size: 999,
+          lang: "typescript",
+          indexed_at: t,
+          completeness: "full",
+          time_created: t,
+          time_updated: t,
+        })
+
+        const result = await CodeGraphBuilder.indexFile(projectID, filePath)
+        expect(result.completeness).not.toBe("unchanged")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("does NOT skip when there is no pre-existing code_file row", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const filePath = path.join(tmp.path, "fresh.ts")
+        await Bun.write(filePath, "export const z = 5\n")
+
+        const result = await CodeGraphBuilder.indexFile(projectID, filePath)
+        expect(result.completeness).not.toBe("unchanged")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+})
+
+describe("builder.indexFiles batch behavior", () => {
+  test("stats separate unchanged from newly indexed", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const a = path.join(tmp.path, "cached.ts")
+        const b = path.join(tmp.path, "missing.ts")
+
+        // File A exists and has a matching "full" row — will short-circuit.
+        await writeAndSeedFile(projectID, a, "export const cached = 1\n", "full")
+        // File B does not exist on disk — indexFileLocked returns
+        // { nodes: 0, completeness: "partial" } (the "file does not
+        // exist" branch), which the stat loop counts as `skipped`.
+
+        const result = await CodeGraphBuilder.indexFiles(projectID, [a, b], { lock: "none" })
+        expect(result.unchanged).toBe(1)
+        expect(result.skipped).toBe(1)
+        expect(result.files).toBe(0)
+        expect(result.failed).toBe(0)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("onProgress fires once per file with the current file path", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        // Seed three files that will all hit the hash-skip fast path
+        // so the test stays LSP-independent. Concurrency 2 so at
+        // least one batch boundary is crossed — ensures the callback
+        // works both inside and across batches.
+        const files = [
+          path.join(tmp.path, "p1.ts"),
+          path.join(tmp.path, "p2.ts"),
+          path.join(tmp.path, "p3.ts"),
+        ]
+        for (const f of files) await writeAndSeedFile(projectID, f, `export const _${path.basename(f)} = 1\n`, "full")
+
+        const events: Array<{ completed: number; total: number; file?: string }> = []
+        const result = await CodeGraphBuilder.indexFiles(projectID, files, {
+          lock: "none",
+          concurrency: 2,
+          onProgress: (completed, total, file) => events.push({ completed, total, file }),
+        })
+
+        expect(result.unchanged).toBe(3)
+        expect(events.length).toBe(3)
+        // Completed counter is monotonic 1..N.
+        expect(events.map((e) => e.completed).sort()).toEqual([1, 2, 3])
+        // Total stays constant across all callbacks.
+        expect(events.every((e) => e.total === 3)).toBe(true)
+        // Every callback carries a valid file path from the input set.
+        expect(events.every((e) => files.includes(e.file ?? ""))).toBe(true)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("pruneOrphans removes stale files when enabled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const live = path.join(tmp.path, "live.ts")
+        const stale = path.join(tmp.path, "stale.ts")
+        await writeAndSeedFile(projectID, live, "export const live = 1\n", "full")
+        // Seed `stale` as if a previous run had indexed it, but do
+        // NOT write the file to disk — the walker wouldn't include
+        // it in `files`. This is the exact scenario prune exists for.
+        const t = Date.now()
+        CodeGraphQuery.upsertFile({
+          id: CodeFileID.ascending(),
+          project_id: projectID,
+          path: stale,
+          sha: "old",
+          size: 1,
+          lang: "typescript",
+          indexed_at: t,
+          completeness: "full",
+          time_created: t,
+          time_updated: t,
+        })
+        expect(CodeGraphQuery.listFiles(projectID).length).toBe(2)
+
+        const result = await CodeGraphBuilder.indexFiles(projectID, [live], {
+          lock: "none",
+          pruneOrphans: true,
+          pruneScopePrefix: tmp.path,
+        })
+        expect(result.pruned.files).toBe(1)
+        expect(CodeGraphQuery.listFiles(projectID).length).toBe(1)
+        expect(CodeGraphQuery.listFiles(projectID)[0].path).toBe(live)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("pruneOrphans disabled leaves stale rows in place", async () => {
+    // The watcher path and the auto-indexer never set pruneOrphans.
+    // Confirm that omitting it is genuinely a no-op: the watcher
+    // calling indexFile on a single saved file must not nuke every
+    // other file in the project.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const live = path.join(tmp.path, "live2.ts")
+        const stale = path.join(tmp.path, "stale2.ts")
+        await writeAndSeedFile(projectID, live, "export const live = 1\n", "full")
+        const t = Date.now()
+        CodeGraphQuery.upsertFile({
+          id: CodeFileID.ascending(),
+          project_id: projectID,
+          path: stale,
+          sha: "old",
+          size: 1,
+          lang: "typescript",
+          indexed_at: t,
+          completeness: "full",
+          time_created: t,
+          time_updated: t,
+        })
+
+        const result = await CodeGraphBuilder.indexFiles(projectID, [live], { lock: "none" })
+        expect(result.pruned.files).toBe(0)
+        expect(CodeGraphQuery.listFiles(projectID).length).toBe(2)
 
         CodeIntelligence.__clearProject(projectID)
       },

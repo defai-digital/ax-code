@@ -268,10 +268,25 @@ export namespace CodeGraphBuilder {
     total: number
   }
 
-  export function indexFile(
-    projectID: ProjectID,
-    absPath: string,
-  ): Promise<{ nodes: number; edges: number; completeness: "full" | "partial" | "lsp-only"; timings: IndexTimings }> {
+  // Per-file indexing outcome. The variants mean:
+  //   "full"      — LSP returned both documentSymbol and references; graph rows written.
+  //   "lsp-only"  — documentSymbol succeeded, references partially failed; rows written.
+  //   "partial"   — the file was skipped (missing, unreadable, unknown language) or LSP returned nothing.
+  //   "unchanged" — the stored sha/size/completeness matched; NO LSP work ran and NO rows were rewritten.
+  //   "failed"    — indexFile threw; no rows written, error logged by the caller.
+  //
+  // "unchanged" and "failed" are transient return values only — they
+  // are never persisted to `code_file.completeness`, which keeps its
+  // pre-existing three-valued domain ("full" | "lsp-only" | "partial").
+  // Do not upsert these values.
+  export type IndexResult = {
+    nodes: number
+    edges: number
+    completeness: "full" | "partial" | "lsp-only" | "unchanged" | "failed"
+    timings: IndexTimings
+  }
+
+  export function indexFile(projectID: ProjectID, absPath: string): Promise<IndexResult> {
     // Serialize per-project to prevent cross-file caller resolution
     // from reading stale nodes that a sibling transaction has already
     // deleted. See the projectMutexes comment at the top of the
@@ -279,10 +294,7 @@ export namespace CodeGraphBuilder {
     return withProjectLock(projectID, () => indexFileLocked(projectID, absPath))
   }
 
-  async function indexFileLocked(
-    projectID: ProjectID,
-    absPath: string,
-  ): Promise<{ nodes: number; edges: number; completeness: "full" | "partial" | "lsp-only"; timings: IndexTimings }> {
+  async function indexFileLocked(projectID: ProjectID, absPath: string): Promise<IndexResult> {
     const timings: IndexTimings = {
       readFile: 0,
       lspTouch: 0,
@@ -324,6 +336,30 @@ export namespace CodeGraphBuilder {
 
     const sha = Bun.hash(text).toString()
     const size = text.length
+
+    // Fast path: if the stored row for this path has the same content
+    // (sha + size) AND we previously indexed it successfully ("full"),
+    // skip all LSP work and return early. Safety notes:
+    //
+    //   - We only short-circuit on "full". "partial" and "lsp-only"
+    //     rows mean a previous run saw LSP errors — we want to retry.
+    //   - We do NOT touch the DB here (no delete, no re-upsert). The
+    //     existing nodes/edges for this file stay exactly as they
+    //     were, which is what we want: their content is a pure
+    //     function of the file's text, and the text is unchanged.
+    //   - Cross-file edges from OTHER files that target this file's
+    //     nodes also remain valid, since we haven't recycled any
+    //     CodeNodeIDs. (See the pre-existing edge-regeneration
+    //     behavior in the delete+insert path below — skipping is
+    //     strictly safer than running that path as a no-op.)
+    //   - "unchanged" is a transient return value; it is never
+    //     written to `code_file.completeness`.
+    const existing = CodeGraphQuery.getFile(projectID, absPath)
+    if (existing && existing.sha === sha && existing.size === size && existing.completeness === "full") {
+      timings.total = performance.now() - tStart
+      log.info("file unchanged, skipping reindex", { file: absPath, sha, size })
+      return { nodes: 0, edges: 0, completeness: "unchanged", timings }
+    }
 
     // Touch the file through LSP so the server has it open before we
     // query documentSymbol. This also ensures diagnostics arrive, but
@@ -647,19 +683,31 @@ export namespace CodeGraphBuilder {
     return { nodes: nodeCount, edges: edgeInserts.length, completeness, timings }
   }
 
-  // Options passed to indexFiles. `onProgress` fires after each
-  // completed batch with the running count. `lock` controls the
-  // cross-process lockfile behavior (see IndexLock) — callers that
-  // need to cooperate with other ax-code processes set this to
-  // "acquire" (wait) or "try" (skip if held). "none" skips the lock
-  // entirely and is reserved for tests that run in isolated temp
-  // directories.
+  // Options passed to indexFiles. `onProgress` fires once per file
+  // as each file finishes (not per batch boundary) so the caller can
+  // show live progress — `currentFile` is the path that just
+  // resolved. `lock` controls the cross-process lockfile behavior
+  // (see IndexLock) — callers that need to cooperate with other
+  // ax-code processes set this to "acquire" (wait) or "try" (skip if
+  // held). "none" skips the lock entirely and is reserved for tests
+  // that run in isolated temp directories.
+  //
+  // `pruneOrphans`: when true, delete code_file / code_node /
+  // code_edge rows whose `code_file.path` is NOT in the `files`
+  // input list and whose path starts with `pruneScopePrefix`. Only
+  // set this from a full-project walk (the CLI) — partial re-index
+  // callers (the file watcher) must leave it false, or they would
+  // nuke every file they didn't happen to pass in. The scope prefix
+  // prevents one worktree's run from purging a sibling worktree's
+  // rows when both share a project id.
   export type IndexFilesOptions = {
     concurrency?: number
-    onProgress?: (completed: number, total: number) => void
+    onProgress?: (completed: number, total: number, currentFile?: string) => void
     lock?: "acquire" | "try" | "none"
     lockTimeoutMs?: number
     onLockWait?: () => void
+    pruneOrphans?: boolean
+    pruneScopePrefix?: string
   }
 
   // Raised when `lock: "try"` is requested and another process holds
@@ -684,18 +732,29 @@ export namespace CodeGraphBuilder {
   // writer with a half-populated graph. The per-file `indexFile` call
   // is NOT wrapped because the watcher fires it on every save and
   // blocking on a cross-process lock would kill editor responsiveness.
+  // Result shape for `indexFiles`. Field meanings:
+  //   nodes/edges — totals written this run (delta only, not graph totals).
+  //   files       — count of files that produced fresh rows (newly indexed).
+  //   unchanged   — count of files short-circuited by the hash-skip fast path.
+  //   skipped     — count of files LSP returned nothing for (partial completeness, 0 nodes).
+  //   failed      — count of files that threw during indexing.
+  //   pruned      — counts removed by the orphan purge (all zeros if pruneOrphans was false).
+  export type IndexFilesResult = {
+    nodes: number
+    edges: number
+    files: number
+    unchanged: number
+    skipped: number
+    failed: number
+    pruned: { files: number; nodes: number; edges: number }
+    timings: IndexTimings
+  }
+
   export async function indexFiles(
     projectID: ProjectID,
     files: string[],
     concurrencyOrOpts: number | IndexFilesOptions = 4,
-  ): Promise<{
-    nodes: number
-    edges: number
-    files: number
-    skipped: number
-    failed: number
-    timings: IndexTimings
-  }> {
+  ): Promise<IndexFilesResult> {
     const opts: IndexFilesOptions =
       typeof concurrencyOrOpts === "number" ? { concurrency: concurrencyOrOpts } : concurrencyOrOpts
     const concurrency = opts.concurrency ?? 4
@@ -714,7 +773,7 @@ export namespace CodeGraphBuilder {
     }
 
     try {
-      return await indexFilesLocked(projectID, files, concurrency, opts.onProgress)
+      return await indexFilesLocked(projectID, files, concurrency, opts)
     } finally {
       lockHandle?.[Symbol.dispose]()
     }
@@ -724,20 +783,16 @@ export namespace CodeGraphBuilder {
     projectID: ProjectID,
     files: string[],
     concurrency: number,
-    onProgress: ((completed: number, total: number) => void) | undefined,
-  ): Promise<{
-    nodes: number
-    edges: number
-    files: number
-    skipped: number
-    failed: number
-    timings: IndexTimings
-  }> {
+    opts: IndexFilesOptions,
+  ): Promise<IndexFilesResult> {
+    const onProgress = opts.onProgress
     let nodes = 0
     let edges = 0
     let indexed = 0
+    let unchanged = 0
     let skipped = 0
     let failed = 0
+    let pruned = { files: 0, nodes: 0, edges: 0 }
     const aggregate: IndexTimings = {
       readFile: 0,
       lspTouch: 0,
@@ -750,6 +805,26 @@ export namespace CodeGraphBuilder {
     }
     const emptyTimings: IndexTimings = { ...aggregate }
 
+    // Orphan purge (opt-in, CLI full-walk only). Runs before the
+    // batch loop so any file rows we delete here won't be touched by
+    // subsequent indexFile calls. Scoped to a path prefix so that
+    // running `ax-code index` in a subdirectory, or in one worktree
+    // of a shared project id, cannot purge rows that belong to a
+    // different walk root. See `IndexFilesOptions.pruneOrphans`.
+    if (opts.pruneOrphans) {
+      const scopePrefix = opts.pruneScopePrefix ?? ""
+      const live = new Set(files)
+      pruned = CodeGraphQuery.pruneOrphanFiles(projectID, live, scopePrefix)
+      if (pruned.files > 0) {
+        log.info("pruned orphan files", { projectID, ...pruned, scopePrefix })
+      }
+    }
+
+    // Per-file progress counter. JS is single-threaded so plain
+    // increment inside the `.then()` continuation is race-free — each
+    // async boundary resolves serially on the event loop.
+    let completed = 0
+
     for (let i = 0; i < files.length; i += concurrency) {
       const batch = files.slice(i, i + concurrency)
       const results = await Promise.all(
@@ -760,16 +835,23 @@ export namespace CodeGraphBuilder {
           // returned `partial` for both and counted the failure as
           // "skipped", hiding genuine indexing errors behind benign
           // ones in the reported totals.
-          indexFile(projectID, file).catch((err) => {
-            log.error("indexFile failed", { file, err })
-            return { nodes: 0, edges: 0, completeness: "failed" as const, timings: emptyTimings }
-          }),
+          indexFile(projectID, file)
+            .catch((err): IndexResult => {
+              log.error("indexFile failed", { file, err })
+              return { nodes: 0, edges: 0, completeness: "failed", timings: emptyTimings }
+            })
+            .then((result) => {
+              completed++
+              onProgress?.(completed, files.length, file)
+              return result
+            }),
         ),
       )
       for (const r of results) {
         nodes += r.nodes
         edges += r.edges
-        if (r.completeness === ("failed" as string)) failed++
+        if (r.completeness === "failed") failed++
+        else if (r.completeness === "unchanged") unchanged++
         else if (r.nodes > 0 || r.completeness !== "partial") indexed++
         else skipped++
         // Aggregate per-phase timings. These are wall-clock per file,
@@ -785,7 +867,6 @@ export namespace CodeGraphBuilder {
         aggregate.dbTransaction += r.timings.dbTransaction
         aggregate.total += r.timings.total
       }
-      onProgress?.(Math.min(i + concurrency, files.length), files.length)
     }
 
     const totalNodes = CodeGraphQuery.countNodes(projectID)
@@ -801,7 +882,7 @@ export namespace CodeGraphBuilder {
     // DB opens, so this one call per index pass is enough.
     CodeGraphQuery.analyze()
 
-    return { nodes, edges, files: indexed, skipped, failed, timings: aggregate }
+    return { nodes, edges, files: indexed, unchanged, skipped, failed, pruned, timings: aggregate }
   }
 
   // Remove all graph state for a single file. Used when a file is

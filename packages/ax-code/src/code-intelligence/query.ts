@@ -289,6 +289,104 @@ export namespace CodeGraphQuery {
     )
   }
 
+  // Reconcile the code graph against a known-live file set: delete
+  // every code_file / code_node / code_edge row for `projectID`
+  // whose path is NOT in `livePaths`, provided the path also starts
+  // with `scopePrefix`. Used by `ax-code index` to clean up files
+  // that were deleted between runs (or while the watcher was
+  // offline).
+  //
+  // The scope prefix exists for safety: the same project id can
+  // appear in multiple worktrees, or the user may run the indexer
+  // from a subdirectory. Without a prefix check, a walk rooted at
+  // `/a/b/subproj` would delete every row for paths under
+  // `/a/b/otherworktree`. Pass the walk root as `scopePrefix`; pass
+  // `""` only when you genuinely intend to prune across the whole
+  // project (tests, manual reset).
+  //
+  // Runs inside a single transaction so a reader never sees a file
+  // row without its nodes or nodes without their file row. Returns
+  // the counts removed so the caller can report them to the user.
+  //
+  // Per-orphan loop (rather than one large `WHERE path IN (...)`
+  // delete) because edge deletion joins through `nodesInFile`, and
+  // the orphan list in practice is tiny (0-few per run).
+  export function pruneOrphanFiles(
+    projectID: ProjectID,
+    livePaths: Set<string>,
+    scopePrefix: string,
+  ): { files: number; nodes: number; edges: number } {
+    const rows = Database.use((db) =>
+      db
+        .select({ path: CodeFileTable.path })
+        .from(CodeFileTable)
+        .where(eq(CodeFileTable.project_id, projectID))
+        .all(),
+    )
+    const orphans = rows
+      .map((r) => r.path)
+      .filter((p) => (scopePrefix === "" || p.startsWith(scopePrefix)) && !livePaths.has(p))
+    if (orphans.length === 0) return { files: 0, nodes: 0, edges: 0 }
+
+    let filesRemoved = 0
+    let nodesRemoved = 0
+    let edgesRemoved = 0
+    Database.transaction(() => {
+      for (const orphan of orphans) {
+        const nodeIds = nodesInFile(projectID, orphan).map((n) => n.id)
+        if (nodeIds.length > 0) {
+          // Count edges touching this file before deletion. `OR` on
+          // from_node and to_node catches both outgoing call edges
+          // and incoming reference edges. Chunked to stay well under
+          // SQLite's 999-parameter limit.
+          const CHUNK = 400
+          for (let i = 0; i < nodeIds.length; i += CHUNK) {
+            const chunk = nodeIds.slice(i, i + CHUNK)
+            const row = Database.use((db) =>
+              db
+                .select({ count: sql<number>`count(*)` })
+                .from(CodeEdgeTable)
+                .where(
+                  and(
+                    eq(CodeEdgeTable.project_id, projectID),
+                    or(inArray(CodeEdgeTable.from_node, chunk), inArray(CodeEdgeTable.to_node, chunk)),
+                  ),
+                )
+                .get(),
+            )
+            edgesRemoved += row?.count ?? 0
+            Database.use((db) =>
+              db
+                .delete(CodeEdgeTable)
+                .where(
+                  and(
+                    eq(CodeEdgeTable.project_id, projectID),
+                    or(inArray(CodeEdgeTable.from_node, chunk), inArray(CodeEdgeTable.to_node, chunk)),
+                  ),
+                )
+                .run(),
+            )
+          }
+          nodesRemoved += nodeIds.length
+          Database.use((db) =>
+            db
+              .delete(CodeNodeTable)
+              .where(and(eq(CodeNodeTable.project_id, projectID), eq(CodeNodeTable.file, orphan)))
+              .run(),
+          )
+        }
+        Database.use((db) =>
+          db
+            .delete(CodeFileTable)
+            .where(and(eq(CodeFileTable.project_id, projectID), eq(CodeFileTable.path, orphan)))
+            .run(),
+        )
+        filesRemoved++
+      }
+    })
+    return { files: filesRemoved, nodes: nodesRemoved, edges: edgesRemoved }
+  }
+
   // ─── Cursor ─────────────────────────────────────────────────────────
 
   export type CursorRow = typeof CodeIndexCursorTable.$inferSelect

@@ -257,6 +257,7 @@ export namespace AutoIndex {
           nodes: result.nodes,
           edges: result.edges,
           files: result.files,
+          unchanged: result.unchanged,
           skipped: result.skipped,
           failed: result.failed,
           elapsedMs: elapsed,

@@ -172,10 +172,20 @@ export const IndexCommand = cmd({
         }
 
         UI.println(`  files:     ${files.length} indexable`)
+        // Do NOT short-circuit when `files.length === 0`. An empty
+        // walk is the exact case where orphan purge matters most: a
+        // user who deleted every indexable file from a previously
+        // indexed project needs us to clean up the DB, not bail out
+        // leaving stale rows. We still print the "no files" warning
+        // but continue into the indexer so the prune runs.
         if (files.length === 0) {
           UI.println("")
           UI.println(`${UI.Style.TEXT_WARNING}No indexable source files found.${UI.Style.TEXT_NORMAL}`)
-          return
+          // If there are also no stored rows to clean up, there's
+          // genuinely nothing to do — bail here to match the old
+          // behavior for pristine projects.
+          if (CodeGraphQuery.listFiles(projectID).length === 0) return
+          UI.println(`${UI.Style.TEXT_DIM}Reconciling graph with working tree...${UI.Style.TEXT_NORMAL}`)
         }
 
         // LSP pre-flight probe. Groups the candidate files by language
@@ -189,7 +199,10 @@ export const IndexCommand = cmd({
         // running in a constrained env and just wants the indexer to
         // try everything.
         const groups = groupFilesByLanguage(files)
-        if (args.probe) {
+        // Skip the LSP probe when there are no files — nothing to
+        // probe, and the "no LSP servers available" warning would be
+        // misleading in a graph-reconcile-only run.
+        if (args.probe && files.length > 0) {
           UI.println("")
           UI.println(`${UI.Style.TEXT_DIM}Probing LSP servers...${UI.Style.TEXT_NORMAL}`)
           const { ready, missing } = await probeLspServers(groups)
@@ -258,14 +271,28 @@ export const IndexCommand = cmd({
           error: null,
         })
 
+        // Heartbeat state. Two signals travel through here:
+        //   - latestCompleted: per-file progress from the builder's
+        //     `onProgress` callback. Tells the user how many files
+        //     have actually finished (not batch boundaries).
+        //   - lastNodeCount: prior snapshot of the live node count,
+        //     used to compute the "+N interval" delta.
+        //
+        // Showing files N/M alongside the symbol count fixes the
+        // "looks stuck" UX from the old heartbeat: when a batch of
+        // files is all in LSP-references phase, no nodes are being
+        // committed and "+0 interval" used to print repeatedly with
+        // no other signal. Now the file counter at least moves
+        // after each file commits.
         const heartbeatStart = Date.now()
         let lastNodeCount = CodeGraphQuery.countNodes(projectID)
+        let latestCompleted = 0
         const heartbeat = setInterval(() => {
           const current = CodeGraphQuery.countNodes(projectID)
           const delta = current - lastNodeCount
           const elapsedSec = Math.round((Date.now() - heartbeatStart) / 1000)
           UI.println(
-            `  ${UI.Style.TEXT_DIM}[${elapsedSec}s] ${current.toLocaleString()} symbols indexed (+${delta.toLocaleString()} this interval)${UI.Style.TEXT_NORMAL}`,
+            `  ${UI.Style.TEXT_DIM}[${elapsedSec}s] ${latestCompleted.toLocaleString()}/${files.length.toLocaleString()} files · ${current.toLocaleString()} symbols (+${delta.toLocaleString()} interval)${UI.Style.TEXT_NORMAL}`,
           )
           lastNodeCount = current
         }, 5_000)
@@ -288,7 +315,20 @@ export const IndexCommand = cmd({
                 `${UI.Style.TEXT_WARNING}Another ax-code process is currently indexing this project. Waiting...${UI.Style.TEXT_NORMAL}`,
               )
             },
-            onProgress: (completed, total) => AutoIndex.reportProgress(projectID, completed, total),
+            onProgress: (completed, total) => {
+              latestCompleted = completed
+              AutoIndex.reportProgress(projectID, completed, total)
+            },
+            // Reconcile the graph with the working tree: delete
+            // rows for files that no longer exist. Scoped to the
+            // walk root (`Instance.directory`) so this can't reach
+            // across sibling worktrees of a shared project id.
+            //
+            // Disabled when `--limit` is set: a truncated walk
+            // would purge every file past the limit, which is
+            // never what the user wants when benchmarking.
+            pruneOrphans: args.limit === undefined,
+            pruneScopePrefix: Instance.directory,
           })
         } catch (err) {
           clearInterval(heartbeat)
@@ -336,7 +376,14 @@ export const IndexCommand = cmd({
         }
         UI.println(`  nodes:     ${status.nodeCount.toLocaleString()}`)
         UI.println(`  edges:     ${status.edgeCount.toLocaleString()}`)
-        UI.println(`  files:     ${result.files.toLocaleString()} indexed, ${result.skipped.toLocaleString()} skipped, ${result.failed.toLocaleString()} failed`)
+        UI.println(
+          `  files:     ${result.files.toLocaleString()} indexed, ${result.unchanged.toLocaleString()} unchanged, ${result.skipped.toLocaleString()} skipped, ${result.failed.toLocaleString()} failed`,
+        )
+        if (result.pruned.files > 0) {
+          UI.println(
+            `  pruned:    ${result.pruned.files.toLocaleString()} file(s) removed (${result.pruned.nodes.toLocaleString()} nodes, ${result.pruned.edges.toLocaleString()} edges)`,
+          )
+        }
         UI.println(`  elapsed:   ${elapsed.toLocaleString()}ms`)
 
         if (result.failed > 0) {
