@@ -16,6 +16,12 @@ import { Filesystem } from "../util/filesystem"
 
 const DIAGNOSTICS_DEBOUNCE_MS = 150
 
+// Hard cap on the per-client diagnostics Map to prevent unbounded growth in
+// long sessions. 1000 is comfortably above typical working-set sizes while
+// bounding memory. LRU eviction: the oldest entry (by insertion order) is
+// removed when the cap is reached.
+const MAX_CACHED_DIAGNOSTICS = 1000
+
 export namespace LSPClient {
   const log = Log.create({ service: "lsp.client" })
 
@@ -50,6 +56,23 @@ export namespace LSPClient {
     )
 
     const diagnostics = new Map<string, Diagnostic[]>()
+
+    function setDiagnostics(filePath: string, diags: Diagnostic[]) {
+      // Move-to-end LRU: if we already have an entry, delete it before
+      // re-inserting so it goes to the end of the iteration order.
+      if (diagnostics.has(filePath)) {
+        diagnostics.delete(filePath)
+      } else if (diagnostics.size >= MAX_CACHED_DIAGNOSTICS) {
+        // At capacity for a new key — evict the oldest entry.
+        const oldest = diagnostics.keys().next().value
+        if (oldest) {
+          diagnostics.delete(oldest)
+          l.info("evicted diagnostics for least-recently-updated file", { path: oldest })
+        }
+      }
+      diagnostics.set(filePath, diags)
+    }
+
     connection.onNotification("textDocument/publishDiagnostics", (params) => {
       const filePath = Filesystem.normalizePath(fileURLToPath(params.uri))
       l.info("textDocument/publishDiagnostics", {
@@ -57,7 +80,7 @@ export namespace LSPClient {
         count: params.diagnostics.length,
       })
       const exists = diagnostics.has(filePath)
-      diagnostics.set(filePath, params.diagnostics)
+      setDiagnostics(filePath, params.diagnostics)
       if (!exists && input.serverID === "typescript") return
       Bus.publish(Event.Diagnostics, { path: filePath, serverID: input.serverID })
     })
@@ -194,6 +217,19 @@ export namespace LSPClient {
       notify: {
         async open(input: { path: string; waitForDiagnostics?: boolean }) {
           input.path = path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path)
+          // If a previously-tracked file has disappeared from disk, treat
+          // the touch as a close so we don't leak stale entries in files,
+          // diagnostics, and lastContent. Caller gets false ("nothing sent
+          // to server").
+          if (files[input.path] !== undefined) {
+            const exists = await Bun.file(input.path)
+              .exists()
+              .catch(() => false)
+            if (!exists) {
+              await result.notify.close({ path: input.path })
+              return false
+            }
+          }
           const text = await Filesystem.readText(input.path)
           const extension = path.extname(input.path)
           const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
@@ -263,6 +299,29 @@ export namespace LSPClient {
           files[input.path] = 0
           lastContent[input.path] = contentFingerprint(text)
           await wait
+          return true
+        },
+        async close(input: { path: string }) {
+          const normalized = path.isAbsolute(input.path)
+            ? input.path
+            : path.resolve(Instance.directory, input.path)
+          // Never-opened files are a no-op. If the file wasn't in our
+          // `files` map it was never handed to this server.
+          if (files[normalized] === undefined) return false
+          log.info("textDocument/didClose", { path: normalized })
+          await connection
+            .sendNotification("textDocument/didClose", {
+              textDocument: {
+                uri: pathToFileURL(normalized).href,
+              },
+            })
+            .catch(() => {
+              // Server may be dead or unresponsive. We still want to
+              // clean up local state.
+            })
+          delete files[normalized]
+          delete lastContent[normalized]
+          diagnostics.delete(normalized)
           return true
         },
       },

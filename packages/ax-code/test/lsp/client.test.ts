@@ -121,4 +121,68 @@ describe("LSPClient interop", () => {
 
     await client.shutdown()
   })
+
+  test("notify.close clears per-file state", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "file.ts")
+    await Bun.write(file, "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        }),
+    })
+
+    // Open, then close, then open again — a fresh open after close should
+    // behave like a first open (didOpen, not didChange skipped by hash).
+    const firstOpen = await client.notify.open({ path: file })
+    expect(firstOpen).toBe(true)
+
+    const closed = await client.notify.close({ path: file })
+    expect(closed).toBe(true)
+
+    // Closing the same file twice is a no-op — it was never-opened after
+    // the first close cleared state.
+    const closedAgain = await client.notify.close({ path: file })
+    expect(closedAgain).toBe(false)
+
+    // Re-open goes through the "first open" path (state was cleared),
+    // which also succeeds.
+    const reopened = await client.notify.open({ path: file })
+    expect(reopened).toBe(true)
+
+    await client.shutdown()
+  })
+
+  test("notify.open short-circuits to close when file no longer exists", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "transient.ts")
+    await Bun.write(file, "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        }),
+    })
+
+    // Open the file, then delete it, then touch it again. The second open
+    // should return false (nothing sent) and clean up local state.
+    await client.notify.open({ path: file })
+    await Bun.file(file).unlink?.()
+
+    const afterDelete = await client.notify.open({ path: file })
+    expect(afterDelete).toBe(false)
+
+    await client.shutdown()
+  })
 })

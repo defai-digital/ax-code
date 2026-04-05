@@ -309,6 +309,19 @@ export namespace LSP {
       })
   }
 
+  // Close a file on every client that has it open. Sends textDocument/didClose
+  // and removes per-file state (version, content fingerprint, cached
+  // diagnostics). Used when a file is deleted, renamed, or no longer relevant
+  // to the current task. Safe to call on files that were never opened — each
+  // client short-circuits non-matching paths.
+  export async function closeFile(input: string) {
+    log.info("closing file", { file: input })
+    const s = await state()
+    await Promise.all(s.clients.map((client) => client.notify.close({ path: input }))).catch((err) => {
+      log.error("failed to close file", { err, file: input })
+    })
+  }
+
   export async function diagnostics() {
     const results: Record<string, LSPClient.Diagnostic[]> = {}
     for (const result of await runAll(async (client) => client.diagnostics)) {
