@@ -513,7 +513,7 @@ export namespace SessionProcessor {
               }
               if (needsCompaction) break
             }
-          } catch (e: any) {
+          } catch (e: unknown) {
             deltaBatcher.flush()
             if (currentText) {
               currentText.text = currentText.text.trimEnd()
@@ -531,16 +531,19 @@ export namespace SessionProcessor {
               }
               await Session.updatePart(part)
             }
+            const errStack = e instanceof Error ? e.stack : undefined
+            const errName = e instanceof Error ? e.name : (e as { constructor?: { name?: string } })?.constructor?.name
+            const errMessage = e instanceof Error ? e.message : String(e)
             log.error("process", {
               error: e,
-              stack: JSON.stringify(e.stack),
+              stack: JSON.stringify(errStack),
             })
             Recorder.emit({
               type: "error",
               sessionID: input.sessionID,
               messageID: input.assistantMessage.id,
-              errorType: e?.name ?? e?.constructor?.name ?? "Unknown",
-              message: (e?.message ?? String(e)).slice(0, 2000),
+              errorType: errName ?? "Unknown",
+              message: errMessage.slice(0, 2000),
               stepIndex: attempt,
             })
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })

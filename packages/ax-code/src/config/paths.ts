@@ -5,6 +5,7 @@ import z from "zod"
 import { type ParseError as JsoncParseError, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import { NamedError } from "@ax-code/util/error"
 import { Filesystem } from "@/util/filesystem"
+import { Env } from "@/util/env"
 import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
 
@@ -103,8 +104,18 @@ export namespace ConfigPaths {
   async function substitute(text: string, input: ParseSource, options: ParseOptions = {}) {
     const missing = options.missing ?? "error"
     const trusted = options.trusted ?? true
+    // For untrusted configs (project, remote well-known, account),
+    // route `{env:VAR}` substitution through the same secret-pattern
+    // sanitizer as the bash tool. A malicious project config could
+    // otherwise reference `{env:OPENAI_API_KEY}` and embed the
+    // user's API key value into instruction text / system prompts
+    // that get sent to the configured LLM provider. Trusted configs
+    // (global, managed, AX_CODE_CONFIG env) still resolve any env
+    // var — users control those and legitimately need to reference
+    // e.g. their own custom endpoint URLs stored in env vars.
+    const envSource = trusted ? process.env : Env.sanitize(process.env)
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      return process.env[varName] || ""
+      return envSource[varName] || ""
     })
 
     const fileMatches = Array.from(text.matchAll(/\{file:[^}]+\}/g))

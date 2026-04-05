@@ -197,7 +197,14 @@ export namespace ToolRegistry {
 
         const state = yield* InstanceState.get(cache)
         const allTools = yield* Effect.promise(() => all(state.custom))
-        const result = yield* Effect.promise(() =>
+        // Per-tool try/catch so one broken tool (most commonly a
+        // flaky MCP server whose `init()` rejects during tool
+        // registration) doesn't reject Promise.all and leave the
+        // agent with zero usable tools — including the built-in
+        // read/write/bash/edit that have no dependency on the
+        // failing tool. Failed tools are logged and filtered out;
+        // the remaining tools register normally.
+        const raw = yield* Effect.promise(() =>
           Promise.all(
             allTools
               .filter((tool) => {
@@ -215,22 +222,28 @@ export namespace ToolRegistry {
                 return true
               })
               .map(async (tool) => {
-                using _ = log.time(tool.id)
-                const next = await tool.init({ agent })
-                const output = {
-                  description: next.description,
-                  parameters: next.parameters,
-                }
-                await Plugin.trigger("tool.definition", { toolID: tool.id }, output)
-                return {
-                  id: tool.id,
-                  ...next,
-                  description: output.description,
-                  parameters: output.parameters,
+                try {
+                  using _ = log.time(tool.id)
+                  const next = await tool.init({ agent })
+                  const output = {
+                    description: next.description,
+                    parameters: next.parameters,
+                  }
+                  await Plugin.trigger("tool.definition", { toolID: tool.id }, output)
+                  return {
+                    id: tool.id,
+                    ...next,
+                    description: output.description,
+                    parameters: output.parameters,
+                  }
+                } catch (err) {
+                  log.error("tool init failed, skipping", { id: tool.id, err })
+                  return undefined
                 }
               }),
           ),
         )
+        const result = raw.filter((t): t is NonNullable<typeof t> => t !== undefined)
         toolCache = { key, result }
         return result
       })

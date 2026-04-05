@@ -1,76 +1,17 @@
 import z from "zod"
-import dns from "dns/promises"
-import net from "net"
 import { Tool } from "./tool"
 import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
 import { abortAfterAny } from "../util/abort"
+import { Ssrf } from "../util/ssrf"
 import { WEBFETCH_MAX_RESPONSE_SIZE as MAX_RESPONSE_SIZE, WEBFETCH_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT, WEBFETCH_MAX_TIMEOUT as MAX_TIMEOUT } from "@/constants/network"
 import { Isolation } from "@/isolation"
 
-// Block SSRF to private/reserved IP ranges. Without this, an LLM could
-// instruct webfetch to hit the local server (localhost:4096), cloud
-// metadata endpoints (169.254.169.254 on AWS/GCP), or internal network
-// services (10.x, 172.16-31.x, 192.168.x). We resolve the hostname and
-// reject addresses in RFC1918, loopback, link-local, and CGNAT ranges
-// for both IPv4 and IPv6.
-function isPrivateIPv4(addr: string): boolean {
-  const parts = addr.split(".").map((p) => parseInt(p, 10))
-  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false
-  const [a, b] = parts
-  if (a === 10) return true // 10.0.0.0/8
-  if (a === 127) return true // loopback
-  if (a === 169 && b === 254) return true // link-local, includes AWS/GCP metadata
-  if (a === 172 && b >= 16 && b <= 31) return true // 172.16.0.0/12
-  if (a === 192 && b === 168) return true // 192.168.0.0/16
-  if (a === 100 && b >= 64 && b <= 127) return true // 100.64.0.0/10 CGNAT
-  if (a === 0) return true // 0.0.0.0/8
-  if (a >= 224) return true // multicast / reserved
-  return false
-}
-
-function isPrivateIPv6(addr: string): boolean {
-  const lower = addr.toLowerCase()
-  if (lower === "::1" || lower === "::") return true
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true // fc00::/7 ULA
-  if (lower.startsWith("fe80:")) return true // link-local
-  if (lower.startsWith("ff")) return true // multicast
-  // IPv4-mapped (::ffff:x.x.x.x) — check the embedded IPv4
-  const mapped = lower.match(/^::ffff:([0-9.]+)$/)
-  if (mapped) return isPrivateIPv4(mapped[1])
-  return false
-}
-
-async function assertPublicUrl(url: string): Promise<void> {
-  const parsed = new URL(url)
-  // Scheme check first — defense in depth. The caller already enforces
-  // http/https before reaching here, but validating again means any
-  // future path that reuses this helper without pre-checking (or a
-  // regression in the caller) still rejects file://, data://, gopher://,
-  // etc. before a single DNS lookup fires.
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(`webfetch: unsupported URL scheme: ${parsed.protocol}`)
-  }
-  const hostname = parsed.hostname
-  // If the hostname is already a literal IP, check it directly.
-  if (net.isIP(hostname)) {
-    const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
-    if (bad) throw new Error(`webfetch: refusing to fetch private/reserved address: ${hostname}`)
-    return
-  }
-  // Resolve all A and AAAA records; reject if any resolve to a private
-  // address. Checking every address prevents DNS rebinding bypass.
-  const addresses = await dns.lookup(hostname, { all: true }).catch(() => [])
-  if (addresses.length === 0) {
-    throw new Error(`webfetch: could not resolve hostname: ${hostname}`)
-  }
-  for (const { address, family } of addresses) {
-    const bad = family === 4 ? isPrivateIPv4(address) : isPrivateIPv6(address)
-    if (bad) {
-      throw new Error(`webfetch: refusing to fetch ${hostname} — resolves to private/reserved address ${address}`)
-    }
-  }
-}
+// Block SSRF to private/reserved IP ranges. The range checks live in
+// `src/util/ssrf.ts` so the remote .well-known config fetch (config.ts)
+// and the instruction URL fetch (session/instruction.ts) can share the
+// exact same guard. See Ssrf.assertPublicUrl for the detailed rationale.
+const assertPublicUrl = (url: string) => Ssrf.assertPublicUrl(url, "webfetch")
 
 export const WebFetchTool = Tool.define("webfetch", {
   description: DESCRIPTION,

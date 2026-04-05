@@ -35,8 +35,8 @@ export async function load(projectRoot: string): Promise<ProjectMemory | null> {
   let text: string
   try {
     text = await fs.readFile(memoryPath, "utf-8")
-  } catch (err: any) {
-    if (err?.code === "ENOENT") return null
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return null
     throw err
   }
   return JSON.parse(text) as ProjectMemory

@@ -4,6 +4,7 @@ import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { basicAuth } from "hono/basic-auth"
 import path from "path"
+import { statSync } from "fs"
 import z from "zod"
 import { Provider } from "../provider/provider"
 import { NamedError } from "@ax-code/util/error"
@@ -554,13 +555,38 @@ export namespace Server {
           c.req.header("x-ax-code-directory") ||
           c.req.header("x-opencode-directory") ||
           process.cwd()
-        const directory = (() => {
+        const decoded = (() => {
           try {
             return decodeURIComponent(raw)
           } catch {
             return raw
           }
         })()
+        // Validate the directory before it becomes Instance.directory
+        // — the containment root that every file tool measures
+        // symlink escapes against. Without this, a request with
+        // `?directory=/` or `?directory=/etc` would silently grant
+        // the full filesystem (or a sensitive subtree) as the
+        // project root, bypassing the per-tool sandbox. Reject
+        // non-absolute paths, non-existent paths, and non-directory
+        // paths with a 400. Defaulted `process.cwd()` values are
+        // always trusted (no user input involved).
+        const directory = path.resolve(decoded)
+        if (decoded !== process.cwd()) {
+          if (!path.isAbsolute(decoded)) {
+            return c.json({ error: "directory must be absolute" }, 400)
+          }
+          const stat = (() => {
+            try {
+              return statSync(directory)
+            } catch {
+              return undefined
+            }
+          })()
+          if (!stat?.isDirectory()) {
+            return c.json({ error: "directory does not exist or is not a directory" }, 400)
+          }
+        }
         return Instance.provide({
           directory,
           init: InstanceBootstrap,

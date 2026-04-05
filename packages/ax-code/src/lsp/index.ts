@@ -234,7 +234,18 @@ export namespace LSP {
     },
     async (state) => {
       if (state.healthCheck) clearInterval(state.healthCheck)
-      await Promise.all(state.clients.map((client) => client.shutdown()))
+      // Per-client catch so one client's shutdown failure (process
+      // already exited, broken pipe, RPC timeout) doesn't skip the
+      // others and leak their child processes. The MCP shutdown
+      // path at mcp/index.ts:251 already does this for exactly the
+      // same reason.
+      await Promise.all(
+        state.clients.map((client) =>
+          client.shutdown().catch((err) => {
+            log.error("failed to shutdown LSP client", { serverID: client.serverID, err })
+          }),
+        ),
+      )
     },
   )
 

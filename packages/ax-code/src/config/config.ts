@@ -35,6 +35,7 @@ import { iife } from "@/util/iife"
 import { Account } from "@/account"
 import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
+import { Ssrf } from "@/util/ssrf"
 import { Process } from "@/util/process"
 import { Lock } from "@/util/lock"
 import * as ConfigSchema from "./schema"
@@ -93,6 +94,22 @@ export namespace Config {
         const endpoint = `${url}/.well-known/ax-code`
         const legacy = `${url}/.well-known/opencode`
         log.debug("fetching remote config", { url: endpoint, legacy })
+        // SSRF guard. The auth provider key is user-controllable via
+        // `ax-code auth login <url>` — if an attacker can influence
+        // the auth URL (social engineering, a compromised auth.json,
+        // or the PUT /auth/:providerID API), they can point it at
+        // http://169.254.169.254/ or any internal service and have
+        // the fetched content deep-merged into the user's config.
+        // Validate both endpoints before the network call. If SSRF
+        // rejects, skip this provider entirely instead of throwing
+        // — we still want to load other providers' configs.
+        try {
+          await Ssrf.assertPublicUrl(endpoint, "wellknown-config")
+          await Ssrf.assertPublicUrl(legacy, "wellknown-config")
+        } catch (err) {
+          log.warn("wellknown config URL rejected by SSRF guard", { url, err })
+          continue
+        }
         const response = await fetch(endpoint)
           .then((res) => {
             if (res.ok || res.status !== 404) return res
@@ -218,23 +235,36 @@ export namespace Config {
         }
 
         if (config) {
-          // Account config comes over the network from the auth
-          // server — same trust model as the well-known remote
-          // config path above. Anchor the config dir to the local
-          // Instance so `{file:}` refs can only reach into the
-          // worktree, and mark untrusted so absolute / `~/` paths
-          // are rejected outright.
+          // Account config comes from the user's authenticated
+          // console over HTTPS. Unlike project configs (which any
+          // contributor can check in) and well-known configs (whose
+          // URL can be poisoned via a compromised auth.json), the
+          // console is an explicitly trusted upstream — the whole
+          // point of the auth flow is to establish this channel.
+          //
+          // Specifically, account config legitimately references
+          // `{env:AX_CODE_CONSOLE_TOKEN}` to thread the token the
+          // auth flow just set into provider options. An untrusted
+          // treatment would strip that env var (it contains "TOKEN")
+          // and break the console integration entirely.
+          //
+          // If the console is ever compromised, the attacker has
+          // much more powerful levers (model routing, tool
+          // permissions, MCP server install) than reading
+          // `/etc/shadow` via `{file:}`, so confining file refs
+          // here isn't the right mitigation anyway.
           result = mergeConfigConcatArrays(
             result,
             await load(JSON.stringify(config), {
               dir: Instance.directory,
               source: `${active.url}/api/config`,
-              trusted: false,
             }),
           )
         }
-      } catch (err: any) {
-        log.debug("failed to fetch remote account config", { error: err?.message ?? err })
+      } catch (err: unknown) {
+        log.debug("failed to fetch remote account config", {
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 

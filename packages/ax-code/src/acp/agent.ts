@@ -140,6 +140,11 @@ export namespace ACP {
     private bashSnapshots = new Map<string, string>()
     private toolStarts = new Set<string>()
     private permissionQueues = new Map<string, Promise<void>>()
+    // Deferred sessionUpdate timers scheduled during session creation.
+    // Tracked so dispose() can cancel them before they fire against a
+    // connection that has been closed. Keyed by session id to allow
+    // per-session cancellation in the future.
+    private pendingSessionUpdates = new Set<ReturnType<typeof setTimeout>>()
     private permissionOptions: PermissionOption[] = [
       { optionId: "once", kind: "allow_once", name: "Allow once" },
       { optionId: "always", kind: "allow_always", name: "Always allow" },
@@ -190,6 +195,12 @@ export namespace ACP {
     dispose() {
       if (this.eventAbort.signal.aborted) return
       this.eventAbort.abort()
+      // Cancel any fire-and-forget session-update timers that were
+      // scheduled during session creation but haven't fired yet —
+      // without this, the timer callback would call sessionUpdate()
+      // on a connection that's already been closed by the ACP client.
+      for (const timer of this.pendingSessionUpdates) clearTimeout(timer)
+      this.pendingSessionUpdates.clear()
     }
 
     private async handleEvent(event: Event) {
@@ -1278,7 +1289,16 @@ export namespace ACP {
         }),
       )
 
-      setTimeout(() => {
+      // Defer the sessionUpdate until after the enclosing create
+      // response returns so the ACP client sees the session id
+      // before the "available_commands_update" event. Track the
+      // timer so dispose() can cancel it, and guard the callback
+      // against firing post-dispose — otherwise a rapid
+      // create/close cycle can call sessionUpdate on a closed
+      // connection.
+      const sessionUpdateTimer = setTimeout(() => {
+        this.pendingSessionUpdates.delete(sessionUpdateTimer)
+        if (this.eventAbort.signal.aborted) return
         this.connection.sessionUpdate({
           sessionId,
           update: {
@@ -1287,6 +1307,7 @@ export namespace ACP {
           },
         })
       }, 0)
+      this.pendingSessionUpdates.add(sessionUpdateTimer)
 
       return {
         sessionId,

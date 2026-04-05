@@ -618,7 +618,11 @@ export namespace MessageV2 {
         return { type: "text", value: output }
       }
 
-      if (typeof output === "object") {
+      // `typeof null === "object"` in JavaScript, so the null case
+      // would fall into this branch and produce a content part with
+      // `text: undefined`. Explicitly exclude null so it falls
+      // through to the JSON fallback below.
+      if (typeof output === "object" && output !== null) {
         const outputObject = output as {
           text: string
           attachments?: Array<{ mime: string; url: string }>

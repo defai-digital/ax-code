@@ -240,16 +240,27 @@ export namespace ShareNext {
       dataMap.set(key(item), item)
     }
 
-    const timeout = setTimeout(() => {
+    const flush = () => {
       void (async () => {
         if (inflight.has(sessionID)) return
         const queued = queue.get(sessionID)
         if (!queued) return
-        queue.delete(sessionID)
         const share = get(sessionID)
-        if (!share) return
+        if (!share) {
+          queue.delete(sessionID)
+          return
+        }
 
+        // Keep the queue entry until we know the POST succeeded,
+        // and schedule a retry timer on failure. The previous
+        // implementation called `queue.delete` up front, so any
+        // fetch failure (transient network blip, 5xx from the
+        // share server) permanently dropped every message / part
+        // accumulated during the 1s debounce window with no retry
+        // path. Now we delete on success and re-schedule the
+        // flush on failure so data survives transient errors.
         inflight.add(sessionID)
+        let success = false
         try {
           const req = await request()
           const response = await fetch(`${req.baseUrl}${req.api.sync(share.id)}`, {
@@ -263,16 +274,37 @@ export namespace ShareNext {
 
           if (!response.ok) {
             log.warn("failed to sync share", { sessionID, shareID: share.id, status: response.status })
+          } else {
+            success = true
           }
         } finally {
           inflight.delete(sessionID)
+          const current = queue.get(sessionID)
+          if (success) {
+            // Only delete if the queue still points at the same
+            // entry we just flushed — a concurrent sync() may have
+            // merged new items into it, in which case the entry
+            // still holds unsent data that needs a fresh flush
+            // timer.
+            if (current === queued && current.data.size === queued.data.size) {
+              queue.delete(sessionID)
+            } else if (current) {
+              // Concurrent additions merged in during the fetch.
+              // The delta hasn't been flushed — schedule a retry.
+              current.timeout = setTimeout(flush, 1000)
+            }
+          } else if (current) {
+            // Failed flush: keep the entry and schedule a retry.
+            // 5s backoff so we don't hammer a broken share server.
+            current.timeout = setTimeout(flush, 5000)
+          }
         }
       })().catch((error) => {
-        queue.delete(sessionID)
         inflight.delete(sessionID)
         log.warn("share sync timer failed", { sessionID, error })
       })
-    }, 1000)
+    }
+    const timeout = setTimeout(flush, 1000)
     queue.set(sessionID, { timeout, data: dataMap })
   }
 

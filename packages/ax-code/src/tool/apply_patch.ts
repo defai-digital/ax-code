@@ -34,7 +34,13 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       const parseResult = Patch.parsePatch(params.patchText)
       hunks = parseResult.hunks
     } catch (error) {
-      throw new Error(`apply_patch verification failed: ${error}`, { cause: error })
+      // `${error}` on an Error produces "Error: <msg>" (ugly prefix)
+      // and on a non-Error plain object produces "[object Object]".
+      // Extract .message for Error instances, String() everything
+      // else. `{ cause }` still carries the full original for
+      // downstream handlers that inspect it.
+      const msg = error instanceof Error ? error.message : String(error)
+      throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
     }
 
     if (hunks.length === 0) {
@@ -120,7 +126,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             const fileUpdate = Patch.deriveNewContentsFromChunks(filePath, hunk.chunks)
             newContent = fileUpdate.content
           } catch (error) {
-            throw new Error(`apply_patch verification failed: ${error}`, { cause: error })
+            const msg = error instanceof Error ? error.message : String(error)
+            throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
           }
 
           const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))
@@ -161,7 +168,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             throw new Error(`apply_patch: cannot delete a directory: ${filePath}`)
           }
           const contentToDelete = await fs.readFile(filePath, "utf-8").catch((error) => {
-            throw new Error(`apply_patch verification failed: ${error}`, { cause: error })
+            const msg = error instanceof Error ? error.message : String(error)
+            throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
           })
           const deleteDiff = trimDiff(createTwoFilesPatch(filePath, filePath, contentToDelete, ""))
 

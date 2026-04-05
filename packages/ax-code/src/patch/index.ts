@@ -314,7 +314,8 @@ export namespace Patch {
     try {
       originalContent = readFileSync(filePath, "utf-8")
     } catch (error) {
-      throw new Error(`Failed to read file ${filePath}: ${error}`, { cause: error })
+      const msg = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to read file ${filePath}: ${msg}`, { cause: error })
     }
 
     let originalLines = originalContent.split("\n")

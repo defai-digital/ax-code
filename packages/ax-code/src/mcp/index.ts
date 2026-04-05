@@ -264,7 +264,7 @@ export namespace MCP {
   // Helper function to fetch prompts for a specific client
   async function fetchPromptsForClient(clientName: string, client: Client) {
     const prompts = await client.listPrompts().catch((e) => {
-      log.error("failed to get prompts", { clientName, error: e.message })
+      log.error("failed to get prompts", { clientName, error: NamedError.message(e) })
       return undefined
     })
 
@@ -286,7 +286,7 @@ export namespace MCP {
 
   async function fetchResourcesForClient(clientName: string, client: Client) {
     const resources = await client.listResources().catch((e) => {
-      log.error("failed to get prompts", { clientName, error: e.message })
+      log.error("failed to get resources", { clientName, error: NamedError.message(e) })
       return undefined
     })
 
@@ -687,7 +687,7 @@ export namespace MCP {
       const toolsResults = await Promise.all(
         connectedClients.map(async ([clientName, client]) => {
           const toolsResult = await client.listTools().catch((e) => {
-            log.error("failed to get tools", { clientName, error: e.message })
+            log.error("failed to get tools", { clientName, error: NamedError.message(e) })
             const failedStatus = {
               status: "failed" as const,
               error: NamedError.message(e),
@@ -783,7 +783,7 @@ export namespace MCP {
         log.error("failed to get prompt from MCP server", {
           clientName,
           promptName: name,
-          error: e.message,
+          error: NamedError.message(e),
         })
         return undefined
       })
@@ -807,10 +807,10 @@ export namespace MCP {
         uri: resourceUri,
       })
       .catch((e) => {
-        log.error("failed to get prompt from MCP server", {
+        log.error("failed to read resource from MCP server", {
           clientName: clientName,
           resourceUri: resourceUri,
-          error: e.message,
+          error: NamedError.message(e),
         })
         return undefined
       })

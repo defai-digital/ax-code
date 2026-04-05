@@ -323,7 +323,15 @@ export namespace Worktree {
   }
 
   function queueStartScripts(directory: string, input: { projectID: ProjectID; extra?: string }) {
-    setTimeout(() => {
+    // Defer start-scripts to the next tick so the caller sees the
+    // worktree info synchronously before hooks run. The callback is
+    // tracked so dispose() / remove() can cancel it — previously it
+    // was a pure fire-and-forget that could fire against a worktree
+    // the user had already removed. `.unref()` keeps the event loop
+    // from being held open by a pending timer after all other work
+    // is done.
+    const timer = setTimeout(() => {
+      startScriptTimers.delete(timer)
       const start = async () => {
         await runStartScripts(directory, input)
       }
@@ -332,6 +340,23 @@ export namespace Worktree {
         log.error("worktree start task failed", { directory, error })
       })
     }, 0)
+    timer.unref?.()
+    startScriptTimers.add(timer)
+  }
+
+  // Pending start-script timers, tracked so cleanup paths can cancel
+  // them before they fire against a worktree that has already been
+  // torn down.
+  const startScriptTimers = new Set<ReturnType<typeof setTimeout>>()
+
+  /**
+   * Cancel all pending worktree start-script timers. Called from
+   * `remove()` so a rapid create/remove cycle does not execute the
+   * start script against a now-deleted directory.
+   */
+  export function cancelPendingStartScripts() {
+    for (const timer of startScriptTimers) clearTimeout(timer)
+    startScriptTimers.clear()
   }
 
   export async function makeWorktreeInfo(name?: string): Promise<Info> {
@@ -422,11 +447,17 @@ export namespace Worktree {
   export const create = fn(CreateInput.optional(), async (input) => {
     const info = await makeWorktreeInfo(input?.name)
     const bootstrap = await createFromInfo(info, input?.startCommand)
-    // Defer bootstrap to the next microtask so callers see the worktree
-    // info synchronously before post-create hooks start running.
-    setTimeout(() => {
+    // Defer bootstrap to the next microtask so callers see the
+    // worktree info synchronously before post-create hooks run.
+    // Tracked via startScriptTimers so cancelPendingStartScripts()
+    // can cancel it if the worktree is removed before the tick.
+    // `.unref()` lets the event loop exit if nothing else is alive.
+    const timer = setTimeout(() => {
+      startScriptTimers.delete(timer)
       bootstrap()
     }, 0)
+    timer.unref?.()
+    startScriptTimers.add(timer)
     return info
   })
 
@@ -434,6 +465,12 @@ export namespace Worktree {
     if (Instance.project.vcs !== "git") {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
+
+    // Cancel any pending start-script / bootstrap timers queued by a
+    // recent create() so they don't fire against the directory we're
+    // about to remove. A rapid create→remove cycle would otherwise
+    // run the user's start script in a now-deleted directory.
+    cancelPendingStartScripts()
 
     const directory = await canonical(input.directory)
     const locate = async (stdout: Uint8Array | undefined) => {

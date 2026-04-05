@@ -7,6 +7,7 @@ import { Instance } from "../project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "../util/log"
 import { Glob } from "../util/glob"
+import { Ssrf } from "../util/ssrf"
 import type { MessageV2 } from "./message-v2"
 
 const log = Log.create({ service: "instruction" })
@@ -139,8 +140,23 @@ export namespace InstructionPrompt {
         }
       }
     }
-    const fetches = urls.map((url) =>
-      fetch(url, { signal: AbortSignal.timeout(5000) })
+    const fetches = urls.map(async (url) => {
+      // SSRF guard. A malicious project config can set
+      // instructions: ["http://169.254.169.254/latest/meta-data/iam/..."]
+      // and have the contents injected verbatim into the LLM system
+      // prompt as "Instructions from: ...", exfiltrating cloud
+      // metadata tokens through the next LLM response. Reject any
+      // URL whose resolved address is in a private/reserved range
+      // before touching the network. Failures are logged and return
+      // an empty string so one bad URL doesn't take down the whole
+      // instruction pipeline.
+      try {
+        await Ssrf.assertPublicUrl(url, "instruction-url")
+      } catch (err) {
+        log.warn("instruction URL rejected by SSRF guard", { url, err })
+        return ""
+      }
+      return fetch(url, { signal: AbortSignal.timeout(5000) })
         .then((res) => {
           if (!res.ok) {
             log.warn("instruction URL returned non-ok", { url, status: res.status })
@@ -152,8 +168,8 @@ export namespace InstructionPrompt {
           log.warn("instruction URL fetch failed", { url, err })
           return ""
         })
-        .then((x) => (x ? "Instructions from: " + url + "\n" + x : "")),
-    )
+        .then((x) => (x ? "Instructions from: " + url + "\n" + x : ""))
+    })
 
     return Promise.all([...files, ...fetches]).then((result) => result.filter(Boolean))
   }

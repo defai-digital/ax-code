@@ -523,14 +523,16 @@ export const GithubRunCommand = cmd({
             await removeReaction(commentType)
           }
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         exitCode = 1
         console.error(e instanceof Error ? e.message : String(e))
-        let msg = e
+        let msg: string
         if (e instanceof Process.RunFailedError) {
           msg = e.stderr.toString()
         } else if (e instanceof Error) {
           msg = e.message
+        } else {
+          msg = String(e)
         }
         if (isUserEvent) {
           await createComment(`${msg}${footer()}`)
@@ -538,7 +540,6 @@ export const GithubRunCommand = cmd({
         }
         core.setFailed(msg)
         // Also output the clean error message for the action to capture
-        //core.setOutput("prepare_error", e.message);
       } finally {
         if (!useGithubToken) {
           await restoreGitConfig()

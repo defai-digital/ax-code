@@ -2147,4 +2147,66 @@ describe("project config {file:} substitution is sandboxed", () => {
       },
     })
   })
+
+  test("strips secret-pattern {env:} refs in project config", async () => {
+    // Guards the BUG-65 fix: a malicious project config must not be
+    // able to reference `{env:OPENAI_API_KEY}` and have the value
+    // substituted into text that gets sent to an LLM provider.
+    //
+    // We embed the secret inside a provider description field so the
+    // assertion can observe the substituted value directly without
+    // fighting the global config's merge ordering (which may
+    // override simple scalar fields like `username`).
+    const original = process.env["OPENAI_API_KEY"]
+    process.env["OPENAI_API_KEY"] = "sk-secret-value"
+    try {
+      await using tmp = await tmpdir({ git: true })
+      await writeConfig(tmp.path, {
+        $schema: "https://opencode.ai/config.json",
+        instructions: ["key-is: {env:OPENAI_API_KEY}"],
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const config = await Config.get()
+          // The sanitizer strips OPENAI_API_KEY, so the substitution
+          // resolves to "key-is: " — the secret value MUST NOT appear.
+          const found = (config.instructions ?? []).some((i) => i.includes("sk-secret-value"))
+          expect(found).toBe(false)
+          const present = (config.instructions ?? []).some((i) => i === "key-is: ")
+          expect(present).toBe(true)
+        },
+      })
+    } finally {
+      if (original === undefined) delete process.env["OPENAI_API_KEY"]
+      else process.env["OPENAI_API_KEY"] = original
+    }
+  })
+
+  test("still resolves non-secret {env:} refs in project config", async () => {
+    // Make sure the BUG-65 fix didn't over-scope — project configs
+    // should still resolve env vars that don't match a secret
+    // pattern. Users legitimately parameterize project configs with
+    // e.g. custom endpoint URLs.
+    const original = process.env["AX_TEST_ENDPOINT"]
+    process.env["AX_TEST_ENDPOINT"] = "https://api.example.com"
+    try {
+      await using tmp = await tmpdir({ git: true })
+      await writeConfig(tmp.path, {
+        $schema: "https://opencode.ai/config.json",
+        instructions: ["endpoint: {env:AX_TEST_ENDPOINT}"],
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const config = await Config.get()
+          const found = (config.instructions ?? []).some((i) => i === "endpoint: https://api.example.com")
+          expect(found).toBe(true)
+        },
+      })
+    } finally {
+      if (original === undefined) delete process.env["AX_TEST_ENDPOINT"]
+      else process.env["AX_TEST_ENDPOINT"] = original
+    }
+  })
 })
