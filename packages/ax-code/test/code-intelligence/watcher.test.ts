@@ -205,4 +205,45 @@ describe("CodeGraphWatcher.start / stop", () => {
       },
     })
   })
+
+  // ── Tool-write integration proof ─────────────────────────────────────
+  //
+  // Edit, Write, and ApplyPatch all call notifyFileEdited from
+  // tool/diagnostics.ts after a successful write. That helper publishes
+  // FileWatcher.Event.Updated on the Bus, which the CodeGraphWatcher
+  // subscription picks up. This test closes the loop end-to-end by
+  // driving the actual tool-side helper (not a hand-rolled Bus.publish)
+  // and asserting the graph reacts. It is the Phase 2 exit gate for
+  // "tool-driven writes invalidate the graph."
+
+  test("notifyFileEdited from the tool layer drives the watcher", async () => {
+    const { notifyFileEdited } = await import("../../src/tool/diagnostics")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        CodeGraphWatcher.start(projectID)
+        expect(CodeGraphWatcher.__pendingCountForTests(projectID)).toBe(0)
+
+        // Exercise the exact helper that Edit/Write/ApplyPatch call
+        // after a successful file write. It publishes FileWatcher.
+        // Event.Updated on the Bus; the CodeGraphWatcher subscription
+        // picks it up and schedules a debounced reindex.
+        await notifyFileEdited("/tmp/tool-written.ts", "change")
+
+        // The file has landed in the watcher's debounce queue — this
+        // is the property under test: the tool-side helper successfully
+        // routed through to the code intelligence subsystem. Actual
+        // reindex output depends on LSP being available for the file
+        // (covered by the builder tests).
+        expect(CodeGraphWatcher.__pendingCountForTests(projectID)).toBe(1)
+
+        CodeGraphWatcher.stop(projectID)
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
 })

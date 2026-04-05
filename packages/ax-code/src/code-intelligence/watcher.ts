@@ -149,6 +149,14 @@ export namespace CodeGraphWatcher {
     log.info("stopped code graph watcher", { projectID })
   }
 
+  // Test helper: report how many files are currently sitting in the
+  // debounce queue for this project. Used by integration tests that
+  // want to prove an event was routed through handleEvent without
+  // waiting for the reindex job to run.
+  export function __pendingCountForTests(projectID: ProjectID): number {
+    return instances.get(projectID)?.pending.size ?? 0
+  }
+
   // Test helper: force synchronous drain of pending debounced events.
   // Production code should never call this.
   export async function __drainForTests(projectID: ProjectID): Promise<void> {
