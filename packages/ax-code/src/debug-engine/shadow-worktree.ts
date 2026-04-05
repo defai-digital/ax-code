@@ -99,7 +99,12 @@ export namespace ShadowWorktree {
    */
   export async function precheck(): Promise<{ ok: true } | OpenPreconditionFailure> {
     if (Instance.project.vcs !== "git") return { ok: false, reason: "not-git" }
-    const status = await git(["status", "--porcelain"], { cwd: Instance.worktree })
+    // --no-renames keeps the porcelain output in a single-path-per-line
+    // format. Without it, renamed entries are `R  old -> new` and the
+    // naive `slice(3)` leaks the old name into the reported file
+    // list. We don't need rename detection here — we only want the
+    // list of files with uncommitted changes.
+    const status = await git(["status", "--porcelain", "--no-renames"], { cwd: Instance.worktree })
     if (status.exitCode !== 0) return { ok: false, reason: "not-git" }
     const text = status.text().trim()
     if (text.length > 0) {

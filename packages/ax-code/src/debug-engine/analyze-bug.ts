@@ -226,10 +226,11 @@ function walkCallers(
   depth: number,
   scope: "worktree" | "none",
   ciExplains: CodeIntelligence.Explain[],
-): CodeIntelligence.Symbol[] {
+): { chain: CodeIntelligence.Symbol[]; truncated: boolean } {
   const chain: CodeIntelligence.Symbol[] = []
   const visited = new Set<string>([entry.id])
   let current = entry
+  let truncated = false
   for (let i = 0; i < depth; i++) {
     const callers = CodeIntelligence.findCallers(projectID, current.id, { scope })
     if (callers.length === 0) break
@@ -240,8 +241,18 @@ function walkCallers(
     chain.push(next.symbol)
     visited.add(next.symbol.id)
     current = next.symbol
+    // If this was the final allowed iteration and `current` still has
+    // an unvisited caller reachable, we stopped due to depth, not
+    // natural termination. Without this distinction the caller (the
+    // `extra.length === chainDepth` check in analyzeBugImpl) could
+    // not tell apart "walk exhausted at depth N" from "budget cut
+    // walk off at depth N", producing false truncation warnings.
+    if (i === depth - 1) {
+      const more = CodeIntelligence.findCallers(projectID, current.id, { scope })
+      if (more.some((c) => !visited.has(c.symbol.id))) truncated = true
+    }
   }
-  return chain
+  return { chain, truncated }
 }
 
 export async function analyzeBugImpl(
@@ -288,7 +299,7 @@ export async function analyzeBugImpl(
   let truncated = false
   if (chain.length > 0 && chain[chain.length - 1].symbol && input.stackTrace) {
     const entry = chain[chain.length - 1].symbol!
-    const extra = walkCallers(projectID, entry, chainDepth, scope, ciExplains)
+    const { chain: extra, truncated: extraTruncated } = walkCallers(projectID, entry, chainDepth, scope, ciExplains)
     if (extra.length > 0) {
       heuristics.push(`walk-callers:depth=${extra.length}`)
       const baseIdx = chain.length
@@ -305,7 +316,7 @@ export async function analyzeBugImpl(
       // frames become "intermediate".
       for (let i = baseIdx; i < chain.length - 1; i++) chain[i].role = "intermediate"
     }
-    if (extra.length === chainDepth) truncated = true
+    if (extraTruncated) truncated = true
   }
 
   // If an explicit entrySymbol was provided and the stack-trace path
@@ -322,7 +333,7 @@ export async function analyzeBugImpl(
         line: seed.range.start.line + 1,
         role: "failure",
       })
-      const extra = walkCallers(projectID, seed, chainDepth, scope, ciExplains)
+      const { chain: extra, truncated: extraTruncated } = walkCallers(projectID, seed, chainDepth, scope, ciExplains)
       heuristics.push(`entry-symbol-seed:callers=${extra.length}`)
       for (let i = 0; i < extra.length; i++) {
         chain.push({
@@ -333,7 +344,7 @@ export async function analyzeBugImpl(
           role: i === extra.length - 1 ? "entry" : "intermediate",
         })
       }
-      if (extra.length === chainDepth) truncated = true
+      if (extraTruncated) truncated = true
     }
   }
 

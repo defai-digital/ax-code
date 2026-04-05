@@ -107,22 +107,39 @@ async function resolveCommands(cwd: string, override?: ApplySafeRefactorInput["c
   return { typecheck, lint, test }
 }
 
+// Hard cap on subprocess runtime. Typecheck/lint/test commands can
+// hang (misconfigured tsc, infinite-loop test), and without a timeout
+// the entire apply-safe-refactor pipeline blocks forever while the
+// child holds its PID and pipe fds. 5 minutes is conservative enough
+// for large test suites but still bounded.
+const RUN_COMMAND_TIMEOUT_MS = 5 * 60 * 1000
+
 async function runCommand(
   cmd: string,
   cwd: string,
-): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
+  timeoutMs: number = RUN_COMMAND_TIMEOUT_MS,
+): Promise<{ ok: boolean; stdout: string; stderr: string; code: number; timedOut: boolean }> {
   const proc = Bun.spawn({
     cmd: ["sh", "-c", cmd],
     cwd,
     stdout: "pipe",
     stderr: "pipe",
   })
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ])
-  const code = await proc.exited
-  return { ok: code === 0, stdout, stderr, code }
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    proc.kill("SIGKILL")
+  }, timeoutMs)
+  try {
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ])
+    const code = await proc.exited
+    return { ok: code === 0 && !timedOut, stdout, stderr, code, timedOut }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function runCheck(
@@ -388,21 +405,15 @@ export async function applySafeRefactorImpl(
 
     // Step 9: real apply. We re-apply the patch to the actual worktree
     // via git apply. The shadow's job is now done; it's disposed in
-    // the finally block.
-    const realApply = await git(
-      ["apply", "--whitespace=fix", "-"],
-      { cwd: Instance.worktree },
-    )
-    // git apply with `-` reads from stdin; the util helper doesn't
-    // pipe stdin (it always passes `stdin: "ignore"`). Fall back to a
-    // temp file in the real worktree instead.
+    // the finally block. The git() util helper passes `stdin: "ignore"`,
+    // so we can't use `git apply -`; write the patch to a temp file
+    // and apply from there.
     const tmpPatch = path.join(Instance.worktree, ".dre-apply.patch")
     await fs.writeFile(tmpPatch, input.patch, "utf8")
     const realResult = await git(["apply", "--whitespace=fix", tmpPatch], {
       cwd: Instance.worktree,
     })
     await fs.rm(tmpPatch, { force: true }).catch(() => undefined)
-    void realApply
 
     if (realResult.exitCode !== 0) {
       // Worktree is unchanged because git apply failed atomically.

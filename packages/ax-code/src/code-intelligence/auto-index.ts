@@ -143,6 +143,7 @@ export namespace AutoIndex {
           edges: result.edges,
           files: result.files,
           skipped: result.skipped,
+          failed: result.failed,
           elapsedMs: elapsed,
         })
       } catch (err) {
