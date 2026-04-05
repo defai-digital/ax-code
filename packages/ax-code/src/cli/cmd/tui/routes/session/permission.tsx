@@ -126,6 +126,68 @@ function TextBody(props: { title: string; description?: string; icon?: string })
   )
 }
 
+// Body for the refactor_apply permission prompt. The tool passes a
+// metadata payload like { tool: "refactor_apply", planId, mode,
+// preflight, files } via ctx.ask({ permission: "edit", metadata }).
+// Rather than route through a new permission key, we detect the
+// refactor_apply tool via metadata inside the existing "edit" branch
+// so the underlying permission policy rules (allow/deny/ask for
+// "edit") apply unchanged. See PRD-debug-refactor-engine.md Tier 1c.
+function RefactorApplyBody(props: { request: PermissionRequest }) {
+  const { theme } = useTheme()
+  const meta = props.request.metadata ?? {}
+  const planId = typeof meta.planId === "string" ? meta.planId : "(unknown)"
+  const mode = meta.mode === "aggressive" ? "aggressive" : "safe"
+  const preflight = meta.preflight === true
+  const filesRaw = Array.isArray(meta.files) ? meta.files : []
+  const files = filesRaw.filter((f): f is string => typeof f === "string")
+  const riskColor = mode === "aggressive" ? theme.warning : theme.success
+  return (
+    <box flexDirection="column" gap={1} paddingLeft={1}>
+      {/* Row 1: mode + preflight distinction — these are the two facts
+          users MUST see before approving. Aggressive mode is colored
+          warning so approval-fatigue users notice it. */}
+      <box flexDirection="row" gap={2}>
+        <text fg={theme.textMuted}>Mode</text>
+        <text fg={riskColor}>{mode}</text>
+        <text fg={theme.textMuted}>·</text>
+        <text fg={theme.textMuted}>Stage</text>
+        <text fg={preflight ? theme.textMuted : theme.text}>
+          {preflight ? "pre-flight check (no file writes)" : "real apply (will modify files on success)"}
+        </text>
+      </box>
+      {/* Row 2: plan id. Referenced by the /plans slash command and
+          by refactor_apply's abortReason on failure. */}
+      <box flexDirection="row" gap={2}>
+        <text fg={theme.textMuted}>Plan</text>
+        <text fg={theme.text}>{planId}</text>
+      </box>
+      {/* Row 3+: affected files. Uses the patterns we pass alongside
+          metadata so users see exactly what will change. */}
+      <Show when={files.length > 0}>
+        <box flexDirection="column" gap={0}>
+          <text fg={theme.textMuted}>Files ({files.length})</text>
+          <box>
+            <For each={files.slice(0, 10)}>
+              {(f) => <text fg={theme.text}>{"  " + normalizePath(f)}</text>}
+            </For>
+            <Show when={files.length > 10}>
+              <text fg={theme.textMuted}>{`  … and ${files.length - 10} more`}</text>
+            </Show>
+          </box>
+        </box>
+      </Show>
+      <Show when={preflight}>
+        <box paddingTop={1}>
+          <text fg={theme.textMuted}>
+            Pre-flight runs typecheck, lint, and tests in a scratch worktree only. No real files change.
+          </text>
+        </box>
+      </Show>
+    </box>
+  )
+}
+
 export function PermissionPrompt(props: { request: PermissionRequest }) {
   const sdk = useSDK()
   const sync = useSync()
@@ -209,6 +271,26 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
             const data = input()
 
             if (permission === "edit") {
+              // DRE refactor_apply hijacks the "edit" policy key so it
+              // inherits the project's existing edit rules, but the
+              // renderer branches on metadata.tool to show plan
+              // context (mode, planId, preflight vs real) instead of
+              // a single-file diff. See PRD-debug-refactor-engine-ui.md
+              // §Tier 1c.
+              if (props.request.metadata?.tool === "refactor_apply") {
+                const planId =
+                  typeof props.request.metadata?.planId === "string" ? props.request.metadata.planId : "(unknown)"
+                const mode = props.request.metadata?.mode === "aggressive" ? "aggressive" : "safe"
+                const preflight = props.request.metadata?.preflight === true
+                const title = preflight
+                  ? `Refactor pre-flight · ${mode} · ${planId}`
+                  : `Apply refactor plan · ${mode} · ${planId}`
+                return {
+                  icon: "♺",
+                  title,
+                  body: <RefactorApplyBody request={props.request} />,
+                }
+              }
               const raw = props.request.metadata?.filepath
               const filepath = typeof raw === "string" ? raw : ""
               return {

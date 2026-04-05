@@ -14,6 +14,10 @@ export function Footer() {
   const mcp = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
   const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
   const lsp = createMemo(() => Object.keys(sync.data.lsp))
+  // DRE pending refactor plans. The server returns 0 when the
+  // experimental flag is off, so this memo stays silent without any
+  // flag branching in the TUI layer.
+  const drePending = createMemo(() => sync.data.debugEngine.pendingPlans)
   const permissions = createMemo(() => {
     if (route.data.type !== "session") return []
     return sync.data.permission[route.data.sessionID] ?? []
@@ -70,6 +74,11 @@ export function Footer() {
             <text fg={theme.text}>
               <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
             </text>
+            <Show when={drePending() > 0}>
+              <text fg={theme.text}>
+                <span style={{ fg: theme.warning }}>◆</span> {drePending()} Plan{drePending() !== 1 ? "s" : ""}
+              </text>
+            </Show>
             <Show when={mcp()}>
               <text fg={theme.text}>
                 <Switch>

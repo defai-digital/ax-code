@@ -9,6 +9,7 @@ import z from "zod"
 import { Provider } from "../provider/provider"
 import { NamedError } from "@ax-code/util/error"
 import { LSP } from "../lsp"
+import { DebugEngine } from "../debug-engine"
 import { Format } from "../format"
 import { TuiRoutes } from "./routes/tui"
 import { Instance } from "../project/instance"
@@ -1018,6 +1019,63 @@ export namespace Server {
         }),
         async (c) => {
           return c.json(await LSP.status())
+        },
+      )
+      .get(
+        "/debug-engine/pending-plans",
+        describeRoute({
+          summary: "List pending DRE refactor plans",
+          description:
+            "Return pending refactor plans for the current project. Used by the TUI footer to surface unfinished refactor work. Returns an empty list when the experimental DRE flag is off so callers can poll unconditionally.",
+          operationId: "debugEngine.pendingPlans",
+          responses: {
+            200: {
+              description: "Pending refactor plan summary",
+              content: {
+                "application/json": {
+                  schema: resolver(
+                    z.object({
+                      count: z.number(),
+                      plans: z.array(
+                        z.object({
+                          planId: z.string(),
+                          kind: z.string(),
+                          risk: z.string(),
+                          summary: z.string(),
+                          affectedFileCount: z.number(),
+                          affectedSymbolCount: z.number(),
+                          timeCreated: z.number(),
+                        }),
+                      ),
+                    }),
+                  ),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          // Silent no-op when the flag is off so the TUI can poll
+          // unconditionally without branching on flag state.
+          if (!Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE) {
+            return c.json({ count: 0, plans: [] })
+          }
+          const projectID = Instance.project.id
+          const plans = DebugEngine.listPlans(projectID, { status: "pending", limit: 25 })
+          return c.json({
+            count: plans.length,
+            plans: plans.map((p) => ({
+              planId: p.planId as unknown as string,
+              kind: p.kind,
+              risk: p.risk,
+              // Trim the markdown summary for list display — the full
+              // summary is still available via getPlan if a caller wants it.
+              summary: p.summary.split("\n").slice(0, 2).join("\n"),
+              affectedFileCount: p.affectedFiles.length,
+              affectedSymbolCount: p.affectedSymbols.length,
+              timeCreated: p.explain.indexedAt,
+            })),
+          })
         },
       )
       .get(

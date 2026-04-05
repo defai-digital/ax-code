@@ -65,6 +65,29 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         [messageID: string]: Part[]
       }
       lsp: LspStatus[]
+      // Debugging & Refactoring Engine status.
+      //
+      // `pendingPlans` drives the footer indicator: when > 0 the footer
+      // lights up a "• N Plans" chip so users don't forget about
+      // refactor plans they haven't applied yet. `plans` holds a
+      // short preview list used by the `/plans` slash command dialog.
+      //
+      // When AX_CODE_EXPERIMENTAL_DEBUG_ENGINE is off, the server
+      // returns `{ count: 0, plans: [] }` unconditionally, so this
+      // store field stays silent without any branching on the flag
+      // in the TUI layer.
+      debugEngine: {
+        pendingPlans: number
+        plans: Array<{
+          planId: string
+          kind: string
+          risk: string
+          summary: string
+          affectedFileCount: number
+          affectedSymbolCount: number
+          timeCreated: number
+        }>
+      }
       mcp: {
         [key: string]: McpStatus
       }
@@ -97,6 +120,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       message: {},
       part: {},
       lsp: [],
+      debugEngine: { pendingPlans: 0, plans: [] },
       mcp: {},
       mcp_resource: {},
       formatter: [],
@@ -111,6 +135,43 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       const result = await sdk.client.worktree.list().catch(() => undefined)
       if (!result?.data) return
       setStore("workspaceList", reconcile(result.data))
+    }
+
+    // Debugging & Refactoring Engine poll. Hits the server's
+    // /debug-engine/pending-plans route directly via sdk.fetch because
+    // the route is new in v2.3.1 and the generated SDK client hasn't
+    // been regenerated yet. Wrapped in a try/catch so a server without
+    // the endpoint (older peer) silently returns zero plans rather
+    // than logging errors every poll.
+    async function syncDebugEngine() {
+      try {
+        const headers: Record<string, string> = { accept: "application/json" }
+        if (sdk.directory) {
+          const encoded = /[^\x00-\x7F]/.test(sdk.directory)
+            ? encodeURIComponent(sdk.directory)
+            : sdk.directory
+          headers["x-ax-code-directory"] = encoded
+          headers["x-opencode-directory"] = encoded
+        }
+        const res = await sdk.fetch(`${sdk.url}/debug-engine/pending-plans`, { headers })
+        if (!res.ok) return
+        const body = (await res.json()) as {
+          count: number
+          plans: Array<{
+            planId: string
+            kind: string
+            risk: string
+            summary: string
+            affectedFileCount: number
+            affectedSymbolCount: number
+            timeCreated: number
+          }>
+        }
+        setStore("debugEngine", reconcile({ pendingPlans: body.count, plans: body.plans }))
+      } catch {
+        // Silent fallback — an older server returns 404 and we leave
+        // the field at its default zero state.
+      }
     }
 
     sdk.event.listen((e) => {
@@ -340,6 +401,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
         case "lsp.updated": {
           sdk.client.lsp.status().then((x) => setStore("lsp", x.data!))
+          // Piggyback on lsp.updated as a cheap "project state changed"
+          // trigger until DRE ships its own Bus event in a later
+          // release. LSP updates fire frequently enough to keep the
+          // pending-plans chip reasonably fresh without adding a
+          // separate timer.
+          syncDebugEngine()
           break
         }
 
@@ -423,6 +490,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
             sdk.client.path.get().then((x) => setStore("path", reconcile(x.data!))),
             syncWorkspaces(),
+            syncDebugEngine(),
           ]).then((results) => {
             for (const r of results) {
               if (r.status === "rejected") Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
