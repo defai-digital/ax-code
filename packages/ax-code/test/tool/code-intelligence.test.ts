@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
 import { CodeIntelligenceTool } from "../../src/tool/code-intelligence"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -24,19 +25,29 @@ const ctx = {
   ask: async () => {},
 }
 
+// The tool defaults to worktree scope, so seeded files must live
+// inside the test's tmpdir or the filter will drop them. Callers
+// pass the tmp base and a relative name.
 function seedSymbol(
   projectID: ProjectID,
-  opts: { name: string; kind?: "function" | "class"; file?: string; signature?: string },
+  opts: {
+    name: string
+    kind?: "function" | "class"
+    base: string
+    relFile?: string
+    signature?: string
+  },
 ) {
   const t = Date.now()
   const id = CodeNodeID.ascending()
+  const file = path.join(opts.base, opts.relFile ?? "t.ts")
   CodeGraphQuery.insertNode({
     id,
     project_id: projectID,
     kind: opts.kind ?? "function",
     name: opts.name,
     qualified_name: opts.name,
-    file: opts.file ?? "/tmp/t.ts",
+    file,
     range_start_line: 0,
     range_start_char: 0,
     range_end_line: 1,
@@ -50,7 +61,7 @@ function seedSymbol(
   CodeGraphQuery.upsertFile({
     id: CodeFileID.ascending(),
     project_id: projectID,
-    path: opts.file ?? "/tmp/t.ts",
+    path: file,
     sha: "seed",
     size: 0,
     lang: "typescript",
@@ -59,7 +70,7 @@ function seedSymbol(
     time_created: t,
     time_updated: t,
   })
-  return id
+  return { id, file }
 }
 
 describe("tool.code_intelligence", () => {
@@ -70,7 +81,11 @@ describe("tool.code_intelligence", () => {
       fn: async () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
-        seedSymbol(projectID, { name: "handleRequest", signature: "(req: Request) => Promise<Response>" })
+        seedSymbol(projectID, {
+          name: "handleRequest",
+          base: tmp.path,
+          signature: "(req: Request) => Promise<Response>",
+        })
 
         const tool = await CodeIntelligenceTool.init()
         const result = await tool.execute({ operation: "findSymbol", name: "handleRequest" }, ctx)
@@ -91,14 +106,14 @@ describe("tool.code_intelligence", () => {
       fn: async () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
-        seedSymbol(projectID, { name: "Foo", kind: "class", file: "/tmp/a.ts" })
-        seedSymbol(projectID, { name: "Foo", kind: "function", file: "/tmp/b.ts" })
+        seedSymbol(projectID, { name: "Foo", kind: "class", base: tmp.path, relFile: "a.ts" })
+        seedSymbol(projectID, { name: "Foo", kind: "function", base: tmp.path, relFile: "b.ts" })
 
         const tool = await CodeIntelligenceTool.init()
         const result = await tool.execute({ operation: "findSymbol", name: "Foo", kind: "class" }, ctx)
         expect(result.metadata.count).toBe(1)
-        expect(result.output).toContain("/tmp/a.ts")
-        expect(result.output).not.toContain("/tmp/b.ts")
+        expect(result.output).toContain("a.ts")
+        expect(result.output).not.toContain("b.ts")
 
         CodeIntelligence.__clearProject(projectID)
       },
@@ -112,9 +127,9 @@ describe("tool.code_intelligence", () => {
       fn: async () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
-        seedSymbol(projectID, { name: "handleRequest" })
-        seedSymbol(projectID, { name: "handleResponse" })
-        seedSymbol(projectID, { name: "processPayment" })
+        seedSymbol(projectID, { name: "handleRequest", base: tmp.path, relFile: "r.ts" })
+        seedSymbol(projectID, { name: "handleResponse", base: tmp.path, relFile: "s.ts" })
+        seedSymbol(projectID, { name: "processPayment", base: tmp.path, relFile: "p.ts" })
 
         const tool = await CodeIntelligenceTool.init()
         const result = await tool.execute({ operation: "findSymbolByPrefix", name: "handle" }, ctx)
@@ -135,12 +150,12 @@ describe("tool.code_intelligence", () => {
       fn: async () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
-        seedSymbol(projectID, { name: "a", file: "/tmp/x.ts" })
-        seedSymbol(projectID, { name: "b", file: "/tmp/x.ts" })
-        seedSymbol(projectID, { name: "c", file: "/tmp/y.ts" })
+        const a = seedSymbol(projectID, { name: "a", base: tmp.path, relFile: "x.ts" })
+        seedSymbol(projectID, { name: "b", base: tmp.path, relFile: "x.ts" })
+        seedSymbol(projectID, { name: "c", base: tmp.path, relFile: "y.ts" })
 
         const tool = await CodeIntelligenceTool.init()
-        const result = await tool.execute({ operation: "symbolsInFile", file: "/tmp/x.ts" }, ctx)
+        const result = await tool.execute({ operation: "symbolsInFile", file: a.file }, ctx)
         expect(result.metadata.count).toBe(2)
         expect(result.output).toContain(" a ")
         expect(result.output).toContain(" b ")
@@ -159,16 +174,16 @@ describe("tool.code_intelligence", () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
 
-        const callerId = seedSymbol(projectID, { name: "handleRequest", file: "/tmp/server.ts" })
-        const calleeId = seedSymbol(projectID, { name: "processPayment", file: "/tmp/pay.ts" })
+        const caller = seedSymbol(projectID, { name: "handleRequest", base: tmp.path, relFile: "server.ts" })
+        const callee = seedSymbol(projectID, { name: "processPayment", base: tmp.path, relFile: "pay.ts" })
         const now = Date.now()
         CodeGraphQuery.insertEdge({
           id: CodeEdgeID.ascending(),
           project_id: projectID,
           kind: "calls",
-          from_node: callerId,
-          to_node: calleeId,
-          file: "/tmp/server.ts",
+          from_node: caller.id,
+          to_node: callee.id,
+          file: caller.file,
           range_start_line: 10,
           range_start_char: 4,
           range_end_line: 10,
@@ -178,7 +193,7 @@ describe("tool.code_intelligence", () => {
         })
 
         const tool = await CodeIntelligenceTool.init()
-        const result = await tool.execute({ operation: "findCallers", symbolID: calleeId }, ctx)
+        const result = await tool.execute({ operation: "findCallers", symbolID: callee.id }, ctx)
         expect(result.metadata.count).toBe(1)
         expect(result.output).toContain("handleRequest")
         expect(result.output).toContain("depth=1")
@@ -195,10 +210,10 @@ describe("tool.code_intelligence", () => {
       fn: async () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
-        const id = seedSymbol(projectID, { name: "orphan" })
+        const node = seedSymbol(projectID, { name: "orphan", base: tmp.path })
 
         const tool = await CodeIntelligenceTool.init()
-        const result = await tool.execute({ operation: "findReferences", symbolID: id }, ctx)
+        const result = await tool.execute({ operation: "findReferences", symbolID: node.id }, ctx)
         expect(result.metadata.count).toBe(0)
         expect(result.output).toBe("No references found")
 
@@ -234,6 +249,161 @@ describe("tool.code_intelligence", () => {
         await expect(
           tool.execute({ operation: "findReferences" } as never, ctx),
         ).rejects.toThrow("findReferences requires `symbolID`")
+      },
+    })
+  })
+
+  // ── Policy-aware scope filter ───────────────────────────────────────
+  //
+  // The tool defaults to worktree scope. Files outside Instance.worktree
+  // must never appear in tool results even if they exist in the graph —
+  // this is the Phase 2 safety boundary that prevents the agent from
+  // seeing code it shouldn't be able to touch.
+
+  test("results outside the worktree are filtered out", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        // One node inside the worktree, one outside (arbitrary /etc path).
+        seedSymbol(projectID, { name: "dualHome", base: tmp.path, relFile: "inside.ts" })
+        seedSymbol(projectID, { name: "dualHome", base: "/etc", relFile: "outside.ts" })
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute({ operation: "findSymbol", name: "dualHome" }, ctx)
+        // Only the worktree-local node reaches the model.
+        expect(result.metadata.count).toBe(1)
+        expect(result.output).toContain("inside.ts")
+        expect(result.output).not.toContain("outside.ts")
+
+        // Direct API call with scope: "none" must see both — proves the
+        // filter is only applied by the tool layer, not the underlying
+        // graph, so infrastructure callers (replay, migrations) still
+        // have raw access.
+        const rawSymbols = CodeIntelligence.findSymbol(projectID, "dualHome", { scope: "none" })
+        expect(rawSymbols.length).toBe(2)
+
+        // Explicit scope: "worktree" on the API matches the tool default.
+        const scoped = CodeIntelligence.findSymbol(projectID, "dualHome", { scope: "worktree" })
+        expect(scoped.length).toBe(1)
+        expect(scoped[0].file).toContain(tmp.path)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("findCallers drops callers from out-of-worktree files", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        // Target symbol lives in-worktree. One caller in-worktree, one
+        // caller in /etc. The out-of-worktree caller must not leak.
+        const callee = seedSymbol(projectID, { name: "target", base: tmp.path, relFile: "target.ts" })
+        const goodCaller = seedSymbol(projectID, { name: "goodCaller", base: tmp.path, relFile: "good.ts" })
+        const badCaller = seedSymbol(projectID, { name: "badCaller", base: "/etc", relFile: "bad.ts" })
+
+        const now = Date.now()
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "calls",
+          from_node: goodCaller.id,
+          to_node: callee.id,
+          file: goodCaller.file,
+          range_start_line: 1,
+          range_start_char: 0,
+          range_end_line: 1,
+          range_end_char: 5,
+          time_created: now,
+          time_updated: now,
+        })
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "calls",
+          from_node: badCaller.id,
+          to_node: callee.id,
+          file: badCaller.file,
+          range_start_line: 2,
+          range_start_char: 0,
+          range_end_line: 2,
+          range_end_char: 5,
+          time_created: now,
+          time_updated: now,
+        })
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute({ operation: "findCallers", symbolID: callee.id }, ctx)
+        expect(result.metadata.count).toBe(1)
+        expect(result.output).toContain("goodCaller")
+        expect(result.output).not.toContain("badCaller")
+
+        // Raw API sees both.
+        const rawCallers = CodeIntelligence.findCallers(projectID, callee.id, { scope: "none" })
+        expect(rawCallers.length).toBe(2)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("findReferences drops references from out-of-worktree files", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const target = seedSymbol(projectID, { name: "Config", kind: "class", base: tmp.path, relFile: "config.ts" })
+        const inside = seedSymbol(projectID, { name: "localUser", base: tmp.path, relFile: "user.ts" })
+        const outside = seedSymbol(projectID, { name: "foreignUser", base: "/etc", relFile: "foreign.ts" })
+
+        const now = Date.now()
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "references",
+          from_node: inside.id,
+          to_node: target.id,
+          file: inside.file,
+          range_start_line: 3,
+          range_start_char: 0,
+          range_end_line: 3,
+          range_end_char: 6,
+          time_created: now,
+          time_updated: now,
+        })
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "references",
+          from_node: outside.id,
+          to_node: target.id,
+          file: outside.file,
+          range_start_line: 4,
+          range_start_char: 0,
+          range_end_line: 4,
+          range_end_char: 6,
+          time_created: now,
+          time_updated: now,
+        })
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute({ operation: "findReferences", symbolID: target.id }, ctx)
+        expect(result.metadata.count).toBe(1)
+        expect(result.output).toContain("user.ts")
+        expect(result.output).not.toContain("foreign.ts")
+
+        CodeIntelligence.__clearProject(projectID)
       },
     })
   })

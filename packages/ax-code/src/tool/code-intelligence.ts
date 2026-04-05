@@ -69,9 +69,13 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
     const limit = args.limit ?? MAX_RESULTS
 
     const result: { title: string; output: string; metadata: Record<string, unknown> } = await (async () => {
+      // Every query runs with worktree scope so results outside the
+      // current working directory are dropped before reaching the model.
+      // This is the policy-aware safety boundary for Phase 2.
+      const scope = "worktree" as const
       if (args.operation === "findSymbol") {
         if (!args.name) throw new Error("findSymbol requires `name`")
-        const symbols = CodeIntelligence.findSymbol(projectID, args.name, { kind: args.kind, limit })
+        const symbols = CodeIntelligence.findSymbol(projectID, args.name, { kind: args.kind, limit, scope })
         return {
           title: `findSymbol ${args.name}${args.kind ? ` (${args.kind})` : ""}`,
           output: symbols.length === 0
@@ -82,7 +86,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "findSymbolByPrefix") {
         if (!args.name) throw new Error("findSymbolByPrefix requires `name`")
-        const symbols = CodeIntelligence.findSymbolByPrefix(projectID, args.name, { kind: args.kind, limit })
+        const symbols = CodeIntelligence.findSymbolByPrefix(projectID, args.name, { kind: args.kind, limit, scope })
         return {
           title: `findSymbolByPrefix ${args.name}`,
           output: symbols.length === 0
@@ -93,7 +97,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "symbolsInFile") {
         if (!args.file) throw new Error("symbolsInFile requires `file`")
-        const symbols = CodeIntelligence.symbolsInFile(projectID, args.file)
+        const symbols = CodeIntelligence.symbolsInFile(projectID, args.file, { scope })
         const clipped = symbols.slice(0, limit)
         return {
           title: `symbolsInFile ${args.file}`,
@@ -105,7 +109,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "findReferences") {
         if (!args.symbolID) throw new Error("findReferences requires `symbolID`")
-        const refs = CodeIntelligence.findReferences(projectID, CodeNodeID.make(args.symbolID))
+        const refs = CodeIntelligence.findReferences(projectID, CodeNodeID.make(args.symbolID), { scope })
         const clipped = refs.slice(0, limit)
         return {
           title: `findReferences ${args.symbolID}`,
@@ -117,7 +121,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "findCallers") {
         if (!args.symbolID) throw new Error("findCallers requires `symbolID`")
-        const callers = CodeIntelligence.findCallers(projectID, CodeNodeID.make(args.symbolID))
+        const callers = CodeIntelligence.findCallers(projectID, CodeNodeID.make(args.symbolID), { scope })
         const clipped = callers.slice(0, limit)
         return {
           title: `findCallers ${args.symbolID}`,
@@ -129,7 +133,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "findCallees") {
         if (!args.symbolID) throw new Error("findCallees requires `symbolID`")
-        const callees = CodeIntelligence.findCallees(projectID, CodeNodeID.make(args.symbolID))
+        const callees = CodeIntelligence.findCallees(projectID, CodeNodeID.make(args.symbolID), { scope })
         const clipped = callees.slice(0, limit)
         return {
           title: `findCallees ${args.symbolID}`,
