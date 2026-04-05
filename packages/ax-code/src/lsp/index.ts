@@ -287,9 +287,7 @@ export namespace LSP {
       .then((clients) => {
         return Promise.all(
           clients.map(async (client) => {
-            const wait = waitForDiagnostics ? client.waitForDiagnostics({ path: input }) : Promise.resolve()
-            await client.notify.open({ path: input })
-            return wait
+            return client.notify.open({ path: input, waitForDiagnostics })
           }),
         )
       })
