@@ -64,12 +64,22 @@ export namespace CodeIntelligence {
     return `q_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   }
 
+  // Guard for the completeness enum read back from SQLite. The column is
+  // stored as plain TEXT (no CHECK constraint — adding one now would
+  // require a migration), so we validate at read time. Any unknown value
+  // collapses to "partial", which is the safest default: callers should
+  // treat it as "we don't fully trust this index".
+  function normalizeCompleteness(value: string | undefined): "full" | "partial" | "lsp-only" {
+    if (value === "full" || value === "lsp-only") return value
+    return "partial"
+  }
+
   function buildExplain(file: string, projectID: ProjectID, queryId: string): Explain {
     const fileRow = CodeGraphQuery.getFile(projectID, file)
     return {
       source: "code-graph",
       indexedAt: fileRow?.indexed_at ?? 0,
-      completeness: (fileRow?.completeness as "full" | "partial" | "lsp-only") ?? "partial",
+      completeness: normalizeCompleteness(fileRow?.completeness),
       queryId,
     }
   }
@@ -121,8 +131,10 @@ export namespace CodeIntelligence {
 
   export function getSymbol(projectID: ProjectID, id: CodeNodeID): Symbol | null {
     const queryId = nextQueryId()
-    const row = CodeGraphQuery.getNode(id)
-    if (!row || row.project_id !== projectID) return null
+    // getNode filters by project_id at the SQL layer — no separate
+    // runtime check needed.
+    const row = CodeGraphQuery.getNode(projectID, id)
+    if (!row) return null
     return nodeRowToSymbol(row, projectID, queryId)
   }
 
@@ -161,8 +173,8 @@ export namespace CodeIntelligence {
     const edges = CodeGraphQuery.edgesTo(projectID, symbolId, "calls")
     const callers: CallChainNode[] = []
     for (const edge of edges) {
-      const callerRow = CodeGraphQuery.getNode(edge.from_node)
-      if (callerRow && callerRow.project_id === projectID) {
+      const callerRow = CodeGraphQuery.getNode(projectID, edge.from_node)
+      if (callerRow) {
         callers.push({
           symbol: nodeRowToSymbol(callerRow, projectID, queryId),
           depth: 1,
@@ -177,8 +189,8 @@ export namespace CodeIntelligence {
     const edges = CodeGraphQuery.edgesFrom(projectID, symbolId, "calls")
     const callees: CallChainNode[] = []
     for (const edge of edges) {
-      const calleeRow = CodeGraphQuery.getNode(edge.to_node)
-      if (calleeRow && calleeRow.project_id === projectID) {
+      const calleeRow = CodeGraphQuery.getNode(projectID, edge.to_node)
+      if (calleeRow) {
         callees.push({
           symbol: nodeRowToSymbol(calleeRow, projectID, queryId),
           depth: 1,
@@ -198,7 +210,7 @@ export namespace CodeIntelligence {
     const edges = CodeGraphQuery.edgesInFile(projectID, file).filter((e) => e.kind === "imports")
     const targets = new Set<string>()
     for (const edge of edges) {
-      const toNode = CodeGraphQuery.getNode(edge.to_node)
+      const toNode = CodeGraphQuery.getNode(projectID, edge.to_node)
       if (toNode) targets.add(toNode.file)
     }
     return [...targets]

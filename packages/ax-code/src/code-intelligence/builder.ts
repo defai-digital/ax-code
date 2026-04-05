@@ -4,6 +4,7 @@ import { LSP } from "../lsp"
 import { Log } from "../util/log"
 import { Filesystem } from "../util/filesystem"
 import { LANGUAGE_EXTENSIONS } from "../lsp/language"
+import { Database } from "../storage/db"
 import { CodeGraphQuery } from "./query"
 import { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
@@ -74,15 +75,25 @@ function isDocumentSymbol(s: LspDocumentSymbol | LspSymbolInformation): s is Lsp
 // Walk a documentSymbol tree depth-first, emitting (symbol, parentQualifiedName)
 // pairs. Parent tracking lets us build qualified names like
 // "SessionCompaction::isOverflow" for disambiguation.
+//
+// Bounded by MAX_SYMBOL_DEPTH to protect against malformed or adversarial
+// LSP responses that contain cycles in the children array. LSP's spec does
+// not forbid cycles; a buggy server could return a symbol whose children
+// reference itself and produce infinite recursion. Real code is never this
+// deep — 64 levels of nested scopes is already absurd.
+const MAX_SYMBOL_DEPTH = 64
+
 function* walkDocumentSymbols(
   symbols: LspDocumentSymbol[],
   parentQualified: string,
+  depth = 0,
 ): Generator<{ symbol: LspDocumentSymbol; parentQualified: string }> {
+  if (depth > MAX_SYMBOL_DEPTH) return
   for (const symbol of symbols) {
     yield { symbol, parentQualified }
     if (symbol.children && symbol.children.length > 0) {
       const nextParent = parentQualified ? `${parentQualified}::${symbol.name}` : symbol.name
-      yield* walkDocumentSymbols(symbol.children, nextParent)
+      yield* walkDocumentSymbols(symbol.children, nextParent, depth + 1)
     }
   }
 }
@@ -144,11 +155,9 @@ export namespace CodeGraphBuilder {
     // "full" is reserved for Phase 2 when references land.
     const completeness: "full" | "partial" | "lsp-only" = raw.length === 0 ? "partial" : "lsp-only"
 
-    // Delete existing state for this file before reinserting. Conservative
-    // but correct — we never leave stale nodes/edges lying around.
-    CodeGraphQuery.deleteEdgesTouchingFile(projectID, absPath)
-    CodeGraphQuery.deleteNodesInFile(projectID, absPath)
-
+    // Build the new node list outside the transaction so we don't hold
+    // the DB lock while walking LSP output. The delete + insert + upsert
+    // then happens inside one transaction below.
     const nodeInserts: Parameters<typeof CodeGraphQuery.insertNodes>[0] = []
     let nodeCount = 0
     const now = Date.now()
@@ -210,27 +219,38 @@ export namespace CodeGraphBuilder {
       }
     }
 
-    // Bulk insert. SQLite's multi-row insert is fast but has a 999-
-    // parameter default limit; our row has ~14 columns so we chunk
-    // at 50 rows per statement as a safe margin.
-    for (let i = 0; i < nodeInserts.length; i += 50) {
-      CodeGraphQuery.insertNodes(nodeInserts.slice(i, i + 50))
-    }
+    // All DB mutations for this file happen atomically. Without the
+    // transaction, a concurrent reader could see nodes without their
+    // edges, or a partially-deleted file, or a new code_file row with
+    // stale node rows underneath it. Transactions are cheap on SQLite
+    // and the whole block is CPU-bound (no await inside), so wrapping
+    // it has no latency cost.
+    Database.transaction((_tx) => {
+      CodeGraphQuery.deleteEdgesTouchingFile(projectID, absPath)
+      CodeGraphQuery.deleteNodesInFile(projectID, absPath)
 
-    // Record file state regardless of whether we found symbols — we
-    // still want to know we tried, so incremental updates can skip
-    // unchanged files without re-running LSP.
-    CodeGraphQuery.upsertFile({
-      id: CodeFileID.ascending(),
-      project_id: projectID,
-      path: absPath,
-      sha,
-      size,
-      lang,
-      indexed_at: now,
-      completeness,
-      time_created: now,
-      time_updated: now,
+      // Bulk insert. SQLite's multi-row insert is fast but has a 999-
+      // parameter default limit; our row has ~14 columns so we chunk
+      // at 50 rows per statement as a safe margin.
+      for (let i = 0; i < nodeInserts.length; i += 50) {
+        CodeGraphQuery.insertNodes(nodeInserts.slice(i, i + 50))
+      }
+
+      // Record file state regardless of whether we found symbols — we
+      // still want to know we tried, so incremental updates can skip
+      // unchanged files without re-running LSP.
+      CodeGraphQuery.upsertFile({
+        id: CodeFileID.ascending(),
+        project_id: projectID,
+        path: absPath,
+        sha,
+        size,
+        lang,
+        indexed_at: now,
+        completeness,
+        time_created: now,
+        time_updated: now,
+      })
     })
 
     log.info("indexed file", { file: absPath, nodes: nodeCount, completeness })

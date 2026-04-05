@@ -1,4 +1,4 @@
-import { Database, eq, and, inArray, desc, like } from "../storage/db"
+import { Database, eq, and, or, inArray, desc, like } from "../storage/db"
 import {
   CodeNodeTable,
   CodeEdgeTable,
@@ -36,9 +36,17 @@ export namespace CodeGraphQuery {
     Database.use((db) => db.insert(CodeNodeTable).values(rows).run())
   }
 
-  export function getNode(id: CodeNodeID): NodeRow | undefined {
+  // Always filters by project_id at the SQL layer so callers can trust
+  // the query for project isolation even if the same node id somehow
+  // appeared in two projects (schema permits it, policy forbids it).
+  export function getNode(projectID: ProjectID, id: CodeNodeID): NodeRow | undefined {
     return Database.use((db) =>
-      db.select().from(CodeNodeTable).where(eq(CodeNodeTable.id, id)).limit(1).all(),
+      db
+        .select()
+        .from(CodeNodeTable)
+        .where(and(eq(CodeNodeTable.project_id, projectID), eq(CodeNodeTable.id, id)))
+        .limit(1)
+        .all(),
     )[0]
   }
 
@@ -166,36 +174,34 @@ export namespace CodeGraphQuery {
   // Delete every edge that touches the given file, not just edges whose
   // `file` column equals it. This catches imports where `to_node` lives
   // in a different file — useful for reverse-dependency invalidation.
+  //
+  // Two failure modes to handle:
+  //   (a) File has more nodes than SQLite's IN-clause parameter limit
+  //       (SQLITE_MAX_VARIABLE_NUMBER, default 999). We chunk to 500 per
+  //       statement to leave headroom for the other WHERE clause params.
+  //   (b) The two directions (from_node, to_node) must delete atomically.
+  //       If the first succeeds and the second throws, we'd leave dangling
+  //       edges. Wrap the whole operation in a transaction.
   export function deleteEdgesTouchingFile(projectID: ProjectID, file: string): void {
-    // First get node ids in that file so we can filter by from/to_node.
     const fileNodes = nodesInFile(projectID, file).map((n) => n.id)
     if (fileNodes.length === 0) return
-    Database.use((db) =>
-      db
-        .delete(CodeEdgeTable)
-        .where(
-          and(
-            eq(CodeEdgeTable.project_id, projectID),
-            // Drizzle inArray returns a SQL expression; we wrap both
-            // directions in an OR by issuing two deletes. The simpler
-            // path is to delete any edge where either end is in the
-            // file's node set — which inArray supports directly.
-            inArray(CodeEdgeTable.from_node, fileNodes),
-          ),
+    const CHUNK = 500
+    Database.transaction((_tx) => {
+      for (let i = 0; i < fileNodes.length; i += CHUNK) {
+        const chunk = fileNodes.slice(i, i + CHUNK)
+        Database.use((db) =>
+          db
+            .delete(CodeEdgeTable)
+            .where(
+              and(
+                eq(CodeEdgeTable.project_id, projectID),
+                or(inArray(CodeEdgeTable.from_node, chunk), inArray(CodeEdgeTable.to_node, chunk)),
+              ),
+            )
+            .run(),
         )
-        .run(),
-    )
-    Database.use((db) =>
-      db
-        .delete(CodeEdgeTable)
-        .where(
-          and(
-            eq(CodeEdgeTable.project_id, projectID),
-            inArray(CodeEdgeTable.to_node, fileNodes),
-          ),
-        )
-        .run(),
-    )
+      }
+    })
   }
 
   export function countEdges(projectID: ProjectID): number {

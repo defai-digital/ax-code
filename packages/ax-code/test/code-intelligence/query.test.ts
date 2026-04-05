@@ -346,6 +346,91 @@ describe("CodeGraphQuery cursor", () => {
   })
 })
 
+describe("CodeGraphQuery regression fixes", () => {
+  test("getNode filters by project_id at the SQL layer", async () => {
+    await using tmpA = await tmpdir({ git: true })
+    await using tmpB = await tmpdir({ git: true })
+
+    // Seed a node in project A, remember its id.
+    const { projectA, nodeFromA } = await Instance.provide({
+      directory: tmpA.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+        const id = CodeNodeID.ascending()
+        CodeGraphQuery.insertNode(
+          makeNode({ id, project_id: projectID, name: "secret" }),
+        )
+        return { projectA: projectID, nodeFromA: id }
+      },
+    })
+
+    // Ask for the same node id under project B. Because getNode now
+    // filters by project_id in SQL, we must get undefined back even if
+    // the row still exists in another project.
+    await Instance.provide({
+      directory: tmpB.path,
+      fn: async () => {
+        const projectB = Instance.project.id
+        CodeGraphQuery.clearProject(projectB)
+        const leaked = CodeGraphQuery.getNode(projectB, nodeFromA)
+        expect(leaked).toBeUndefined()
+
+        // Same id under the correct project still works.
+        const found = CodeGraphQuery.getNode(projectA, nodeFromA)
+        expect(found).toBeDefined()
+        expect(found?.name).toBe("secret")
+
+        CodeGraphQuery.clearProject(projectA)
+        CodeGraphQuery.clearProject(projectB)
+      },
+    })
+  })
+
+  test("deleteEdgesTouchingFile handles files with many nodes (SQLite IN-clause chunking)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        // Seed more nodes than SQLite's IN-clause parameter limit (999).
+        // The old implementation crashed at ~999; the new chunked
+        // version should complete without error.
+        const COUNT = 1500
+        const nodes = Array.from({ length: COUNT }, (_, i) =>
+          makeNode({ project_id: projectID, name: `n${i}`, file: "/tmp/big.ts" }),
+        )
+        // Insert in chunks of 50 to match builder's internal batching.
+        for (let i = 0; i < nodes.length; i += 50) {
+          CodeGraphQuery.insertNodes(nodes.slice(i, i + 50))
+        }
+        expect(CodeGraphQuery.countNodes(projectID)).toBe(COUNT)
+
+        // Add a few edges so deleteEdgesTouchingFile has work to do.
+        for (let i = 0; i < 5; i++) {
+          CodeGraphQuery.insertEdge(
+            makeEdge({
+              project_id: projectID,
+              from_node: nodes[i].id,
+              to_node: nodes[i + 1].id,
+              file: "/tmp/big.ts",
+            }),
+          )
+        }
+        expect(CodeGraphQuery.countEdges(projectID)).toBe(5)
+
+        // This was the failing call before chunking.
+        CodeGraphQuery.deleteEdgesTouchingFile(projectID, "/tmp/big.ts")
+        expect(CodeGraphQuery.countEdges(projectID)).toBe(0)
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+})
+
 describe("CodeGraphQuery project isolation", () => {
   test("queries do not leak between projects", async () => {
     // Two separate git repos give us two distinct project IDs that
