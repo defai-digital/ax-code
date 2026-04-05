@@ -1,4 +1,5 @@
 import { describe, expect, test, beforeEach } from "bun:test"
+import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { LSPClient } from "../../src/lsp/client"
@@ -177,11 +178,30 @@ describe("LSPClient interop", () => {
 
     // Open the file, then delete it, then touch it again. The second open
     // should return false (nothing sent) and clean up local state.
+    const sent: { method: string; params: any }[] = []
+    const conn = client.connection as typeof client.connection & {
+      sendNotification: (method: string, params: any) => Promise<void>
+    }
+    const orig = conn.sendNotification.bind(conn)
+    conn.sendNotification = ((method: string, params: any) => {
+      sent.push({ method, params })
+      return orig(method, params)
+    }) as typeof conn.sendNotification
+
     await client.notify.open({ path: file })
-    await Bun.file(file).unlink?.()
+    sent.length = 0
+    await fs.unlink(file)
 
     const afterDelete = await client.notify.open({ path: file })
     expect(afterDelete).toBe(false)
+    expect(sent.some((item) => item.method === "textDocument/didClose")).toBe(true)
+    expect(
+      sent.some(
+        (item) =>
+          item.method === "workspace/didChangeWatchedFiles" &&
+          item.params?.changes?.some((change: { type: number }) => change.type === 3),
+      ),
+    ).toBe(true)
 
     await client.shutdown()
   })

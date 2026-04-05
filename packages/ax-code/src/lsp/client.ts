@@ -319,7 +319,7 @@ export namespace LSPClient {
               .exists()
               .catch(() => false)
             if (!exists) {
-              await result.notify.close({ path: input.path })
+              await result.notify.close({ path: input.path, deleted: true })
               return false
             }
           }
@@ -421,7 +421,7 @@ export namespace LSPClient {
           await wait
           return true
         },
-        async close(input: { path: string }) {
+        async close(input: { path: string; deleted?: boolean }) {
           const normalized = path.isAbsolute(input.path)
             ? input.path
             : path.resolve(Instance.directory, input.path)
@@ -439,6 +439,21 @@ export namespace LSPClient {
               // Server may be dead or unresponsive. We still want to
               // clean up local state.
             })
+          if (input.deleted) {
+            await connection
+              .sendNotification("workspace/didChangeWatchedFiles", {
+                changes: [
+                  {
+                    uri: pathToFileURL(normalized).href,
+                    type: 3, // Deleted
+                  },
+                ],
+              })
+              .catch(() => {
+                // Same policy as didClose: deletion signal is best-effort,
+                // local cleanup still wins if the server is already gone.
+              })
+          }
           delete files[normalized]
           delete lastContent[normalized]
           diagnostics.delete(normalized)

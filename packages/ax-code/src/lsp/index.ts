@@ -401,10 +401,10 @@ export namespace LSP {
   // diagnostics). Used when a file is deleted, renamed, or no longer relevant
   // to the current task. Safe to call on files that were never opened — each
   // client short-circuits non-matching paths.
-  export async function closeFile(input: string) {
+  export async function closeFile(input: string, deleted = false) {
     log.info("closing file", { file: input })
     const s = await state()
-    await Promise.all(s.clients.map((client) => client.notify.close({ path: input }))).catch((err) => {
+    await Promise.all(s.clients.map((client) => client.notify.close({ path: input, deleted }))).catch((err) => {
       log.error("failed to close file", { err, file: input })
     })
   }
