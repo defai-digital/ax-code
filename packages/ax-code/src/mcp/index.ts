@@ -261,6 +261,19 @@ export namespace MCP {
     },
   )
 
+  // MCP identifiers (client name, tool name, prompt name, resource
+  // name) can contain characters that aren't valid in the registry
+  // keys the agent layer expects — slashes, spaces, colons, etc. We
+  // replace every non-alphanumeric / non-underscore / non-hyphen
+  // byte with `_`. The rule must be identical for tools, prompts,
+  // and resources: if it drifts, a prompt's lookup key stops
+  // matching the client's registration and the feature silently
+  // breaks. Extracted so the rule has exactly one definition.
+  // See issue #14.
+  function sanitize(name: string): string {
+    return name.replace(/[^a-zA-Z0-9_-]/g, "_")
+  }
+
   // Helper function to fetch prompts for a specific client
   async function fetchPromptsForClient(clientName: string, client: Client) {
     const prompts = await client.listPrompts().catch((e) => {
@@ -275,9 +288,7 @@ export namespace MCP {
     const commands: Record<string, PromptInfo & { client: string }> = {}
 
     for (const prompt of prompts.prompts) {
-      const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
-      const sanitizedPromptName = prompt.name.replace(/[^a-zA-Z0-9_-]/g, "_")
-      const key = sanitizedClientName + ":" + sanitizedPromptName
+      const key = sanitize(clientName) + ":" + sanitize(prompt.name)
 
       commands[key] = { ...prompt, client: clientName }
     }
@@ -297,9 +308,7 @@ export namespace MCP {
     const commands: Record<string, ResourceInfo & { client: string }> = {}
 
     for (const resource of resources.resources) {
-      const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
-      const sanitizedResourceName = resource.name.replace(/[^a-zA-Z0-9_-]/g, "_")
-      const key = sanitizedClientName + ":" + sanitizedResourceName
+      const key = sanitize(clientName) + ":" + sanitize(resource.name)
 
       commands[key] = { ...resource, client: clientName }
     }
@@ -706,9 +715,7 @@ export namespace MCP {
         const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
         const timeout = entry?.timeout ?? defaultTimeout
         for (const mcpTool of toolsResult.tools) {
-          const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
-          const sanitizedToolName = mcpTool.name.replace(/[^a-zA-Z0-9_-]/g, "_")
-          result[sanitizedClientName + "_" + sanitizedToolName] = await convertMcpTool(mcpTool, client, timeout)
+          result[sanitize(clientName) + "_" + sanitize(mcpTool.name)] = await convertMcpTool(mcpTool, client, timeout)
         }
       }
       cachedTools = result

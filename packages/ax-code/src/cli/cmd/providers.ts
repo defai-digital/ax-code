@@ -79,6 +79,35 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
       prompts.log.info("Go to: " + authorize.url)
     }
 
+    // Shared between the "auto" and "code" branches below. The two
+    // branches used to carry byte-identical credential-saving logic;
+    // when the "refresh" path gained a new discriminator field the
+    // change had to be mirrored in both blocks and one lagged for a
+    // release. Keep the divergent UI feedback (spinner vs log) at
+    // the call sites, everything else lives here. See issue #15.
+    async function saveAuthResult(
+      result: Extract<Awaited<ReturnType<typeof authorize.callback>>, { type: "success" }>,
+    ) {
+      const saveProvider = result.provider ?? provider
+      if ("refresh" in result) {
+        const { type: _, provider: __, refresh, access, expires, ...extraFields } = result
+        await Auth.set(saveProvider, {
+          type: "oauth",
+          refresh,
+          access,
+          expires,
+          ...extraFields,
+        })
+        return
+      }
+      if ("key" in result) {
+        await Auth.set(saveProvider, {
+          type: "api",
+          key: result.key,
+        })
+      }
+    }
+
     if (authorize.method === "auto") {
       if (authorize.instructions) {
         prompts.log.info(authorize.instructions)
@@ -90,23 +119,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
         spinner.stop("Failed to authorize", 1)
       }
       if (result.type === "success") {
-        const saveProvider = result.provider ?? provider
-        if ("refresh" in result) {
-          const { type: _, provider: __, refresh, access, expires, ...extraFields } = result
-          await Auth.set(saveProvider, {
-            type: "oauth",
-            refresh,
-            access,
-            expires,
-            ...extraFields,
-          })
-        }
-        if ("key" in result) {
-          await Auth.set(saveProvider, {
-            type: "api",
-            key: result.key,
-          })
-        }
+        await saveAuthResult(result)
         spinner.stop("Login successful")
       }
     }
@@ -122,23 +135,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
         prompts.log.error("Failed to authorize")
       }
       if (result.type === "success") {
-        const saveProvider = result.provider ?? provider
-        if ("refresh" in result) {
-          const { type: _, provider: __, refresh, access, expires, ...extraFields } = result
-          await Auth.set(saveProvider, {
-            type: "oauth",
-            refresh,
-            access,
-            expires,
-            ...extraFields,
-          })
-        }
-        if ("key" in result) {
-          await Auth.set(saveProvider, {
-            type: "api",
-            key: result.key,
-          })
-        }
+        await saveAuthResult(result)
         prompts.log.success("Login successful")
       }
     }
@@ -406,7 +403,13 @@ export const ProvidersLoginCommand = cmd({
           provider = selected as string
         }
 
-        const plugin = await Plugin.list().then((x) => x.findLast((x) => x.auth?.provider === provider))
+        // Cache the plugin list once for this login flow. Both the
+        // initial provider lookup and the custom-provider fallback
+        // iterate the same set; no plugin can be installed between
+        // the two calls, so a re-read would just repeat the
+        // filesystem scan. See issue #16.
+        const plugins = await Plugin.list()
+        const plugin = plugins.findLast((x) => x.auth?.provider === provider)
         if (plugin && plugin.auth) {
           const handled = await handlePluginAuth({ auth: plugin.auth }, provider, args.method)
           if (handled) return
@@ -420,7 +423,7 @@ export const ProvidersLoginCommand = cmd({
           if (prompts.isCancel(custom)) throw new UI.CancelledError()
           provider = custom.replace(/^@ai-sdk\//, "")
 
-          const customPlugin = await Plugin.list().then((x) => x.findLast((x) => x.auth?.provider === provider))
+          const customPlugin = plugins.findLast((x) => x.auth?.provider === provider)
           if (customPlugin && customPlugin.auth) {
             const handled = await handlePluginAuth({ auth: customPlugin.auth }, provider, args.method)
             if (handled) return

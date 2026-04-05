@@ -40,6 +40,14 @@ import { Process } from "@/util/process"
 import { Lock } from "@/util/lock"
 import * as ConfigSchema from "./schema"
 
+// Single source of truth for the public config schema URL. Written
+// into every user's ax-code.json on first load, into legacy-TOML
+// migrations, and into remote wellknown configs that omit `$schema`.
+// Used to be copy-pasted in 4 places — a domain rename or versioning
+// change would have missed at least one site and persisted wrong
+// schema URLs into random users' configs. See issue #17.
+const CONFIG_SCHEMA_URL = "https://ax-code.ai/config.json"
+
 export namespace Config {
 
   const log = Log.create({ service: "config" })
@@ -122,7 +130,7 @@ export namespace Config {
         const wellknown = (await response.json()) as Record<string, unknown>
         const remoteConfig = (wellknown.config ?? {}) as Record<string, unknown>
         // Add $schema to prevent load() from trying to write back to a non-existent file
-        if (!remoteConfig.$schema) remoteConfig.$schema = "https://ax-code.ai/config.json"
+        if (!remoteConfig.$schema) remoteConfig.$schema = CONFIG_SCHEMA_URL
         // Remote well-known configs are untrusted by definition: a
         // compromised or typosquatted `.well-known/ax-code` endpoint
         // could otherwise embed `{file:/etc/shadow}` and exfiltrate
@@ -677,7 +685,7 @@ export namespace Config {
         .then(async (mod) => {
           const { provider, model, ...rest } = mod.default
           if (provider && model) result.model = `${provider}/${model}`
-          result["$schema"] = "https://ax-code.ai/config.json"
+          result["$schema"] = CONFIG_SCHEMA_URL
           result = mergeDeep(result, rest)
           await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
           await fs.unlink(legacy)
@@ -734,8 +742,8 @@ export namespace Config {
     const parsed = Info.safeParse(normalized)
     if (parsed.success) {
       if (!parsed.data.$schema && isFile) {
-        parsed.data.$schema = "https://ax-code.ai/config.json"
-        const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://ax-code.ai/config.json",')
+        parsed.data.$schema = CONFIG_SCHEMA_URL
+        const updated = original.replace(/^\s*\{/, `{\n  "$schema": "${CONFIG_SCHEMA_URL}",`)
         // Log write failures — a silent `.catch(() => {})` leaves the
         // user staring at a config that keeps getting "$schema" added
         // on every load but never persisted (e.g. permission denied).

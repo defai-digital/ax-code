@@ -10,6 +10,8 @@ import { Config } from "../../config/config"
 import { Installation } from "../../installation"
 import { Global } from "../../global"
 import { Flag } from "../../flag/flag"
+import { Auth } from "../../auth"
+import { ModelsDev } from "../../provider/models"
 import path from "path"
 
 export const DoctorCommand: CommandModule = {
@@ -68,26 +70,65 @@ export const DoctorCommand: CommandModule = {
       })
     }
 
-    // 6. API keys
-    const keyChecks: [string, string][] = [
-      ["GOOGLE_GENERATIVE_AI_API_KEY", "Google"],
-      ["XAI_API_KEY", "XAI/Grok"],
-      ["GROQ_API_KEY", "Groq"],
-    ]
-
-    let hasKey = false
-    for (const [env, name] of keyChecks) {
-      if (process.env[env]) {
-        checks.push({ name: `${name} API key`, status: "ok", detail: `${env} is set` })
-        hasKey = true
+    // 6. API keys — combine `ax-code providers login` entries (auth.json)
+    // with environment variable fallbacks. Previously we only checked
+    // three hardcoded env vars (GOOGLE_GENERATIVE_AI_API_KEY, XAI_API_KEY,
+    // GROQ_API_KEY) and ignored auth.json entirely, so users who set up
+    // credentials via `ax-code providers login` saw a spurious
+    // "No API keys found in environment" warning on every doctor run.
+    // The env list is now derived from models.dev (one line per provider
+    // in the bundled snapshot) so new providers are picked up
+    // automatically and doctor stays in sync with the rest of the app.
+    // See issue #18.
+    const stored: string[] = []
+    try {
+      const auth = await Auth.all()
+      for (const [providerID, info] of Object.entries(auth)) {
+        // Every stored credential counts — api keys, oauth refresh
+        // tokens, and wellknown configs all unlock a provider.
+        if (info.type === "api" || info.type === "oauth" || info.type === "wellknown") {
+          stored.push(providerID)
+        }
       }
+    } catch {
+      // auth.json might not exist on a fresh install — that's fine,
+      // we just proceed with the env var check.
     }
 
-    if (!hasKey) {
+    const envKeys: { env: string; provider: string }[] = []
+    try {
+      const modelsDev = await ModelsDev.get()
+      const seenEnv = new Set<string>()
+      for (const provider of Object.values(modelsDev)) {
+        for (const env of provider.env ?? []) {
+          if (seenEnv.has(env)) continue
+          seenEnv.add(env)
+          if (process.env[env]) envKeys.push({ env, provider: provider.name })
+        }
+      }
+    } catch {
+      // models.dev snapshot failed to load — degrade to no env check
+      // rather than crashing the whole doctor report.
+    }
+
+    if (stored.length > 0 || envKeys.length > 0) {
+      const parts: string[] = []
+      if (stored.length > 0) {
+        parts.push(`${stored.length} stored (${stored.sort().join(", ")})`)
+      }
+      if (envKeys.length > 0) {
+        parts.push(`${envKeys.length} in environment (${envKeys.map((k) => k.env).join(", ")})`)
+      }
+      checks.push({
+        name: "API keys",
+        status: "ok",
+        detail: parts.join(" + "),
+      })
+    } else {
       checks.push({
         name: "API keys",
         status: "warn",
-        detail: "No API keys found in environment. Set at least one (e.g., GOOGLE_GENERATIVE_AI_API_KEY)",
+        detail: "No API keys found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY)",
       })
     }
 
