@@ -22,6 +22,54 @@ export namespace LSP {
   const RPC_TIMEOUT_MS = 5_000
   const RPC_TIMEOUT_LONG_MS = 15_000
 
+  // Exponential backoff for broken servers. A server that fails to spawn or
+  // initialize is marked broken and skipped until nextAttempt. After the
+  // cooldown expires the entry is dropped and the next getClients() call will
+  // retry the spawn. Failures compound the backoff to avoid hammering a
+  // server that is genuinely unrecoverable (missing binary, bad config).
+  //   attempt 1 failure →  30s
+  //   attempt 2 failure →   2m
+  //   attempt 3 failure →   8m
+  //   attempt 4 failure →  32m
+  //   attempt 5+ failure →  60m (capped)
+  const BROKEN_BACKOFF_BASE_MS = 30_000
+  const BROKEN_BACKOFF_MAX_MS = 60 * 60 * 1000
+
+  function computeBackoff(failures: number): number {
+    const raw = BROKEN_BACKOFF_BASE_MS * Math.pow(4, failures - 1)
+    return Math.min(raw, BROKEN_BACKOFF_MAX_MS)
+  }
+
+  export type BrokenEntry = {
+    failures: number
+    nextAttempt: number
+  }
+
+  // Check whether a (root, server) key is currently in cooldown. If the
+  // cooldown has expired we eagerly drop the entry so the next caller can
+  // retry a fresh spawn. The caller tracks failure count across retries so
+  // backoff compounds on repeat failures.
+  function isBroken(broken: Map<string, BrokenEntry>, key: string): boolean {
+    const entry = broken.get(key)
+    if (!entry) return false
+    if (Date.now() >= entry.nextAttempt) {
+      broken.delete(key)
+      return false
+    }
+    return true
+  }
+
+  function markBroken(broken: Map<string, BrokenEntry>, key: string) {
+    const existing = broken.get(key)
+    const failures = (existing?.failures ?? 0) + 1
+    const backoffMs = computeBackoff(failures)
+    broken.set(key, {
+      failures,
+      nextAttempt: Date.now() + backoffMs,
+    })
+    log.info("lsp server marked broken", { key, failures, backoffMs })
+  }
+
   export const Event = {
     Updated: BusEvent.define("lsp.updated", z.object({})),
   }
@@ -93,7 +141,7 @@ export namespace LSP {
       if (cfg.lsp === false) {
         log.info("all LSPs are disabled")
         return {
-          broken: new Set<string>(),
+          broken: new Map<string, BrokenEntry>(),
           servers,
           clients,
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
@@ -140,7 +188,7 @@ export namespace LSP {
       })
 
       return {
-        broken: new Set<string>(),
+        broken: new Map<string, BrokenEntry>(),
         servers,
         clients,
         spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
@@ -191,11 +239,11 @@ export namespace LSP {
       const handle = await server
         .spawn(root)
         .then((value) => {
-          if (!value) s.broken.add(key)
+          if (!value) markBroken(s.broken, key)
           return value
         })
         .catch((err) => {
-          s.broken.add(key)
+          markBroken(s.broken, key)
           log.error(`Failed to spawn LSP server ${server.id}`, { error: err })
           return undefined
         })
@@ -208,7 +256,7 @@ export namespace LSP {
         server: handle,
         root,
       }).catch(async (err) => {
-        s.broken.add(key)
+        markBroken(s.broken, key)
         await Process.stop(handle.process)
         log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
         return undefined
@@ -240,7 +288,7 @@ export namespace LSP {
       const root = await server.root(file)
       if (!root) continue
       const key = root + server.id
-      if (s.broken.has(key)) continue
+      if (isBroken(s.broken, key)) continue
 
       const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
       if (match) {
@@ -288,7 +336,7 @@ export namespace LSP {
       if (server.extensions.length && !server.extensions.includes(extension)) continue
       const root = await server.root(file)
       if (!root) continue
-      if (s.broken.has(root + server.id)) continue
+      if (isBroken(s.broken, root + server.id)) continue
       return true
     }
     return false
@@ -320,6 +368,19 @@ export namespace LSP {
     await Promise.all(s.clients.map((client) => client.notify.close({ path: input }))).catch((err) => {
       log.error("failed to close file", { err, file: input })
     })
+  }
+
+  // Manually clear the broken-server cooldown map. The next getClients() call
+  // for a previously-broken (root, server) pair will attempt a fresh spawn.
+  // Use this after fixing a server binary, editing LSP config, or any other
+  // manual intervention that would make retry pointful. Returns the number
+  // of entries that were cleared.
+  export async function resetBroken() {
+    const s = await state()
+    const count = s.broken.size
+    s.broken.clear()
+    log.info("reset broken lsp servers", { count })
+    return count
   }
 
   export async function diagnostics() {
