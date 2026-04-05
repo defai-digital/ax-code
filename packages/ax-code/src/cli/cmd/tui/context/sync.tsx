@@ -72,10 +72,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       // refactor plans they haven't applied yet. `plans` holds a
       // short preview list used by the `/plans` slash command dialog.
       //
+      // `toolCount` and `graph` (v2.3.6) drive the sidebar DRE empty
+      // state so users can tell at a glance whether DRE is ready to
+      // use. A non-zero `toolCount` with `graph.nodeCount === 0` means
+      // "DRE is enabled but the code graph hasn't been indexed yet,
+      // so tool results will be empty" — a distinct failure mode from
+      // plain "DRE is off".
+      //
       // When AX_CODE_EXPERIMENTAL_DEBUG_ENGINE is off, the server
-      // returns `{ count: 0, plans: [] }` unconditionally, so this
-      // store field stays silent without any branching on the flag
-      // in the TUI layer.
+      // returns zero counts unconditionally, so this store field
+      // stays silent without any branching on the flag in the TUI
+      // layer.
       debugEngine: {
         pendingPlans: number
         plans: Array<{
@@ -87,6 +94,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           affectedSymbolCount: number
           timeCreated: number
         }>
+        toolCount: number
+        graph: {
+          nodeCount: number
+          edgeCount: number
+          lastIndexedAt: number | null
+        }
       }
       mcp: {
         [key: string]: McpStatus
@@ -120,7 +133,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       message: {},
       part: {},
       lsp: [],
-      debugEngine: { pendingPlans: 0, plans: [] },
+      debugEngine: {
+        pendingPlans: 0,
+        plans: [],
+        toolCount: 0,
+        graph: { nodeCount: 0, edgeCount: 0, lastIndexedAt: null },
+      },
       mcp: {},
       mcp_resource: {},
       formatter: [],
@@ -142,7 +160,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     // the route is new in v2.3.1 and the generated SDK client hasn't
     // been regenerated yet. Wrapped in a try/catch so a server without
     // the endpoint (older peer) silently returns zero plans rather
-    // than logging errors every poll.
+    // than logging errors every poll. The `toolCount` / `graph` fields
+    // were added in v2.3.6 and default to zero if the server is an
+    // older peer that doesn't send them.
     async function syncDebugEngine() {
       try {
         const headers: Record<string, string> = { accept: "application/json" }
@@ -166,8 +186,22 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             affectedSymbolCount: number
             timeCreated: number
           }>
+          toolCount?: number
+          graph?: {
+            nodeCount: number
+            edgeCount: number
+            lastIndexedAt: number | null
+          }
         }
-        setStore("debugEngine", reconcile({ pendingPlans: body.count, plans: body.plans }))
+        setStore(
+          "debugEngine",
+          reconcile({
+            pendingPlans: body.count,
+            plans: body.plans,
+            toolCount: body.toolCount ?? 0,
+            graph: body.graph ?? { nodeCount: 0, edgeCount: 0, lastIndexedAt: null },
+          }),
+        )
       } catch {
         // Silent fallback — an older server returns 404 and we leave
         // the field at its default zero state.

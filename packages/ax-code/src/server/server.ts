@@ -2,7 +2,6 @@ import { Log } from "../util/log"
 import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler } from "hono-openapi"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
-import { proxy } from "hono/proxy"
 import { basicAuth } from "hono/basic-auth"
 import path from "path"
 import z from "zod"
@@ -10,6 +9,7 @@ import { Provider } from "../provider/provider"
 import { NamedError } from "@ax-code/util/error"
 import { LSP } from "../lsp"
 import { DebugEngine } from "../debug-engine"
+import { CodeIntelligence } from "../code-intelligence"
 import { Format } from "../format"
 import { TuiRoutes } from "./routes/tui"
 import { Instance } from "../project/instance"
@@ -476,17 +476,6 @@ export namespace Server {
 
             if (input.startsWith("http://localhost:")) return input
             if (input.startsWith("http://127.0.0.1:")) return input
-            if (
-              input === "tauri://localhost" ||
-              input === "http://tauri.localhost" ||
-              input === "https://tauri.localhost"
-            )
-              return input
-
-            // *.ax-code.ai (https only, adjust if needed)
-            if (/^https:\/\/([a-z0-9-]+\.)*(ax-code|opencode)\.ai$/.test(input)) {
-              return input
-            }
             if (opts?.cors?.includes(input)) {
               return input
             }
@@ -1024,13 +1013,13 @@ export namespace Server {
       .get(
         "/debug-engine/pending-plans",
         describeRoute({
-          summary: "List pending DRE refactor plans",
+          summary: "DRE status and pending refactor plans",
           description:
-            "Return pending refactor plans for the current project. Used by the TUI footer to surface unfinished refactor work. Returns an empty list when the experimental DRE flag is off so callers can poll unconditionally.",
+            "Return the current project's pending refactor plans plus DRE health information (graph node count, last-indexed timestamp, registered tool count). The TUI footer uses the plans count for its chip; the TUI sidebar uses the graph and tool fields to render the DRE section empty state so users can tell at a glance whether DRE is ready to use. Fields default to zero / null when the experimental DRE flag is off, so callers can poll unconditionally. The `graph` and `toolCount` fields were added in v2.3.6 — older clients ignore unknown fields and continue to work against the original `{ count, plans }` shape.",
           operationId: "debugEngine.pendingPlans",
           responses: {
             200: {
-              description: "Pending refactor plan summary",
+              description: "DRE status + pending refactor plans",
               content: {
                 "application/json": {
                   schema: resolver(
@@ -1047,6 +1036,13 @@ export namespace Server {
                           timeCreated: z.number(),
                         }),
                       ),
+                      // v2.3.6 additions — surface DRE readiness in the TUI sidebar.
+                      toolCount: z.number(),
+                      graph: z.object({
+                        nodeCount: z.number(),
+                        edgeCount: z.number(),
+                        lastIndexedAt: z.number().nullable(),
+                      }),
                     }),
                   ),
                 },
@@ -1056,12 +1052,26 @@ export namespace Server {
         }),
         async (c) => {
           // Silent no-op when the flag is off so the TUI can poll
-          // unconditionally without branching on flag state.
+          // unconditionally without branching on flag state. The v2.3.6
+          // fields (`toolCount`, `graph`) default to zero / null so the
+          // sidebar renders a coherent "DRE disabled" empty state
+          // without any flag branching on the client.
           if (!Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE) {
-            return c.json({ count: 0, plans: [] })
+            return c.json({
+              count: 0,
+              plans: [],
+              toolCount: 0,
+              graph: { nodeCount: 0, edgeCount: 0, lastIndexedAt: null },
+            })
           }
           const projectID = Instance.project.id
           const plans = DebugEngine.listPlans(projectID, { status: "pending", limit: 25 })
+          // DRE ships exactly six tools today. Hard-coding matches the
+          // registry wiring at tool/registry.ts — if a tool is added
+          // or removed, update this count alongside the registry
+          // change so the sidebar stays accurate.
+          const DRE_TOOL_COUNT = 6
+          const graph = CodeIntelligence.status(projectID)
           return c.json({
             count: plans.length,
             plans: plans.map((p) => ({
@@ -1075,6 +1085,12 @@ export namespace Server {
               affectedSymbolCount: p.affectedSymbols.length,
               timeCreated: p.explain.indexedAt,
             })),
+            toolCount: DRE_TOOL_COUNT,
+            graph: {
+              nodeCount: graph.nodeCount,
+              edgeCount: graph.edgeCount,
+              lastIndexedAt: graph.lastUpdated,
+            },
           })
         },
       )
@@ -1099,22 +1115,6 @@ export namespace Server {
           return c.json(await Format.status())
         },
       )
-      .all("/*", async (c) => {
-        const path = c.req.path
-
-        const response = await proxy(`https://app.ax-code.ai${path}`, {
-          ...c.req,
-          headers: {
-            ...c.req.raw.headers,
-            host: "app.ax-code.ai",
-          },
-        })
-        response.headers.set(
-          "Content-Security-Policy",
-          "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
-        )
-        return response
-      })
   }
 
   export async function openapi() {

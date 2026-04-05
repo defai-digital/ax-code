@@ -243,12 +243,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             {/* Debugging & Refactoring Engine section. Mirrors the LSP
                 section's pattern (always visible heading, fallback text
                 when empty, expand/collapse at >2 items) so users can
-                tell at a glance that DRE is active. Gated on the
-                experimental flag — when the flag is off, no section
-                appears. The server returns plans=[] unconditionally
-                when the flag is off, so the fallback text here only
-                ever renders when DRE is enabled but no plans exist
-                yet. See PRD-debug-refactor-engine-ui-tier-3.md. */}
+                tell at a glance whether DRE is ready to use. Gated on
+                the experimental flag — when the flag is off, no
+                section appears. The server returns zero counts when
+                the flag is off, so the inner state branches here are
+                never reached in the "flag off" case. The empty-state
+                layout shows tool count, graph readiness, and a
+                discoverability hint pointing at the DRE slash
+                commands. See PRD-debug-refactor-engine-ui-tier-3.md
+                §6.9 for the design rationale. */}
             <Show when={Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE}>
               <box>
                 <box
@@ -266,9 +269,58 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   </text>
                 </box>
                 <Show when={sync.data.debugEngine.plans.length <= 2 || expanded.dre}>
+                  {/* Empty state: no pending refactor plans. Show
+                      readiness facts instead of just "DRE is active",
+                      so users can tell whether the tools will produce
+                      real results (graph indexed) or empty ones
+                      (graph not indexed — run `ax-code index`). */}
                   <Show when={sync.data.debugEngine.plans.length === 0}>
-                    <text fg={theme.textMuted}>No pending plans · DRE is active</text>
+                    {/* Row 1: tool count. Dot is green when tools
+                        registered, muted otherwise. Zero toolCount
+                        means the server is an older peer that
+                        doesn't report this field; fall back to
+                        hiding the row rather than lying. */}
+                    <Show when={sync.data.debugEngine.toolCount > 0}>
+                      <box flexDirection="row" gap={1}>
+                        <text flexShrink={0} style={{ fg: theme.success }}>
+                          •
+                        </text>
+                        <text fg={theme.textMuted}>
+                          {sync.data.debugEngine.toolCount} tools ready
+                        </text>
+                      </box>
+                    </Show>
+                    {/* Row 2: graph readiness. Green dot + symbol
+                        count when indexed, warning dot + "not
+                        indexed" when empty. This is the honest
+                        signal that distinguishes "DRE works" from
+                        "DRE is loaded but will return empty
+                        results". */}
+                    <box flexDirection="row" gap={1}>
+                      <text
+                        flexShrink={0}
+                        style={{
+                          fg:
+                            sync.data.debugEngine.graph.nodeCount > 0
+                              ? theme.success
+                              : theme.warning,
+                        }}
+                      >
+                        •
+                      </text>
+                      <text fg={theme.textMuted}>
+                        {sync.data.debugEngine.graph.nodeCount > 0
+                          ? `${sync.data.debugEngine.graph.nodeCount.toLocaleString()} symbols indexed`
+                          : "graph not indexed · run `ax-code index`"}
+                      </text>
+                    </box>
+                    {/* Row 3: discoverability hint. Points at the
+                        slash commands shipped in v2.3.1. Users who
+                        see the section but don't know what to type
+                        get a concrete next step. */}
+                    <text fg={theme.textMuted}>Try /debug /refactor /impact</text>
                   </Show>
+                  {/* Non-empty state: per-plan rows unchanged from v2.3.3. */}
                   <For each={sync.data.debugEngine.plans}>
                     {(plan) => (
                       <box flexDirection="row" gap={1}>
