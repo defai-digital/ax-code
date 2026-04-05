@@ -84,6 +84,7 @@ The important distinction is that `ax-code` is not just a chat UI. It is a runti
 - agent routing, planning, and dependency-ordered execution
 - tool execution, MCP integrations, LSP, and a persistent code graph (Code Intelligence, v2.2)
 - the **Debugging & Refactoring Engine** (DRE, v2.3) — deterministic-first root-cause analysis, duplicate and hardcode detection, change-impact analysis, and shadow-worktree-validated refactors
+- **incremental indexing** (v2.4) — content-hash skip on unchanged files, orphan purge on deleted files, per-file progress reporting
 - session, memory, and storage state with replay, audit, and snapshot trails
 - sandbox, permission, and policy boundaries
 - provider abstraction across hosted and local inference
@@ -226,17 +227,33 @@ AX Code talks to real language servers — the same ones your IDE uses.
 
 Supports TypeScript, Python (Pyright), Go (gopls), Rust (rust-analyzer), Ruby (Solargraph), C/C++ (clangd), and more.
 
-### 25+ Built-in Tools
+### Code Intelligence Graph
 
-| Category            | Tools                                                               |
-| ------------------- | ------------------------------------------------------------------- |
-| **File operations** | read, write, edit, glob, ls, multiedit                              |
-| **Code search**     | grep (regex), codesearch (web), websearch                           |
-| **Shell execution** | bash (with timeout and sandboxing), pty (interactive)               |
-| **LSP queries**     | definition, references, hover, symbols, call hierarchy, diagnostics |
-| **Planning**        | task, todo, plan enter/exit                                         |
-| **Web**             | webfetch (URL to markdown), websearch                               |
-| **Batch**           | Parallel tool execution                                             |
+AX Code builds a persistent code graph from LSP data — symbols, call edges, and cross-file references stored in SQLite for instant queries.
+
+```bash
+ax-code index                # Populate the code intelligence graph
+ax-code index --concurrency 8  # Parallel indexing for large projects
+```
+
+**Incremental by default (v2.4).** Second runs skip unchanged files via content-hash matching — only modified files re-index. Deleted files are automatically purged from the graph. Progress shows per-file completion in real time.
+
+The graph powers tools like `code-intelligence` (symbol lookup, callers, callees), `impact_analyze` (change impact estimation), and `refactor_plan` (dependency-aware refactoring).
+
+### 35+ Built-in Tools
+
+| Category              | Tools                                                               |
+| --------------------- | ------------------------------------------------------------------- |
+| **File operations**   | read, write, edit, glob, ls, multiedit, apply_patch                 |
+| **Code search**       | grep (regex), codesearch (web), websearch                           |
+| **Shell execution**   | bash (with timeout and sandboxing)                                  |
+| **LSP queries**       | definition, references, hover, symbols, call hierarchy, diagnostics |
+| **Code intelligence** | code-intelligence (graph queries, symbol lookup, call graphs)       |
+| **DRE analysis**      | debug_analyze, dedup_scan, hardcode_scan, impact_analyze            |
+| **DRE refactoring**   | refactor_plan, refactor_apply (shadow-worktree-validated)           |
+| **Planning**          | task, todo, plan enter/exit, skill                                  |
+| **Web**               | webfetch (URL to markdown), websearch, exa-fetch                    |
+| **Batch**             | Parallel tool execution                                             |
 
 ### Session Persistence
 
@@ -474,10 +491,18 @@ ax-code memory warmup                # Pre-cache context
 ax-code mcp add                      # Add MCP server
 ax-code mcp list --discover          # Auto-detect servers
 
+# Code Intelligence
+ax-code index                        # Build code graph from LSP
+ax-code index --concurrency 8        # Parallel indexing
+
 # Analysis
 ax-code design-check src/            # Design violations
 ax-code context                      # Token usage & cost
 ax-code stats                        # Usage statistics
+ax-code doctor                       # System health check
+
+# Maintenance
+ax-code upgrade                      # Upgrade to latest version
 
 # Sessions
 ax-code session list                 # List sessions
@@ -491,13 +516,15 @@ ax-code export <sessionID>           # Export as JSON
 ```
 ax-code/
 ├── packages/
-│   ├── ax-code/           # Core CLI — agents, tools, providers, server
-│   ├── sdk/js/            # JavaScript/TypeScript SDK
-│   ├── plugin/            # Plugin system
-│   ├── ui/                # Shared UI components
-│   ├── util/              # Shared utilities
-│   └── script/            # Build & release scripts
-└── docs/                  # Documentation
+│   ├── ax-code/              # Core CLI — agents, tools, providers, server
+│   ├── sdk/                  # JavaScript/TypeScript SDK
+│   ├── plugin/               # Plugin system (@ax-code/plugin)
+│   ├── ui/                   # Shared UI components
+│   ├── util/                 # Shared utilities
+│   ├── script/               # Build & release scripts
+│   ├── integration-vscode/   # VS Code extension
+│   └── integration-github/   # GitHub Actions integration
+└── docs/                     # Documentation
 ```
 
 ---
