@@ -228,12 +228,19 @@ export namespace LSP {
       return client
     }
 
+    // Pass 1: classify each server-for-this-file and collect pending promises.
+    // Servers that already have a client land in `result` directly. Servers
+    // currently being spawned reuse the inflight promise. New spawns go into
+    // `pending` and are awaited in parallel in pass 2.
+    const pending: { key: string; task: Promise<LSPClient.Info | undefined>; fresh: boolean }[] = []
+
     for (const server of Object.values(s.servers)) {
       if (server.extensions.length && !server.extensions.includes(extension)) continue
 
       const root = await server.root(file)
       if (!root) continue
-      if (s.broken.has(root + server.id)) continue
+      const key = root + server.id
+      if (s.broken.has(key)) continue
 
       const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
       if (match) {
@@ -241,28 +248,34 @@ export namespace LSP {
         continue
       }
 
-      const inflight = s.spawning.get(root + server.id)
+      const inflight = s.spawning.get(key)
       if (inflight) {
-        const client = await inflight
-        if (!client) continue
-        result.push(client)
+        // Reuse the in-flight promise from a concurrent caller. Don't mark
+        // it `fresh` — the originating call will emit the Updated event.
+        pending.push({ key, task: inflight, fresh: false })
         continue
       }
 
-      const task = schedule(server, root, root + server.id)
-      s.spawning.set(root + server.id, task)
-
+      const task = schedule(server, root, key)
+      s.spawning.set(key, task)
       task.finally(() => {
-        if (s.spawning.get(root + server.id) === task) {
-          s.spawning.delete(root + server.id)
+        if (s.spawning.get(key) === task) {
+          s.spawning.delete(key)
         }
       })
+      pending.push({ key, task, fresh: true })
+    }
 
-      const client = await task
-      if (!client) continue
-
-      result.push(client)
-      Bus.publish(Event.Updated, {})
+    // Pass 2: await all pending spawns in parallel. For a file that matches
+    // N servers this turns init time from O(Σ init) into O(max init).
+    if (pending.length > 0) {
+      const resolved = await Promise.all(pending.map((p) => p.task))
+      for (let i = 0; i < resolved.length; i++) {
+        const client = resolved[i]
+        if (!client) continue
+        result.push(client)
+        if (pending[i].fresh) Bus.publish(Event.Updated, {})
+      }
     }
 
     return result
