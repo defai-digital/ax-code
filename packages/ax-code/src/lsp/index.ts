@@ -11,9 +11,16 @@ import { Instance } from "../project/instance"
 import { Flag } from "@/flag/flag"
 import { Process } from "../util/process"
 import { spawn as lspspawn } from "./launch"
+import { withTimeout } from "../util/timeout"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
+
+  // Bound LSP RPC calls so a hung language server cannot block tool execution.
+  // Pointwise queries get a short budget; workspace-wide queries get a longer
+  // one because they may scan the entire project on first call.
+  const RPC_TIMEOUT_MS = 5_000
+  const RPC_TIMEOUT_LONG_MS = 15_000
 
   export const Event = {
     Updated: BusEvent.define("lsp.updated", z.object({})),
@@ -305,8 +312,8 @@ export namespace LSP {
 
   export async function hover(input: { file: string; line: number; character: number }) {
     return run(input.file, (client) => {
-      return client.connection
-        .sendRequest("textDocument/hover", {
+      return withTimeout(
+        client.connection.sendRequest("textDocument/hover", {
           textDocument: {
             uri: pathToFileURL(input.file).href,
           },
@@ -314,8 +321,9 @@ export namespace LSP {
             line: input.line,
             character: input.character,
           },
-        })
-        .catch(() => null)
+        }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => null)
     })
   }
 
@@ -361,10 +369,12 @@ export namespace LSP {
 
   export async function workspaceSymbol(query: string) {
     return runAll((client) =>
-      client.connection
-        .sendRequest("workspace/symbol", {
+      withTimeout(
+        client.connection.sendRequest("workspace/symbol", {
           query,
-        })
+        }),
+        RPC_TIMEOUT_LONG_MS,
+      )
         .then((result) => (result as LSP.Symbol[]).filter((x: LSP.Symbol) => kinds.includes(x.kind)))
         .then((result) => result.slice(0, 10))
         .catch(() => []),
@@ -374,13 +384,14 @@ export namespace LSP {
   export async function documentSymbol(uri: string) {
     const file = fileURLToPath(uri)
     return run(file, (client) =>
-      client.connection
-        .sendRequest("textDocument/documentSymbol", {
+      withTimeout(
+        client.connection.sendRequest("textDocument/documentSymbol", {
           textDocument: {
             uri,
           },
-        })
-        .catch(() => []),
+        }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => []),
     )
       .then((result) => result.flat() as (LSP.DocumentSymbol | LSP.Symbol)[])
       .then((result) => result.filter(Boolean))
@@ -388,72 +399,84 @@ export namespace LSP {
 
   export async function definition(input: { file: string; line: number; character: number }) {
     return run(input.file, (client) =>
-      client.connection
-        .sendRequest("textDocument/definition", {
+      withTimeout(
+        client.connection.sendRequest("textDocument/definition", {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
-        })
-        .catch(() => null),
+        }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => null),
     ).then((result) => result.flat().filter(Boolean))
   }
 
   export async function references(input: { file: string; line: number; character: number }) {
     return run(input.file, (client) =>
-      client.connection
-        .sendRequest("textDocument/references", {
+      withTimeout(
+        client.connection.sendRequest("textDocument/references", {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
           context: { includeDeclaration: true },
-        })
-        .catch(() => []),
+        }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => []),
     ).then((result) => result.flat().filter(Boolean))
   }
 
   export async function implementation(input: { file: string; line: number; character: number }) {
     return run(input.file, (client) =>
-      client.connection
-        .sendRequest("textDocument/implementation", {
+      withTimeout(
+        client.connection.sendRequest("textDocument/implementation", {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
-        })
-        .catch(() => null),
+        }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => null),
     ).then((result) => result.flat().filter(Boolean))
   }
 
   export async function prepareCallHierarchy(input: { file: string; line: number; character: number }) {
     return run(input.file, (client) =>
-      client.connection
-        .sendRequest("textDocument/prepareCallHierarchy", {
+      withTimeout(
+        client.connection.sendRequest("textDocument/prepareCallHierarchy", {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
-        })
-        .catch(() => []),
+        }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => []),
     ).then((result) => result.flat().filter(Boolean))
   }
 
   export async function incomingCalls(input: { file: string; line: number; character: number }) {
     return run(input.file, async (client) => {
-      const items = (await client.connection
-        .sendRequest("textDocument/prepareCallHierarchy", {
+      const items = (await withTimeout(
+        client.connection.sendRequest("textDocument/prepareCallHierarchy", {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
-        })
-        .catch(() => [])) as unknown[]
+        }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => [])) as unknown[]
       if (!items?.length) return []
-      return client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }).catch(() => [])
+      return withTimeout(
+        client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => [])
     }).then((result) => result.flat().filter(Boolean))
   }
 
   export async function outgoingCalls(input: { file: string; line: number; character: number }) {
     return run(input.file, async (client) => {
-      const items = (await client.connection
-        .sendRequest("textDocument/prepareCallHierarchy", {
+      const items = (await withTimeout(
+        client.connection.sendRequest("textDocument/prepareCallHierarchy", {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
-        })
-        .catch(() => [])) as unknown[]
+        }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => [])) as unknown[]
       if (!items?.length) return []
-      return client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }).catch(() => [])
+      return withTimeout(
+        client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }),
+        RPC_TIMEOUT_MS,
+      ).catch(() => [])
     }).then((result) => result.flat().filter(Boolean))
   }
 
