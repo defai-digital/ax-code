@@ -2,19 +2,19 @@ import { Log } from "@/util/log"
 
 export namespace State {
   interface Entry {
-    state: any
+    state: unknown
     dispose?: (state: any) => Promise<void>
   }
 
   const log = Log.create({ service: "state" })
-  const recordsByKey = new Map<string, Map<any, Entry>>()
+  const recordsByKey = new Map<string, Map<Function, Entry>>()
 
   export function create<S>(root: () => string, init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) {
     return () => {
       const key = root()
       let entries = recordsByKey.get(key)
       if (!entries) {
-        entries = new Map<string, Entry>()
+        entries = new Map<Function, Entry>()
         recordsByKey.set(key, entries)
       }
       const exists = entries.get(init)

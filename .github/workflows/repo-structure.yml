@@ -1,0 +1,55 @@
+name: repo-structure
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/repo-structure.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "script/**"
+      - "scripts/**"
+      - "docs/**"
+      - "github/**"
+      - "packages/**"
+      - "sdks/**"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/repo-structure.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "script/**"
+      - "scripts/**"
+      - "docs/**"
+      - "github/**"
+      - "packages/**"
+      - "sdks/**"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Check repo structure
+        run: pnpm run check:structure

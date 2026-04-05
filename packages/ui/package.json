@@ -6,6 +6,12 @@
   "exports": {
     "./package.json": "./package.json",
     "./*": "./src/components/*.tsx",
+    "./actions/*": "./src/components/actions/*.tsx",
+    "./forms/*": "./src/components/forms/*.tsx",
+    "./layout/*": "./src/components/layout/*.tsx",
+    "./navigation/*": "./src/components/navigation/*.tsx",
+    "./overlay/*": "./src/components/overlay/*.tsx",
+    "./status/*": "./src/components/status/*.tsx",
     "./i18n/*": "./src/i18n/*.ts",
     "./pierre": "./src/pierre/index.ts",
     "./pierre/*": "./src/pierre/*.ts",

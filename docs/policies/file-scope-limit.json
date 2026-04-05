@@ -1,0 +1,23 @@
+{
+  "version": "1",
+  "name": "file-scope-limit",
+  "rules": [
+    {
+      "agent": "build",
+      "tools": ["read", "write", "edit", "grep", "glob"],
+      "files": ["src/**", "test/**", "package.json", "tsconfig.json"],
+      "action": "allow"
+    },
+    {
+      "agent": "build",
+      "tools": ["bash"],
+      "action": "ask"
+    },
+    {
+      "agent": "build",
+      "tools": ["write", "edit"],
+      "files": ["**"],
+      "action": "deny"
+    }
+  ]
+}

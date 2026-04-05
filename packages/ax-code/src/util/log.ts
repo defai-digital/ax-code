@@ -23,15 +23,15 @@ export namespace Log {
   }
 
   export type Logger = {
-    debug(message?: any, extra?: Record<string, any>): void
-    info(message?: any, extra?: Record<string, any>): void
-    error(message?: any, extra?: Record<string, any>): void
-    warn(message?: any, extra?: Record<string, any>): void
+    debug(message?: unknown, extra?: Record<string, unknown>): void
+    info(message?: unknown, extra?: Record<string, unknown>): void
+    error(message?: unknown, extra?: Record<string, unknown>): void
+    warn(message?: unknown, extra?: Record<string, unknown>): void
     tag(key: string, value: string): Logger
     clone(): Logger
     time(
       message: string,
-      extra?: Record<string, any>,
+      extra?: Record<string, unknown>,
     ): {
       stop(): void
       [Symbol.dispose](): void
@@ -52,7 +52,7 @@ export namespace Log {
   export function file() {
     return logpath
   }
-  let write = (msg: any) => {
+  let write: (msg: string) => number | Promise<number> = (msg) => {
     process.stderr.write(msg)
     return msg.length
   }
@@ -67,14 +67,13 @@ export namespace Log {
     )
     await fs.truncate(logpath).catch(() => {})
     const stream = createWriteStream(logpath, { flags: "a" })
-    write = async (msg: any) => {
-      return new Promise((resolve, reject) => {
+    write = (msg: string) =>
+      new Promise<number>((resolve, reject) => {
         stream.write(msg, (err) => {
           if (err) reject(err)
           else resolve(msg.length)
         })
       })
-    }
   }
 
   async function cleanup(dir: string) {
@@ -85,7 +84,7 @@ export namespace Log {
     })
     if (files.length <= 5) return
 
-    const filesToDelete = files.slice(0, -10)
+    const filesToDelete = files.slice(0, -5)
     await Promise.all(filesToDelete.map((file) => fs.unlink(file).catch(() => {})))
   }
 
@@ -108,7 +107,7 @@ export namespace Log {
       }
     }
 
-    function build(message: any, extra?: Record<string, any>) {
+    function build(message: unknown, extra?: Record<string, unknown>) {
       const prefix = Object.entries({
         ...tags,
         ...extra,
@@ -127,22 +126,22 @@ export namespace Log {
       return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, message].filter(Boolean).join(" ") + "\n"
     }
     const result: Logger = {
-      debug(message?: any, extra?: Record<string, any>) {
+      debug(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("DEBUG")) {
           write("DEBUG " + build(message, extra))
         }
       },
-      info(message?: any, extra?: Record<string, any>) {
+      info(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("INFO")) {
           write("INFO  " + build(message, extra))
         }
       },
-      error(message?: any, extra?: Record<string, any>) {
+      error(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("ERROR")) {
           write("ERROR " + build(message, extra))
         }
       },
-      warn(message?: any, extra?: Record<string, any>) {
+      warn(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("WARN")) {
           write("WARN  " + build(message, extra))
         }

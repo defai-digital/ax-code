@@ -1,3 +1,5 @@
+import clojureWasm from "./assets/tree-sitter-clojure.wasm" with { type: "file" }
+
 export default {
   // NOTE: FOR markdown, javascript and typescript, we use the opentui built-in parsers
   // Warn: when taking queries from the nvim-treesitter repo, make sure to include the query dependencies as well
@@ -241,8 +243,11 @@ export default {
     },
     {
       filetype: "clojure",
-      // temporarily using fork to fix issues
-      wasm: "https://github.com/anomalyco/tree-sitter-clojure/releases/download/v0.0.1/tree-sitter-clojure.wasm",
+      // Vendored WASM — originally sourced from anomalyco/tree-sitter-clojure v0.0.1
+      // (a fork of sogaiu/tree-sitter-clojure which ships no releases). The binary is
+      // committed at packages/ax-code/assets/tree-sitter-clojure.wasm and embedded
+      // into the built binary via Bun's file import.
+      wasm: clojureWasm,
       queries: {
         highlights: [
           "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/clojure/highlights.scm",

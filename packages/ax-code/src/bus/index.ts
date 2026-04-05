@@ -17,7 +17,7 @@ export namespace Bus {
 
   const state = Instance.state(
     () => {
-      const subscriptions = new Map<any, Subscription[]>()
+      const subscriptions = new Map<string, Subscription[]>()
 
       return {
         subscriptions,

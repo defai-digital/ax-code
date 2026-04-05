@@ -1,17 +1,4 @@
-import {
-  Component,
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  onMount,
-  Show,
-  Switch,
-  onCleanup,
-  Index,
-  type JSX,
-} from "solid-js"
+import { Component, createEffect, createMemo, createSignal, For, Match, Show, Switch, Index, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import stripAnsi from "strip-ansi"
 import { Dynamic } from "solid-js/web"
@@ -32,7 +19,7 @@ import {
 import { useData } from "../context"
 import { useFileComponent } from "../context/file"
 import { useDialog } from "../context/dialog"
-import { type UiI18n, useI18n } from "../context/i18n"
+import { useI18n } from "../context/i18n"
 import { BasicTool, GenericTool } from "./basic-tool"
 import { Accordion } from "./accordion"
 import { StickyAccordionHeader } from "./sticky-accordion-header"
@@ -50,83 +37,30 @@ import { checksum } from "@ax-code/util/encode"
 import { Tooltip } from "./tooltip"
 import { IconButton } from "./icon-button"
 import { TextShimmer } from "./text-shimmer"
-import { AnimatedCountList } from "./tool-count-summary"
-import { ToolStatusTitle } from "./tool-status-title"
-import { animate } from "motion"
 import { useLocation } from "@solidjs/router"
 import { attached, inline, kind } from "./message-file"
-
-function ShellSubmessage(props: { text: string; animate?: boolean }) {
-  let widthRef: HTMLSpanElement | undefined
-  let valueRef: HTMLSpanElement | undefined
-
-  onMount(() => {
-    if (!props.animate) return
-    requestAnimationFrame(() => {
-      if (widthRef) {
-        animate(widthRef, { width: "auto" }, { type: "spring", visualDuration: 0.25, bounce: 0 })
-      }
-      if (valueRef) {
-        animate(valueRef, { opacity: 1, filter: "blur(0px)" }, { duration: 0.32, ease: [0.16, 1, 0.3, 1] })
-      }
-    })
-  })
-
-  return (
-    <span data-component="shell-submessage">
-      <span ref={widthRef} data-slot="shell-submessage-width" style={{ width: props.animate ? "0px" : undefined }}>
-        <span data-slot="basic-tool-tool-subtitle">
-          <span
-            ref={valueRef}
-            data-slot="shell-submessage-value"
-            style={props.animate ? { opacity: 0, filter: "blur(2px)" } : undefined}
-          >
-            {props.text}
-          </span>
-        </span>
-      </span>
-    </span>
-  )
-}
-
-interface Diagnostic {
-  range: {
-    start: { line: number; character: number }
-    end: { line: number; character: number }
-  }
-  message: string
-  severity?: number
-}
-
-function getDiagnostics(
-  diagnosticsByFile: Record<string, Diagnostic[]> | undefined,
-  filePath: string | undefined,
-): Diagnostic[] {
-  if (!diagnosticsByFile || !filePath) return []
-  const diagnostics = diagnosticsByFile[filePath] ?? []
-  return diagnostics.filter((d) => d.severity === 1).slice(0, 3)
-}
-
-function DiagnosticsDisplay(props: { diagnostics: Diagnostic[] }): JSX.Element {
-  const i18n = useI18n()
-  return (
-    <Show when={props.diagnostics.length > 0}>
-      <div data-component="diagnostics">
-        <For each={props.diagnostics}>
-          {(diagnostic) => (
-            <div data-slot="diagnostic">
-              <span data-slot="diagnostic-label">{i18n.t("ui.messagePart.diagnostic.error")}</span>
-              <span data-slot="diagnostic-location">
-                [{diagnostic.range.start.line + 1}:{diagnostic.range.start.character + 1}]
-              </span>
-              <span data-slot="diagnostic-message">{diagnostic.message}</span>
-            </div>
-          )}
-        </For>
-      </div>
-    </Show>
-  )
-}
+import { DiagnosticsDisplay, getDiagnostics } from "./message-part.diagnostics"
+import {
+  createThrottledValue,
+  groupParts,
+  index,
+  isContextGroupTool,
+  list,
+  partDefaultOpen,
+  relativizeProjectPath,
+  renderable,
+  same,
+  sameGroups,
+  sessionLink,
+  type PartGroup,
+} from "./message-part.logic"
+import { getToolInfo } from "./message-part.tools"
+import { ShellSubmessage } from "./message-part.shell-submessage"
+import { ExaOutput } from "./message-part.exa-output"
+import { ContextToolGroup } from "./message-part.context-group"
+import { HighlightedText } from "./message-part.highlight"
+import { ToolFileAccordion } from "./message-part.file-accordion"
+import { UserMessageDisplay } from "./message-part.user-message"
 
 export interface MessageProps {
   message: MessageType
@@ -156,329 +90,9 @@ export type PartComponent = Component<MessagePartProps>
 
 export const PART_MAPPING: Record<string, PartComponent | undefined> = {}
 
-const TEXT_RENDER_THROTTLE_MS = 100
-
-function createThrottledValue(getValue: () => string) {
-  const [value, setValue] = createSignal(getValue())
-  let timeout: ReturnType<typeof setTimeout> | undefined
-  let last = 0
-
-  createEffect(() => {
-    const next = getValue()
-    const now = Date.now()
-
-    const remaining = TEXT_RENDER_THROTTLE_MS - (now - last)
-    if (remaining <= 0) {
-      if (timeout) {
-        clearTimeout(timeout)
-        timeout = undefined
-      }
-      last = now
-      setValue(next)
-      return
-    }
-    if (timeout) clearTimeout(timeout)
-    timeout = setTimeout(() => {
-      last = Date.now()
-      setValue(next)
-      timeout = undefined
-    }, remaining)
-  })
-
-  onCleanup(() => {
-    if (timeout) clearTimeout(timeout)
-  })
-
-  return value
-}
-
-function relativizeProjectPath(path: string, directory?: string) {
-  if (!path) return ""
-  if (!directory) return path
-  if (directory === "/") return path
-  if (directory === "\\") return path
-  if (path === directory) return ""
-
-  const separator = directory.includes("\\") ? "\\" : "/"
-  const prefix = directory.endsWith(separator) ? directory : directory + separator
-  if (!path.startsWith(prefix)) return path
-  return path.slice(directory.length)
-}
-
 function getDirectory(path: string | undefined) {
   const data = useData()
   return relativizeProjectPath(_getDirectory(path), data.directory)
-}
-
-import type { IconProps } from "./icon"
-
-export type ToolInfo = {
-  icon: IconProps["name"]
-  title: string
-  subtitle?: string
-}
-
-function agentTitle(i18n: UiI18n, type?: string) {
-  if (!type) return i18n.t("ui.tool.agent.default")
-  return i18n.t("ui.tool.agent", { type })
-}
-
-export function getToolInfo(tool: string, input: any = {}): ToolInfo {
-  const i18n = useI18n()
-  switch (tool) {
-    case "read":
-      return {
-        icon: "glasses",
-        title: i18n.t("ui.tool.read"),
-        subtitle: input.filePath ? getFilename(input.filePath) : undefined,
-      }
-    case "list":
-      return {
-        icon: "bullet-list",
-        title: i18n.t("ui.tool.list"),
-        subtitle: input.path ? getFilename(input.path) : undefined,
-      }
-    case "glob":
-      return {
-        icon: "magnifying-glass-menu",
-        title: i18n.t("ui.tool.glob"),
-        subtitle: input.pattern,
-      }
-    case "grep":
-      return {
-        icon: "magnifying-glass-menu",
-        title: i18n.t("ui.tool.grep"),
-        subtitle: input.pattern,
-      }
-    case "webfetch":
-      return {
-        icon: "window-cursor",
-        title: i18n.t("ui.tool.webfetch"),
-        subtitle: input.url,
-      }
-    case "websearch":
-      return {
-        icon: "window-cursor",
-        title: i18n.t("ui.tool.websearch"),
-        subtitle: input.query,
-      }
-    case "codesearch":
-      return {
-        icon: "code",
-        title: i18n.t("ui.tool.codesearch"),
-        subtitle: input.query,
-      }
-    case "task": {
-      const type =
-        typeof input.subagent_type === "string" && input.subagent_type
-          ? input.subagent_type[0]!.toUpperCase() + input.subagent_type.slice(1)
-          : undefined
-      return {
-        icon: "task",
-        title: agentTitle(i18n, type),
-        subtitle: input.description,
-      }
-    }
-    case "bash":
-      return {
-        icon: "console",
-        title: i18n.t("ui.tool.shell"),
-        subtitle: input.description,
-      }
-    case "edit":
-      return {
-        icon: "code-lines",
-        title: i18n.t("ui.messagePart.title.edit"),
-        subtitle: input.filePath ? getFilename(input.filePath) : undefined,
-      }
-    case "write":
-      return {
-        icon: "code-lines",
-        title: i18n.t("ui.messagePart.title.write"),
-        subtitle: input.filePath ? getFilename(input.filePath) : undefined,
-      }
-    case "apply_patch":
-      return {
-        icon: "code-lines",
-        title: i18n.t("ui.tool.patch"),
-        subtitle: input.files?.length
-          ? `${input.files.length} ${i18n.t(input.files.length > 1 ? "ui.common.file.other" : "ui.common.file.one")}`
-          : undefined,
-      }
-    case "todowrite":
-      return {
-        icon: "checklist",
-        title: i18n.t("ui.tool.todos"),
-      }
-    case "todoread":
-      return {
-        icon: "checklist",
-        title: i18n.t("ui.tool.todos.read"),
-      }
-    case "question":
-      return {
-        icon: "bubble-5",
-        title: i18n.t("ui.tool.questions"),
-      }
-    case "skill":
-      return {
-        icon: "brain",
-        title: input.name || i18n.t("ui.tool.skill"),
-      }
-    default:
-      return {
-        icon: "mcp",
-        title: tool,
-      }
-  }
-}
-
-function urls(text: string | undefined) {
-  if (!text) return []
-  const seen = new Set<string>()
-  return [...text.matchAll(/https?:\/\/[^\s<>"'`)\]]+/g)]
-    .map((item) => item[0].replace(/[),.;:!?]+$/g, ""))
-    .filter((item) => {
-      if (seen.has(item)) return false
-      seen.add(item)
-      return true
-    })
-}
-
-function sessionLink(id: string | undefined, path: string, href?: (id: string) => string | undefined) {
-  if (!id) return
-
-  const direct = href?.(id)
-  if (direct) return direct
-
-  const idx = path.indexOf("/session")
-  if (idx === -1) return
-  return `${path.slice(0, idx)}/session/${id}`
-}
-
-const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list"])
-const HIDDEN_TOOLS = new Set(["todowrite", "todoread"])
-
-function list<T>(value: T[] | undefined | null, fallback: T[]) {
-  if (Array.isArray(value)) return value
-  return fallback
-}
-
-function same<T>(a: readonly T[] | undefined, b: readonly T[] | undefined) {
-  if (a === b) return true
-  if (!a || !b) return false
-  if (a.length !== b.length) return false
-  return a.every((x, i) => x === b[i])
-}
-
-type PartRef = {
-  messageID: string
-  partID: string
-}
-
-type PartGroup =
-  | {
-      key: string
-      type: "part"
-      ref: PartRef
-    }
-  | {
-      key: string
-      type: "context"
-      refs: PartRef[]
-    }
-
-function sameRef(a: PartRef, b: PartRef) {
-  return a.messageID === b.messageID && a.partID === b.partID
-}
-
-function sameGroup(a: PartGroup, b: PartGroup) {
-  if (a === b) return true
-  if (a.key !== b.key) return false
-  if (a.type !== b.type) return false
-  if (a.type === "part") {
-    if (b.type !== "part") return false
-    return sameRef(a.ref, b.ref)
-  }
-  if (b.type !== "context") return false
-  if (a.refs.length !== b.refs.length) return false
-  return a.refs.every((ref, i) => sameRef(ref, b.refs[i]!))
-}
-
-function sameGroups(a: readonly PartGroup[] | undefined, b: readonly PartGroup[] | undefined) {
-  if (a === b) return true
-  if (!a || !b) return false
-  if (a.length !== b.length) return false
-  return a.every((item, i) => sameGroup(item, b[i]!))
-}
-
-function groupParts(parts: { messageID: string; part: PartType }[]) {
-  const result: PartGroup[] = []
-  let start = -1
-
-  const flush = (end: number) => {
-    if (start < 0) return
-    const first = parts[start]
-    const last = parts[end]
-    if (!first || !last) {
-      start = -1
-      return
-    }
-    result.push({
-      key: `context:${first.part.id}`,
-      type: "context",
-      refs: parts.slice(start, end + 1).map((item) => ({
-        messageID: item.messageID,
-        partID: item.part.id,
-      })),
-    })
-    start = -1
-  }
-
-  parts.forEach((item, index) => {
-    if (isContextGroupTool(item.part)) {
-      if (start < 0) start = index
-      return
-    }
-
-    flush(index - 1)
-    result.push({
-      key: `part:${item.messageID}:${item.part.id}`,
-      type: "part",
-      ref: {
-        messageID: item.messageID,
-        partID: item.part.id,
-      },
-    })
-  })
-
-  flush(parts.length - 1)
-  return result
-}
-
-function index<T extends { id: string }>(items: readonly T[]) {
-  return new Map(items.map((item) => [item.id, item] as const))
-}
-
-function renderable(part: PartType, showReasoningSummaries = true) {
-  if (part.type === "tool") {
-    if (HIDDEN_TOOLS.has(part.tool)) return false
-    if (part.tool === "question") return part.state.status !== "pending" && part.state.status !== "running"
-    return true
-  }
-  if (part.type === "text") return !!part.text?.trim()
-  if (part.type === "reasoning") return showReasoningSummaries && !!part.text?.trim()
-  return !!PART_MAPPING[part.type]
-}
-
-function toolDefaultOpen(tool: string, shell = false, edit = false) {
-  if (tool === "bash") return shell
-  if (tool === "edit" || tool === "write" || tool === "apply_patch") return edit
-}
-
-function partDefaultOpen(part: PartType, shell = false, edit = false) {
-  if (part.type !== "tool") return
-  return toolDefaultOpen(part.tool, shell, edit)
 }
 
 export function AssistantParts(props: {
@@ -506,7 +120,7 @@ export function AssistantParts(props: {
       groupParts(
         props.messages.flatMap((message) =>
           list(data.store.part?.[message.id], emptyParts)
-            .filter((part) => renderable(part, props.showReasoningSummaries ?? true))
+            .filter((part) => renderable(part, PART_MAPPING, props.showReasoningSummaries ?? true))
             .map((part) => ({
               messageID: message.id,
               part,
@@ -543,7 +157,7 @@ export function AssistantParts(props: {
 
                 return (
                   <Show when={parts().length > 0}>
-                    <ContextToolGroup parts={parts()} busy={busy()} />
+                    <ContextToolGroup parts={parts()} busy={busy()} directory={getDirectory} />
                   </Show>
                 )
               })()}
@@ -580,106 +194,6 @@ export function AssistantParts(props: {
         )
       }}
     </Index>
-  )
-}
-
-function isContextGroupTool(part: PartType): part is ToolPart {
-  return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)
-}
-
-function contextToolDetail(part: ToolPart): string | undefined {
-  const info = getToolInfo(part.tool, part.state.input ?? {})
-  if (info.subtitle) return info.subtitle
-  if (part.state.status === "error") return part.state.error
-  if ((part.state.status === "running" || part.state.status === "completed") && part.state.title)
-    return part.state.title
-  const description = part.state.input?.description
-  if (typeof description === "string") return description
-  return undefined
-}
-
-function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
-  const input = (part.state.input ?? {}) as Record<string, unknown>
-  const path = typeof input.path === "string" ? input.path : "/"
-  const filePath = typeof input.filePath === "string" ? input.filePath : undefined
-  const pattern = typeof input.pattern === "string" ? input.pattern : undefined
-  const include = typeof input.include === "string" ? input.include : undefined
-  const offset = typeof input.offset === "number" ? input.offset : undefined
-  const limit = typeof input.limit === "number" ? input.limit : undefined
-
-  switch (part.tool) {
-    case "read": {
-      const args: string[] = []
-      if (offset !== undefined) args.push("offset=" + offset)
-      if (limit !== undefined) args.push("limit=" + limit)
-      return {
-        title: i18n.t("ui.tool.read"),
-        subtitle: filePath ? getFilename(filePath) : "",
-        args,
-      }
-    }
-    case "list":
-      return {
-        title: i18n.t("ui.tool.list"),
-        subtitle: getDirectory(path),
-      }
-    case "glob":
-      return {
-        title: i18n.t("ui.tool.glob"),
-        subtitle: getDirectory(path),
-        args: pattern ? ["pattern=" + pattern] : [],
-      }
-    case "grep": {
-      const args: string[] = []
-      if (pattern) args.push("pattern=" + pattern)
-      if (include) args.push("include=" + include)
-      return {
-        title: i18n.t("ui.tool.grep"),
-        subtitle: getDirectory(path),
-        args,
-      }
-    }
-    default: {
-      const info = getToolInfo(part.tool, input)
-      return {
-        title: info.title,
-        subtitle: info.subtitle || contextToolDetail(part),
-        args: [],
-      }
-    }
-  }
-}
-
-function contextToolSummary(parts: ToolPart[]) {
-  const read = parts.filter((part) => part.tool === "read").length
-  const search = parts.filter((part) => part.tool === "glob" || part.tool === "grep").length
-  const list = parts.filter((part) => part.tool === "list").length
-  return { read, search, list }
-}
-
-function ExaOutput(props: { output?: string }) {
-  const links = createMemo(() => urls(props.output))
-
-  return (
-    <Show when={links().length > 0}>
-      <div data-component="exa-tool-output">
-        <div data-slot="exa-tool-links">
-          <For each={links()}>
-            {(url) => (
-              <a
-                data-slot="exa-tool-link"
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(event) => event.stopPropagation()}
-              >
-                {url}
-              </a>
-            )}
-          </For>
-        </div>
-      </div>
-    </Show>
   )
 }
 
@@ -721,7 +235,7 @@ export function AssistantMessageDisplay(props: {
     () =>
       groupParts(
         props.parts
-          .filter((part) => renderable(part, props.showReasoningSummaries ?? true))
+          .filter((part) => renderable(part, PART_MAPPING, props.showReasoningSummaries ?? true))
           .map((part) => ({
             messageID: props.message.id,
             part,
@@ -754,7 +268,7 @@ export function AssistantMessageDisplay(props: {
 
                 return (
                   <Show when={parts().length > 0}>
-                    <ContextToolGroup parts={parts()} />
+                    <ContextToolGroup parts={parts()} directory={getDirectory} />
                   </Show>
                 )
               })()}
@@ -783,338 +297,6 @@ export function AssistantMessageDisplay(props: {
       }}
     </Index>
   )
-}
-
-function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean }) {
-  const i18n = useI18n()
-  const [open, setOpen] = createSignal(false)
-  const pending = createMemo(
-    () =>
-      !!props.busy || props.parts.some((part) => part.state.status === "pending" || part.state.status === "running"),
-  )
-  const summary = createMemo(() => contextToolSummary(props.parts))
-
-  return (
-    <Collapsible open={open()} onOpenChange={setOpen} variant="ghost">
-      <Collapsible.Trigger>
-        <div data-component="context-tool-group-trigger">
-          <span
-            data-slot="context-tool-group-title"
-            class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong"
-          >
-            <span data-slot="context-tool-group-label" class="shrink-0">
-              <ToolStatusTitle
-                active={pending()}
-                activeText={i18n.t("ui.sessionTurn.status.gatheringContext")}
-                doneText={i18n.t("ui.sessionTurn.status.gatheredContext")}
-                split={false}
-              />
-            </span>
-            <span
-              data-slot="context-tool-group-summary"
-              class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base"
-            >
-              <AnimatedCountList
-                items={[
-                  {
-                    key: "read",
-                    count: summary().read,
-                    one: i18n.t("ui.messagePart.context.read.one"),
-                    other: i18n.t("ui.messagePart.context.read.other"),
-                  },
-                  {
-                    key: "search",
-                    count: summary().search,
-                    one: i18n.t("ui.messagePart.context.search.one"),
-                    other: i18n.t("ui.messagePart.context.search.other"),
-                  },
-                  {
-                    key: "list",
-                    count: summary().list,
-                    one: i18n.t("ui.messagePart.context.list.one"),
-                    other: i18n.t("ui.messagePart.context.list.other"),
-                  },
-                ]}
-                fallback=""
-              />
-            </span>
-          </span>
-          <Collapsible.Arrow />
-        </div>
-      </Collapsible.Trigger>
-      <Collapsible.Content>
-        <div data-component="context-tool-group-list">
-          <Index each={props.parts}>
-            {(partAccessor) => {
-              const trigger = createMemo(() => contextToolTrigger(partAccessor(), i18n))
-              const running = createMemo(
-                () => partAccessor().state.status === "pending" || partAccessor().state.status === "running",
-              )
-              return (
-                <div data-slot="context-tool-group-item">
-                  <div data-component="tool-trigger">
-                    <div data-slot="basic-tool-tool-trigger-content">
-                      <div data-slot="basic-tool-tool-info">
-                        <div data-slot="basic-tool-tool-info-structured">
-                          <div data-slot="basic-tool-tool-info-main">
-                            <span data-slot="basic-tool-tool-title">
-                              <TextShimmer text={trigger().title} active={running()} />
-                            </span>
-                            <Show when={!running() && trigger().subtitle}>
-                              <span data-slot="basic-tool-tool-subtitle">{trigger().subtitle}</span>
-                            </Show>
-                            <Show when={!running() && trigger().args?.length}>
-                              <For each={trigger().args}>
-                                {(arg) => <span data-slot="basic-tool-tool-arg">{arg}</span>}
-                              </For>
-                            </Show>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            }}
-          </Index>
-        </div>
-      </Collapsible.Content>
-    </Collapsible>
-  )
-}
-
-export function UserMessageDisplay(props: { message: UserMessage; parts: PartType[]; actions?: UserActions }) {
-  const data = useData()
-  const dialog = useDialog()
-  const i18n = useI18n()
-  const [state, setState] = createStore({
-    copied: false,
-    busy: undefined as "fork" | "revert" | undefined,
-  })
-  const copied = () => state.copied
-  const busy = () => state.busy
-
-  const textPart = createMemo(
-    () => props.parts?.find((p) => p.type === "text" && !(p as TextPart).synthetic) as TextPart | undefined,
-  )
-
-  const text = createMemo(() => textPart()?.text || "")
-
-  const files = createMemo(() => (props.parts?.filter((p) => p.type === "file") as FilePart[]) ?? [])
-
-  const attachments = createMemo(() => files().filter(attached))
-
-  const inlineFiles = createMemo(() => files().filter(inline))
-
-  const agents = createMemo(() => (props.parts?.filter((p) => p.type === "agent") as AgentPart[]) ?? [])
-
-  const model = createMemo(() => {
-    const providerID = props.message.model?.providerID
-    const modelID = props.message.model?.modelID
-    if (!providerID || !modelID) return ""
-    const match = data.store.provider?.all?.find((p) => p.id === providerID)
-    return match?.models?.[modelID]?.name ?? modelID
-  })
-  const timefmt = createMemo(() => new Intl.DateTimeFormat(i18n.locale(), { timeStyle: "short" }))
-
-  const stamp = createMemo(() => {
-    const created = props.message.time?.created
-    if (typeof created !== "number") return ""
-    return timefmt().format(created)
-  })
-
-  const metaHead = createMemo(() => {
-    const agent = props.message.agent
-    const items = [agent ? agent[0]?.toUpperCase() + agent.slice(1) : "", model()]
-    return items.filter((x) => !!x).join("\u00A0\u00B7\u00A0")
-  })
-
-  const metaTail = stamp
-
-  const openImagePreview = (url: string, alt?: string) => {
-    dialog.show(() => <ImagePreview src={url} alt={alt} />)
-  }
-
-  const handleCopy = async () => {
-    const content = text()
-    if (!content) return
-    await navigator.clipboard.writeText(content)
-    setState("copied", true)
-    setTimeout(() => setState("copied", false), 2000)
-  }
-
-  const run = (kind: "fork" | "revert") => {
-    const act = kind === "fork" ? props.actions?.fork : props.actions?.revert
-    if (!act || busy()) return
-    setState("busy", kind)
-    void Promise.resolve()
-      .then(() =>
-        act({
-          sessionID: props.message.sessionID,
-          messageID: props.message.id,
-        }),
-      )
-      .finally(() => {
-        if (busy() === kind) setState("busy", undefined)
-      })
-  }
-
-  return (
-    <div data-component="user-message">
-      <Show when={attachments().length > 0}>
-        <div data-slot="user-message-attachments">
-          <For each={attachments()}>
-            {(file) => {
-              const type = kind(file)
-              const name = file.filename ?? i18n.t("ui.message.attachment.alt")
-
-              return (
-                <div
-                  data-slot="user-message-attachment"
-                  data-type={type}
-                  data-clickable={type === "image" ? "true" : undefined}
-                  title={type === "file" ? name : undefined}
-                  onClick={() => {
-                    if (type === "image") openImagePreview(file.url, name)
-                  }}
-                >
-                  <Show
-                    when={type === "image"}
-                    fallback={
-                      <div data-slot="user-message-attachment-file">
-                        <FileIcon node={{ path: name, type: "file" }} />
-                        <span data-slot="user-message-attachment-name">{name}</span>
-                      </div>
-                    }
-                  >
-                    <img data-slot="user-message-attachment-image" src={file.url} alt={name} />
-                  </Show>
-                </div>
-              )
-            }}
-          </For>
-        </div>
-      </Show>
-      <Show when={text()}>
-        <>
-          <div data-slot="user-message-body">
-            <div data-slot="user-message-text">
-              <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
-            </div>
-          </div>
-          <div data-slot="user-message-copy-wrapper">
-            <Show when={metaHead() || metaTail()}>
-              <span data-slot="user-message-meta-wrap">
-                <Show when={metaHead()}>
-                  <span data-slot="user-message-meta" class="text-12-regular text-text-weak cursor-default">
-                    {metaHead()}
-                  </span>
-                </Show>
-                <Show when={metaHead() && metaTail()}>
-                  <span data-slot="user-message-meta-sep" class="text-12-regular text-text-weak cursor-default">
-                    {"\u00A0\u00B7\u00A0"}
-                  </span>
-                </Show>
-                <Show when={metaTail()}>
-                  <span data-slot="user-message-meta-tail" class="text-12-regular text-text-weak cursor-default">
-                    {metaTail()}
-                  </span>
-                </Show>
-              </span>
-            </Show>
-            <Show when={props.actions?.fork}>
-              <Tooltip value={i18n.t("ui.message.forkMessage")} placement="top" gutter={4}>
-                <IconButton
-                  icon="fork"
-                  size="normal"
-                  variant="ghost"
-                  disabled={!!busy()}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    run("fork")
-                  }}
-                  aria-label={i18n.t("ui.message.forkMessage")}
-                />
-              </Tooltip>
-            </Show>
-            <Show when={props.actions?.revert}>
-              <Tooltip value={i18n.t("ui.message.revertMessage")} placement="top" gutter={4}>
-                <IconButton
-                  icon="reset"
-                  size="normal"
-                  variant="ghost"
-                  disabled={!!busy()}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    run("revert")
-                  }}
-                  aria-label={i18n.t("ui.message.revertMessage")}
-                />
-              </Tooltip>
-            </Show>
-            <Tooltip
-              value={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
-              placement="top"
-              gutter={4}
-            >
-              <IconButton
-                icon={copied() ? "check" : "copy"}
-                size="normal"
-                variant="ghost"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  handleCopy()
-                }}
-                aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
-              />
-            </Tooltip>
-          </div>
-        </>
-      </Show>
-    </div>
-  )
-}
-
-type HighlightSegment = { text: string; type?: "file" | "agent" }
-
-function HighlightedText(props: { text: string; references: FilePart[]; agents: AgentPart[] }) {
-  const segments = createMemo(() => {
-    const text = props.text
-
-    const allRefs: { start: number; end: number; type: "file" | "agent" }[] = [
-      ...props.references
-        .filter((r) => r.source?.text?.start !== undefined && r.source?.text?.end !== undefined)
-        .map((r) => ({ start: r.source!.text!.start, end: r.source!.text!.end, type: "file" as const })),
-      ...props.agents
-        .filter((a) => a.source?.start !== undefined && a.source?.end !== undefined)
-        .map((a) => ({ start: a.source!.start, end: a.source!.end, type: "agent" as const })),
-    ].sort((a, b) => a.start - b.start)
-
-    const result: HighlightSegment[] = []
-    let lastIndex = 0
-
-    for (const ref of allRefs) {
-      if (ref.start < lastIndex) continue
-
-      if (ref.start > lastIndex) {
-        result.push({ text: text.slice(lastIndex, ref.start) })
-      }
-
-      result.push({ text: text.slice(ref.start, ref.end), type: ref.type })
-      lastIndex = ref.end
-    }
-
-    if (lastIndex < text.length) {
-      result.push({ text: text.slice(lastIndex) })
-    }
-
-    return result
-  })
-
-  return <For each={segments()}>{(segment) => <span data-highlight={segment.type}>{segment.text}</span>}</For>
 }
 
 export function Part(props: MessagePartProps) {
@@ -1168,42 +350,6 @@ export function getTool(name: string) {
 export const ToolRegistry = {
   register: registerTool,
   render: getTool,
-}
-
-function ToolFileAccordion(props: { path: string; actions?: JSX.Element; children: JSX.Element }) {
-  const value = createMemo(() => props.path || "tool-file")
-
-  return (
-    <Accordion
-      multiple
-      data-scope="apply-patch"
-      style={{ "--sticky-accordion-offset": "40px" }}
-      defaultValue={[value()]}
-    >
-      <Accordion.Item value={value()}>
-        <StickyAccordionHeader>
-          <Accordion.Trigger>
-            <div data-slot="apply-patch-trigger-content">
-              <div data-slot="apply-patch-file-info">
-                <FileIcon node={{ path: props.path, type: "file" }} />
-                <div data-slot="apply-patch-file-name-container">
-                  <Show when={props.path.includes("/")}>
-                    <span data-slot="apply-patch-directory">{`\u202A${getDirectory(props.path)}\u202C`}</span>
-                  </Show>
-                  <span data-slot="apply-patch-filename">{getFilename(props.path)}</span>
-                </div>
-              </div>
-              <div data-slot="apply-patch-trigger-actions">
-                {props.actions}
-                <Icon name="chevron-grabber-vertical" size="small" />
-              </div>
-            </div>
-          </Accordion.Trigger>
-        </StickyAccordionHeader>
-        <Accordion.Content>{props.children}</Accordion.Content>
-      </Accordion.Item>
-    </Accordion>
-  )
 }
 
 PART_MAPPING["tool"] = function ToolPartDisplay(props) {
@@ -1643,12 +789,14 @@ ToolRegistry.register({
     const i18n = useI18n()
     const location = useLocation()
     const childSessionId = () => props.metadata.sessionId as string | undefined
-    const type = createMemo(() => {
-      const raw = props.input.subagent_type
-      if (typeof raw !== "string" || !raw) return undefined
-      return raw[0]!.toUpperCase() + raw.slice(1)
-    })
-    const title = createMemo(() => agentTitle(i18n, type()))
+    const title = createMemo(
+      () =>
+        getToolInfo(
+          "task",
+          props.input as Record<string, unknown>,
+          (key: string, params?: Record<string, string | number>) => i18n.t(key as never, params as never),
+        ).title,
+    )
     const subtitle = createMemo(() => {
       const value = props.input.description
       if (typeof value === "string" && value) return value
@@ -1800,6 +948,7 @@ ToolRegistry.register({
           <Show when={path()}>
             <ToolFileAccordion
               path={path()}
+              directory={getDirectory}
               actions={
                 <Show when={!pending() && props.metadata.filediff}>
                   <DiffChanges changes={props.metadata.filediff!} />
@@ -1866,7 +1015,7 @@ ToolRegistry.register({
           }
         >
           <Show when={props.input.content && path()}>
-            <ToolFileAccordion path={path()}>
+            <ToolFileAccordion path={path()} directory={getDirectory}>
               <div data-component="write-content">
                 <Dynamic
                   component={fileComponent}
@@ -2062,6 +1211,7 @@ ToolRegistry.register({
           >
             <ToolFileAccordion
               path={single()!.relativePath}
+              directory={getDirectory}
               actions={
                 <Switch>
                   <Match when={single()!.type === "add"}>

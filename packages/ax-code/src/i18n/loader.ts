@@ -52,9 +52,9 @@ export function getTranslations(lang?: SupportedLanguage): Translations {
 export function t(key: string, lang?: SupportedLanguage): string {
   const translations = getTranslations(lang)
   const keys = key.split(".")
-  let value: any = translations
+  let value: unknown = translations
   for (const k of keys) {
-    value = value?.[k]
+    value = (value as Record<string, unknown>)?.[k]
     if (value === undefined) break
   }
 
@@ -63,9 +63,9 @@ export function t(key: string, lang?: SupportedLanguage): string {
   // Fallback to English
   if ((lang ?? currentLanguage) !== "en") {
     const english = getTranslations("en")
-    let enValue: any = english
+    let enValue: unknown = english
     for (const k of keys) {
-      enValue = enValue?.[k]
+      enValue = (enValue as Record<string, unknown>)?.[k]
       if (enValue === undefined) break
     }
     if (typeof enValue === "string") return enValue

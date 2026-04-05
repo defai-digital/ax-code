@@ -1,4 +1,4 @@
-import type { AssistantMessage, Project, UserMessage } from "@ax-code/sdk/v2"
+import type { Project, UserMessage } from "@ax-code/sdk/v2"
 import { useDialog } from "@ax-code/ui/context/dialog"
 import { useMutation } from "@tanstack/solid-query"
 import {
@@ -51,17 +51,41 @@ import {
   createSessionTabs,
   createSizing,
   focusTerminalById,
+  filterReviewDiffs,
   shouldFocusTerminalOnKeyDown,
+  lastCompletedAssistant,
+  reviewStats,
+  selectedReviewFile,
+  visibleUserMessages as selectVisibleUserMessages,
 } from "@/pages/session/helpers"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
+import {
+  getAssistantSummary,
+  getDiffKind,
+  getFirstLine,
+  getHandoffChecks,
+  getHandoffFlags,
+  getHandoffOpen,
+  getHandoffRisks,
+  getHandoffSteps,
+  getHandoffText,
+} from "@/pages/session/review/session-handoff"
 import { SessionReviewHandoffCard } from "@/pages/session/session-review-handoff-card"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
+import {
+  appendFollowup,
+  getFollowupText,
+  removeFollowup as removeQueuedFollowup,
+  shouldAutoSendFollowup,
+  updateRecentChecks,
+} from "@/pages/session/hooks/session-followup"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
+import { createSessionHistoryWindow } from "@/pages/session/history/session-history-window"
 import { Identifier } from "@/utils/id"
 import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
@@ -74,253 +98,6 @@ const picks = ["all", "added", "modified", "deleted"] as const
 
 type ReviewPick = (typeof picks)[number]
 type ReviewKind = Exclude<ReviewPick, "all">
-
-type SessionHistoryWindowInput = {
-  sessionID: () => string | undefined
-  messagesReady: () => boolean
-  loaded: () => number
-  visibleUserMessages: () => UserMessage[]
-  historyMore: () => boolean
-  historyLoading: () => boolean
-  loadMore: (sessionID: string) => Promise<void>
-  userScrolled: () => boolean
-  scroller: () => HTMLDivElement | undefined
-}
-
-/**
- * Maintains the rendered history window for a session timeline.
- *
- * It keeps initial paint bounded to recent turns, reveals cached turns in
- * small batches while scrolling upward, and prefetches older history near top.
- */
-function createSessionHistoryWindow(input: SessionHistoryWindowInput) {
-  const turnInit = 10
-  const turnBatch = 8
-  const turnScrollThreshold = 200
-  const turnPrefetchBuffer = 16
-  const prefetchCooldownMs = 400
-  const prefetchNoGrowthLimit = 2
-
-  const [state, setState] = createStore({
-    turnID: undefined as string | undefined,
-    turnStart: 0,
-    prefetchUntil: 0,
-    prefetchNoGrowth: 0,
-  })
-
-  const initialTurnStart = (len: number) => (len > turnInit ? len - turnInit : 0)
-
-  const turnStart = createMemo(() => {
-    const id = input.sessionID()
-    const len = input.visibleUserMessages().length
-    if (!id || len <= 0) return 0
-    if (state.turnID !== id) return initialTurnStart(len)
-    if (state.turnStart <= 0) return 0
-    if (state.turnStart >= len) return initialTurnStart(len)
-    return state.turnStart
-  })
-
-  const setTurnStart = (start: number) => {
-    const id = input.sessionID()
-    const next = start > 0 ? start : 0
-    if (!id) {
-      setState({ turnID: undefined, turnStart: next })
-      return
-    }
-    setState({ turnID: id, turnStart: next })
-  }
-
-  const renderedUserMessages = createMemo(
-    () => {
-      const msgs = input.visibleUserMessages()
-      const start = turnStart()
-      if (start <= 0) return msgs
-      return msgs.slice(start)
-    },
-    emptyUserMessages,
-    {
-      equals: same,
-    },
-  )
-
-  const preserveScroll = (fn: () => void) => {
-    const el = input.scroller()
-    if (!el) {
-      fn()
-      return
-    }
-    const beforeTop = el.scrollTop
-    const beforeHeight = el.scrollHeight
-    fn()
-    requestAnimationFrame(() => {
-      const delta = el.scrollHeight - beforeHeight
-      if (!delta) return
-      el.scrollTop = beforeTop + delta
-    })
-  }
-
-  const backfillTurns = () => {
-    const start = turnStart()
-    if (start <= 0) return
-
-    const next = start - turnBatch
-    const nextStart = next > 0 ? next : 0
-
-    preserveScroll(() => setTurnStart(nextStart))
-  }
-
-  /** Button path: reveal all cached turns, fetch older history, reveal one batch. */
-  const loadAndReveal = async () => {
-    const id = input.sessionID()
-    if (!id) return
-
-    const start = turnStart()
-    const beforeVisible = input.visibleUserMessages().length
-    let loaded = input.loaded()
-
-    if (start > 0) setTurnStart(0)
-
-    if (!input.historyMore() || input.historyLoading()) return
-
-    let afterVisible = beforeVisible
-    let added = 0
-
-    const MAX_FETCH_ROUNDS = 3
-    for (let round = 0; round < MAX_FETCH_ROUNDS; round++) {
-      await input.loadMore(id)
-      if (input.sessionID() !== id) return
-
-      afterVisible = input.visibleUserMessages().length
-      const nextLoaded = input.loaded()
-      const raw = nextLoaded - loaded
-      added += raw
-      loaded = nextLoaded
-
-      if (afterVisible > beforeVisible) break
-      if (raw <= 0) break
-      if (!input.historyMore()) break
-    }
-
-    if (added <= 0) return
-    if (state.prefetchNoGrowth) setState("prefetchNoGrowth", 0)
-
-    const growth = afterVisible - beforeVisible
-    if (growth <= 0) return
-    if (turnStart() !== 0) return
-
-    const target = Math.min(afterVisible, beforeVisible + turnBatch)
-    setTurnStart(Math.max(0, afterVisible - target))
-  }
-
-  /** Scroll/prefetch path: fetch older history from server. */
-  const fetchOlderMessages = async (opts?: { prefetch?: boolean }) => {
-    const id = input.sessionID()
-    if (!id) return
-    if (!input.historyMore() || input.historyLoading()) return
-
-    if (opts?.prefetch) {
-      const now = Date.now()
-      if (state.prefetchUntil > now) return
-      if (state.prefetchNoGrowth >= prefetchNoGrowthLimit) return
-      setState("prefetchUntil", now + prefetchCooldownMs)
-    }
-
-    const start = turnStart()
-    const beforeVisible = input.visibleUserMessages().length
-    const beforeRendered = start <= 0 ? beforeVisible : renderedUserMessages().length
-    let loaded = input.loaded()
-    let added = 0
-    let growth = 0
-
-    const MAX_FETCH_ROUNDS = 3
-    for (let round = 0; round < MAX_FETCH_ROUNDS; round++) {
-      await input.loadMore(id)
-      if (input.sessionID() !== id) return
-
-      const nextLoaded = input.loaded()
-      const raw = nextLoaded - loaded
-      added += raw
-      loaded = nextLoaded
-      growth = input.visibleUserMessages().length - beforeVisible
-
-      if (growth > 0) break
-      if (raw <= 0) break
-      if (opts?.prefetch) break
-      if (!input.historyMore()) break
-    }
-
-    const afterVisible = input.visibleUserMessages().length
-
-    if (opts?.prefetch) {
-      setState("prefetchNoGrowth", added > 0 ? 0 : state.prefetchNoGrowth + 1)
-    } else if (added > 0 && state.prefetchNoGrowth) {
-      setState("prefetchNoGrowth", 0)
-    }
-
-    if (added <= 0) return
-    if (growth <= 0) return
-
-    if (opts?.prefetch) {
-      const current = turnStart()
-      preserveScroll(() => setTurnStart(current + growth))
-      return
-    }
-
-    if (turnStart() !== start) return
-
-    const currentRendered = renderedUserMessages().length
-    const base = Math.max(beforeRendered, currentRendered)
-    const target = Math.min(afterVisible, base + turnBatch)
-    preserveScroll(() => setTurnStart(Math.max(0, afterVisible - target)))
-  }
-
-  const onScrollerScroll = () => {
-    if (!input.userScrolled()) return
-    const el = input.scroller()
-    if (!el) return
-    if (el.scrollTop >= turnScrollThreshold) return
-
-    const start = turnStart()
-    if (start > 0) {
-      if (start <= turnPrefetchBuffer) {
-        void fetchOlderMessages({ prefetch: true })
-      }
-      backfillTurns()
-      return
-    }
-
-    void fetchOlderMessages()
-  }
-
-  createEffect(
-    on(
-      input.sessionID,
-      () => {
-        setState({ prefetchUntil: 0, prefetchNoGrowth: 0 })
-      },
-      { defer: true },
-    ),
-  )
-
-  createEffect(
-    on(
-      () => [input.sessionID(), input.messagesReady()] as const,
-      ([id, ready]) => {
-        if (!id || !ready) return
-        setTurnStart(initialTurnStart(input.visibleUserMessages().length))
-      },
-      { defer: true },
-    ),
-  )
-
-  return {
-    turnStart,
-    setTurnStart,
-    renderedUserMessages,
-    loadAndReveal,
-    onScrollerScroll,
-  }
-}
 
 export default function Page() {
   const globalSync = useGlobalSync()
@@ -489,52 +266,19 @@ export default function Page() {
     { equals: same },
   )
   const visibleUserMessages = createMemo(
-    () => {
-      const revert = revertMessageID()
-      if (!revert) return userMessages()
-      return userMessages().filter((m) => m.id < revert)
-    },
+    () => selectVisibleUserMessages(userMessages(), revertMessageID()),
     emptyUserMessages,
     {
       equals: same,
     },
   )
   const lastUserMessage = createMemo(() => visibleUserMessages().at(-1))
-  const lastAssistantMessage = createMemo(() => {
-    const parent = lastUserMessage()?.id
-    let fallback: AssistantMessage | undefined
-
-    for (let i = messages().length - 1; i >= 0; i--) {
-      const item = messages()[i]
-      if (item.role !== "assistant") continue
-      if (typeof item.time.completed !== "number" || item.error) continue
-      if (!fallback) fallback = item
-      if (parent && item.parentID === parent) return item
-    }
-
-    return fallback
-  })
-
-  const firstLine = (value: string | undefined) => {
-    const text = value?.replace(/\s+/g, " ").trim()
-    if (!text) return
-    return text.length > 220 ? `${text.slice(0, 219).trimEnd()}...` : text
-  }
+  const lastAssistantMessage = createMemo(() => lastCompletedAssistant(messages(), lastUserMessage()?.id))
 
   const assistantSummary = createMemo(() => {
     const item = lastAssistantMessage()
     if (!item) return
-    const text = (sync.data.part[item.id] ?? [])
-      .flatMap((part) => (part.type === "text" && !part.synthetic && !part.ignored ? [part.text] : []))
-      .join("\n")
-      .trim()
-
-    if (!text) return
-    const paragraph = text
-      .split(/\n\s*\n/)
-      .map((part) => part.replace(/\s+/g, " ").trim())
-      .find((part) => !!part)
-    return firstLine(paragraph ?? text)
+    return getAssistantSummary(sync.data.part[item.id] ?? [])
   })
 
   createEffect(() => {
@@ -621,29 +365,11 @@ export default function Page() {
   const turnDiffs = createMemo(() => lastUserMessage()?.summary?.diffs ?? [])
   const reviewDiffs = createMemo(() => (store.changes === "session" ? diffs() : turnDiffs()))
   const handoffDiffs = createMemo(() => (diffs().length > 0 ? diffs() : turnDiffs()))
-  const diffKind = (diff: { status?: ReviewKind; before?: string; after?: string }): ReviewKind => {
-    if (diff.status) return diff.status
-    if (!diff.before && diff.after) return "added"
-    if (diff.before && !diff.after) return "deleted"
-    return "modified"
-  }
   const stats = createMemo(() => {
-    const out = {
-      all: reviewDiffs().length,
-      added: 0,
-      modified: 0,
-      deleted: 0,
-    }
-
-    for (const diff of reviewDiffs()) {
-      out[diffKind(diff)]++
-    }
-
-    return out
+    return reviewStats(reviewDiffs(), getDiffKind)
   })
   const shown = createMemo(() => {
-    if (store.pick === "all") return reviewDiffs()
-    return reviewDiffs().filter((diff) => diffKind(diff) === store.pick)
+    return filterReviewDiffs(reviewDiffs(), store.pick, getDiffKind)
   })
 
   const newSessionWorktree = createMemo(() => {
@@ -1016,14 +742,12 @@ export default function Page() {
   const changesOptions = ["session", "turn"] as const
   const changesOptionsList = [...changesOptions]
   const shownFile = createMemo(() => {
-    const file = tree.activeDiff
-    if (file && shown().some((diff) => diff.file === file)) return file
-    return shown()[0]?.file
+    return selectedReviewFile(shown(), tree.activeDiff)
   })
   const shownDiff = createMemo(() => shown().find((diff) => diff.file === shownFile()))
   const canOpenShown = createMemo(() => {
     const diff = shownDiff()
-    return !!diff && diffKind(diff) !== "deleted"
+    return !!diff && getDiffKind(diff) !== "deleted"
   })
 
   const changesTitle = () => {
@@ -1043,7 +767,7 @@ export default function Page() {
 
     const open = () => {
       const diff = shownDiff()
-      if (!diff || diffKind(diff) === "deleted") return
+      if (!diff || getDiffKind(diff) === "deleted") return
       setTree("activeDiff", diff.file)
       openReviewFile(diff.file)
     }
@@ -1555,9 +1279,9 @@ export default function Page() {
   })
 
   const handoffTitle = createMemo(() => {
-    const title = firstLine(lastUserMessage()?.summary?.title)
+    const title = getFirstLine(lastUserMessage()?.summary?.title)
     if (title) return title
-    const body = firstLine(lastUserMessage()?.summary?.body)
+    const body = getFirstLine(lastUserMessage()?.summary?.body)
     if (body) return body
     const id = lastUserMessage()?.id
     if (id) return line(id)
@@ -1565,111 +1289,42 @@ export default function Page() {
   })
 
   const handoffSummary = createMemo(() => {
-    const body = firstLine(lastUserMessage()?.summary?.body)
+    const body = getFirstLine(lastUserMessage()?.summary?.body)
     if (body && body !== handoffTitle()) return body
     const assistant = assistantSummary()
     if (assistant && assistant !== handoffTitle()) return assistant
     return undefined
   })
 
-  const handoffFlags = createMemo(() => {
-    const files = handoffDiffs().map((item) => item.file)
-    const config = files.some((file) =>
-      /(^|\/)(package\.json|pnpm-lock\.yaml|bun\.lockb?|tsconfig.*\.json|eslint.*|prettier.*|vite\.config.*|vitest\.config.*|playwright\.config.*|turbo\.json|tailwind\.config.*|ax-code\.json)$/i.test(
-        file,
-      ),
-    )
-    const deleted = handoffDiffs().some((diff) => diffKind(diff) === "deleted")
-    const added = handoffDiffs().some((diff) => diffKind(diff) === "added")
-    return { config, deleted, added }
-  })
+  const handoffFlags = createMemo(() => getHandoffFlags(handoffDiffs()))
 
   const handoffOpen = createMemo(() => {
     const id = params.id
     if (!id) return []
-    return (sync.data.todo[id] ?? globalSync.data.session_todo[id] ?? [])
-      .filter((item) => item.status !== "completed" && item.status !== "cancelled")
-      .map((item) => item.content.trim())
-      .filter((item) => !!item)
+    return getHandoffOpen(sync.data.todo[id] ?? globalSync.data.session_todo[id] ?? [])
   })
 
-  const handoffRisks = createMemo(() => {
-    const out = [...handoffOpen()]
-    const flags = handoffFlags()
+  const handoffRisks = createMemo(() => getHandoffRisks(handoffOpen(), handoffFlags(), language.t))
 
-    if (flags.deleted) out.push(language.t("session.handoff.open.deleted"))
-    if (flags.config) out.push(language.t("session.handoff.open.config"))
-    if (out.length === 0 && flags.added) out.push(language.t("session.handoff.open.added"))
-    if (out.length === 0) out.push(language.t("session.handoff.open.generic"))
+  const handoffChecks = createMemo(() => getHandoffChecks(verify.recent, context()?.checks))
 
-    return [...new Set(out)].slice(0, 3)
-  })
-
-  const handoffChecks = createMemo(() => {
-    const seen = new Set<string>()
-    const out: { id: string; title: string; command: string; recent?: boolean }[] = []
-
-    for (const item of verify.recent) {
-      const cmd = item.command.trim()
-      if (!cmd || seen.has(cmd)) continue
-      seen.add(cmd)
-      out.push({
-        id: `recent:${cmd}`,
-        title: item.title,
-        command: cmd,
-        recent: true,
-      })
-    }
-
-    for (const item of context()?.checks ?? []) {
-      const cmd = item.command.trim()
-      if (!cmd || seen.has(cmd)) continue
-      seen.add(cmd)
-      out.push({
-        id: item.id,
-        title: item.title,
-        command: cmd,
-      })
-    }
-
-    return out.slice(0, 4)
-  })
-
-  const handoffSteps = createMemo(() => {
-    const out = []
-    const flags = handoffFlags()
-    const checks = handoffChecks()
-
-    out.push(language.t("session.handoff.verify.review"))
-    if (flags.deleted) out.push(language.t("session.handoff.verify.deleted"))
-    if (flags.config) out.push(language.t("session.handoff.verify.config"))
-    if (checks.length > 0) {
-      out.push(
-        ...checks.slice(0, 2).map((item) => language.t("session.handoff.verify.command", { command: item.command })),
-      )
-    } else {
-      out.push(language.t("session.handoff.verify.checks"))
-    }
-
-    return [...new Set(out)].slice(0, 3)
-  })
+  const handoffSteps = createMemo(() => getHandoffSteps(handoffFlags(), handoffChecks(), language.t))
 
   const handoffText = createMemo(() => {
-    const lines = [
-      `${language.t("session.handoff.eyebrow")}: ${handoffTitle()}`,
-      handoffSummary(),
-      language.t("session.handoff.copy.files", {
+    return getHandoffText({
+      eyebrow: language.t("session.handoff.eyebrow"),
+      title: handoffTitle(),
+      summary: handoffSummary(),
+      stats: language.t("session.handoff.copy.files", {
         count: Math.max(info()?.summary?.files ?? 0, handoffDiffs().length),
         additions: info()?.summary?.additions ?? 0,
         deletions: info()?.summary?.deletions ?? 0,
       }),
-      `${language.t("session.handoff.open.title")}:`,
-      ...handoffRisks().map((item) => `- ${item}`),
-      `${language.t("session.handoff.verify.title")}:`,
-      ...handoffSteps().map((item) => `- ${item}`),
-    ].filter((item): item is string => !!item)
-
-    return lines.join("\n")
+      openTitle: language.t("session.handoff.open.title"),
+      risks: handoffRisks(),
+      verifyTitle: language.t("session.handoff.verify.title"),
+      steps: handoffSteps(),
+    })
   })
 
   const write = async (value: string) => {
@@ -1734,12 +1389,7 @@ export default function Page() {
   const runHandoffCheck = (item: { command: string; title?: string }) => {
     const cmd = item.command.trim()
     if (cmd) {
-      setVerify("recent", (list) =>
-        [{ command: cmd, title: item.title?.trim() || cmd }, ...list.filter((entry) => entry.command !== cmd)].slice(
-          0,
-          4,
-        ),
-      )
+      setVerify("recent", (list) => updateRecentChecks(list, item))
     }
     const text = language.t("session.handoff.action.command.prompt", { command: item.command })
     prompt.set(quickPrompt(text), text.length)
@@ -1843,32 +1493,14 @@ export default function Page() {
     return settings.general.followup() === "queue" && busy(id) && !composer.blocked()
   })
 
-  const followupText = (item: FollowupDraft) => {
-    const text = item.prompt
-      .map((part) => {
-        if (part.type === "image") return `[image:${part.filename}]`
-        if (part.type === "file") return `[file:${part.path}]`
-        if (part.type === "agent") return `@${part.name}`
-        return part.content
-      })
-      .join("")
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find((line) => !!line)
-
-    if (text) return text
-    return `[${language.t("common.attachment")}]`
-  }
-
   const queueFollowup = (draft: FollowupDraft) => {
-    setFollowup("items", draft.sessionID, (items) => [
-      ...(items ?? []),
-      { id: Identifier.ascending("message"), ...draft },
-    ])
+    setFollowup("items", draft.sessionID, (items) => appendFollowup(items, draft, Identifier.ascending("message")))
     setFollowup("failed", draft.sessionID, undefined)
   }
 
-  const followupDock = createMemo(() => queuedFollowups().map((item) => ({ id: item.id, text: followupText(item) })))
+  const followupDock = createMemo(() =>
+    queuedFollowups().map((item) => ({ id: item.id, text: getFollowupText(item, language.t("common.attachment")) })),
+  )
 
   const sendFollowup = (sessionID: string, id: string, opts?: { manual?: boolean }) => {
     const item = (followup.items[sessionID] ?? []).find((entry) => entry.id === id)
@@ -1886,7 +1518,7 @@ export default function Page() {
     const item = queuedFollowups().find((entry) => entry.id === id)
     if (!item) return
 
-    setFollowup("items", sessionID, (items) => (items ?? []).filter((entry) => entry.id !== id))
+    setFollowup("items", sessionID, (items) => removeQueuedFollowup(items, id))
     setFollowup("failed", sessionID, (value) => (value === id ? undefined : value))
     setFollowup("edit", sessionID, {
       id: item.id,
@@ -1905,7 +1537,7 @@ export default function Page() {
     const sessionID = params.id
     if (!sessionID) return
     if (followupBusy(sessionID) && sendingFollowup() === id) return
-    setFollowup("items", sessionID, (items) => (items ?? []).filter((entry) => entry.id !== id))
+    setFollowup("items", sessionID, (items) => removeQueuedFollowup(items, id))
     setFollowup("failed", sessionID, (value) => (value === id ? undefined : value))
   }
 
@@ -2028,15 +1660,19 @@ export default function Page() {
 
   createEffect(() => {
     const sessionID = params.id
-    if (!sessionID) return
-
     const item = queuedFollowups()[0]
-    if (!item) return
-    if (followupBusy(sessionID)) return
-    if (followup.failed[sessionID] === item.id) return
-    if (followup.paused[sessionID]) return
-    if (composer.blocked()) return
-    if (busy(sessionID)) return
+    if (!sessionID) return
+    if (
+      !shouldAutoSendFollowup({
+        item,
+        sending: followupBusy(sessionID),
+        failed: followup.failed[sessionID],
+        paused: followup.paused[sessionID],
+        blocked: composer.blocked(),
+        busy: busy(sessionID),
+      })
+    )
+      return
 
     void sendFollowup(sessionID, item.id)
   })

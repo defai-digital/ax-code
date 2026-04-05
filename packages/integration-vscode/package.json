@@ -1,0 +1,157 @@
+{
+  "name": "ax-code",
+  "displayName": "AX Code",
+  "description": "AI coding agent for VS Code — powered by AX Code",
+  "version": "1.4.0",
+  "publisher": "defai-digital",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/defai-digital/ax-code"
+  },
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#000000",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ax-code",
+          "title": "ax-code",
+          "icon": "images/button-dark.svg"
+        }
+      ]
+    },
+    "views": {
+      "ax-code": [
+        {
+          "type": "webview",
+          "id": "ax-code.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ax-code.openChat",
+        "title": "ax-code: Open Chat"
+      },
+      {
+        "command": "ax-code.askAboutFile",
+        "title": "ax-code: Explain This File"
+      },
+      {
+        "command": "ax-code.fixFile",
+        "title": "ax-code: Fix This File"
+      },
+      {
+        "command": "ax-code.explainSelection",
+        "title": "ax-code: Explain Selection"
+      },
+      {
+        "command": "ax-code.reviewSelection",
+        "title": "ax-code: Review Selection"
+      },
+      {
+        "command": "ax-code.openTerminal",
+        "title": "ax-code: Open Terminal",
+        "icon": {
+          "light": "images/button-dark.svg",
+          "dark": "images/button-light.svg"
+        }
+      },
+      {
+        "command": "ax-code.openNewTerminal",
+        "title": "ax-code: Open Terminal (New Tab)",
+        "icon": {
+          "light": "images/button-dark.svg",
+          "dark": "images/button-light.svg"
+        }
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "ax-code.openChat",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ax-code.explainSelection",
+          "group": "ax-code",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "ax-code.reviewSelection",
+          "group": "ax-code",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "ax-code.askAboutFile",
+          "group": "ax-code"
+        },
+        {
+          "command": "ax-code.fixFile",
+          "group": "ax-code"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ax-code.openChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      },
+      {
+        "command": "ax-code.explainSelection",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "ax-code.openTerminal",
+        "key": "ctrl+escape",
+        "mac": "cmd+escape"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "bun run package",
+    "compile": "bun run check-types && bun run lint && node esbuild.js",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "bun run check-types && bun run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "bun run compile-tests && bun run compile && bun run lint",
+    "check-types": "tsc --noEmit",
+    "typecheck": "bun run check-types",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.94.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "eslint": "^9.25.1",
+    "esbuild": "^0.25.3",
+    "typescript": "^5.8.3",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

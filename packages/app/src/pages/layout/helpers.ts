@@ -1,9 +1,15 @@
 import { getFilename } from "@ax-code/util/path"
 import { type Session } from "@ax-code/sdk/v2/client"
+import { type LocalProject } from "@/context/layout"
 
 type SessionStore = {
   session?: Session[]
   path: { directory: string }
+}
+
+type WorkspaceNames = {
+  workspaceName: Record<string, string>
+  workspaceBranchName: Record<string, Record<string, string>>
 }
 
 export const workspaceKey = (directory: string) => {
@@ -103,4 +109,60 @@ export const effectiveWorkspaceOrder = (local: string, dirs: string[], persisted
   }
 
   return [...result, ...live.values()]
+}
+
+export const getWorkspaceName = (store: WorkspaceNames, directory: string, projectId?: string, branch?: string) => {
+  const key = workspaceKey(directory)
+  const direct = store.workspaceName[key] ?? store.workspaceName[directory]
+  if (direct) return direct
+  if (!projectId || !branch) return
+  return store.workspaceBranchName[projectId]?.[branch]
+}
+
+export const getWorkspaceLabel = (store: WorkspaceNames, directory: string, branch?: string, projectId?: string) =>
+  getWorkspaceName(store, directory, projectId, branch) ?? branch ?? getFilename(directory)
+
+export const workspaceIdsForProject = ({
+  project,
+  active,
+  current,
+  persisted,
+  pending,
+}: {
+  project: LocalProject | undefined
+  active?: string
+  current?: string
+  persisted?: string[]
+  pending?: (directory: string) => boolean
+}) => {
+  if (!project) return []
+  const local = project.worktree
+  const dirs = [local, ...(project.sandboxes ?? [])]
+  const extra =
+    current &&
+    workspaceKey(active ?? "") === workspaceKey(project.worktree) &&
+    workspaceKey(current) !== workspaceKey(local) &&
+    !dirs.some((item) => workspaceKey(item) === workspaceKey(current))
+      ? current
+      : undefined
+
+  const ordered = effectiveWorkspaceOrder(local, dirs, persisted)
+  if (!extra) return ordered
+  if (!pending?.(extra)) return [...ordered, extra]
+  return [local, extra, ...ordered.filter((item) => item !== local)]
+}
+
+export const mergeByID = <T extends { id: string }>(current: T[], incoming: T[]) => {
+  if (current.length === 0) {
+    return incoming.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  }
+
+  const map = new Map<string, T>()
+  for (const item of current) {
+    map.set(item.id, item)
+  }
+  for (const item of incoming) {
+    map.set(item.id, item)
+  }
+  return [...map.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 }

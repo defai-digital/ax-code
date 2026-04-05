@@ -22,7 +22,6 @@ import { Filesystem } from "../util/filesystem"
 // Direct imports for bundled providers
 import { createGroq } from "@ai-sdk/groq"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
 import { ProviderTransform } from "./transform"
@@ -104,12 +103,11 @@ export namespace Provider {
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
     "@ai-sdk/groq": createGroq,
     "@ai-sdk/google": createGoogleGenerativeAI,
-    "@ai-sdk/openai": createOpenAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
   }
 
-  function useLanguageModel(sdk: any) {
+  function useLanguageModel(sdk: Record<string, unknown>) {
     return sdk.responses === undefined && sdk.chat === undefined
   }
 
@@ -606,7 +604,7 @@ export namespace Provider {
       const chunkTimeout = options["chunkTimeout"]
       delete options["chunkTimeout"]
 
-      options["fetch"] = async (input: any, init?: BunFetchRequestInit) => {
+      options["fetch"] = async (input: string | Request | URL, init?: BunFetchRequestInit) => {
         // Preserve custom fetch if it exists, wrap it with timeout logic
         const fetchFn = customFetch ?? fetch
         const opts = init ?? {}

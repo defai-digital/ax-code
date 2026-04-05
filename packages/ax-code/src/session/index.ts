@@ -727,7 +727,7 @@ export namespace Session {
     (input) => {
       const safe = (value: unknown): number => {
         if (typeof value === "number" && Number.isFinite(value)) return value
-        if (value && typeof value === "object" && "total" in value) return safe((value as any).total)
+        if (value && typeof value === "object" && "total" in value) return safe((value as { total: unknown }).total)
         return 0
       }
       const inputTokens = safe(input.usage.inputTokens ?? 0)
@@ -736,7 +736,7 @@ export namespace Session {
 
       const cacheReadInputTokens = safe(input.usage.cachedInputTokens ?? 0)
 
-      const anthropicMeta = (input.metadata as any)?.["anthropic"] as Record<string, number> | undefined
+      const anthropicMeta = (input.metadata as Record<string, unknown>)?.["anthropic"] as Record<string, number> | undefined
       const cacheWriteInputTokens = safe(
         (anthropicMeta?.["cacheCreationInputTokens"] ??
           // @ts-expect-error

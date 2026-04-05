@@ -67,9 +67,13 @@ import {
   displayName,
   effectiveWorkspaceOrder,
   errorMessage,
+  getWorkspaceLabel,
+  getWorkspaceName,
   latestRootSession,
+  mergeByID,
   sortedRootSessions,
   workspaceKey,
+  workspaceIdsForProject,
 } from "./layout/helpers"
 import {
   collectNewSessionDeepLinks,
@@ -77,6 +81,9 @@ import {
   deepLinkEvent,
   drainPendingDeepLinks,
 } from "./layout/deep-links"
+import { projectByOffset, sessionIndexByOffset, unseenSessionIndex } from "./layout/navigation"
+import { nextInList } from "./layout/preferences"
+import { dropProjectSession, projectRootForDirectory, rememberProjectSession } from "./layout/route-state"
 import { createInlineEditorController } from "./layout/inline-editor"
 import {
   LocalWorkspace,
@@ -331,10 +338,8 @@ export default function Layout(props: ParentProps) {
 
   function cycleTheme(direction = 1) {
     const ids = availableThemeEntries().map(([id]) => id)
-    if (ids.length === 0) return
-    const currentIndex = ids.indexOf(theme.themeId())
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + direction + ids.length) % ids.length
-    const nextThemeId = ids[nextIndex]
+    const nextThemeId = nextInList(ids, theme.themeId(), direction)
+    if (!nextThemeId) return
     theme.setTheme(nextThemeId)
     showToast({
       title: language.t("toast.theme.title"),
@@ -343,11 +348,8 @@ export default function Layout(props: ParentProps) {
   }
 
   function cycleColorScheme(direction = 1) {
-    const current = theme.colorScheme()
-    const currentIndex = colorSchemeOrder.indexOf(current)
-    const nextIndex =
-      currentIndex === -1 ? 0 : (currentIndex + direction + colorSchemeOrder.length) % colorSchemeOrder.length
-    const next = colorSchemeOrder[nextIndex]
+    const next = nextInList(colorSchemeOrder, theme.colorScheme(), direction)
+    if (!next) return
     theme.setColorScheme(next)
     showToast({
       title: language.t("toast.scheme.title"),
@@ -365,10 +367,7 @@ export default function Layout(props: ParentProps) {
   }
 
   function cycleLanguage(direction = 1) {
-    const locales = language.locales
-    const currentIndex = locales.indexOf(language.locale())
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + direction + locales.length) % locales.length
-    const next = locales[nextIndex]
+    const next = nextInList(language.locales, language.locale(), direction)
     if (!next) return
     setLocale(next)
   }
@@ -605,14 +604,8 @@ export default function Layout(props: ParentProps) {
     }
   })
 
-  const workspaceName = (directory: string, projectId?: string, branch?: string) => {
-    const key = workspaceKey(directory)
-    const direct = store.workspaceName[key] ?? store.workspaceName[directory]
-    if (direct) return direct
-    if (!projectId) return
-    if (!branch) return
-    return store.workspaceBranchName[projectId]?.[branch]
-  }
+  const workspaceName = (directory: string, projectId?: string, branch?: string) =>
+    getWorkspaceName(store, directory, projectId, branch)
 
   const setWorkspaceName = (directory: string, next: string, projectId?: string, branch?: string) => {
     const key = workspaceKey(directory)
@@ -626,7 +619,7 @@ export default function Layout(props: ParentProps) {
   }
 
   const workspaceLabel = (directory: string, branch?: string, projectId?: string) =>
-    workspaceName(directory, projectId, branch) ?? branch ?? getFilename(directory)
+    getWorkspaceLabel(store, directory, branch, projectId)
 
   const workspaceSetting = createMemo(() => {
     const project = currentProject()
@@ -753,21 +746,6 @@ export default function Layout(props: ParentProps) {
     }
     prefetchQueues.set(directory, created)
     return created
-  }
-
-  const mergeByID = <T extends { id: string }>(current: T[], incoming: T[]) => {
-    if (current.length === 0) {
-      return incoming.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    }
-
-    const map = new Map<string, T>()
-    for (const item of current) {
-      map.set(item.id, item)
-    }
-    for (const item of incoming) {
-      map.set(item.id, item)
-    }
-    return [...map.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   }
 
   async function prefetchMessages(directory: string, sessionID: string, token: number) {
@@ -929,17 +907,8 @@ export default function Layout(props: ParentProps) {
 
   function navigateSessionByOffset(offset: number) {
     const sessions = currentSessions()
-    if (sessions.length === 0) return
-
-    const sessionIndex = params.id ? sessions.findIndex((s) => s.id === params.id) : -1
-
-    let targetIndex: number
-    if (sessionIndex === -1) {
-      targetIndex = offset > 0 ? 0 : sessions.length - 1
-    } else {
-      targetIndex = (sessionIndex + offset + sessions.length) % sessions.length
-    }
-
+    const targetIndex = sessionIndexByOffset(sessions, params.id, offset)
+    if (targetIndex === undefined) return
     const session = sessions[targetIndex]
     if (!session) return
 
@@ -951,19 +920,11 @@ export default function Layout(props: ParentProps) {
 
   function navigateProjectByOffset(offset: number) {
     const projects = layout.projects.list()
-    if (projects.length === 0) return
 
     const current = currentProject()?.worktree
     const fallback = currentDir() ? projectRoot(currentDir()) : undefined
     const active = current ?? fallback
-    const index = active ? projects.findIndex((project) => project.worktree === active) : -1
-
-    const target =
-      index === -1
-        ? offset > 0
-          ? projects[0]
-          : projects[projects.length - 1]
-        : projects[(index + offset + projects.length) % projects.length]
+    const target = projectByOffset(projects, active, offset)
     if (!target) return
 
     openProject(target.worktree)
@@ -971,26 +932,16 @@ export default function Layout(props: ParentProps) {
 
   function navigateSessionByUnseen(offset: number) {
     const sessions = currentSessions()
-    if (sessions.length === 0) return
+    const index = unseenSessionIndex(sessions, params.id, offset, (session) =>
+      notification.session.unseenCount(session.id),
+    )
+    if (index === undefined) return
+    const session = sessions[index]
+    if (!session) return
 
-    const hasUnseen = sessions.some((session) => notification.session.unseenCount(session.id) > 0)
-    if (!hasUnseen) return
-
-    const activeIndex = params.id ? sessions.findIndex((s) => s.id === params.id) : -1
-    const start = activeIndex === -1 ? (offset > 0 ? -1 : 0) : activeIndex
-
-    for (let i = 1; i <= sessions.length; i++) {
-      const index = offset > 0 ? (start + i) % sessions.length : (start - i + sessions.length) % sessions.length
-      const session = sessions[index]
-      if (!session) continue
-      if (notification.session.unseenCount(session.id) === 0) continue
-
-      prefetchSession(session, "high")
-      warm(sessions, index)
-
-      navigateToSession(session)
-      return
-    }
+    prefetchSession(session, "high")
+    warm(sessions, index)
+    navigateToSession(session)
   }
 
   async function archiveSession(session: Session) {
@@ -1229,26 +1180,14 @@ export default function Layout(props: ParentProps) {
   }
 
   function projectRoot(directory: string) {
-    const key = workspaceKey(directory)
-    const project = layout.projects
-      .list()
-      .find(
-        (item) =>
-          workspaceKey(item.worktree) === key || item.sandboxes?.some((sandbox) => workspaceKey(sandbox) === key),
-      )
-    if (project) return project.worktree
-
-    const known = Object.entries(store.workspaceOrder).find(
-      ([root, dirs]) => workspaceKey(root) === key || dirs.some((item) => workspaceKey(item) === key),
-    )
-    if (known) return known[0]
-
     const [child] = globalSync.child(directory, { bootstrap: false })
-    const id = child.project
-    if (!id) return directory
-
-    const meta = globalSync.data.project.find((item) => item.id === id)
-    return meta?.worktree ?? directory
+    return projectRootForDirectory({
+      directory,
+      projects: layout.projects.list(),
+      order: store.workspaceOrder,
+      childProject: child.project,
+      meta: globalSync.data.project,
+    })
   }
 
   function activeProjectRoot(directory: string) {
@@ -1256,18 +1195,14 @@ export default function Layout(props: ParentProps) {
   }
 
   function rememberSessionRoute(directory: string, id: string, root = activeProjectRoot(directory)) {
-    setStore("lastProjectSession", root, { directory, id, at: Date.now() })
+    setStore("lastProjectSession", rememberProjectSession(store.lastProjectSession, root, directory, id, Date.now()))
     return root
   }
 
   function clearLastProjectSession(root: string) {
-    if (!store.lastProjectSession[root]) return
-    setStore(
-      "lastProjectSession",
-      produce((draft) => {
-        delete draft[root]
-      }),
-    )
+    const next = dropProjectSession(store.lastProjectSession, root)
+    if (next === store.lastProjectSession) return
+    setStore("lastProjectSession", next)
   }
 
   function syncSessionRoute(directory: string, id: string, root = activeProjectRoot(directory)) {
@@ -1872,24 +1807,13 @@ export default function Layout(props: ParentProps) {
   }
 
   function workspaceIds(project: LocalProject | undefined) {
-    if (!project) return []
-    const local = project.worktree
-    const dirs = [local, ...(project.sandboxes ?? [])]
-    const active = currentProject()
-    const directory = workspaceKey(active?.worktree ?? "") === workspaceKey(project.worktree) ? currentDir() : undefined
-    const extra =
-      directory &&
-      workspaceKey(directory) !== workspaceKey(local) &&
-      !dirs.some((item) => workspaceKey(item) === workspaceKey(directory))
-        ? directory
-        : undefined
-    const pending = extra ? WorktreeState.get(extra)?.status === "pending" : false
-
-    const ordered = effectiveWorkspaceOrder(local, dirs, store.workspaceOrder[project.worktree])
-    if (pending && extra) return [local, extra, ...ordered.filter((item) => item !== local)]
-    if (!extra) return ordered
-    if (pending) return ordered
-    return [...ordered, extra]
+    return workspaceIdsForProject({
+      project,
+      active: currentProject()?.worktree,
+      current: currentDir(),
+      persisted: project ? store.workspaceOrder[project.worktree] : undefined,
+      pending: (directory) => WorktreeState.get(directory)?.status === "pending",
+    })
   }
 
   const sidebarProject = createMemo(() => {

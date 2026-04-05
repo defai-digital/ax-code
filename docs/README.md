@@ -1,26 +1,30 @@
-# AX Code — Internal Documentation
+# AX Code Documentation
 
-Architecture Decision Records (ADRs) and Product Requirements Documents (PRDs) for the AX Code project.
+This folder holds repository documentation that should be stable, discoverable, and safe to reference from code reviews and contributor guidance.
 
-## Architecture Decision Records
+## Architecture
 
-| Document | Summary |
-|----------|---------|
-| [ADR-001](ADR-001-ax-code-revamp.md) | Use OpenCode as the base, port selected ax-cli features |
-| [ADR-002](ADR-002-features-5-8.md) | Design decisions for i18n, Design Check, Memory Warmup, Context Stats |
+| Document                                               | Summary                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| [Repository Structure](architecture/repo-structure.md) | Canonical repo layout, dependency rules, hotspot folders, and placement guidance |
+| [Testing Policy](architecture/testing-policy.md)       | Default test layout by package type and when tests are required                  |
 
-## Product Requirements Documents
+## Planning
 
-| Document | Summary |
-|----------|---------|
-| [PRD — ax-code Revamp](PRD-ax-code-revamp.md) | Product vision, goals, and feature scope for v1.0 |
-| [PRD — Features 5-8](PRD-features-5-8.md) | Specifications for i18n, Design Check, Memory Warmup, Context Stats |
-| [PRD — Programmatic SDK](PRD-programmatic-sdk.md) | Direct agent instantiation API without HTTP server |
-| [PRD — pnpm Migration](PRD-pnpm-migration.md) | Migration from Bun-only to pnpm as package manager |
-| [PRD — Code Quality Refactor](PRD-code-quality-refactor.md) | Centralize constants, eliminate duplication, break large files, YAML configs |
+| Folder             | Summary                                            |
+| ------------------ | -------------------------------------------------- |
+| [`adr/`](adr/)     | Architecture decision records                      |
+| [`prd/`](prd/)     | Product and engineering requirement documents      |
+| [`specs/`](specs/) | Stable product and technical specifications        |
+| [`bugs/`](bugs/)   | Bug inventories, audits, and defect tracking notes |
+| [`todos/`](todos/) | Deferred work and follow-up plans                  |
 
 ## Reference
 
-| Document | Summary |
-|----------|---------|
+| Document                                        | Summary                                                                |
+| ----------------------------------------------- | ---------------------------------------------------------------------- |
 | [Migration Review](ax-code-migration-review.md) | Feature comparison and migration strategy: OpenCode + ax-cli → AX Code |
+
+## Policies
+
+Machine-readable policy examples live in [`docs/policies`](policies/).

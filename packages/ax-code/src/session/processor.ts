@@ -60,6 +60,7 @@ export namespace SessionProcessor {
     sessionID: SessionID
     model: Provider.Model
     abort: AbortSignal
+    messages?: MessageV2.WithParts[]
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const recentToolRing: { tool: string; input: string }[] = []
@@ -93,6 +94,7 @@ export namespace SessionProcessor {
           try {
             let usedTools = false
             let stepStartTime = Date.now()
+            let stepParts: Array<{ type: "text", text: string } | { type: "reasoning", text: string } | { type: "tool_call", callID: string, tool: string, input: Record<string, unknown> }> = []
             Recorder.emit({
               type: "llm.request",
               sessionID: input.sessionID,
@@ -147,6 +149,7 @@ export namespace SessionProcessor {
                       end: Date.now(),
                     }
                     if (value.providerMetadata) part.metadata = value.providerMetadata
+                    stepParts.push({ type: "reasoning", text: part.text })
                     await Session.updatePart(part)
                     delete reasoningMap[value.id]
                   }
@@ -178,6 +181,7 @@ export namespace SessionProcessor {
 
                 case "tool-call": {
                   usedTools = true
+                  stepParts.push({ type: "tool_call", callID: value.toolCallId, tool: value.toolName, input: value.input as Record<string, unknown> })
                   Recorder.emit({
                     type: "tool.call",
                     sessionID: input.sessionID,
@@ -258,6 +262,7 @@ export namespace SessionProcessor {
                       output: typeof value.output.output === "string" ? value.output.output.slice(0, 1000) : undefined,
                       durationMs: toolEndTime - match.state.time.start,
                       stepIndex: attempt,
+                      deterministic: false,
                     })
 
                     // Self-correction: clear retry budget on success
@@ -299,6 +304,7 @@ export namespace SessionProcessor {
                       error: errorMsg.slice(0, 1000),
                       durationMs: toolErrorEnd - match.state.time.start,
                       stepIndex: attempt,
+                      deterministic: false,
                     })
 
                     if (
@@ -330,6 +336,7 @@ export namespace SessionProcessor {
                   usedTools = false
                   snapshot = undefined
                   stepStartTime = Date.now()
+                  stepParts = []
                   Recorder.emit({
                     type: "step.start",
                     sessionID: input.sessionID,
@@ -353,7 +360,7 @@ export namespace SessionProcessor {
                   })
                   const finishReason = typeof value.finishReason === "string"
                     ? value.finishReason
-                    : (value.finishReason as any)?.type ?? String(value.finishReason ?? "stop")
+                    : (value.finishReason as { type?: string })?.type ?? String(value.finishReason ?? "stop")
                   input.assistantMessage.finish = usedTools ? "tool-calls" : finishReason
                   input.assistantMessage.cost += usage.cost
                   input.assistantMessage.tokens = {
@@ -407,6 +414,15 @@ export namespace SessionProcessor {
                     latencyMs: Date.now() - stepStartTime,
                     stepIndex: attempt,
                   })
+                  if (stepParts.length > 0) {
+                    Recorder.emit({
+                      type: "llm.output",
+                      sessionID: input.sessionID,
+                      messageID: input.assistantMessage.id,
+                      stepIndex: attempt,
+                      parts: stepParts,
+                    })
+                  }
                   if (snapshot) {
                     const patch = await Snapshot.patch(snapshot)
                     if (patch.files.length) {
@@ -422,7 +438,7 @@ export namespace SessionProcessor {
                   SessionSummary.summarize({
                     sessionID: input.sessionID,
                     messageID: input.assistantMessage.parentID,
-                  }).catch((e) => log.warn("summarize failed", { error: e }))
+                  }, input.messages).catch((e) => log.warn("summarize failed", { error: e }))
                   if (
                     !input.assistantMessage.summary &&
                     (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model }))
@@ -471,6 +487,7 @@ export namespace SessionProcessor {
                       end: Date.now(),
                     }
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
+                    stepParts.push({ type: "text", text: currentText.text })
                     await Session.updatePart(currentText)
                   }
                   currentText = undefined

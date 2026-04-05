@@ -1,0 +1,68 @@
+name: Promote to Stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Beta version to promote (e.g., 2.0.0)"
+        required: true
+      skip_soak_check:
+        description: "Skip 48-hour soak period check (emergency only)"
+        type: boolean
+        default: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check soak period
+        if: ${{ !inputs.skip_soak_check }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ inputs.version }}"
+          CREATED=$(gh release view "$TAG" --json createdAt -q .createdAt 2>/dev/null)
+          if [ -z "$CREATED" ]; then
+            echo "::error::Release $TAG not found"
+            exit 1
+          fi
+          AGE_HOURS=$(( ($(date +%s) - $(date -d "$CREATED" +%s)) / 3600 ))
+          echo "Release $TAG is ${AGE_HOURS}h old"
+          if [ "$AGE_HOURS" -lt 48 ]; then
+            echo "::error::Release is only ${AGE_HOURS}h old. Minimum 48h soak required. Use skip_soak_check for emergencies."
+            exit 1
+          fi
+          echo "Soak period satisfied (${AGE_HOURS}h >= 48h)"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Promote to stable
+        run: bun script/publish.ts
+        env:
+          AX_CODE_CHANNEL: latest
+          AX_CODE_VERSION: ${{ inputs.version }}
+          AX_CODE_RELEASE: "true"
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

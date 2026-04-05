@@ -1,6 +1,6 @@
 import { createMemo, createSignal, onMount, Show } from "solid-js"
 import { useSync } from "@tui/context/sync"
-import { map, pipe, sortBy } from "remeda"
+import { filter, map, pipe, sortBy } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { useSDK } from "../context/sdk"
@@ -15,6 +15,7 @@ import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
 
 const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama", "lmstudio"])
+const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "alibaba"])
 
 export function createDialogProviderOptions() {
   const sync = useSync()
@@ -24,6 +25,7 @@ export function createDialogProviderOptions() {
   const options = createMemo(() => {
     return pipe(
       sync.data.provider_next.all,
+      filter((x) => !HIDDEN_PROVIDERS.has(x.id)),
       sortBy((x) => (OFFLINE_PROVIDERS.has(x.id) ? 0 : 1), (x) => x.name),
       map((provider) => ({
         title: provider.name,

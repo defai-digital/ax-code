@@ -293,7 +293,7 @@ export const ProvidersLoginCommand = cmd({
       async fn() {
         if (args.url) {
           const url = args.url.replace(/\/+$/, "")
-          const wellknown = await fetch(`${url}/.well-known/ax-code`).then((x) => x.json() as any)
+          const wellknown = await fetch(`${url}/.well-known/ax-code`).then((x) => x.json() as Promise<Record<string, any>>)
           prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
           const proc = Process.spawn(wellknown.auth.command, {
             stdout: "pipe",
@@ -321,7 +321,14 @@ export const ProvidersLoginCommand = cmd({
         const config = await Config.get()
 
         // Only show providers with bundled SDK support (+ any user-enabled via config)
-        const SUPPORTED_PROVIDERS = new Set(["ax-code", "google", "groq", "xai", "zai", "zai-coding-plan"])
+        const SUPPORTED_PROVIDERS = new Set([
+          "ax-code",
+          "groq",
+          "xai",
+          "zai",
+          "zai-coding-plan",
+          "alibaba-coding-plan",
+        ])
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 

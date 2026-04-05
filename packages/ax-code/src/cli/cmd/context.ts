@@ -3,6 +3,7 @@ import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { bootstrap } from "../bootstrap"
 import { Session } from "../../session"
+import { MessageV2 } from "../../session/message-v2"
 import { calculateBreakdown, formatBreakdown, estimateCost } from "../../stats"
 
 export const ContextCommand = cmd({
@@ -54,15 +55,16 @@ export const ContextCommand = cmd({
       for (const msg of messages) {
         messageCount++
         if (msg.info.role === "assistant") {
-          const tokens = (msg.info as any).tokens
+          const info = msg.info as MessageV2.Assistant
+          const tokens = info.tokens
           if (tokens) {
             inputTokens += tokens.input ?? 0
             outputTokens += tokens.output ?? 0
             reasoningTokens += tokens.reasoning ?? 0
             cachedTokens += tokens.cache?.read ?? 0
           }
-          providerID = (msg.info as any).providerID ?? providerID
-          modelID = (msg.info as any).modelID ?? modelID
+          providerID = info.providerID ?? providerID
+          modelID = info.modelID ?? modelID
 
           for (const part of msg.parts) {
             if (part.type === "tool") toolCalls++

@@ -1,0 +1,18 @@
+{
+  "version": "1",
+  "name": "read-only-audit",
+  "rules": [
+    {
+      "agent": "*",
+      "tools": ["read", "grep", "glob", "lsp", "codesearch"],
+      "files": ["**"],
+      "action": "allow"
+    },
+    {
+      "agent": "*",
+      "tools": ["write", "edit", "apply_patch", "bash"],
+      "files": ["**"],
+      "action": "deny"
+    }
+  ]
+}

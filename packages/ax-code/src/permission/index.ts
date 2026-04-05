@@ -13,6 +13,7 @@ import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
 import { Deferred, Effect, Layer, Schema, ServiceMap } from "effect"
 import os from "os"
+import path from "path"
 import z from "zod"
 import { evaluate as evalRule } from "./evaluate"
 import { PermissionID } from "./schema"
@@ -325,6 +326,51 @@ export namespace Permission {
 
   export function merge(...rulesets: Ruleset[]): Ruleset {
     return rulesets.flat()
+  }
+
+  // R16: Local policy mode — .ax-code/policy.json
+  export const PolicyRule = z.object({
+    agent: z.string().optional().default("*"),
+    tools: z.string().array(),
+    files: z.string().array().optional().default(["*"]),
+    action: Action,
+  })
+
+  export const PolicyFile = z.object({
+    version: z.string(),
+    name: z.string().optional(),
+    rules: PolicyRule.array(),
+  })
+  export type PolicyFile = z.infer<typeof PolicyFile>
+
+  /** Convert a policy.json file into a Permission.Ruleset */
+  export function fromPolicy(policy: PolicyFile): Ruleset {
+    const ruleset: Ruleset = []
+    for (const rule of policy.rules) {
+      for (const tool of rule.tools) {
+        const permission = EDIT_TOOLS.includes(tool) ? "edit" : tool
+        for (const file of rule.files) {
+          ruleset.push({ permission, pattern: expand(file), action: rule.action })
+        }
+      }
+    }
+    return ruleset
+  }
+
+  /** Load policy from .ax-code/policy.json if it exists */
+  export async function loadPolicy(directory: string): Promise<Ruleset> {
+    const filepath = path.join(directory, ".ax-code", "policy.json")
+    try {
+      const file = Bun.file(filepath)
+      if (!(await file.exists())) return []
+      const raw = await file.json()
+      const policy = PolicyFile.parse(raw)
+      log.info("loaded policy", { name: policy.name, rules: policy.rules.length, path: filepath })
+      return fromPolicy(policy)
+    } catch (e) {
+      log.warn("failed to load policy", { path: filepath, error: e })
+      return []
+    }
   }
 
   const EDIT_TOOLS = ["edit", "write", "apply_patch", "multiedit"]

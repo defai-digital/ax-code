@@ -38,6 +38,8 @@ including but not limited to:
 - zod - Copyright Colin McDonnell
 - fuzzysort - Copyright Stephen Kamenar
 - remeda - Copyright Remeda Contributors
+- ghostty-web - Copyright (c) 2025 Coder (vendored in packages/ghostty-web/,
+  upstream: https://github.com/coder/ghostty-web)
 
 ========================================================================
 BSD-3-Clause License

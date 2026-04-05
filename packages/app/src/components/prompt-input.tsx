@@ -3,17 +3,8 @@ import { useSpring } from "@ax-code/ui/motion-spring"
 import { createEffect, on, Component, Show, onCleanup, createMemo, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocal } from "@/context/local"
-import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
-import {
-  ContentPart,
-  DEFAULT_PROMPT,
-  isPromptEqual,
-  Prompt,
-  usePrompt,
-  ImageAttachmentPart,
-  AgentPart,
-  FileAttachmentPart,
-} from "@/context/prompt"
+import { selectionFromLines, useFile } from "@/context/file"
+import { ContentPart, DEFAULT_PROMPT, isPromptEqual, Prompt, usePrompt, ImageAttachmentPart } from "@/context/prompt"
 import { useLayout } from "@/context/layout"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -38,18 +29,42 @@ import { usePlatform } from "@/context/platform"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { promptEnabled, promptProbe } from "@/testing/prompt"
-import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge } from "./prompt-input/editor-dom"
+import {
+  createPill,
+  createTextFragment,
+  getCursorPosition,
+  isNormalizedEditor,
+  parsePromptEditor,
+  renderPromptEditor,
+  setCursorPosition,
+  setRangeEdge,
+} from "./prompt-input/editor-dom"
 import { createPromptAttachments } from "./prompt-input/attachments"
 import { ACCEPTED_FILE_TYPES } from "./prompt-input/files"
 import {
   canNavigateHistoryAtCursor,
-  navigatePromptHistory,
-  prependHistoryEntry,
   type PromptHistoryComment,
   type PromptHistoryEntry,
   type PromptHistoryStoredEntry,
+  navigatePromptHistory,
+  prependHistoryEntry,
   promptLength,
 } from "./prompt-input/history"
+import {
+  buildSlashCommands,
+  commentCount as promptCommentCount,
+  contextItems as promptContextItems,
+  hasUserPrompt as hasPromptMessage,
+  historyComments as buildHistoryComments,
+  isSeedable,
+  promptPopover,
+  promptText,
+  recentPaths,
+  shouldIgnoreWorkingSubmit,
+  shouldResetPrompt,
+  togglePin as togglePromptPin,
+  touchRecipe as touchPromptRecipe,
+} from "./prompt-input/state"
 import { createPromptSubmit, type FollowupDraft } from "./prompt-input/submit"
 import {
   PromptPopover,
@@ -105,8 +120,6 @@ const EXAMPLES = [
   "prompt.example.24",
   "prompt.example.25",
 ] as const
-
-const NON_EMPTY_TEXT = /[^\s\u200B]/
 
 export const PromptInput: Component<PromptInputProps> = (props) => {
   const sdk = useSDK()
@@ -228,21 +241,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }
 
   const recent = createMemo(() => {
-    const all = tabs().all()
-    const active = activeFileTab()
-    const order = active ? [active, ...all.filter((x) => x !== active)] : all
-    const seen = new Set<string>()
-    const paths: string[] = []
-
-    for (const tab of order) {
-      const path = files.pathFromTab(tab)
-      if (!path) continue
-      if (seen.has(path)) continue
-      seen.add(path)
-      paths.push(path)
-    }
-
-    return paths
+    return recentPaths(tabs().all(), activeFileTab(), files.pathFromTab)
   })
   const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
   const status = createMemo(
@@ -303,22 +302,17 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const control = createMemo(() => ({ height: "28px", ...buttons() }))
 
   const commentCount = createMemo(() => {
-    if (store.mode === "shell") return 0
-    return prompt.context.items().filter((item) => !!item.comment?.trim()).length
+    return promptCommentCount(prompt.context.items(), store.mode)
   })
 
   const contextItems = createMemo(() => {
-    const items = prompt.context.items()
-    if (store.mode !== "shell") return items
-    return items.filter((item) => !item.comment?.trim())
+    return promptContextItems(prompt.context.items(), store.mode)
   })
 
   const hasUserPrompt = createMemo(() => {
     const sessionID = params.id
     if (!sessionID) return false
-    const messages = sync.data.message[sessionID]
-    if (!messages) return false
-    return messages.some((m) => m.role === "user")
+    return hasPromptMessage(sync.data.message[sessionID])
   })
 
   const [history, setHistory] = persisted(
@@ -351,14 +345,15 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const suggest = createMemo(() => !hasUserPrompt())
   const starts = createMemo(() => quickStarts((key, params) => language.t(key as never, params as never)))
   const pins = createMemo(() => new Set(recipes.pin))
-  const seedable = createMemo(
-    () =>
-      store.mode === "normal" &&
-      suggest() &&
-      !prompt.dirty() &&
-      !working() &&
-      imageAttachments().length === 0 &&
-      contextItems().length === 0,
+  const seedable = createMemo(() =>
+    isSeedable({
+      mode: store.mode,
+      suggest: suggest(),
+      dirty: prompt.dirty(),
+      working: working(),
+      imageCount: imageAttachments().length,
+      contextCount: contextItems().length,
+    }),
   )
 
   const placeholder = createMemo(() =>
@@ -372,35 +367,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   )
 
   const historyComments = () => {
-    const byID = new Map(comments.all().map((item) => [`${item.file}\n${item.id}`, item] as const))
-    return prompt.context.items().flatMap((item) => {
-      if (item.type !== "file") return []
-      const comment = item.comment?.trim()
-      if (!comment) return []
-
-      const selection = item.commentID ? byID.get(`${item.path}\n${item.commentID}`)?.selection : undefined
-      const nextSelection =
-        selection ??
-        (item.selection
-          ? ({
-              start: item.selection.startLine,
-              end: item.selection.endLine,
-            } satisfies SelectedLineRange)
-          : undefined)
-      if (!nextSelection) return []
-
-      return [
-        {
-          id: item.commentID ?? item.key,
-          path: item.path,
-          selection: { ...nextSelection },
-          comment,
-          time: item.commentID ? (byID.get(`${item.path}\n${item.commentID}`)?.time ?? Date.now()) : Date.now(),
-          origin: item.commentOrigin,
-          preview: item.preview,
-        } satisfies PromptHistoryComment,
-      ]
-    })
+    return buildHistoryComments(prompt.context.items(), comments.all())
   }
 
   const applyHistoryComments = (items: PromptHistoryComment[]) => {
@@ -545,7 +512,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const renderEditorWithCursor = (parts: Prompt) => {
     const cursor = currentCursor()
-    renderEditor(parts)
+    renderPromptEditor(editorRef, parts)
     if (cursor !== null) setCursorPosition(editorRef, cursor)
   }
 
@@ -638,77 +605,20 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
 
   const slashCommands = createMemo<SlashCommand[]>(() => {
-    const label = (key: string) => language.t(key as Parameters<typeof language.t>[0])
-    const pin = new Map(recipes.pin.map((id, index) => [id, index] as const))
-    const recent = new Map(recipes.recent.map((id, index) => [id, index] as const))
-    const builtin = command.options
-      .filter((opt) => !opt.disabled && !opt.id.startsWith("suggested.") && opt.slash)
-      .map((opt) => ({
-        id: opt.id,
-        trigger: opt.slash!,
-        title: opt.title,
-        description: opt.description,
-        category: opt.category,
-        keybind: opt.keybind,
-        type: "builtin" as const,
-      }))
-
-    const custom = sync.data.command.map((cmd) => ({
-      id: `custom.${cmd.name}`,
-      trigger: cmd.name,
-      title: cmd.name,
-      description: cmd.description,
-      type: "custom" as const,
-      source: cmd.source,
-    }))
-
-    return [...custom, ...builtin]
-      .map((cmd, index) => {
-        if (pins().has(cmd.id)) {
-          return {
-            ...cmd,
-            category: label("prompt.recipe.group.pinned"),
-            order: pin.get(cmd.id) ?? index,
-            index,
-          }
-        }
-
-        if (recipes.recent.includes(cmd.id)) {
-          return {
-            ...cmd,
-            category: label("prompt.recipe.group.recent"),
-            order: recent.get(cmd.id) ?? index,
-            index,
-          }
-        }
-
-        if (cmd.type === "custom" && cmd.source === "command") {
-          return {
-            ...cmd,
-            category: label("prompt.recipe.group.recommended"),
-            order: index,
-            index,
-          }
-        }
-
-        return {
-          ...cmd,
-          order: index,
-          index,
-        }
-      })
-      .sort((a, b) => a.order - b.order || a.index - b.index)
-      .map(({ order, index, ...cmd }) => cmd)
+    return buildSlashCommands({
+      options: command.options,
+      commands: sync.data.command,
+      recipes,
+      t: (key) => language.t(key as Parameters<typeof language.t>[0]),
+    })
   })
 
   const touchRecipe = (id: string) => {
-    setRecipes("recent", (list) => [id, ...list.filter((item) => item !== id)].slice(0, 6))
+    setRecipes("recent", (list) => touchPromptRecipe(list, id))
   }
 
   const togglePin = (id: string) => {
-    setRecipes("pin", (list) =>
-      list.includes(id) ? list.filter((item) => item !== id) : [id, ...list.filter((item) => item !== id)],
-    )
+    setRecipes("pin", (list) => togglePromptPin(list, id))
   }
 
   const handleSlashSelect = (cmd: SlashCommand | undefined) => {
@@ -746,55 +656,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       slashGroupRank(b.category, (key) => language.t(key as Parameters<typeof language.t>[0])),
     onSelect: handleSlashSelect,
   })
-
-  const createPill = (part: FileAttachmentPart | AgentPart) => {
-    const pill = document.createElement("span")
-    pill.textContent = part.content
-    pill.setAttribute("data-type", part.type)
-    if (part.type === "file") pill.setAttribute("data-path", part.path)
-    if (part.type === "agent") pill.setAttribute("data-name", part.name)
-    pill.setAttribute("contenteditable", "false")
-    pill.style.userSelect = "text"
-    pill.style.cursor = "default"
-    return pill
-  }
-
-  const isNormalizedEditor = () =>
-    Array.from(editorRef.childNodes).every((node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent ?? ""
-        if (!text.includes("\u200B")) return true
-        if (text !== "\u200B") return false
-
-        const prev = node.previousSibling
-        const next = node.nextSibling
-        const prevIsBr = prev?.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).tagName === "BR"
-        return !!prevIsBr && !next
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) return false
-      const el = node as HTMLElement
-      if (el.dataset.type === "file") return true
-      if (el.dataset.type === "agent") return true
-      return el.tagName === "BR"
-    })
-
-  const renderEditor = (parts: Prompt) => {
-    clearEditor()
-    for (const part of parts) {
-      if (part.type === "text") {
-        editorRef.appendChild(createTextFragment(part.content))
-        continue
-      }
-      if (part.type === "file" || part.type === "agent") {
-        editorRef.appendChild(createPill(part))
-      }
-    }
-
-    const last = editorRef.lastChild
-    if (last?.nodeType === Node.ELEMENT_NODE && (last as HTMLElement).tagName === "BR") {
-      editorRef.appendChild(document.createTextNode("\u200B"))
-    }
-  }
 
   // Auto-scroll active command into view when navigating with keyboard
   createEffect(() => {
@@ -843,14 +704,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const reconcile = (input: Prompt) => {
     if (mirror.input) {
       mirror.input = false
-      if (isNormalizedEditor()) return
+      if (isNormalizedEditor(editorRef)) return
 
       renderEditorWithCursor(input)
       return
     }
 
-    const dom = parseFromDOM()
-    if (isNormalizedEditor() && isPromptEqual(input, dom)) return
+    const dom = parsePromptEditor(editorRef)
+    if (isNormalizedEditor(editorRef) && isPromptEqual(input, dom)) return
 
     renderEditorWithCursor(input)
   }
@@ -865,98 +726,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     ),
   )
 
-  const parseFromDOM = (): Prompt => {
-    const parts: Prompt = []
-    let position = 0
-    let buffer = ""
-
-    const flushText = () => {
-      let content = buffer
-      if (content.includes("\r")) content = content.replace(/\r\n?/g, "\n")
-      if (content.includes("\u200B")) content = content.replace(/\u200B/g, "")
-      buffer = ""
-      if (!content) return
-      parts.push({ type: "text", content, start: position, end: position + content.length })
-      position += content.length
-    }
-
-    const pushFile = (file: HTMLElement) => {
-      const content = file.textContent ?? ""
-      parts.push({
-        type: "file",
-        path: file.dataset.path!,
-        content,
-        start: position,
-        end: position + content.length,
-      })
-      position += content.length
-    }
-
-    const pushAgent = (agent: HTMLElement) => {
-      const content = agent.textContent ?? ""
-      parts.push({
-        type: "agent",
-        name: agent.dataset.name!,
-        content,
-        start: position,
-        end: position + content.length,
-      })
-      position += content.length
-    }
-
-    const visit = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        buffer += node.textContent ?? ""
-        return
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) return
-
-      const el = node as HTMLElement
-      if (el.dataset.type === "file") {
-        flushText()
-        pushFile(el)
-        return
-      }
-      if (el.dataset.type === "agent") {
-        flushText()
-        pushAgent(el)
-        return
-      }
-      if (el.tagName === "BR") {
-        buffer += "\n"
-        return
-      }
-
-      for (const child of Array.from(el.childNodes)) {
-        visit(child)
-      }
-    }
-
-    const children = Array.from(editorRef.childNodes)
-    children.forEach((child, index) => {
-      const isBlock = child.nodeType === Node.ELEMENT_NODE && ["DIV", "P"].includes((child as HTMLElement).tagName)
-      visit(child)
-      if (isBlock && index < children.length - 1) {
-        buffer += "\n"
-      }
-    })
-
-    flushText()
-
-    if (parts.length === 0) parts.push(...DEFAULT_PROMPT)
-    return parts
-  }
-
   const handleInput = () => {
-    const rawParts = parseFromDOM()
+    const rawParts = parsePromptEditor(editorRef)
     const images = imageAttachments()
     const cursorPosition = getCursorPosition(editorRef)
-    const rawText =
-      rawParts.length === 1 && rawParts[0]?.type === "text"
-        ? rawParts[0].content
-        : rawParts.map((p) => ("content" in p ? p.content : "")).join("")
-    const hasNonText = rawParts.some((part) => part.type !== "text")
-    const shouldReset = !NON_EMPTY_TEXT.test(rawText) && !hasNonText && images.length === 0
+    const rawText = promptText(rawParts)
+    const shouldReset = shouldResetPrompt({ text: rawText, parts: rawParts, imageCount: images.length })
 
     if (shouldReset) {
       closePopover()
@@ -969,21 +744,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       return
     }
 
-    const shellMode = store.mode === "shell"
-
-    if (!shellMode) {
-      const atMatch = rawText.substring(0, cursorPosition).match(/@(\S*)$/)
-      const slashMatch = rawText.match(/^\/(\S*)$/)
-
-      if (atMatch) {
-        atOnInput(atMatch[1])
-        setStore("popover", "at")
-      } else if (slashMatch) {
-        slashOnInput(slashMatch[1])
-        setStore("popover", "slash")
-      } else {
-        closePopover()
-      }
+    const popover = promptPopover({ mode: store.mode, text: rawText, cursor: cursorPosition })
+    if (popover?.type === "at") {
+      atOnInput(popover.query)
+      setStore("popover", "at")
+    } else if (popover?.type === "slash") {
+      slashOnInput(popover.query)
+      setStore("popover", "slash")
     } else {
       closePopover()
     }
@@ -1340,14 +1107,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       event.preventDefault()
       if (event.repeat) return
       if (
-        working() &&
-        prompt
-          .current()
-          .map((part) => ("content" in part ? part.content : ""))
-          .join("")
-          .trim().length === 0 &&
-        imageAttachments().length === 0 &&
-        commentCount() === 0
+        shouldIgnoreWorkingSubmit({
+          working: working(),
+          text: promptText(prompt.current()),
+          imageCount: imageAttachments().length,
+          commentCount: commentCount(),
+        })
       ) {
         return
       }

@@ -1,16 +1,1 @@
-import type { UserMessage } from "@ax-code/sdk/v2"
-
-type Local = {
-  session: {
-    reset(): void
-    restore(msg: UserMessage): void
-  }
-}
-
-export const resetSessionModel = (local: Local) => {
-  local.session.reset()
-}
-
-export const syncSessionModel = (local: Local, msg: UserMessage) => {
-  local.session.restore(msg)
-}
+export { resetSessionModel, syncSessionModel } from "./state/session-model-helpers"

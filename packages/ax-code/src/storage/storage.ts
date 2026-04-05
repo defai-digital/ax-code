@@ -127,8 +127,8 @@ export namespace Storage {
         await Filesystem.writeJson(path.join(dir, "session", session.projectID, session.id + ".json"), {
           ...session,
           summary: {
-            additions: diffs.reduce((sum: any, x: any) => sum + x.additions, 0),
-            deletions: diffs.reduce((sum: any, x: any) => sum + x.deletions, 0),
+            additions: diffs.reduce((sum: number, x: { additions: number; deletions: number }) => sum + x.additions, 0),
+            deletions: diffs.reduce((sum: number, x: { additions: number; deletions: number }) => sum + x.deletions, 0),
           },
         })
       }

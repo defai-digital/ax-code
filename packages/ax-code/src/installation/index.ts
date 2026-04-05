@@ -268,7 +268,7 @@ export namespace Installation {
           }
 
           const response = yield* httpOk.execute(
-            HttpClientRequest.get("https://api.github.com/repos/anomalyco/ax-code/releases/latest").pipe(
+            HttpClientRequest.get("https://api.github.com/repos/defai-digital/ax-code/releases/latest").pipe(
               HttpClientRequest.acceptJson,
             ),
           )
@@ -298,12 +298,12 @@ export namespace Installation {
               const formula = yield* getBrewFormula()
               const env = { HOMEBREW_NO_AUTO_UPDATE: "1" }
               if (formula.includes("/")) {
-                const tap = yield* run(["brew", "tap", "anomalyco/tap"], { env })
+                const tap = yield* run(["brew", "tap", "defai-digital/tap"], { env })
                 if (tap.code !== 0) {
                   result = tap
                   break
                 }
-                const repo = yield* text(["brew", "--repo", "anomalyco/tap"])
+                const repo = yield* text(["brew", "--repo", "defai-digital/tap"])
                 const dir = repo.trim()
                 if (dir) {
                   const pull = yield* run(["git", "pull", "--ff-only"], { cwd: dir, env })
@@ -321,6 +321,11 @@ export namespace Installation {
               break
             case "scoop":
               result = yield* run(["scoop", "install", `ax-code@${target}`])
+              break
+            case "unknown":
+              // Fallback to curl installer script when method can't be detected —
+              // works regardless of install location (bun global, manual copy, etc.)
+              result = yield* upgradeCurl(target)
               break
             default:
               return yield* new UpgradeFailedError({ stderr: `Unknown method: ${m}` })

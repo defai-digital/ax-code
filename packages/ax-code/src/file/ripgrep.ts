@@ -369,8 +369,13 @@ export namespace Ripgrep {
 
     const matches = []
     for (const line of lines) {
-      const parsed = Result.parse(JSON.parse(line))
-      if (parsed.type === "match") matches.push(parsed.data)
+      try {
+        const parsed = Result.parse(JSON.parse(line))
+        if (parsed.type === "match") matches.push(parsed.data)
+      } catch {
+        // Skip malformed JSON lines from ripgrep (e.g., truncated output)
+        continue
+      }
     }
     return matches
   }

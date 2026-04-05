@@ -107,6 +107,7 @@ export namespace Agent {
           })
 
           const user = Permission.fromConfig(cfg.permission ?? {})
+          const policy = yield* Effect.promise(() => Permission.loadPolicy(ctx.directory))
 
           const agents: Record<string, Info> = {
             build: {
@@ -115,6 +116,7 @@ export namespace Agent {
               options: {},
               permission: Permission.merge(
                 defaults,
+                policy,
                 Permission.fromConfig({
                   question: "allow",
                   plan_enter: "allow",
@@ -130,6 +132,7 @@ export namespace Agent {
               options: {},
               permission: Permission.merge(
                 defaults,
+                policy,
                 Permission.fromConfig({
                   question: "allow",
                   plan_exit: "allow",
@@ -153,6 +156,7 @@ export namespace Agent {
               description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
               permission: Permission.merge(
                 defaults,
+                policy,
                 Permission.fromConfig({
                   todoread: "deny",
                   todowrite: "deny",
@@ -167,6 +171,7 @@ export namespace Agent {
               name: "explore",
               permission: Permission.merge(
                 defaults,
+                policy,
                 readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
@@ -183,6 +188,7 @@ export namespace Agent {
               prompt: PROMPT_REACT,
               permission: Permission.merge(
                 defaults,
+                policy,
                 Permission.fromConfig({
                   question: "allow",
                   plan_enter: "allow",
@@ -201,6 +207,7 @@ export namespace Agent {
               prompt: PROMPT_SECURITY,
               permission: Permission.merge(
                 defaults,
+                policy,
                 readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
@@ -216,6 +223,7 @@ export namespace Agent {
               prompt: PROMPT_ARCHITECT,
               permission: Permission.merge(
                 defaults,
+                policy,
                 readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
@@ -231,6 +239,7 @@ export namespace Agent {
               prompt: PROMPT_DEBUG,
               permission: Permission.merge(
                 defaults,
+                policy,
                 Permission.fromConfig({
                   question: "allow",
                 }),
@@ -248,6 +257,7 @@ export namespace Agent {
               prompt: PROMPT_PERF,
               permission: Permission.merge(
                 defaults,
+                policy,
                 readOnlyNoWeb(whitelistedDirs),
                 user,
               ),

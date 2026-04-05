@@ -12,7 +12,7 @@ const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
 
 function isFileNotFound(e: unknown): boolean {
-  return (e as any)?.code === "ENOENT"
+  return (e as { code?: string })?.code === "ENOENT"
 }
 
 // Approximate token count (1 token ≈ 4 chars)

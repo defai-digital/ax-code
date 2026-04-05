@@ -1,4 +1,10 @@
-# AX Code
+```
+___________  __     _________________________________
+___    |_  |/ /     __  ____/_  __ \__  __ \__  ____/
+__  /| |_    /_______  /    _  / / /_  / / /_  __/
+_  ___ |    |_/_____/ /___  / /_/ /_  /_/ /_  /___
+/_/  |_/_/|_|       \____/  \____/ /_____/ /_____/
+```
 
 **AI coding runtime for teams that need control, auditability, and extensibility, not just code suggestions.**
 
@@ -40,13 +46,13 @@ Most AI coding products stop at chat plus tool calls. AX Code is designed as a r
 
 Teams adopt `ax-code` when they need AI coding to behave like an execution system they can reason about, integrate, and operate, rather than a suggestion layer they can only observe after the fact.
 
-| Requirement | Typical AI coding tooling | AX Code |
-|-----------|---------------------------|---------|
-| Use multiple model providers without rewriting the workflow | Often tied to one vendor or one API surface | Provider-agnostic runtime with cloud and local backends |
-| Keep tool execution controlled | Tooling is often implicit or loosely governed | Explicit tools, session state, sandbox, and permission boundaries |
-| Reuse the same coding engine across products | Usually bound to one UI | Same runtime can power CLI, TUI, server, SDK, and internal automation |
-| Operate in stricter environments | Cloud assumptions are common | Local-first, localhost defaults, and air-gap-friendly deployment model |
-| Build on top of it | Extensibility is limited or UI-specific | SDK, MCP, plugins, LSP, and headless server mode |
+| Requirement                                                 | Typical AI coding tooling                     | AX Code                                                                |
+| ----------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
+| Use multiple model providers without rewriting the workflow | Often tied to one vendor or one API surface   | Provider-agnostic runtime with cloud and local backends                |
+| Keep tool execution controlled                              | Tooling is often implicit or loosely governed | Explicit tools, session state, sandbox, and permission boundaries      |
+| Reuse the same coding engine across products                | Usually bound to one UI                       | Same runtime can power CLI, TUI, server, SDK, and internal automation  |
+| Operate in stricter environments                            | Cloud assumptions are common                  | Local-first, localhost defaults, and air-gap-friendly deployment model |
+| Build on top of it                                          | Extensibility is limited or UI-specific       | SDK, MCP, plugins, LSP, and headless server mode                       |
 
 ## Primary Users
 
@@ -107,14 +113,14 @@ Source: [docs/automatosx-stack.mmd](docs/automatosx-stack.mmd)
 
 Within AutomatosX, `ax-code` is the developer-facing execution layer. `AX Engine` handles inference, `AX Serving` handles orchestration, `AX Fabric` handles knowledge, and `AX Trust` provides governance and policy boundaries.
 
-| Component | Repository | Role |
-|-----------|-----------|------|
-| **AX Studio** | [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio) | General GenAI workspace — enterprise knowledge + agentic workflows |
-| **AX Code** | [defai-digital/ax-code](https://github.com/defai-digital/ax-code) | AI coding & automation — developer-optimized entrypoint |
-| **AX Trust** | — | Deterministic AI pipeline — contract-based execution, guardrails, audit |
-| **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Enterprise orchestration — multi-node routing, heterogeneous compute |
-| **AX Fabric** | [defai-digital/ax-fabric](https://github.com/defai-digital/ax-fabric) | Knowledge infrastructure — RAG, distillation, knowledge lifecycle |
-| **AX Engine** | [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) | Mac-native inference — Apple Silicon optimized, 30B-70B+ models |
+| Component      | Repository                                                              | Role                                                                    |
+| -------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **AX Studio**  | [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio)   | General GenAI workspace — enterprise knowledge + agentic workflows      |
+| **AX Code**    | [defai-digital/ax-code](https://github.com/defai-digital/ax-code)       | AI coding & automation — developer-optimized entrypoint                 |
+| **AX Trust**   | —                                                                       | Deterministic AI pipeline — contract-based execution, guardrails, audit |
+| **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Enterprise orchestration — multi-node routing, heterogeneous compute    |
+| **AX Fabric**  | [defai-digital/ax-fabric](https://github.com/defai-digital/ax-fabric)   | Knowledge infrastructure — RAG, distillation, knowledge lifecycle       |
+| **AX Engine**  | [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine)   | Mac-native inference — Apple Silicon optimized, 30B-70B+ models         |
 
 ---
 
@@ -160,28 +166,28 @@ ax-code
 
 ### Cloud
 
-| Provider | Models | Setup |
-|----------|--------|-------|
-| **Anthropic** | Claude Opus, Sonnet, Haiku | `ANTHROPIC_API_KEY` |
-| **OpenAI** | GPT-5, GPT-4, o3, o4 | `OPENAI_API_KEY` |
-| **Google** | Gemini 3.0, 3.1 | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| **xAI** | Grok-2, Grok-3, Grok-4 | `XAI_API_KEY` |
-| **DeepSeek** | Chat, Reasoner | `DEEPSEEK_API_KEY` |
-| **Groq** | Llama, Qwen, Gemma, DeepSeek | `GROQ_API_KEY` (free) |
-| **GitHub Copilot** | Claude, GPT, Gemini via Copilot | `ax-code providers login` |
-| **Alibaba Cloud** | Qwen3, Qwen3-Coder | `DASHSCOPE_API_KEY` |
-| **Azure** | GPT, Claude, Llama, Phi | `AZURE_API_KEY` |
-| **Perplexity** | Sonar, Sonar Pro, Deep Research | `PERPLEXITY_API_KEY` |
-| **Z.AI** | GLM-4.5, GLM-4.7, GLM-5 | `ax-code providers login` |
+| Provider           | Models                          | Setup                          |
+| ------------------ | ------------------------------- | ------------------------------ |
+| **Anthropic**      | Claude Opus, Sonnet, Haiku      | `ANTHROPIC_API_KEY`            |
+| **OpenAI**         | GPT-5, GPT-4, o3, o4            | `OPENAI_API_KEY`               |
+| **Google**         | Gemini 3.0, 3.1                 | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| **xAI**            | Grok-2, Grok-3, Grok-4          | `XAI_API_KEY`                  |
+| **DeepSeek**       | Chat, Reasoner                  | `DEEPSEEK_API_KEY`             |
+| **Groq**           | Llama, Qwen, Gemma, DeepSeek    | `GROQ_API_KEY` (free)          |
+| **GitHub Copilot** | Claude, GPT, Gemini via Copilot | `ax-code providers login`      |
+| **Alibaba Cloud**  | Qwen3, Qwen3-Coder              | `DASHSCOPE_API_KEY`            |
+| **Azure**          | GPT, Claude, Llama, Phi         | `AZURE_API_KEY`                |
+| **Perplexity**     | Sonar, Sonar Pro, Deep Research | `PERPLEXITY_API_KEY`           |
+| **Z.AI**           | GLM-4.5, GLM-4.7, GLM-5         | `ax-code providers login`      |
 
 ### Local / Sovereign (Offline, Air-Gapped)
 
-| Provider | Setup |
-|----------|-------|
-| **AX Engine** | Apple Silicon optimized inference — [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) |
+| Provider      | Setup                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **AX Engine** | Apple Silicon optimized inference — [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine)                      |
 | **AX Studio** | Auto-detected at `localhost:11434` or `AX_STUDIO_HOST` — [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio) |
-| **Ollama** | Auto-detected at `localhost:11434` or `OLLAMA_HOST` |
-| **LM Studio** | Configure in `ax-code.json` |
+| **Ollama**    | Auto-detected at `localhost:11434` or `OLLAMA_HOST`                                                                            |
+| **LM Studio** | Configure in `ax-code.json`                                                                                                    |
 
 Local providers auto-discover running models — no API key needed. Your code never leaves your machine.
 
@@ -193,17 +199,17 @@ Local providers auto-discover running models — no API key needed. Your code ne
 
 AX Code doesn't use a single generic assistant. It ships with **9 purpose-built agents**, each with tailored system prompts, tool access, and permission boundaries.
 
-| Agent | What It Does | Auto-routes When You Say... |
-|-------|-------------|---------------------------|
-| **build** | General development — full tool access | *(default agent)* |
-| **security** | Vulnerability scanning, secrets detection, OWASP analysis | "scan for vulnerabilities", "security audit" |
-| **architect** | System design analysis, dependency review, coupling detection | "analyze architecture", "review structure" |
-| **debug** | Bug investigation, root cause analysis, systematic fixes | "debug this", "why is it crashing" |
-| **perf** | Bottleneck detection, memory profiling, optimization | "too slow", "optimize", "performance" |
-| **plan** | Read-only task decomposition and planning | *(manual switch via Tab)* |
-| **react** | Structured Thought/Action/Observation reasoning | *(manual switch via Tab)* |
-| **general** | Parallel multi-step task execution | *(subagent)* |
-| **explore** | Fast codebase search and navigation | *(subagent)* |
+| Agent         | What It Does                                                  | Auto-routes When You Say...                  |
+| ------------- | ------------------------------------------------------------- | -------------------------------------------- |
+| **build**     | General development — full tool access                        | _(default agent)_                            |
+| **security**  | Vulnerability scanning, secrets detection, OWASP analysis     | "scan for vulnerabilities", "security audit" |
+| **architect** | System design analysis, dependency review, coupling detection | "analyze architecture", "review structure"   |
+| **debug**     | Bug investigation, root cause analysis, systematic fixes      | "debug this", "why is it crashing"           |
+| **perf**      | Bottleneck detection, memory profiling, optimization          | "too slow", "optimize", "performance"        |
+| **plan**      | Read-only task decomposition and planning                     | _(manual switch via Tab)_                    |
+| **react**     | Structured Thought/Action/Observation reasoning               | _(manual switch via Tab)_                    |
+| **general**   | Parallel multi-step task execution                            | _(subagent)_                                 |
+| **explore**   | Fast codebase search and navigation                           | _(subagent)_                                 |
 
 **Agent auto-routing** analyzes your message and switches to the right agent automatically. A toast notification tells you when it happens. You can also switch manually with **Tab**.
 
@@ -221,15 +227,15 @@ Supports TypeScript, Python (Pyright), Go (gopls), Rust (rust-analyzer), Ruby (S
 
 ### 25+ Built-in Tools
 
-| Category | Tools |
-|----------|-------|
-| **File operations** | read, write, edit, glob, ls, multiedit |
-| **Code search** | grep (regex), codesearch (web), websearch |
-| **Shell execution** | bash (with timeout and sandboxing), pty (interactive) |
-| **LSP queries** | definition, references, hover, symbols, call hierarchy, diagnostics |
-| **Planning** | task, todo, plan enter/exit |
-| **Web** | webfetch (URL to markdown), websearch |
-| **Batch** | Parallel tool execution |
+| Category            | Tools                                                               |
+| ------------------- | ------------------------------------------------------------------- |
+| **File operations** | read, write, edit, glob, ls, multiedit                              |
+| **Code search**     | grep (regex), codesearch (web), websearch                           |
+| **Shell execution** | bash (with timeout and sandboxing), pty (interactive)               |
+| **LSP queries**     | definition, references, hover, symbols, call hierarchy, diagnostics |
+| **Planning**        | task, todo, plan enter/exit                                         |
+| **Web**             | webfetch (URL to markdown), websearch                               |
+| **Batch**           | Parallel tool execution                                             |
 
 ### Session Persistence
 
@@ -244,15 +250,15 @@ Every conversation is stored in SQLite. You can:
 
 Connect to external tools and services via MCP with 16 pre-configured templates:
 
-| Category | Servers |
-|----------|---------|
-| **Search & Web** | Exa, Brave Search |
+| Category            | Servers                        |
+| ------------------- | ------------------------------ |
+| **Search & Web**    | Exa, Brave Search              |
 | **Developer Tools** | GitHub, GitLab, Linear, Sentry |
-| **Databases** | PostgreSQL, SQLite |
-| **Browser** | Puppeteer, Playwright |
-| **Cloud** | Vercel, Cloudflare |
-| **Design** | Figma |
-| **Communication** | Slack |
+| **Databases**       | PostgreSQL, SQLite             |
+| **Browser**         | Puppeteer, Playwright          |
+| **Cloud**           | Vercel, Cloudflare             |
+| **Design**          | Figma                          |
+| **Communication**   | Slack                          |
 
 ```bash
 ax-code mcp add              # Add from template or custom
@@ -295,11 +301,11 @@ Catches hardcoded colors, raw spacing values, inline styles, missing alt text, a
 
 Control what the AI agent can access with three isolation modes:
 
-| Mode | Behavior |
-|------|----------|
-| **Read-only** | Blocks all file mutations and shell commands |
-| **Workspace write** *(default)* | Allows writes only inside the workspace; `.git` and `.ax-code` always protected |
-| **Full access** | Disables isolation (explicit opt-in) |
+| Mode                            | Behavior                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| **Read-only**                   | Blocks all file mutations and shell commands                                    |
+| **Workspace write** _(default)_ | Allows writes only inside the workspace; `.git` and `.ax-code` always protected |
+| **Full access**                 | Disables isolation (explicit opt-in)                                            |
 
 ```bash
 ax-code --sandbox read-only
@@ -371,7 +377,7 @@ Full-featured web interface with chat, file explorer, terminal emulator, and mod
 
 Use ax-code directly inside VS Code:
 
-1. `Ctrl+Shift+P` -> **"Install from VSIX"** -> select `sdks/vscode/ax-code-1.4.0.vsix`
+1. `Ctrl+Shift+P` -> **"Install from VSIX"** -> select `packages/integration-vscode/ax-code-1.4.0.vsix`
 2. Open the sidebar panel with `Ctrl+Shift+A`
 
 **Features:** chat panel, explain/review/fix via right-click, code selection actions, integrated terminal.
@@ -414,13 +420,14 @@ await session.run("Read src/auth/index.ts")
 await session.run("Now add input validation")
 
 // Discovery
-const models = await agent.models()   // 78+ models
-const tools = await agent.tools()     // 15 built-in tools
+const models = await agent.models() // 78+ models
+const tools = await agent.tools() // 15 built-in tools
 
 await agent.dispose()
 ```
 
 **SDK highlights:**
+
 - In-process execution (< 1s startup, no server)
 - Typed errors: `ProviderError`, `TimeoutError`, `ToolError`, `DisposedError`
 - Stream helpers: `.text()`, `.result()`, `.on()`, `.done()`
@@ -448,16 +455,16 @@ Config is hierarchical: remote org defaults -> global -> custom path -> project 
 
 ### Key Environment Variables
 
-| Variable | Purpose |
-|----------|---------|
-| `ANTHROPIC_API_KEY` | Claude |
-| `OPENAI_API_KEY` | GPT |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini |
-| `XAI_API_KEY` | Grok |
-| `DEEPSEEK_API_KEY` | DeepSeek |
-| `GROQ_API_KEY` | Groq (free) |
-| `AX_CODE_ISOLATION_MODE` | Sandbox: `read-only`, `workspace-write`, `full-access` |
-| `AX_CODE_SERVER_PASSWORD` | Required for network-bound server |
+| Variable                       | Purpose                                                |
+| ------------------------------ | ------------------------------------------------------ |
+| `ANTHROPIC_API_KEY`            | Claude                                                 |
+| `OPENAI_API_KEY`               | GPT                                                    |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini                                                 |
+| `XAI_API_KEY`                  | Grok                                                   |
+| `DEEPSEEK_API_KEY`             | DeepSeek                                               |
+| `GROQ_API_KEY`                 | Groq (free)                                            |
+| `AX_CODE_ISOLATION_MODE`       | Sandbox: `read-only`, `workspace-write`, `full-access` |
+| `AX_CODE_SERVER_PASSWORD`      | Required for network-bound server                      |
 
 ---
 

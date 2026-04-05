@@ -365,8 +365,8 @@ export namespace LSP {
         .sendRequest("workspace/symbol", {
           query,
         })
-        .then((result: any) => result.filter((x: LSP.Symbol) => kinds.includes(x.kind)))
-        .then((result: any) => result.slice(0, 10))
+        .then((result) => (result as LSP.Symbol[]).filter((x: LSP.Symbol) => kinds.includes(x.kind)))
+        .then((result) => result.slice(0, 10))
         .catch(() => []),
     ).then((result) => result.flat() as LSP.Symbol[])
   }
@@ -438,7 +438,7 @@ export namespace LSP {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
         })
-        .catch(() => [])) as any[]
+        .catch(() => [])) as unknown[]
       if (!items?.length) return []
       return client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }).catch(() => [])
     }).then((result) => result.flat().filter(Boolean))
@@ -451,7 +451,7 @@ export namespace LSP {
           textDocument: { uri: pathToFileURL(input.file).href },
           position: { line: input.line, character: input.character },
         })
-        .catch(() => [])) as any[]
+        .catch(() => [])) as unknown[]
       if (!items?.length) return []
       return client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }).catch(() => [])
     }).then((result) => result.flat().filter(Boolean))

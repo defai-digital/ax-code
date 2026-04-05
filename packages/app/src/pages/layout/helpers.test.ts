@@ -8,13 +8,18 @@ import {
 } from "./deep-links"
 import { type Session } from "@ax-code/sdk/v2/client"
 import {
+  getWorkspaceLabel,
+  getWorkspaceName,
   displayName,
   effectiveWorkspaceOrder,
   errorMessage,
   hasProjectPermissions,
   latestRootSession,
+  mergeByID,
   workspaceKey,
+  workspaceIdsForProject,
 } from "./helpers"
+import { type LocalProject } from "@/context/layout"
 
 const session = (input: Partial<Session> & Pick<Session, "id" | "directory">) =>
   ({
@@ -201,6 +206,83 @@ describe("layout workspace helpers", () => {
   test("formats fallback project display name", () => {
     expect(displayName({ worktree: "/tmp/app" })).toBe("app")
     expect(displayName({ worktree: "/tmp/app", name: "My App" })).toBe("My App")
+  })
+
+  test("reads direct and branch workspace names", () => {
+    const store = {
+      workspaceName: { "/tmp/root": "Root" },
+      workspaceBranchName: { project: { feature: "Feature" } },
+    }
+
+    expect(getWorkspaceName(store, "/tmp/root")).toBe("Root")
+    expect(getWorkspaceName(store, "/tmp/child", "project", "feature")).toBe("Feature")
+    expect(getWorkspaceName(store, "/tmp/other", "project", "missing")).toBeUndefined()
+  })
+
+  test("formats workspace labels from name, branch, and path", () => {
+    const store = {
+      workspaceName: { "/tmp/root": "Root" },
+      workspaceBranchName: {},
+    }
+
+    expect(getWorkspaceLabel(store, "/tmp/root")).toBe("Root")
+    expect(getWorkspaceLabel(store, "/tmp/child", "feature")).toBe("feature")
+    expect(getWorkspaceLabel(store, "/tmp/app")).toBe("app")
+  })
+
+  test("orders project workspaces with active pending worktree first", () => {
+    const project = {
+      worktree: "/root",
+      expanded: true,
+      sandboxes: ["/a", "/b"],
+    } satisfies LocalProject
+
+    expect(
+      workspaceIdsForProject({
+        project,
+        active: "/root",
+        current: "/pending",
+        persisted: ["/b", "/a"],
+        pending: (directory) => directory === "/pending",
+      }),
+    ).toEqual(["/root", "/pending", "/b", "/a"])
+  })
+
+  test("appends active non-pending worktree after persisted order", () => {
+    const project = {
+      worktree: "/root",
+      expanded: true,
+      sandboxes: ["/a", "/b"],
+    } satisfies LocalProject
+
+    expect(
+      workspaceIdsForProject({
+        project,
+        active: "/root",
+        current: "/live",
+        persisted: ["/b", "/a"],
+        pending: () => false,
+      }),
+    ).toEqual(["/root", "/b", "/a", "/live"])
+  })
+
+  test("merges records by id and keeps sorted order", () => {
+    const result = mergeByID(
+      [
+        { id: "b", value: 1 },
+        { id: "a", value: 1 },
+      ],
+      [
+        { id: "b", value: 2 },
+        { id: "c", value: 3 },
+      ],
+    )
+
+    expect(result).toEqual([
+      { id: "a", value: 1 },
+      { id: "b", value: 2 },
+      { id: "c", value: 3 },
+    ])
   })
 
   test("extracts api error message and fallback", () => {

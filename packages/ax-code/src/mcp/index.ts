@@ -221,7 +221,7 @@ export namespace MCP {
       // Kill the full descendant tree first so the server exits promptly
       // and no processes are left behind.
       for (const client of Object.values(state.clients)) {
-        const pid = (client.transport as any)?.pid
+        const pid = (client.transport as { pid?: number })?.pid
         if (typeof pid !== "number") continue
         for (const dpid of await descendants(pid)) {
           try {

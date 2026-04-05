@@ -37,6 +37,7 @@ import { HTTPException } from "hono/http-exception"
 import { errors } from "./error"
 import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
+import { AuditRoutes } from "./routes/audit"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
@@ -598,6 +599,7 @@ export namespace Server {
       .route("/experimental", ExperimentalRoutes())
       .route("/session", SessionRoutes())
       .route("/permission", PermissionRoutes())
+      .route("/audit", AuditRoutes())
       .route("/question", QuestionRoutes())
       .route("/provider", ProviderRoutes())
       .route("/", FileRoutes())

@@ -2,6 +2,8 @@ import { NamedError } from "@ax-code/util/error"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { AcpCommand } from "./cmd/acp"
+import { AuditCommand } from "./cmd/audit"
+import { ReplayCommand } from "./cmd/replay"
 import { AgentCommand } from "./cmd/agent"
 import { ConsoleCommand } from "./cmd/account"
 import { AttachCommand } from "./cmd/tui/attach"
@@ -39,6 +41,8 @@ import { Log } from "../util/log"
 
 const cmds = [
   AcpCommand,
+  AuditCommand,
+  ReplayCommand,
   McpCommand,
   TuiThreadCommand,
   AttachCommand,
@@ -109,7 +113,7 @@ export function cli(argv = hideBin(process.argv)) {
       await init(opts)
       await migrate()
     })
-    .usage("\n" + UI.logo())
+    .usage("\n" + UI.logo({ variant: "auto" }))
     .completion("completion", "generate shell completion script")
 
   for (const cmd of cmds) cli = cli.command(cmd as never)

@@ -1,0 +1,24 @@
+{
+  "version": "1",
+  "name": "restricted-write",
+  "rules": [
+    {
+      "agent": "*",
+      "tools": ["read", "grep", "glob", "lsp"],
+      "files": ["**"],
+      "action": "allow"
+    },
+    {
+      "agent": "build",
+      "tools": ["write", "edit", "apply_patch"],
+      "files": ["src/**", "test/**"],
+      "action": "allow"
+    },
+    {
+      "agent": "*",
+      "tools": ["write", "edit", "apply_patch"],
+      "files": ["**"],
+      "action": "deny"
+    }
+  ]
+}

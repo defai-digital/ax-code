@@ -86,7 +86,7 @@ export namespace SessionPrompt {
           abort: AbortController
           callbacks: {
             resolve(input: MessageV2.WithParts): void
-            reject(reason?: any): void
+            reject(reason?: unknown): void
           }[]
         }
       > = {}
@@ -441,13 +441,16 @@ export namespace SessionPrompt {
     }
 
     await using _ = defer(() => cancel(sessionID))
+    let sessionStarted = false
     await using _recorder = defer(() => {
-      Recorder.emit({
-        type: "session.end",
-        sessionID,
-        reason,
-        totalSteps: step,
-      })
+      if (sessionStarted) {
+        Recorder.emit({
+          type: "session.end",
+          sessionID,
+          reason,
+          totalSteps: step,
+        })
+      }
       Recorder.end(sessionID)
     })
     Recorder.begin(sessionID)
@@ -459,7 +462,7 @@ export namespace SessionPrompt {
     let structuredOutput: unknown | undefined
 
     let step = 0
-    let reason: "completed" | "aborted" | "error" | "step_limit" = "completed"
+    let reason: "completed" | "aborted" | "error" | "step_limit" = "error"
     let consecutiveErrors = 0
     const MAX_CONSECUTIVE_ERRORS = _MAX_CONSECUTIVE_ERRORS
     const GLOBAL_STEP_LIMIT = _GLOBAL_STEP_LIMIT
@@ -536,6 +539,7 @@ export namespace SessionPrompt {
         lastUser.id < lastAssistant.id
       ) {
         log.info("exiting loop", { sessionID })
+        reason = "completed"
         break
       }
 
@@ -554,6 +558,7 @@ export namespace SessionPrompt {
           model: `${lastUser.model.providerID}/${lastUser.model.modelID}`,
           directory: Instance.directory,
         })
+        sessionStarted = true
       }
 
       const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID).catch((e) => {
@@ -587,7 +592,10 @@ export namespace SessionPrompt {
           auto: task.auto,
           overflow: task.overflow,
         })
-        if (result === "stop") break
+        if (result === "stop") {
+          reason = "completed"
+          break
+        }
         cachedMsgs = undefined // invalidate cache after compaction
         continue
       }
@@ -658,6 +666,7 @@ export namespace SessionPrompt {
         sessionID: sessionID,
         model,
         abort,
+        messages: msgs,
       })
       using _ = defer(() => InstructionPrompt.clear(processor.message.id))
 
@@ -761,6 +770,7 @@ export namespace SessionPrompt {
         processor.message.structured = structuredOutput
         processor.message.finish = processor.message.finish ?? "stop"
         await Session.updateMessage(processor.message)
+        reason = "completed"
         break
       }
 
@@ -775,11 +785,15 @@ export namespace SessionPrompt {
             retries: 0,
           }).toObject()
           await Session.updateMessage(processor.message)
+          reason = "error"
           break
         }
       }
 
-      if (result === "stop") break
+      if (result === "stop") {
+        reason = processor.message.error ? "error" : "completed"
+        break
+      }
 
       // Track consecutive errors — break if agent is stuck
       if (processor.message.error) {

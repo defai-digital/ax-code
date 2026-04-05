@@ -37,7 +37,8 @@ export namespace McpAuth {
     const prev = locks.get(key) ?? Promise.resolve()
     let result: T
     const next = prev.then(async () => { result = await fn() })
-    locks.set(key, next.catch(() => {}))
+    // Store a promise that always resolves so the chain continues after errors
+    locks.set(key, next.then(() => {}, () => {}))
     await next
     return result!
   }

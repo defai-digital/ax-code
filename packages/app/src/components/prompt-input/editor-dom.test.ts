@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { createTextFragment, getCursorPosition, getNodeLength, getTextLength, setCursorPosition } from "./editor-dom"
+import {
+  createPill,
+  createTextFragment,
+  getCursorPosition,
+  getNodeLength,
+  getTextLength,
+  isNormalizedEditor,
+  parsePromptEditor,
+  renderPromptEditor,
+  setCursorPosition,
+} from "./editor-dom"
 
 describe("prompt-input editor dom", () => {
   test("createTextFragment preserves newlines with consecutive br nodes", () => {
@@ -95,5 +105,44 @@ describe("prompt-input editor dom", () => {
     expect(getCursorPosition(container)).toBe(3)
 
     container.remove()
+  })
+
+  test("createPill stores file and agent metadata", () => {
+    const file = createPill({ type: "file", path: "/tmp/a.ts", content: "@/tmp/a.ts", start: 0, end: 10 })
+    const agent = createPill({ type: "agent", name: "worker", content: "@worker", start: 0, end: 7 })
+
+    expect(file.dataset.type).toBe("file")
+    expect(file.dataset.path).toBe("/tmp/a.ts")
+    expect(agent.dataset.type).toBe("agent")
+    expect(agent.dataset.name).toBe("worker")
+  })
+
+  test("renderPromptEditor and parsePromptEditor round-trip prompt parts", () => {
+    const container = document.createElement("div")
+    renderPromptEditor(container, [
+      { type: "text", content: "hello\n", start: 0, end: 6 },
+      { type: "file", path: "/tmp/a.ts", content: "@/tmp/a.ts", start: 6, end: 16 },
+      { type: "text", content: " ", start: 16, end: 17 },
+      { type: "agent", name: "worker", content: "@worker", start: 17, end: 24 },
+    ])
+
+    expect(parsePromptEditor(container)).toEqual([
+      { type: "text", content: "hello\n", start: 0, end: 6 },
+      { type: "file", path: "/tmp/a.ts", content: "@/tmp/a.ts", start: 6, end: 16 },
+      { type: "text", content: " ", start: 16, end: 17 },
+      { type: "agent", name: "worker", content: "@worker", start: 17, end: 24 },
+    ])
+  })
+
+  test("isNormalizedEditor accepts pills, breaks, and trailing zero-width marker", () => {
+    const container = document.createElement("div")
+    container.appendChild(document.createTextNode("a"))
+    container.appendChild(document.createElement("br"))
+    container.appendChild(document.createTextNode("\u200B"))
+
+    expect(isNormalizedEditor(container)).toBe(true)
+
+    container.lastChild!.textContent = "a\u200Bb"
+    expect(isNormalizedEditor(container)).toBe(false)
   })
 })

@@ -1,7 +1,7 @@
 import z from "zod"
 import { EOL } from "os"
 import { NamedError } from "@ax-code/util/error"
-import { logo as glyphs } from "./logo"
+import { logo as glyphs, logoLarge, LOGO_LARGE_WIDTH } from "./logo"
 
 export namespace UI {
   export const CancelledError = NamedError.create("UICancelledError", z.void())
@@ -40,7 +40,21 @@ export namespace UI {
     blank = true
   }
 
-  export function logo(pad?: string) {
+  export type LogoVariant = "compact" | "large" | "auto"
+
+  export function logo(pad?: string): string
+  export function logo(opts: { variant?: LogoVariant; pad?: string }): string
+  export function logo(arg?: string | { variant?: LogoVariant; pad?: string }) {
+    const pad = typeof arg === "string" ? arg : arg?.pad
+    const variant: LogoVariant = typeof arg === "object" && arg?.variant ? arg.variant : "compact"
+    const cols = process.stdout.columns ?? 0
+    const resolved: "compact" | "large" =
+      variant === "large" ? "large" : variant === "auto" && cols >= LOGO_LARGE_WIDTH ? "large" : "compact"
+    if (resolved === "large") return renderLogoLarge(pad)
+    return renderLogoCompact(pad)
+  }
+
+  function renderLogoCompact(pad?: string) {
     const result: string[] = []
     const reset = "\x1b[0m"
     const left = {
@@ -86,6 +100,18 @@ export namespace UI {
       result.push(EOL)
     })
     return result.join("").trimEnd()
+  }
+
+  function renderLogoLarge(pad?: string) {
+    // Large logo is rendered in a single accent color. The figlet-style shading
+    // already provides visual depth, so a two-tone split like the compact logo
+    // would look noisy. Bold + bright cyan matches the TEXT_HIGHLIGHT accent.
+    const fg = Style.TEXT_HIGHLIGHT_BOLD
+    const reset = Style.TEXT_NORMAL
+    return logoLarge
+      .map((line) => (pad ?? "") + fg + line + reset)
+      .join(EOL)
+      .trimEnd()
   }
 
   export async function input(prompt: string): Promise<string> {

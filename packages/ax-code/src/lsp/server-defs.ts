@@ -14,11 +14,15 @@ import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
 import { JS_LOCKFILES } from "@/constants/lsp"
 import {
+  clangdAsset,
   log,
+  NearestRoot,
+  output,
   pathExists,
   run,
-  output,
-  NearestRoot,
+  venvBin,
+  venvPython,
+  zlsAsset,
   type ServerInfo,
 } from "./server-helpers"
 
@@ -54,10 +58,7 @@ export const Deno: Info = {
 
 export const Typescript: Info = {
   id: "typescript",
-  root: NearestRoot(
-    [...JS_LOCKFILES],
-    ["deno.json", "deno.jsonc"],
-  ),
+  root: NearestRoot([...JS_LOCKFILES], ["deno.json", "deno.jsonc"]),
   extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"],
   async spawn(root) {
     const tsserver = Module.resolve("typescript/lib/tsserver.js", Instance.directory)
@@ -89,14 +90,7 @@ export const Vue: Info = {
     let binary = which("vue-language-server")
     const args: string[] = []
     if (!binary) {
-      const js = path.join(
-        Global.Path.bin,
-        "node_modules",
-        "@vue",
-        "language-server",
-        "bin",
-        "vue-language-server.js",
-      )
+      const js = path.join(Global.Path.bin, "node_modules", "@vue", "language-server", "bin", "vue-language-server.js")
       if (!(await Filesystem.exists(js))) {
         if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
         await Process.spawn([BunProc.which(), "install", "@vue/language-server"], {
@@ -110,7 +104,7 @@ export const Vue: Info = {
           stdin: "pipe",
         }).exited
       }
-      binary = BunProc.which()
+      binary = BunProc.which() ?? null
       args.push("run", js)
     }
     args.push("--stdio")
@@ -425,31 +419,11 @@ export const Ty: Info = {
 
     const initialization: Record<string, string> = {}
 
-    const potentialVenvPaths = [process.env["VIRTUAL_ENV"], path.join(root, ".venv"), path.join(root, "venv")].filter(
-      (p): p is string => p !== undefined,
-    )
-    for (const venvPath of potentialVenvPaths) {
-      const isWindows = process.platform === "win32"
-      const potentialPythonPath = isWindows
-        ? path.join(venvPath, "Scripts", "python.exe")
-        : path.join(venvPath, "bin", "python")
-      if (await Filesystem.exists(potentialPythonPath)) {
-        initialization["pythonPath"] = potentialPythonPath
-        break
-      }
-    }
+    const python = await venvPython(root)
+    if (python) initialization["pythonPath"] = python
 
     if (!binary) {
-      for (const venvPath of potentialVenvPaths) {
-        const isWindows = process.platform === "win32"
-        const potentialTyPath = isWindows
-          ? path.join(venvPath, "Scripts", "ty.exe")
-          : path.join(venvPath, "bin", "ty")
-        if (await Filesystem.exists(potentialTyPath)) {
-          binary = potentialTyPath
-          break
-        }
-      }
+      binary = (await venvBin(root, "ty")) ?? null
     }
 
     if (!binary) {
@@ -493,20 +467,8 @@ export const Pyright: Info = {
     args.push("--stdio")
 
     const initialization: Record<string, string> = {}
-
-    const potentialVenvPaths = [process.env["VIRTUAL_ENV"], path.join(root, ".venv"), path.join(root, "venv")].filter(
-      (p): p is string => p !== undefined,
-    )
-    for (const venvPath of potentialVenvPaths) {
-      const isWindows = process.platform === "win32"
-      const potentialPythonPath = isWindows
-        ? path.join(venvPath, "Scripts", "python.exe")
-        : path.join(venvPath, "bin", "python")
-      if (await Filesystem.exists(potentialPythonPath)) {
-        initialization["pythonPath"] = potentialPythonPath
-        break
-      }
-    }
+    const python = await venvPython(root)
+    if (python) initialization["pythonPath"] = python
 
     const proc = spawn(binary, args, {
       cwd: root,
@@ -610,42 +572,20 @@ export const Zls: Info = {
         return
       }
 
-      const release = (await releaseResponse.json()) as any
+      const release = (await releaseResponse.json()) as {
+        tag_name: string
+        assets: { name: string; browser_download_url: string }[]
+      }
 
       const platform = process.platform
       const arch = process.arch
-      let assetName = ""
-
-      let zlsArch: string = arch
-      if (arch === "arm64") zlsArch = "aarch64"
-      else if (arch === "x64") zlsArch = "x86_64"
-      else if (arch === "ia32") zlsArch = "x86"
-
-      let zlsPlatform: string = platform
-      if (platform === "darwin") zlsPlatform = "macos"
-      else if (platform === "win32") zlsPlatform = "windows"
-
-      const ext = platform === "win32" ? "zip" : "tar.xz"
-
-      assetName = `zls-${zlsArch}-${zlsPlatform}.${ext}`
-
-      const supportedCombos = [
-        "zls-x86_64-linux.tar.xz",
-        "zls-x86_64-macos.tar.xz",
-        "zls-x86_64-windows.zip",
-        "zls-aarch64-linux.tar.xz",
-        "zls-aarch64-macos.tar.xz",
-        "zls-aarch64-windows.zip",
-        "zls-x86-linux.tar.xz",
-        "zls-x86-windows.zip",
-      ]
-
-      if (!supportedCombos.includes(assetName)) {
+      const assetName = zlsAsset(platform, arch)
+      if (!assetName) {
         log.error(`Platform ${platform} and architecture ${arch} is not supported by zls`)
         return
       }
 
-      const asset = release.assets.find((a: any) => a.name === assetName)
+      const asset = release.assets.find((a) => a.name === assetName)
       if (!asset) {
         log.error(`Could not find asset ${assetName} in latest zls release`)
         return
@@ -661,7 +601,7 @@ export const Zls: Info = {
       const tempPath = path.join(Global.Path.bin, assetName)
       if (downloadResponse.body) await Filesystem.writeStream(tempPath, downloadResponse.body)
 
-      if (ext === "zip") {
+      if (assetName.endsWith(".zip")) {
         const ok = await Archive.extractZip(tempPath, Global.Path.bin)
           .then(() => true)
           .catch((error) => {
@@ -914,29 +854,12 @@ export const Clangd: Info = {
       return
     }
     const platform = process.platform
-    const tokens: Record<string, string> = {
-      darwin: "mac",
-      linux: "linux",
-      win32: "windows",
-    }
-    const token = tokens[platform]
-    if (!token) {
-      log.error(`Platform ${platform} is not supported by clangd auto-download`)
+    const assets = release.assets ?? []
+    const asset = clangdAsset(assets, tag, platform)
+    if (!asset) {
+      log.error("clangd could not match release asset", { tag, platform })
       return
     }
-
-    const assets = release.assets ?? []
-    const valid = (item: { name?: string; browser_download_url?: string }) => {
-      if (!item.name) return false
-      if (!item.browser_download_url) return false
-      if (!item.name.includes(token)) return false
-      return item.name.includes(tag)
-    }
-
-    const asset =
-      assets.find((item) => valid(item) && item.name?.endsWith(".zip")) ??
-      assets.find((item) => valid(item) && item.name?.endsWith(".tar.xz")) ??
-      assets.find((item) => valid(item))
     if (!asset?.name || !asset.browser_download_url) {
       log.error("clangd could not match release asset", { tag, platform })
       return
@@ -1320,15 +1243,7 @@ export const YamlLS: Info = {
     let binary = which("yaml-language-server")
     const args: string[] = []
     if (!binary) {
-      const js = path.join(
-        Global.Path.bin,
-        "node_modules",
-        "yaml-language-server",
-        "out",
-        "server",
-        "src",
-        "server.js",
-      )
+      const js = path.join(Global.Path.bin, "node_modules", "yaml-language-server", "out", "server", "src", "server.js")
       const exists = await Filesystem.exists(js)
       if (!exists) {
         if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
@@ -1387,7 +1302,10 @@ export const LuaLS: Info = {
         return
       }
 
-      const release = await releaseResponse.json()
+      const release = (await releaseResponse.json()) as {
+        tag_name: string
+        assets: { name: string; browser_download_url: string }[]
+      }
 
       const platform = process.platform
       const arch = process.arch
@@ -1422,7 +1340,7 @@ export const LuaLS: Info = {
         return
       }
 
-      const asset = release.assets.find((a: any) => a.name === assetName)
+      const asset = release.assets.find((a) => a.name === assetName)
       if (!asset) {
         log.error(`Could not find asset ${assetName} in latest lua-language-server release`)
         return
