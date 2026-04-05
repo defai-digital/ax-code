@@ -12,6 +12,7 @@ import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
 import { Usage } from "./usage"
+import { Flag } from "@/flag/flag"
 
 function bar(input: { pct?: number | null; busy: boolean; tick: number }) {
   const width = 20
@@ -51,6 +52,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     diff: true,
     todo: true,
     lsp: true,
+    // DRE section defaults to expanded so users see the pending-plan
+    // list (or the "DRE is active" placeholder) immediately after
+    // enabling the experimental flag. Collapses if the plan list
+    // grows beyond 2 entries, same rule as LSP / Todo.
+    dre: true,
   })
 
   // Sort MCP servers alphabetically for consistent display order
@@ -234,6 +240,61 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </For>
               </Show>
             </box>
+            {/* Debugging & Refactoring Engine section. Mirrors the LSP
+                section's pattern (always visible heading, fallback text
+                when empty, expand/collapse at >2 items) so users can
+                tell at a glance that DRE is active. Gated on the
+                experimental flag — when the flag is off, no section
+                appears. The server returns plans=[] unconditionally
+                when the flag is off, so the fallback text here only
+                ever renders when DRE is enabled but no plans exist
+                yet. See PRD-debug-refactor-engine-ui-tier-3.md. */}
+            <Show when={Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE}>
+              <box>
+                <box
+                  flexDirection="row"
+                  gap={1}
+                  onMouseDown={() =>
+                    sync.data.debugEngine.plans.length > 2 && setExpanded("dre", !expanded.dre)
+                  }
+                >
+                  <Show when={sync.data.debugEngine.plans.length > 2}>
+                    <text fg={theme.text}>{expanded.dre ? "▼" : "▶"}</text>
+                  </Show>
+                  <text fg={theme.text}>
+                    <b>DRE</b>
+                  </text>
+                </box>
+                <Show when={sync.data.debugEngine.plans.length <= 2 || expanded.dre}>
+                  <Show when={sync.data.debugEngine.plans.length === 0}>
+                    <text fg={theme.textMuted}>No pending plans · DRE is active</text>
+                  </Show>
+                  <For each={sync.data.debugEngine.plans}>
+                    {(plan) => (
+                      <box flexDirection="row" gap={1}>
+                        <text
+                          flexShrink={0}
+                          style={{
+                            fg:
+                              plan.risk === "high"
+                                ? theme.error
+                                : plan.risk === "medium"
+                                  ? theme.warning
+                                  : theme.success,
+                          }}
+                        >
+                          •
+                        </text>
+                        <text fg={theme.textMuted}>
+                          {plan.kind} · {plan.affectedFileCount} file
+                          {plan.affectedFileCount === 1 ? "" : "s"}
+                        </text>
+                      </box>
+                    )}
+                  </For>
+                </Show>
+              </box>
+            </Show>
             <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
               <box>
                 <box
