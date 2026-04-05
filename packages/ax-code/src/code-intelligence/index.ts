@@ -1,6 +1,7 @@
 import { Log } from "../util/log"
 import { CodeGraphQuery } from "./query"
 import { CodeGraphBuilder } from "./builder"
+import { CodeGraphWatcher } from "./watcher"
 import type { CodeNodeID } from "./id"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
@@ -245,6 +246,24 @@ export namespace CodeIntelligence {
 
   export function purgeFile(projectID: ProjectID, absPath: string): void {
     CodeGraphBuilder.purgeFile(projectID, absPath)
+  }
+
+  // ─── Incremental updates via file watcher ────────────────────────────
+  //
+  // Start the watcher after an initial indexing pass to keep the graph
+  // live across file edits. Subscribes to FileWatcher.Event.Updated, so
+  // it depends on the FileWatcher subsystem already running (it does by
+  // default in an active instance).
+  //
+  // Idempotent: calling startWatcher twice for the same project is a
+  // no-op. stopWatcher clears pending debounce timers and unsubscribes.
+
+  export function startWatcher(projectID: ProjectID): void {
+    CodeGraphWatcher.start(projectID)
+  }
+
+  export function stopWatcher(projectID: ProjectID): void {
+    CodeGraphWatcher.stop(projectID)
   }
 
   // ─── Health / introspection ─────────────────────────────────────────
