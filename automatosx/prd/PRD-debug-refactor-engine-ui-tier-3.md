@@ -380,13 +380,19 @@ Trigger conditions for lifting the §6.3 deferral:
 - **If** user telemetry shows a significant number of sessions where users
   manually invoke DRE slash commands in the `build` agent (suggesting the
   default agent should have surfaced them autonomously), reconsider.
-- **If** a future release graduates `AX_CODE_EXPERIMENTAL_DEBUG_ENGINE` from
-  experimental to default-on, the build/general prompts should be revisited
-  as part of that graduation — a default-on feature that the default agent
-  doesn't mention would be an inconsistency.
+- **⚠ TRIGGERED in v2.3.4**: If a future release graduates
+  `AX_CODE_EXPERIMENTAL_DEBUG_ENGINE` from experimental to default-on, the
+  build/general prompts should be revisited as part of that graduation — a
+  default-on feature that the default agent doesn't mention would be an
+  inconsistency. **This trigger fired in v2.3.4.** Resolution is open: see
+  §6.6 for why the graduation shipped without creating the prompt files in
+  the same patch, and §6.7 for the follow-up work this creates.
 
-Until one of these triggers fires, build/plan/general continue using the
-provider default system prompt.
+Until the remaining trigger is resolved, build/plan/general continue using
+the provider default system prompt. The `/debug`, `/impact`, `/dedup`,
+`/hardcode`, `/refactor`, and `/plans` slash commands (Tier 1b) remain the
+explicit-invocation path for those agents and now default to on alongside
+DRE itself.
 
 ### 6.5 Principle: distinguish execution gaps from deferred features
 
@@ -404,3 +410,126 @@ This section exists to keep two very different kinds of "not done" separate:
 Future contributors should add entries to §6 when they discover similar gaps
 in past releases. Do not add execution gaps to §2 — that list is for planned
 future work only.
+
+### 6.6 Graduation: DRE + v3 Code Intelligence default-on (v2.3.4)
+
+**What changed.** `AX_CODE_EXPERIMENTAL_DEBUG_ENGINE` and
+`AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE` were flipped from default-off to
+default-on. The two flags graduate together because DRE depends on the v3
+code intelligence graph — shipping DRE on without its data source would
+produce uniformly empty tool results (empty call chains, zero dependents,
+zero duplicates, no resolvable refactor targets) and users would reasonably
+conclude DRE was broken.
+
+**Implementation.** Both flags now use the `!falsy(X)` pattern already
+established by `AX_CODE_EXPERIMENTAL_MARKDOWN` — default-on with a negative
+opt-out. Users who hit problems can set either env var to `0` or `false`
+to disable:
+
+```sh
+export AX_CODE_EXPERIMENTAL_DEBUG_ENGINE=0        # disable DRE only
+export AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=0   # disable code intelligence
+                                                  # (which disables DRE too,
+                                                  # since DRE depends on it)
+```
+
+**Decision override.** An earlier conversation (pre-v2.3.1) explicitly argued
+*against* enabling DRE by default for three reasons: `refactor_apply`'s safety
+pipeline hadn't been battle-tested on real user workflows, DRE depends on
+experimental v3 code intelligence, and footer noise for users who wouldn't
+use DRE. The user overrode that recommendation in v2.3.4 with an explicit
+instruction to ship DRE on by default. This PRD records the override so the
+reasoning trail is preserved:
+
+1. **`refactor_apply` safety** — still gated by permission `ask` on every
+   invocation. The blast radius of a bad apply is contained by the user's
+   approval click, not by the flag default. Default-on does not change the
+   write-guard.
+2. **Dependency on v3 code intelligence** — addressed by graduating both
+   flags in the same patch. There is no state where DRE is on and code
+   intelligence is off unless the user explicitly opts out of one.
+3. **Footer noise** — the v2.3.3 sidebar DRE section is designed to be
+   silent ("No pending plans · DRE is active") until there's content. The
+   footer chip still fires only on `plans > 0`. The only sustained cost is
+   six Debugging slash commands in the command palette, which is acceptable.
+
+**What graduation does NOT mean.** Both flags are still technically named
+`AX_CODE_EXPERIMENTAL_*`. The naming is kept to preserve the env-var contract
+for scripts and CI that already reference these names. The flags are no
+longer opt-in — they are opt-out — but the semantic "this is still maturing,
+you can disable it if you hit problems" is preserved by the `AX_CODE_EXPERIMENTAL_*`
+prefix.
+
+**Verification.** v2.3.4 ran the full regression sweep with the flags
+default-on: 752 pass / 0 fail / 6 skip across 66 files. The v2.3.0 flag-gating
+test (`debug-engine.test.ts:566`) was written defensively to assert the
+*invariant* rather than a specific state, so it continues to pass in the new
+default — this is why the flip was a two-line change rather than a test
+rewrite.
+
+### 6.7 Follow-up work created by the §6.6 graduation
+
+The graduation fires the third trigger in §6.4 but does not resolve it. Two
+open questions for a future release:
+
+**Q1: Should `build`, `plan`, and `general` get prompt files now?**
+
+The §6.3 deferral reasoning was "adding DRE guidance to build/plan/general
+means creating brand-new prompt files, which is a design decision, not a
+patch fix." With DRE now default-on, the argument shifts: the default agent
+(`build`) sees DRE tools in its registry and the default state of the
+product advertises DRE in the sidebar, but the default agent has no
+system-prompt guidance on when to use them. This is the same inconsistency
+that motivated v2.3.2 for `react`, just scaled up to the default agent.
+
+Options for resolution:
+
+- **Option A — Create minimal `build.txt` / `general.txt` prompt files**
+  with just a short "DRE tools are available, use them when the task
+  matches" section. Risk: this changes how those agents behave across all
+  providers (they currently use the provider default), which is a larger
+  change than a patch should ship.
+- **Option B — Add tool-hint injection to the shared system prompt** so
+  every agent (with or without its own prompt file) sees a condensed DRE
+  usage hint. Risk: affects agents that deliberately exclude DRE today
+  (architect, explore, perf, security).
+- **Option C — Accept the inconsistency**. The slash commands remain the
+  explicit-invocation path, and users can still manually ask the build
+  agent to "use refactor_plan for X". Risk: slash commands have limited
+  discoverability (see Item 5 in §2).
+
+No option is clearly correct. This is a legitimate design decision that
+needs its own review, not a patch fix.
+
+**Q2: Should the "experimental" naming survive graduation?**
+
+`AX_CODE_EXPERIMENTAL_DEBUG_ENGINE` and `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE`
+are now default-on but still carry the `EXPERIMENTAL_` prefix. Options:
+
+- **Option A — Keep the name.** Preserves the env-var contract and signals
+  "still maturing, opt-out exists". Precedent: `AX_CODE_EXPERIMENTAL_MARKDOWN`
+  has been default-on for several releases and still uses the same name.
+- **Option B — Rename to `AX_CODE_DISABLE_DEBUG_ENGINE` / `AX_CODE_DISABLE_CODE_INTELLIGENCE`.**
+  Matches the `AX_CODE_DISABLE_*` convention used by
+  `AX_CODE_DISABLE_AUTOUPDATE`, `AX_CODE_DISABLE_LSP_DOWNLOAD`, etc. Breaks
+  env-var contracts for anyone who already references the old names.
+
+v2.3.4 chose Option A implicitly (by not renaming) to avoid breaking
+existing tooling. A future major release could revisit.
+
+### 6.8 Updated principle: "graduation" is a third category
+
+§6.5 originally distinguished two kinds of "not done": deferred features
+(§2) and execution gaps (§6.1–6.5). The v2.3.4 graduation creates a third
+category that belongs here but isn't either of those:
+
+- **Deferred features** (§2): planned work waiting for triggers
+- **Execution gaps** (§6.1–6.5): shipped releases meant to cover X but didn't
+- **Graduations** (§6.6+): features moving from experimental-off to
+  experimental-on-with-opt-out, with the decision override, the dependency
+  coupling, and the follow-up questions they create
+
+Future contributors should add graduation entries to §6 with three
+components: (a) what changed, (b) what previous reasoning it overrode and
+why, (c) what follow-up work it creates. Without the follow-up section the
+graduation record is incomplete — see §6.7 for the template.

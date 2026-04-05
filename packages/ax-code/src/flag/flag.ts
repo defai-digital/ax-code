@@ -64,13 +64,18 @@ export namespace Flag {
   export const AX_CODE_EXPERIMENTAL_OXFMT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_OXFMT")
   export const AX_CODE_EXPERIMENTAL_LSP_TY = truthy("AX_CODE_EXPERIMENTAL_LSP_TY")
   export const AX_CODE_EXPERIMENTAL_LSP_TOOL = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_LSP_TOOL")
-  export const AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE =
-    AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE")
-  // Gates the Debugging & Refactoring Engine (DRE) tools while the feature
-  // stabilizes. When the flag is off, no DRE tools register and no DRE
-  // command surface is exposed. See PRD-debug-refactor-engine.md §5.2.
-  export const AX_CODE_EXPERIMENTAL_DEBUG_ENGINE =
-    AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_DEBUG_ENGINE")
+  // Code Intelligence (v3 graph-backed symbol index) and the Debugging &
+  // Refactoring Engine default to ON as of v2.3.4. DRE depends on code
+  // intelligence, so they graduate together — shipping DRE on without
+  // its data source would produce uniformly empty results and look
+  // broken. Users who hit problems can opt out with
+  // `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=0` or
+  // `AX_CODE_EXPERIMENTAL_DEBUG_ENGINE=0`, matching the pattern
+  // AX_CODE_EXPERIMENTAL_MARKDOWN already uses (default-on with a
+  // negative opt-out). See PRD-debug-refactor-engine-ui-tier-3.md §6.6
+  // for the graduation record.
+  export const AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE = !falsy("AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE")
+  export const AX_CODE_EXPERIMENTAL_DEBUG_ENGINE = !falsy("AX_CODE_EXPERIMENTAL_DEBUG_ENGINE")
   export const AX_CODE_DISABLE_FILETIME_CHECK = Config.boolean("AX_CODE_DISABLE_FILETIME_CHECK").pipe(
     Config.withDefault(false),
   )
