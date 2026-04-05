@@ -6,6 +6,7 @@ import { useConnected } from "../../component/dialog-model"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
 import { Installation } from "@/installation"
+import { Flag } from "@/flag/flag"
 
 export function Footer() {
   const { theme } = useTheme()
@@ -14,10 +15,22 @@ export function Footer() {
   const mcp = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
   const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
   const lsp = createMemo(() => Object.keys(sync.data.lsp))
-  // DRE pending refactor plans. The server returns 0 when the
-  // experimental flag is off, so this memo stays silent without any
-  // flag branching in the TUI layer.
+  // DRE footer chip state (v2.3.8). The chip has three visible states:
+  //   1. Pending plans exist    → "◆ N Plans"    (warning-colored)
+  //   2. Graph indexed, no plans → "◆ DRE ready" (success-colored)
+  //   3. Otherwise               → hidden
+  // State 1 is the original v2.3.1 behavior. State 2 is new in v2.3.8
+  // and answers "is DRE actually usable right now?" at a glance from
+  // the footer, mirroring the sidebar DRE section's visibility rule
+  // from v2.3.6. State 3 covers flag-off AND flag-on-but-graph-empty:
+  // in the empty-graph case the sidebar already tells the user to run
+  // `ax-code index`, and a second "DRE" chip in the footer without
+  // that context would be actively misleading.
   const drePending = createMemo(() => sync.data.debugEngine.pendingPlans)
+  const dreGraphIndexed = createMemo(
+    () => Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE && sync.data.debugEngine.graph.nodeCount > 0,
+  )
+  const dreChipVisible = createMemo(() => drePending() > 0 || dreGraphIndexed())
   const permissions = createMemo(() => {
     if (route.data.type !== "session") return []
     return sync.data.permission[route.data.sessionID] ?? []
@@ -74,9 +87,25 @@ export function Footer() {
             <text fg={theme.text}>
               <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
             </text>
-            <Show when={drePending() > 0}>
+            <Show when={dreChipVisible()}>
               <text fg={theme.text}>
-                <span style={{ fg: theme.warning }}>◆</span> {drePending()} Plan{drePending() !== 1 ? "s" : ""}
+                <Switch>
+                  <Match when={drePending() > 0}>
+                    {/* Pending-plan state: warning color + count. This
+                        is the original v2.3.1 behavior, preserved so
+                        users with active refactor work see the same
+                        chip they already know. */}
+                    <span style={{ fg: theme.warning }}>◆</span> {drePending()} Plan{drePending() !== 1 ? "s" : ""}
+                  </Match>
+                  <Match when={true}>
+                    {/* Ready state: success color + static label. New
+                        in v2.3.8. Fires only when the graph is indexed
+                        (nodeCount > 0) so the chip never appears
+                        while `ax-code index` is still required — the
+                        sidebar owns that onboarding hint. */}
+                    <span style={{ fg: theme.success }}>◆</span> DRE ready
+                  </Match>
+                </Switch>
               </text>
             </Show>
             <Show when={mcp()}>
