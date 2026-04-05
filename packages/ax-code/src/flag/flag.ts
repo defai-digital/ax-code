@@ -76,6 +76,16 @@ export namespace Flag {
   // for the graduation record.
   export const AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE = !falsy("AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE")
   export const AX_CODE_EXPERIMENTAL_DEBUG_ENGINE = !falsy("AX_CODE_EXPERIMENTAL_DEBUG_ENGINE")
+  // Auto-index fires a background code-intelligence index when a
+  // session starts against an empty or missing graph, so users no
+  // longer need to run `ax-code index` manually before DRE tools
+  // produce useful results. Opt-out via `AX_CODE_DISABLE_AUTO_INDEX=1`
+  // if the automatic run is undesirable (e.g. very large projects
+  // where a user wants to control indexing timing, CI environments,
+  // or debugging the indexer itself). Default-on so the DRE UI
+  // rows populate themselves without user intervention. See v2.3.9
+  // release notes.
+  export const AX_CODE_DISABLE_AUTO_INDEX = truthy("AX_CODE_DISABLE_AUTO_INDEX")
   export const AX_CODE_DISABLE_FILETIME_CHECK = Config.boolean("AX_CODE_DISABLE_FILETIME_CHECK").pipe(
     Config.withDefault(false),
   )

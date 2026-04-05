@@ -38,6 +38,7 @@ import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
 import { Recorder } from "../replay/recorder"
 import { CodeIntelligence } from "../code-intelligence"
+import { AutoIndex } from "../code-intelligence/auto-index"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
@@ -568,6 +569,17 @@ export namespace SessionPrompt {
               lastIndexedAt: s.lastUpdated,
             })
             CodeIntelligence.startWatcher(Instance.project.id)
+            // v2.3.9: if the graph is empty (fresh project or
+            // never-indexed), kick off a background batch index so
+            // users don't have to run `ax-code index` manually
+            // before DRE tools produce useful results. The call
+            // is fire-and-forget and self-gated on in-flight state,
+            // empty-graph check, and the AX_CODE_DISABLE_AUTO_INDEX
+            // opt-out — see code-intelligence/auto-index.ts. The
+            // watcher started on the previous line handles
+            // incremental updates once the auto-index populates
+            // the graph.
+            AutoIndex.maybeStart(Instance.project.id)
           } catch (e) {
             log.warn("code.graph init skipped", {
               sessionID,

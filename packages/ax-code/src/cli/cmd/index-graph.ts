@@ -2,6 +2,7 @@ import type { Argv } from "yargs"
 import path from "path"
 import { Instance } from "../../project/instance"
 import { CodeIntelligence } from "../../code-intelligence"
+import { CodeGraphQuery } from "../../code-intelligence/query"
 import { Ripgrep } from "../../file/ripgrep"
 import { LANGUAGE_EXTENSIONS } from "../../lsp/language"
 import { UI } from "../ui"
@@ -72,17 +73,28 @@ export const IndexCommand = cmd({
         // nothing between "files: N indexable" and "Indexing complete"
         // by default. That looks identical to a hang, and users
         // Ctrl-C out of the command in the middle of indexing, leaving
-        // the graph half-populated. The timer below polls
-        // CodeIntelligence.status() every 5 seconds and prints a
-        // node-count delta so it's obvious work is happening. The
-        // finally block clears the timer even if indexFiles throws.
+        // the graph half-populated. The timer below polls the LIVE
+        // node count (`CodeGraphQuery.countNodes`) every 5 seconds and
+        // prints a delta so it's obvious work is happening.
+        //
+        // v2.3.9 fix: the earlier heartbeat (v2.3.7–v2.3.8) read
+        // `CodeIntelligence.status().nodeCount`, which returns the
+        // cached `code_index_cursor.node_count` summary row. That row
+        // is only updated at the END of `indexFiles()` (see
+        // `builder.ts:upsertCursor` call after the batch loop), so
+        // during a live indexing run the cursor holds the previous
+        // batch's final count and the heartbeat printed "+0 this
+        // interval" for the entire run — the exact UX problem the
+        // heartbeat was supposed to fix. `countNodes` runs a real
+        // `SELECT COUNT(*)` against `code_node` so it reflects rows
+        // inserted by the in-progress batch in real time.
         UI.println("")
         UI.println(`${UI.Style.TEXT_DIM}Indexing in progress. This takes several minutes for larger projects.${UI.Style.TEXT_NORMAL}`)
         UI.println("")
         const heartbeatStart = Date.now()
-        let lastNodeCount = CodeIntelligence.status(projectID).nodeCount
+        let lastNodeCount = CodeGraphQuery.countNodes(projectID)
         const heartbeat = setInterval(() => {
-          const current = CodeIntelligence.status(projectID).nodeCount
+          const current = CodeGraphQuery.countNodes(projectID)
           const delta = current - lastNodeCount
           const elapsedSec = Math.round((Date.now() - heartbeatStart) / 1000)
           UI.println(
