@@ -240,12 +240,16 @@ export namespace CodeGraphQuery {
 
   export function upsertFile(row: FileInsert): void {
     Database.use((db) => {
-      // Drizzle's onConflictDoUpdate needs the conflict target. id is
-      // primary key, so we upsert by id.
+      // Conflict target is (project_id, path) via the unique index
+      // code_file_project_path_idx. Targeting `id` (which used to be
+      // here) was wrong — the builder generates a fresh CodeFileID on
+      // every call, so the conflict never fired and every re-index
+      // appended a new row. The unique index is enforced by
+      // migration 20260405063900_code_file_unique_path.
       db.insert(CodeFileTable)
         .values(row)
         .onConflictDoUpdate({
-          target: CodeFileTable.id,
+          target: [CodeFileTable.project_id, CodeFileTable.path],
           set: {
             sha: row.sha,
             size: row.size,

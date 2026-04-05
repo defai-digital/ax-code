@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import type { ProjectID } from "../project/schema"
 import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
@@ -128,7 +128,10 @@ export const CodeFileTable = sqliteTable(
   },
   (table) => [
     index("code_file_project_idx").on(table.project_id),
-    index("code_file_project_path_idx").on(table.project_id, table.path),
+    // UNIQUE: upsertFile's ON CONFLICT target. Prevents duplicate file
+    // rows when the builder re-indexes a path with a fresh CodeFileID.
+    // See migration 20260405063900_code_file_unique_path for the fix.
+    uniqueIndex("code_file_project_path_idx").on(table.project_id, table.path),
   ],
 )
 
