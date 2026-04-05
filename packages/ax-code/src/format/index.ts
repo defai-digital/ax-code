@@ -122,14 +122,12 @@ export namespace Format {
                       if (exit !== 0) {
                         log.error("failed", {
                           command: item.command,
-                          ...item.environment,
                         })
                       }
                     } catch (error) {
                       log.error("failed to format file", {
                         error,
                         command: item.command,
-                        ...item.environment,
                         file,
                       })
                     }

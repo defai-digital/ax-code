@@ -79,7 +79,8 @@ export namespace Terminal {
         // Match OSC 4 (palette colors)
         const paletteMatches = str.matchAll(/\x1b]4;(\d+);([^\x07\x1b]+)/g)
         for (const match of paletteMatches) {
-          const index = parseInt(match[1])
+          const index = parseInt(match[1], 10)
+          if (index < 0 || index >= 16) continue
           const color = parseColor(match[2])
           if (color) paletteColors[index] = color
         }

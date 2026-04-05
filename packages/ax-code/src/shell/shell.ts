@@ -32,10 +32,16 @@ export namespace Shell {
         process.kill(-pid, "SIGKILL")
       }
     } catch (_e) {
-      proc.kill("SIGTERM")
-      await sleep(SIGKILL_TIMEOUT_MS)
-      if (!opts?.exited?.()) {
-        proc.kill("SIGKILL")
+      // SIGTERM to process group failed (ESRCH = already exited,
+      // EPERM = not a group leader). Fall back to direct kill.
+      try {
+        proc.kill("SIGTERM")
+        await sleep(SIGKILL_TIMEOUT_MS)
+        if (!opts?.exited?.()) {
+          proc.kill("SIGKILL")
+        }
+      } catch {
+        // Process already exited — nothing left to kill.
       }
     }
   }

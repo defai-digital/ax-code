@@ -236,10 +236,13 @@ export namespace CodeGraphBuilder {
   async function withProjectLock<T>(projectID: ProjectID, fn: () => Promise<T>): Promise<T> {
     const prev = projectMutexes.get(projectID) ?? Promise.resolve()
     const next = prev.then(fn, fn)
-    projectMutexes.set(
-      projectID,
-      next.catch(() => {}),
-    )
+    const sentinel = next.catch(() => {})
+    projectMutexes.set(projectID, sentinel)
+    // Clean up the entry when the chain settles and no newer
+    // operation has replaced it, preventing unbounded Map growth.
+    sentinel.then(() => {
+      if (projectMutexes.get(projectID) === sentinel) projectMutexes.delete(projectID)
+    })
     return next
   }
 

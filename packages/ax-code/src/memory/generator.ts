@@ -97,7 +97,7 @@ async function scanConfig(root: string): Promise<MemorySection> {
     if (pkg.dependencies) {
       parts.push(`Dependencies: ${Object.keys(pkg.dependencies).length} packages`)
     }
-  } catch (e) { if (!isFileNotFound(e)) throw e }
+  } catch (e) { if (!isFileNotFound(e) && !(e instanceof SyntaxError)) throw e }
 
   // tsconfig.json
   try {
@@ -129,7 +129,8 @@ async function scanPatterns(root: string): Promise<MemorySection> {
 
   // Check for common frameworks
   try {
-    const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf-8"))
+    const raw = await fs.readFile(path.join(root, "package.json"), "utf-8")
+    const pkg = JSON.parse(raw)
     const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
     const deps = Object.keys(allDeps)
 
@@ -148,7 +149,7 @@ async function scanPatterns(root: string): Promise<MemorySection> {
     if (deps.includes("zod")) patterns.push("Validation: Zod")
     if (deps.includes("tailwindcss")) patterns.push("CSS: Tailwind")
     if (deps.includes("vitest") || deps.includes("jest")) patterns.push("Testing: configured")
-  } catch (e) { if (!isFileNotFound(e)) throw e }
+  } catch (e) { if (!isFileNotFound(e) && !(e instanceof SyntaxError)) throw e }
 
   // Check for Python
   try {

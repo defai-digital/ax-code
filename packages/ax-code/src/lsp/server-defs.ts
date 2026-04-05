@@ -862,7 +862,7 @@ export const JDTLS: Info = {
     }
     const javaMajorVersion = await run(["java", "-version"]).then((result) => {
       const m = /"(\d+)\.\d+\.\d+"/.exec(result.stderr.toString())
-      return !m ? undefined : parseInt(m[1])
+      return !m ? undefined : parseInt(m[1], 10)
     })
     if (javaMajorVersion == null || javaMajorVersion < 21) {
       log.error("JDTLS requires at least Java 21.")
@@ -1449,7 +1449,7 @@ export const TexLab: Info = {
         tag_name?: string
         assets?: { name?: string; browser_download_url?: string }[]
       }
-      const version = release.tag_name?.replace("v", "")
+      const version = release.tag_name?.replace(/^v/, "")
       if (!version) {
         log.error("texlab release did not include a version tag")
         return

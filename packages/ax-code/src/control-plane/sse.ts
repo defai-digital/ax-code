@@ -72,10 +72,14 @@ export async function parseSSE(
       buf += decoder.decode(next.value, { stream: true })
 
       while (true) {
-        const idx = buf.search(/\r?\n\r?\n/)
-        if (idx === -1) break
+        let idx = buf.indexOf("\n\n")
+        let gap = 2
+        if (idx === -1) {
+          idx = buf.indexOf("\r\n\r\n")
+          gap = 4
+          if (idx === -1) break
+        }
         const block = buf.slice(0, idx)
-        const gap = buf.slice(idx).match(/^\r?\n\r?\n/)?.[0].length ?? 2
         buf = buf.slice(idx + gap)
         emit(block)
       }

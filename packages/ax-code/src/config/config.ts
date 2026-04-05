@@ -69,7 +69,11 @@ export namespace Config {
     return process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
   }
 
-  const managedDir = managedConfigDir()
+  // Lazy — not cached at import time so tests that set
+  // AX_CODE_TEST_MANAGED_CONFIG_DIR after import take effect.
+  function getManagedDir() {
+    return managedConfigDir()
+  }
 
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
@@ -280,6 +284,7 @@ export namespace Config {
     // Kept separate from directories array to avoid write operations when installing plugins
     // which would fail on system directories requiring elevated permissions
     // This way it only loads config file and not skills/plugins/commands
+    const managedDir = getManagedDir()
     if (existsSync(managedDir)) {
       for (const file of ["ax-code.jsonc", "ax-code.json"]) {
         result = mergeConfigConcatArrays(result, await loadFile(path.join(managedDir, file)))

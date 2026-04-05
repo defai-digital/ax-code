@@ -1306,8 +1306,8 @@ query($owner: String!, $repo: String!, $number: Int!) {
         // Only called for non-schedule events, so payload is defined
         const comments = (issue.comments?.nodes || [])
           .filter((c) => {
-            const id = parseInt(c.databaseId)
-            return id !== triggerCommentId
+            const id = parseInt(c.databaseId, 10)
+            return !Number.isNaN(id) && id !== triggerCommentId
           })
           .map((c) => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
 
@@ -1434,8 +1434,8 @@ query($owner: String!, $repo: String!, $number: Int!) {
         // Only called for non-schedule events, so payload is defined
         const comments = (pr.comments?.nodes || [])
           .filter((c) => {
-            const id = parseInt(c.databaseId)
-            return id !== triggerCommentId
+            const id = parseInt(c.databaseId, 10)
+            return !Number.isNaN(id) && id !== triggerCommentId
           })
           .map((c) => `- ${c.author.login} at ${c.createdAt}: ${c.body}`)
 

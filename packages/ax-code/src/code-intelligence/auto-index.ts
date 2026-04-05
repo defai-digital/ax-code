@@ -98,6 +98,7 @@ export namespace AutoIndex {
   }
 
   const stateByProject = new Map<string, IndexState>()
+  const MAX_STATE_ENTRIES = 64
 
   export function getState(projectID: ProjectID): IndexState {
     const key = projectID as unknown as string
@@ -125,6 +126,17 @@ export namespace AutoIndex {
     const prev = getState(projectID)
     const next: IndexState = { ...prev, ...patch }
     stateByProject.set(key, next)
+    // Cap the map to prevent unbounded growth in long-running
+    // processes that open many projects. Evict the oldest idle
+    // entry when the cap is exceeded (FIFO on insertion order).
+    if (stateByProject.size > MAX_STATE_ENTRIES) {
+      for (const [k, v] of stateByProject) {
+        if (v.state === "idle") {
+          stateByProject.delete(k)
+          break
+        }
+      }
+    }
     // Fire-and-forget: a publish failure on an observability event
     // must never affect the index run. Bus.publish already catches
     // subscriber errors internally.

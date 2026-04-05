@@ -79,7 +79,7 @@ export namespace CodeIntelligence {
   }
 
   function nextQueryId(): string {
-    return `q_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    return `q_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`
   }
 
   // Guard for the completeness enum read back from SQLite. The column is

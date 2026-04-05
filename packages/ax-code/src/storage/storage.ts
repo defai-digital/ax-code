@@ -138,7 +138,10 @@ export namespace Storage {
   const state = lazy(async () => {
     const dir = path.join(Global.Path.data, "storage")
     const migration = await Filesystem.readJson<string>(path.join(dir, "migration"))
-      .then((x) => parseInt(x))
+      .then((x) => {
+        const n = parseInt(x, 10)
+        return Number.isNaN(n) ? 0 : n
+      })
       .catch(() => 0)
     for (let index = migration; index < MIGRATIONS.length; index++) {
       log.info("running migration", { index })

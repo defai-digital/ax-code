@@ -3,6 +3,7 @@ import path from "path"
 import z from "zod"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "../util/filesystem"
+import { Ssrf } from "../util/ssrf"
 
 const snapshotPath = path.join(import.meta.dirname, "models-snapshot.json")
 
@@ -120,6 +121,7 @@ export namespace ModelsDev {
     if (url) {
       log.info("loading model data from url", { url })
       try {
+        await Ssrf.assertPublicUrl(url, "AX_CODE_MODELS_URL")
         return (await fetch(url).then((res) => res.json())) as Record<string, unknown>
       } catch (error) {
         log.warn("failed to load model data", { source: "url", url, error })

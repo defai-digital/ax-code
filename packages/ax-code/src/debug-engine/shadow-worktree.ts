@@ -65,8 +65,13 @@ function releaseSlot(projectID: ProjectID): void {
   if (!gate) return
   gate.inFlight--
   const waiter = gate.waiters.shift()
-  if (waiter) waiter()
-  if (gate.inFlight === 0 && gate.waiters.length === 0) concurrencyGates.delete(key)
+  if (waiter) {
+    // The waiter's resolved microtask will increment inFlight.
+    // Do NOT delete the gate here — the waiter still needs it.
+    waiter()
+    return
+  }
+  if (gate.inFlight === 0) concurrencyGates.delete(key)
 }
 
 export namespace ShadowWorktree {
