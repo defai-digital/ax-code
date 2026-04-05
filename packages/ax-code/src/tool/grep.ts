@@ -39,7 +39,22 @@ export const GrepTool = Tool.define("grep", {
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
 
     const rgPath = await Ripgrep.filepath()
-    const args = ["-nH", "--hidden", "--no-messages", "--field-match-separator=|", "--regexp", params.pattern]
+    // Use the ASCII Unit Separator (0x1f) as the field separator
+    // instead of `|`. `|` is a valid filename character on Unix, so a
+    // path like `foo|bar.ts` would corrupt the split. 0x1f is a
+    // control character that cannot appear in typical file paths,
+    // line numbers, or source code, and Node's child_process allows
+    // it (it only rejects NUL/0x00 in argv). Ripgrep treats it as a
+    // literal byte separator.
+    const FIELD_SEP = "\x1f"
+    const args = [
+      "-nH",
+      "--hidden",
+      "--no-messages",
+      `--field-match-separator=${FIELD_SEP}`,
+      "--regexp",
+      params.pattern,
+    ]
     if (params.include) {
       args.push("--glob", params.include)
     }
@@ -83,12 +98,15 @@ export const GrepTool = Tool.define("grep", {
     for (const line of lines) {
       if (!line) continue
 
-      const [filePath, lineNumStr, ...lineTextParts] = line.split("|")
+      const [filePath, lineNumStr, ...lineTextParts] = line.split(FIELD_SEP)
       if (!filePath || !lineNumStr || lineTextParts.length === 0) continue
 
       const lineNum = parseInt(lineNumStr, 10)
       if (isNaN(lineNum)) continue
-      const lineText = lineTextParts.join("|")
+      // Rejoin on the field separator so matched lines that happened
+      // to contain 0x1f reconstruct correctly (edge case for binary
+      // files or terminal escape sequences).
+      const lineText = lineTextParts.join(FIELD_SEP)
 
       const stats = Filesystem.stat(filePath)
       if (!stats) continue

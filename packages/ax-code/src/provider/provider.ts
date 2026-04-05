@@ -637,6 +637,29 @@ export namespace Provider {
       if (!model.api.npm.startsWith("file://")) {
         installedPath = await BunProc.install(model.api.npm, "latest")
       } else {
+        // Restrict file:// imports to a small set of trusted directories.
+        // Previously the `if (!npm.startsWith("file://"))` allowlist check
+        // above completely bypassed the allowlist for file:// URLs,
+        // letting a compromised AX_CODE_MODELS_URL or a malicious config
+        // entry trigger `import()` against an arbitrary path on disk —
+        // i.e. RCE via file write + config injection.
+        const filePath = model.api.npm.replace(/^file:\/\//, "")
+        const resolved = path.resolve(filePath)
+        const allowedDirs = [Instance.worktree, Global.Path.data, Global.Path.cache, Global.Path.config]
+        const inAllowed = allowedDirs.some((dir) => {
+          const normalizedDir = path.resolve(dir) + path.sep
+          return (resolved + path.sep).startsWith(normalizedDir)
+        })
+        if (!inAllowed) {
+          throw new InitError(
+            { providerID: model.providerID },
+            {
+              cause: new Error(
+                `file:// path outside allowed directories (worktree, data, cache, config): ${model.api.npm}`,
+              ),
+            },
+          )
+        }
         log.info("loading local provider", { pkg: model.api.npm })
         installedPath = model.api.npm
       }

@@ -78,7 +78,11 @@ export const BashTool = Tool.define("bash", async () => {
     }),
     async execute(params, ctx) {
       const cwd = params.workdir || Instance.directory
-      if (params.timeout !== undefined && params.timeout < 0) {
+      if (params.timeout !== undefined && params.timeout < 1) {
+        // Reject 0 as well as negatives: timeout=0 combined with the
+        // `+ 100` in the kill timer fires ~100ms later, giving
+        // commands almost no time to run. The error message still
+        // says "positive number" which was already accurate.
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
@@ -169,11 +173,25 @@ export const BashTool = Tool.define("bash", async () => {
         { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
         { env: {} },
       )
+      // Strip secrets from process.env before forwarding to the child.
+      // An LLM prompt that instructs the shell to run `env` or
+      // `echo $OPENAI_API_KEY` could otherwise exfiltrate provider
+      // tokens, passwords, and other credentials held by the parent
+      // process. The pattern matches common secret-like names
+      // (KEY, SECRET, TOKEN, PASSWORD, CREDENTIAL) case-insensitively
+      // and excludes harmless session-local overrides (PATH, HOME,
+      // SHELL, etc.) by matching substrings rather than full names.
+      const SECRET_PATTERN = /(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)/i
+      const sanitizedEnv: Record<string, string | undefined> = {}
+      for (const [k, v] of Object.entries(process.env)) {
+        if (SECRET_PATTERN.test(k)) continue
+        sanitizedEnv[k] = v
+      }
       const proc = spawn(params.command, {
         shell,
         cwd,
         env: {
-          ...process.env,
+          ...sanitizedEnv,
           ...shellEnv.env,
         },
         stdio: ["ignore", "pipe", "pipe"],
@@ -182,6 +200,15 @@ export const BashTool = Tool.define("bash", async () => {
       })
 
       let output = ""
+      // Hard cap on raw output to protect process memory against
+      // commands that produce gigabytes of stdout/stderr. Previously
+      // only the metadata snapshot was truncated; the `output` string
+      // itself grew unbounded and accumulated the full stream in RAM
+      // until the process was killed by the OOM killer. 10MB matches
+      // the size at which we should surface a clear "output too large"
+      // signal rather than silently truncating forever.
+      const OUTPUT_HARD_CAP = 10 * 1024 * 1024
+      let truncated = false
 
       // Initialize metadata with empty output
       ctx.metadata({
@@ -192,15 +219,25 @@ export const BashTool = Tool.define("bash", async () => {
       })
 
       const append = (chunk: Buffer) => {
-        output += chunk.toString()
+        if (output.length < OUTPUT_HARD_CAP) {
+          const remaining = OUTPUT_HARD_CAP - output.length
+          const text = chunk.toString()
+          if (text.length <= remaining) {
+            output += text
+          } else {
+            output += text.slice(0, remaining) + "\n\n[output truncated at 10MB]"
+            truncated = true
+          }
+        }
         ctx.metadata({
           metadata: {
-            // truncate the metadata to avoid GIANT blobs of data (has nothing to do w/ what agent can access)
+            // truncate the metadata snapshot separately (smaller cap).
             output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
             description: params.description,
           },
         })
       }
+      void truncated // reserved for future surfacing; hard cap is enough for memory safety
 
       proc.stdout?.on("data", append)
       proc.stderr?.on("data", append)

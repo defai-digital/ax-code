@@ -1330,7 +1330,11 @@ export namespace ACP {
                 filename,
                 mime: part.mimeType,
               })
-            } else if (part.uri && part.uri.startsWith("http:")) {
+            } else if (part.uri && (part.uri.startsWith("http:") || part.uri.startsWith("https:"))) {
+              // Accept both http: and https: image URLs. Previously
+              // only http: was checked, so every modern (https) image
+              // URL from ACP clients was silently dropped and never
+              // attached to the outgoing message.
               parts.push({
                 type: "file",
                 url: part.uri,

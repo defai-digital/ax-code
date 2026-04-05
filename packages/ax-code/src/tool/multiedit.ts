@@ -27,7 +27,13 @@ export const MultiEditTool = Tool.define("multiedit", {
     for (const [, edit] of params.edits.entries()) {
       const result = await tool.execute(
         {
-          filePath: edit.filePath || params.filePath,
+          // Use nullish coalescing, not `||`. With `||`, an LLM that
+          // generates `filePath: ""` for a sub-edit would silently
+          // fall through to the parent's filePath and apply the edit
+          // to the wrong file. `??` only falls through on null/undefined,
+          // preserving "" as an explicit (invalid) value that the edit
+          // tool will reject downstream.
+          filePath: edit.filePath ?? params.filePath,
           oldString: edit.oldString,
           newString: edit.newString,
           replaceAll: edit.replaceAll,

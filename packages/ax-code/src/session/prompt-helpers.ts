@@ -355,11 +355,18 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
 
 export function remindQueuedMessages(msgs: MessageV2.WithParts[], lastFinished?: MessageV2.Assistant) {
   if (!lastFinished) return
+  // Idempotency check: if the text already starts with the reminder
+  // opening tag, this message has been wrapped in a prior iteration —
+  // skip it so we don't stack `<system-reminder>` tags and grow the
+  // token count on every loop step. The caller's `msgs` array is
+  // shared across iterations, so the wrap persists once applied.
+  const REMINDER_PREFIX = "<system-reminder>\nThe user sent the following message:"
   for (const msg of msgs) {
     if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
     for (const part of msg.parts) {
       if (part.type !== "text" || part.ignored || part.synthetic) continue
       if (!part.text.trim()) continue
+      if (part.text.startsWith(REMINDER_PREFIX)) continue
       part.text = [
         "<system-reminder>",
         "The user sent the following message:",

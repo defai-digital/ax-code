@@ -56,6 +56,13 @@ export const EditTool = Tool.define("edit", {
     await FileTime.withLock(filePath, async () => {
       if (params.oldString === "") {
         const existed = await Filesystem.exists(filePath)
+        // When overwriting an existing file, enforce the "must read
+        // before write" protection. Previously the empty-oldString
+        // branch skipped FileTime.assert entirely, letting an edit
+        // with oldString="" blow away a file the session had never
+        // read — bypassing the staleness check that every other
+        // write path enforces.
+        if (existed) await FileTime.assert(ctx.sessionID, filePath)
         contentNew = params.newString
         diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
         await ctx.ask({
@@ -100,10 +107,9 @@ export const EditTool = Tool.define("edit", {
 
       await Filesystem.write(filePath, contentNew)
       await notifyFileEdited(filePath, "change")
-      // Recompute diff from in-memory content (no need to re-read the file we just wrote)
-      diff = trimDiff(
-        createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
-      )
+      // The diff above was already computed from the same `contentOld`
+      // and `contentNew` locals — recomputing here produces an
+      // identical string and wastes CPU on large files.
       await FileTime.read(ctx.sessionID, filePath)
     })
 
@@ -444,9 +450,14 @@ export const EscapeNormalizedReplacer: Replacer = function* (content, find) {
 
   const unescapedFind = unescapeString(find)
 
-  // Try direct match with unescaped find string
+  // Try direct match with unescaped find string. If it succeeds, stop
+  // here — the multi-line rescan below would otherwise yield the same
+  // content a second time as an "escaped version", and the caller's
+  // uniqueness check (indexOf !== lastIndexOf) would incorrectly
+  // report "multiple matches" for what is really a single match.
   if (content.includes(unescapedFind)) {
     yield unescapedFind
+    return
   }
 
   // Also try finding escaped versions in content that match unescaped find
@@ -527,37 +538,40 @@ export const ContextAwareReplacer: Replacer = function* (content, find) {
   for (let i = 0; i < contentLines.length; i++) {
     if (contentLines[i].trim() !== firstLine) continue
 
-    // Look for the matching last line
-    for (let j = i + 2; j < contentLines.length; j++) {
-      if (contentLines[j].trim() === lastLine) {
-        // Found a potential context block
-        const blockLines = contentLines.slice(i, j + 1)
-        const block = blockLines.join("\n")
+    // Look for the matching last line. We keep scanning forward even
+    // when a wrong-length candidate appears, because the *correct*
+    // block for this `i` may begin later in the file. A previous
+    // version had a `break` that abandoned `i` as soon as it saw the
+    // first `lastLine` regardless of whether the enclosing block
+    // matched `findLines.length`, causing valid later matches to be
+    // silently dropped.
+    let matched = false
+    for (let j = i + 2; j < contentLines.length && !matched; j++) {
+      if (contentLines[j].trim() !== lastLine) continue
 
-        // Check if the middle content has reasonable similarity
-        // (simple heuristic: at least 50% of non-empty lines should match when trimmed)
-        if (blockLines.length === findLines.length) {
-          let matchingLines = 0
-          let totalNonEmptyLines = 0
+      // Found a candidate block bounded by the context anchors.
+      const blockLines = contentLines.slice(i, j + 1)
+      if (blockLines.length !== findLines.length) continue
 
-          for (let k = 1; k < blockLines.length - 1; k++) {
-            const blockLine = blockLines[k].trim()
-            const findLine = findLines[k].trim()
-
-            if (blockLine.length > 0 || findLine.length > 0) {
-              totalNonEmptyLines++
-              if (blockLine === findLine) {
-                matchingLines++
-              }
-            }
-          }
-
-          if (totalNonEmptyLines === 0 || matchingLines / totalNonEmptyLines >= 0.5) {
-            yield block
-            break // Only match the first occurrence
+      // Check if the middle content has reasonable similarity
+      // (simple heuristic: at least 50% of non-empty lines should
+      // match when trimmed).
+      let matchingLines = 0
+      let totalNonEmptyLines = 0
+      for (let k = 1; k < blockLines.length - 1; k++) {
+        const blockLine = blockLines[k].trim()
+        const findLine = findLines[k].trim()
+        if (blockLine.length > 0 || findLine.length > 0) {
+          totalNonEmptyLines++
+          if (blockLine === findLine) {
+            matchingLines++
           }
         }
-        break
+      }
+
+      if (totalNonEmptyLines === 0 || matchingLines / totalNonEmptyLines >= 0.5) {
+        yield blockLines.join("\n")
+        matched = true // stop the j-loop; we've yielded the first valid match for this i
       }
     }
   }

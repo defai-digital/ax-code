@@ -142,12 +142,29 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
         case "delete": {
           await FileTime.assert(ctx.sessionID, filePath)
+          // Match the update branch: reject directories explicitly so
+          // a delete against a directory fails with a clear error
+          // instead of a raw EISDIR from readFile/unlink.
+          const deleteStats = await fs.stat(filePath).catch(() => null)
+          if (deleteStats?.isDirectory()) {
+            throw new Error(`apply_patch: cannot delete a directory: ${filePath}`)
+          }
           const contentToDelete = await fs.readFile(filePath, "utf-8").catch((error) => {
             throw new Error(`apply_patch verification failed: ${error}`)
           })
           const deleteDiff = trimDiff(createTwoFilesPatch(filePath, filePath, contentToDelete, ""))
 
-          const deletions = contentToDelete.split("\n").length
+          // Count actual lines, not `split("\n").length`. For content
+          // "hello\nworld\n", split yields ["hello", "world", ""]
+          // (length 3), but the file has 2 lines. Empty file → 0
+          // deletions. Content without trailing newline → split length
+          // equals line count, which is also what we want.
+          const deletions =
+            contentToDelete.length === 0
+              ? 0
+              : contentToDelete.endsWith("\n")
+                ? contentToDelete.split("\n").length - 1
+                : contentToDelete.split("\n").length
 
           fileChanges.push({
             filePath,

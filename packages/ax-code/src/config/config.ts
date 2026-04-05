@@ -670,7 +670,14 @@ export namespace Config {
       if (!parsed.data.$schema && isFile) {
         parsed.data.$schema = "https://ax-code.ai/config.json"
         const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://ax-code.ai/config.json",')
-        await Filesystem.write(options.path, updated).catch(() => {})
+        // Log write failures — a silent `.catch(() => {})` leaves the
+        // user staring at a config that keeps getting "$schema" added
+        // on every load but never persisted (e.g. permission denied).
+        // The operation is not critical so we do not throw; the next
+        // start will retry.
+        await Filesystem.write(options.path, updated).catch((err) =>
+          log.warn("failed to persist auto-injected $schema", { path: options.path, err }),
+        )
       }
       const data = parsed.data
       if (data.plugin && isFile) {

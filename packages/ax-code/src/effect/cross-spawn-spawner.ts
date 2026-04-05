@@ -307,7 +307,15 @@ export const make = Effect.gen(function* () {
 
     return Effect.try({
       try: () => {
-        globalThis.process.kill(-proc.pid!, signal)
+        // Guard the PID before calling kill. `proc.pid` is
+        // `number | undefined` until the `'spawn'` event fires;
+        // `killGroup` is called from acquireRelease cleanup which
+        // usually runs after spawn, but if the spawn failed outright
+        // the PID will still be undefined. A bare non-null assertion
+        // would invoke `process.kill(-undefined, …)` which throws a
+        // raw TypeError and masks the real spawn failure.
+        if (proc.pid == null) return
+        globalThis.process.kill(-proc.pid, signal)
       },
       catch: (err) => toPlatformError("kill", toError(err), command),
     })
@@ -398,8 +406,16 @@ export const make = Effect.gen(function* () {
 
           const fd = yield* setupFds(command, proc, extra)
           const out = setupOutput(command, proc, sout, serr)
+          // Guard the PID: spawn success normally implies `proc.pid` is
+          // defined, but on platforms where the child exits instantly
+          // (binary missing, permission denied) the pid can still be
+          // undefined here. Fail loudly with a platform error instead
+          // of propagating `undefined as number` through ProcessId.
+          if (proc.pid == null) {
+            return yield* Effect.fail(toPlatformError("spawn", new Error("Process PID not available"), command))
+          }
           return makeHandle({
-            pid: ProcessId(proc.pid!),
+            pid: ProcessId(proc.pid),
             stdin: yield* setupStdin(command, proc, sin),
             stdout: out.stdout,
             stderr: out.stderr,

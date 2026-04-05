@@ -5,6 +5,7 @@ import type { Snapshot } from "../snapshot"
 import type { Permission } from "../permission"
 import type { ProjectID } from "../project/schema"
 import type { SessionID, MessageID, PartID } from "./schema"
+import type { WorkspaceID } from "../control-plane/schema"
 import { Timestamps } from "../storage/schema.sql"
 
 type PartData = Omit<MessageV2.Part, "id" | "sessionID" | "messageID">
@@ -30,6 +31,10 @@ export const SessionTable = sqliteTable(
     summary_diffs: text({ mode: "json" }).$type<Snapshot.FileDiff[]>(),
     revert: text({ mode: "json" }).$type<{ messageID: MessageID; partID?: PartID; snapshot?: string; diff?: string }>(),
     permission: text({ mode: "json" }).$type<Permission.Ruleset>(),
+    // workspace_id was added by migration 20260227213759_add_session_workspace_id
+    // but was missing from the Drizzle schema, producing drift between the
+    // live database and the ORM model. Declaring it here aligns the two.
+    workspace_id: text().$type<WorkspaceID>(),
     ...Timestamps,
     time_compacting: integer(),
     time_archived: integer(),
@@ -37,6 +42,9 @@ export const SessionTable = sqliteTable(
   (table) => [
     index("session_project_idx").on(table.project_id),
     index("session_parent_idx").on(table.parent_id),
+    // Matches the `session_workspace_idx` index created by the same
+    // migration that added the column above.
+    index("session_workspace_idx").on(table.workspace_id),
   ],
 )
 

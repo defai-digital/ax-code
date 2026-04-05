@@ -199,7 +199,19 @@ export namespace MCP {
             return
           }
 
-          const result = await create(key, mcp).catch(() => undefined)
+          // Log MCP creation failures and record a "failed" status so
+          // the user sees why a server isn't connecting. Previously
+          // this swallowed all errors into `undefined`, leaving
+          // misconfigured MCP servers silently missing from the status
+          // map with no feedback at all.
+          const result = await create(key, mcp).catch((err) => {
+            log.error("MCP server creation failed", { server: key, err })
+            status[key] = {
+              status: "failed" as const,
+              error: err instanceof Error ? err.message : String(err),
+            }
+            return undefined
+          })
           if (!result) return
 
           status[key] = result.status

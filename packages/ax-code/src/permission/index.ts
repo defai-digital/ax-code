@@ -130,6 +130,12 @@ export namespace Permission {
   interface State {
     pending: Map<PermissionID, PendingEntry>
     approved: Ruleset
+    // Captured at state init so the reply handler can persist the
+    // updated `approved` array back to the database. Using
+    // `Instance.project.id` at reply time would also work, but the
+    // per-instance state is already scoped to a specific project so
+    // capturing once is simpler and cannot drift.
+    projectID: ProjectID
   }
 
   export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
@@ -147,9 +153,10 @@ export namespace Permission {
           const row = Database.use((db) =>
             db.select().from(PermissionTable).where(eq(PermissionTable.project_id, ctx.project.id)).get(),
           )
-          const state = {
+          const state: State = {
             pending: new Map<PermissionID, PendingEntry>(),
             approved: row?.data ?? [],
+            projectID: ctx.project.id,
           }
 
           yield* Effect.addFinalizer(() =>
@@ -212,7 +219,7 @@ export namespace Permission {
       })
 
       const reply = Effect.fn("Permission.reply")(function* (input: z.infer<typeof ReplyInput>) {
-        const { approved, pending } = yield* InstanceState.get(state)
+        const { approved, pending, projectID } = yield* InstanceState.get(state)
         const existing = pending.get(input.requestID)
         if (!existing) return
 
@@ -268,6 +275,31 @@ export namespace Permission {
             action: "allow",
           })
         }
+
+        // Persist the updated approved ruleset to the database.
+        // Without this, "always allow" approvals live only in the
+        // in-memory state and are lost on process restart — users had
+        // to re-approve the same permissions every session. Upsert is
+        // used so the row is created on first approval even if the
+        // session started with no prior permissions persisted.
+        Database.use((db) =>
+          db
+            .insert(PermissionTable)
+            .values({
+              project_id: projectID,
+              data: approved,
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .onConflictDoUpdate({
+              target: PermissionTable.project_id,
+              set: {
+                data: approved,
+                time_updated: Date.now(),
+              },
+            })
+            .run(),
+        )
 
         for (const [id, item] of pending.entries()) {
           if (item.info.sessionID !== existing.info.sessionID) continue
@@ -379,6 +411,14 @@ export namespace Permission {
     const result = new Set<string>()
     for (const tool of tools) {
       const permission = EDIT_TOOLS.includes(tool) ? "edit" : tool
+      // Intentional semantics: `disabled()` returns tools that are
+      // FULLY denied (i.e. the last matching rule has a wildcard
+      // pattern denying everything). A specific allow rule that
+      // follows a wildcard deny means the tool is still usable for
+      // that specific pattern, so it is shown as enabled in the UI
+      // even though some pattern-specific calls will be rejected at
+      // enforcement time. See test/permission-task.test.ts for the
+      // codified behavior. BUG-18 from the audit was a false positive.
       const rule = ruleset.findLast((rule) => Wildcard.match(permission, rule.permission))
       if (!rule) continue
       if (rule.pattern === "*" && rule.action === "deny") result.add(tool)

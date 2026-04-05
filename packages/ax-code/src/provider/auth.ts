@@ -169,7 +169,21 @@ export namespace ProviderAuth {
         inputs?: Record<string, string>
       }) {
         const { hooks, pending } = yield* InstanceState.get(state)
-        const method = hooks[input.providerID].methods[input.method]
+        // Bounds-check both `providerID` and `method` before chaining
+        // property accesses. Previously an invalid providerID or
+        // out-of-range method index crashed the Effect service with a
+        // raw TypeError, taking down the whole auth flow for every
+        // provider until the service restarted. Reuse the existing
+        // `OauthMissing` typed error so the failure flows through the
+        // service's declared error channel.
+        const provider = hooks[input.providerID]
+        if (!provider) {
+          return yield* Effect.fail(new OauthMissing({ providerID: input.providerID }))
+        }
+        const method = provider.methods[input.method]
+        if (!method) {
+          return yield* Effect.fail(new OauthMissing({ providerID: input.providerID }))
+        }
         if (method.type !== "oauth") return
 
         if (method.prompts && input.inputs) {

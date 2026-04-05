@@ -44,25 +44,30 @@ export async function fetchExaTool(config: {
 
     const responseText = await response.text()
 
-    // Parse SSE response
+    // Parse SSE response. Collect every content-bearing event and
+    // return the LAST one. Previously this returned on the first
+    // event with content, which would cut off the final result if the
+    // API emitted any preliminary events (partial content, status
+    // updates, etc.) before the complete answer.
     const lines = responseText.split("\n")
+    let lastResult: { output: string; title: string; metadata: Record<string, never> } | undefined
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        let data: McpResponse
-        try {
-          data = JSON.parse(line.substring(6))
-        } catch {
-          continue // skip malformed SSE lines
-        }
-        if (data.result?.content?.[0]?.text) {
-          return {
-            output: data.result.content[0].text,
-            title: config.title,
-            metadata: {},
-          }
+      if (!line.startsWith("data: ")) continue
+      let data: McpResponse
+      try {
+        data = JSON.parse(line.substring(6))
+      } catch {
+        continue // skip malformed SSE lines
+      }
+      if (data.result?.content?.[0]?.text) {
+        lastResult = {
+          output: data.result.content[0].text,
+          title: config.title,
+          metadata: {},
         }
       }
     }
+    if (lastResult) return lastResult
 
     return {
       output: config.noResultsMessage,

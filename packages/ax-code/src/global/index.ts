@@ -6,10 +6,20 @@ import { Filesystem } from "../util/filesystem"
 
 const app = "ax-code"
 
-const data = path.join(xdgData!, app)
-const cache = path.join(xdgCache!, app)
-const config = path.join(xdgConfig!, app)
-const state = path.join(xdgState!, app)
+// Fall back to the conventional `~/.local/share`, `~/.cache`, etc. when
+// the xdg-basedir helpers return undefined. This happens in minimal
+// environments (Docker containers without $HOME, some CI runners,
+// sandboxed executions) where the corresponding env vars are unset
+// AND the library can't derive defaults. The non-null assertions
+// `xdgData!` etc. would otherwise crash at startup with a cryptic
+// "path argument must be of type string" TypeError.
+const home = os.homedir()
+const fallback = (dir: string | undefined, sub: string) => dir ?? path.join(home, sub)
+
+const data = path.join(fallback(xdgData, ".local/share"), app)
+const cache = path.join(fallback(xdgCache, ".cache"), app)
+const config = path.join(fallback(xdgConfig, ".config"), app)
+const state = path.join(fallback(xdgState, ".local/state"), app)
 
 export namespace Global {
   export const Path = {

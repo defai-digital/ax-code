@@ -117,7 +117,17 @@ export namespace Workspace {
             directory: item.id,
             payload,
           })
-        }).catch(() => {})
+        }).catch((err) => {
+          // Log SSE sync failures so a dead workspace connection is
+          // visible. Previously this swallowed everything and a
+          // broken workspace looked like a healthy one that never
+          // received events.
+          log.warn("workspace SSE sync lost", {
+            workspaceID: item.id,
+            type: item.type,
+            err,
+          })
+        })
       })
 
     return {

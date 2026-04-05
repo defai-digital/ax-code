@@ -1,4 +1,4 @@
-import { Database, eq, and, gte, lte, desc } from "../storage/db"
+import { Database, eq, and, gte, lte, desc, sql } from "../storage/db"
 import { EventLogTable } from "./event-log.sql"
 import { EventLogID } from "./index"
 import type { ReplayEvent } from "./event"
@@ -42,14 +42,16 @@ export namespace EventQuery {
   }
 
   export function count(sessionID: SessionID): number {
-    const result = Database.use((db) =>
+    // Use COUNT(*) via .get() instead of loading every row to count
+    // them. See code-intelligence/query.ts countNodes for rationale.
+    const row = Database.use((db) =>
       db
-        .select()
+        .select({ count: sql<number>`count(*)` })
         .from(EventLogTable)
         .where(eq(EventLogTable.session_id, sessionID))
-        .all(),
+        .get(),
     )
-    return result.length
+    return row?.count ?? 0
   }
 
   export function allSince(since: number): { session_id: SessionID; event_data: ReplayEvent; time_created: number }[] {
@@ -98,17 +100,22 @@ export namespace EventQuery {
 
   export function pruneOlderThan(cutoffMs: number): number {
     const cutoff = Date.now() - cutoffMs
-    const count = Database.use((db) =>
-      db
-        .select({ id: EventLogTable.id })
+    // Wrap count + delete in a single transaction so the returned
+    // count matches the number of rows actually removed (no TOCTOU).
+    // The previous implementation selected all matching IDs into
+    // memory just to get `.length`, then ran a separate DELETE — two
+    // full scans plus a race window. COUNT(*) is O(1) memory and the
+    // transaction ensures the two queries see the same snapshot.
+    return Database.transaction((db) => {
+      const row = db
+        .select({ count: sql<number>`count(*)` })
         .from(EventLogTable)
         .where(lte(EventLogTable.time_created, cutoff))
-        .all(),
-    ).length
-    if (count === 0) return 0
-    Database.use((db) =>
-      db.delete(EventLogTable).where(lte(EventLogTable.time_created, cutoff)).run(),
-    )
-    return count
+        .get()
+      const count = row?.count ?? 0
+      if (count === 0) return 0
+      db.delete(EventLogTable).where(lte(EventLogTable.time_created, cutoff)).run()
+      return count
+    })
   }
 }

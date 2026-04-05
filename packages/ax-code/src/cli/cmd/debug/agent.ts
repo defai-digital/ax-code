@@ -91,22 +91,22 @@ function parseToolParams(input?: string) {
   const trimmed = input.trim()
   if (trimmed.length === 0) return {}
 
+  // JSON only. The previous `new Function("return (" + input + ")")`
+  // fallback was a code-injection vector: any caller of
+  // `ax-code debug agent` could pass `--params "process.mainModule.
+  // require('child_process').execSync('id')"` for arbitrary command
+  // execution. `new Function` is `eval` in disguise — never feed user
+  // input into it.
   const parsed = iife(() => {
     try {
       return JSON.parse(trimmed)
     } catch (jsonError) {
-      try {
-        return new Function(`return (${trimmed})`)()
-      } catch (evalError) {
-        throw new Error(
-          `Failed to parse --params. Use JSON or a JS object literal. JSON error: ${jsonError}. Eval error: ${evalError}.`,
-        )
-      }
+      throw new Error(`Failed to parse --params as JSON: ${jsonError}. Tool params must be valid JSON.`)
     }
   })
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Tool params must be an object.")
+    throw new Error("Tool params must be a JSON object.")
   }
   return parsed as Record<string, unknown>
 }

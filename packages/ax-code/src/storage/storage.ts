@@ -166,7 +166,14 @@ export namespace Storage {
     const target = path.join(dir, ...key) + ".json"
     return withErrorHandling(async () => {
       using _ = await Lock.write(target)
-      await fs.unlink(target).catch(() => {})
+      // ENOENT is expected (already removed). Any other error
+      // (EPERM, EBUSY, EIO) should surface — a silent catch left
+      // callers believing removal succeeded when it hadn't.
+      await fs.unlink(target).catch((err: NodeJS.ErrnoException) => {
+        if (err?.code === "ENOENT") return
+        log.error("storage remove failed", { target, err })
+        throw err
+      })
     })
   }
 

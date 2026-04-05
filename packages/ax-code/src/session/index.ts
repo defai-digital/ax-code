@@ -40,10 +40,15 @@ export namespace Session {
     return (isChild ? childTitlePrefix : parentTitlePrefix) + new Date().toISOString()
   }
 
+  // Pre-compiled at module init. Previously `isDefaultTitle` built a
+  // fresh RegExp on every call, which showed up in session list/route
+  // hot paths.
+  const DEFAULT_TITLE_RE = new RegExp(
+    `^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`,
+  )
+
   export function isDefaultTitle(title: string) {
-    return new RegExp(
-      `^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`,
-    ).test(title)
+    return DEFAULT_TITLE_RE.test(title)
   }
 
   // Escape SQL LIKE metacharacters so a user search string containing

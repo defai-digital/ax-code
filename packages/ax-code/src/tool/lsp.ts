@@ -32,6 +32,22 @@ export const LspTool = Tool.define("lsp", {
     const file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
     await assertExternalDirectory(ctx, file)
 
+    // Validate BEFORE asking permission. Previously the user saw a
+    // "Grant LSP access?" prompt for non-existent files or files with
+    // no matching LSP server, approved, then immediately got a
+    // "File not found" or "No LSP server available" error. Checking
+    // prerequisites first means only real, actionable calls surface
+    // a permission prompt.
+    const exists = await Filesystem.exists(file)
+    if (!exists) {
+      throw new Error(`File not found: ${file}`)
+    }
+
+    const available = await LSP.hasClients(file)
+    if (!available) {
+      throw new Error("No LSP server available for this file type.")
+    }
+
     await ctx.ask({
       permission: "lsp",
       patterns: ["*"],
@@ -47,16 +63,6 @@ export const LspTool = Tool.define("lsp", {
 
     const relPath = path.relative(Instance.worktree, file)
     const title = `${args.operation} ${relPath}:${args.line}:${args.character}`
-
-    const exists = await Filesystem.exists(file)
-    if (!exists) {
-      throw new Error(`File not found: ${file}`)
-    }
-
-    const available = await LSP.hasClients(file)
-    if (!available) {
-      throw new Error("No LSP server available for this file type.")
-    }
 
     await LSP.touchFile(file, true)
 

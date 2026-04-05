@@ -282,12 +282,35 @@ export namespace SessionProcessor {
                     const errorMsg = value.error instanceof Error ? value.error.message : String(value.error)
                     const toolErrorEnd = Date.now()
 
+                    // Self-correction: analyze the failure BEFORE persisting
+                    // the tool error so we can append the reflection prompt
+                    // to the error message the LLM sees. Previously the
+                    // prompt was computed but discarded, making the whole
+                    // self-correction feature a no-op — the log showed
+                    // "self-correction active" but the model received no
+                    // guidance on its next turn.
+                    let annotatedError = errorMsg
+                    if (
+                      !(value.error instanceof Permission.RejectedError) &&
+                      !(value.error instanceof Question.RejectedError)
+                    ) {
+                      const correction = SelfCorrection.analyze(input.sessionID, match.tool, errorMsg)
+                      if (correction) {
+                        log.info("self-correction active", {
+                          tool: match.tool,
+                          strategy: correction.signal.strategy,
+                          attempt: correction.signal.attempt,
+                        })
+                        annotatedError = `${errorMsg}\n\n<system-reminder>\n${correction.prompt}\n</system-reminder>`
+                      }
+                    }
+
                     await Session.updatePart({
                       ...match,
                       state: {
                         status: "error",
                         input: value.input ?? match.state.input,
-                        error: errorMsg,
+                        error: annotatedError,
                         time: {
                           start: match.state.time.start,
                           end: toolErrorEnd,
@@ -312,16 +335,6 @@ export namespace SessionProcessor {
                       value.error instanceof Question.RejectedError
                     ) {
                       blocked = shouldBreak
-                    } else {
-                      // Self-correction: analyze failure and log recovery hint
-                      const correction = SelfCorrection.analyze(input.sessionID, match.tool, errorMsg)
-                      if (correction) {
-                        log.info("self-correction active", {
-                          tool: match.tool,
-                          strategy: correction.signal.strategy,
-                          attempt: correction.signal.attempt,
-                        })
-                      }
                     }
                     recentToolRing.push({ tool: match.tool, input: JSON.stringify(value.input ?? match.state.input) })
                     if (recentToolRing.length > DOOM_LOOP_THRESHOLD) recentToolRing.shift()

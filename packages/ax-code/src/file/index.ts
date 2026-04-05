@@ -442,6 +442,12 @@ export namespace File {
           if (diffOutput.trim()) {
             for (const line of diffOutput.trim().split("\n")) {
               const [added, removed, file] = line.split("\t")
+              // Skip malformed numstat lines (anything missing the
+              // three tab-separated fields). Previously a line without
+              // two tabs yielded `file === undefined` and pushed a row
+              // with a nullish path, leading to confusing downstream
+              // errors.
+              if (!file || added === undefined || removed === undefined) continue
               changed.push({
                 path: file,
                 added: added === "-" ? 0 : parseInt(added, 10),
@@ -530,6 +536,16 @@ export namespace File {
 
           if (!Filesystem.contains(Instance.directory, full)) {
             throw new Error("Access denied: path escapes project directory")
+          }
+
+          // Resolve symlinks and re-check containment so a symlink
+          // inside the project pointing to `/etc/passwd` cannot be used
+          // to read arbitrary files. If the file doesn't exist yet,
+          // realpath throws ENOENT and we skip the check — the
+          // subsequent read will return empty content anyway.
+          const realFull = await fs.promises.realpath(full).catch(() => null)
+          if (realFull && !Filesystem.contains(Instance.directory, realFull)) {
+            throw new Error("Access denied: symlink target escapes project directory")
           }
 
           if (isImageByExtension(file)) {
@@ -624,6 +640,13 @@ export namespace File {
           const resolved = dir ? path.join(Instance.directory, dir) : Instance.directory
           if (!Filesystem.contains(Instance.directory, resolved)) {
             throw new Error("Access denied: path escapes project directory")
+          }
+
+          // Resolve symlinks before reading the directory so a symlink
+          // inside the project pointing to `/etc` cannot be listed.
+          const realResolved = await fs.promises.realpath(resolved).catch(() => null)
+          if (realResolved && !Filesystem.contains(Instance.directory, realResolved)) {
+            throw new Error("Access denied: symlink target escapes project directory")
           }
 
           const nodes: File.Node[] = []

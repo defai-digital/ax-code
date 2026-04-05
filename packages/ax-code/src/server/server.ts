@@ -430,7 +430,14 @@ export namespace Server {
           return c.json(err.toObject(), { status })
         }
         if (err instanceof HTTPException) return err.getResponse()
-        const message = err instanceof Error && err.stack ? err.stack : err.toString()
+        // Return a generic message to the client; the full stack was
+        // already logged by `log.error("failed", { error: err })` above.
+        // Previously this returned `err.stack` in the response body,
+        // which leaked internal paths, function names, line numbers,
+        // and library versions to any caller that could reach the
+        // server. Clients get a short message and a 500 — operators
+        // see the full trace in the logs.
+        const message = err instanceof Error ? err.message : "Internal server error"
         return c.json(new NamedError.Unknown({ message }).toObject(), {
           status: 500,
         })

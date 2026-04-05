@@ -136,8 +136,11 @@ export const ESLint: Info = {
           log.error("Failed to extract vscode-eslint archive", { error })
           return false
         })
+      // Always clean up the ~50MB zip, even on extraction failure.
+      // Previously the cleanup only ran on the success path, so repeated
+      // failed installs would exhaust disk space with orphaned archives.
+      await fs.rm(zipPath, { force: true }).catch(() => {})
       if (!ok) return
-      await fs.rm(zipPath, { force: true })
 
       const extractedPath = path.join(Global.Path.bin, "vscode-eslint-main")
       const finalPath = path.join(Global.Path.bin, "vscode-eslint")
@@ -212,15 +215,17 @@ export const Oxlint: Info = {
 
     if (lintBin) {
       const proc = spawn(lintBin, ["--help"])
-      await proc.exited
-      if (proc.stdout) {
-        const help = await text(proc.stdout)
-        if (help.includes("--lsp")) {
-          return {
-            process: spawn(lintBin, ["--lsp"], {
-              cwd: root,
-            }),
-          }
+      // Read stdout concurrently with awaiting exit so the child cannot
+      // block on a full pipe buffer. Small output in practice (typical
+      // --help is <10KB), but the concurrent pattern is still safer and
+      // mirrors what Promise.all([text(stream), exited]) guarantees.
+      const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
+      const [help] = await Promise.all([helpPromise, proc.exited])
+      if (help.includes("--lsp")) {
+        return {
+          process: spawn(lintBin, ["--lsp"], {
+            cwd: root,
+          }),
         }
       }
     }

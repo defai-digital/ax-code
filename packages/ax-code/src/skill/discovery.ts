@@ -86,9 +86,21 @@ export namespace Discovery {
             (skill) =>
               Effect.gen(function* () {
                 const root = path.join(cache, skill.name)
+                // Path-traversal guard: a compromised remote index
+                // could list file paths like `../../etc/cron.d/evil`,
+                // which `path.join(root, file)` would resolve outside
+                // the cache directory. Reject any file whose resolved
+                // path doesn't stay within `root` so a malicious skill
+                // repo cannot write arbitrary files to disk.
+                const rootPrefix = path.resolve(root) + path.sep
+                const safeFiles = skill.files.filter((file) => {
+                  const resolved = path.resolve(root, file)
+                  if ((resolved + path.sep).startsWith(rootPrefix)) return true
+                  return false
+                })
 
                 yield* Effect.forEach(
-                  skill.files,
+                  safeFiles,
                   (file) => download(new URL(file, `${host}/${skill.name}/`).href, path.join(root, file)),
                   {
                     concurrency: fileConcurrency,

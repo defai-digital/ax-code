@@ -22,22 +22,29 @@ export const WriteTool = Tool.define("write", {
     await assertExternalDirectory(ctx, filepath)
     Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
 
-    const exists = await Filesystem.exists(filepath)
-    const contentOld = exists ? await Filesystem.readText(filepath) : ""
-    if (exists) await FileTime.assert(ctx.sessionID, filepath)
-
-    const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, params.content))
-    await ctx.ask({
-      permission: "edit",
-      patterns: [path.relative(Instance.worktree, filepath)],
-      always: ["*"],
-      metadata: {
-        filepath,
-        diff,
-      },
-    })
-
+    // Read + assert + diff computation must all happen inside the lock,
+    // otherwise a concurrent tool call or external process modifying
+    // the file between `Filesystem.readText` and `Filesystem.write`
+    // would make the diff shown to the user stale — they'd approve
+    // one change and see a different one applied. `edit.ts` already
+    // does all of this inside its lock; `write.ts` was inconsistent.
+    let exists = false
     await FileTime.withLock(filepath, async () => {
+      exists = await Filesystem.exists(filepath)
+      const contentOld = exists ? await Filesystem.readText(filepath) : ""
+      if (exists) await FileTime.assert(ctx.sessionID, filepath)
+
+      const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, params.content))
+      await ctx.ask({
+        permission: "edit",
+        patterns: [path.relative(Instance.worktree, filepath)],
+        always: ["*"],
+        metadata: {
+          filepath,
+          diff,
+        },
+      })
+
       await Filesystem.write(filepath, params.content)
       await notifyFileEdited(filepath, exists ? "change" : "add")
       await FileTime.read(ctx.sessionID, filepath)

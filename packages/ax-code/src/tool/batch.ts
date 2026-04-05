@@ -43,9 +43,17 @@ export const BatchTool = Tool.define("batch", async () => {
       const availableTools = await ToolRegistry.tools({ modelID: ModelID.make(""), providerID: ProviderID.make("") })
       const toolMap = new Map(availableTools.map((t) => [t.id, t]))
 
-      const executeCall = async (call: (typeof toolCalls)[0]) => {
+      // Pre-generate all PartIDs in declaration order BEFORE the
+      // parallel execution. Generating `PartID.ascending()` inside
+      // the async `executeCall` body meant calls racing inside
+      // `Promise.all` could receive IDs in a non-deterministic order,
+      // so the UI displayed the tool parts shuffled. Pre-generating
+      // pins the ordering to the input order.
+      const partIDs = toolCalls.map(() => PartID.ascending())
+
+      const executeCall = async (call: (typeof toolCalls)[0], idx: number) => {
         const callStartTime = Date.now()
-        const partID = PartID.ascending()
+        const partID = partIDs[idx]
 
         try {
           if (DISALLOWED.has(call.tool)) {
@@ -134,7 +142,7 @@ export const BatchTool = Tool.define("batch", async () => {
         }
       }
 
-      const results = await Promise.all(toolCalls.map((call) => executeCall(call)))
+      const results = await Promise.all(toolCalls.map((call, idx) => executeCall(call, idx)))
 
       // Add discarded calls as errors
       const now = Date.now()

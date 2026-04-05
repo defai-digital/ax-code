@@ -485,6 +485,12 @@ export namespace SessionPrompt {
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
     while (true) {
+      // Reset structured output state at the start of each iteration so
+      // a stale value from a prior step cannot cause the loop to save
+      // old output and break out prematurely. `structuredOutput` is
+      // populated via the onSuccess callback only when the current step
+      // is actually using structured output mode.
+      structuredOutput = undefined
       await SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID, consecutiveErrors })
       if (step > 0 && step % 10 === 0) {
@@ -958,10 +964,16 @@ export namespace SessionPrompt {
       const execute = item.execute
       if (!execute) continue
 
-      const transformed = ProviderTransform.schema(input.model, asSchema(item.inputSchema).jsonSchema)
-      item.inputSchema = jsonSchema(transformed)
+      // `MCP.tools()` returns references to cached tool objects; mutating
+      // `item.inputSchema` directly would re-transform the schema on every
+      // loop iteration, double-wrapping the JSON schema and eventually
+      // producing malformed input for the LLM. Clone to a fresh object so
+      // the transformation is idempotent across iterations.
+      const mcpTool = { ...item }
+      const transformed = ProviderTransform.schema(input.model, asSchema(mcpTool.inputSchema).jsonSchema)
+      mcpTool.inputSchema = jsonSchema(transformed)
       // Wrap execute to add plugin hooks and format output
-      item.execute = async (args, opts) => {
+      mcpTool.execute = async (args, opts) => {
         const ctx = context(args, opts)
 
         await Plugin.trigger(
@@ -1044,7 +1056,7 @@ export namespace SessionPrompt {
           content: result.content, // directly return content to preserve ordering when outputting to model
         }
       }
-      tools[key] = item
+      tools[key] = mcpTool
     }
 
     return tools
@@ -1471,9 +1483,11 @@ export namespace SessionPrompt {
     }
 
     await Session.updateMessage(info)
-    for (const part of parts) {
-      await Session.updatePart(part)
-    }
+    // Run updatePart calls in parallel — they are independent DB
+    // inserts with independent bus publishes. For messages with many
+    // file attachments (screenshots, paste images), sequential awaits
+    // added ~10-50ms per part.
+    await Promise.all(parts.map((part) => Session.updatePart(part)))
 
     return {
       info,

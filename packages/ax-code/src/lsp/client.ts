@@ -249,6 +249,39 @@ export namespace LSPClient {
       [path: string]: number
     } = {}
 
+    // Per-path promise chain so concurrent notify.open/notify.close for
+    // the same file serialize. Without this, two parallel notify.open
+    // calls both read `files[path]` BEFORE either writes back, both
+    // compute the same `next` version number, and both send duplicate
+    // didChange notifications with the same version — which confuses
+    // LSP servers that require strictly monotonic versions.
+    //
+    // The chain pattern: each call appends its work to the tail. The
+    // stored promise always resolves (errors are swallowed in the
+    // chain) so a thrown fn() does not break the lock for later
+    // waiters. The Map entry is overwritten on every call so it never
+    // grows beyond the number of distinct in-flight paths.
+    const pathLocks: Map<string, Promise<void>> = new Map()
+    async function withPathLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
+      const prev = pathLocks.get(filepath) ?? Promise.resolve()
+      let resolveNext!: () => void
+      const nextTail = new Promise<void>((resolve) => {
+        resolveNext = resolve
+      })
+      // Chain the new tail after the previous one. Callers awaiting on
+      // `prev` will see it resolve before nextTail starts.
+      pathLocks.set(
+        filepath,
+        prev.then(() => nextTail),
+      )
+      try {
+        await prev
+        return await fn()
+      } finally {
+        resolveNext()
+      }
+    }
+
     // Per-file snapshot of the last text we sent to the server, used both
     // for the hash-skip path (quick equality check) and for computing
     // incremental diffs on the next didChange. We keep the full text rather
@@ -299,6 +332,46 @@ export namespace LSPClient {
         })
     }
 
+    // Unlocked close: the body of notify.close, factored out so
+    // notify.open can reuse it when it needs to evict a stale file
+    // entry while already holding the per-path lock. Callers from
+    // outside the lock must go through notify.close, which wraps this
+    // with withPathLock.
+    async function closeUnlocked(input: { path: string; deleted?: boolean }): Promise<boolean> {
+      const normalized = input.path
+      if (files[normalized] === undefined) return false
+      log.info("textDocument/didClose", { path: normalized })
+      await connection
+        .sendNotification("textDocument/didClose", {
+          textDocument: {
+            uri: pathToFileURL(normalized).href,
+          },
+        })
+        .catch(() => {
+          // Server may be dead or unresponsive. We still want to
+          // clean up local state.
+        })
+      if (input.deleted) {
+        await connection
+          .sendNotification("workspace/didChangeWatchedFiles", {
+            changes: [
+              {
+                uri: pathToFileURL(normalized).href,
+                type: 3, // Deleted
+              },
+            ],
+          })
+          .catch(() => {
+            // Same policy as didClose: deletion signal is best-effort,
+            // local cleanup still wins if the server is already gone.
+          })
+      }
+      delete files[normalized]
+      delete lastContent[normalized]
+      diagnostics.delete(normalized)
+      return true
+    }
+
     const result = {
       root: input.root,
       get serverID() {
@@ -310,6 +383,11 @@ export namespace LSPClient {
       notify: {
         async open(input: { path: string; waitForDiagnostics?: boolean }) {
           input.path = path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path)
+          // Serialize per-path. Concurrent opens for the same file would
+          // otherwise race on the `files[path]` read-modify-write and
+          // send duplicate didChange notifications with the same version
+          // number. Unrelated paths still run in parallel.
+          return withPathLock(input.path, async () => {
           // If a previously-tracked file has disappeared from disk, treat
           // the touch as a close so we don't leak stale entries in files,
           // diagnostics, and lastContent. Caller gets false ("nothing sent
@@ -319,7 +397,8 @@ export namespace LSPClient {
               .exists()
               .catch(() => false)
             if (!exists) {
-              await result.notify.close({ path: input.path, deleted: true })
+              // closeUnlocked — we already hold the lock for this path.
+              await closeUnlocked({ path: input.path, deleted: true })
               return false
             }
           }
@@ -420,44 +499,13 @@ export namespace LSPClient {
           lastContent[input.path] = contentFingerprint(text)
           await wait
           return true
+          })
         },
         async close(input: { path: string; deleted?: boolean }) {
           const normalized = path.isAbsolute(input.path)
             ? input.path
             : path.resolve(Instance.directory, input.path)
-          // Never-opened files are a no-op. If the file wasn't in our
-          // `files` map it was never handed to this server.
-          if (files[normalized] === undefined) return false
-          log.info("textDocument/didClose", { path: normalized })
-          await connection
-            .sendNotification("textDocument/didClose", {
-              textDocument: {
-                uri: pathToFileURL(normalized).href,
-              },
-            })
-            .catch(() => {
-              // Server may be dead or unresponsive. We still want to
-              // clean up local state.
-            })
-          if (input.deleted) {
-            await connection
-              .sendNotification("workspace/didChangeWatchedFiles", {
-                changes: [
-                  {
-                    uri: pathToFileURL(normalized).href,
-                    type: 3, // Deleted
-                  },
-                ],
-              })
-              .catch(() => {
-                // Same policy as didClose: deletion signal is best-effort,
-                // local cleanup still wins if the server is already gone.
-              })
-          }
-          delete files[normalized]
-          delete lastContent[normalized]
-          diagnostics.delete(normalized)
-          return true
+          return withPathLock(normalized, () => closeUnlocked({ path: normalized, deleted: input.deleted }))
         },
       },
       get diagnostics() {
@@ -487,8 +535,21 @@ export namespace LSPClient {
       },
       async shutdown() {
         l.info("shutting down")
-        connection.end()
-        connection.dispose()
+        // Wrap end() and dispose() so a broken-stream throw from
+        // either one cannot prevent us from reaching Process.stop().
+        // Without this, a crashed LSP server leaves its child process
+        // as an orphan because connection.end() throws before the
+        // kill runs.
+        try {
+          connection.end()
+        } catch (err) {
+          l.warn("connection.end threw during shutdown", { err })
+        }
+        try {
+          connection.dispose()
+        } catch (err) {
+          l.warn("connection.dispose threw during shutdown", { err })
+        }
         await Process.stop(input.server.process)
         l.info("shutdown")
       },

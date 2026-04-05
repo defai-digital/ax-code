@@ -58,11 +58,16 @@ export const ensureTool = async (input: {
   if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
 
   log.info(input.title ?? `installing ${input.name}`)
+  // Use "ignore" for stdout/stderr instead of "pipe" — nothing reads the
+  // streams here and a "pipe" whose reader is never attached will fill
+  // the OS pipe buffer (~64KB on Linux) and the child process will block
+  // on write, deadlocking `await proc.exited`. Installers like npm/pnpm
+  // produce well more than 64KB of output.
   const proc = Process.spawn(input.install, {
     env: input.env,
-    stdout: "pipe",
-    stderr: "pipe",
-    stdin: "pipe",
+    stdout: "ignore",
+    stderr: "ignore",
+    stdin: "ignore",
   })
   const exit = await proc.exited
   if (exit !== 0) {
@@ -131,12 +136,15 @@ export const bunServer = async (input: {
   if (!bin) {
     if (!(await Filesystem.exists(input.script))) {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
+      // Same deadlock hazard as ensureTool above: "pipe" without a
+      // reader will block the child once the OS pipe buffer fills.
+      // Nothing in this path reads the streams, so discard them.
       await Process.spawn([BunProc.which(), "install", input.pkg], {
         cwd: Global.Path.bin,
         env: bunEnv(),
-        stdout: "pipe",
-        stderr: "pipe",
-        stdin: "pipe",
+        stdout: "ignore",
+        stderr: "ignore",
+        stdin: "ignore",
       }).exited
     }
     bin = BunProc.which() ?? null

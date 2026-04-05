@@ -62,7 +62,13 @@ export function encrypt(plaintext: string): EncryptedValue {
 
 /**
  * Decrypt an encrypted value back to plaintext
- * Tries current iterations first, falls back to legacy for backward compat
+ * Tries current iterations first, falls back to legacy for backward compat.
+ *
+ * The current-iteration catch block swallows the error so the function
+ * can silently upgrade old ciphertexts (encrypted with
+ * PBKDF2_LEGACY_ITERATIONS) without failing. This is intentional backward
+ * compatibility, but we log at debug level so genuine corruption is still
+ * traceable via logs — previously the failure was completely invisible.
  */
 export function decrypt(value: EncryptedValue): string {
   const encrypted = Buffer.from(value.encrypted, "base64")
@@ -73,8 +79,11 @@ export function decrypt(value: EncryptedValue): string {
   // Try current iterations first
   try {
     return decryptWith(encrypted, iv, salt, tag, PBKDF2_ITERATIONS)
-  } catch {
-    // Fall back to legacy iterations
+  } catch (err) {
+    // Fall back to legacy iterations. If this also fails, the original
+    // legacy error propagates to the caller (no swallow).
+    // eslint-disable-next-line no-console
+    console.debug("auth/encryption: decrypt with current iterations failed, retrying with legacy", { err })
     return decryptWith(encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
   }
 }
@@ -111,15 +120,24 @@ export function encryptField<T extends Record<string, unknown>>(obj: T, field: s
 }
 
 /**
- * Decrypt a specific field in an object if it's encrypted
+ * Decrypt a specific field in an object if it's encrypted.
+ *
+ * On decryption failure the field is set to `undefined` so callers see
+ * a plain-typed value instead of a still-encrypted object shape.
+ * Previously this returned the original object unchanged, which meant
+ * downstream code that expected a decrypted string received an
+ * `EncryptedValue` and silently produced wrong behavior — masking real
+ * data corruption.
  */
 export function decryptField<T extends Record<string, unknown>>(obj: T, field: string): T {
   const val = obj[field]
   if (!isEncrypted(val)) return obj
   try {
     return { ...obj, [field]: decrypt(val) }
-  } catch {
-    return obj // leave as-is if decryption fails
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`auth/encryption: failed to decrypt field "${field}"`, err)
+    return { ...obj, [field]: undefined }
   }
 }
 
