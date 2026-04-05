@@ -67,8 +67,37 @@ export const IndexCommand = cmd({
           return
         }
 
+        // Progress heartbeat. LSP-driven indexing for a medium codebase
+        // (~600 files) takes several minutes and this command prints
+        // nothing between "files: N indexable" and "Indexing complete"
+        // by default. That looks identical to a hang, and users
+        // Ctrl-C out of the command in the middle of indexing, leaving
+        // the graph half-populated. The timer below polls
+        // CodeIntelligence.status() every 5 seconds and prints a
+        // node-count delta so it's obvious work is happening. The
+        // finally block clears the timer even if indexFiles throws.
+        UI.println("")
+        UI.println(`${UI.Style.TEXT_DIM}Indexing in progress. This takes several minutes for larger projects.${UI.Style.TEXT_NORMAL}`)
+        UI.println("")
+        const heartbeatStart = Date.now()
+        let lastNodeCount = CodeIntelligence.status(projectID).nodeCount
+        const heartbeat = setInterval(() => {
+          const current = CodeIntelligence.status(projectID).nodeCount
+          const delta = current - lastNodeCount
+          const elapsedSec = Math.round((Date.now() - heartbeatStart) / 1000)
+          UI.println(
+            `  ${UI.Style.TEXT_DIM}[${elapsedSec}s] ${current.toLocaleString()} symbols indexed (+${delta.toLocaleString()} this interval)${UI.Style.TEXT_NORMAL}`,
+          )
+          lastNodeCount = current
+        }, 5_000)
+
         const start = Date.now()
-        const result = await CodeIntelligence.indexFiles(projectID, files, args.concurrency)
+        let result: Awaited<ReturnType<typeof CodeIntelligence.indexFiles>>
+        try {
+          result = await CodeIntelligence.indexFiles(projectID, files, args.concurrency)
+        } finally {
+          clearInterval(heartbeat)
+        }
         const elapsed = Date.now() - start
 
         const status = CodeIntelligence.status(projectID)
@@ -94,6 +123,18 @@ export const IndexCommand = cmd({
         UI.println(`    db.transaction:     ${fmt(t.dbTransaction).padStart(8)}${pct(t.dbTransaction)}`)
         UI.println(`    symbol.walk:        ${fmt(t.symbolWalk).padStart(8)}${pct(t.symbolWalk)}`)
         UI.println(`    file.read:          ${fmt(t.readFile).padStart(8)}${pct(t.readFile)}`)
+
+        // Running TUI / server sessions read the graph through an
+        // in-process cache of the last poll. They will NOT pick up
+        // the freshly-indexed data until their next poll cycle, and
+        // in practice users who index in one terminal while a TUI
+        // is open in another see stale "graph not indexed" output
+        // in the sidebar for minutes afterwards. Point this out
+        // explicitly so the next step is obvious.
+        UI.println("")
+        UI.println(
+          `${UI.Style.TEXT_DIM}If you have an ax-code TUI session open, restart it to pick up the new graph.${UI.Style.TEXT_NORMAL}`,
+        )
       },
     })
   },
