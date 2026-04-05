@@ -35,7 +35,8 @@ export namespace LSP {
   const BROKEN_BACKOFF_BASE_MS = 30_000
   const BROKEN_BACKOFF_MAX_MS = 60 * 60 * 1000
 
-  function computeBackoff(failures: number): number {
+  // Exported for unit tests. Deterministic pure function — no side effects.
+  export function computeBackoff(failures: number): number {
     const raw = BROKEN_BACKOFF_BASE_MS * Math.pow(4, failures - 1)
     return Math.min(raw, BROKEN_BACKOFF_MAX_MS)
   }
@@ -54,7 +55,8 @@ export namespace LSP {
   // cooldown has expired we eagerly drop the entry so the next caller can
   // retry a fresh spawn. The caller tracks failure count across retries so
   // backoff compounds on repeat failures.
-  function isBroken(broken: Map<string, BrokenEntry>, key: string): boolean {
+  // Exported for unit tests.
+  export function isBroken(broken: Map<string, BrokenEntry>, key: string): boolean {
     const entry = broken.get(key)
     if (!entry) return false
     if (Date.now() >= entry.nextAttempt) {
@@ -64,7 +66,8 @@ export namespace LSP {
     return true
   }
 
-  function markBroken(broken: Map<string, BrokenEntry>, key: string) {
+  // Exported for unit tests.
+  export function markBroken(broken: Map<string, BrokenEntry>, key: string) {
     const existing = broken.get(key)
     const failures = (existing?.failures ?? 0) + 1
     const backoffMs = computeBackoff(failures)

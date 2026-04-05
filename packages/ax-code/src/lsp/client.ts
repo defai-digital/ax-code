@@ -233,7 +233,6 @@ export namespace LSPClient {
           const text = await Filesystem.readText(input.path)
           const extension = path.extname(input.path)
           const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
-          const wait = input.waitForDiagnostics ? diagnosticsWait({ path: input.path }) : undefined
 
           const version = files[input.path]
           if (version !== undefined) {
@@ -249,6 +248,7 @@ export namespace LSPClient {
             }
 
             log.info("workspace/didChangeWatchedFiles", input)
+            const wait = input.waitForDiagnostics ? diagnosticsWait({ path: input.path }) : undefined
             await connection.sendNotification("workspace/didChangeWatchedFiles", {
               changes: [
                 {
@@ -277,6 +277,7 @@ export namespace LSPClient {
           }
 
           log.info("workspace/didChangeWatchedFiles", input)
+          const wait = input.waitForDiagnostics ? diagnosticsWait({ path: input.path }) : undefined
           await connection.sendNotification("workspace/didChangeWatchedFiles", {
             changes: [
               {
