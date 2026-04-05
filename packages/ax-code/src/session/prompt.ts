@@ -58,12 +58,7 @@ import { Truncate } from "@/tool/truncate"
 import { decodeDataUrl } from "@/util/data-url"
 import {
   commandSetup,
-  commandModel,
-  commandParts,
-  commandTemplate,
   shellArgs,
-  commandUser,
-  commandTemplateText,
   agentInfo,
   remindQueuedMessages,
   resolvePromptParts as _resolvePromptParts,

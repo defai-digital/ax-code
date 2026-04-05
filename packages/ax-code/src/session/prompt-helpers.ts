@@ -301,7 +301,9 @@ export async function commandParts(input: {
   parts?: any[]
 }) {
   const base = await resolvePromptParts(input.template)
-  const subtask = (input.agent.mode === "subagent" && input.command.subtask !== false) || input.command.subtask === true
+  const hasExtra = [...base, ...(input.parts ?? [])].some((item) => item.type !== "text")
+  const subtask =
+    !hasExtra && ((input.agent.mode === "subagent" && input.command.subtask !== false) || input.command.subtask === true)
   if (!subtask) return { subtask, parts: [...base, ...(input.parts ?? [])] }
 
   return {

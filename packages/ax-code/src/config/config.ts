@@ -31,7 +31,6 @@ import { GlobalBus } from "@/bus/global"
 import { Event } from "../server/event"
 import { Glob } from "../util/glob"
 import { PackageRegistry } from "@/bun/registry"
-import { proxied } from "@/util/proxied"
 import { iife } from "@/util/iife"
 import { Account } from "@/account"
 import { ConfigPaths } from "./paths"
@@ -307,8 +306,7 @@ export namespace Config {
     await BunProc.run(
       [
         "install",
-        // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
-        ...(proxied() || process.env.CI ? ["--no-cache"] : []),
+        ...BunProc.installCacheWorkaroundArgs(),
       ],
       { cwd: dir },
     ).catch((err) => {

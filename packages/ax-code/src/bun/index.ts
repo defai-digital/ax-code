@@ -42,6 +42,30 @@ export namespace BunProc {
     return process.execPath
   }
 
+  /**
+   * Return the extra `bun install` flags needed to work around
+   * https://github.com/oven-sh/bun/issues/19936 — a performance regression
+   * where the local bun cache makes `bun install` slower than `--no-cache`
+   * when running behind a proxy or in CI. We flip cache off in those
+   * environments to avoid the regression; otherwise we leave the cache on
+   * because it is faster in the default case.
+   *
+   * Centralized so there is one place to remove the workaround when the
+   * upstream issue is fixed. Callers: BunProc.installArgs and the config
+   * plugin-install path in src/config/config.ts.
+   *
+   * To verify status: check whether #19936 is closed in Bun's tracker
+   * and whether the installed Bun version post-dates the fix. When both
+   * are true, delete this helper and its two call sites.
+   */
+  export function installCacheWorkaroundArgs(
+    env: { proxied?: boolean; ci?: boolean } = {},
+  ): string[] {
+    const isProxied = env.proxied ?? proxied()
+    const isCi = env.ci ?? !!process.env.CI
+    return isProxied || isCi ? ["--no-cache"] : []
+  }
+
   export const InstallFailedError = NamedError.create(
     "BunInstallFailedError",
     z.object({
@@ -63,8 +87,7 @@ export namespace BunProc {
       "add",
       "--force",
       "--exact",
-      // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
-      ...(dep.proxied || dep.ci ? ["--no-cache"] : []),
+      ...installCacheWorkaroundArgs(dep),
       "--cwd",
       dep.cwd,
       pkg + "@" + version,

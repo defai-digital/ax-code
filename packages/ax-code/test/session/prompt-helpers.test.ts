@@ -133,6 +133,21 @@ describe("session.prompt helpers", () => {
     ])
   })
 
+  test("falls back to inline command parts when subtask input includes non-text parts", async () => {
+    const result = await commandParts({
+      agent: { name: "reviewer", mode: "subagent" },
+      command: { description: "Review the diff" },
+      name: "review",
+      model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.2") },
+      template: "look at src/app.ts",
+      parts: [{ type: "file", filename: "a.ts" }],
+    })
+
+    expect(result.subtask).toBe(false)
+    expect(result.parts[0]).toMatchObject({ type: "text", text: "look at src/app.ts" })
+    expect(result.parts[1]).toMatchObject({ type: "file", filename: "a.ts" })
+  })
+
   test("scans loop messages for the current turn and pending tasks", () => {
     const msgs = [
       {

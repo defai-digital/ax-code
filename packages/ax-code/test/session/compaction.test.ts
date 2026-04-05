@@ -110,19 +110,23 @@ describe("session.compaction.isOverflow", () => {
     })
   })
 
-  // ─── Bug reproduction tests ───────────────────────────────────────────
-  // These tests demonstrate that when limit.input is set, isOverflow()
-  // does not subtract any headroom for the next model response. This means
-  // compaction only triggers AFTER we've already consumed the full input
-  // budget, leaving zero room for the next API call's output tokens.
+  // ─── Regression tests for input-limited models (Claude + prompt caching) ─
+  // Models with limit.input set (e.g. Claude with prompt caching, where
+  // limit.input != limit.context) need headroom subtracted from the input
+  // budget to leave room for the next response. isOverflow() does this by
+  // computing `usable = limit.input - reserved` where reserved is the
+  // configured compaction buffer (capped at the model's max output tokens).
   //
-  // Compare: without limit.input, usable = context - output (reserves space).
-  // With limit.input, usable = limit.input (reserves nothing).
+  // These tests pin that behavior: without the subtraction, an
+  // input-limited model would let the conversation fill the input budget
+  // completely and then fail on the next turn with no room for output.
   //
-  // Related issues: #10634, #8089, #11086, #12621
-  // Open PRs: #6875, #12924
+  // Historical context: this path shipped without headroom subtraction
+  // for input-limited models, which let sessions silently overflow. Fixed
+  // in src/session/compaction.ts — see the `input.model.limit.input
+  // ? input.model.limit.input - reserved : ...` branch in isOverflow.
 
-  test("BUG: no headroom when limit.input is set — compaction should trigger near boundary but does not", async () => {
+  test("input-limited model triggers compaction near the input boundary", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -130,62 +134,56 @@ describe("session.compaction.isOverflow", () => {
         // Simulate Claude with prompt caching: input limit = 200K, output limit = 32K
         const model = createModel({ context: 200_000, input: 200_000, output: 32_000 })
 
-        // We've used 198K tokens total. Only 2K under the input limit.
-        // On the next turn, the full conversation (198K) becomes input,
-        // plus the model needs room to generate output — this WILL overflow.
+        // 198K tokens total. With the headroom subtraction:
+        //   usable = limit.input - reserved ≈ 200K - min(buffer, 32K)
+        // so 198K is above the threshold and compaction fires.
         const tokens = { input: 180_000, output: 15_000, reasoning: 0, cache: { read: 3_000, write: 0 } }
-        // count = 180K + 3K + 15K = 198K
-        // usable = limit.input = 200K (no output subtracted!)
-        // 198K > 200K = false → no compaction triggered
 
-        // WITHOUT limit.input: usable = 200K - 32K = 168K, and 198K > 168K = true ✓
-        // WITH limit.input: usable = 200K, and 198K > 200K = false ✗
-
-        // With 198K used and only 2K headroom, the next turn will overflow.
-        // Compaction MUST trigger here.
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
       },
     })
   })
 
-  test("BUG: without limit.input, same token count correctly triggers compaction", async () => {
+  test("context-limited model (no limit.input) uses context - output as the usable budget", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        // Same model but without limit.input — uses context - output instead
+        // No limit.input — usable = context - output = 200K - 32K = 168K
         const model = createModel({ context: 200_000, output: 32_000 })
 
-        // Same token usage as above
+        // 198K total, above 168K → compact
         const tokens = { input: 180_000, output: 15_000, reasoning: 0, cache: { read: 3_000, write: 0 } }
-        // count = 198K
-        // usable = context - output = 200K - 32K = 168K
-        // 198K > 168K = true → compaction correctly triggered
 
-        const result = await SessionCompaction.isOverflow({ tokens, model })
-        expect(result).toBe(true) // ← Correct: headroom is reserved
+        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
       },
     })
   })
 
-  test("BUG: asymmetry — limit.input model allows 30K more usage before compaction than equivalent model without it", async () => {
+  test("input-limited and context-limited models agree on overflow when real capacity matches", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        // Two models with identical context/output limits, differing only in limit.input
+        // Two models with identical real capacity, differing only in
+        // whether limit.input is explicitly set. Both should reach the
+        // same overflow decision because both have headroom subtracted.
         const withInputLimit = createModel({ context: 200_000, input: 200_000, output: 32_000 })
         const withoutInputLimit = createModel({ context: 200_000, output: 32_000 })
 
-        // 170K total tokens — well above context-output (168K) but below input limit (200K)
+        // 181K total — above 168K (context - output) for the no-input-limit
+        // case, and within 30K of 200K (the input limit) for the other.
         const tokens = { input: 166_000, output: 10_000, reasoning: 0, cache: { read: 5_000, write: 0 } }
 
         const withLimit = await SessionCompaction.isOverflow({ tokens, model: withInputLimit })
         const withoutLimit = await SessionCompaction.isOverflow({ tokens, model: withoutInputLimit })
 
-        // Both models have identical real capacity — they should agree:
-        expect(withLimit).toBe(true) // should compact (170K leaves no room for 32K output)
-        expect(withoutLimit).toBe(true) // correctly compacts (170K > 168K)
+        // Regression guard: both paths must agree. A prior bug broke this
+        // symmetry by not subtracting any headroom for the input-limited
+        // path, letting the input-limited model accept ~30K more usage
+        // before compacting.
+        expect(withLimit).toBe(withoutLimit)
+        expect(withLimit).toBe(true)
       },
     })
   })

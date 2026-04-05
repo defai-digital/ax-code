@@ -383,17 +383,26 @@ export namespace LSP {
 
   export async function touchFile(input: string, waitForDiagnostics?: boolean) {
     log.info("touching file", { file: input })
-    await getClients(input)
-      .then((clients) => {
-        return Promise.all(
-          clients.map(async (client) => {
-            return client.notify.open({ path: input, waitForDiagnostics })
-          }),
-        )
-      })
-      .catch((err) => {
-        log.error("failed to touch file", { err, file: input })
-      })
+    const clients = await getClients(input).catch((err) => {
+      log.error("failed to get clients for touch", { err, file: input })
+      return [] as LSPClient.Info[]
+    })
+    // allSettled: one flaky client must not block healthy ones. Each client
+    // either completes its notify.open or fails individually with a logged
+    // error that carries the serverID for debugging.
+    const results = await Promise.allSettled(
+      clients.map((client) => client.notify.open({ path: input, waitForDiagnostics })),
+    )
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]
+      if (r.status === "rejected") {
+        log.error("failed to touch file for client", {
+          err: r.reason,
+          file: input,
+          serverID: clients[i]?.serverID,
+        })
+      }
+    }
   }
 
   // Close a file on every client that has it open. Sends textDocument/didClose
@@ -404,9 +413,23 @@ export namespace LSP {
   export async function closeFile(input: string, deleted = false) {
     log.info("closing file", { file: input })
     const s = await state()
-    await Promise.all(s.clients.map((client) => client.notify.close({ path: input, deleted }))).catch((err) => {
-      log.error("failed to close file", { err, file: input })
-    })
+    // allSettled: see note in touchFile. Per-client failures are logged with
+    // the serverID and do not block cleanup on the other clients — local
+    // state eviction on the failing client still happens inside notify.close
+    // because notify.close only catches connection errors, not state deletes.
+    const results = await Promise.allSettled(
+      s.clients.map((client) => client.notify.close({ path: input, deleted })),
+    )
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]
+      if (r.status === "rejected") {
+        log.error("failed to close file for client", {
+          err: r.reason,
+          file: input,
+          serverID: s.clients[i]?.serverID,
+        })
+      }
+    }
   }
 
   // Manually clear the broken-server cooldown map. The next getClients() call

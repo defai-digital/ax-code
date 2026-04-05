@@ -152,21 +152,25 @@ export default {
           // "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/html/highlights.scm",
           "https://github.com/tree-sitter/tree-sitter-html/raw/refs/heads/master/queries/highlights.scm",
         ],
-        // TODO: Injections not working for some reason
-        // injections: [
-        //   "https://github.com/tree-sitter/tree-sitter-html/raw/refs/heads/master/queries/injections.scm",
-        // ],
+        // Injects <script> / <style> bodies into the javascript / css parsers
+        // via the tree-sitter-html upstream injection query. The query uses
+        // standard nvim-treesitter directives (@injection.content + #set!
+        // injection.language) and targets script_element / style_element
+        // node types, which match the injectionMapping below.
+        injections: [
+          "https://github.com/tree-sitter/tree-sitter-html/raw/refs/heads/master/queries/injections.scm",
+        ],
       },
-      // injectionMapping: {
-      //   nodeTypes: {
-      //     script_element: "javascript",
-      //     style_element: "css",
-      //   },
-      //   infoStringMap: {
-      //     javascript: "javascript",
-      //     css: "css",
-      //   },
-      // },
+      injectionMapping: {
+        nodeTypes: {
+          script_element: "javascript",
+          style_element: "css",
+        },
+        infoStringMap: {
+          javascript: "javascript",
+          css: "css",
+        },
+      },
     },
     {
       filetype: "hcl",
