@@ -240,7 +240,7 @@ export namespace ACP {
                 return
               }
 
-              if (res.outcome.optionId !== "reject" && permission.permission == "edit") {
+              if (res.outcome.optionId !== "reject" && permission.permission === "edit") {
                 const metadata = permission.metadata || {}
                 const filepath = typeof metadata["filepath"] === "string" ? metadata["filepath"] : ""
                 const diff = typeof metadata["diff"] === "string" ? metadata["diff"] : ""
@@ -1212,7 +1212,10 @@ export namespace ACP {
           },
           { throwOnError: true },
         )
-        .then((resp) => resp.data!)
+        .then((resp) => {
+          if (!resp.data) throw new Error("command.list returned empty data")
+          return resp.data
+        })
 
       const availableCommands = commands.map((command) => ({
         name: command.name,

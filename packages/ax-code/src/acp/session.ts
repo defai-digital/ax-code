@@ -25,7 +25,10 @@ export class ACPSessionManager {
         },
         { throwOnError: true },
       )
-      .then((x) => x.data!)
+      .then((x) => {
+        if (!x.data) throw new Error("session.create returned empty data")
+        return x.data
+      })
 
     const sessionId = session.id
     const resolvedModel = model
@@ -57,7 +60,10 @@ export class ACPSessionManager {
         },
         { throwOnError: true },
       )
-      .then((x) => x.data!)
+      .then((x) => {
+        if (!x.data) throw new Error("session.get returned empty data")
+        return x.data
+      })
 
     const resolvedModel = model
 

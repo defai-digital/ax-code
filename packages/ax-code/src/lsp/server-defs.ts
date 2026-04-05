@@ -922,27 +922,38 @@ export const JDTLS: Info = {
       })(),
     )
     const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-jdtls-data"))
-    const proc = spawn(
-      java,
-      [
-        "-jar",
-        launcherJar,
-        "-configuration",
-        configFile,
-        "-data",
-        dataDir,
-        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-        "-Dosgi.bundles.defaultStartLevel=4",
-        "-Declipse.product=org.eclipse.jdt.ls.core.product",
-        "-Dlog.level=ALL",
-        "--add-modules=ALL-SYSTEM",
-        "--add-opens java.base/java.util=ALL-UNNAMED",
-        "--add-opens java.base/java.lang=ALL-UNNAMED",
-      ],
-      {
-        cwd: root,
-      },
-    )
+    let proc
+    try {
+      proc = spawn(
+        java,
+        [
+          "-jar",
+          launcherJar,
+          "-configuration",
+          configFile,
+          "-data",
+          dataDir,
+          "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+          "-Dosgi.bundles.defaultStartLevel=4",
+          "-Declipse.product=org.eclipse.jdt.ls.core.product",
+          "-Dlog.level=ALL",
+          "--add-modules=ALL-SYSTEM",
+          "--add-opens java.base/java.util=ALL-UNNAMED",
+          "--add-opens java.base/java.lang=ALL-UNNAMED",
+        ],
+        {
+          cwd: root,
+        },
+      )
+    } catch (err) {
+      // spawn() can throw synchronously (ENOENT on missing java, EACCES,
+      // etc.). Before this catch, the exit handler below was never
+      // registered and the mkdtemp'd directory leaked on every failed
+      // spawn — accumulating endlessly in $TMPDIR for users without
+      // Java installed who keep opening Java projects.
+      await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {})
+      throw err
+    }
     // Clean up the JDTLS data directory once the language server exits.
     // Previously these directories were left behind on every shutdown and
     // accumulated indefinitely in $TMPDIR.

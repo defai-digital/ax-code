@@ -3,6 +3,7 @@ import os from "os"
 import fs from "fs/promises"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
+import { Env } from "../util/env"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
@@ -1768,13 +1769,17 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       { cwd, sessionID: input.sessionID, callID: part.callID },
       { env: {} },
     )
+    // Strip secrets (provider keys, tokens, passwords) before forwarding
+    // the environment to the session shell. Without this, an LLM-invoked
+    // command like `env | curl …` or `echo $OPENAI_API_KEY` would
+    // exfiltrate the parent process credentials. See Env.sanitize.
     const proc = spawn(shell, args, {
       cwd,
       detached: process.platform !== "win32",
       windowsHide: process.platform === "win32",
       stdio: ["ignore", "pipe", "pipe"],
       env: {
-        ...process.env,
+        ...Env.sanitize(process.env),
         ...shellEnv.env,
         TERM: "dumb",
       },

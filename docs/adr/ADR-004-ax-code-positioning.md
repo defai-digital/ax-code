@@ -88,10 +88,9 @@ What competitors lack: Most AI coding tools are bound to one surface (Cursor = I
 
 What ax-code has today:
 - CLI/TUI (terminal)
-- Desktop app (Tauri)
-- Web app (SolidJS)
 - Headless API server (Hono)
 - Programmatic SDK (in-process, < 1s startup)
+- ACP (Agent Client Protocol)
 - VS Code extension
 - MCP integration
 
@@ -250,7 +249,7 @@ Phase 3: Enterprise readiness (air-gap cert, audit export, RBAC) — 6-10 weeks
 
 ```
 #1 validation:
-  - Only product with multi-surface runtime (CLI + SDK + server + desktop + web)
+  - Only product with multi-surface runtime (CLI + TUI + SDK + server + ACP + LSP + code graph)
   - Only product with 9 specialized agents + provider-agnostic + sandbox
   - SDK adoption by ≥3 teams building internal coding automation
   - Headless API used in ≥2 CI/CD pipeline deployments

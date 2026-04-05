@@ -62,6 +62,14 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     for (const hunk of hunks) {
       const filePath = path.resolve(Instance.directory, hunk.path)
       await assertExternalDirectory(ctx, filePath)
+      // Resolve symlinks and re-check containment so a symlink inside
+      // the project pointing to e.g. `~/.ssh/authorized_keys` cannot
+      // be patched through the symlink. For `add` hunks the file
+      // doesn't exist yet; realpath throws ENOENT and we skip.
+      const realFilePath = await fs.realpath(filePath).catch(() => null)
+      if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {
+        throw new Error("Access denied: symlink target escapes project directory")
+      }
       Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
 
       switch (hunk.type) {

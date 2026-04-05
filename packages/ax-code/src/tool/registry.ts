@@ -132,7 +132,7 @@ export namespace ToolRegistry {
 
       async function all(custom: Tool.Info[]): Promise<Tool.Info[]> {
         const cfg = await Config.get()
-        const question = ["app", "cli", "desktop"].includes(Flag.AX_CODE_CLIENT) || Flag.AX_CODE_ENABLE_QUESTION_TOOL
+        const question = Flag.AX_CODE_CLIENT === "cli" || Flag.AX_CODE_ENABLE_QUESTION_TOOL
 
         return [
           InvalidTool,

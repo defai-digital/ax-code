@@ -120,7 +120,14 @@ export namespace InstructionPrompt {
     const paths = await systemPaths()
 
     const files = Array.from(paths).map(async (p) => {
-      const content = await Filesystem.readText(p).catch(() => "")
+      // Log failures so the user sees why a listed instruction file
+      // silently produced no effect (permissions, corruption,
+      // symlink to a missing path). The previous `.catch(() => "")`
+      // made misconfigured paths invisible.
+      const content = await Filesystem.readText(p).catch((err) => {
+        log.warn("instruction file read failed", { path: p, err })
+        return ""
+      })
       return content ? "Instructions from: " + p + "\n" + content : ""
     })
 
@@ -134,8 +141,17 @@ export namespace InstructionPrompt {
     }
     const fetches = urls.map((url) =>
       fetch(url, { signal: AbortSignal.timeout(5000) })
-        .then((res) => (res.ok ? res.text() : ""))
-        .catch(() => "")
+        .then((res) => {
+          if (!res.ok) {
+            log.warn("instruction URL returned non-ok", { url, status: res.status })
+            return ""
+          }
+          return res.text()
+        })
+        .catch((err) => {
+          log.warn("instruction URL fetch failed", { url, err })
+          return ""
+        })
         .then((x) => (x ? "Instructions from: " + url + "\n" + x : "")),
     )
 

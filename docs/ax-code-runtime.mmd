@@ -5,7 +5,7 @@
     "primaryColor": "#f8fafc",
     "primaryTextColor": "#0f172a",
     "primaryBorderColor": "#0f172a",
-    "lineColor": "#475569",
+    "lineColor": "#64748b",
     "secondaryColor": "#e2e8f0",
     "secondaryTextColor": "#0f172a",
     "secondaryBorderColor": "#334155",
@@ -18,46 +18,56 @@
   "flowchart": {
     "curve": "linear",
     "htmlLabels": true,
-    "nodeSpacing": 34,
-    "rankSpacing": 56,
-    "padding": 18
+    "nodeSpacing": 38,
+    "rankSpacing": 58,
+    "padding": 20
   }
 }}%%
 
 flowchart TB
   subgraph A["Interfaces"]
     direction LR
-    CLI["CLI / TUI"]
-    SDK["SDK / Server"]
-    UX["Web / Desktop / VS Code"]
+    CLI["CLI · TUI"]
+    SDK["SDK · Server · ACP"]
+    VSC["VS Code"]
   end
 
-  R["ax-code runtime<br/>Agent routing · planning · execution"]
-
-  subgraph C["Control Plane"]
-    direction LR
-    ST["Session · memory · storage"]
-    SG["Sandbox · permissions · policy"]
-  end
+  R(["ax-code runtime<br/><i>agent routing · planning · execution</i>"])
 
   subgraph X["Execution Layer"]
     direction LR
-    TL["Tools · MCP · LSP"]
-    PV["Providers · cloud · local"]
+    TL["Tools · MCP"]
+    LS["LSP · Code Graph<br/><i>v2.2</i>"]
+    DRE["DRE<br/><i>v2.3 · debug · refactor</i>"]
+    PV["Providers<br/><i>cloud · local</i>"]
+  end
+
+  subgraph C["Control Plane"]
+    direction LR
+    ST["Session · Memory · Storage"]
+    SG["Sandbox · Permissions · Policy"]
+    OB["Replay · Audit · Snapshot"]
   end
 
   CLI --> R
   SDK --> R
-  UX --> R
+  VSC --> R
+
   R --> TL
+  R --> LS
+  R --> DRE
   R --> PV
+
   R --> ST
   R --> SG
+  R --> OB
 
   classDef runtime fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#0f172a
   classDef surface fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
   classDef exec fill:#f6f8fa,stroke:#475569,stroke-width:1.5px,color:#0f172a
+  classDef power fill:#fef3c7,stroke:#b45309,stroke-width:2.5px,color:#0f172a
 
   class R runtime
-  class CLI,SDK,UX,ST,SG surface
-  class TL,PV exec
+  class CLI,SDK,VSC,ST,SG,OB surface
+  class TL,LS,PV exec
+  class DRE power

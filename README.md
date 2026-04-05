@@ -73,17 +73,18 @@ Teams adopt `ax-code` when they need AI coding to behave like an execution syste
 This is the product runtime itself, independent of the broader ecosystem:
 
 <p align="center">
-  <img src="docs/images/ax-code-runtime.png" alt="ax-code runtime architecture" width="860" />
+  <img src="docs/images/ax-code-runtime.png" alt="ax-code runtime architecture" width="960" />
 </p>
 
 Source: [docs/ax-code-runtime.mmd](docs/ax-code-runtime.mmd)
 
 The important distinction is that `ax-code` is not just a chat UI. It is a runtime that coordinates:
 
-- interfaces such as CLI, TUI, SDK, and headless server mode
-- agent routing and planning
-- tool execution, MCP integrations, and LSP-backed code intelligence
-- session, memory, and storage state
+- interfaces such as CLI, TUI, SDK, ACP, and headless server mode
+- agent routing, planning, and dependency-ordered execution
+- tool execution, MCP integrations, LSP, and a persistent code graph (Code Intelligence, v2.2)
+- the **Debugging & Refactoring Engine** (DRE, v2.3) — deterministic-first root-cause analysis, duplicate and hardcode detection, change-impact analysis, and shadow-worktree-validated refactors
+- session, memory, and storage state with replay, audit, and snapshot trails
 - sandbox, permission, and policy boundaries
 - provider abstraction across hosted and local inference
 
@@ -354,25 +355,6 @@ ax-code run "fix the login bug"  # One-shot non-interactive mode
 
 The terminal UI features a customizable theme system (GitHub default), context stats, agent switching, and real-time streaming.
 
-### Desktop App
-
-Native cross-platform desktop app built with Tauri:
-
-```bash
-pnpm --dir packages/desktop tauri dev
-```
-
-Available for macOS (Apple Silicon & Intel), Windows, and Linux.
-
-### Web App
-
-```bash
-ax-code serve --port 4096          # Start the backend
-pnpm --dir packages/app dev        # Start the web UI
-```
-
-Full-featured web interface with chat, file explorer, terminal emulator, and model selection.
-
 ### VS Code Extension
 
 Use ax-code directly inside VS Code:
@@ -510,8 +492,6 @@ ax-code export <sessionID>           # Export as JSON
 ax-code/
 ├── packages/
 │   ├── ax-code/           # Core CLI — agents, tools, providers, server
-│   ├── app/               # Web UI (SolidJS)
-│   ├── desktop/           # Desktop app (Tauri)
 │   ├── sdk/js/            # JavaScript/TypeScript SDK
 │   ├── plugin/            # Plugin system
 │   ├── ui/                # Shared UI components
@@ -524,7 +504,7 @@ ax-code/
 
 ## Built With
 
-[Bun](https://bun.sh) | [TypeScript](https://typescriptlang.org) | [Vercel AI SDK](https://sdk.vercel.ai) | [SolidJS](https://solidjs.com) | [Hono](https://hono.dev) | [Drizzle ORM](https://orm.drizzle.team) | [Effect](https://effect.website) | [Tauri](https://tauri.app)
+[Bun](https://bun.sh) | [TypeScript](https://typescriptlang.org) | [Vercel AI SDK](https://sdk.vercel.ai) | [Hono](https://hono.dev) | [Drizzle ORM](https://orm.drizzle.team) | [Effect](https://effect.website)
 
 ---
 

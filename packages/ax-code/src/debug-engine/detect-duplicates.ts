@@ -172,7 +172,12 @@ export async function detectDuplicatesImpl(
   // normalization is idempotent.
   const buckets = new Map<string, { norm: string; members: CodeIntelligence.Symbol[] }>()
   for (const sym of pool) {
-    const norm = normalizeSignature(sym.signature!)
+    // Skip symbols without a signature (incomplete LSP indexing,
+    // minified code). Feeding undefined into normalizeSignature
+    // crashes `tokenize(undefined)`. See also the singleton branch
+    // below, which has the same guard.
+    if (!sym.signature) continue
+    const norm = normalizeSignature(sym.signature)
     const hash = hashNormalized(norm)
     const bucket = buckets.get(hash)
     if (bucket) bucket.members.push(sym)
@@ -187,7 +192,10 @@ export async function detectDuplicatesImpl(
       // Tier classification: all members with byte-identical signature
       // → "exact". Otherwise → "structural" (they matched after
       // normalization of names/literals).
-      const rawSigs = new Set(members.map((m) => m.signature!))
+      // Signatures are guaranteed non-null here because the bucket
+      // loop above skips members without one, but filter defensively
+      // in case upstream changes break that invariant.
+      const rawSigs = new Set(members.map((m) => m.signature).filter((s): s is string => !!s))
       const tier: DebugEngine.DuplicateTier = rawSigs.size === 1 ? "exact" : "structural"
       clusters.push({
         id: `cluster_${clusters.length}`,

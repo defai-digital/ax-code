@@ -11,8 +11,6 @@
     "cli": "bun run --cwd packages/ax-code --conditions=browser src/index.ts",
     "setup:cli": "bun run script/setup-cli.ts",
     "check:structure": "bun run script/structure.ts",
-    "dev:desktop": "pnpm --dir packages/desktop run tauri dev",
-    "dev:web": "pnpm --dir packages/app run dev",
     "typecheck": "pnpm -r --if-present run typecheck",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"

@@ -11,12 +11,6 @@ This repo uses multiple valid test layouts. The rule is not "one layout everywhe
 - favor integration-style coverage over mocks
 - use shared fixtures from `test/fixture`
 
-### `packages/app`
-
-- colocate unit tests with components, hooks, page helpers, and context logic
-- keep workflow coverage under `e2e/`
-- shared test helpers belong in `src/testing`
-
 ### `packages/ui`
 
 - colocate component and interaction tests next to exported components

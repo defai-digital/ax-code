@@ -224,6 +224,24 @@ function* walkDocumentSymbols(
 }
 
 export namespace CodeGraphBuilder {
+  // Project-level mutex. Concurrent `indexFile` calls for the same
+  // project would otherwise race: one transaction can read stale
+  // cross-file caller nodes that a sibling transaction has already
+  // deleted, silently dropping edges from the graph. SQLite's WAL
+  // mode prevents deadlocks but not this read-your-own-transaction
+  // skew, so we serialize at the project level. Different projects
+  // still run in parallel.
+  const projectMutexes = new Map<string, Promise<unknown>>()
+  async function withProjectLock<T>(projectID: ProjectID, fn: () => Promise<T>): Promise<T> {
+    const prev = projectMutexes.get(projectID) ?? Promise.resolve()
+    const next = prev.then(fn, fn)
+    projectMutexes.set(
+      projectID,
+      next.catch(() => {}),
+    )
+    return next
+  }
+
   // Index a single file: extract its symbols via LSP and upsert them as
   // graph nodes. Replaces any existing nodes/edges for the file in an
   // atomic delete-then-insert pattern. Safe to call repeatedly — later
@@ -249,7 +267,18 @@ export namespace CodeGraphBuilder {
     total: number
   }
 
-  export async function indexFile(
+  export function indexFile(
+    projectID: ProjectID,
+    absPath: string,
+  ): Promise<{ nodes: number; edges: number; completeness: "full" | "partial" | "lsp-only"; timings: IndexTimings }> {
+    // Serialize per-project to prevent cross-file caller resolution
+    // from reading stale nodes that a sibling transaction has already
+    // deleted. See the projectMutexes comment at the top of the
+    // namespace.
+    return withProjectLock(projectID, () => indexFileLocked(projectID, absPath))
+  }
+
+  async function indexFileLocked(
     projectID: ProjectID,
     absPath: string,
   ): Promise<{ nodes: number; edges: number; completeness: "full" | "partial" | "lsp-only"; timings: IndexTimings }> {
@@ -606,12 +635,14 @@ export namespace CodeGraphBuilder {
     edges: number
     files: number
     skipped: number
+    failed: number
     timings: IndexTimings
   }> {
     let nodes = 0
     let edges = 0
     let indexed = 0
     let skipped = 0
+    let failed = 0
     const aggregate: IndexTimings = {
       readFile: 0,
       lspTouch: 0,
@@ -628,16 +659,23 @@ export namespace CodeGraphBuilder {
       const batch = files.slice(i, i + concurrency)
       const results = await Promise.all(
         batch.map((file) =>
+          // Use a distinct `failed` marker so the stats loop below can
+          // tell a real crash (exception bubbled up through indexFile)
+          // apart from an intentional partial/skip. The previous code
+          // returned `partial` for both and counted the failure as
+          // "skipped", hiding genuine indexing errors behind benign
+          // ones in the reported totals.
           indexFile(projectID, file).catch((err) => {
             log.error("indexFile failed", { file, err })
-            return { nodes: 0, edges: 0, completeness: "partial" as const, timings: emptyTimings }
+            return { nodes: 0, edges: 0, completeness: "failed" as const, timings: emptyTimings }
           }),
         ),
       )
       for (const r of results) {
         nodes += r.nodes
         edges += r.edges
-        if (r.nodes > 0 || r.completeness !== "partial") indexed++
+        if (r.completeness === ("failed" as string)) failed++
+        else if (r.nodes > 0 || r.completeness !== "partial") indexed++
         else skipped++
         // Aggregate per-phase timings. These are wall-clock per file,
         // so summing across a batch of size N that ran in parallel
@@ -667,7 +705,7 @@ export namespace CodeGraphBuilder {
     // DB opens, so this one call per index pass is enough.
     CodeGraphQuery.analyze()
 
-    return { nodes, edges, files: indexed, skipped, timings: aggregate }
+    return { nodes, edges, files: indexed, skipped, failed, timings: aggregate }
   }
 
   // Remove all graph state for a single file. Used when a file is

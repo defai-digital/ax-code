@@ -164,13 +164,18 @@ export namespace MCP {
   async function descendants(pid: number): Promise<number[]> {
     if (process.platform === "win32") return []
     const pids: number[] = []
+    const seen = new Set<number>()
     const queue = [pid]
     while (queue.length > 0) {
       const current = queue.shift()!
       const lines = await Process.lines(["pgrep", "-P", String(current)], { nothrow: true })
       for (const tok of lines) {
         const cpid = parseInt(tok, 10)
-        if (!isNaN(cpid) && !pids.includes(cpid)) {
+        // O(1) Set lookup instead of O(n) array.includes. For build
+        // systems that spawn hundreds of descendant processes the
+        // previous quadratic scan noticeably slowed MCP shutdown.
+        if (!isNaN(cpid) && !seen.has(cpid)) {
+          seen.add(cpid)
           pids.push(cpid)
           queue.push(cpid)
         }
@@ -493,6 +498,14 @@ export namespace MCP {
           command: mcp.command,
           cwd,
           error: NamedError.message(error),
+        })
+        // Kill the subprocess that StdioClientTransport spawned.
+        // Without this, a failed connect (timeout, transport error)
+        // leaves the MCP server process running orphaned — holding
+        // its PID, pipes, and any ports it opened — until the parent
+        // ax-code process exits.
+        await transport.close().catch((closeErr) => {
+          log.debug("failed to close mcp transport after connect failure", { key, err: closeErr })
         })
         status = {
           status: "failed" as const,

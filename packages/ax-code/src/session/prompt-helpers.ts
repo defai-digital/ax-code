@@ -571,7 +571,14 @@ export async function ensureTitle(input: {
         : MessageV2.toModelMessages(contextMessages, model)),
     ],
   })
-  const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))
+  // Return undefined explicitly on failure — the previous code relied
+  // on `log.error` happening to return void, which works accidentally
+  // today but silently breaks if log.error ever returns something
+  // truthy.
+  const text = await result.text.catch((err) => {
+    log.error("failed to generate title", { error: err })
+    return undefined
+  })
   if (text) {
     const cleaned = text
       .replace(/<think>[\s\S]*?<\/think>\s*/g, "")

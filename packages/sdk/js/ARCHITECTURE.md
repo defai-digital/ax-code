@@ -7,7 +7,7 @@
 ## Allowed Dependencies
 
 - may depend on the runtime package as needed for SDK generation and programmatic access
-- must not depend on `@ax-code/app`, `@ax-code/desktop`, or `@ax-code/ui`
+- must not depend on `@ax-code/ui`
 
 ## Placement
 

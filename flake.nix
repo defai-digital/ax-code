@@ -40,15 +40,10 @@
             axCode = final.callPackage ./nix/opencode.nix {
               inherit node_modules;
             };
-            desktop = final.callPackage ./nix/desktop.nix {
-              opencode = axCode;
-            };
           in
           {
             opencode = axCode;
             ax-code = axCode;
-            opencode-desktop = desktop;
-            ax-code-desktop = desktop;
           };
       };
 
@@ -61,16 +56,11 @@
           axCode = pkgs.callPackage ./nix/opencode.nix {
             inherit node_modules;
           };
-          desktop = pkgs.callPackage ./nix/desktop.nix {
-            opencode = axCode;
-          };
         in
         {
           default = axCode;
           opencode = axCode;
           ax-code = axCode;
-          inherit desktop;
-          ax-code-desktop = desktop;
           # Updater derivation with fakeHash - build fails and reveals correct hash
           node_modules_updater = node_modules.override {
             hash = pkgs.lib.fakeHash;

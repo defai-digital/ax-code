@@ -7,7 +7,7 @@
 ## Allowed Dependencies
 
 - should remain dependency-light
-- must not depend on `@ax-code/app`, `@ax-code/desktop`, or `@ax-code/ui`
+- must not depend on `@ax-code/ui`
 
 ## Placement
 

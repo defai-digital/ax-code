@@ -11,10 +11,6 @@
     "ax-code#test": {
       "dependsOn": ["^build"],
       "outputs": []
-    },
-    "@ax-code/app#test": {
-      "dependsOn": ["^build"],
-      "outputs": []
     }
   }
 }

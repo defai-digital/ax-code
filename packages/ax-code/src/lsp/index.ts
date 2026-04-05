@@ -633,16 +633,32 @@ export namespace LSP {
     }).then((result) => result.flat().filter(Boolean))
   }
 
+  // Per-client catch so one failing LSP client (e.g. gopls crashed
+  // mid-request) doesn't reject the whole Promise.all and discard
+  // results from every other healthy language server. The callback's
+  // own .catch wrappers handle timeout errors, but the `input` callable
+  // itself can throw (null connection, sendRequest error) before
+  // reaching those catches — this wrapper catches that case.
   async function runAll<T>(input: (client: LSPClient.Info) => Promise<T>): Promise<T[]> {
     const clients = await state().then((x) => x.clients)
-    const tasks = clients.map((x) => input(x))
-    return Promise.all(tasks)
+    const tasks = clients.map((x) =>
+      input(x).catch((err) => {
+        log.warn("LSP client failed in runAll", { serverID: x.serverID, err })
+        return undefined
+      }),
+    )
+    return (await Promise.all(tasks)).filter((r): r is Awaited<T> => r !== undefined) as T[]
   }
 
   async function run<T>(file: string, input: (client: LSPClient.Info) => Promise<T>): Promise<T[]> {
     const clients = await getClients(file)
-    const tasks = clients.map((x) => input(x))
-    return Promise.all(tasks)
+    const tasks = clients.map((x) =>
+      input(x).catch((err) => {
+        log.warn("LSP client failed in run", { serverID: x.serverID, err })
+        return undefined
+      }),
+    )
+    return (await Promise.all(tasks)).filter((r): r is Awaited<T> => r !== undefined) as T[]
   }
 
   export namespace Diagnostic {

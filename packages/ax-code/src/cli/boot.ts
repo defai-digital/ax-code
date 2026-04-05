@@ -31,7 +31,6 @@ import { StatsCommand } from "./cmd/stats"
 import { TuiThreadCommand } from "./cmd/tui/thread"
 import { UninstallCommand } from "./cmd/uninstall"
 import { UpgradeCommand } from "./cmd/upgrade"
-import { WebCommand } from "./cmd/web"
 import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
 import { migrate } from "./bootstrap/migrate"
@@ -58,7 +57,6 @@ const cmds = [
   UninstallCommand,
   ServeCommand,
   RestartCommand,
-  WebCommand,
   ModelsCommand,
   StatsCommand,
   ExportCommand,

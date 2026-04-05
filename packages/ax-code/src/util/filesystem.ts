@@ -155,7 +155,15 @@ export namespace Filesystem {
   }
 
   export function contains(parent: string, child: string) {
-    return !relative(parent, child).startsWith("..")
+    // Resolve both paths before comparison so redundant segments
+    // (`//`, `./`, `../` anywhere in the input) don't cause false
+    // positives/negatives. `path.relative` on unnormalized inputs
+    // can return a path that starts with something other than `..`
+    // yet still escape the parent. Note: this stays synchronous and
+    // does NOT resolve symlinks — callers that need the stronger
+    // guarantee must realpath() first.
+    const rel = relative(pathResolve(parent), pathResolve(child))
+    return !rel.startsWith("..") && !rel.startsWith("/")
   }
 
   export async function findUp(target: string, start: string, stop?: string) {

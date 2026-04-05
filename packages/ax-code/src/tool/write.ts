@@ -1,5 +1,6 @@
 import z from "zod"
 import * as path from "path"
+import * as fs from "fs"
 import { Tool } from "./tool"
 import { createTwoFilesPatch } from "diff"
 import DESCRIPTION from "./write.txt"
@@ -20,6 +21,15 @@ export const WriteTool = Tool.define("write", {
   async execute(params, ctx) {
     const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     await assertExternalDirectory(ctx, filepath)
+    // Resolve symlinks and re-check containment so a symlink inside
+    // the project pointing to e.g. `~/.ssh/authorized_keys` cannot be
+    // used as a write sink. If the file doesn't exist yet, realpath
+    // throws ENOENT and we skip the check — the new file will be
+    // created at the literal path, not through any symlink.
+    const realFilepath = await fs.promises.realpath(filepath).catch(() => null)
+    if (realFilepath && !Filesystem.contains(Instance.directory, realFilepath)) {
+      throw new Error("Access denied: symlink target escapes project directory")
+    }
     Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
 
     // Read + assert + diff computation must all happen inside the lock,

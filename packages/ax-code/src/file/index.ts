@@ -550,7 +550,12 @@ export namespace File {
 
           if (isImageByExtension(file)) {
             if (await Filesystem.exists(full)) {
-              const buffer = await Filesystem.readBytes(full).catch(() => Buffer.from([]))
+              // Let read errors propagate instead of silently returning
+              // an empty buffer. The previous `.catch(() => Buffer.from([]))`
+              // made a failed read look like a successful read of an
+              // empty image to the LLM, producing confidently wrong
+              // analysis on unreadable files.
+              const buffer = await Filesystem.readBytes(full)
               return {
                 type: "text",
                 content: buffer.toString("base64"),
@@ -579,7 +584,11 @@ export namespace File {
           }
 
           if (encode) {
-            const buffer = await Filesystem.readBytes(full).catch(() => Buffer.from([]))
+            // Propagate read errors instead of silently returning an
+            // empty base64 blob — the caller should know the file
+            // couldn't be read rather than seeing a valid-looking
+            // zero-byte image / binary.
+            const buffer = await Filesystem.readBytes(full)
             return {
               type: "text",
               content: buffer.toString("base64"),

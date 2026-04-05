@@ -11,9 +11,7 @@ const note = [
   "packages/integration-github/ARCHITECTURE.md",
   "packages/integration-vscode/ARCHITECTURE.md",
   "packages/ax-code/ARCHITECTURE.md",
-  "packages/app/ARCHITECTURE.md",
   "packages/ui/ARCHITECTURE.md",
-  "packages/desktop/ARCHITECTURE.md",
   "packages/util/ARCHITECTURE.md",
   "packages/plugin/ARCHITECTURE.md",
   "packages/sdk/js/ARCHITECTURE.md",
@@ -23,51 +21,36 @@ const rule = [
   {
     name: "ax-code",
     dir: "packages/ax-code/src",
-    bad: ["@ax-code/app", "@ax-code/desktop", "@ax-code/ui"],
-  },
-  {
-    name: "ui",
-    dir: "packages/ui/src",
-    bad: ["@ax-code/app", "@ax-code/desktop"],
+    bad: ["@ax-code/ui"],
   },
   {
     name: "util",
     dir: "packages/util/src",
-    bad: ["@ax-code/app", "@ax-code/desktop", "@ax-code/ui"],
+    bad: ["@ax-code/ui"],
   },
   {
     name: "plugin",
     dir: "packages/plugin/src",
-    bad: ["@ax-code/app", "@ax-code/desktop", "@ax-code/ui"],
+    bad: ["@ax-code/ui"],
   },
   {
     name: "sdk",
     dir: "packages/sdk/js/src",
-    bad: ["@ax-code/app", "@ax-code/desktop", "@ax-code/ui"],
+    bad: ["@ax-code/ui"],
   },
   {
     name: "integration-github",
     dir: "packages/integration-github",
-    bad: ["@ax-code/app", "@ax-code/desktop", "@ax-code/ui"],
+    bad: ["@ax-code/ui"],
   },
   {
     name: "integration-vscode",
     dir: "packages/integration-vscode/src",
-    bad: ["@ax-code/app", "@ax-code/desktop", "@ax-code/ui"],
-  },
-  {
-    name: "app",
-    dir: "packages/app/src",
-    bad: ["ax-code/src/", "packages/ax-code/src/"],
-  },
-  {
-    name: "desktop",
-    dir: "packages/desktop/src",
-    bad: ["ax-code/src/", "packages/ax-code/src/"],
+    bad: ["@ax-code/ui"],
   },
 ]
 
-const hot = ["packages/ax-code/src/cli/cmd", "packages/app/src/pages/session", "packages/ui/src/components"]
+const hot = ["packages/ax-code/src/cli/cmd", "packages/ui/src/components"]
 
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
 const old = ["ADRS", "PRDS", "BUGS", "TODOS", "specs", "sdks", "github", "scripts"]
@@ -155,8 +138,6 @@ async function deep() {
   const out = [] as { file: string; spec: string }[]
   for (const dir of [
     "packages/ax-code/src",
-    "packages/app/src",
-    "packages/desktop/src",
     "packages/plugin/src",
     "packages/sdk/js/src",
     "packages/integration-github",
@@ -198,7 +179,7 @@ async function lines(dir: string) {
 
 async function size() {
   const out = [] as { file: string; lines: number }[]
-  for (const dir of ["packages/ax-code/src", "packages/app/src", "packages/ui/src"]) {
+  for (const dir of ["packages/ax-code/src", "packages/ui/src"]) {
     out.push(...(await lines(dir)))
   }
   return out.sort((a, b) => b.lines - a.lines)

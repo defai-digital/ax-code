@@ -43,6 +43,14 @@ function isPrivateIPv6(addr: string): boolean {
 
 async function assertPublicUrl(url: string): Promise<void> {
   const parsed = new URL(url)
+  // Scheme check first — defense in depth. The caller already enforces
+  // http/https before reaching here, but validating again means any
+  // future path that reuses this helper without pre-checking (or a
+  // regression in the caller) still rejects file://, data://, gopher://,
+  // etc. before a single DNS lookup fires.
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`webfetch: unsupported URL scheme: ${parsed.protocol}`)
+  }
   const hostname = parsed.hostname
   // If the hostname is already a literal IP, check it directly.
   if (net.isIP(hostname)) {

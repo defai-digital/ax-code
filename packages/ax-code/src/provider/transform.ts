@@ -48,13 +48,20 @@ export namespace ProviderTransform {
 
           // Include reasoning_content | reasoning_details directly on the message for all assistant messages
           if (reasoningText) {
+            // Read the extension field through a narrow structural
+            // shape instead of `as any`. Keeps the rest of the object
+            // fully type-checked while acknowledging openaiCompatible
+            // is an openrouter/openai extension not modelled by the
+            // core ModelMessage type.
+            const existing = (msg.providerOptions as { openaiCompatible?: Record<string, string> } | undefined)
+              ?.openaiCompatible
             return {
               ...msg,
               content: filteredContent,
               providerOptions: {
                 ...msg.providerOptions,
                 openaiCompatible: {
-                  ...(msg.providerOptions as any)?.openaiCompatible,
+                  ...existing,
                   [field]: reasoningText,
                 },
               },

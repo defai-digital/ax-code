@@ -10,6 +10,7 @@ import { Language } from "web-tree-sitter"
 import fs from "fs/promises"
 
 import { Filesystem } from "@/util/filesystem"
+import { Env } from "@/util/env"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
@@ -174,27 +175,10 @@ export const BashTool = Tool.define("bash", async () => {
         { env: {} },
       )
       // Strip secrets from process.env before forwarding to the child.
-      // An LLM prompt that instructs the shell to run `env` or
-      // `echo $OPENAI_API_KEY` could otherwise exfiltrate provider
-      // tokens, passwords, and other credentials held by the parent
-      // process. We match on _component_ boundaries (start/end of
-      // string or underscore) rather than raw substrings so that
-      // functional variables like `SSH_AUTH_SOCK` (auth agent socket)
-      // and `GIT_ASKPASS` (credential helper) aren't accidentally
-      // stripped, breaking SSH and Git over the bash tool. A small
-      // explicit allowlist covers the few legitimate cases where a
-      // secret-looking keyword IS a real substring we want to keep.
-      const SECRET_PATTERN = /(?:^|_)(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)(?:_|$)/i
-      const SAFE_ALLOWLIST = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS"])
-      const sanitizedEnv: Record<string, string | undefined> = {}
-      for (const [k, v] of Object.entries(process.env)) {
-        if (SAFE_ALLOWLIST.has(k)) {
-          sanitizedEnv[k] = v
-          continue
-        }
-        if (SECRET_PATTERN.test(k)) continue
-        sanitizedEnv[k] = v
-      }
+      // See Env.sanitize for the rationale — LLM-invoked shell commands
+      // must not see provider tokens, passwords, or other credentials
+      // held by the parent process.
+      const sanitizedEnv = Env.sanitize(process.env)
       const proc = spawn(params.command, {
         shell,
         cwd,

@@ -5,6 +5,7 @@
 
 import z from "zod"
 import * as path from "path"
+import * as fs from "fs"
 import { Tool } from "./tool"
 import { createTwoFilesPatch, diffLines } from "diff"
 import DESCRIPTION from "./edit.txt"
@@ -48,6 +49,15 @@ export const EditTool = Tool.define("edit", {
 
     const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     await assertExternalDirectory(ctx, filePath)
+    // Resolve symlinks and re-check containment so a symlink inside
+    // the project pointing to e.g. `~/.ssh/authorized_keys` cannot be
+    // edited through the symlink. If the target doesn't exist yet
+    // (oldString === ""), realpath throws ENOENT and we skip — the
+    // new file will be created at the literal path.
+    const realFilePath = await fs.promises.realpath(filePath).catch(() => null)
+    if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {
+      throw new Error("Access denied: symlink target escapes project directory")
+    }
     Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
 
     let diff = ""
@@ -225,8 +235,11 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
       continue
     }
 
-    // Look for the matching last line after this first line
-    for (let j = i + 2; j < originalLines.length; j++) {
+    // Look for the matching last line after this first line. Start at
+    // i + 1 so 2-line blocks can match — previously j = i + 2 skipped
+    // the line immediately after the anchor, making 2-line searches
+    // unfindable even though the guards above permit them.
+    for (let j = i + 1; j < originalLines.length; j++) {
       if (originalLines[j].trim() === lastLineSearch) {
         candidates.push({ startLine: i, endLine: j })
         break // Only match the first occurrence of the last line
@@ -546,7 +559,10 @@ export const ContextAwareReplacer: Replacer = function* (content, find) {
     // matched `findLines.length`, causing valid later matches to be
     // silently dropped.
     let matched = false
-    for (let j = i + 2; j < contentLines.length && !matched; j++) {
+    // Start at i + 1 so 2-line blocks can match. j = i + 2 previously
+    // skipped the line right after the first anchor, making 2-line
+    // context-aware edits unfindable.
+    for (let j = i + 1; j < contentLines.length && !matched; j++) {
       if (contentLines[j].trim() !== lastLine) continue
 
       // Found a candidate block bounded by the context anchors.

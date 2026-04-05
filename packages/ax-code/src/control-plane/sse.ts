@@ -44,19 +44,25 @@ export async function parseSSE(
     const text = data.join("\n")
     if (!text) return
 
+    // Separate the JSON.parse try from the onEvent try. The previous
+    // single-try/catch swallowed any error thrown inside onEvent —
+    // including real handler bugs — as if it were a parse failure,
+    // silently dropping events with no feedback.
+    let parsed: unknown
     try {
-      onEvent(JSON.parse(text))
+      parsed = JSON.parse(text)
+    } catch {
+      onEvent({
+        type: "sse.message",
+        properties: {
+          data: text,
+          id,
+          retry,
+        },
+      })
       return
-    } catch {}
-
-    onEvent({
-      type: "sse.message",
-      properties: {
-        data: text,
-        id,
-        retry,
-      },
-    })
+    }
+    onEvent(parsed as Parameters<typeof onEvent>[0])
   }
 
   try {

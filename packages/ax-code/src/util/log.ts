@@ -52,6 +52,7 @@ export namespace Log {
   export function file() {
     return logpath
   }
+  let currentStream: ReturnType<typeof createWriteStream> | undefined
   let write: (msg: string) => number | Promise<number> = (msg) => {
     process.stderr.write(msg)
     return msg.length
@@ -66,7 +67,13 @@ export namespace Log {
       options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
     )
     await fs.truncate(logpath).catch(() => {})
+    // Close the previous stream before opening a new one. Without
+    // this, every init() (e.g. after a worker reload) leaks a file
+    // descriptor — the old stream stayed captured in the closure and
+    // was never ended.
+    if (currentStream) currentStream.end()
     const stream = createWriteStream(logpath, { flags: "a" })
+    currentStream = stream
     write = (msg: string) =>
       new Promise<number>((resolve, reject) => {
         stream.write(msg, (err) => {

@@ -2,12 +2,11 @@
 
 ## Purpose
 
-`packages/ui` contains shared UI components, content rendering, icons, styles, and UI-only helpers reused by the app and desktop packages.
+`packages/ui` contains shared UI components, content rendering, icons, styles, and UI-only helpers used by Storybook and any future visual surfaces.
 
 ## Allowed Dependencies
 
 - may depend on `@ax-code/sdk` and `@ax-code/util`
-- must not depend on `@ax-code/app` or `@ax-code/desktop`
 
 ## Placement
 

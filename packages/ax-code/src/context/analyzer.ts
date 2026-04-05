@@ -111,10 +111,12 @@ export async function analyze(root: string): Promise<ProjectInfo> {
 }
 
 async function readJson<T>(filepath: string): Promise<T | null> {
+  // Skip the exists() probe. It adds a TOCTOU window (the file can be
+  // deleted or truncated between exists() and json()) and the catch
+  // below already handles ENOENT. Removing the probe also means one
+  // fewer syscall on the happy path.
   try {
-    const file = Bun.file(filepath)
-    if (!(await file.exists())) return null
-    return (await file.json()) as T
+    return (await Bun.file(filepath).json()) as T
   } catch {
     return null
   }

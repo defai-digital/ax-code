@@ -691,8 +691,17 @@ export namespace Config {
               const require = createRequire(options.path)
               const resolvedPath = require.resolve(plugin)
               data.plugin[i] = pathToFileURL(resolvedPath).href
-            } catch {
-              // Ignore, plugin might be a generic string identifier like "mcp-server"
+            } catch (err) {
+              // Plugin may legitimately be a generic string identifier
+              // like "mcp-server" that the plugin loader resolves later.
+              // Log at debug so misspelled plugin paths can still be
+              // diagnosed by the user (previous empty catch left them
+              // wondering why their plugin never loaded).
+              log.debug("plugin resolve failed — may be string identifier", {
+                plugin,
+                configPath: options.path,
+                err,
+              })
             }
           }
         }

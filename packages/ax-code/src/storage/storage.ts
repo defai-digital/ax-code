@@ -191,6 +191,14 @@ export namespace Storage {
     const dir = await state().then((x) => x.dir)
     const target = path.join(dir, ...key) + ".json"
     return withErrorHandling(async () => {
+      // Lock.write is in-process only (a Map-backed mutex). Two
+      // ax-code processes on the same directory (CLI + desktop app,
+      // multiple terminals) would otherwise read-modify-write race
+      // and lose one of the two updates. We can't pull in a file
+      // locking dependency for SQLite-style cross-process locks, but
+      // we can at least keep the read + write tightly coupled and
+      // document the limitation. TODO(BUG-12): proper cross-process
+      // lock via a lockfile or O_EXCL sentinel.
       using _ = await Lock.write(target)
       const content = await Filesystem.readJson<T>(target)
       fn(content as T)

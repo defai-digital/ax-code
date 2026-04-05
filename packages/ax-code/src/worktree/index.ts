@@ -422,8 +422,8 @@ export namespace Worktree {
   export const create = fn(CreateInput.optional(), async (input) => {
     const info = await makeWorktreeInfo(input?.name)
     const bootstrap = await createFromInfo(info, input?.startCommand)
-    // This is needed due to how worktrees currently work in the
-    // desktop app
+    // Defer bootstrap to the next microtask so callers see the worktree
+    // info synchronously before post-create hooks start running.
     setTimeout(() => {
       bootstrap()
     }, 0)
