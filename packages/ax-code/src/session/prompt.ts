@@ -37,6 +37,7 @@ import { FileTime } from "../file/time"
 import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
 import { Recorder } from "../replay/recorder"
+import { CodeIntelligence } from "../code-intelligence"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
@@ -433,8 +434,16 @@ export namespace SessionPrompt {
     const abort = resume_existing ? (resume(sessionID) ?? start(sessionID)) : start(sessionID)
     if (!abort) {
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
-        const callbacks = state()[sessionID].callbacks
-        callbacks.push({ resolve, reject })
+        // Capture atomically: a concurrent cancel() may have deleted the
+        // state entry between the `start()` check above and this access,
+        // which previously threw TypeError: Cannot read properties of
+        // undefined (reading 'callbacks').
+        const entry = state()[sessionID]
+        if (!entry) {
+          reject(new Error("Session was cancelled"))
+          return
+        }
+        entry.callbacks.push({ resolve, reject })
       })
     }
 
@@ -530,6 +539,28 @@ export namespace SessionPrompt {
           model: `${lastUser.model.providerID}/${lastUser.model.modelID}`,
           directory: Instance.directory,
         })
+        // Snapshot the Code Intelligence graph state alongside session.start
+        // so deterministic replay can see what the agent "knew" about the
+        // code at the moment it began this session. Defensive: if the
+        // code_* tables are missing (e.g. an old DB before v3), swallow
+        // and skip — we never want this to take down a session.
+        try {
+          const s = CodeIntelligence.status(Instance.project.id)
+          Recorder.emit({
+            type: "code.graph.snapshot",
+            sessionID,
+            projectID: s.projectID,
+            commitSha: s.lastCommitSha,
+            nodeCount: s.nodeCount,
+            edgeCount: s.edgeCount,
+            lastIndexedAt: s.lastUpdated,
+          })
+        } catch (e) {
+          log.warn("code.graph.snapshot skipped", {
+            sessionID,
+            e: e instanceof Error ? e.message : String(e),
+          })
+        }
         sessionStarted = true
       }
 

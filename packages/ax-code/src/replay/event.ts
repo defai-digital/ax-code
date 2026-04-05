@@ -116,6 +116,20 @@ export const ErrorEvent = Base.extend({
   message: z.string(),
 })
 
+// Snapshot of the Code Intelligence graph at a point in time. Emitted
+// once per session (right after session.start) so replay can see the
+// exact graph state the agent was querying against. Counts come from
+// CodeGraphQuery.getCursor — if the project has never been indexed,
+// all numeric fields are 0 and commitSha is null.
+export const CodeGraphSnapshotEvent = Base.extend({
+  type: z.literal("code.graph.snapshot"),
+  projectID: z.string(),
+  commitSha: z.string().nullable(),
+  nodeCount: z.number().int(),
+  edgeCount: z.number().int(),
+  lastIndexedAt: z.number().nullable(),
+})
+
 export const ReplayEvent = z.discriminatedUnion("type", [
   SessionStartEvent,
   SessionEndEvent,
@@ -130,5 +144,6 @@ export const ReplayEvent = z.discriminatedUnion("type", [
   PermissionAskEvent,
   PermissionReplyEvent,
   ErrorEvent,
+  CodeGraphSnapshotEvent,
 ])
 export type ReplayEvent = z.infer<typeof ReplayEvent>

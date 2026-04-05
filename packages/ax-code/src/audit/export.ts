@@ -63,6 +63,13 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
       return { ...base, action: "output", result: `${event.parts.length} parts` }
     case "error":
       return { ...base, action: "error", result: `${event.errorType}: ${event.message}` }
+    case "code.graph.snapshot":
+      return {
+        ...base,
+        action: "snapshot",
+        target: event.projectID,
+        result: `nodes=${event.nodeCount} edges=${event.edgeCount}${event.commitSha ? ` sha=${event.commitSha}` : ""}`,
+      }
     default:
       return base
   }

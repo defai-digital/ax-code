@@ -351,6 +351,9 @@ export namespace Replay {
         case "error":
           lines.push(`[error]   ${event.errorType}: ${event.message}`)
           break
+        case "code.graph.snapshot":
+          lines.push(`[graph]   snapshot project=${event.projectID} nodes=${event.nodeCount} edges=${event.edgeCount}${event.commitSha ? ` sha=${event.commitSha}` : ""}`)
+          break
       }
     }
 
