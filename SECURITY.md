@@ -2,10 +2,14 @@
 
 ## Supported Versions
 
+Only the latest minor line receives security patches. The `1.x` series
+predates the project's rename to `ax-code` and is end of life — upgrade
+to the current minor before reporting a vulnerability.
+
 | Version | Supported |
 |---------|-----------|
-| 1.6.x   | Yes       |
-| < 1.6   | No        |
+| 2.3.x   | Yes       |
+| < 2.3   | No        |
 
 ## Reporting a Vulnerability
 

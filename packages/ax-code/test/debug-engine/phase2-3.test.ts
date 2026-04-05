@@ -412,6 +412,51 @@ describe("detectHardcodes", () => {
     })
   })
 
+  test("ignores magic numbers inside block comments and JSDoc", async () => {
+    // Regression test for issue #23. Before the fix, `stripComments`
+    // only handled line comments (`//`); magic numbers and secret-
+    // shaped strings inside `/* ... */` or JSDoc blocks were reported
+    // as hardcodes. The scanner now tracks multi-line block-comment
+    // state and strips all forms of block comments before running
+    // detectors.
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "commented.ts"),
+      [
+        "/**",
+        " * Connect to the service.",
+        " *",
+        " * @example",
+        " *   const port = 8888",
+        " *   const timeout = 60000",
+        " */",
+        "export function connect() {",
+        "  /* inline comment with magic 12345 */ return true",
+        "}",
+        "// plus a line with 99999 in it",
+        "const real = 77777",
+      ].join("\n"),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectHardcodes(projectID, {
+          patterns: ["magic_number"],
+        })
+        const values = report.findings.filter((f) => f.kind === "magic_number").map((f) => f.value)
+        // 77777 sits in a real assignment — detected.
+        expect(values).toContain("77777")
+        // 8888, 60000, 12345 are all inside comments — dropped.
+        expect(values).not.toContain("8888")
+        expect(values).not.toContain("60000")
+        expect(values).not.toContain("12345")
+        expect(values).not.toContain("99999")
+      },
+    })
+  })
+
   test("ignores numbers inside named const declarations", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(

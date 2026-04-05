@@ -4,14 +4,23 @@ import path from "path"
 
 const rootPkgPath = path.resolve(import.meta.dir, "../../../package.json")
 const rootPkg = await Bun.file(rootPkgPath).json()
-const expectedBunVersion = rootPkg.packageManager?.split("@")[1]
+// The build script runs under Bun. Before v2.3.17 this parsed the
+// root `packageManager` field (which holds the pnpm version) and
+// compared it against `process.versions.bun`. Since pnpm is at 9.x
+// and Bun is at 1.x, the check always failed:
+//
+//   error: This script requires bun@^9.15.9, but you are using bun@1.3.5
+//
+// breaking every local `bun run script/build.ts` invocation. CI
+// bypassed the check because `oven-sh/setup-bun` ran Bun in a
+// different harness. Fixed by reading from the root `engines.bun`
+// field (npm/pnpm standard), which was added in the same commit.
+// See issue #19.
+const expectedBunVersionRange = rootPkg.engines?.bun
 
-if (!expectedBunVersion) {
-  throw new Error("packageManager field not found in root package.json")
+if (!expectedBunVersionRange) {
+  throw new Error("engines.bun field not found in root package.json — expected a semver range like '^1.3.11'")
 }
-
-// relax version requirement
-const expectedBunVersionRange = `^${expectedBunVersion}`
 
 if (!semver.satisfies(process.versions.bun, expectedBunVersionRange)) {
   throw new Error(`This script requires bun@${expectedBunVersionRange}, but you are using bun@${process.versions.bun}`)

@@ -75,20 +75,29 @@ function isExcludedDir(file: string, cwd: string): boolean {
   return segments.some((seg) => DEFAULT_EXCLUDE_DIRS.includes(seg))
 }
 
-// Strip block and line comments from a single line. Naive: only handles
-// line-level comments and leftover `// ...` tails. A full comment
-// tokenizer is out of scope for Phase 2; the occasional missed comment
-// is preferable to running a full parser on every file.
+// Strip single-line comments (both `//` and inline `/* ... */` that
+// open and close on the same line). Multi-line block comments are
+// tracked by the scanner loop in scanFile — this helper only handles
+// what it can see on the line in front of it. See issue #23.
 function stripComments(line: string): string {
-  // Line comment
-  const lineIdx = line.indexOf("//")
+  // Inline block comments `/* ... */`. Repeat the strip until the
+  // pattern is gone: a single line can carry multiple blocks like
+  // `const x = 1 /* a */ + /* b */ 2`.
+  let out = line
+  while (true) {
+    const next = out.replace(/\/\*[\s\S]*?\*\//g, "")
+    if (next === out) break
+    out = next
+  }
+  // Line comment `// ...` at the end of a line, only if not inside a
+  // string literal on the same line (naive quote-balance check).
+  const lineIdx = out.indexOf("//")
   if (lineIdx >= 0) {
-    // But not inside a string — check no unbalanced quote precedes it
-    const prefix = line.slice(0, lineIdx)
+    const prefix = out.slice(0, lineIdx)
     const quotes = (prefix.match(/"/g) ?? []).length + (prefix.match(/'/g) ?? []).length
     if (quotes % 2 === 0) return prefix
   }
-  return line
+  return out
 }
 
 type Detector = (line: string, trimmedLine: string) => Array<{ value: string; column: number }>
@@ -203,15 +212,53 @@ async function scanFile(
   const lines = content.split("\n")
   const findings: DebugEngine.HardcodeFinding[] = []
 
+  // Cross-line block comment state. The old code skipped lines that
+  // started with `*` or `/*`, but that missed: (1) the opening line
+  // when code precedes `/*`, (2) the closing line when code follows
+  // `*/`, and (3) interior lines that don't start with a leading
+  // `*`. Each of those carried magic numbers and secret-shaped
+  // strings inside JSDoc blocks that the scanner reported as real
+  // hardcodes. Track the open/close state here; stripComments still
+  // handles the single-line cases on its own. See issue #23.
+  let inBlockComment = false
   for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i]
-    const trimmed = raw.trim()
-    if (trimmed.length === 0) continue
-    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) continue
+    if (lines[i].trim().length === 0) continue
+
+    // Walk the line accounting for block comment state. Any portion
+    // of the line that falls inside a block comment is removed; if
+    // the block doesn't close on this line, flip `inBlockComment`
+    // and skip the rest.
+    let remaining = lines[i]
+    if (inBlockComment) {
+      const closeIdx = remaining.indexOf("*/")
+      if (closeIdx === -1) continue // whole line is inside a block
+      remaining = remaining.slice(closeIdx + 2)
+      inBlockComment = false
+    }
+    // From here, search for a block-comment opener that isn't
+    // closed on the same line. Anything after the unclosed opener
+    // belongs to the block and must be stripped; we also flip the
+    // state so subsequent lines know we're still inside.
+    const openIdx = remaining.indexOf("/*")
+    if (openIdx !== -1) {
+      const closeIdx = remaining.indexOf("*/", openIdx + 2)
+      if (closeIdx === -1) {
+        remaining = remaining.slice(0, openIdx)
+        inBlockComment = true
+      }
+    }
+    if (remaining.trim().length === 0) continue
+
+    // Re-derive `trimmed` against the (possibly shortened) remainder
+    // so downstream detectors see a consistent view. The single-line
+    // `//` handler lives in stripComments and will run per-detector.
+    const rawForScan = remaining
+    const trimmedForScan = remaining.trim()
+    if (trimmedForScan.startsWith("//")) continue
 
     const applyDetector = (kind: DebugEngine.HardcodeKind, detect: Detector) => {
       if (!enabledKinds.has(kind)) return
-      for (const hit of detect(raw, trimmed)) {
+      for (const hit of detect(rawForScan, trimmedForScan)) {
         if (findings.length >= maxPerFile) return
         findings.push({
           file,
