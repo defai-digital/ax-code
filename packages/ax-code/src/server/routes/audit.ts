@@ -6,6 +6,22 @@ import { AuditExport } from "../../audit/export"
 import { EventQuery } from "../../replay/query"
 import { Replay } from "../../replay/replay"
 import { lazy } from "../../util/lazy"
+import { Log } from "../../util/log"
+
+const log = Log.create({ service: "audit.routes" })
+
+// Parse a JSON-Lines entry and return null on failure instead of throwing.
+// One corrupt line (partial write, truncation) previously blew up the
+// whole /audit export — callers now skip null entries so the rest of the
+// log is still returned.
+function parseLine(line: string): unknown | null {
+  try {
+    return JSON.parse(line)
+  } catch (err) {
+    log.warn("skipping corrupt audit line", { line: line.slice(0, 200), err })
+    return null
+  }
+}
 
 export const AuditRoutes = lazy(() =>
   new Hono()
@@ -23,7 +39,7 @@ export const AuditRoutes = lazy(() =>
       async (c) => {
         const sid = SessionID.make(c.req.valid("param").sessionID)
         const lines = [...AuditExport.stream(sid)]
-        return c.json({ data: lines.map((l) => JSON.parse(l)) })
+        return c.json({ data: lines.map(parseLine).filter((x) => x !== null) })
       },
     )
     .get(
@@ -40,7 +56,7 @@ export const AuditRoutes = lazy(() =>
       async (c) => {
         const since = c.req.valid("query").since ? new Date(c.req.valid("query").since!).getTime() : undefined
         const lines = [...AuditExport.streamAll({ since })]
-        return c.json({ data: lines.map((l) => JSON.parse(l)) })
+        return c.json({ data: lines.map(parseLine).filter((x) => x !== null) })
       },
     )
     .get(

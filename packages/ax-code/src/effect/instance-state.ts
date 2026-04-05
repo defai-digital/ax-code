@@ -19,7 +19,16 @@ export namespace InstanceState {
         lookup: () => init(Instance.current),
       })
 
-      const off = registerDisposer((directory) => Effect.runPromise(ScopedCache.invalidate(cache, directory)))
+      // Attach a catch handler so a cache invalidation failure surfaces
+      // as a logged error rather than an unhandled promise rejection.
+      // The global unhandledRejection handler would still absorb it, but
+      // the generic Effect error carries no useful diagnostic context.
+      const off = registerDisposer((directory) =>
+        Effect.runPromise(ScopedCache.invalidate(cache, directory)).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error("InstanceState disposer: cache invalidate failed", { directory, err })
+        }),
+      )
       yield* Effect.addFinalizer(() => Effect.sync(off))
 
       return {

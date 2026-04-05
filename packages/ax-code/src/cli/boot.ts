@@ -113,7 +113,7 @@ export function cli(argv = hideBin(process.argv)) {
       await init(opts)
       await migrate()
     })
-    .usage("\n" + UI.logo({ variant: "auto" }))
+    .usage("\n" + UI.logo())
     .completion("completion", "generate shell completion script")
 
   for (const cmd of cmds) cli = cli.command(cmd as never)

@@ -266,7 +266,7 @@ export namespace SessionProcessor {
                     })
 
                     // Self-correction: clear retry budget on success
-                    SelfCorrection.recordSuccess(match.tool)
+                    SelfCorrection.recordSuccess(input.sessionID, match.tool)
 
                     recentToolRing.push({ tool: match.tool, input: JSON.stringify(value.input ?? match.state.input) })
                     if (recentToolRing.length > DOOM_LOOP_THRESHOLD) recentToolRing.shift()
@@ -314,7 +314,7 @@ export namespace SessionProcessor {
                       blocked = shouldBreak
                     } else {
                       // Self-correction: analyze failure and log recovery hint
-                      const correction = SelfCorrection.analyze(match.tool, errorMsg)
+                      const correction = SelfCorrection.analyze(input.sessionID, match.tool, errorMsg)
                       if (correction) {
                         log.info("self-correction active", {
                           tool: match.tool,

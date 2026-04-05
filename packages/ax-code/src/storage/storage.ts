@@ -143,7 +143,17 @@ export namespace Storage {
     for (let index = migration; index < MIGRATIONS.length; index++) {
       log.info("running migration", { index })
       const migration = MIGRATIONS[index]
-      await migration(dir).catch(() => log.error("failed to run migration", { index }))
+      // Do NOT advance the version marker on failure — a failed migration
+      // must be retried on the next startup, otherwise storage can be
+      // left in a permanently corrupt state. The previous code swallowed
+      // the error and wrote the next index unconditionally, which meant
+      // broken migrations were silently skipped forever.
+      try {
+        await migration(dir)
+      } catch (err) {
+        log.error("failed to run migration", { index, err })
+        throw err
+      }
       await Filesystem.write(path.join(dir, "migration"), (index + 1).toString())
     }
     return {

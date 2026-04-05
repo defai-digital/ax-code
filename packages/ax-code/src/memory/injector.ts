@@ -5,6 +5,9 @@
 
 import type { ProjectMemory } from "./types"
 import * as store from "./store"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "memory.injector" })
 
 /**
  * Build context string from memory sections
@@ -48,7 +51,14 @@ export function buildContext(memory: ProjectMemory): string {
  * Returns empty string if no memory cached
  */
 export async function getContext(projectRoot: string): Promise<string> {
-  const memory = await store.load(projectRoot)
+  // store.load only throws on corrupt JSON (ENOENT returns null). Log and
+  // fall back to empty context so a corrupt memory file does not break
+  // prompt construction — but the corrupt file is preserved on disk for
+  // manual recovery rather than being silently overwritten.
+  const memory = await store.load(projectRoot).catch((err) => {
+    log.error("failed to load memory", { projectRoot, err })
+    return null
+  })
   if (!memory) return ""
   return buildContext(memory)
 }
@@ -63,7 +73,10 @@ export async function getMetadata(projectRoot: string): Promise<{
   contentHash: string
   sections: string[]
 } | null> {
-  const memory = await store.load(projectRoot)
+  const memory = await store.load(projectRoot).catch((err) => {
+    log.error("failed to load memory metadata", { projectRoot, err })
+    return null
+  })
   if (!memory) return null
 
   return {

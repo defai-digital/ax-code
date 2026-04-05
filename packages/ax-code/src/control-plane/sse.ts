@@ -32,7 +32,12 @@ export async function parseSSE(
       }
       if (key === "retry") {
         const val = Number(raw)
-        if (!Number.isNaN(val)) retry = val
+        // Reject NaN, negative, and Infinity; cap accepted value at 60s.
+        // A buggy or malicious server sending `retry: "9".repeat(20)`
+        // would otherwise coerce to Infinity, and a downstream
+        // setTimeout on an Infinity delay never fires — blocking
+        // reconnection forever.
+        if (Number.isFinite(val) && val >= 0) retry = Math.min(val, 60_000)
       }
     }
 

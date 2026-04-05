@@ -39,6 +39,12 @@ const CACHE_VERSION = "21"
 const version = await Filesystem.readText(path.join(Global.Path.cache, "version")).catch(() => "0")
 
 if (version !== CACHE_VERSION) {
+  // Only stamp the new cache version after the wipe succeeds. The
+  // previous code always advanced the marker even if `fs.rm` threw
+  // (permission, disk full, EBUSY), which meant partial cleanups were
+  // treated as complete on the next start and stale files were never
+  // revisited.
+  let cleaned = true
   try {
     const contents = await fs.readdir(Global.Path.cache)
     await Promise.all(
@@ -49,6 +55,11 @@ if (version !== CACHE_VERSION) {
         }),
       ),
     )
-  } catch (e) {}
-  await Filesystem.write(path.join(Global.Path.cache, "version"), CACHE_VERSION)
+  } catch (e) {
+    cleaned = false
+    console.error("cache cleanup failed, leaving version marker unchanged:", e)
+  }
+  if (cleaned) {
+    await Filesystem.write(path.join(Global.Path.cache, "version"), CACHE_VERSION)
+  }
 }

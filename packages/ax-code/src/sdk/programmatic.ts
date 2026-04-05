@@ -74,13 +74,20 @@ const ENV_VAR_MAP: Record<string, string> = {
   GROQ_API_KEY: "groq",
 }
 
+const autoDetectLog = Log.create({ service: "sdk.auto-detect-auth" })
+
 async function autoDetectAuth(): Promise<void> {
   for (const [envVar, provider] of Object.entries(ENV_VAR_MAP)) {
     const key = process.env[envVar]
     if (key) {
       const existing = await Auth.get(provider).catch(() => undefined)
       if (!existing) {
-        await Auth.set(provider, { type: "api", key }).catch(() => {})
+        // Log persistence failures — a silent catch previously let the
+        // SDK run in-memory only and credentials would not survive a
+        // restart with no indication of why.
+        await Auth.set(provider, { type: "api", key }).catch((err) =>
+          autoDetectLog.error("failed to persist auto-detected auth", { provider, envVar, err }),
+        )
       }
     }
   }

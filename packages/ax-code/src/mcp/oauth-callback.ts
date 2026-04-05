@@ -62,6 +62,11 @@ interface PendingAuth {
 
 export namespace McpOAuthCallback {
   let server: ReturnType<typeof Bun.serve> | undefined
+  // In-flight init promise. Serializes concurrent ensureRunning() calls so
+  // two callers never race past the `if (server)` guard and both attempt
+  // `Bun.serve()` on the same port (EADDRINUSE). Cleared on completion so
+  // a subsequent start after stop() can still initialize.
+  let initPromise: Promise<void> | undefined
   const pendingAuths = new Map<string, PendingAuth>()
   const pendingStates = new Map<string, string>()
 
@@ -69,88 +74,92 @@ export namespace McpOAuthCallback {
 
   export async function ensureRunning(): Promise<void> {
     if (server) return
+    if (initPromise) return initPromise
+    initPromise = (async () => {
+      const running = await isPortInUse()
+      if (running) {
+        log.info("oauth callback server already running on another instance", { port: OAUTH_CALLBACK_PORT })
+        return
+      }
+      server = Bun.serve({
+        port: OAUTH_CALLBACK_PORT,
+        fetch(req) {
+          const url = new URL(req.url)
 
-    const running = await isPortInUse()
-    if (running) {
-      log.info("oauth callback server already running on another instance", { port: OAUTH_CALLBACK_PORT })
-      return
-    }
-
-    server = Bun.serve({
-      port: OAUTH_CALLBACK_PORT,
-      fetch(req) {
-        const url = new URL(req.url)
-
-        if (url.pathname !== OAUTH_CALLBACK_PATH) {
-          return new Response("Not found", { status: 404 })
-        }
-
-        const code = url.searchParams.get("code")
-        const state = url.searchParams.get("state")
-        const error = url.searchParams.get("error")
-        const errorDescription = url.searchParams.get("error_description")
-
-        log.info("received oauth callback", { hasCode: !!code, state, error })
-
-        // Enforce state parameter presence
-        if (!state) {
-          const errorMsg = "Missing required state parameter - potential CSRF attack"
-          log.error("oauth callback missing state parameter", { url: url.toString() })
-          return new Response(HTML_ERROR(errorMsg), {
-            status: 400,
-            headers: { "Content-Type": "text/html" },
-          })
-        }
-
-        if (error) {
-          const errorMsg = errorDescription || error
-          if (pendingAuths.has(state)) {
-            const pending = pendingAuths.get(state)!
-            clearTimeout(pending.timeout)
-            pendingAuths.delete(state)
-            for (const [name, value] of pendingStates) {
-              if (value === state) pendingStates.delete(name)
-            }
-            pending.reject(new Error(errorMsg))
+          if (url.pathname !== OAUTH_CALLBACK_PATH) {
+            return new Response("Not found", { status: 404 })
           }
-          return new Response(HTML_ERROR(errorMsg), {
+
+          const code = url.searchParams.get("code")
+          const state = url.searchParams.get("state")
+          const error = url.searchParams.get("error")
+          const errorDescription = url.searchParams.get("error_description")
+
+          log.info("received oauth callback", { hasCode: !!code, state, error })
+
+          // Enforce state parameter presence
+          if (!state) {
+            const errorMsg = "Missing required state parameter - potential CSRF attack"
+            log.error("oauth callback missing state parameter", { url: url.toString() })
+            return new Response(HTML_ERROR(errorMsg), {
+              status: 400,
+              headers: { "Content-Type": "text/html" },
+            })
+          }
+
+          if (error) {
+            const errorMsg = errorDescription || error
+            if (pendingAuths.has(state)) {
+              const pending = pendingAuths.get(state)!
+              clearTimeout(pending.timeout)
+              pendingAuths.delete(state)
+              for (const [name, value] of pendingStates) {
+                if (value === state) pendingStates.delete(name)
+              }
+              pending.reject(new Error(errorMsg))
+            }
+            return new Response(HTML_ERROR(errorMsg), {
+              headers: { "Content-Type": "text/html" },
+            })
+          }
+
+          if (!code) {
+            return new Response(HTML_ERROR("No authorization code provided"), {
+              status: 400,
+              headers: { "Content-Type": "text/html" },
+            })
+          }
+
+          // Validate state parameter
+          if (!pendingAuths.has(state)) {
+            const errorMsg = "Invalid or expired state parameter - potential CSRF attack"
+            log.error("oauth callback with invalid state", { state, pendingStates: Array.from(pendingAuths.keys()) })
+            return new Response(HTML_ERROR(errorMsg), {
+              status: 400,
+              headers: { "Content-Type": "text/html" },
+            })
+          }
+
+          const pending = pendingAuths.get(state)!
+
+          clearTimeout(pending.timeout)
+          pendingAuths.delete(state)
+          for (const [name, value] of pendingStates) {
+            if (value === state) pendingStates.delete(name)
+          }
+          pending.resolve(code)
+
+          return new Response(HTML_SUCCESS, {
             headers: { "Content-Type": "text/html" },
           })
-        }
+        },
+      })
 
-        if (!code) {
-          return new Response(HTML_ERROR("No authorization code provided"), {
-            status: 400,
-            headers: { "Content-Type": "text/html" },
-          })
-        }
-
-        // Validate state parameter
-        if (!pendingAuths.has(state)) {
-          const errorMsg = "Invalid or expired state parameter - potential CSRF attack"
-          log.error("oauth callback with invalid state", { state, pendingStates: Array.from(pendingAuths.keys()) })
-          return new Response(HTML_ERROR(errorMsg), {
-            status: 400,
-            headers: { "Content-Type": "text/html" },
-          })
-        }
-
-        const pending = pendingAuths.get(state)!
-
-        clearTimeout(pending.timeout)
-        pendingAuths.delete(state)
-        for (const [name, value] of pendingStates) {
-          if (value === state) pendingStates.delete(name)
-        }
-        pending.resolve(code)
-
-        return new Response(HTML_SUCCESS, {
-          headers: { "Content-Type": "text/html" },
-        })
-      },
+      log.info("oauth callback server started", { port: OAUTH_CALLBACK_PORT })
+    })().finally(() => {
+      initPromise = undefined
     })
-
-    log.info("oauth callback server started", { port: OAUTH_CALLBACK_PORT })
+    return initPromise
   }
 
   export function waitForCallback(oauthState: string, mcpName?: string): Promise<string> {

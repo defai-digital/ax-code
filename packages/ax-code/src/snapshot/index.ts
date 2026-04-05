@@ -315,8 +315,8 @@ export namespace Snapshot {
                       ],
                       { concurrency: 2 },
                     )
-                const additions = binary ? 0 : parseInt(adds)
-                const deletions = binary ? 0 : parseInt(dels)
+                const additions = binary ? 0 : parseInt(adds, 10)
+                const deletions = binary ? 0 : parseInt(dels, 10)
                 result.push({
                   file,
                   before,

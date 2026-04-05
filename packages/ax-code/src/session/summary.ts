@@ -10,6 +10,9 @@ import { Snapshot } from "@/snapshot"
 import { Storage } from "@/storage/storage"
 import { Bus } from "@/bus"
 import { NotFoundError } from "@/storage/db"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "session.summary" })
 
 export namespace SessionSummary {
   function unquoteGitPath(input: string) {
@@ -130,7 +133,12 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed) Storage.write(["session_diff", input.sessionID], next).catch(() => {})
+      // Log write failures — silently swallowing them caused session
+      // summaries to degrade without any trace of why.
+      if (changed)
+        Storage.write(["session_diff", input.sessionID], next).catch((err) =>
+          log.error("failed to persist session_diff", { sessionID: input.sessionID, err }),
+        )
       return next
     },
   )

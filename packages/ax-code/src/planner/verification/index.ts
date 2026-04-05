@@ -181,8 +181,8 @@ function parseTypeScriptErrors(output: string): VerificationIssue[] {
   while ((match = pattern.exec(output)) !== null) {
     issues.push({
       file: match[1],
-      line: parseInt(match[2]),
-      column: parseInt(match[3]),
+      line: parseInt(match[2], 10),
+      column: parseInt(match[3], 10),
       severity: match[4] as "error" | "warning",
       code: match[5],
       message: match[6],

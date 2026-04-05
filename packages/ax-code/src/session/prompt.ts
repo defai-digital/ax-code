@@ -541,25 +541,33 @@ export namespace SessionPrompt {
         })
         // Snapshot the Code Intelligence graph state alongside session.start
         // so deterministic replay can see what the agent "knew" about the
-        // code at the moment it began this session. Defensive: if the
-        // code_* tables are missing (e.g. an old DB before v3), swallow
-        // and skip — we never want this to take down a session.
-        try {
-          const s = CodeIntelligence.status(Instance.project.id)
-          Recorder.emit({
-            type: "code.graph.snapshot",
-            sessionID,
-            projectID: s.projectID,
-            commitSha: s.lastCommitSha,
-            nodeCount: s.nodeCount,
-            edgeCount: s.edgeCount,
-            lastIndexedAt: s.lastUpdated,
-          })
-        } catch (e) {
-          log.warn("code.graph.snapshot skipped", {
-            sessionID,
-            e: e instanceof Error ? e.message : String(e),
-          })
+        // code at the moment it began this session, and start the watcher
+        // so file edits during the session are reflected in the graph.
+        // Both are gated behind the experimental flag so users who have
+        // not opted in don't pay any cost for this feature.
+        //
+        // Defensive: if the code_* tables are missing (e.g. an old DB
+        // before v3) or the watcher fails to subscribe, swallow and
+        // skip — we never want this to take down a session.
+        if (Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) {
+          try {
+            const s = CodeIntelligence.status(Instance.project.id)
+            Recorder.emit({
+              type: "code.graph.snapshot",
+              sessionID,
+              projectID: s.projectID,
+              commitSha: s.lastCommitSha,
+              nodeCount: s.nodeCount,
+              edgeCount: s.edgeCount,
+              lastIndexedAt: s.lastUpdated,
+            })
+            CodeIntelligence.startWatcher(Instance.project.id)
+          } catch (e) {
+            log.warn("code.graph init skipped", {
+              sessionID,
+              e: e instanceof Error ? e.message : String(e),
+            })
+          }
         }
         sessionStarted = true
       }
@@ -870,6 +878,20 @@ export namespace SessionPrompt {
         _schemaCache!.get(cacheKey) ??
         (() => {
           const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+          // Bound the cache to avoid a slow memory leak in long-running
+          // processes (TUI/daemon) that accumulate tool×model entries
+          // across session lifetimes. Simple FIFO eviction: when we
+          // reach the cap, drop the oldest 100 entries. Maps preserve
+          // insertion order, so `.keys()` iterates oldest first.
+          const SCHEMA_CACHE_MAX = 500
+          if (_schemaCache!.size >= SCHEMA_CACHE_MAX) {
+            const drop = 100
+            let dropped = 0
+            for (const key of _schemaCache!.keys()) {
+              _schemaCache!.delete(key)
+              if (++dropped >= drop) break
+            }
+          }
           _schemaCache!.set(cacheKey, s)
           return s
         })()
@@ -1410,6 +1432,11 @@ export namespace SessionPrompt {
       },
     )
 
+    // Validation guards: previously these blocks only logged errors and
+    // then fell through to persistence, so invalid data was written to
+    // the database anyway and corrupted downstream consumers (LLM
+    // context, replay, API responses). Now we throw on any validation
+    // failure so the caller sees a clear error and nothing is saved.
     const parsedInfo = MessageV2.Info.safeParse(info)
     if (!parsedInfo.success) {
       log.error("invalid user message before save", {
@@ -1419,8 +1446,12 @@ export namespace SessionPrompt {
         model: info.model,
         issues: parsedInfo.error.issues,
       })
+      throw new Error(
+        `Invalid user message: ${parsedInfo.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
+      )
     }
 
+    const invalidParts: number[] = []
     parts.forEach((part, index) => {
       const parsedPart = MessageV2.Part.safeParse(part)
       if (parsedPart.success) return
@@ -1433,7 +1464,11 @@ export namespace SessionPrompt {
         issues: parsedPart.error.issues,
         part,
       })
+      invalidParts.push(index)
     })
+    if (invalidParts.length > 0) {
+      throw new Error(`Invalid user part(s) at index ${invalidParts.join(", ")} — see log for details`)
+    }
 
     await Session.updateMessage(info)
     for (const part of parts) {

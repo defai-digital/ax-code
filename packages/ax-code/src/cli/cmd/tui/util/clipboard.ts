@@ -4,6 +4,7 @@ import { lazy } from "../../../../util/lazy.js"
 import { tmpdir } from "os"
 import path from "path"
 import fs from "fs/promises"
+import { randomBytes } from "crypto"
 import { Filesystem } from "../../../../util/filesystem"
 import { Process } from "../../../../util/process"
 import { which } from "../../../../util/which"
@@ -32,7 +33,10 @@ export namespace Clipboard {
     const os = platform()
 
     if (os === "darwin") {
-      const tmpfile = path.join(tmpdir(), "ax-code-clipboard.png")
+      // Unique per-read temp file so two concurrent ax-code instances
+      // (or two overlapping reads in the same process) cannot race on a
+      // shared path and mix each other's clipboard contents.
+      const tmpfile = path.join(tmpdir(), `ax-code-clipboard-${process.pid}-${randomBytes(4).toString("hex")}.png`)
       try {
         await Process.run(
           [

@@ -1,14 +1,7 @@
-export const logo = {
-  left: ["              ", "█▀▀█ █__█ ▄▄▄", "█▀▀█ ▀^^▀ ▀▀▀", "▀~~▀ ▀~~▀    "],
-  right: ["             ▄     ", "█▀▀▀ █▀▀█ █▀▀█ █▀▀█", "█___ █__█ █__█ █^^^", "▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀"],
-}
-
-export const marks = "_^~"
-
-// Large "slant"-style figlet rendering of "AX-CODE". 6 lines tall, 53 columns
-// wide. Used on `ax-code --help` when the terminal is wide enough. Falls back
-// to the compact block-glyph `logo` above on narrower terminals.
-export const logoLarge = [
+// Large "slant"-style figlet rendering of "AX-CODE". 5 lines tall, 53 columns
+// wide. This is the single canonical ax-code banner used everywhere (CLI help,
+// TUI welcome, session exit, upgrade/uninstall/web commands).
+export const logo = [
   "___________  __     _________________________________",
   "___    |_  |/ /     __  ____/_  __ \\__  __ \\__  ____/",
   "__  /| |_    /_______  /    _  / / /_  / / /_  __/   ",
@@ -16,4 +9,4 @@ export const logoLarge = [
   "/_/  |_/_/|_|       \\____/  \\____/ /_____/ /_____/   ",
 ]
 
-export const LOGO_LARGE_WIDTH = 53
+export const LOGO_WIDTH = 53

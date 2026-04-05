@@ -32,21 +32,31 @@ export namespace Terminal {
       }
 
       const parseColor = (colorStr: string): RGBA | null => {
+        // Validate parsed components before passing to RGBA.fromInts.
+        // Previously malformed strings like `rgb:` or `rgb(,,)` produced
+        // RGBA with NaN components (which coerce to 0, yielding valid
+        // black) instead of null. The type signature says RGBA | null,
+        // so callers expect null on failure.
         if (colorStr.startsWith("rgb:")) {
           const parts = colorStr.substring(4).split("/")
-          return RGBA.fromInts(
-            parseInt(parts[0], 16) >> 8, // Convert 16-bit to 8-bit
-            parseInt(parts[1], 16) >> 8,
-            parseInt(parts[2], 16) >> 8,
-            255,
-          )
+          if (parts.length !== 3) return null
+          const r = parseInt(parts[0], 16) >> 8
+          const g = parseInt(parts[1], 16) >> 8
+          const b = parseInt(parts[2], 16) >> 8
+          if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null
+          return RGBA.fromInts(r, g, b, 255)
         }
         if (colorStr.startsWith("#")) {
           return RGBA.fromHex(colorStr)
         }
         if (colorStr.startsWith("rgb(")) {
           const parts = colorStr.substring(4, colorStr.length - 1).split(",")
-          return RGBA.fromInts(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]), 255)
+          if (parts.length !== 3) return null
+          const r = parseInt(parts[0], 10)
+          const g = parseInt(parts[1], 10)
+          const b = parseInt(parts[2], 10)
+          if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null
+          return RGBA.fromInts(r, g, b, 255)
         }
         return null
       }

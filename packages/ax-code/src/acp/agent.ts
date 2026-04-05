@@ -1108,14 +1108,14 @@ export namespace ACP {
     }
 
     private async loadAvailableModes(directory: string): Promise<ModeOption[]> {
-      const agents = await this.config.sdk.app
-        .agents(
-          {
-            directory,
-          },
-          { throwOnError: true },
-        )
-        .then((resp) => resp.data!)
+      const resp = await this.config.sdk.app.agents(
+        {
+          directory,
+        },
+        { throwOnError: true },
+      )
+      const agents = resp.data
+      if (!agents) throw new Error(`ACP loadAvailableModes: empty agents response for ${directory}`)
 
       return agents
         .filter((agent) => agent.mode !== "subagent" && !agent.hidden)
@@ -1131,8 +1131,9 @@ export namespace ACP {
       sessionId: string,
     ): Promise<{ availableModes: ModeOption[]; currentModeId?: string }> {
       const availableModes = await this.loadAvailableModes(directory)
+      const existing = this.sessionManager.get(sessionId)
       const currentModeId =
-        this.sessionManager.get(sessionId).modeId ||
+        existing?.modeId ||
         (await (async () => {
           if (!availableModes.length) return undefined
           const defaultAgentName = await AgentModule.defaultAgent()
@@ -1150,7 +1151,10 @@ export namespace ACP {
       const model = await defaultModel(this.config, directory)
       const sessionId = params.sessionId
 
-      const providers = await this.sdk.config.providers({ directory }).then((x) => x.data!.providers)
+      const providersResp = await this.sdk.config.providers({ directory }, { throwOnError: true })
+      if (!providersResp.data?.providers)
+        throw new Error(`ACP loadSessionMode: empty providers response for ${directory}`)
+      const providers = providersResp.data.providers
       const entries = sortProvidersByName(providers)
       const availableVariants = modelVariantsFromProviders(entries, model)
       const currentVariant = this.sessionManager.getVariant(sessionId)
@@ -1254,9 +1258,11 @@ export namespace ACP {
 
     async unstable_setSessionModel(params: SetSessionModelRequest) {
       const session = this.sessionManager.get(params.sessionId)
-      const providers = await this.sdk.config
-        .providers({ directory: session.cwd }, { throwOnError: true })
-        .then((x) => x.data!.providers)
+      if (!session) throw new Error(`ACP unstable_setSessionModel: unknown session ${params.sessionId}`)
+      const providersResp = await this.sdk.config.providers({ directory: session.cwd }, { throwOnError: true })
+      if (!providersResp.data?.providers)
+        throw new Error(`ACP unstable_setSessionModel: empty providers response for ${session.cwd}`)
+      const providers = providersResp.data.providers
 
       const selection = parseModelSelection(params.modelId, providers)
       this.sessionManager.setModel(session.id, selection.model)
@@ -1276,6 +1282,7 @@ export namespace ACP {
 
     async setSessionMode(params: SetSessionModeRequest): Promise<SetSessionModeResponse | void> {
       const session = this.sessionManager.get(params.sessionId)
+      if (!session) throw new Error(`ACP setSessionMode: unknown session ${params.sessionId}`)
       const availableModes = await this.loadAvailableModes(session.cwd)
       if (!availableModes.some((mode) => mode.id === params.modeId)) {
         throw new Error(`Agent not found: ${params.modeId}`)
@@ -1286,6 +1293,7 @@ export namespace ACP {
     async prompt(params: PromptRequest) {
       const sessionID = params.sessionId
       const session = this.sessionManager.get(sessionID)
+      if (!session) throw new Error(`ACP prompt: unknown session ${sessionID}`)
       const directory = session.cwd
 
       const current = session.model
@@ -1421,9 +1429,9 @@ export namespace ACP {
         }
       }
 
-      const command = await this.config.sdk.command
-        .list({ directory }, { throwOnError: true })
-        .then((x) => x.data!.find((c) => c.name === cmd.name))
+      const commandResp = await this.config.sdk.command.list({ directory }, { throwOnError: true })
+      if (!commandResp.data) throw new Error(`ACP command.list: empty response for ${directory}`)
+      const command = commandResp.data.find((c) => c.name === cmd.name)
       if (command) {
         const response = await this.sdk.session.command({
           sessionID,
@@ -1468,6 +1476,7 @@ export namespace ACP {
 
     async cancel(params: CancelNotification) {
       const session = this.sessionManager.get(params.sessionId)
+      if (!session) throw new Error(`ACP cancel: unknown session ${params.sessionId}`)
       await this.config.sdk.session.abort(
         {
           sessionID: params.sessionId,

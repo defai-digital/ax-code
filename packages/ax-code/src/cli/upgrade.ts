@@ -2,6 +2,9 @@ import { Bus } from "@/bus"
 import { Config } from "@/config/config"
 import { Flag } from "@/flag/flag"
 import { Installation } from "@/installation"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "cli.upgrade" })
 
 export async function upgrade() {
   const config = await Config.global()
@@ -25,7 +28,13 @@ export async function upgrade() {
   }
 
   if (method === "unknown") return
+  // Log upgrade failures and publish an UpdateAvailable event so the user
+  // is not silently left stuck on an outdated version — a silent
+  // `.catch(() => {})` would make them believe the upgrade succeeded.
   await Installation.upgrade(method, latest)
     .then(() => Bus.publish(Installation.Event.Updated, { version: latest }))
-    .catch(() => {})
+    .catch(async (err) => {
+      log.error("upgrade failed", { method, version: latest, err })
+      await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
+    })
 }

@@ -22,16 +22,24 @@ export async function save(projectRoot: string, memory: ProjectMemory): Promise<
 }
 
 /**
- * Load memory from disk
+ * Load memory from disk.
+ *
+ * Returns `null` only when the file does not exist. Corrupt JSON (partial
+ * write, disk error, truncation) throws so callers cannot accidentally
+ * overwrite recoverable state with empty data. The previous implementation
+ * collapsed both cases to `null`, which meant any corruption silently
+ * discarded the user's project memory on the next save.
  */
 export async function load(projectRoot: string): Promise<ProjectMemory | null> {
   const memoryPath = getMemoryPath(projectRoot)
+  let text: string
   try {
-    const text = await fs.readFile(memoryPath, "utf-8")
-    return JSON.parse(text) as ProjectMemory
-  } catch {
-    return null
+    text = await fs.readFile(memoryPath, "utf-8")
+  } catch (err: any) {
+    if (err?.code === "ENOENT") return null
+    throw err
   }
+  return JSON.parse(text) as ProjectMemory
 }
 
 /**

@@ -25,8 +25,21 @@ export namespace SelfCorrection {
     failures: FailureSignal[]
   }
 
-  // Budget tracking per failure signature (tool + error pattern)
-  const budgets = new Map<string, Budget>()
+  // Budget tracking is scoped per-session. Previously this was a global
+  // Map<string, Budget> that accumulated forever: failures from older
+  // sessions exhausted budgets for new ones, and a success in session B
+  // could wipe session A's budget. Scoping per session means state is
+  // bounded and can be freed when a session ends.
+  const sessionBudgets = new Map<string, Map<string, Budget>>()
+
+  function forSession(sessionID: string): Map<string, Budget> {
+    let m = sessionBudgets.get(sessionID)
+    if (!m) {
+      m = new Map()
+      sessionBudgets.set(sessionID, m)
+    }
+    return m
+  }
 
   function key(tool: string, error: string): string {
     // Normalize error to group similar failures
@@ -35,13 +48,16 @@ export namespace SelfCorrection {
   }
 
   /**
-   * Analyze a tool error and determine if self-correction should be attempted
-   * Returns a reflection prompt to inject, or null if no correction is possible
+   * Analyze a tool error and determine if self-correction should be attempted.
+   * Returns a reflection prompt to inject, or null if no correction is
+   * possible. State is scoped to the provided sessionID.
    */
   export function analyze(
+    sessionID: string,
     toolName: string,
     error: string,
   ): { signal: FailureSignal; prompt: string } | null {
+    const budgets = forSession(sessionID)
     const k = key(toolName, error)
     const budget = budgets.get(k) ?? { remaining: -1, max: 0, failures: [] }
 
@@ -61,12 +77,12 @@ export namespace SelfCorrection {
 
     // Check if we should attempt correction
     if (!signal.recoverable) {
-      log.info("failure not recoverable", { tool: toolName, strategy: signal.strategy, attempt })
+      log.info("failure not recoverable", { sessionID, tool: toolName, strategy: signal.strategy, attempt })
       return null
     }
 
     if (budget.remaining <= 0) {
-      log.info("retry budget exhausted", { tool: toolName, attempt, max: budget.max })
+      log.info("retry budget exhausted", { sessionID, tool: toolName, attempt, max: budget.max })
       return null
     }
 
@@ -74,6 +90,7 @@ export namespace SelfCorrection {
     budget.remaining--
 
     log.info("self-correction triggered", {
+      sessionID,
       tool: toolName,
       strategy: signal.strategy,
       attempt,
@@ -88,40 +105,49 @@ export namespace SelfCorrection {
 
   /**
    * Record a successful tool execution to reset the budget for that tool
-   * Called when a tool succeeds after previous failures
+   * in a specific session. Called when a tool succeeds after failures.
    */
-  export function recordSuccess(toolName: string) {
-    // Clear all budgets for this tool (success means the issue is resolved)
+  export function recordSuccess(sessionID: string, toolName: string) {
+    const budgets = sessionBudgets.get(sessionID)
+    if (!budgets) return
     for (const [k] of budgets) {
-      if (k.startsWith(`${toolName}:`)) {
-        budgets.delete(k)
-      }
+      if (k.startsWith(`${toolName}:`)) budgets.delete(k)
     }
   }
 
   /**
-   * Reset all correction state (e.g., at session start)
+   * Reset correction state for a specific session (called on session end
+   * or fresh start). Pass no argument to clear all sessions.
    */
-  export function reset() {
-    budgets.clear()
+  export function reset(sessionID?: string) {
+    if (sessionID === undefined) {
+      sessionBudgets.clear()
+      return
+    }
+    sessionBudgets.delete(sessionID)
   }
 
   /**
-   * Get correction statistics
+   * Get correction statistics for a specific session, or aggregate across
+   * all sessions when no sessionID is supplied.
    */
-  export function stats() {
+  export function stats(sessionID?: string) {
+    const sources =
+      sessionID === undefined ? Array.from(sessionBudgets.values()) : [sessionBudgets.get(sessionID) ?? new Map()]
     let total = 0
     let corrected = 0
-
-    for (const budget of budgets.values()) {
-      total += budget.failures.length
-      if (budget.max > budget.remaining) corrected += budget.max - budget.remaining
+    let active = 0
+    for (const budgets of sources) {
+      active += budgets.size
+      for (const budget of budgets.values()) {
+        total += budget.failures.length
+        if (budget.max > budget.remaining) corrected += budget.max - budget.remaining
+      }
     }
-
     return {
       totalFailures: total,
       correctionsAttempted: corrected,
-      activeBudgets: budgets.size,
+      activeBudgets: active,
     }
   }
 }

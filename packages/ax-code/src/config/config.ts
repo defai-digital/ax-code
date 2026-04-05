@@ -135,9 +135,9 @@ export namespace Config {
       }
     }
 
-    result.agent = result.agent || {}
-    result.mode = result.mode || {}
-    result.plugin = result.plugin || []
+    result.agent = result.agent ?? {}
+    result.mode = result.mode ?? {}
+    result.plugin = result.plugin ?? []
 
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
 
@@ -625,7 +625,11 @@ export namespace Config {
           await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
           await fs.unlink(legacy)
         })
-        .catch(() => {})
+        // Log migration failures — a silent swallow leaves the user stuck
+        // on the legacy TOML file with no indication that the migration
+        // did not run. The legacy file is intentionally NOT deleted on
+        // failure so the next startup can retry the migration.
+        .catch((err) => log.error("legacy toml config migration failed", { legacy, err }))
     }
 
     return result

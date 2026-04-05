@@ -7,6 +7,9 @@ import { TuiEvent } from "@/cli/cmd/tui/event"
 import { AsyncQueue } from "../../util/queue"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { Log } from "../../util/log"
+
+const log = Log.create({ service: "server.tui" })
 
 const TuiRequest = z.object({
   path: z.string(),
@@ -168,7 +171,7 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         await Bus.publish(TuiEvent.CommandExecute, {
-          command: "session.list",
+          command: "theme.switch",
         })
         return c.json(true)
       },
@@ -345,7 +348,16 @@ export const TuiRoutes = lazy(() =>
       ),
       async (c) => {
         const evt = c.req.valid("json")
-        await Bus.publish(Object.values(TuiEvent).find((def) => def.type === evt.type)!, evt.properties)
+        // Guard the lookup — `.find()` can return undefined if the
+        // posted event type does not match any TuiEvent definition.
+        // Previously this used a non-null assertion and would pass
+        // `undefined` straight to Bus.publish, crashing there.
+        const def = Object.values(TuiEvent).find((d) => d.type === evt.type)
+        if (!def) {
+          log.warn("unknown tui event type", { type: evt.type })
+          return c.json({ error: `Unknown tui event type: ${evt.type}` }, 400)
+        }
+        await Bus.publish(def, evt.properties)
         return c.json(true)
       },
     )

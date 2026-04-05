@@ -915,21 +915,39 @@ export namespace MessageV2 {
   }
 
   export async function filterCompacted(stream: AsyncIterable<MessageV2.WithParts>) {
+    // Stream order is newest → oldest (see MessageV2.stream). We walk
+    // backwards looking for the most recent compaction marker whose
+    // assistant reply fully succeeded — that boundary is safe to break
+    // at because the assistant's generated summary is guaranteed present.
+    //
+    // Fallback for interrupted compaction: if we never see a completed
+    // compaction assistant, we still remember the index of the most
+    // recent compaction marker and truncate to it at the end. That
+    // guarantees a bounded return even when the latest compaction pass
+    // crashed mid-summary — previously this path leaked the full history
+    // and could trigger context overflow on the next turn.
     const result = [] as MessageV2.WithParts[]
     const completed = new Set<string>()
+    let latestMarkerEnd = -1 // result length immediately after the latest marker we've seen
     for await (const msg of stream) {
       result.push(msg)
-      if (
-        msg.info.role === "user" &&
-        completed.has(msg.info.id) &&
-        msg.parts.some((part) => part.type === "compaction")
-      )
-        break
+      if (msg.info.role === "user" && msg.parts.some((part) => part.type === "compaction")) {
+        if (latestMarkerEnd === -1) latestMarkerEnd = result.length
+        if (completed.has(msg.info.id)) {
+          // Happy path: marker + completed summary → break here.
+          result.reverse()
+          return result
+        }
+      }
       if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish && !msg.info.error)
         completed.add(msg.info.parentID)
     }
-    result.reverse()
-    return result
+    // No successful compaction found. If a marker exists, truncate to it
+    // (bounded context, may lose detail); otherwise return the full stream
+    // (no compaction has ever been attempted for this session).
+    const truncated = latestMarkerEnd > -1 ? result.slice(0, latestMarkerEnd) : result
+    truncated.reverse()
+    return truncated
   }
 
   export function fromError(e: unknown, ctx: { providerID: ProviderID }): NonNullable<Assistant["error"]> {
@@ -941,6 +959,20 @@ export namespace MessageV2 {
             cause: e,
           },
         ).toObject()
+      // Pass through already-shaped MessageV2 error objects (e.g. when a
+      // caller throws `new MessageV2.APIError(...).toObject()` directly,
+      // or re-throws an error that has already been processed). Without
+      // these branches the default fallthrough would serialize the
+      // object via NamedError.Unknown and the retry logic would no
+      // longer recognize it as an APIError.
+      case MessageV2.APIError.isInstance(e):
+        return e
+      case MessageV2.AuthError.isInstance(e):
+        return e
+      case MessageV2.ContextOverflowError.isInstance(e):
+        return e
+      case MessageV2.AbortedError.isInstance(e):
+        return e
       case MessageV2.OutputLengthError.isInstance(e):
         return e
       case LoadAPIKeyError.isInstance(e):
@@ -1016,8 +1048,24 @@ export namespace MessageV2 {
               },
             ).toObject()
           }
-        } catch {}
-        return new NamedError.Unknown({ message: JSON.stringify(e) }, { cause: e }).toObject()
+        } catch {
+          // Intentionally swallow parser failures and fall through to
+          // the NamedError.Unknown path below. The original error `e` is
+          // still attached as `cause`, and the message string below is
+          // now derived from `e` directly (not the parser error) so
+          // telemetry carries a useful description.
+        }
+        return new NamedError.Unknown(
+          {
+            // Derive a human-readable message from `e` directly. Previously
+            // this used JSON.stringify(e), which produces "{}" for most
+            // Error instances (their fields are non-enumerable), making
+            // error telemetry useless. Prefer the instance's own message
+            // string and fall back to String(e) for non-Error throws.
+            message: e instanceof Error ? e.message : typeof e === "string" ? e : String(e),
+          },
+          { cause: e },
+        ).toObject()
     }
   }
 }

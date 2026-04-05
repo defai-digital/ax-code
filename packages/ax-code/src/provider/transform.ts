@@ -18,10 +18,14 @@ function mimeToModality(mime: string): Modality | undefined {
 export namespace ProviderTransform {
   export const OUTPUT_TOKEN_MAX = Flag.AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
 
-  // Maps npm package to the key the AI SDK expects for providerOptions
+  // Maps npm package to the key the AI SDK expects for providerOptions.
+  // The Vertex provider uses the same "google" key as the Gemini provider,
+  // so variant options (thinkingConfig, reasoning effort) produced by
+  // variants() land under the right namespace.
   function sdkKey(npm: string): string | undefined {
     switch (npm) {
       case "@ai-sdk/google":
+      case "@ai-sdk/google-vertex":
         return "google"
     }
     return undefined
@@ -151,18 +155,35 @@ export namespace ProviderTransform {
 
   const WIDELY_SUPPORTED_EFFORTS = ["low", "medium", "high"]
 
+  // Match a model family name against a model id with a word-boundary on
+  // both sides, so ids like "zai-glm-4" do not match the "glm" family and
+  // hypothetical providers named "kimi-tools" do not match "kimi". A
+  // family matches when it appears at the start, end, or surrounded by
+  // non-alphanumeric characters (typically "-", "/", "."). This keeps the
+  // existing substring-based dispatch without false positives from future
+  // provider names that embed a family token as a substring of a larger
+  // word.
+  function hasFamily(id: string, family: string): boolean {
+    const idx = id.indexOf(family)
+    if (idx === -1) return false
+    const before = idx === 0 ? "" : id[idx - 1]
+    const after = idx + family.length >= id.length ? "" : id[idx + family.length]
+    const isWord = (c: string) => /[a-z0-9]/.test(c)
+    return !isWord(before) && !isWord(after)
+  }
+
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
     if (!model.capabilities.reasoning) return {}
 
     const id = model.id.toLowerCase()
     if (
-      id.includes("deepseek") ||
-      id.includes("minimax") ||
-      id.includes("glm") ||
-      id.includes("mistral") ||
-      id.includes("kimi") ||
+      hasFamily(id, "deepseek") ||
+      hasFamily(id, "minimax") ||
+      hasFamily(id, "glm") ||
+      hasFamily(id, "mistral") ||
+      hasFamily(id, "kimi") ||
       // TODO: Remove this after models.dev data is fixed to use "kimi-k2.5" instead of "k2p5"
-      id.includes("k2p5")
+      hasFamily(id, "k2p5")
     )
       return {}
 
@@ -277,7 +298,9 @@ export namespace ProviderTransform {
   }
 
   export function maxOutputTokens(model: Provider.Model): number {
-    return Math.min(model.limit.output, OUTPUT_TOKEN_MAX) || OUTPUT_TOKEN_MAX
+    // Use nullish coalescing so an explicit output: 0 (no output capability)
+    // is not coerced to OUTPUT_TOKEN_MAX by the falsy-zero short-circuit.
+    return Math.min(model.limit.output, OUTPUT_TOKEN_MAX) ?? OUTPUT_TOKEN_MAX
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
@@ -340,15 +363,19 @@ export namespace ProviderTransform {
           if (key === "enum" && Array.isArray(value)) {
             // Convert all enum values to strings
             result[key] = value.map((v) => String(v))
-            // If we have integer type with enum, change type to string
-            if (result.type === "integer" || result.type === "number") {
-              result.type = "string"
-            }
           } else if (typeof value === "object" && value !== null) {
             result[key] = sanitizeGemini(value)
           } else {
             result[key] = value
           }
+        }
+        // Post-process: if the schema has an enum and its type is integer or
+        // number, promote the type to string. Done after the copy loop so the
+        // conversion is independent of JSON key order — previously this lived
+        // inside the loop and silently missed schemas where enum appeared
+        // before type.
+        if (Array.isArray(result.enum) && (result.type === "integer" || result.type === "number")) {
+          result.type = "string"
         }
 
         // Filter required array to only include fields that exist in properties

@@ -96,19 +96,33 @@ export namespace McpAuth {
     return result
   }
 
+  // All set/remove/update operations serialize on the same shared lock
+  // key (`filepath`) so concurrent OAuth completions for different MCP
+  // servers cannot race on the read-modify-write of mcp-auth.json.
+  // Previously only updateXxx() used the lock; set()/remove() read and
+  // wrote the file independently, so two parallel set() calls could
+  // drop an entry by last-write-wins.
   export async function set(mcpName: string, entry: Entry, serverUrl?: string): Promise<void> {
-    const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(() => ({}))
-    if (serverUrl) {
-      entry.serverUrl = serverUrl
-    }
-    raw[mcpName] = encryptEntry(entry)
-    await Filesystem.writeJson(filepath, raw, 0o600)
+    return withLock(filepath, async () => {
+      const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(
+        () => ({}),
+      )
+      if (serverUrl) {
+        entry.serverUrl = serverUrl
+      }
+      raw[mcpName] = encryptEntry(entry)
+      await Filesystem.writeJson(filepath, raw, 0o600)
+    })
   }
 
   export async function remove(mcpName: string): Promise<void> {
-    const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(() => ({}))
-    delete raw[mcpName]
-    await Filesystem.writeJson(filepath, raw, 0o600)
+    return withLock(filepath, async () => {
+      const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(
+        () => ({}),
+      )
+      delete raw[mcpName]
+      await Filesystem.writeJson(filepath, raw, 0o600)
+    })
   }
 
   export async function updateTokens(mcpName: string, tokens: Tokens, serverUrl?: string): Promise<void> {

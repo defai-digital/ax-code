@@ -98,7 +98,11 @@ export function displayCommands(input: {
           .share({
             sessionID: input.routeSessionID,
           })
-          .then((res) => copy(res.data!.share!.url))
+          .then((res) => {
+            const url = res.data?.share?.url
+            if (!url) throw new Error("Share endpoint returned no URL")
+            return copy(url)
+          })
           .catch((error) => {
             input.toast.show({
               message: error instanceof Error ? error.message : "Failed to share session",

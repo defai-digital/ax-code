@@ -917,29 +917,36 @@ export const JDTLS: Info = {
       })(),
     )
     const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-jdtls-data"))
-    return {
-      process: spawn(
-        java,
-        [
-          "-jar",
-          launcherJar,
-          "-configuration",
-          configFile,
-          "-data",
-          dataDir,
-          "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-          "-Dosgi.bundles.defaultStartLevel=4",
-          "-Declipse.product=org.eclipse.jdt.ls.core.product",
-          "-Dlog.level=ALL",
-          "--add-modules=ALL-SYSTEM",
-          "--add-opens java.base/java.util=ALL-UNNAMED",
-          "--add-opens java.base/java.lang=ALL-UNNAMED",
-        ],
-        {
-          cwd: root,
-        },
-      ),
-    }
+    const proc = spawn(
+      java,
+      [
+        "-jar",
+        launcherJar,
+        "-configuration",
+        configFile,
+        "-data",
+        dataDir,
+        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+        "-Dosgi.bundles.defaultStartLevel=4",
+        "-Declipse.product=org.eclipse.jdt.ls.core.product",
+        "-Dlog.level=ALL",
+        "--add-modules=ALL-SYSTEM",
+        "--add-opens java.base/java.util=ALL-UNNAMED",
+        "--add-opens java.base/java.lang=ALL-UNNAMED",
+      ],
+      {
+        cwd: root,
+      },
+    )
+    // Clean up the JDTLS data directory once the language server exits.
+    // Previously these directories were left behind on every shutdown and
+    // accumulated indefinitely in $TMPDIR.
+    proc.once("exit", () => {
+      fs.rm(dataDir, { recursive: true, force: true }).catch((err) =>
+        log.warn("failed to remove jdtls data dir", { dataDir, err }),
+      )
+    })
+    return { process: proc }
   },
 }
 

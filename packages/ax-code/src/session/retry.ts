@@ -70,12 +70,12 @@ export namespace SessionRetry {
     }
 
     const json = iife(() => {
+      // Previously this had an unreachable fallthrough that called
+      // `JSON.parse(error.data.message)` on a non-string, which always
+      // threw a TypeError (caught by the surrounding catch). Replace
+      // with an explicit early return so the logic reads clearly.
+      if (typeof error.data?.message !== "string") return undefined
       try {
-        if (typeof error.data?.message === "string") {
-          const parsed = JSON.parse(error.data.message)
-          return parsed
-        }
-
         return JSON.parse(error.data.message)
       } catch {
         return undefined

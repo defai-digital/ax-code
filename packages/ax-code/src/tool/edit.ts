@@ -347,9 +347,18 @@ export const WhitespaceNormalizedReplacer: Replacer = function* (content, find) 
       // Only check for substring matches if the full line doesn't match
       const normalizedLine = normalizeWhitespace(line)
       if (normalizedLine.includes(normalizedFind)) {
-        // Find the actual substring in the original line that matches
+        // Find the actual substring in the original line that matches.
+        // Build a `word\s+word\s+...` regex from the search text, but cap
+        // the word count at 6: combining many short words with flexible
+        // `\s+` separators creates exponential-backtracking regexes that
+        // can hang the edit tool on adversarial input (ReDoS). For longer
+        // searches we fall back to yielding the normalized find text as
+        // the match — the caller handles multi-line matching separately
+        // via `findLines`, so this branch is only best-effort.
         const words = find.trim().split(/\s+/)
-        if (words.length > 0) {
+        if (words.length > 6) {
+          yield find
+        } else if (words.length > 0) {
           const pattern = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+")
           try {
             const regex = new RegExp(pattern)

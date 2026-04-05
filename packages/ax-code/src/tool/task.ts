@@ -127,7 +127,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       function cancel() {
         SessionPrompt.cancel(session.id)
       }
-      ctx.abort.addEventListener("abort", cancel)
+      ctx.abort.addEventListener("abort", cancel, { once: true })
       using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
       const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
 

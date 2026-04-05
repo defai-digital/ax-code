@@ -17,6 +17,7 @@ import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
+import { SelfCorrection } from "./correction"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
@@ -43,6 +44,15 @@ export namespace Session {
     return new RegExp(
       `^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`,
     ).test(title)
+  }
+
+  // Escape SQL LIKE metacharacters so a user search string containing
+  // `%` or `_` matches those characters literally. Without this, a
+  // search for `%` matches all sessions and `_` matches any single
+  // character — not a SQL injection (Drizzle parameterizes the value)
+  // but a semantic-injection bug that changes query behavior.
+  function escapeLike(input: string) {
+    return input.replace(/[\\%_]/g, "\\$&")
   }
 
   type SessionRow = typeof SessionTable.$inferSelect
@@ -264,27 +274,62 @@ export namespace Session {
         idMap.set(msg.info.id, MessageID.ascending())
       }
 
-      // Batch write all messages and parts
-      for (const msg of filtered) {
+      // Pre-compute the full insert plan so we can commit every message and
+      // every part in a single atomic transaction. If anything throws
+      // mid-fork (process crash, I/O error), SQLite rolls back and no
+      // partial session is left behind — the previous loop issued one
+      // auto-commit write per message/part, so a crash after the first few
+      // messages left an un-resumable half-fork.
+      const plan = filtered.map((msg) => {
         const newID = idMap.get(msg.info.id)!
         const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
-        await updateMessage({
+        const info = {
           ...msg.info,
           sessionID: session.id,
           id: newID,
           ...(parentID && { parentID }),
-        })
-        await Promise.all(
-          msg.parts.map((part) =>
-            updatePart({
+        } as MessageV2.Info
+        const parts = msg.parts.map(
+          (part) =>
+            ({
               ...part,
               id: PartID.ascending(),
               messageID: newID,
               sessionID: session.id,
-            }),
-          ),
+            }) as MessageV2.Part,
         )
+        return { info, parts }
+      })
+
+      Database.transaction((db) => {
+        for (const { info } of plan) {
+          const { id, sessionID, ...data } = info
+          db.insert(MessageTable)
+            .values({ id, session_id: sessionID, time_created: info.time.created, data })
+            .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
+            .run()
+        }
+        const partTime = Date.now()
+        for (const { parts } of plan) {
+          for (const part of parts) {
+            const { id, messageID, sessionID, ...data } = part
+            db.insert(PartTable)
+              .values({ id, message_id: messageID, session_id: sessionID, time_created: partTime, data })
+              .onConflictDoUpdate({ target: PartTable.id, set: { data } })
+              .run()
+          }
+        }
+      })
+
+      // Publish events after the transaction commits so subscribers never
+      // observe a partial fork.
+      for (const { info, parts } of plan) {
+        await Bus.publish(MessageV2.Event.Updated, { info })
+        for (const part of parts) {
+          await Bus.publish(MessageV2.Event.PartUpdated, { part })
+        }
       }
+
       return session
     },
   )
@@ -445,17 +490,18 @@ export namespace Session {
       }),
   )
 
-  export const diff = fn(SessionID.zod, async (sessionID) => {
-    try {
-      return await Storage.read<Snapshot.FileDiff[]>(["session_diff", sessionID])
-    } catch (err) {
-      if (Storage.NotFoundError.isInstance(err)) {
-        return []
-      }
-      await Storage.write(["session_diff", sessionID], []).catch(() => {})
-      return []
-    }
-  })
+  export const diff = fn(SessionID.zod, async (sessionID) =>
+    Storage.read<Snapshot.FileDiff[]>(["session_diff", sessionID]).catch((err) => {
+      // NotFound is expected — sessions without recorded diffs return [].
+      if (Storage.NotFoundError.isInstance(err)) return []
+      // Any other error (corrupt JSON, I/O, permission) must propagate so
+      // the caller can decide how to handle it. Do NOT overwrite the file
+      // with [] — that permanently destroys recoverable diff history on
+      // transient errors.
+      log.error("session diff read failed", { sessionID, err })
+      throw err
+    }),
+  )
 
   export const messages = fn(
     z.object({
@@ -492,7 +538,7 @@ export namespace Session {
       conditions.push(gte(SessionTable.time_updated, input.start))
     }
     if (input?.search) {
-      conditions.push(like(SessionTable.title, `%${input.search}%`))
+      conditions.push(like(SessionTable.title, `%${escapeLike(input.search)}%`))
     }
 
     const limit = input?.limit ?? 100
@@ -536,7 +582,7 @@ export namespace Session {
       conditions.push(lt(SessionTable.time_updated, input.cursor))
     }
     if (input?.search) {
-      conditions.push(like(SessionTable.title, `%${input.search}%`))
+      conditions.push(like(SessionTable.title, `%${escapeLike(input.search)}%`))
     }
     if (!input?.archived) {
       conditions.push(isNull(SessionTable.time_archived))
@@ -609,6 +655,11 @@ export namespace Session {
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
       Database.effect(() => Bus.publish(Event.Deleted, { info: session }))
     })
+    // Free any self-correction budgets held by this session and its
+    // children so the in-memory map doesn't leak entries for deleted
+    // sessions over the lifetime of the process.
+    for (const child of kids) SelfCorrection.reset(child.id)
+    SelfCorrection.reset(sessionID)
     await unshare(sessionID).catch((e) => log.warn("session unshare failed", { error: e }))
   })
 

@@ -63,57 +63,79 @@ export namespace ShareNext {
 
   const disabled = process.env["AX_CODE_DISABLE_SHARE"] === "true" || process.env["AX_CODE_DISABLE_SHARE"] === "1"
 
+  // Track active subscriptions so repeated init() calls do not stack up
+  // duplicate listeners. Each entry is an unsubscribe function returned
+  // by Bus.subscribe.
+  let activeUnsubs: Array<() => void> = []
+
   export async function init() {
     if (disabled) return
+    // Idempotent: tear down any prior subscriptions before rewiring so a
+    // second init() (bootstrap re-entry, tests) cannot accumulate
+    // duplicate sync requests for every event.
+    dispose()
     const safeSync = async (sessionID: SessionID, data: Data[], source: string) => {
       await sync(sessionID, data).catch((error) => {
         log.warn("share sync failed", { sessionID, source, error })
       })
     }
-    Bus.subscribe(Session.Event.Updated, async (evt) => {
-      await safeSync(evt.properties.info.id, [
-        {
-          type: "session",
-          data: evt.properties.info,
-        },
-      ], "session.updated")
-    })
-    Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
-      await safeSync(evt.properties.info.sessionID, [
-        {
-          type: "message",
-          data: evt.properties.info,
-        },
-      ], "message.updated")
-      if (evt.properties.info.role === "user") {
+    activeUnsubs.push(
+      Bus.subscribe(Session.Event.Updated, async (evt) => {
+        await safeSync(evt.properties.info.id, [
+          {
+            type: "session",
+            data: evt.properties.info,
+          },
+        ], "session.updated")
+      }),
+    )
+    activeUnsubs.push(
+      Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
         await safeSync(evt.properties.info.sessionID, [
           {
-            type: "model",
-            data: [
-              await Provider.getModel(evt.properties.info.model.providerID, evt.properties.info.model.modelID).then(
-                (m) => m,
-              ),
-            ],
+            type: "message",
+            data: evt.properties.info,
           },
-        ], "message.updated.model")
-      }
-    })
-    Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-      await safeSync(evt.properties.part.sessionID, [
-        {
-          type: "part",
-          data: evt.properties.part,
-        },
-      ], "part.updated")
-    })
-    Bus.subscribe(Session.Event.Diff, async (evt) => {
-      await safeSync(evt.properties.sessionID, [
-        {
-          type: "session_diff",
-          data: evt.properties.diff,
-        },
-      ], "session.diff")
-    })
+        ], "message.updated")
+        if (evt.properties.info.role === "user") {
+          await safeSync(evt.properties.info.sessionID, [
+            {
+              type: "model",
+              data: [
+                await Provider.getModel(evt.properties.info.model.providerID, evt.properties.info.model.modelID).then(
+                  (m) => m,
+                ),
+              ],
+            },
+          ], "message.updated.model")
+        }
+      }),
+    )
+    activeUnsubs.push(
+      Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
+        await safeSync(evt.properties.part.sessionID, [
+          {
+            type: "part",
+            data: evt.properties.part,
+          },
+        ], "part.updated")
+      }),
+    )
+    activeUnsubs.push(
+      Bus.subscribe(Session.Event.Diff, async (evt) => {
+        await safeSync(evt.properties.sessionID, [
+          {
+            type: "session_diff",
+            data: evt.properties.diff,
+          },
+        ], "session.diff")
+      }),
+    )
+  }
+
+  export function dispose() {
+    for (const unsub of activeUnsubs) unsub()
+    activeUnsubs = []
   }
 
   export async function create(sessionID: SessionID) {

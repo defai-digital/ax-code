@@ -5,7 +5,15 @@ export namespace Rpc {
 
   export function listen(rpc: Definition) {
     onmessage = async (evt) => {
-      const parsed = JSON.parse(evt.data)
+      // Malformed messages must not crash the worker: onmessage is a raw
+      // assignment (not addEventListener), so any throw here kills it and
+      // strands every in-flight RPC promise. Parse defensively and drop.
+      let parsed: any
+      try {
+        parsed = JSON.parse(evt.data)
+      } catch {
+        return
+      }
       if (parsed.type === "rpc.request") {
         const result = await rpc[parsed.method](parsed.input)
         postMessage(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
@@ -25,7 +33,13 @@ export namespace Rpc {
     const listeners = new Map<string, Set<(data: any) => void>>()
     let id = 0
     target.onmessage = async (evt) => {
-      const parsed = JSON.parse(evt.data)
+      // See Rpc.listen — drop malformed messages instead of crashing.
+      let parsed: any
+      try {
+        parsed = JSON.parse(evt.data)
+      } catch {
+        return
+      }
       if (parsed.type === "rpc.result") {
         const resolve = pending.get(parsed.id)
         if (resolve) {

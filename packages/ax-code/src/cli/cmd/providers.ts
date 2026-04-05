@@ -38,7 +38,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
       ],
     })
     if (prompts.isCancel(method)) throw new UI.CancelledError()
-    index = parseInt(method)
+    index = parseInt(method, 10)
   }
   const method = plugin.auth.methods[index]
 

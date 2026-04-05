@@ -64,11 +64,20 @@ export namespace FileTime {
       )
 
       const getLock = Effect.fn("FileTime.lock")(function* (filepath: string) {
+        // IMPORTANT: once `locks` is obtained there MUST be no yield
+        // points (no `yield*`, no `await`) between the `.get` check and
+        // the `.set` — otherwise two concurrent fibers could both see
+        // `undefined`, both create a new Semaphore, and both write,
+        // defeating mutual exclusion. The double-check after creation
+        // is a belt-and-braces guard so a future refactor that adds a
+        // yield between the check and set cannot silently reintroduce
+        // the race.
         const locks = (yield* InstanceState.get(state)).locks
-        const lock = locks.get(filepath)
-        if (lock) return lock
-
+        const existing = locks.get(filepath)
+        if (existing) return existing
         const next = Semaphore.makeUnsafe(1)
+        const winner = locks.get(filepath)
+        if (winner) return winner
         locks.set(filepath, next)
         return next
       })

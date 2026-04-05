@@ -27,6 +27,11 @@ const QueryCommand = cmd({
     const query = args.query as string | undefined
     if (query) {
       const db = new BunDatabase(Database.Path, { readonly: true })
+      // Guarantee db.close() on every exit path (success AND error) so
+      // the WAL checkpoint and file lock are released. The previous code
+      // called process.exit(1) from inside catch, which skipped close()
+      // entirely on failure.
+      let ok = false
       try {
         const result = db.query(query).all() as Record<string, unknown>[]
         if (args.format === "json") {
@@ -38,11 +43,12 @@ const QueryCommand = cmd({
             console.log(keys.map((k) => row[k]).join("\t"))
           }
         }
+        ok = true
       } catch (err) {
         UI.error(err instanceof Error ? err.message : String(err))
-        process.exit(1)
       }
       db.close()
+      if (!ok) process.exit(1)
       return
     }
     const child = spawn("sqlite3", [Database.Path], {

@@ -1,7 +1,7 @@
 import z from "zod"
 import { EOL } from "os"
 import { NamedError } from "@ax-code/util/error"
-import { logo as glyphs, logoLarge, LOGO_LARGE_WIDTH } from "./logo"
+import { logo as figlet } from "./logo"
 
 export namespace UI {
   export const CancelledError = NamedError.create("UICancelledError", z.void())
@@ -40,75 +40,15 @@ export namespace UI {
     blank = true
   }
 
-  export type LogoVariant = "compact" | "large" | "auto"
-
   export function logo(pad?: string): string
-  export function logo(opts: { variant?: LogoVariant; pad?: string }): string
-  export function logo(arg?: string | { variant?: LogoVariant; pad?: string }) {
+  export function logo(opts: { pad?: string }): string
+  export function logo(arg?: string | { pad?: string }) {
     const pad = typeof arg === "string" ? arg : arg?.pad
-    const variant: LogoVariant = typeof arg === "object" && arg?.variant ? arg.variant : "compact"
-    const cols = process.stdout.columns ?? 0
-    const resolved: "compact" | "large" =
-      variant === "large" ? "large" : variant === "auto" && cols >= LOGO_LARGE_WIDTH ? "large" : "compact"
-    if (resolved === "large") return renderLogoLarge(pad)
-    return renderLogoCompact(pad)
-  }
-
-  function renderLogoCompact(pad?: string) {
-    const result: string[] = []
-    const reset = "\x1b[0m"
-    const left = {
-      fg: "\x1b[90m",
-      shadow: "\x1b[38;5;235m",
-      bg: "\x1b[48;5;235m",
-    }
-    const right = {
-      fg: reset,
-      shadow: "\x1b[38;5;238m",
-      bg: "\x1b[48;5;238m",
-    }
-    const gap = " "
-    const draw = (line: string, fg: string, shadow: string, bg: string) => {
-      const parts: string[] = []
-      for (const char of line) {
-        if (char === "_") {
-          parts.push(bg, " ", reset)
-          continue
-        }
-        if (char === "^") {
-          parts.push(fg, bg, "▀", reset)
-          continue
-        }
-        if (char === "~") {
-          parts.push(shadow, "▀", reset)
-          continue
-        }
-        if (char === " ") {
-          parts.push(" ")
-          continue
-        }
-        parts.push(fg, char, reset)
-      }
-      return parts.join("")
-    }
-    glyphs.left.forEach((row, index) => {
-      if (pad) result.push(pad)
-      result.push(draw(row, left.fg, left.shadow, left.bg))
-      result.push(gap)
-      const other = glyphs.right[index] ?? ""
-      result.push(draw(other, right.fg, right.shadow, right.bg))
-      result.push(EOL)
-    })
-    return result.join("").trimEnd()
-  }
-
-  function renderLogoLarge(pad?: string) {
-    // Large logo is rendered in a single accent color. The figlet-style shading
-    // already provides visual depth, so a two-tone split like the compact logo
-    // would look noisy. Bold + bright cyan matches the TEXT_HIGHLIGHT accent.
+    // The figlet-style shading already provides visual depth, so a single bold
+    // accent color (TEXT_HIGHLIGHT) reads clearly without looking noisy.
     const fg = Style.TEXT_HIGHLIGHT_BOLD
     const reset = Style.TEXT_NORMAL
-    return logoLarge
+    return figlet
       .map((line) => (pad ?? "") + fg + line + reset)
       .join(EOL)
       .trimEnd()

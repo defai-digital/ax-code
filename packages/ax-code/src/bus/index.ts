@@ -53,7 +53,14 @@ export namespace Bus {
     for (const key of [def.type, "*"]) {
       const match = [...(state().subscriptions.get(key) ?? [])]
       for (const sub of match) {
-        pending.push(sub(payload))
+        // Wrap in Promise.resolve().then so a synchronous throw from any
+        // subscriber becomes a rejected promise instead of propagating up
+        // and skipping later subscribers in the same publish cycle.
+        pending.push(
+          Promise.resolve()
+            .then(() => sub(payload))
+            .catch((err) => log.error("subscriber threw", { type: def.type, err })),
+        )
       }
     }
     GlobalBus.emit("event", {
