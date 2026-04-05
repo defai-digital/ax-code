@@ -140,7 +140,15 @@ export namespace Database {
   export function effect(fn: () => any | Promise<any>) {
     try {
       ctx.use().effects.push(fn)
-    } catch {
+    } catch (err) {
+      // Only the "no active context" case should fall through to
+      // direct execution. Any other context error (corruption,
+      // disposal, internal assertion) is a real bug and must
+      // propagate rather than silently turning an intended-to-be-
+      // transactional effect into a non-transactional write.
+      // Matches the narrowing in `use()` and `transaction()` above.
+      // See BUG-80.
+      if (!(err instanceof Context.NotFound)) throw err
       fn()
     }
   }

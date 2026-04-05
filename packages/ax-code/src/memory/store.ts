@@ -43,16 +43,20 @@ export async function load(projectRoot: string): Promise<ProjectMemory | null> {
 }
 
 /**
- * Delete memory from disk
+ * Delete memory from disk. Returns true if the file was deleted,
+ * false if it never existed. Other errors (EACCES, EBUSY, EIO, etc.)
+ * propagate — a caller that proceeds as if clear() succeeded when it
+ * didn't would leak stale memory into a fresh session. See BUG-73.
  */
 export async function clear(projectRoot: string): Promise<boolean> {
   const memoryPath = getMemoryPath(projectRoot)
-  try {
-    await fs.unlink(memoryPath)
-    return true
-  } catch {
-    return false
-  }
+  return fs
+    .unlink(memoryPath)
+    .then(() => true)
+    .catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return false
+      throw err
+    })
 }
 
 /**

@@ -379,7 +379,19 @@ export namespace Worktree {
       throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
     }
 
-    await Project.addSandbox(Instance.project.id, info.directory).catch(() => undefined)
+    // If the sandbox record fails to land (DB disk full, concurrent
+    // write conflict, corruption), the worktree exists on disk but
+    // has no tracking row — remove()/cleanup logic never finds it and
+    // it accumulates as an orphaned directory consuming the full
+    // project working copy. Can't cleanly roll back the git worktree
+    // without risking data loss on a partially-populated tree, so
+    // log loudly instead of silently swallowing. See BUG-75.
+    await Project.addSandbox(Instance.project.id, info.directory).catch((err) => {
+      log.warn("failed to record worktree in database; directory may become orphaned", {
+        directory: info.directory,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
 
     const projectID = Instance.project.id
     const extra = startCommand?.trim()

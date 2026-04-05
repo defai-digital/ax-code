@@ -9,7 +9,13 @@ import { Log } from "../../util/log"
 
 const log = Log.create({ service: "planner.verify" })
 
-export type VerificationStatus = "passed" | "failed" | "skipped" | "timeout"
+// "failed" means the verifier ran and reported issues.
+// "error" means the verifier itself could not run (missing binary,
+// spawn failure, internal crash). Consumers that previously only
+// checked `passed === false` still see both as failing, but they can
+// now distinguish between "your code has type errors" and "the
+// typechecker isn't installed / crashed". See BUG-79.
+export type VerificationStatus = "passed" | "failed" | "skipped" | "timeout" | "error"
 
 export interface VerificationIssue {
   file: string
@@ -79,11 +85,19 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       output,
     }
   } catch (e) {
+    // The outer try catches process-level failures: missing `tsc`
+    // binary, spawn EACCES, the output-parsing code throwing on an
+    // unexpected format, etc. These are infrastructure problems, not
+    // type errors — surface them as `status: "error"` with an empty
+    // issues list. The previous catch-all reported them as
+    // `status: "failed"` which made the planner believe the user's
+    // code had type errors when in fact the typechecker never ran.
+    // See BUG-79.
     return {
       name,
       type: "typecheck",
       passed: false,
-      status: "failed",
+      status: "error",
       issues: [],
       duration: Date.now() - start,
       output: e instanceof Error ? e.message : String(e),
@@ -129,11 +143,14 @@ export async function custom(cmd: string, cwd: string, timeout = 60_000): Promis
       output: (stdout + stderr).trim(),
     }
   } catch (e) {
+    // Same rationale as the typecheck catch above — a spawn failure
+    // or parse crash is not the same thing as the command returning
+    // a non-zero exit code. See BUG-79.
     return {
       name: cmd,
       type: "custom",
       passed: false,
-      status: "failed",
+      status: "error",
       issues: [],
       duration: Date.now() - start,
       output: e instanceof Error ? e.message : String(e),

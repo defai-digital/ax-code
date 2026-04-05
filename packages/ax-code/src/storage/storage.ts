@@ -198,7 +198,11 @@ export namespace Storage {
       // locking dependency for SQLite-style cross-process locks, but
       // we can at least keep the read + write tightly coupled and
       // document the limitation. TODO(BUG-12): proper cross-process
-      // lock via a lockfile or O_EXCL sentinel.
+      // lock via a lockfile or O_EXCL sentinel. The v2.3.13 code-
+      // intelligence lockfile (src/code-intelligence/lockfile.ts)
+      // already proves this pattern end-to-end — extracting that
+      // module into `util/lockfile.ts` and wiring it here is the
+      // expected path.
       using _ = await Lock.write(target)
       const content = await Filesystem.readJson<T>(target)
       fn(content as T)
@@ -230,10 +234,18 @@ export namespace Storage {
   export async function list(prefix: string[]) {
     const dir = await state().then((x) => x.dir)
     try {
+      // Strip the `.json` suffix specifically. The previous `.slice(0,
+      // -5)` hardcoded the strip length assuming every file is at
+      // least 5 chars long and ends in `.json` — a 4-char file like
+      // `a.json` would become `a.js` and a file with any other
+      // extension would be silently mangled. A regex anchored to `$`
+      // is both correct for the current contract and safe for any
+      // future file type that enters the storage directory. See
+      // BUG-67.
       const result = await Glob.scan("**/*", {
         cwd: path.join(dir, ...prefix),
         include: "file",
-      }).then((results) => results.map((x) => [...prefix, ...x.slice(0, -5).split(path.sep)]))
+      }).then((results) => results.map((x) => [...prefix, ...x.replace(/\.json$/, "").split(path.sep)]))
       result.sort()
       return result
     } catch {

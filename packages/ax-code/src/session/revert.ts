@@ -68,7 +68,14 @@ export namespace SessionRevert {
       revert.snapshot = session.revert?.snapshot ?? (await Snapshot.track())
       await Snapshot.revert(patches)
       if (revert.snapshot) revert.diff = await Snapshot.diff(revert.snapshot)
-      const rangeMessages = all.filter((msg) => msg.info.id >= revert!.messageID)
+      // Capture the narrowed value in a const so TypeScript's
+      // narrowing survives the closure boundary in `.filter()` below.
+      // The previous `revert!.messageID` relied on a non-null
+      // assertion that would become a real crash risk if anyone ever
+      // reassigned `revert` between the if-check and the filter call.
+      // See BUG-82.
+      const narrowed = revert
+      const rangeMessages = all.filter((msg) => msg.info.id >= narrowed.messageID)
       const diffs = await SessionSummary.computeDiff({ messages: rangeMessages })
       await Storage.write(["session_diff", input.sessionID], diffs)
       Bus.publish(Session.Event.Diff, {

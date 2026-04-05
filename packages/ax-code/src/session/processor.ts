@@ -216,6 +216,16 @@ export namespace SessionProcessor {
                         (p) => p.tool === value.toolName && p.input === inputStr,
                       )
                     ) {
+                      // `Agent.get()` returns undefined if the agent
+                      // was removed or renamed mid-session (e.g. via
+                      // config reload). Accessing `.permission` on
+                      // undefined would crash the entire processor
+                      // pipeline mid-loop. An empty ruleset falls
+                      // through to the default "ask" behavior, which
+                      // is the same semantic the full ruleset would
+                      // have for a doom_loop permission that isn't
+                      // explicitly allowed — the user sees the prompt
+                      // either way. See BUG-68.
                       const agent = await Agent.get(input.assistantMessage.agent)
                       await Permission.ask({
                         permission: "doom_loop",
@@ -226,7 +236,7 @@ export namespace SessionProcessor {
                           input: value.input,
                         },
                         always: [value.toolName],
-                        ruleset: agent.permission,
+                        ruleset: agent?.permission ?? [],
                       })
                     }
                   }

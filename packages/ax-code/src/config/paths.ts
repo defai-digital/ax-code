@@ -168,7 +168,26 @@ export namespace ConfigPaths {
             message: `file reference escapes config directory: "${token}" (untrusted configs cannot use absolute paths)`,
           })
         }
-        const real = await fs.realpath(resolvedPath).catch(() => resolvedPath)
+        // Only tolerate ENOENT here (an optional include that doesn't
+        // exist yet — the Filesystem.readText call below will produce
+        // a proper InvalidError if `missing` is not set to "empty"). For
+        // every other errno (EACCES on a directory component, ELOOP on
+        // a symlink cycle, EIO on filesystem trouble) fail closed: the
+        // old catch-all silently fell back to the unresolved relative
+        // path, and if that path's target was a symlink pointing
+        // outside configDir the subsequent `contains` check would pass
+        // against the relative form while the real target escaped. See
+        // BUG-66.
+        const real = await fs.realpath(resolvedPath).catch((e: NodeJS.ErrnoException) => {
+          if (e?.code === "ENOENT") return resolvedPath
+          throw new InvalidError(
+            {
+              path: configSource,
+              message: `file reference cannot be resolved: "${token}" (${e?.code ?? "unknown error"})`,
+            },
+            { cause: e },
+          )
+        })
         if (!Filesystem.contains(configDirResolved, real)) {
           throw new InvalidError({
             path: configSource,

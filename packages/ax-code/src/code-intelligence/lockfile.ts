@@ -135,11 +135,19 @@ export namespace IndexLock {
     // Held. Try once to steal if it's stale or abandoned.
     const stolen = await maybeSteal(target)
     if (!stolen) return undefined
-    // Stealing succeeded — retry the create. If we lose this race to a
-    // third process, return undefined rather than looping.
+    // Stealing succeeded — retry the create. Only `EEXIST` (a third
+    // process won the post-steal race) counts as "couldn't acquire";
+    // every other errno (EACCES, ENOSPC, EIO) is a real failure and
+    // must propagate, otherwise the caller proceeds without the lock
+    // it thinks it just stole. The initial write path above already
+    // has this contract — the retry path was missing it in v2.3.13.
+    // See BUG-74.
     const retry = await writeLockFile(target)
       .then(() => true)
-      .catch(() => false)
+      .catch((err: NodeJS.ErrnoException) => {
+        if (err?.code === "EEXIST") return false
+        throw err
+      })
     return retry ? makeDisposable(target) : undefined
   }
 

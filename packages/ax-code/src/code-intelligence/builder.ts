@@ -486,13 +486,32 @@ export namespace CodeGraphBuilder {
       // could limit further here, but 100 queries in parallel is
       // reasonable for typical projects.
       const tRefs = performance.now()
+      // Track reference-query failures. When LSP.references throws
+      // (server crash, RPC timeout, malformed response) the old code
+      // silently swallowed the error and returned []. The edge
+      // resolver then treated it as "no references found", leaving
+      // gaps in the call graph with no operator visibility. We now
+      // count failures and downgrade the file's completeness to
+      // "partial" if any reference query failed — the completeness
+      // flag is the contract with downstream consumers (findCallers,
+      // findReferences) for "trust this file's edges". See BUG-76.
+      let referenceFailures = 0
       const refResults = await Promise.all(
         eligibleBookmarks.map(async (bookmark) => {
           const locations = (await LSP.references({
             file: absPath,
             line: bookmark.selectionLine,
             character: bookmark.selectionChar,
-          }).catch(() => [])) as LspLocation[]
+          }).catch((err) => {
+            referenceFailures++
+            log.warn("LSP references failed; edges will be incomplete for this symbol", {
+              file: absPath,
+              symbol: bookmark.nodeId,
+              line: bookmark.selectionLine,
+              err: err instanceof Error ? err.message : String(err),
+            })
+            return []
+          })) as LspLocation[]
           return { bookmark, locations }
         }),
       )
@@ -571,8 +590,13 @@ export namespace CodeGraphBuilder {
       // If we ran reference queries and LSP gave us results, mark the
       // file as fully indexed. If all reference queries returned empty,
       // it's still "lsp-only" — the server supports symbols but not
-      // references (or there genuinely are none).
+      // references (or there genuinely are none). If any reference
+      // query actually threw (LSP crash / RPC timeout), we have
+      // genuinely missing edges and must downgrade to "partial" so
+      // downstream callers know this file's edge set is untrustworthy.
+      // See BUG-76.
       if (edgeInserts.length > 0) completeness = "full"
+      if (referenceFailures > 0) completeness = "partial"
       timings.edgeResolve = performance.now() - tResolve
     }
 

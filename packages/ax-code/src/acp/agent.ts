@@ -1473,9 +1473,14 @@ export namespace ACP {
           (msg.tokens.cache?.write ?? 0),
         inputTokens: msg.tokens.input,
         outputTokens: msg.tokens.output,
-        thoughtTokens: msg.tokens.reasoning || undefined,
-        cachedReadTokens: msg.tokens.cache?.read || undefined,
-        cachedWriteTokens: msg.tokens.cache?.write || undefined,
+        // `??` (not `||`) so that a legitimate `0` count is reported
+        // to the ACP client as zero rather than being coerced to
+        // undefined ("unknown"). Line 1472 already uses `??` in the
+        // sum above for the same fields — the line below was the
+        // last holdout. See BUG-70.
+        thoughtTokens: msg.tokens.reasoning ?? undefined,
+        cachedReadTokens: msg.tokens.cache?.read ?? undefined,
+        cachedWriteTokens: msg.tokens.cache?.write ?? undefined,
       })
 
       if (!cmd) {

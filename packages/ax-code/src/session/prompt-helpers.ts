@@ -100,7 +100,11 @@ export function commandTemplate(template: string, input: string) {
   const withArgs = template.replaceAll(placeholderRegex, (_, index) => {
     const position = Number(index)
     const arg = position - 1
-    if (arg >= args.length) return ""
+    // Guard both ends of the range. The upper bound catches missing
+    // trailing args; the lower bound catches `$0` which would produce
+    // `args[-1]` = undefined and stringify to the literal "undefined"
+    // in the rendered template. See BUG-72.
+    if (arg < 0 || arg >= args.length) return ""
     if (position === last) return args.slice(arg).join(" ")
     return args[arg]
   })
