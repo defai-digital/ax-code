@@ -137,6 +137,52 @@ export namespace LSPClient {
       [path: string]: number
     } = {}
 
+    // Per-file content fingerprint of the last text we sent to the server.
+    // Used to skip redundant didChange notifications when touchFile() is
+    // called repeatedly with no actual disk change. Non-cryptographic hash
+    // — we're deduplicating, not signing. We compare both the length and
+    // the hash to make accidental collisions astronomically unlikely.
+    const lastContent: {
+      [path: string]: { hash: string; length: number }
+    } = {}
+
+    function contentFingerprint(text: string) {
+      return { hash: Bun.hash(text).toString(), length: text.length }
+    }
+
+    function contentUnchanged(filePath: string, text: string) {
+      const prev = lastContent[filePath]
+      if (!prev) return false
+      if (prev.length !== text.length) return false
+      return prev.hash === Bun.hash(text).toString()
+    }
+
+    function diagnosticsWait(input: { path: string }) {
+      log.info("waiting for diagnostics", { path: input.path })
+      let unsub: (() => void) | undefined
+      let t: ReturnType<typeof setTimeout> | undefined
+      return withTimeout(
+        new Promise<void>((resolve) => {
+          unsub = Bus.subscribe(Event.Diagnostics, (event) => {
+            if (event.properties.path === input.path && event.properties.serverID === result.serverID) {
+              if (t) clearTimeout(t)
+              t = setTimeout(() => {
+                log.info("got diagnostics", { path: input.path })
+                unsub?.()
+                resolve()
+              }, DIAGNOSTICS_DEBOUNCE_MS)
+            }
+          })
+        }),
+        3000,
+      )
+        .catch(() => {})
+        .finally(() => {
+          if (t) clearTimeout(t)
+          unsub?.()
+        })
+    }
+
     const result = {
       root: input.root,
       get serverID() {
@@ -146,14 +192,26 @@ export namespace LSPClient {
         return connection
       },
       notify: {
-        async open(input: { path: string }) {
+        async open(input: { path: string; waitForDiagnostics?: boolean }) {
           input.path = path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path)
           const text = await Filesystem.readText(input.path)
           const extension = path.extname(input.path)
           const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
+          const wait = input.waitForDiagnostics ? diagnosticsWait({ path: input.path }) : undefined
 
           const version = files[input.path]
           if (version !== undefined) {
+            // File previously opened — this would be a didChange. Skip
+            // the round-trip entirely if the content is byte-identical to
+            // what we already sent; the server's state is already correct.
+            if (contentUnchanged(input.path, text)) {
+              log.info("textDocument/didChange skipped (unchanged)", {
+                path: input.path,
+                version,
+              })
+              return false
+            }
+
             log.info("workspace/didChangeWatchedFiles", input)
             await connection.sendNotification("workspace/didChangeWatchedFiles", {
               changes: [
@@ -177,7 +235,9 @@ export namespace LSPClient {
               },
               contentChanges: [{ text }],
             })
-            return
+            lastContent[input.path] = contentFingerprint(text)
+            await wait
+            return true
           }
 
           log.info("workspace/didChangeWatchedFiles", input)
@@ -201,7 +261,9 @@ export namespace LSPClient {
             },
           })
           files[input.path] = 0
-          return
+          lastContent[input.path] = contentFingerprint(text)
+          await wait
+          return true
         },
       },
       get diagnostics() {
@@ -211,30 +273,7 @@ export namespace LSPClient {
         const normalizedPath = Filesystem.normalizePath(
           path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path),
         )
-        log.info("waiting for diagnostics", { path: normalizedPath })
-        let unsub: () => void
-        let debounceTimer: ReturnType<typeof setTimeout> | undefined
-        return await withTimeout(
-          new Promise<void>((resolve) => {
-            unsub = Bus.subscribe(Event.Diagnostics, (event) => {
-              if (event.properties.path === normalizedPath && event.properties.serverID === result.serverID) {
-                // Debounce to allow LSP to send follow-up diagnostics (e.g., semantic after syntax)
-                if (debounceTimer) clearTimeout(debounceTimer)
-                debounceTimer = setTimeout(() => {
-                  log.info("got diagnostics", { path: normalizedPath })
-                  unsub?.()
-                  resolve()
-                }, DIAGNOSTICS_DEBOUNCE_MS)
-              }
-            })
-          }),
-          3000,
-        )
-          .catch(() => {})
-          .finally(() => {
-            if (debounceTimer) clearTimeout(debounceTimer)
-            unsub?.()
-          })
+        return await diagnosticsWait({ path: normalizedPath })
       },
       async shutdown() {
         l.info("shutting down")
