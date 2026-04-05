@@ -150,11 +150,16 @@ export namespace Installation {
         )
 
         const getBrewFormula = Effect.fnUntraced(function* () {
-          const tapFormula = yield* text(["brew", "list", "--formula", "defai-digital/tap/ax-code"])
-          if (tapFormula.includes("ax-code")) return "defai-digital/tap/ax-code"
+          // The tap historically used both "ax-code" and "ax" as formula
+          // names. Probe both so we work on existing installs regardless
+          // of which name the user's brew has tapped.
+          const tapAxCode = yield* text(["brew", "list", "--formula", "defai-digital/tap/ax-code"])
+          if (tapAxCode.includes("ax-code")) return "defai-digital/tap/ax-code"
+          const tapAx = yield* text(["brew", "list", "--formula", "defai-digital/tap/ax"])
+          if (tapAx.includes("ax")) return "defai-digital/tap/ax"
           const coreFormula = yield* text(["brew", "list", "--formula", "ax-code"])
           if (coreFormula.includes("ax-code")) return "ax-code"
-          return "ax-code"
+          return "defai-digital/tap/ax"
         })
 
         const upgradeCurl = Effect.fnUntraced(
