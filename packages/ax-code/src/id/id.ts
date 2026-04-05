@@ -13,6 +13,9 @@ export namespace Identifier {
     tool: "tool",
     workspace: "wrk",
     event: "evt",
+    code_node: "cnd",
+    code_edge: "ced",
+    code_file: "cfi",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {
