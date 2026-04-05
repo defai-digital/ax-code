@@ -53,6 +53,37 @@ describe("tool()", () => {
     expect(await t.execute({})).toBe("done")
   })
 
+  test("rejects invalid tool names", () => {
+    expect(() =>
+      tool({
+        name: "my-tool",
+        description: "has hyphens",
+        parameters: z.object({}),
+        execute: async () => "ok",
+      }),
+    ).toThrow(/invalid/)
+
+    expect(() =>
+      tool({
+        name: "My Tool",
+        description: "has spaces and caps",
+        parameters: z.object({}),
+        execute: async () => "ok",
+      }),
+    ).toThrow(/invalid/)
+  })
+
+  test("accepts valid tool names", () => {
+    expect(() =>
+      tool({
+        name: "deploy_staging_v2",
+        description: "all valid chars",
+        parameters: z.object({}),
+        execute: async () => "ok",
+      }),
+    ).not.toThrow()
+  })
+
   test("execute can return objects", async () => {
     const t = tool({
       name: "deploy",

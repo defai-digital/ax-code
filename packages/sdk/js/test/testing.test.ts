@@ -93,6 +93,10 @@ describe("createMockAgent", () => {
     const agent = createMockAgent({ replies: ["ok"] })
     await agent.dispose()
   })
+
+  test("throws on empty replies array", () => {
+    expect(() => createMockAgent({ replies: [] })).toThrow(/at least one reply/)
+  })
 })
 
 describe("assertToolSuccess / assertToolFailure", () => {

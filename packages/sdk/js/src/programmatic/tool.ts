@@ -42,6 +42,11 @@ export function tool<I>(definition: {
    *  JSON-stringified and sent back to the LLM as the tool result. */
   execute: (input: I) => unknown | Promise<unknown>
 }): SdkTool<I> {
+  if (!/^[a-z0-9_]+$/.test(definition.name)) {
+    throw new Error(
+      `Tool name "${definition.name}" is invalid. Must contain only lowercase letters, digits, and underscores (a-z, 0-9, _).`,
+    )
+  }
   return {
     __brand: "SdkTool" as const,
     name: definition.name,

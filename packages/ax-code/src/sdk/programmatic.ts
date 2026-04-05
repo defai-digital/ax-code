@@ -68,7 +68,11 @@ function withSdkTimeout<T>(promise: Promise<T>, ms: number, makeError: () => Err
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      reject(makeError())
+      try {
+        reject(makeError())
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)))
+      }
     }, ms)
     promise.then(
       (value) => {
@@ -307,7 +311,10 @@ function classifyError(errMsg: string, rawError?: any): Error {
     return new ToolError(toolMatch[1], toolMatch[2])
   }
 
-  return new Error(errMsg)
+  // Unclassified errors default to ProviderError so callers can at
+  // least narrow on `instanceof ProviderError`. A generic `Error`
+  // forced users to fall through to a catch-all with no retry path.
+  return new ProviderError(errMsg, { status: 0 })
 }
 
 // ============================================================
@@ -335,7 +342,18 @@ function fromSdkTool(sdkTool: SdkTool): Tool.Info {
       parameters: z,
       async execute(args: any) {
         const result = await sdkTool.execute(args)
-        const output = typeof result === "string" ? result : JSON.stringify(result, null, 2)
+        let output: string
+        if (typeof result === "string") {
+          output = result
+        } else if (result === undefined || result === null) {
+          output = String(result)
+        } else {
+          try {
+            output = JSON.stringify(result, null, 2)
+          } catch {
+            output = "[Tool returned a non-serializable value]"
+          }
+        }
         return {
           title: `${sdkTool.name} result`,
           output,
@@ -467,8 +485,6 @@ async function* streamEvents(
   let modelInfo = { providerID: "", modelID: "" }
   let messageID = ""
   let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-  let lastTextLength = 0
-
   for await (const event of events.stream) {
     if (event.type === "message.updated") {
       const info = (event as any).properties.info
@@ -485,9 +501,15 @@ async function* streamEvents(
 
       if (part.type === "text") {
         const currentText = part.text ?? ""
-        if (currentText.length > lastTextLength) {
-          yield { type: "text", text: currentText.slice(lastTextLength) }
-          lastTextLength = currentText.length
+        // Emit only the delta since the last update. Use string
+        // content comparison (not just length) so edits that shrink
+        // the text don't silently drop the new content. The slice
+        // is safe: if the new text is shorter than `text`, the
+        // delta is empty and we still update `text` to reflect
+        // the latest state.
+        if (currentText !== text) {
+          const delta = currentText.slice(text.length)
+          if (delta.length > 0) yield { type: "text", text: delta }
           text = currentText
         }
       }
@@ -570,7 +592,7 @@ async function* streamEvents(
 // SESSION HANDLE
 // ============================================================
 
-function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: AgentOptions): SessionHandle {
+function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: AgentOptions, isDisposed?: () => boolean): SessionHandle {
   return {
     get id() { return sessionID },
 
@@ -579,12 +601,18 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
 
       const exec = () => {
         const resultPromise = collectResult(sdk, sessionID, opts.hooks)
+        // Fire-and-forget — the result comes through the SSE event
+        // stream, not from the prompt response. But if the prompt
+        // itself fails (validation error, session missing) the event
+        // stream hangs forever, so log the rejection.
         sdk.session.prompt({
           sessionID,
           agent: options?.agent ?? opts.agent,
           model,
           variant: options?.variant ?? opts.variant,
           parts: [{ type: "text", text: message }],
+        }).catch((err: unknown) => {
+          opts.hooks?.onError?.(err instanceof Error ? err : new Error(String(err)))
         })
         return resultPromise
       }
@@ -609,6 +637,8 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
         model,
         variant: options?.variant ?? opts.variant,
         parts: [{ type: "text", text: message }],
+      }).catch((err: unknown) => {
+        opts.hooks?.onError?.(err instanceof Error ? err : new Error(String(err)))
       })
       return createStreamHandle(rawStream)
     },
@@ -619,13 +649,15 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
     },
 
     async fork(): Promise<SessionHandle> {
+      if (isDisposed?.()) throw new DisposedError()
       const result = await sdk.session.fork({ sessionID })
       const newID = (result.data as any)?.id
       if (!newID) throw new Error("Failed to fork session")
-      return createSessionHandle(sdk, newID, opts)
+      return createSessionHandle(sdk, newID, opts, isDisposed)
     },
 
     async abort() {
+      if (isDisposed?.()) throw new DisposedError()
       await sdk.session.abort({ sessionID })
     },
   }
@@ -699,10 +731,12 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
       // tool loader in registry.ts:fromPlugin — the ToolRegistry
       // already has a public `register(tool: Tool.Info)` method, so
       // this is pure plumbing.
+      //
+      // All registrations must complete BEFORE resolve() fires —
+      // otherwise the first prompt can race against a pending
+      // registration and the LLM won't see the user's tools.
       if (options.tools?.length) {
-        for (const sdkTool of options.tools) {
-          await ToolRegistry.register(fromSdkTool(sdkTool))
-        }
+        await Promise.all(options.tools.map((t) => ToolRegistry.register(fromSdkTool(t))))
       }
 
       sdk = createInProcessClient(options.directory)
@@ -729,7 +763,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         const session = await sdk.session.create()
         const sessionID = (session.data as any)?.id
         if (!sessionID) throw new Error("Failed to create session")
-        return createSessionHandle(sdk, sessionID, options).run(message, runOptions)
+        return createSessionHandle(sdk, sessionID, options, () => disposed).run(message, runOptions)
       }
       if (runOptions?.timeout) {
         const timeoutMs = runOptions.timeout
@@ -751,7 +785,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 const session = await sdk.session.create()
                 const sessionID = (session.data as any)?.id
                 if (!sessionID) throw new Error("Failed to create session")
-                gen = createSessionHandle(sdk, sessionID, options).stream(message, runOptions)[Symbol.asyncIterator]() as AsyncGenerator<StreamEvent>
+                gen = createSessionHandle(sdk, sessionID, options, () => disposed).stream(message, runOptions)[Symbol.asyncIterator]() as AsyncGenerator<StreamEvent>
               }
               return gen!.next()
             },
@@ -768,13 +802,13 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
       const session = await sdk.session.create()
       const sessionID = (session.data as any)?.id
       if (!sessionID) throw new Error("Failed to create session")
-      return createSessionHandle(sdk, sessionID, options)
+      return createSessionHandle(sdk, sessionID, options, () => disposed)
     },
 
     async tool(name: string, input: Record<string, unknown>): Promise<unknown> {
       if (disposed) throw new DisposedError()
       const toolsList = await sdk.tool.ids()
-      const available = toolsList.data as string[] ?? []
+      const available = Array.isArray(toolsList.data) ? toolsList.data as string[] : []
       if (!available.includes(name)) {
         throw new ToolError(name, `Not found. Available: ${available.join(", ")}`)
       }

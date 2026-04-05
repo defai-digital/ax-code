@@ -111,13 +111,16 @@ function makeMockStreamHandle(text: string, toolCalls: ToolCallInfo[]): StreamHa
  * database, no file system access.
  */
 export function createMockAgent(options: MockAgentOptions): Agent {
+  if (options.replies.length === 0) {
+    throw new Error("createMockAgent requires at least one reply in options.replies")
+  }
   let callIndex = 0
-  const toolCallStubs = (options.toolCalls ?? []).map((tc) => ({
+  const toolCallStubs = Object.freeze((options.toolCalls ?? []).map((tc) => ({
     tool: tc.tool,
     input: tc.input,
     output: tc.output,
     status: "completed" as const,
-  }))
+  })))
 
   function nextReply(): string {
     const reply = options.replies[callIndex % options.replies.length]
@@ -175,8 +178,14 @@ export function createMockAgent(options: MockAgentOptions): Agent {
  * Assert that a `RunResult` contains a successful call to a specific tool.
  */
 export function assertToolSuccess(result: RunResult, toolName: string): ToolCallInfo {
-  const match = result.toolCalls.find((tc) => tc.tool === toolName && tc.status === "completed")
-  if (!match) throw new Error(`Expected a successful call to "${toolName}" but found none`)
+  const calls = result.toolCalls ?? []
+  if (calls.length === 0) throw new Error(`Expected a successful call to "${toolName}" but no tool calls were made`)
+  const forTool = calls.filter((tc) => tc.tool === toolName)
+  const match = forTool.find((tc) => tc.status === "completed")
+  if (!match) {
+    if (forTool.length > 0) throw new Error(`Tool "${toolName}" was called but failed (status: ${forTool[0].status})`)
+    throw new Error(`Expected a successful call to "${toolName}" but it was never called. Called: ${calls.map((tc) => tc.tool).join(", ")}`)
+  }
   return match
 }
 
@@ -184,7 +193,13 @@ export function assertToolSuccess(result: RunResult, toolName: string): ToolCall
  * Assert that a `RunResult` contains a failed call to a specific tool.
  */
 export function assertToolFailure(result: RunResult, toolName: string): ToolCallInfo {
-  const match = result.toolCalls.find((tc) => tc.tool === toolName && tc.status === "error")
-  if (!match) throw new Error(`Expected a failed call to "${toolName}" but found none`)
+  const calls = result.toolCalls ?? []
+  if (calls.length === 0) throw new Error(`Expected a failed call to "${toolName}" but no tool calls were made`)
+  const forTool = calls.filter((tc) => tc.tool === toolName)
+  const match = forTool.find((tc) => tc.status === "error")
+  if (!match) {
+    if (forTool.length > 0) throw new Error(`Tool "${toolName}" was called but succeeded (expected failure)`)
+    throw new Error(`Expected a failed call to "${toolName}" but it was never called. Called: ${calls.map((tc) => tc.tool).join(", ")}`)
+  }
   return match
 }
