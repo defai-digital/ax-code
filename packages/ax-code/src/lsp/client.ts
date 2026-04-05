@@ -334,6 +334,22 @@ export namespace LSPClient {
         )
         return await diagnosticsWait({ path: normalizedPath })
       },
+      // Liveness check. Uses signal 0 (kill -0), which doesn't actually
+      // send a signal — it just asks the kernel whether the process still
+      // exists. Cheap, synchronous, no LSP traffic, no dependency on the
+      // server answering requests. Catches the crashed/exited case;
+      // doesn't catch the "alive but not reading stdin" case, which would
+      // need a real RPC roundtrip with a short timeout.
+      ping(): boolean {
+        const pid = input.server.process.pid
+        if (typeof pid !== "number") return false
+        try {
+          process.kill(pid, 0)
+          return true
+        } catch {
+          return false
+        }
+      },
       async shutdown() {
         l.info("shutting down")
         connection.end()

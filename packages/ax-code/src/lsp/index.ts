@@ -45,6 +45,11 @@ export namespace LSP {
     nextAttempt: number
   }
 
+  // How often the health-check loop runs. A dead-process probe is cheap
+  // (kill -0 syscall), so we can run it frequently without concern. 60s is
+  // responsive enough for interactive use without generating log noise.
+  const HEALTH_CHECK_INTERVAL_MS = 60_000
+
   // Check whether a (root, server) key is currently in cooldown. If the
   // cooldown has expired we eagerly drop the entry so the next caller can
   // retry a fresh spawn. The caller tracks failure count across retries so
@@ -145,6 +150,7 @@ export namespace LSP {
           servers,
           clients,
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
+          healthCheck: undefined,
         }
       }
 
@@ -187,14 +193,44 @@ export namespace LSP {
           .join(", "),
       })
 
-      return {
+      const s = {
         broken: new Map<string, BrokenEntry>(),
         servers,
         clients,
         spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
+        healthCheck: undefined as ReturnType<typeof setInterval> | undefined,
       }
+
+      // Health-check loop: periodically probe every connected client and
+      // remove any whose underlying process has died. Dead clients get
+      // marked broken so the backoff keeps them from respawning immediately.
+      // The interval is unref'd so ax-code can exit cleanly even if the
+      // loop is in flight.
+      s.healthCheck = setInterval(() => {
+        if (s.clients.length === 0) return
+        const dead: LSPClient.Info[] = []
+        for (const client of s.clients) {
+          if (!client.ping()) dead.push(client)
+        }
+        if (dead.length === 0) return
+        for (const client of dead) {
+          const key = client.root + client.serverID
+          log.warn("lsp server died unexpectedly", { serverID: client.serverID, root: client.root })
+          markBroken(s.broken, key)
+          const idx = s.clients.indexOf(client)
+          if (idx >= 0) s.clients.splice(idx, 1)
+          // Best-effort shutdown to release the connection objects. The
+          // process is already gone so Process.stop is a no-op.
+          client.shutdown().catch(() => {})
+        }
+        Bus.publish(Event.Updated, {})
+      }, HEALTH_CHECK_INTERVAL_MS)
+      s.healthCheck.unref?.()
+
+      return s
     },
     async (state) => {
+      if (state.healthCheck) clearInterval(state.healthCheck)
       await Promise.all(state.clients.map((client) => client.shutdown()))
     },
   )

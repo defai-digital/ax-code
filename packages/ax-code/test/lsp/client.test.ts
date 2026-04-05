@@ -185,4 +185,32 @@ describe("LSPClient interop", () => {
 
     await client.shutdown()
   })
+
+  test("ping returns true for live process, false after process dies", async () => {
+    await using tmp = await tmpdir()
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        }),
+    })
+
+    // Alive immediately after spawn.
+    expect(client.ping()).toBe(true)
+
+    // Kill the process and wait a beat for the kernel to reap it.
+    handle.process.kill("SIGKILL")
+    await new Promise((r) => setTimeout(r, 100))
+
+    // ping() should now report dead.
+    expect(client.ping()).toBe(false)
+
+    // Cleanup (shutdown is safe to call on a dead process).
+    await client.shutdown().catch(() => {})
+  })
 })
