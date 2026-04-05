@@ -474,32 +474,84 @@ open questions for a future release:
 
 **Q1: Should `build`, `plan`, and `general` get prompt files now?**
 
+**✅ RESOLVED in v2.3.5 with Option D (new), not A, B, or C.**
+
 The §6.3 deferral reasoning was "adding DRE guidance to build/plan/general
 means creating brand-new prompt files, which is a design decision, not a
-patch fix." With DRE now default-on, the argument shifts: the default agent
-(`build`) sees DRE tools in its registry and the default state of the
-product advertises DRE in the sidebar, but the default agent has no
-system-prompt guidance on when to use them. This is the same inconsistency
-that motivated v2.3.2 for `react`, just scaled up to the default agent.
+patch fix." With DRE default-on in v2.3.4, the default agent (`build`) saw
+DRE tools in its registry and the sidebar advertised DRE, but the default
+agent had no system-prompt guidance on when to use them. This was the same
+inconsistency that motivated v2.3.2 for `react`, scaled up to the default
+agent.
 
-Options for resolution:
+The v2.3.4 PRD listed three options (A: per-agent prompt files, B: shared
+injection, C: accept the inconsistency) and called the choice "a legitimate
+design decision that needs its own review." **That framing was wrong.**
+The research in support of v2.3.5 surfaced a fourth option that was already
+supported by existing ax-code infrastructure:
 
-- **Option A — Create minimal `build.txt` / `general.txt` prompt files**
-  with just a short "DRE tools are available, use them when the task
-  matches" section. Risk: this changes how those agents behave across all
-  providers (they currently use the provider default), which is a larger
-  change than a patch should ship.
-- **Option B — Add tool-hint injection to the shared system prompt** so
-  every agent (with or without its own prompt file) sees a condensed DRE
-  usage hint. Risk: affects agents that deliberately exclude DRE today
-  (architect, explore, perf, security).
-- **Option C — Accept the inconsistency**. The slash commands remain the
-  explicit-invocation path, and users can still manually ask the build
-  agent to "use refactor_plan for X". Risk: slash commands have limited
-  discoverability (see Item 5 in §2).
+- **Option D — Add DRE guidance to the existing provider-specific prompt
+  files** in `session/prompt/{anthropic,beast,gemini,default}.txt`. These
+  files are the fallback system prompt for any agent that doesn't have its
+  own per-agent prompt file, including `build`, `plan`, and `general`. The
+  dispatch lives at `session/system.ts:17-24` (`SystemPrompt.provider()`)
+  and is picked at `session/llm.ts:71` when an agent has no `prompt:` field.
 
-No option is clearly correct. This is a legitimate design decision that
-needs its own review, not a patch fix.
+Why Option D is the correct answer:
+
+1. **It preserves provider specialization.** ax-code already tunes its
+   default system prompt per provider (Claude, GPT, Gemini, fallback). Each
+   file has a different tone and length, matching that model family's
+   prompting characteristics per current industry guidance (Claude responds
+   to explicit rule-based enforcement, GPT-family needs persistence cues,
+   Gemini prefers bold-bullet structured guidance). Option A would have
+   flattened this into one custom prompt per agent, losing the per-provider
+   tuning.
+
+2. **It doesn't touch any per-agent prompt file.** The v2.3.1/v2.3.2
+   decisions about `debug.txt` and `react.txt` stay intact. The §6.2
+   per-agent decision matrix stays intact — `architect`, `explore`, `perf`,
+   `security` continue to opt out via their own prompt files overriding
+   the provider default.
+
+3. **It covers build, plan, AND general in one change.** All three route
+   through `SystemPrompt.provider(model)`. One edit to the four provider
+   files cascades to all three agents on every provider.
+
+4. **It matches upstream OpenCode's pattern** (the project ax-code forked
+   from), which already uses per-provider prompt variants for exactly this
+   reason. Staying aligned with upstream reduces merge friction.
+
+5. **It matches Anthropic's own tools.** Claude Code embeds ~6k tokens of
+   tool-use guidance inline in its system prompt rather than in separate
+   agent definitions. See
+   [Piebald-AI/claude-code-system-prompts](https://github.com/Piebald-AI/claude-code-system-prompts).
+
+**What v2.3.5 shipped:** ~15-25 lines of DRE "when to use" guidance added
+to each of the four provider prompt files, tuned per-provider:
+
+- `anthropic.txt`: rule-heavy with explicit invariants and `<example>` tags
+  (Claude's preferred declarative-rule style)
+- `beast.txt` (GPT-4/o1/o3): numbered "DRE Rules" list with persistence
+  cues matching the file's existing verbose style
+- `gemini.txt`: bold-bullet structure (`**debug_analyze:**`) matching the
+  file's Core Mandates format, plus two concrete `<example>` blocks
+- `default.txt`: compact fallback for unknown providers; over-explicit on
+  the invariants since we can't assume model behavior
+
+Every variant conveys the same five invariants:
+1. All six DRE tools exist and when to use each
+2. Cite-or-drop — never invent symbols not in a tool response
+3. Report confidence / risk / truncated values verbatim
+4. Multi-file refactors follow plan → review → apply
+5. `truncated: true` forces risk to high regardless of label
+
+**Why the earlier framing was wrong.** When I wrote the v2.3.4 PRD §6.7 I
+only looked at `agent/prompt/*.txt` (per-agent prompts) and missed
+`session/prompt/*.txt` (per-provider prompts) one directory over. The
+fourth option was always available; I just didn't notice the existing
+infrastructure. §6.9 below records this as a meta-lesson about where to
+look before declaring a design question "open."
 
 **Q2: Should the "experimental" naming survive graduation?**
 
@@ -533,3 +585,46 @@ Future contributors should add graduation entries to §6 with three
 components: (a) what changed, (b) what previous reasoning it overrode and
 why, (c) what follow-up work it creates. Without the follow-up section the
 graduation record is incomplete — see §6.7 for the template.
+
+### 6.9 Meta-lesson: look before declaring a question "open"
+
+The v2.3.4 PRD §6.7 Q1 listed three resolution options and concluded
+"no option is clearly correct." The v2.3.5 research found a fourth option
+that was obviously correct — adding DRE guidance to the existing
+`session/prompt/*.txt` provider-specific prompt files. The reason it was
+missed: I looked in `agent/prompt/*.txt` (per-agent prompts) and stopped,
+without checking `session/prompt/*.txt` (per-provider fallback prompts)
+one directory over.
+
+**The lesson.** Before recording a design question as "open" or "needs
+review" in a PRD, grep the codebase for existing infrastructure that
+might already solve it. In this specific case, a single `grep -r
+"PROMPT_" src/session/` would have surfaced `SystemPrompt.provider()` and
+its four-provider dispatch, which was the entire answer to Q1.
+
+**Concrete heuristics for future contributors:**
+
+1. **When the question involves "how should feature X behave differently
+   by Y?"** (by provider, by agent, by workspace, by project type),
+   search for existing dispatches by Y before concluding there's no
+   mechanism. In ax-code specifically:
+   - Per-provider behavior: `session/prompt/` + `SystemPrompt.provider()`
+   - Per-agent behavior: `agent/prompt/` + `Agent.Info.prompt`
+   - Per-workspace behavior: `Instance.worktree` + `InstanceState`
+   - Per-project behavior: `CLAUDE.md` / `AX.md` context files
+
+2. **When the question is "should we create a new file of type Z?"**
+   check whether any Z-files already exist with `find` or `ls`. In this
+   case, `ls packages/ax-code/src/session/prompt/` would have immediately
+   shown `anthropic.txt`, `beast.txt`, `gemini.txt`, `default.txt` — the
+   exact files that needed editing.
+
+3. **When writing a PRD section titled "Options for resolution: A, B,
+   C…"** pause and ask "is there a mechanism I haven't considered because
+   I haven't read enough of the codebase yet?" If the answer might be
+   yes, read more first.
+
+The v2.3.4 PRD §6.7 framing is preserved above (rather than deleted) as a
+record of the mistake. Future contributors who encounter a "no option is
+clearly correct" conclusion in any PRD should treat it as a signal to
+re-investigate the codebase, not as a final answer.
