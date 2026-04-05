@@ -23,12 +23,15 @@ export const WriteTool = Tool.define("write", {
     await assertExternalDirectory(ctx, filepath)
     // Resolve symlinks and re-check containment so a symlink inside
     // the project pointing to e.g. `~/.ssh/authorized_keys` cannot be
-    // used as a write sink. If the file doesn't exist yet, realpath
-    // throws ENOENT and we skip the check — the new file will be
-    // created at the literal path, not through any symlink.
-    const realFilepath = await fs.promises.realpath(filepath).catch(() => null)
-    if (realFilepath && !Filesystem.contains(Instance.directory, realFilepath)) {
-      throw new Error("Access denied: symlink target escapes project directory")
+    // used as a write sink. Only enforce when the original path was
+    // inside the project — external writes go through the
+    // `assertExternalDirectory` permission flow above and remain
+    // allowed after the grant.
+    if (Filesystem.contains(Instance.directory, filepath)) {
+      const realFilepath = await fs.promises.realpath(filepath).catch(() => null)
+      if (realFilepath && !Filesystem.contains(Instance.directory, realFilepath)) {
+        throw new Error("Access denied: symlink target escapes project directory")
+      }
     }
     Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
 

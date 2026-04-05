@@ -335,11 +335,35 @@ export namespace CodeIntelligence {
   // ─── Health / introspection ─────────────────────────────────────────
 
   export function status(projectID: ProjectID) {
+    // `code_index_cursor` is a summary row written only at the END of a
+    // full `indexFiles()` batch — see `builder.ts:upsertCursor`. The
+    // incremental watcher (`indexFile` on save) never touches it, an
+    // interrupted `ax-code index` run never reaches it, and
+    // `clearProject` never resets it. Reading counts from the cursor
+    // is therefore unreliable: a user who Ctrl-C's out of `ax-code
+    // index` ends up with thousands of rows in `code_node` but a
+    // missing / zero cursor row, and the TUI sidebar shows "graph
+    // not indexed · run `ax-code index`" forever because the endpoint
+    // below read the stale cursor.
+    //
+    // `countNodes` / `countEdges` run `SELECT count(*) WHERE
+    // project_id = ?` against an indexed column (see
+    // `code_node_project_idx`, `code_edge_project_idx` in
+    // `schema.sql.ts`) — a few ms even on 200K-row graphs. Cheap
+    // enough for the ~5s TUI poll. The cursor's `commit_sha` and
+    // `time_updated` still carry meaning (they mark the last
+    // successful full-index run and are used by plan-staleness
+    // detection in `apply-safe-refactor.ts`), so we keep reading
+    // them — only the counts switch to live.
+    //
+    // The same fix landed in `cli/cmd/index-graph.ts`'s heartbeat
+    // in v2.3.9 for the same reason. Every reader of `nodeCount` /
+    // `edgeCount` should use live queries, not the cached summary.
     const cursor = CodeGraphQuery.getCursor(projectID)
     return {
       projectID,
-      nodeCount: cursor?.node_count ?? 0,
-      edgeCount: cursor?.edge_count ?? 0,
+      nodeCount: CodeGraphQuery.countNodes(projectID),
+      edgeCount: CodeGraphQuery.countEdges(projectID),
       lastCommitSha: cursor?.commit_sha ?? null,
       lastUpdated: cursor?.time_updated ?? null,
     }

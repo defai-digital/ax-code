@@ -50,6 +50,40 @@ function last<T>(list: T[], test: (item: T) => boolean): T | undefined {
   }
 }
 
+// Local `withTimeout` that wraps a promise so post-timeout rejections
+// don't become unhandled rejections and the timer is cleared as soon
+// as the inner promise settles. The previous implementation used
+// `Promise.race([p, new Promise((_, r) => setTimeout(r, ms))])` which
+// leaked the timer for ms after p resolved *and* left p unhandled if
+// it rejected after the timeout fired — the exact pathology the util
+// package's `withTimeout` already documents and avoids. Keeping this
+// one local so we can plug in a typed TimeoutError instead of the
+// util's generic Error.
+function withSdkTimeout<T>(promise: Promise<T>, ms: number, makeError: () => Error): Promise<T> {
+  let settled = false
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      reject(makeError())
+    }, ms)
+    promise.then(
+      (value) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
+}
+
 let logInitialized = false
 
 async function ensureLog() {
@@ -521,12 +555,8 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
         : exec()
 
       if (options?.timeout) {
-        return Promise.race([
-          resultPromise,
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new TimeoutError(options.timeout!, "agent.run")), options.timeout),
-          ),
-        ])
+        const timeoutMs = options.timeout
+        return withSdkTimeout(resultPromise, timeoutMs, () => new TimeoutError(timeoutMs, "agent.run"))
       }
       return resultPromise
     },
@@ -593,6 +623,21 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
 
   let sdk: OpencodeClient
   let disposed = false
+  // `bootstrap()` wraps its callback in `Instance.provide(...)` which
+  // tears down the Instance in a `finally` block. That means the
+  // callback must not return until the user is done with the agent,
+  // otherwise the Instance (LSP clients, DB, watchers, etc.) gets
+  // disposed while the agent is still in use. We hold the callback
+  // open by awaiting `keepAlive` here and resolving it from dispose().
+  // The previous implementation polled `disposed` every 100ms with
+  // `setTimeout(check, 100)` — wasting wake-ups for the entire
+  // lifetime of every agent and keeping the event loop busy even
+  // when nothing was happening. Resolving the promise directly from
+  // dispose() lets the runtime sleep.
+  let resolveKeepAlive!: () => void
+  const keepAlive = new Promise<void>((r) => {
+    resolveKeepAlive = r
+  })
 
   const initPromise = new Promise<void>((resolve, reject) => {
     bootstrap(options.directory, async () => {
@@ -612,22 +657,16 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
       sdk = createInProcessClient(options.directory)
       resolve()
 
-      // Keep alive until dispose()
-      await new Promise<void>((r) => {
-        const check = () => { if (disposed) return r(); setTimeout(check, 100) }
-        check()
-      })
+      // Block the bootstrap callback until dispose() is called so
+      // `Instance.provide`'s finally-block teardown is deferred.
+      await keepAlive
     }).catch(reject)
   })
 
   // Enhancement #4: Timeout on createAgent
   if (options.timeout) {
-    await Promise.race([
-      initPromise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new TimeoutError(options.timeout!, "createAgent")), options.timeout),
-      ),
-    ])
+    const timeoutMs = options.timeout
+    await withSdkTimeout(initPromise, timeoutMs, () => new TimeoutError(timeoutMs, "createAgent"))
   } else {
     await initPromise
   }
@@ -642,12 +681,8 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         return createSessionHandle(sdk, sessionID, options).run(message, runOptions)
       }
       if (runOptions?.timeout) {
-        return Promise.race([
-          exec(),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new TimeoutError(runOptions.timeout!, "agent.run")), runOptions.timeout),
-          ),
-        ])
+        const timeoutMs = runOptions.timeout
+        return withSdkTimeout(exec(), timeoutMs, () => new TimeoutError(timeoutMs, "agent.run"))
       }
       return exec()
     },
@@ -730,7 +765,12 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
     },
 
     async dispose() {
+      if (disposed) return
       disposed = true
+      // Unblock the keep-alive promise so bootstrap()'s callback
+      // returns and `Instance.provide` runs its finally-block
+      // teardown (LSP shutdown, DB close, watcher cleanup, etc.).
+      resolveKeepAlive()
     },
   }
 }

@@ -9,6 +9,7 @@ import { Instance } from "@/project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { Global } from "@/global"
+import { Filesystem } from "@/util/filesystem"
 
 export namespace TuiConfig {
   const log = Log.create({ service: "tui.config" })
@@ -49,14 +50,23 @@ export namespace TuiConfig {
       log.debug("loaded custom tui config", { path: custom })
     }
 
+    // Project tui.json{,c} files live in the worktree and can be
+    // committed by anyone — treat as untrusted so `{file:}` refs
+    // inside them can't reach files outside the config's own dir.
     for (const file of projectFiles) {
-      result = mergeInfo(result, await loadFile(file))
+      result = mergeInfo(result, await loadFile(file, { trusted: false }))
     }
 
     for (const dir of unique(directories)) {
       if (!dir.endsWith(".ax-code") && dir !== Flag.AX_CODE_CONFIG_DIR) continue
+      // Only `.ax-code` dirs inside the worktree are untrusted; the
+      // home-level `~/.ax-code/` walk and AX_CODE_CONFIG_DIR are
+      // trusted (the user controls them).
+      const inWorktree = Filesystem.contains(Instance.worktree, dir)
+      const isUserConfigDir = dir === Flag.AX_CODE_CONFIG_DIR
+      const trusted = !inWorktree || isUserConfigDir
       for (const file of ConfigPaths.fileInDirectory(dir, "tui")) {
-        result = mergeInfo(result, await loadFile(file))
+        result = mergeInfo(result, await loadFile(file, { trusted }))
       }
     }
 
@@ -77,17 +87,17 @@ export namespace TuiConfig {
     return state().then((x) => x.config)
   }
 
-  async function loadFile(filepath: string): Promise<Info> {
+  async function loadFile(filepath: string, opts?: { trusted?: boolean }): Promise<Info> {
     const text = await ConfigPaths.readFile(filepath)
     if (!text) return {}
-    return load(text, filepath).catch((error) => {
+    return load(text, filepath, opts?.trusted).catch((error) => {
       log.warn("failed to load tui config", { path: filepath, error })
       return {}
     })
   }
 
-  async function load(text: string, configFilepath: string): Promise<Info> {
-    const data = await ConfigPaths.parseText(text, configFilepath, "empty")
+  async function load(text: string, configFilepath: string, trusted?: boolean): Promise<Info> {
+    const data = await ConfigPaths.parseText(text, configFilepath, { missing: "empty", trusted })
     if (!data || typeof data !== "object" || Array.isArray(data)) return {}
 
     // Flatten a nested "tui" key so users who wrote `{ "tui": { ... } }` inside tui.json

@@ -114,10 +114,40 @@ export const IndexCommand = cmd({
 
         const status = CodeIntelligence.status(projectID)
         UI.println("")
-        UI.println(`${UI.Style.TEXT_SUCCESS_BOLD}Indexing complete${UI.Style.TEXT_NORMAL}`)
-        UI.println(`  nodes:     ${status.nodeCount}`)
-        UI.println(`  edges:     ${status.edgeCount}`)
-        UI.println(`  elapsed:   ${elapsed}ms`)
+        // Pick the headline wording based on whether we actually wrote
+        // any nodes. "Indexing complete" with nodes=0 is confusing:
+        // users can't tell whether their project has no indexable
+        // symbols or LSP failed silently on every file. Distinguish
+        // the empty outcome explicitly.
+        if (status.nodeCount === 0) {
+          UI.println(`${UI.Style.TEXT_WARNING}Indexing finished but produced no symbols${UI.Style.TEXT_NORMAL}`)
+        } else {
+          UI.println(`${UI.Style.TEXT_SUCCESS_BOLD}Indexing complete${UI.Style.TEXT_NORMAL}`)
+        }
+        UI.println(`  nodes:     ${status.nodeCount.toLocaleString()}`)
+        UI.println(`  edges:     ${status.edgeCount.toLocaleString()}`)
+        UI.println(`  files:     ${result.files.toLocaleString()} indexed, ${result.skipped.toLocaleString()} skipped, ${result.failed.toLocaleString()} failed`)
+        UI.println(`  elapsed:   ${elapsed.toLocaleString()}ms`)
+
+        if (result.failed > 0) {
+          UI.println("")
+          UI.println(
+            `${UI.Style.TEXT_WARNING}${result.failed} file(s) failed to index.${UI.Style.TEXT_NORMAL} Check the log file for details.`,
+          )
+        }
+        if (status.nodeCount === 0 && files.length > 0) {
+          // Graph is empty despite having candidate files — the most
+          // common cause is LSP servers failing to spawn (missing
+          // language runtime, unsupported language version) or
+          // returning no document symbols. Point users at the log.
+          UI.println("")
+          UI.println(
+            `${UI.Style.TEXT_WARNING}No symbols were extracted.${UI.Style.TEXT_NORMAL} Common causes:`,
+          )
+          UI.println(`  • LSP server for the project's language failed to spawn (check the log)`)
+          UI.println(`  • Project contains only unsupported file types`)
+          UI.println(`  • Files are empty or contain no top-level symbols`)
+        }
 
         // Per-phase breakdown — aggregated wall-clock across all files.
         // Since files run in parallel (concurrency jobs at a time) the
@@ -136,17 +166,14 @@ export const IndexCommand = cmd({
         UI.println(`    symbol.walk:        ${fmt(t.symbolWalk).padStart(8)}${pct(t.symbolWalk)}`)
         UI.println(`    file.read:          ${fmt(t.readFile).padStart(8)}${pct(t.readFile)}`)
 
-        // Running TUI / server sessions read the graph through an
-        // in-process cache of the last poll. They will NOT pick up
-        // the freshly-indexed data until their next poll cycle, and
-        // in practice users who index in one terminal while a TUI
-        // is open in another see stale "graph not indexed" output
-        // in the sidebar for minutes afterwards. Point this out
-        // explicitly so the next step is obvious.
-        UI.println("")
-        UI.println(
-          `${UI.Style.TEXT_DIM}If you have an ax-code TUI session open, restart it to pick up the new graph.${UI.Style.TEXT_NORMAL}`,
-        )
+        // Prior releases showed a "restart your TUI" hint here because
+        // the sidebar's `/debug-engine/pending-plans` endpoint read
+        // node counts from the cached `code_index_cursor` row, which
+        // was only updated at the end of a full indexing run. The
+        // fix in `code-intelligence/index.ts:status()` (this release)
+        // makes that endpoint compute counts live via `countNodes`,
+        // so a running TUI picks up the new graph on its next poll
+        // automatically — no restart needed.
       },
     })
   },

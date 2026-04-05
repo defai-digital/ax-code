@@ -53,6 +53,10 @@ export namespace Log {
     return logpath
   }
   let currentStream: ReturnType<typeof createWriteStream> | undefined
+  // Low-level write used by every logger method. Must never throw or
+  // return a rejected promise — the logger call sites invoke `write`
+  // without awaiting, so a rejection would become an unhandled promise
+  // rejection and pollute test output / crash on `unhandledRejection`.
   let write: (msg: string) => number | Promise<number> = (msg) => {
     process.stderr.write(msg)
     return msg.length
@@ -67,20 +71,55 @@ export namespace Log {
       options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
     )
     await fs.truncate(logpath).catch(() => {})
-    // Close the previous stream before opening a new one. Without
-    // this, every init() (e.g. after a worker reload) leaks a file
-    // descriptor — the old stream stayed captured in the closure and
-    // was never ended.
-    if (currentStream) currentStream.end()
+    // Drain and close the previous stream before opening a new one.
+    // Without this, every init() (e.g. after a worker reload) leaks
+    // a file descriptor AND loses any log lines still in the old
+    // stream's buffer. Await the finish event so pending writes
+    // actually flush to disk before the stream is dropped.
+    if (currentStream) {
+      const prev = currentStream
+      await new Promise<void>((resolve) => {
+        prev.end(() => resolve())
+      }).catch(() => {})
+    }
     const stream = createWriteStream(logpath, { flags: "a" })
+    // Attach an error handler so a delayed stream error (disk full,
+    // NFS disconnect, FD closed underneath us) doesn't crash the
+    // process via Node's default unhandled 'error' behavior. Fall
+    // back to stderr so diagnostics keep flowing.
+    stream.on("error", (err) => {
+      process.stderr.write(`log stream error: ${err.message}\n`)
+      write = (msg) => {
+        process.stderr.write(msg)
+        return msg.length
+      }
+    })
     currentStream = stream
-    write = (msg: string) =>
-      new Promise<number>((resolve, reject) => {
+    write = (msg: string) => {
+      // Fast path: if the stream was already ended (by a concurrent
+      // re-init, or by Node during shutdown) don't even attempt the
+      // write — `writable` is false on ended streams and attempting
+      // `.write()` would emit ERR_STREAM_WRITE_AFTER_END. Fall back
+      // to stderr so the message still lands somewhere.
+      if (!stream.writable) {
+        process.stderr.write(msg)
+        return msg.length
+      }
+      return new Promise<number>((resolve) => {
         stream.write(msg, (err) => {
-          if (err) reject(err)
-          else resolve(msg.length)
+          if (err) {
+            // Swallow: callers don't await, so a rejection would be
+            // unhandled. Write-after-end is the common case during
+            // worker reload and test teardown; log the message to
+            // stderr as a fallback.
+            process.stderr.write(msg)
+            resolve(msg.length)
+            return
+          }
+          resolve(msg.length)
         })
       })
+    }
   }
 
   async function cleanup(dir: string) {

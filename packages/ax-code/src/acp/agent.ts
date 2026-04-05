@@ -31,6 +31,7 @@ import {
 import { Log } from "../util/log"
 import { pathToFileURL } from "url"
 import { Filesystem } from "../util/filesystem"
+import { FileTime } from "../file/time"
 import { Hash } from "../util/hash"
 import { ACPSessionManager } from "./session"
 import type { ACPConfig } from "./types"
@@ -244,14 +245,23 @@ export namespace ACP {
                 const metadata = permission.metadata || {}
                 const filepath = typeof metadata["filepath"] === "string" ? metadata["filepath"] : ""
                 const diff = typeof metadata["diff"] === "string" ? metadata["diff"] : ""
-                const content = (await Filesystem.exists(filepath)) ? await Filesystem.readText(filepath) : ""
-                const newContent = getNewContent(content, diff)
-
-                if (newContent) {
-                  this.connection.writeTextFile({
-                    sessionId: session.id,
-                    path: filepath,
-                    content: newContent,
+                if (filepath) {
+                  // Serialize the read-modify-write through FileTime's
+                  // per-path lock — matches the discipline used by
+                  // tool/edit.ts and tool/write.ts. Without the lock,
+                  // the file could be deleted or replaced between
+                  // `exists()` and `readText()`, producing a diff
+                  // applied against stale content.
+                  await FileTime.withLock(filepath, async () => {
+                    const content = (await Filesystem.exists(filepath)) ? await Filesystem.readText(filepath) : ""
+                    const newContent = getNewContent(content, diff)
+                    if (newContent) {
+                      this.connection.writeTextFile({
+                        sessionId: session.id,
+                        path: filepath,
+                        content: newContent,
+                      })
+                    }
                   })
                 }
               }

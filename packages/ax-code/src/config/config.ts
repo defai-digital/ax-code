@@ -106,11 +106,19 @@ export namespace Config {
         const remoteConfig = (wellknown.config ?? {}) as Record<string, unknown>
         // Add $schema to prevent load() from trying to write back to a non-existent file
         if (!remoteConfig.$schema) remoteConfig.$schema = "https://ax-code.ai/config.json"
+        // Remote well-known configs are untrusted by definition: a
+        // compromised or typosquatted `.well-known/ax-code` endpoint
+        // could otherwise embed `{file:/etc/shadow}` and exfiltrate
+        // host secrets through the next LLM call. Anchor the config
+        // dir to the local Instance directory so any `{file:}`
+        // references resolve inside the worktree (the untrusted
+        // check then confines them further).
         result = mergeConfigConcatArrays(
           result,
           await load(JSON.stringify(remoteConfig), {
-            dir: path.dirname(response.url || endpoint),
+            dir: Instance.directory,
             source: response.url || endpoint,
+            trusted: false,
           }),
         )
         log.debug("loaded remote config from well-known", { url })
@@ -129,7 +137,11 @@ export namespace Config {
     // Project config overrides global and remote config.
     if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
       const projectFiles = await ConfigPaths.projectFiles("ax-code", Instance.directory, Instance.worktree)
-      const loaded = await Promise.all(projectFiles.map((file) => loadFile(file)))
+      // Project configs live inside the worktree and may be checked
+      // in by anyone — treat them as untrusted so a malicious
+      // `ax-code.json` committed to a shared repo cannot read files
+      // outside the config's directory.
+      const loaded = await Promise.all(projectFiles.map((file) => loadFile(file, { trusted: false })))
       for (const config of loaded) {
         result = mergeConfigConcatArrays(result, config)
       }
@@ -149,10 +161,18 @@ export namespace Config {
     const deps = []
 
     for (const dir of unique(directories)) {
+      // Directories come from three sources: Global.Path.config
+      // (trusted), user home walk (trusted), worktree walk
+      // (untrusted). Only `.ax-code` dirs *inside the worktree*
+      // carry code committed by third parties, so they're the ones
+      // we need to confine.
+      const inWorktree = Filesystem.contains(Instance.worktree, dir)
+      const isUserConfigDir = dir === Global.Path.config || dir === Flag.AX_CODE_CONFIG_DIR
+      const trusted = !inWorktree || isUserConfigDir
       if (dir.endsWith(".ax-code") || dir === Flag.AX_CODE_CONFIG_DIR) {
         for (const file of ["ax-code.jsonc", "ax-code.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
-          result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
+          result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file), { trusted }))
           // to satisfy the type checker
           result.agent ??= {}
           result.mode ??= {}
@@ -198,11 +218,18 @@ export namespace Config {
         }
 
         if (config) {
+          // Account config comes over the network from the auth
+          // server — same trust model as the well-known remote
+          // config path above. Anchor the config dir to the local
+          // Instance so `{file:}` refs can only reach into the
+          // worktree, and mark untrusted so absolute / `~/` paths
+          // are rejected outright.
           result = mergeConfigConcatArrays(
             result,
             await load(JSON.stringify(config), {
-              dir: path.dirname(`${active.url}/api/config`),
+              dir: Instance.directory,
               source: `${active.url}/api/config`,
+              trusted: false,
             }),
           )
         }
@@ -637,20 +664,29 @@ export namespace Config {
 
   export const { readFile } = ConfigPaths
 
-  async function loadFile(filepath: string): Promise<Info> {
+  async function loadFile(filepath: string, opts?: { trusted?: boolean }): Promise<Info> {
     log.info("loading", { path: filepath })
     const text = await readFile(filepath)
     if (!text) return {}
-    return load(text, { path: filepath })
+    return load(text, { path: filepath, trusted: opts?.trusted })
   }
 
-  async function load(text: string, options: { path: string } | { dir: string; source: string }) {
+  async function load(
+    text: string,
+    options: ({ path: string } | { dir: string; source: string }) & { trusted?: boolean },
+  ) {
     const original = text
     const source = "path" in options ? options.path : options.source
     const isFile = "path" in options
+    // Trust defaults to true for backward compatibility. Call sites
+    // loading untrusted sources (project-level configs inside the
+    // worktree, remote well-known configs, network account configs)
+    // pass `trusted: false` explicitly — see the loader below and
+    // the remote/account paths in state().
     const data = await ConfigPaths.parseText(
       text,
       "path" in options ? options.path : { source: options.source, dir: options.dir },
+      { trusted: options.trusted },
     )
 
     const normalized = (() => {
@@ -831,7 +867,13 @@ export namespace Config {
     global.reset()
 
     void Instance.disposeAll()
-      .catch(() => undefined)
+      .catch((err) => {
+        // Log disposal failures so leaked resources during reload
+        // (stuck DB connections, file watchers, processes) leave a
+        // trail instead of a silent broken state that would compound
+        // on subsequent reloads.
+        log.error("failed to dispose instances during config reload", { err })
+      })
       .finally(() => {
         GlobalBus.emit("event", {
           directory: "global",

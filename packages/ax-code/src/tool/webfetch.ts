@@ -134,13 +134,51 @@ export const WebFetchTool = Tool.define("webfetch", {
     }
 
     try {
-      const initial = await fetch(params.url, { signal, headers })
+      // Manual redirect handling so each hop gets re-validated by
+      // assertPublicUrl. The default `fetch` follows redirects
+      // internally without any hook to inspect the target — a public
+      // attacker-controlled URL returning `Location: http://169.254.169.254/…`
+      // (AWS/GCP cloud metadata) or `http://127.0.0.1:4096/…` would
+      // otherwise bypass the SSRF guard entirely.
+      const MAX_REDIRECTS = 10
+      let currentUrl = params.url
+      let response: Response | undefined
+      for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+        const attemptHeaders = hop === 0 ? headers : { ...headers }
+        let res = await fetch(currentUrl, { signal, headers: attemptHeaders, redirect: "manual" })
 
-      // Retry with honest UA if blocked by Cloudflare bot detection (TLS fingerprint mismatch)
-      let response = initial
-      if (initial.status === 403 && initial.headers.get("cf-mitigated") === "challenge") {
-        await initial.body?.cancel().catch(() => {})
-        response = await fetch(params.url, { signal, headers: { ...headers, "User-Agent": "ax-code" } })
+        // Retry with honest UA only on the initial request if blocked
+        // by Cloudflare bot detection (TLS fingerprint mismatch).
+        if (hop === 0 && res.status === 403 && res.headers.get("cf-mitigated") === "challenge") {
+          await res.body?.cancel().catch(() => {})
+          res = await fetch(currentUrl, {
+            signal,
+            headers: { ...headers, "User-Agent": "ax-code" },
+            redirect: "manual",
+          })
+        }
+
+        // 3xx with a Location header → re-validate target and loop.
+        // Anything else (including opaqueredirect from same-origin
+        // fetches) falls through to the response-handling path.
+        if (res.status >= 300 && res.status < 400) {
+          const location = res.headers.get("location")
+          await res.body?.cancel().catch(() => {})
+          if (!location) {
+            throw new Error(`Redirect response missing Location header (status ${res.status})`)
+          }
+          const next = new URL(location, currentUrl).toString()
+          await assertPublicUrl(next)
+          currentUrl = next
+          continue
+        }
+
+        response = res
+        break
+      }
+
+      if (!response) {
+        throw new Error(`Too many redirects (>${MAX_REDIRECTS})`)
       }
 
       if (!response.ok) {

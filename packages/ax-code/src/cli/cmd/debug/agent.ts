@@ -101,7 +101,9 @@ function parseToolParams(input?: string) {
     try {
       return JSON.parse(trimmed)
     } catch (jsonError) {
-      throw new Error(`Failed to parse --params as JSON: ${jsonError}. Tool params must be valid JSON.`)
+      throw new Error(`Failed to parse --params as JSON: ${jsonError}. Tool params must be valid JSON.`, {
+        cause: jsonError,
+      })
     }
   })
 

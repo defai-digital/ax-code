@@ -37,6 +37,19 @@ export const ReadTool = Tool.define("read", {
       kind: stat?.isDirectory() ? "directory" : "file",
     })
 
+    // Resolve symlinks and re-check containment so a symlink inside
+    // the project pointing at e.g. `/etc/shadow` or `~/.ssh/id_rsa`
+    // can't be read through the symlink. Only enforce the check when
+    // the original path was inside the project — external reads are
+    // a separate workflow gated by `assertExternalDirectory` above
+    // and must still be allowed after the permission grant.
+    if (stat && Filesystem.contains(Instance.directory, filepath)) {
+      const realFilepath = await fs.realpath(filepath).catch(() => null)
+      if (realFilepath && !Filesystem.contains(Instance.directory, realFilepath)) {
+        throw new Error("Access denied: symlink target escapes project directory")
+      }
+    }
+
     await ctx.ask({
       permission: "read",
       patterns: [filepath],

@@ -25,7 +25,7 @@ import { createSimpleContext } from "./helper"
 import type { Snapshot } from "@/snapshot"
 import { useExit } from "./exit"
 import { useArgs } from "./args"
-import { batch, onMount } from "solid-js"
+import { batch, onMount, onCleanup } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@ax-code/sdk"
 import { upsert, mergeSorted } from "./sync-util"
@@ -544,6 +544,23 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
     onMount(() => {
       bootstrap()
+      // Poll the DRE stats endpoint periodically so the sidebar
+      // picks up out-of-band graph changes (e.g. the user runs
+      // `ax-code index` in a separate terminal, or the background
+      // auto-index fires on session start and finishes a minute
+      // later). Previously the only refresh triggers were the
+      // initial bootstrap and LSP updated events — neither fires
+      // when the graph is populated by a different process, so
+      // the sidebar's "graph not indexed · run ax-code index"
+      // label stuck around even after the user ran the command.
+      // 10s is a deliberate compromise: fast enough that indexing
+      // in another terminal reflects within a single UI beat,
+      // slow enough to add negligible server load (the endpoint
+      // runs two COUNT(*) queries against indexed columns).
+      const debugEnginePoll = setInterval(() => {
+        void syncDebugEngine()
+      }, 10_000)
+      onCleanup(() => clearInterval(debugEnginePoll))
     })
 
     const fullSyncedSessions = new Set<string>()

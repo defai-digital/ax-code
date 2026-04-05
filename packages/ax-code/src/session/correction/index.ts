@@ -30,14 +30,34 @@ export namespace SelfCorrection {
   // sessions exhausted budgets for new ones, and a success in session B
   // could wipe session A's budget. Scoping per session means state is
   // bounded and can be freed when a session ends.
+  //
+  // LRU cap: in long-running processes (e.g. the headless server or
+  // desktop app) sessions aren't always explicitly deleted — they just
+  // go idle. Without a cap the Map grew one entry per session for the
+  // lifetime of the process. JS `Map` preserves insertion order, so
+  // evicting the first key gives us oldest-first eviction; each touch
+  // deletes-and-reinserts to move the entry to the "newest" slot.
+  const MAX_SESSIONS = 256
   const sessionBudgets = new Map<string, Map<string, Budget>>()
+
+  function touch(sessionID: string, m: Map<string, Budget>) {
+    // Re-insert to move to the end of Map's insertion order (LRU tail).
+    if (sessionBudgets.has(sessionID)) sessionBudgets.delete(sessionID)
+    sessionBudgets.set(sessionID, m)
+    while (sessionBudgets.size > MAX_SESSIONS) {
+      const oldest = sessionBudgets.keys().next().value
+      if (oldest === undefined) break
+      sessionBudgets.delete(oldest)
+      log.debug("evicted self-correction budget for oldest session", { sessionID: oldest })
+    }
+  }
 
   function forSession(sessionID: string): Map<string, Budget> {
     let m = sessionBudgets.get(sessionID)
     if (!m) {
       m = new Map()
-      sessionBudgets.set(sessionID, m)
     }
+    touch(sessionID, m)
     return m
   }
 

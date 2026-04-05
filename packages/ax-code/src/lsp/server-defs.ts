@@ -1040,14 +1040,20 @@ export const KotlinLS: Info = {
         return
       }
       await Filesystem.writeStream(archivePath, download.body)
-      const ok = await Archive.extractZip(archivePath, distPath)
-        .then(() => true)
-        .catch((error) => {
-          log.error("Failed to extract Kotlin LS archive", { error })
-          return false
-        })
-      if (!ok) return
-      await fs.rm(archivePath, { force: true })
+      try {
+        const ok = await Archive.extractZip(archivePath, distPath)
+          .then(() => true)
+          .catch((error) => {
+            log.error("Failed to extract Kotlin LS archive", { error })
+            return false
+          })
+        if (!ok) return
+      } finally {
+        // Always remove the downloaded archive — previously only the
+        // happy path deleted it, leaving ~10-100MB stuck in the bin
+        // directory after every failed extraction.
+        await fs.rm(archivePath, { force: true }).catch(() => {})
+      }
       if (process.platform !== "win32") {
         await fs.chmod(launcherScript, 0o755).catch(() => {})
       }
@@ -1178,25 +1184,30 @@ export const LuaLS: Info = {
 
       await fs.mkdir(installDir, { recursive: true })
 
-      if (ext === "zip") {
-        const ok = await Archive.extractZip(tempPath, installDir)
-          .then(() => true)
-          .catch((error) => {
-            log.error("Failed to extract lua-language-server archive", { error })
-            return false
-          })
-        if (!ok) return
-      } else {
-        const ok = await run(["tar", "-xzf", tempPath, "-C", installDir])
-          .then((result) => result.code === 0)
-          .catch((error: unknown) => {
-            log.error("Failed to extract lua-language-server archive", { error })
-            return false
-          })
-        if (!ok) return
+      try {
+        if (ext === "zip") {
+          const ok = await Archive.extractZip(tempPath, installDir)
+            .then(() => true)
+            .catch((error) => {
+              log.error("Failed to extract lua-language-server archive", { error })
+              return false
+            })
+          if (!ok) return
+        } else {
+          const ok = await run(["tar", "-xzf", tempPath, "-C", installDir])
+            .then((result) => result.code === 0)
+            .catch((error: unknown) => {
+              log.error("Failed to extract lua-language-server archive", { error })
+              return false
+            })
+          if (!ok) return
+        }
+      } finally {
+        // Always remove the archive — previously only the happy path
+        // reached the rm call, leaving downloads wedged in the bin
+        // dir after every failed extraction.
+        await fs.rm(tempPath, { force: true }).catch(() => {})
       }
-
-      await fs.rm(tempPath, { force: true })
 
       // Binary is located in bin/ subdirectory within the extracted archive
       bin = path.join(installDir, "bin", "lua-language-server" + (platform === "win32" ? ".exe" : ""))
@@ -1372,14 +1383,20 @@ export const TerraformLS: Info = {
       const tempPath = path.join(Global.Path.bin, "terraform-ls.zip")
       if (downloadResponse.body) await Filesystem.writeStream(tempPath, downloadResponse.body)
 
-      const ok = await Archive.extractZip(tempPath, Global.Path.bin)
-        .then(() => true)
-        .catch((error) => {
-          log.error("Failed to extract terraform-ls archive", { error })
-          return false
-        })
-      if (!ok) return
-      await fs.rm(tempPath, { force: true })
+      try {
+        const ok = await Archive.extractZip(tempPath, Global.Path.bin)
+          .then(() => true)
+          .catch((error) => {
+            log.error("Failed to extract terraform-ls archive", { error })
+            return false
+          })
+        if (!ok) return
+      } finally {
+        // Always remove the downloaded archive — previously only the
+        // happy path reached this rm, leaving stuck downloads in the
+        // bin directory after every failed extraction.
+        await fs.rm(tempPath, { force: true }).catch(() => {})
+      }
 
       bin = path.join(Global.Path.bin, "terraform-ls" + (platform === "win32" ? ".exe" : ""))
 

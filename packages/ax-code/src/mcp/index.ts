@@ -12,6 +12,7 @@ import {
 import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
+import { Env } from "../util/env"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
@@ -465,13 +466,20 @@ export namespace MCP {
     if (mcp.type === "local") {
       const [cmd, ...args] = mcp.command
       const cwd = Instance.directory
+      // Strip provider keys, tokens, passwords, etc. before forwarding
+      // the environment to a local MCP server. Community MCP servers
+      // are typically installed from npm and run arbitrary code — a
+      // compromised server would otherwise read API keys straight out
+      // of its own environment. The bash tool applies the same
+      // sanitizer to shell commands for identical reasons. MCP-specific
+      // secrets can still be passed explicitly via `mcp.environment`.
       const transport = new StdioClientTransport({
         stderr: "pipe",
         command: cmd,
         args,
         cwd,
         env: {
-          ...process.env,
+          ...Env.sanitize(process.env),
           ...(cmd === "ax-code" ? { BUN_BE_BUN: "1" } : {}),
           ...mcp.environment,
         },
@@ -577,7 +585,21 @@ export namespace MCP {
     return state().then((state) => state.clients)
   }
 
+  // Per-server connect serialization. Two concurrent connect(name)
+  // calls would otherwise each run create() in parallel, then race
+  // on `s.clients[name] = result.mcpClient` — the loser's client
+  // reference is silently dropped without `.close()`, leaking the
+  // child process. The lock scopes to `name` so different servers
+  // still connect in parallel.
+  const connectLocks = new Map<string, Promise<unknown>>()
   export async function connect(name: string) {
+    const prev = connectLocks.get(name) ?? Promise.resolve()
+    const next = prev.then(() => connectImpl(name), () => connectImpl(name))
+    connectLocks.set(name, next.catch(() => {}))
+    return next
+  }
+
+  async function connectImpl(name: string) {
     cachedTools = undefined
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
@@ -631,54 +653,72 @@ export namespace MCP {
   }
 
   let cachedTools: Record<string, Tool> | undefined
+  let toolsPromise: Promise<Record<string, Tool>> | undefined
   let toolsCacheSubscribed = false
 
   export async function tools() {
     if (!toolsCacheSubscribed) {
       toolsCacheSubscribed = true
-      Bus.subscribe(ToolsChanged, () => { cachedTools = undefined })
+      Bus.subscribe(ToolsChanged, () => {
+        cachedTools = undefined
+        toolsPromise = undefined
+      })
     }
     if (cachedTools) return cachedTools
-    const result: Record<string, Tool> = {}
-    const s = await state()
-    const cfg = await Config.get()
-    const config = cfg.mcp ?? {}
-    const clientsSnapshot = await clients()
-    const defaultTimeout = cfg.experimental?.mcp_timeout
+    // Coalesce concurrent callers onto a single in-flight computation.
+    // Without this, two simultaneous `tools()` calls would each do a
+    // full listTools() roundtrip, and worse: if a client died during
+    // the async window, one caller's result could bake a dead client
+    // reference into the shared cache while the other completed a
+    // clean fetch.
+    if (toolsPromise) return toolsPromise
+    toolsPromise = (async () => {
+      const result: Record<string, Tool> = {}
+      const s = await state()
+      const cfg = await Config.get()
+      const config = cfg.mcp ?? {}
+      const clientsSnapshot = await clients()
+      const defaultTimeout = cfg.experimental?.mcp_timeout
 
-    const connectedClients = Object.entries(clientsSnapshot).filter(
-      ([clientName]) => s.status[clientName]?.status === "connected",
-    )
+      const connectedClients = Object.entries(clientsSnapshot).filter(
+        ([clientName]) => s.status[clientName]?.status === "connected",
+      )
 
-    const toolsResults = await Promise.all(
-      connectedClients.map(async ([clientName, client]) => {
-        const toolsResult = await client.listTools().catch((e) => {
-          log.error("failed to get tools", { clientName, error: e.message })
-          const failedStatus = {
-            status: "failed" as const,
-            error: NamedError.message(e),
-          }
-          s.status[clientName] = failedStatus
-          delete s.clients[clientName]
-          return undefined
-        })
-        return { clientName, client, toolsResult }
-      }),
-    )
+      const toolsResults = await Promise.all(
+        connectedClients.map(async ([clientName, client]) => {
+          const toolsResult = await client.listTools().catch((e) => {
+            log.error("failed to get tools", { clientName, error: e.message })
+            const failedStatus = {
+              status: "failed" as const,
+              error: NamedError.message(e),
+            }
+            s.status[clientName] = failedStatus
+            delete s.clients[clientName]
+            return undefined
+          })
+          return { clientName, client, toolsResult }
+        }),
+      )
 
-    for (const { clientName, client, toolsResult } of toolsResults) {
-      if (!toolsResult) continue
-      const mcpConfig = config[clientName]
-      const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
-      const timeout = entry?.timeout ?? defaultTimeout
-      for (const mcpTool of toolsResult.tools) {
-        const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
-        const sanitizedToolName = mcpTool.name.replace(/[^a-zA-Z0-9_-]/g, "_")
-        result[sanitizedClientName + "_" + sanitizedToolName] = await convertMcpTool(mcpTool, client, timeout)
+      for (const { clientName, client, toolsResult } of toolsResults) {
+        if (!toolsResult) continue
+        const mcpConfig = config[clientName]
+        const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
+        const timeout = entry?.timeout ?? defaultTimeout
+        for (const mcpTool of toolsResult.tools) {
+          const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
+          const sanitizedToolName = mcpTool.name.replace(/[^a-zA-Z0-9_-]/g, "_")
+          result[sanitizedClientName + "_" + sanitizedToolName] = await convertMcpTool(mcpTool, client, timeout)
+        }
       }
+      cachedTools = result
+      return result
+    })()
+    try {
+      return await toolsPromise
+    } finally {
+      toolsPromise = undefined
     }
-    cachedTools = result
-    return result
   }
 
   export async function prompts() {

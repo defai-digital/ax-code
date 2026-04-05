@@ -217,6 +217,14 @@ export namespace ShareNext {
   }
 
   const queue = new Map<string, { timeout: NodeJS.Timeout; data: Map<string, Data> }>()
+  // Per-session in-flight guard. Between `queue.delete(sessionID)`
+  // and the `await fetch()` inside the flush closure, a new sync()
+  // for the same sessionID would create a second queue entry — its
+  // timer could fire while the first fetch is still in progress,
+  // producing duplicate POSTs with overlapping data. This set keeps
+  // the second caller merging into a fresh queue entry but blocks
+  // its flush until the in-flight one completes.
+  const inflight = new Set<string>()
   async function sync(sessionID: SessionID, data: Data[]) {
     if (disabled) return
     const existing = queue.get(sessionID)
@@ -234,27 +242,34 @@ export namespace ShareNext {
 
     const timeout = setTimeout(() => {
       void (async () => {
+        if (inflight.has(sessionID)) return
         const queued = queue.get(sessionID)
         if (!queued) return
         queue.delete(sessionID)
         const share = get(sessionID)
         if (!share) return
 
-        const req = await request()
-        const response = await fetch(`${req.baseUrl}${req.api.sync(share.id)}`, {
-          method: "POST",
-          headers: { ...req.headers, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            secret: share.secret,
-            data: Array.from(queued.data.values()),
-          }),
-        })
+        inflight.add(sessionID)
+        try {
+          const req = await request()
+          const response = await fetch(`${req.baseUrl}${req.api.sync(share.id)}`, {
+            method: "POST",
+            headers: { ...req.headers, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              secret: share.secret,
+              data: Array.from(queued.data.values()),
+            }),
+          })
 
-        if (!response.ok) {
-          log.warn("failed to sync share", { sessionID, shareID: share.id, status: response.status })
+          if (!response.ok) {
+            log.warn("failed to sync share", { sessionID, shareID: share.id, status: response.status })
+          }
+        } finally {
+          inflight.delete(sessionID)
         }
       })().catch((error) => {
         queue.delete(sessionID)
+        inflight.delete(sessionID)
         log.warn("share sync timer failed", { sessionID, error })
       })
     }, 1000)

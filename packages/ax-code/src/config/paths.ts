@@ -1,5 +1,6 @@
 import path from "path"
 import os from "os"
+import * as fs from "fs/promises"
 import z from "zod"
 import { type ParseError as JsoncParseError, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import { NamedError } from "@ax-code/util/error"
@@ -81,8 +82,27 @@ export namespace ConfigPaths {
     return typeof input === "string" ? path.dirname(input) : input.dir
   }
 
+  export type ParseOptions = {
+    missing?: "error" | "empty"
+    /**
+     * Whether the config source is trusted. Trusted configs (user's
+     * global config, managed/enterprise config, explicit env vars)
+     * can resolve `{file:}` tokens to any absolute path. Untrusted
+     * configs (project files in the worktree, remote well-known
+     * configs, account configs fetched over the network) are
+     * restricted to references inside their own config directory —
+     * otherwise a malicious project config could exfiltrate
+     * `{file:/etc/shadow}` or `{file:~/.ssh/id_rsa}`. Default: true
+     * for backward compatibility. Callers loading project / network
+     * configs must explicitly opt into `trusted: false`.
+     */
+    trusted?: boolean
+  }
+
   /** Apply {env:VAR} and {file:path} substitutions to config text. */
-  async function substitute(text: string, input: ParseSource, missing: "error" | "empty" = "error") {
+  async function substitute(text: string, input: ParseSource, options: ParseOptions = {}) {
+    const missing = options.missing ?? "error"
+    const trusted = options.trusted ?? true
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
       return process.env[varName] || ""
     })
@@ -92,6 +112,7 @@ export namespace ConfigPaths {
 
     const configDir = dir(input)
     const configSource = source(input)
+    const configDirResolved = path.resolve(configDir)
     let out = ""
     let cursor = 0
 
@@ -108,12 +129,43 @@ export namespace ConfigPaths {
         continue
       }
 
-      let filePath = token.replace(/^\{file:/, "").replace(/\}$/, "")
+      const rawRef = token.replace(/^\{file:/, "").replace(/\}$/, "")
+      let filePath = rawRef
       if (filePath.startsWith("~/")) {
+        // `~/` can only appear in trusted configs — an untrusted
+        // project config writing `{file:~/.ssh/id_rsa}` must not be
+        // allowed to escape to the user's home directory.
+        if (!trusted) {
+          throw new InvalidError({
+            path: configSource,
+            message: `file reference escapes config directory: "${token}" (untrusted configs cannot use ~/)`,
+          })
+        }
         filePath = path.join(os.homedir(), filePath.slice(2))
       }
 
       const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(configDir, filePath)
+
+      if (!trusted) {
+        // For untrusted configs, confine resolution to the config's
+        // own directory. Reject absolute paths outright and resolve
+        // symlinks to catch escape attempts like a relative path
+        // whose target is a symlink pointing outside configDir.
+        if (path.isAbsolute(rawRef)) {
+          throw new InvalidError({
+            path: configSource,
+            message: `file reference escapes config directory: "${token}" (untrusted configs cannot use absolute paths)`,
+          })
+        }
+        const real = await fs.realpath(resolvedPath).catch(() => resolvedPath)
+        if (!Filesystem.contains(configDirResolved, real)) {
+          throw new InvalidError({
+            path: configSource,
+            message: `file reference escapes config directory: "${token}"`,
+          })
+        }
+      }
+
       const fileContent = (
         await Filesystem.readText(resolvedPath).catch((error: NodeJS.ErrnoException) => {
           if (missing === "empty") return ""
@@ -141,9 +193,18 @@ export namespace ConfigPaths {
   }
 
   /** Substitute and parse JSONC text, throwing JsonError on syntax errors. */
-  export async function parseText(text: string, input: ParseSource, missing: "error" | "empty" = "error") {
+  export async function parseText(
+    text: string,
+    input: ParseSource,
+    missingOrOptions: "error" | "empty" | ParseOptions = "error",
+  ) {
+    // Accept legacy positional string for the `missing` argument so
+    // existing callers keep working while new callers can pass the
+    // full options bag (including `trusted`).
+    const options: ParseOptions =
+      typeof missingOrOptions === "string" ? { missing: missingOrOptions } : missingOrOptions
     const configSource = source(input)
-    text = await substitute(text, input, missing)
+    text = await substitute(text, input, options)
 
     const errors: JsoncParseError[] = []
     const data = parseJsonc(text, errors, { allowTrailingComma: true })

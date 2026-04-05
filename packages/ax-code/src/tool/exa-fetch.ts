@@ -78,7 +78,7 @@ export async function fetchExaTool(config: {
     clearTimeout()
 
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`${config.errorPrefix} timed out`)
+      throw new Error(`${config.errorPrefix} timed out`, { cause: error })
     }
 
     throw error

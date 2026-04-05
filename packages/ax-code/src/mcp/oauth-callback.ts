@@ -192,14 +192,24 @@ export namespace McpOAuthCallback {
   export async function isPortInUse(): Promise<boolean> {
     return new Promise((resolve) => {
       const socket = createConnection(OAUTH_CALLBACK_PORT, "127.0.0.1")
-      socket.on("connect", () => {
+      let settled = false
+      // Cap the probe at 1s. The previous implementation had no
+      // timeout — on systems where a half-open TCP socket doesn't
+      // error (firewall silently dropping SYNs, stale LISTEN with
+      // no accept) the promise would hang until the OS TCP connect
+      // timeout (~75s on Linux, longer elsewhere), blocking the
+      // entire MCP OAuth flow with no diagnostic. A local loopback
+      // probe should resolve in milliseconds; 1s is generous.
+      const finish = (result: boolean) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
         socket.destroy()
-        resolve(true)
-      })
-      socket.on("error", () => {
-        socket.destroy()
-        resolve(false)
-      })
+        resolve(result)
+      }
+      const timer = setTimeout(() => finish(false), 1000)
+      socket.once("connect", () => finish(true))
+      socket.once("error", () => finish(false))
     })
   }
 

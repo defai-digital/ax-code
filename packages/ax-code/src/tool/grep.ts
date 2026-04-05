@@ -1,4 +1,5 @@
 import z from "zod"
+import * as fs from "fs/promises"
 import { text } from "node:stream/consumers"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
@@ -37,6 +38,17 @@ export const GrepTool = Tool.define("grep", {
     let searchPath = params.path ?? Instance.directory
     searchPath = path.isAbsolute(searchPath) ? searchPath : path.resolve(Instance.directory, searchPath)
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
+    // Resolve symlinks and re-check containment. Without this, a
+    // symlink inside the project like `vendor -> /etc` would let grep
+    // search through system directories and return their contents.
+    // Only enforce when the original search path was inside the
+    // project — external grep is gated by the permission flow above.
+    if (Filesystem.contains(Instance.directory, searchPath)) {
+      const realSearchPath = await fs.realpath(searchPath).catch(() => null)
+      if (realSearchPath && !Filesystem.contains(Instance.directory, realSearchPath)) {
+        throw new Error("Access denied: symlink target escapes project directory")
+      }
+    }
 
     const rgPath = await Ripgrep.filepath()
     // Use the ASCII Unit Separator (0x1f) as the field separator

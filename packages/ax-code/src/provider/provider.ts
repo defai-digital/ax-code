@@ -534,7 +534,14 @@ export namespace Provider {
   })
 
   export function warmup() {
-    state().catch(() => {})
+    // Log warmup failures at warn level. Previously the empty catch
+    // made a silent failure indistinguishable from a successful pre-
+    // load — users with an invalid API key saw normal startup and
+    // only discovered the problem on first request, slowing down
+    // their first prompt for no diagnosable reason.
+    state().catch((err) => {
+      log.warn("provider warmup failed", { err })
+    })
   }
 
   export async function list() {

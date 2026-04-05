@@ -655,7 +655,18 @@ export function Prompt(props: PromptProps) {
             ...nonTextParts.map(assign),
           ],
         })
-        .catch(() => {})
+        // Surface submission failures via the toast. Previously the
+        // empty `.catch(() => {})` left the user staring at a blank
+        // screen when the SDK call failed (network down, server
+        // stopped, auth expired) with no indication of what went wrong.
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : "Unknown error"
+          console.log("Prompt submission failed:", error)
+          toast.show({
+            message: `Prompt submission failed: ${message}`,
+            variant: "error",
+          })
+        })
     }
     history.append({
       ...store.prompt,

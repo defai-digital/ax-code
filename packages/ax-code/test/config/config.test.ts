@@ -2076,3 +2076,75 @@ describe("AX_CODE_CONFIG_CONTENT token substitution", () => {
     }
   })
 })
+
+describe("project config {file:} substitution is sandboxed", () => {
+  // Guards the fix for BUG-03: a malicious project ax-code.json
+  // committed to a shared repo must not be able to exfiltrate files
+  // outside its own config directory via `{file:}` substitution.
+  // `NamedError` sets `.message` to the error name; the human-facing
+  // detail lives on `.data.message`, so match against that.
+
+  async function expectEscapeRejection(cfgDir: string) {
+    await Instance.provide({
+      directory: cfgDir,
+      fn: async () => {
+        let err: any
+        try {
+          await Config.get()
+        } catch (e) {
+          err = e
+        }
+        expect(err).toBeDefined()
+        expect(err.name).toBe("ConfigInvalidError")
+        expect(err.data?.message ?? "").toMatch(/escapes config directory/)
+      },
+    })
+  }
+
+  test("rejects absolute path in project config", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const abs = process.platform === "win32" ? "C:\\Windows\\System32\\drivers\\etc\\hosts" : "/etc/hosts"
+    await writeConfig(tmp.path, {
+      $schema: "https://opencode.ai/config.json",
+      username: `{file:${abs}}`,
+    })
+    await expectEscapeRejection(tmp.path)
+  })
+
+  test("rejects ~/ expansion in project config", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeConfig(tmp.path, {
+      $schema: "https://opencode.ai/config.json",
+      username: "{file:~/.ssh/id_rsa}",
+    })
+    await expectEscapeRejection(tmp.path)
+  })
+
+  test("rejects relative traversal escaping config dir", async () => {
+    await using outer = await tmpdir()
+    await Filesystem.write(path.join(outer.path, "secret.txt"), "secret")
+    await using tmp = await tmpdir({ git: true })
+    const escape = path.relative(tmp.path, path.join(outer.path, "secret.txt")).replaceAll("\\", "/")
+    await writeConfig(tmp.path, {
+      $schema: "https://opencode.ai/config.json",
+      username: `{file:${escape}}`,
+    })
+    await expectEscapeRejection(tmp.path)
+  })
+
+  test("still allows relative refs inside the project dir", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Filesystem.write(path.join(tmp.path, "allowed.txt"), "inside-project")
+    await writeConfig(tmp.path, {
+      $schema: "https://opencode.ai/config.json",
+      username: "{file:allowed.txt}",
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.username).toBe("inside-project")
+      },
+    })
+  })
+})

@@ -34,7 +34,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       const parseResult = Patch.parsePatch(params.patchText)
       hunks = parseResult.hunks
     } catch (error) {
-      throw new Error(`apply_patch verification failed: ${error}`)
+      throw new Error(`apply_patch verification failed: ${error}`, { cause: error })
     }
 
     if (hunks.length === 0) {
@@ -64,11 +64,14 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       await assertExternalDirectory(ctx, filePath)
       // Resolve symlinks and re-check containment so a symlink inside
       // the project pointing to e.g. `~/.ssh/authorized_keys` cannot
-      // be patched through the symlink. For `add` hunks the file
-      // doesn't exist yet; realpath throws ENOENT and we skip.
-      const realFilePath = await fs.realpath(filePath).catch(() => null)
-      if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {
-        throw new Error("Access denied: symlink target escapes project directory")
+      // be patched through the symlink. Only enforce when the target
+      // was inside the project; external patches go through the
+      // external-directory permission flow.
+      if (Filesystem.contains(Instance.directory, filePath)) {
+        const realFilePath = await fs.realpath(filePath).catch(() => null)
+        if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {
+          throw new Error("Access denied: symlink target escapes project directory")
+        }
       }
       Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
 
@@ -117,7 +120,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             const fileUpdate = Patch.deriveNewContentsFromChunks(filePath, hunk.chunks)
             newContent = fileUpdate.content
           } catch (error) {
-            throw new Error(`apply_patch verification failed: ${error}`)
+            throw new Error(`apply_patch verification failed: ${error}`, { cause: error })
           }
 
           const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))
@@ -158,7 +161,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             throw new Error(`apply_patch: cannot delete a directory: ${filePath}`)
           }
           const contentToDelete = await fs.readFile(filePath, "utf-8").catch((error) => {
-            throw new Error(`apply_patch verification failed: ${error}`)
+            throw new Error(`apply_patch verification failed: ${error}`, { cause: error })
           })
           const deleteDiff = trimDiff(createTwoFilesPatch(filePath, filePath, contentToDelete, ""))
 

@@ -51,12 +51,14 @@ export const EditTool = Tool.define("edit", {
     await assertExternalDirectory(ctx, filePath)
     // Resolve symlinks and re-check containment so a symlink inside
     // the project pointing to e.g. `~/.ssh/authorized_keys` cannot be
-    // edited through the symlink. If the target doesn't exist yet
-    // (oldString === ""), realpath throws ENOENT and we skip — the
-    // new file will be created at the literal path.
-    const realFilePath = await fs.promises.realpath(filePath).catch(() => null)
-    if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {
-      throw new Error("Access denied: symlink target escapes project directory")
+    // edited through the symlink. Only enforce when the original
+    // path was inside the project — `assertExternalDirectory` above
+    // already gates external edits through the permission flow.
+    if (Filesystem.contains(Instance.directory, filePath)) {
+      const realFilePath = await fs.promises.realpath(filePath).catch(() => null)
+      if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {
+        throw new Error("Access denied: symlink target escapes project directory")
+      }
     }
     Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
 
