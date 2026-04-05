@@ -148,11 +148,14 @@ export namespace CodeIntelligence {
 
   // ─── Reference and call analysis ────────────────────────────────────
   //
-  // Phase 1 ships these as stubs that return empty arrays. Edges
-  // (references, calls) land in Phase 2 alongside the incremental
-  // update and invalidation machinery. We ship the API surface now
-  // so consumers can write code against the final shape and see the
-  // empty-result fallback naturally.
+  // Phase 2: these functions return real data. Edge ingestion happens
+  // inside CodeGraphBuilder.indexFile — for each container symbol
+  // (function, method, class, interface, module) it queries
+  // LSP.references and emits a "references" edge for each call site,
+  // plus a "calls" edge if both endpoints are callable (function/method).
+  //
+  // findCallers / findCallees / findReferences all go through the indexed
+  // storage — no LSP fallback happens at query time.
 
   export function findReferences(projectID: ProjectID, symbolId: CodeNodeID): Reference[] {
     const queryId = nextQueryId()

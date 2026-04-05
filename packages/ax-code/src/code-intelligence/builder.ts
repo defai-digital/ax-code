@@ -1,5 +1,5 @@
 import path from "path"
-import { pathToFileURL } from "url"
+import { pathToFileURL, fileURLToPath } from "url"
 import { LSP } from "../lsp"
 import { Log } from "../util/log"
 import { Filesystem } from "../util/filesystem"
@@ -67,9 +67,80 @@ type LspSymbolInformation = {
   location: { uri: string; range: LspRange }
   containerName?: string
 }
+type LspLocation = {
+  uri: string
+  range: LspRange
+}
 
 function isDocumentSymbol(s: LspDocumentSymbol | LspSymbolInformation): s is LspDocumentSymbol {
   return typeof (s as LspDocumentSymbol).range?.start?.line === "number" && !("location" in s)
+}
+
+// Given a position in a file, return the innermost node whose range covers
+// it. "Innermost" = smallest range that still contains the position, which
+// is the most specific enclosing scope. Used to attribute LSP reference
+// results to their containing function/method/class.
+//
+// Two variants: one for in-flight inserts (same-file references when the
+// current file's nodes aren't yet in the DB), one for the DB (cross-file
+// references to already-indexed files).
+
+function resolveContainingNodeInMemory(
+  nodeInserts: Array<{
+    id: CodeNodeID
+    file: string
+    range_start_line: number
+    range_start_char: number
+    range_end_line: number
+    range_end_char: number
+    kind: CodeNodeKind
+  }>,
+  bookmarks: Array<{ nodeId: CodeNodeID; kind: CodeNodeKind }>,
+  line: number,
+  char: number,
+): CodeNodeID | undefined {
+  const bookmarkKind = new Map(bookmarks.map((b) => [b.nodeId, b.kind]))
+  let best: { id: CodeNodeID; size: number } | undefined
+  for (const node of nodeInserts) {
+    const kind = bookmarkKind.get(node.id)
+    if (!kind || !CONTAINER_KINDS.has(kind)) continue
+    if (!rangeContains(node, line, char)) continue
+    const size = (node.range_end_line - node.range_start_line) * 1000 + (node.range_end_char - node.range_start_char)
+    if (!best || size < best.size) {
+      best = { id: node.id, size }
+    }
+  }
+  return best?.id
+}
+
+function resolveContainingNodeFromDb(
+  projectID: ProjectID,
+  file: string,
+  line: number,
+  char: number,
+): CodeNodeID | undefined {
+  const rows = CodeGraphQuery.nodesInFile(projectID, file)
+  let best: { id: CodeNodeID; size: number } | undefined
+  for (const row of rows) {
+    if (!CONTAINER_KINDS.has(row.kind)) continue
+    if (!rangeContains(row, line, char)) continue
+    const size = (row.range_end_line - row.range_start_line) * 1000 + (row.range_end_char - row.range_start_char)
+    if (!best || size < best.size) {
+      best = { id: row.id, size }
+    }
+  }
+  return best?.id
+}
+
+function rangeContains(
+  r: { range_start_line: number; range_start_char: number; range_end_line: number; range_end_char: number },
+  line: number,
+  char: number,
+): boolean {
+  if (line < r.range_start_line || line > r.range_end_line) return false
+  if (line === r.range_start_line && char < r.range_start_char) return false
+  if (line === r.range_end_line && char > r.range_end_char) return false
+  return true
 }
 
 // Walk a documentSymbol tree depth-first, emitting (symbol, parentQualifiedName)
@@ -82,6 +153,23 @@ function isDocumentSymbol(s: LspDocumentSymbol | LspSymbolInformation): s is Lsp
 // reference itself and produce infinite recursion. Real code is never this
 // deep — 64 levels of nested scopes is already absurd.
 const MAX_SYMBOL_DEPTH = 64
+
+// Cap on how many symbols per file get reference queries. LSP reference
+// queries can be expensive (O(project size) for common symbols), and doing
+// them for every symbol in a 1000-symbol file is O(file_size × project_size).
+// Phase 2 caps this at a number of the largest-range symbols first (which
+// are typically top-level definitions). Small inner helpers get skipped.
+const MAX_REFERENCE_QUERIES_PER_FILE = 100
+
+// Kinds that are "containers" — edges can terminate inside them. A reference
+// at line N is attributed to the innermost container whose range covers N.
+// Fields, properties, constants, parameters are excluded because they're
+// not meaningful "callers" in a call graph.
+const CONTAINER_KINDS = new Set(["function", "method", "class", "interface", "module"])
+
+// Kinds that are "callable" — a call edge is only emitted when both endpoints
+// are callable. Otherwise the edge is a plain reference.
+const CALLABLE_KINDS = new Set(["function", "method"])
 
 function* walkDocumentSymbols(
   symbols: LspDocumentSymbol[],
@@ -148,17 +236,25 @@ export namespace CodeGraphBuilder {
       return []
     })) as Array<LspDocumentSymbol | LspSymbolInformation>
 
-    // Determine if any client returned results. "partial" means the
-    // language had no LSP client at all (fell through to zero results);
-    // "lsp-only" means LSP answered but cross-references are not yet
-    // queried in Phase 1 so the graph is symbol-only for this file.
-    // "full" is reserved for Phase 2 when references land.
-    const completeness: "full" | "partial" | "lsp-only" = raw.length === 0 ? "partial" : "lsp-only"
-
     // Build the new node list outside the transaction so we don't hold
     // the DB lock while walking LSP output. The delete + insert + upsert
     // then happens inside one transaction below.
     const nodeInserts: Parameters<typeof CodeGraphQuery.insertNodes>[0] = []
+    // Bookmarks: per-node info needed for the Phase 2 reference pass.
+    // We keep the LSP selectionRange (= the name identifier position, not
+    // the full declaration range) because that's what textDocument/references
+    // expects as its position argument.
+    type ReferenceBookmark = {
+      nodeId: CodeNodeID
+      kind: CodeNodeKind
+      selectionLine: number
+      selectionChar: number
+      // Range of the node itself — used to exclude self-references from
+      // the edge list.
+      rangeStartLine: number
+      rangeEndLine: number
+    }
+    const refBookmarks: ReferenceBookmark[] = []
     let nodeCount = 0
     const now = Date.now()
 
@@ -171,8 +267,9 @@ export namespace CodeGraphBuilder {
           const kind = LSP_SYMBOL_KIND_MAP[symbol.kind]
           if (!kind) continue
           const qualified = parentQualified ? `${parentQualified}::${symbol.name}` : symbol.name
+          const nodeId = CodeNodeID.ascending()
           nodeInserts.push({
-            id: CodeNodeID.ascending(),
+            id: nodeId,
             project_id: projectID,
             kind,
             name: symbol.name,
@@ -188,17 +285,28 @@ export namespace CodeGraphBuilder {
             time_created: now,
             time_updated: now,
           })
+          refBookmarks.push({
+            nodeId,
+            kind,
+            selectionLine: symbol.selectionRange.start.line,
+            selectionChar: symbol.selectionRange.start.character,
+            rangeStartLine: symbol.range.start.line,
+            rangeEndLine: symbol.range.end.line,
+          })
           nodeCount++
         }
       } else {
         // SymbolInformation[] path. No parent hierarchy, containerName
-        // gives us a qualifier.
+        // gives us a qualifier. No selectionRange either, so we fall back
+        // to the location range start — less precise but LSP typically
+        // accepts it for symbols with unambiguous names.
         for (const s of raw as LspSymbolInformation[]) {
           const kind = LSP_SYMBOL_KIND_MAP[s.kind]
           if (!kind) continue
           const qualified = s.containerName ? `${s.containerName}::${s.name}` : s.name
+          const nodeId = CodeNodeID.ascending()
           nodeInserts.push({
-            id: CodeNodeID.ascending(),
+            id: nodeId,
             project_id: projectID,
             kind,
             name: s.name,
@@ -214,9 +322,139 @@ export namespace CodeGraphBuilder {
             time_created: now,
             time_updated: now,
           })
+          refBookmarks.push({
+            nodeId,
+            kind,
+            selectionLine: s.location.range.start.line,
+            selectionChar: s.location.range.start.character,
+            rangeStartLine: s.location.range.start.line,
+            rangeEndLine: s.location.range.end.line,
+          })
           nodeCount++
         }
       }
+    }
+
+    // ─── Phase 2 reference pass ─────────────────────────────────────
+    //
+    // For each "container" symbol (function, method, class, interface,
+    // module), query LSP for references to its selection position. Each
+    // reference becomes a "references" edge, and if both endpoints are
+    // callable (function/method), also a "calls" edge.
+    //
+    // Two safeguards:
+    //   - Cap the number of reference queries per file via
+    //     MAX_REFERENCE_QUERIES_PER_FILE. We sort by range size descending
+    //     so the biggest top-level symbols get queried first; small inner
+    //     helpers are dropped.
+    //   - The references return uri+range of each call site. We attribute
+    //     each call site to the innermost node in our graph whose range
+    //     covers the position. If no node matches (e.g. the call site is
+    //     in an unindexed file), the edge is skipped.
+    //
+    // LSP RPCs happen outside the transaction below so we don't hold the
+    // DB lock on network I/O.
+
+    const edgeInserts: Parameters<typeof CodeGraphQuery.insertEdges>[0] = []
+
+    // Sort bookmarks by range size descending — biggest (top-level)
+    // symbols first. We query only the top
+    // MAX_REFERENCE_QUERIES_PER_FILE to keep reference traffic bounded.
+    const eligibleBookmarks = refBookmarks
+      .filter((b) => CONTAINER_KINDS.has(b.kind))
+      .sort((a, b) => (b.rangeEndLine - b.rangeStartLine) - (a.rangeEndLine - a.rangeStartLine))
+      .slice(0, MAX_REFERENCE_QUERIES_PER_FILE)
+
+    // Determine completeness: "full" if every eligible symbol had its
+    // references queried, "lsp-only" if the file was indexed but with
+    // nodes only, "partial" if LSP returned nothing.
+    let completeness: "full" | "partial" | "lsp-only" = raw.length === 0 ? "partial" : "lsp-only"
+
+    if (eligibleBookmarks.length > 0) {
+      // Resolve each bookmark's references. Parallelism is bounded by
+      // LSP.references itself (each call hits the underlying LSP server
+      // which has its own concurrency limits). For very large files we
+      // could limit further here, but 100 queries in parallel is
+      // reasonable for typical projects.
+      const refResults = await Promise.all(
+        eligibleBookmarks.map(async (bookmark) => {
+          const locations = (await LSP.references({
+            file: absPath,
+            line: bookmark.selectionLine,
+            character: bookmark.selectionChar,
+          }).catch(() => [])) as LspLocation[]
+          return { bookmark, locations }
+        }),
+      )
+
+      for (const { bookmark, locations } of refResults) {
+        for (const loc of locations) {
+          let refFile: string
+          try {
+            refFile = fileURLToPath(loc.uri)
+          } catch {
+            continue
+          }
+          // Skip self-references (the symbol's own declaration).
+          if (
+            refFile === absPath &&
+            loc.range.start.line >= bookmark.rangeStartLine &&
+            loc.range.start.line <= bookmark.rangeEndLine
+          ) {
+            continue
+          }
+          // Resolve which node in the graph (the "caller") contains this
+          // reference location. Uses the pre-insert nodeInserts for
+          // same-file lookups (since nodes aren't in the DB yet) and
+          // falls back to CodeGraphQuery for other files.
+          const callerNodeId =
+            refFile === absPath
+              ? resolveContainingNodeInMemory(nodeInserts, refBookmarks, loc.range.start.line, loc.range.start.character)
+              : resolveContainingNodeFromDb(projectID, refFile, loc.range.start.line, loc.range.start.character)
+          if (!callerNodeId) continue
+
+          const callerBookmark = refBookmarks.find((b) => b.nodeId === callerNodeId)
+          const isCallable =
+            bookmark.kind && CALLABLE_KINDS.has(bookmark.kind) && callerBookmark && CALLABLE_KINDS.has(callerBookmark.kind)
+
+          edgeInserts.push({
+            id: CodeEdgeID.ascending(),
+            project_id: projectID,
+            kind: "references",
+            from_node: callerNodeId,
+            to_node: bookmark.nodeId,
+            file: refFile,
+            range_start_line: loc.range.start.line,
+            range_start_char: loc.range.start.character,
+            range_end_line: loc.range.end.line,
+            range_end_char: loc.range.end.character,
+            time_created: now,
+            time_updated: now,
+          })
+          if (isCallable) {
+            edgeInserts.push({
+              id: CodeEdgeID.ascending(),
+              project_id: projectID,
+              kind: "calls",
+              from_node: callerNodeId,
+              to_node: bookmark.nodeId,
+              file: refFile,
+              range_start_line: loc.range.start.line,
+              range_start_char: loc.range.start.character,
+              range_end_line: loc.range.end.line,
+              range_end_char: loc.range.end.character,
+              time_created: now,
+              time_updated: now,
+            })
+          }
+        }
+      }
+
+      // If we ran reference queries and LSP gave us results, mark the
+      // file as fully indexed. If all reference queries returned empty,
+      // it's still "lsp-only" — the server supports symbols but not
+      // references (or there genuinely are none).
+      if (edgeInserts.length > 0) completeness = "full"
     }
 
     // All DB mutations for this file happen atomically. Without the
@@ -236,6 +474,12 @@ export namespace CodeGraphBuilder {
         CodeGraphQuery.insertNodes(nodeInserts.slice(i, i + 50))
       }
 
+      // Insert edges. Edge rows have ~12 columns; 60/chunk stays well
+      // under the 999 SQLite parameter limit.
+      for (let i = 0; i < edgeInserts.length; i += 60) {
+        CodeGraphQuery.insertEdges(edgeInserts.slice(i, i + 60))
+      }
+
       // Record file state regardless of whether we found symbols — we
       // still want to know we tried, so incremental updates can skip
       // unchanged files without re-running LSP.
@@ -253,8 +497,8 @@ export namespace CodeGraphBuilder {
       })
     })
 
-    log.info("indexed file", { file: absPath, nodes: nodeCount, completeness })
-    return { nodes: nodeCount, edges: 0, completeness }
+    log.info("indexed file", { file: absPath, nodes: nodeCount, edges: edgeInserts.length, completeness })
+    return { nodes: nodeCount, edges: edgeInserts.length, completeness }
   }
 
   // Index a batch of files with a concurrency cap. Returns cumulative

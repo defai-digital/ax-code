@@ -4,7 +4,7 @@ import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 import { CodeIntelligence } from "../../src/code-intelligence"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
-import { CodeNodeID, CodeFileID } from "../../src/code-intelligence/id"
+import { CodeNodeID, CodeEdgeID, CodeFileID } from "../../src/code-intelligence/id"
 import type { ProjectID } from "../../src/project/schema"
 
 Log.init({ print: false })
@@ -228,12 +228,7 @@ describe("CodeIntelligence.symbolsInFile", () => {
   })
 })
 
-describe("CodeIntelligence edge-dependent queries (Phase 1 stubs)", () => {
-  // Phase 1 ships these API entry points with empty results because
-  // edge ingestion lives in Phase 2. These tests lock in that
-  // behavior so Phase 2 can upgrade them to real results without
-  // needing to invent new function names.
-
+describe("CodeIntelligence edge-dependent queries", () => {
   test("findReferences returns [] when no edges exist", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -271,6 +266,156 @@ describe("CodeIntelligence edge-dependent queries (Phase 1 stubs)", () => {
         CodeIntelligence.__clearProject(projectID)
         const id = seedSymbol(projectID, { name: "foo" })
         expect(CodeIntelligence.findCallees(projectID, id)).toEqual([])
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("findCallers returns seeded call edges with the caller symbol", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const callerId = seedSymbol(projectID, { name: "handleRequest", file: "/tmp/server.ts" })
+        const calleeId = seedSymbol(projectID, { name: "processPayment", file: "/tmp/payments.ts" })
+
+        // Seed a call edge: handleRequest -[calls]-> processPayment
+        const now = Date.now()
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "calls",
+          from_node: callerId,
+          to_node: calleeId,
+          file: "/tmp/server.ts",
+          range_start_line: 10,
+          range_start_char: 4,
+          range_end_line: 10,
+          range_end_char: 20,
+          time_created: now,
+          time_updated: now,
+        })
+
+        const callers = CodeIntelligence.findCallers(projectID, calleeId)
+        expect(callers.length).toBe(1)
+        expect(callers[0].symbol.name).toBe("handleRequest")
+        expect(callers[0].symbol.file).toBe("/tmp/server.ts")
+        expect(callers[0].depth).toBe(1)
+        expect(callers[0].symbol.explain.source).toBe("code-graph")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("findCallees returns seeded call edges with the callee symbol", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const callerId = seedSymbol(projectID, { name: "main", file: "/tmp/main.ts" })
+        const calleeA = seedSymbol(projectID, { name: "init", file: "/tmp/main.ts" })
+        const calleeB = seedSymbol(projectID, { name: "run", file: "/tmp/main.ts" })
+
+        const now = Date.now()
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "calls",
+          from_node: callerId,
+          to_node: calleeA,
+          file: "/tmp/main.ts",
+          range_start_line: 2,
+          range_start_char: 2,
+          range_end_line: 2,
+          range_end_char: 8,
+          time_created: now,
+          time_updated: now,
+        })
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "calls",
+          from_node: callerId,
+          to_node: calleeB,
+          file: "/tmp/main.ts",
+          range_start_line: 3,
+          range_start_char: 2,
+          range_end_line: 3,
+          range_end_char: 7,
+          time_created: now,
+          time_updated: now,
+        })
+
+        const callees = CodeIntelligence.findCallees(projectID, callerId)
+        expect(callees.length).toBe(2)
+        const names = callees.map((c) => c.symbol.name).sort()
+        expect(names).toEqual(["init", "run"])
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("findReferences returns only 'references' edges, not 'calls' edges", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const targetId = seedSymbol(projectID, { name: "Config", kind: "class" })
+        const userId = seedSymbol(projectID, { name: "loadUser", file: "/tmp/user.ts" })
+
+        const now = Date.now()
+        // Seed a reference edge (non-call, e.g. type annotation)
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "references",
+          from_node: userId,
+          to_node: targetId,
+          file: "/tmp/user.ts",
+          range_start_line: 5,
+          range_start_char: 10,
+          range_end_line: 5,
+          range_end_char: 16,
+          time_created: now,
+          time_updated: now,
+        })
+        // And a calls edge to the same target — should NOT show up in findReferences
+        CodeGraphQuery.insertEdge({
+          id: CodeEdgeID.ascending(),
+          project_id: projectID,
+          kind: "calls",
+          from_node: userId,
+          to_node: targetId,
+          file: "/tmp/user.ts",
+          range_start_line: 6,
+          range_start_char: 4,
+          range_end_line: 6,
+          range_end_char: 10,
+          time_created: now,
+          time_updated: now,
+        })
+
+        const refs = CodeIntelligence.findReferences(projectID, targetId)
+        expect(refs.length).toBe(1)
+        expect(refs[0].edgeKind).toBe("references")
+        expect(refs[0].range.start.line).toBe(5)
+
+        // And findCallers returns the calls edge only
+        const callers = CodeIntelligence.findCallers(projectID, targetId)
+        expect(callers.length).toBe(1)
+        expect(callers[0].symbol.name).toBe("loadUser")
+
         CodeIntelligence.__clearProject(projectID)
       },
     })
