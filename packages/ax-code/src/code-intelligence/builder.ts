@@ -132,6 +132,27 @@ function resolveContainingNodeFromDb(
   return best?.id
 }
 
+// Look up a caller's kind for the isCallable decision. Same-file callers
+// live in the in-memory refBookmarks built earlier in this indexing pass;
+// cross-file callers have to be read back from the DB. Returning undefined
+// for a valid node id would be a silent bug — every call site across file
+// boundaries would lose its calls edge — so this helper is extracted and
+// unit-tested independently of the full builder pipeline (which requires
+// a running LSP server).
+//
+// Exported for testing. Not part of the public surface.
+export function __lookupCallerKind(
+  projectID: ProjectID,
+  callerNodeId: CodeNodeID,
+  sameFile: boolean,
+  bookmarks: Array<{ nodeId: CodeNodeID; kind: CodeNodeKind }>,
+): CodeNodeKind | undefined {
+  if (sameFile) {
+    return bookmarks.find((b) => b.nodeId === callerNodeId)?.kind
+  }
+  return CodeGraphQuery.getNode(projectID, callerNodeId)?.kind
+}
+
 function rangeContains(
   r: { range_start_line: number; range_start_char: number; range_end_line: number; range_end_char: number },
   line: number,
@@ -407,15 +428,21 @@ export namespace CodeGraphBuilder {
           // reference location. Uses the pre-insert nodeInserts for
           // same-file lookups (since nodes aren't in the DB yet) and
           // falls back to CodeGraphQuery for other files.
-          const callerNodeId =
-            refFile === absPath
-              ? resolveContainingNodeInMemory(nodeInserts, refBookmarks, loc.range.start.line, loc.range.start.character)
-              : resolveContainingNodeFromDb(projectID, refFile, loc.range.start.line, loc.range.start.character)
+          const sameFile = refFile === absPath
+          const callerNodeId = sameFile
+            ? resolveContainingNodeInMemory(nodeInserts, refBookmarks, loc.range.start.line, loc.range.start.character)
+            : resolveContainingNodeFromDb(projectID, refFile, loc.range.start.line, loc.range.start.character)
           if (!callerNodeId) continue
 
-          const callerBookmark = refBookmarks.find((b) => b.nodeId === callerNodeId)
+          // Determine the caller's kind. Same-file callers come from the
+          // in-memory bookmarks built earlier in this pass. Cross-file
+          // callers have to be read back from the DB — we can't skip
+          // them here, otherwise findCallers silently loses every edge
+          // whose endpoints span two files (which is the common case
+          // for any non-trivial codebase). See __lookupCallerKind.
+          const callerKind = __lookupCallerKind(projectID, callerNodeId, sameFile, refBookmarks)
           const isCallable =
-            bookmark.kind && CALLABLE_KINDS.has(bookmark.kind) && callerBookmark && CALLABLE_KINDS.has(callerBookmark.kind)
+            bookmark.kind && CALLABLE_KINDS.has(bookmark.kind) && callerKind && CALLABLE_KINDS.has(callerKind)
 
           edgeInserts.push({
             id: CodeEdgeID.ascending(),
