@@ -1,0 +1,19 @@
+Query the persistent Code Intelligence graph for symbols, references, and call relationships. This is the deterministic code-understanding layer — results come from an indexed SQLite graph, not from LSP round-trips, so queries are fast and repeatable.
+
+Prefer this tool over grep/read when you need to:
+- Find a function/class by name (use findSymbol instead of `grep "function foo"`)
+- Find everywhere a symbol is referenced (use findReferences instead of grep-for-name)
+- Understand call relationships (use findCallers/findCallees instead of reading multiple files)
+- List all symbols in a file (use symbolsInFile instead of reading the whole file)
+
+Supported operations:
+- findSymbol: Look up symbols by exact name. Optional kind filter (function/method/class/interface/type/variable/module). Returns symbol metadata including file, range, signature, and an "explain" payload describing the index freshness.
+- findSymbolByPrefix: Same as findSymbol but matches a name prefix. Useful for fuzzy discovery.
+- symbolsInFile: List every indexed symbol in the given file.
+- findReferences: Find every place that references the symbol with the given id (pass the id returned by findSymbol). Returns non-call references only — use findCallers for call sites.
+- findCallers: Find every function/method that calls the symbol with the given id. Depth is currently 1 (direct callers only).
+- findCallees: Find every function/method called by the symbol with the given id. Depth is currently 1.
+
+Every result carries an "explain" field with source, indexedAt, completeness ("full" | "partial" | "lsp-only"), and a queryId. "lsp-only" means the file was indexed for symbols but not yet for cross-references — call/reference queries may be incomplete for those files.
+
+If the graph has never been built for this project, queries return empty results. The graph is populated automatically when the project is indexed (background) or explicitly via the indexing subsystem.
