@@ -88,6 +88,7 @@ function isDocumentSymbol(s: LspDocumentSymbol | LspSymbolInformation): s is Lsp
 function resolveContainingNodeInMemory(
   nodeInserts: Array<{
     id: CodeNodeID
+    name: string
     file: string
     range_start_line: number
     range_start_char: number
@@ -103,7 +104,7 @@ function resolveContainingNodeInMemory(
   let best: { id: CodeNodeID; size: number } | undefined
   for (const node of nodeInserts) {
     const kind = bookmarkKind.get(node.id)
-    if (!kind || !CONTAINER_KINDS.has(kind)) continue
+    if (!kind || !isNamedContainer(node.name, kind)) continue
     if (!rangeContains(node, line, char)) continue
     const size = (node.range_end_line - node.range_start_line) * 1000 + (node.range_end_char - node.range_start_char)
     if (!best || size < best.size) {
@@ -113,6 +114,8 @@ function resolveContainingNodeInMemory(
   return best?.id
 }
 
+// Exported for testing. Not part of the public surface. See builder.test.ts.
+export { resolveContainingNodeFromDb as __resolveContainingNodeFromDbForTests }
 function resolveContainingNodeFromDb(
   projectID: ProjectID,
   file: string,
@@ -122,7 +125,7 @@ function resolveContainingNodeFromDb(
   const rows = CodeGraphQuery.nodesInFile(projectID, file)
   let best: { id: CodeNodeID; size: number } | undefined
   for (const row of rows) {
-    if (!CONTAINER_KINDS.has(row.kind)) continue
+    if (!isNamedContainer(row.name, row.kind)) continue
     if (!rangeContains(row, line, char)) continue
     const size = (row.range_end_line - row.range_start_line) * 1000 + (row.range_end_char - row.range_start_char)
     if (!best || size < best.size) {
@@ -187,6 +190,19 @@ const MAX_REFERENCE_QUERIES_PER_FILE = 100
 // Fields, properties, constants, parameters are excluded because they're
 // not meaningful "callers" in a call graph.
 const CONTAINER_KINDS = new Set(["function", "method", "class", "interface", "module"])
+
+// Names tsserver emits for anonymous symbols — "<function>" for anonymous
+// function literals (arrow functions assigned to properties, IIFEs, etc.),
+// "<unknown>" for variables with unparseable names. These are useless as
+// navigation targets: saying "called by <function>" tells the user nothing.
+// When picking a container for a reference, we skip these in favor of an
+// enclosing named symbol, even if the anonymous one is the tighter match.
+const ANONYMOUS_NAMES = new Set(["<function>", "<unknown>", ""])
+
+function isNamedContainer(name: string, kind: string): boolean {
+  if (!CONTAINER_KINDS.has(kind)) return false
+  return !ANONYMOUS_NAMES.has(name)
+}
 
 // Kinds that are "callable" — a call edge is only emitted when both endpoints
 // are callable. Otherwise the edge is a plain reference.
@@ -569,10 +585,17 @@ export namespace CodeGraphBuilder {
 
   // Remove all graph state for a single file. Used when a file is
   // deleted from disk or moved out of scope.
+  //
+  // Wrap the three deletes in a single transaction so a crash (or SQL
+  // error) between them cannot leave orphaned edges/nodes referring to
+  // a file record that's already gone, or vice-versa. Matches the
+  // pattern used by `Session.remove` and `Session.revert`.
   export function purgeFile(projectID: ProjectID, absPath: string): void {
-    CodeGraphQuery.deleteEdgesTouchingFile(projectID, absPath)
-    CodeGraphQuery.deleteNodesInFile(projectID, absPath)
-    CodeGraphQuery.deleteFile(projectID, absPath)
+    Database.transaction(() => {
+      CodeGraphQuery.deleteEdgesTouchingFile(projectID, absPath)
+      CodeGraphQuery.deleteNodesInFile(projectID, absPath)
+      CodeGraphQuery.deleteFile(projectID, absPath)
+    })
     log.info("purged file from graph", { file: absPath })
   }
 
