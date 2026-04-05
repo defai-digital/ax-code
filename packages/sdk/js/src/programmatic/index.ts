@@ -39,6 +39,7 @@
  */
 
 export { createAgent } from "./agent.js"
+export { tool } from "./tool.js"
 export type {
   Agent,
   AgentOptions,
@@ -51,6 +52,7 @@ export type {
   SessionHandle,
   ToolCallInfo,
   PermissionRequest,
+  SdkTool,
 } from "./types.js"
 export {
   AxCodeError,

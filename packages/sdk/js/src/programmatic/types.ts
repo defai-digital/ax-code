@@ -84,6 +84,27 @@ export class DisposedError extends AxCodeError {
 }
 
 // ============================================================
+// User-defined tools
+// ============================================================
+
+/**
+ * Opaque handle representing a user-defined tool registered via
+ * `tool()`. Pass an array of these to `createAgent({ tools: [...] })`
+ * to make them available to the agent alongside built-in tools.
+ *
+ * The generic `I` carries the Zod-inferred input type so the
+ * `execute` function's argument is fully typed — no casts needed.
+ */
+export interface SdkTool<I = unknown> {
+  /** @internal — consumers should not read this */
+  readonly __brand: "SdkTool"
+  readonly name: string
+  readonly description: string
+  readonly parameters: unknown // Zod schema stored opaquely
+  readonly execute: (input: I) => unknown | Promise<unknown>
+}
+
+// ============================================================
 // Options & Configuration
 // ============================================================
 
@@ -112,6 +133,9 @@ export interface AgentOptions {
   timeout?: number
   /** Direct API key authentication (skips local config) */
   auth?: AuthConfig
+  /** User-defined tools to register alongside built-in tools.
+   *  Create each with the `tool()` helper from `@ax-code/sdk`. */
+  tools?: SdkTool[]
 }
 
 export interface AuthConfig {

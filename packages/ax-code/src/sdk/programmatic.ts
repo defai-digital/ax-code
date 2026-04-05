@@ -12,6 +12,8 @@ import { Log } from "../util/log.js"
 import { bootstrap } from "../cli/bootstrap.js"
 import { Server } from "../server/server.js"
 import { Auth } from "../auth/index.js"
+import { ToolRegistry } from "../tool/registry.js"
+import { Tool } from "../tool/tool.js"
 import { setLanguage, t } from "../i18n/index.js"
 import { createOpencodeClient } from "@ax-code/sdk/v2/client"
 import type { OpencodeClient } from "@ax-code/sdk/v2/client"
@@ -24,6 +26,7 @@ import type {
   StreamHandle,
   SessionHandle,
   ToolCallInfo,
+  SdkTool,
 } from "../../../sdk/js/src/programmatic/types.js"
 import {
   DisposedError,
@@ -305,6 +308,42 @@ function classifyError(errMsg: string, rawError?: any): Error {
   }
 
   return new Error(errMsg)
+}
+
+// ============================================================
+// SDK TOOL → INTERNAL TOOL ADAPTER
+// ============================================================
+
+// Converts a user-defined `SdkTool` (from the SDK's `tool()` helper)
+// into an internal `Tool.Info` that the `ToolRegistry` accepts. The
+// adapter mirrors `fromPlugin` in `tool/registry.ts` — same shape,
+// same contract, but sourced from the programmatic SDK surface
+// instead of a config-directory `.ts` file or a plugin module.
+//
+// The user's `execute` function returns any JSON-serializable value;
+// we stringify it as the `output` field the LLM sees. If the user
+// throws, the error propagates through the normal tool-error path
+// in the session processor and gets classified as a `ToolError` in
+// the SDK's event stream.
+
+function fromSdkTool(sdkTool: SdkTool): Tool.Info {
+  const z = sdkTool.parameters as any
+  return {
+    id: sdkTool.name,
+    init: async () => ({
+      description: sdkTool.description,
+      parameters: z,
+      async execute(args: any) {
+        const result = await sdkTool.execute(args)
+        const output = typeof result === "string" ? result : JSON.stringify(result, null, 2)
+        return {
+          title: `${sdkTool.name} result`,
+          output,
+          metadata: {},
+        }
+      },
+    }),
+  }
 }
 
 // ============================================================
@@ -653,6 +692,18 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
 
       // Enhancement #6: Auto-detect env vars
       await autoDetectAuth()
+
+      // Register user-defined tools before the SDK client is created
+      // so they appear in the tool registry when the first session
+      // prompt is sent. Uses the same adapter pattern as the plugin
+      // tool loader in registry.ts:fromPlugin — the ToolRegistry
+      // already has a public `register(tool: Tool.Info)` method, so
+      // this is pure plumbing.
+      if (options.tools?.length) {
+        for (const sdkTool of options.tools) {
+          await ToolRegistry.register(fromSdkTool(sdkTool))
+        }
+      }
 
       sdk = createInProcessClient(options.directory)
       resolve()

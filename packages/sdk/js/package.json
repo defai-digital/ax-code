@@ -1,22 +1,25 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@ax-code/sdk",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "build": "bun ./script/build.ts"
+    "build": "bun ./script/build.ts",
+    "test": "bun test"
   },
   "exports": {
     ".": "./src/index.ts",
+    "./http": "./src/http.ts",
+    "./testing": "./src/testing/index.ts",
+    "./programmatic": "./src/programmatic/index.ts",
     "./client": "./src/client.ts",
     "./server": "./src/server.ts",
     "./v2": "./src/v2/index.ts",
     "./v2/client": "./src/v2/client.ts",
     "./v2/gen/client": "./src/v2/gen/client/index.ts",
-    "./v2/server": "./src/v2/server.ts",
-    "./programmatic": "./src/programmatic/index.ts"
+    "./v2/server": "./src/v2/server.ts"
   },
   "files": [
     "dist"
