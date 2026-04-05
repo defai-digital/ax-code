@@ -516,6 +516,10 @@ export namespace Server {
           const providerID = c.req.valid("param").providerID
           const info = c.req.valid("json")
           await Auth.set(providerID, info)
+          // Invalidate the per-directory provider cache so the next
+          // `Provider.list()` re-reads auth and shows the new key
+          // without requiring a process restart. See issue #13.
+          await Provider.invalidate()
           return c.json(true)
         },
       )
@@ -546,6 +550,10 @@ export namespace Server {
         async (c) => {
           const providerID = c.req.valid("param").providerID
           await Auth.remove(providerID)
+          // Same rationale as the PUT handler — a removed key must
+          // also disappear from the provider list without a restart.
+          // See issue #13.
+          await Provider.invalidate()
           return c.json(true)
         },
       )

@@ -9,8 +9,24 @@ export namespace State {
   const log = Log.create({ service: "state" })
   const recordsByKey = new Map<string, Map<Function, Entry>>()
 
-  export function create<S>(root: () => string, init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) {
-    return () => {
+  // Return type for `create`: the cached getter, plus an `invalidate`
+  // method that drops the current entry for the active root key (and
+  // runs its dispose hook, if any). Callers use invalidate() to force
+  // a rebuild on the next get() — for example, Provider.invalidate()
+  // fires from the `/auth/:providerID` server handler so a fresh API
+  // key shows up in the provider list without waiting for a full
+  // Instance.reload (which would also wipe LSP clients, MCP
+  // connections, sessions, etc.). See issue #13.
+  export type Getter<S> = (() => S) & {
+    invalidate: () => Promise<void>
+  }
+
+  export function create<S>(
+    root: () => string,
+    init: () => S,
+    dispose?: (state: Awaited<S>) => Promise<void>,
+  ): Getter<S> {
+    const get = (() => {
       const key = root()
       let entries = recordsByKey.get(key)
       if (!entries) {
@@ -25,7 +41,25 @@ export namespace State {
         dispose,
       })
       return state
+    }) as Getter<S>
+    get.invalidate = async () => {
+      const key = root()
+      const entries = recordsByKey.get(key)
+      if (!entries) return
+      const entry = entries.get(init)
+      if (!entry) return
+      entries.delete(init)
+      if (!entry.dispose) return
+      // Run the dispose hook on the cached state. Await the state
+      // first in case it's a Promise — matches the pattern in
+      // dispose() below, which also tolerates async init functions.
+      // Errors are logged but swallowed: invalidation must not fail
+      // because a stale entry's cleanup threw.
+      await Promise.resolve(entry.state)
+        .then((s) => entry.dispose!(s))
+        .catch((err) => log.error("error while invalidating state", { err, key }))
     }
+    return get
   }
 
   export async function dispose(key: string) {

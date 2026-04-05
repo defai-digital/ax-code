@@ -548,6 +548,20 @@ export namespace Provider {
     return state().then((state) => state.providers)
   }
 
+  // Drop the cached provider state so the next `list()` / `getSDK()`
+  // call re-reads `Auth.all()`, `Config.get()`, `ModelsDev.get()`, and
+  // the CUSTOM_LOADERS pipeline. The server's `PUT /auth/:providerID`
+  // handler calls this after `Auth.set()` succeeds; without it the
+  // provider list stays stale until the process restarts because
+  // `Instance.state()` caches the state forever per directory. This
+  // is the narrowest fix for issue #13 — a full `Instance.reload()`
+  // would also tear down LSP clients, MCP connections, the session
+  // store, and the tool registry, which is disproportionate for an
+  // auth-only change.
+  export async function invalidate() {
+    await state.invalidate()
+  }
+
   async function getSDK(model: Model) {
     try {
       using _ = log.time("getSDK", {
