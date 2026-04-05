@@ -30,11 +30,6 @@ const model: Provider.Model = {
     output: { text: true, audio: false, image: false, video: false, pdf: false },
     interleaved: false,
   },
-  cost: {
-    input: 0,
-    output: 0,
-    cache: { read: 0, write: 0 },
-  },
   limit: {
     context: 128_000,
     output: 8_192,
@@ -81,7 +76,6 @@ describe("session.processor", () => {
           mode: "build",
           agent: "build",
           path: { cwd: tmp.path, root: tmp.path },
-          cost: 0,
           tokens: {
             input: 0,
             output: 0,
@@ -163,7 +157,6 @@ describe("session.processor", () => {
           mode: "build",
           agent: "build",
           path: { cwd: tmp.path, root: tmp.path },
-          cost: 0,
           tokens: {
             input: 0,
             output: 0,
@@ -253,7 +246,6 @@ describe("session.processor", () => {
           mode: "build",
           agent: "build",
           path: { cwd: tmp.path, root: tmp.path },
-          cost: 0,
           tokens: {
             input: 0,
             output: 0,
@@ -326,7 +318,6 @@ describe("session.processor", () => {
           mode: "build",
           agent: "build",
           path: { cwd: tmp.path, root: tmp.path },
-          cost: 0,
           tokens: {
             input: 0,
             output: 0,

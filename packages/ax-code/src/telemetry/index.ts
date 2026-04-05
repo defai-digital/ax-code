@@ -83,7 +83,6 @@ export namespace Telemetry {
             stepSpan.setAttribute("step.finish_reason", finish.finishReason)
             stepSpan.setAttribute("step.tokens.input", finish.tokens.input)
             stepSpan.setAttribute("step.tokens.output", finish.tokens.output)
-            if (finish.cost) stepSpan.setAttribute("step.cost", finish.cost)
           }
           stepSpan.end()
           break

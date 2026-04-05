@@ -38,14 +38,6 @@ const model: Provider.Model = {
     },
     interleaved: false,
   },
-  cost: {
-    input: 0,
-    output: 0,
-    cache: {
-      read: 0,
-      write: 0,
-    },
-  },
   limit: {
     context: 0,
     input: 0,
@@ -89,7 +81,6 @@ function assistantInfo(
     mode: "",
     agent: "agent",
     path: { cwd: "/", root: "/" },
-    cost: 0,
     tokens: {
       input: 0,
       output: 0,

@@ -4,7 +4,7 @@ import * as prompts from "@clack/prompts"
 import { bootstrap } from "../bootstrap"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
-import { calculateBreakdown, formatBreakdown, estimateCost } from "../../stats"
+import { calculateBreakdown, formatBreakdown } from "../../stats"
 
 export const ContextCommand = cmd({
   command: "context [sessionID]",
@@ -101,9 +101,6 @@ export const ContextCommand = cmd({
       console.log(`  Reasoning:  ${reasoningTokens.toLocaleString()}`)
       console.log(`  Cached:     ${cachedTokens.toLocaleString()}`)
       console.log()
-
-      const cost = estimateCost(providerID, inputTokens, outputTokens, cachedTokens)
-      console.log(`${bold}Estimated Cost:${reset} $${cost.totalCost.toFixed(4)} ${dim}(input: $${cost.inputCost.toFixed(4)}, output: $${cost.outputCost.toFixed(4)})${reset}`)
 
       if (sessions.length > 1) {
         console.log(`\n${dim}${sessions.length} total sessions. Showing latest. Use: ax-code context <sessionID>${reset}`)

@@ -28,11 +28,6 @@ const model: Provider.Model = {
     output: { text: true, audio: false, image: false, video: false, pdf: false },
     interleaved: false,
   },
-  cost: {
-    input: 0,
-    output: 0,
-    cache: { read: 0, write: 0 },
-  },
   limit: {
     context: 128_000,
     output: 8_192,

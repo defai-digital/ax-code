@@ -14,7 +14,6 @@ function createModel(opts: {
   context: number
   output: number
   input?: number
-  cost?: Provider.Model["cost"]
   npm?: string
 }): Provider.Model {
   return {
@@ -26,7 +25,6 @@ function createModel(opts: {
       input: opts.input,
       output: opts.output,
     },
-    cost: opts.cost ?? { input: 0, output: 0, cache: { read: 0, write: 0 } },
     capabilities: {
       toolcall: true,
       attachment: false,
@@ -347,29 +345,6 @@ describe("session.getUsage", () => {
     expect(result.tokens.reasoning).toBe(0)
     expect(result.tokens.cache.read).toBe(0)
     expect(result.tokens.cache.write).toBe(0)
-    expect(Number.isNaN(result.cost)).toBe(false)
-  })
-
-  test("calculates cost correctly", () => {
-    const model = createModel({
-      context: 100_000,
-      output: 32_000,
-      cost: {
-        input: 3,
-        output: 15,
-        cache: { read: 0.3, write: 3.75 },
-      },
-    })
-    const result = Session.getUsage({
-      model,
-      usage: {
-        inputTokens: 1_000_000,
-        outputTokens: 100_000,
-        totalTokens: 1_100_000,
-      },
-    })
-
-    expect(result.cost).toBe(3 + 1.5)
   })
 
   test.each(["@ai-sdk/google-vertex/anthropic"])(

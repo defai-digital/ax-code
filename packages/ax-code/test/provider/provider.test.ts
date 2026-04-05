@@ -451,47 +451,6 @@ test("provider with baseURL from config", async () => {
   })
 })
 
-test("model cost defaults to zero when not specified", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "ax-code.json"),
-        JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
-          provider: {
-            "test-provider": {
-              name: "Test Provider",
-              npm: "@ai-sdk/openai-compatible",
-              env: [],
-              models: {
-                "test-model": {
-                  name: "Test Model",
-                  tool_call: true,
-                  limit: { context: 128000, output: 4096 },
-                },
-              },
-              options: {
-                apiKey: "test-key",
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const providers = await Provider.list()
-      const model = providers[ProviderID.make("test-provider")].models["test-model"]
-      expect(model.cost.input).toBe(0)
-      expect(model.cost.output).toBe(0)
-      expect(model.cost.cache.read).toBe(0)
-      expect(model.cost.cache.write).toBe(0)
-    },
-  })
-})
-
 test("model options are merged from existing model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -870,51 +829,6 @@ test("model modalities default correctly", async () => {
   })
 })
 
-test("model with custom cost values", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "ax-code.json"),
-        JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
-          provider: {
-            "test-provider": {
-              name: "Test",
-              npm: "@ai-sdk/openai-compatible",
-              env: [],
-              models: {
-                "test-model": {
-                  name: "Test Model",
-                  tool_call: true,
-                  limit: { context: 8000, output: 2000 },
-                  cost: {
-                    input: 5,
-                    output: 15,
-                    cache_read: 2.5,
-                    cache_write: 7.5,
-                  },
-                },
-              },
-              options: { apiKey: "test" },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const providers = await Provider.list()
-      const model = providers[ProviderID.make("test-provider")].models["test-model"]
-      expect(model.cost.input).toBe(5)
-      expect(model.cost.output).toBe(15)
-      expect(model.cost.cache.read).toBe(2.5)
-      expect(model.cost.cache.write).toBe(7.5)
-    },
-  })
-})
-
 test("getSmallModel returns appropriate small model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -1256,43 +1170,6 @@ test("provider with single env var includes apiKey automatically", async () => {
       expect(providers[ProviderID.make("single-env")]).toBeDefined()
       // Single env option should auto-set key
       expect(providers[ProviderID.make("single-env")].key).toBe("my-api-key")
-    },
-  })
-})
-
-test("model cost overrides existing cost values", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "ax-code.json"),
-        JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
-          provider: {
-            xai: {
-              models: {
-                "grok-4": {
-                  cost: {
-                    input: 999,
-                    output: 888,
-                  },
-                },
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
-      expect(model.cost.input).toBe(999)
-      expect(model.cost.output).toBe(888)
     },
   })
 })

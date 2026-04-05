@@ -19,7 +19,6 @@ export const AuditRecord = z.object({
       output: z.number(),
     })
     .optional(),
-  cost: z.number().optional(),
   policy: z
     .object({
       name: z.string(),

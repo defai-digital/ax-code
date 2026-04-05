@@ -362,7 +362,6 @@ export namespace SessionProcessor {
                     ? value.finishReason
                     : (value.finishReason as { type?: string })?.type ?? String(value.finishReason ?? "stop")
                   input.assistantMessage.finish = usedTools ? "tool-calls" : finishReason
-                  input.assistantMessage.cost += usage.cost
                   input.assistantMessage.tokens = {
                     total: (usage.tokens.total ?? 0) + (input.assistantMessage.tokens.total ?? 0) || undefined,
                     input: usage.tokens.input + input.assistantMessage.tokens.input,
@@ -382,7 +381,6 @@ export namespace SessionProcessor {
                     sessionID: input.assistantMessage.sessionID,
                     type: "step-finish",
                     tokens: usage.tokens,
-                    cost: usage.cost,
                   })
                   await Session.updateMessage(input.assistantMessage)
                   Recorder.emit({
@@ -397,7 +395,6 @@ export namespace SessionProcessor {
                       reasoning: usage.tokens.reasoning,
                       cache: usage.tokens.cache,
                     },
-                    cost: usage.cost,
                   })
                   Recorder.emit({
                     type: "llm.response",
@@ -410,7 +407,6 @@ export namespace SessionProcessor {
                       reasoning: usage.tokens.reasoning,
                       cache: usage.tokens.cache,
                     },
-                    cost: usage.cost,
                     latencyMs: Date.now() - stepStartTime,
                     stepIndex: attempt,
                   })

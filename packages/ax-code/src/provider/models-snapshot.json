@@ -29,12 +29,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 131072
@@ -65,12 +59,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 131072
@@ -99,12 +87,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 131072
@@ -130,12 +112,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.07,
-          "output": 0.4,
-          "cache_read": 0.01,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 131072
@@ -161,12 +137,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 204800,
           "output": 131072
@@ -194,10 +164,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "output": 32768
@@ -225,12 +191,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 204800,
           "output": 131072
@@ -259,12 +219,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 131072
@@ -293,12 +247,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 204800,
           "output": 131072
@@ -336,11 +284,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 0.5,
-          "cache_read": 0.05
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -367,11 +310,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 0.5,
-          "cache_read": 0.05
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -397,12 +335,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 3,
-          "output": 15,
-          "reasoning": 15,
-          "cache_read": 0.75
-        },
         "limit": {
           "context": 256000,
           "output": 64000
@@ -428,11 +360,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 1.5,
-          "cache_read": 0.02
-        },
         "limit": {
           "context": 256000,
           "output": 10000
@@ -459,11 +386,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 0.5,
-          "cache_read": 0.05
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -489,16 +411,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 6,
-          "cache_read": 0.2,
-          "context_over_200k": {
-            "input": 4,
-            "output": 12,
-            "cache_read": 0.4
-          }
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -524,16 +436,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 6,
-          "cache_read": 0.2,
-          "context_over_200k": {
-            "input": 4,
-            "output": 12,
-            "cache_read": 0.4
-          }
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -559,16 +461,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 6,
-          "cache_read": 0.2,
-          "context_over_200k": {
-            "input": 4,
-            "output": 12,
-            "cache_read": 0.4
-          }
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -595,11 +487,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 0.5,
-          "cache_read": 0.05
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -642,11 +529,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.1,
-          "output": 0.4,
-          "cache_read": 0.025
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -677,11 +559,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.1,
-          "output": 0.4,
-          "cache_read": 0.025
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -711,11 +588,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.15,
-          "output": 0.6,
-          "cache_read": 0.0375
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -746,16 +618,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 12,
-          "cache_read": 0.2,
-          "context_over_200k": {
-            "input": 4,
-            "output": 18,
-            "cache_read": 0.4
-          }
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -781,10 +643,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 8192,
           "output": 2000
@@ -815,11 +673,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.15,
-          "output": 0.6,
-          "cache_read": 0.0375
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -850,16 +703,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 12,
-          "cache_read": 0.2,
-          "context_over_200k": {
-            "input": 4,
-            "output": 18,
-            "cache_read": 0.4
-          }
-        },
         "limit": {
           "context": 1000000,
           "output": 64000
@@ -887,10 +730,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -917,10 +756,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 32768,
           "output": 8192
@@ -946,10 +781,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 8192,
           "output": 2000
@@ -980,11 +811,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.31
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1015,11 +841,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.31
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1050,10 +871,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.075,
-          "output": 0.3
-        },
         "limit": {
           "context": 1048576,
           "output": 8192
@@ -1082,11 +899,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.0375,
-          "output": 0.15,
-          "cache_read": 0.01
-        },
         "limit": {
           "context": 1000000,
           "output": 8192
@@ -1115,11 +927,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.075,
-          "output": 0.3,
-          "cache_read": 0.01875
-        },
         "limit": {
           "context": 1000000,
           "output": 8192
@@ -1145,10 +952,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1,
-          "output": 20
-        },
         "limit": {
           "context": 8000,
           "output": 16000
@@ -1179,16 +982,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.5,
-          "output": 3,
-          "cache_read": 0.05,
-          "context_over_200k": {
-            "input": 0.5,
-            "output": 3,
-            "cache_read": 0.05
-          }
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1219,11 +1012,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.31
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1254,12 +1042,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.3,
-          "output": 2.5,
-          "cache_read": 0.075,
-          "input_audio": 1
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1290,16 +1072,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 12,
-          "cache_read": 0.2,
-          "context_over_200k": {
-            "input": 4,
-            "output": 18,
-            "cache_read": 0.4
-          }
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1330,12 +1102,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.3,
-          "output": 2.5,
-          "cache_read": 0.075,
-          "input_audio": 1
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1366,11 +1132,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.1,
-          "output": 0.4,
-          "cache_read": 0.025
-        },
         "limit": {
           "context": 1048576,
           "output": 8192
@@ -1399,11 +1160,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 5,
-          "cache_read": 0.3125
-        },
         "limit": {
           "context": 1000000,
           "output": 8192
@@ -1433,12 +1189,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.1,
-          "output": 0.4,
-          "cache_read": 0.025,
-          "input_audio": 0.3
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1464,10 +1214,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.5,
-          "output": 10
-        },
         "limit": {
           "context": 8000,
           "output": 16000
@@ -1498,12 +1244,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.25,
-          "output": 1.5,
-          "cache_read": 0.025,
-          "cache_write": 1
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1534,11 +1274,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.1,
-          "output": 0.4,
-          "cache_read": 0.025
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1567,10 +1302,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.25,
-          "output": 60
-        },
         "limit": {
           "context": 131072,
           "output": 32768
@@ -1598,11 +1329,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.3,
-          "output": 30,
-          "cache_read": 0.075
-        },
         "limit": {
           "context": 32768,
           "output": 32768
@@ -1633,12 +1359,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.3,
-          "output": 2.5,
-          "cache_read": 0.075,
-          "input_audio": 1
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -1666,10 +1386,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 32768,
           "output": 8192
@@ -1698,12 +1414,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.5,
-          "output": 2,
-          "input_audio": 3,
-          "output_audio": 12
-        },
         "limit": {
           "context": 131072,
           "output": 65536
@@ -1729,10 +1439,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.15,
-          "output": 0
-        },
         "limit": {
           "context": 2048,
           "output": 3072
@@ -1762,12 +1468,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.5,
-          "output": 2,
-          "input_audio": 3,
-          "output_audio": 12
-        },
         "limit": {
           "context": 128000,
           "output": 8000
@@ -1795,11 +1495,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.3,
-          "output": 30,
-          "cache_read": 0.075
-        },
         "limit": {
           "context": 32768,
           "output": 32768
@@ -1836,10 +1531,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 131072,
           "output": 32768
@@ -1865,10 +1556,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 262144,
           "output": 65536
@@ -1894,10 +1581,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 262144,
           "output": 16384
@@ -1934,10 +1617,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.59,
-          "output": 0.79
-        },
         "limit": {
           "context": 8192,
           "output": 8192
@@ -1964,10 +1643,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.59,
-          "output": 0.79
-        },
         "limit": {
           "context": 131072,
           "output": 32768
@@ -1993,10 +1668,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.75,
-          "output": 0.99
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -2023,10 +1694,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.2,
-          "output": 0.2
-        },
         "limit": {
           "context": 8192,
           "output": 8192
@@ -2053,10 +1720,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.05,
-          "output": 0.08
-        },
         "limit": {
           "context": 131072,
           "output": 131072
@@ -2082,10 +1745,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.29,
-          "output": 0.39
-        },
         "limit": {
           "context": 131072,
           "output": 16384
@@ -2111,10 +1770,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.2,
-          "output": 0.2
-        },
         "limit": {
           "context": 8192,
           "output": 8192
@@ -2141,10 +1796,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.79,
-          "output": 0.79
-        },
         "limit": {
           "context": 32768,
           "output": 32768
@@ -2171,10 +1822,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 448,
           "output": 448
@@ -2200,10 +1847,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 448,
           "output": 448
@@ -2229,10 +1872,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.05,
-          "output": 0.08
-        },
         "limit": {
           "context": 8192,
           "output": 8192
@@ -2259,10 +1898,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 4096,
           "output": 4096
@@ -2288,10 +1923,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.15,
-          "output": 0.6
-        },
         "limit": {
           "context": 131072,
           "output": 65536
@@ -2316,11 +1947,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.075,
-          "output": 0.3,
-          "cache_read": 0.037
-        },
         "limit": {
           "context": 131072,
           "output": 65536
@@ -2346,10 +1972,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.075,
-          "output": 0.3
-        },
         "limit": {
           "context": 131072,
           "output": 65536
@@ -2375,10 +1997,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 40,
-          "output": 0
-        },
         "limit": {
           "context": 4000,
           "output": 50000
@@ -2404,10 +2022,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 4000,
           "output": 50000
@@ -2433,10 +2047,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.2,
-          "output": 0.2
-        },
         "limit": {
           "context": 131072,
           "output": 1024
@@ -2465,10 +2075,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.11,
-          "output": 0.34
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -2494,10 +2100,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.03,
-          "output": 0.03
-        },
         "limit": {
           "context": 512,
           "output": 512
@@ -2525,10 +2127,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.2,
-          "output": 0.6
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -2555,10 +2153,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.04,
-          "output": 0.04
-        },
         "limit": {
           "context": 512,
           "output": 512
@@ -2584,10 +2178,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.29,
-          "output": 0.59
-        },
         "limit": {
           "context": 131072,
           "output": 40960
@@ -2613,10 +2203,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -2642,10 +2228,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -2672,10 +2254,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 1,
-          "output": 3
-        },
         "limit": {
           "context": 262144,
           "output": 16384
@@ -2701,10 +2279,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 1,
-          "output": 3
-        },
         "limit": {
           "context": 131072,
           "output": 16384
@@ -2745,11 +2319,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.75,
-          "output": 14,
-          "cache_read": 0.175
-        },
         "limit": {
           "context": 400000,
           "output": 128000
@@ -2773,10 +2342,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.13,
-          "output": 0
-        },
         "limit": {
           "context": 8191,
           "output": 3072
@@ -2804,11 +2369,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.25,
-          "output": 2,
-          "cache_read": 0.025
-        },
         "limit": {
           "context": 400000,
           "output": 128000
@@ -2836,11 +2396,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.08,
-          "output": 0.32,
-          "input_audio": 4
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -2865,10 +2420,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.1,
-          "output": 0
-        },
         "limit": {
           "context": 512,
           "output": 1024
@@ -2896,10 +2447,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 30,
-          "output": 180
-        },
         "limit": {
           "context": 400000,
           "input": 272000,
@@ -2925,10 +2472,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.1,
-          "output": 0
-        },
         "limit": {
           "context": 512,
           "output": 1024
@@ -2954,11 +2497,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.1,
-          "output": 4.4,
-          "cache_read": 0.55
-        },
         "limit": {
           "context": 200000,
           "output": 100000
@@ -2987,11 +2525,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.75,
-          "output": 4.5,
-          "cache_read": 0.075
-        },
         "limit": {
           "context": 400000,
           "input": 272000,
@@ -3020,10 +2553,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 15,
-          "output": 120
-        },
         "limit": {
           "context": 400000,
           "output": 272000
@@ -3049,10 +2578,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 3,
-          "output": 4
-        },
         "limit": {
           "context": 16384,
           "output": 16384
@@ -3078,10 +2603,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 1.14,
-          "output": 4.56
-        },
         "limit": {
           "context": 131072,
           "output": 131072
@@ -3107,10 +2628,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.3,
-          "output": 0.61
-        },
         "limit": {
           "context": 128000,
           "output": 32768
@@ -3137,11 +2654,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.6,
-          "output": 2.5,
-          "cache_read": 0.15
-        },
         "limit": {
           "context": 262144,
           "output": 262144
@@ -3167,10 +2679,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 1.35,
-          "output": 5.4
-        },
         "limit": {
           "context": 163840,
           "output": 163840
@@ -3197,11 +2705,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.13
-        },
         "limit": {
           "context": 272000,
           "output": 128000
@@ -3227,10 +2730,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.71,
-          "output": 0.71
-        },
         "limit": {
           "context": 128000,
           "output": 32768
@@ -3256,10 +2755,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.13,
-          "output": 0.52
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -3285,10 +2780,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.15,
-          "output": 0.6
-        },
         "limit": {
           "context": 8192,
           "output": 2048
@@ -3316,12 +2807,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cache_read": 0.5,
-          "cache_write": 6.25
-        },
         "limit": {
           "context": 200000,
           "output": 64000
@@ -3354,10 +2839,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.6,
-          "output": 3
-        },
         "limit": {
           "context": 262144,
           "output": 262144
@@ -3389,10 +2870,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 10,
-          "output": 30
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -3419,11 +2896,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2.5,
-          "output": 10,
-          "cache_read": 1.25
-        },
         "limit": {
           "context": 128000,
           "output": 16384
@@ -3450,11 +2922,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 0.5,
-          "cache_read": 0.05
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -3480,12 +2947,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 3,
-          "output": 15,
-          "reasoning": 15,
-          "cache_read": 0.75
-        },
         "limit": {
           "context": 256000,
           "output": 64000
@@ -3511,10 +2972,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1,
-          "output": 2
-        },
         "limit": {
           "context": 16384,
           "output": 16384
@@ -3540,10 +2997,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.075,
-          "output": 0.3
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -3569,10 +3022,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.125,
-          "output": 0.5
-        },
         "limit": {
           "context": 32000,
           "output": 4096
@@ -3598,11 +3047,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 1.5,
-          "cache_read": 0.02
-        },
         "limit": {
           "context": 256000,
           "output": 10000
@@ -3628,10 +3072,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.3,
-          "output": 0.9
-        },
         "limit": {
           "context": 256000,
           "output": 256000
@@ -3659,11 +3099,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.75,
-          "output": 14,
-          "cache_read": 0.175
-        },
         "limit": {
           "context": 400000,
           "output": 128000
@@ -3690,11 +3125,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.25,
-          "output": 2,
-          "cache_read": 0.03
-        },
         "limit": {
           "context": 272000,
           "output": 128000
@@ -3721,10 +3151,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 10,
-          "output": 30
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -3750,10 +3176,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 6
-        },
         "limit": {
           "context": 128000,
           "output": 32768
@@ -3781,18 +3203,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cache_read": 0.5,
-          "cache_write": 6.25,
-          "context_over_200k": {
-            "input": 10,
-            "output": 37.5,
-            "cache_read": 1,
-            "cache_write": 12.5
-          }
-        },
         "limit": {
           "context": 200000,
           "output": 128000
@@ -3823,11 +3233,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.15,
-          "output": 0.6,
-          "cache_read": 0.08
-        },
         "limit": {
           "context": 128000,
           "output": 16384
@@ -3855,11 +3260,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.125
-        },
         "limit": {
           "context": 400000,
           "output": 128000
@@ -3886,11 +3286,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 8,
-          "cache_read": 0.5
-        },
         "limit": {
           "context": 1047576,
           "output": 32768
@@ -3916,11 +3311,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.5,
-          "output": 6,
-          "cache_read": 0.375
-        },
         "limit": {
           "context": 200000,
           "output": 100000
@@ -3946,10 +3336,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.075,
-          "output": 0.3
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -3976,10 +3362,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.2,
-          "output": 0.78
-        },
         "limit": {
           "context": 128000,
           "output": 8192
@@ -4006,10 +3388,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.37,
-          "output": 0.37
-        },
         "limit": {
           "context": 128000,
           "output": 8192
@@ -4035,10 +3413,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.13,
-          "output": 0.52
-        },
         "limit": {
           "context": 4096,
           "output": 1024
@@ -4064,10 +3438,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.17,
-          "output": 0.68
-        },
         "limit": {
           "context": 4096,
           "output": 1024
@@ -4092,10 +3462,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.14,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "output": 16384
@@ -4121,10 +3487,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.5,
-          "output": 2
-        },
         "limit": {
           "context": 4096,
           "output": 4096
@@ -4155,11 +3517,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.125
-        },
         "limit": {
           "context": 128000,
           "output": 16384
@@ -4188,11 +3545,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2.5,
-          "output": 15,
-          "cache_read": 0.25
-        },
         "limit": {
           "context": 400000,
           "input": 272000,
@@ -4220,11 +3572,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 15,
-          "output": 60,
-          "cache_read": 7.5
-        },
         "limit": {
           "context": 200000,
           "output": 100000
@@ -4251,11 +3598,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2,
-          "output": 8,
-          "cache_read": 0.5
-        },
         "limit": {
           "context": 200000,
           "output": 100000
@@ -4281,11 +3623,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 0.5,
-          "cache_read": 0.05
-        },
         "limit": {
           "context": 128000,
           "input": 128000,
@@ -4313,10 +3650,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.35,
-          "output": 5.4
-        },
         "limit": {
           "context": 128000,
           "output": 8192
@@ -4343,10 +3676,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.1,
-          "output": 0.3
-        },
         "limit": {
           "context": 128000,
           "output": 32768
@@ -4373,11 +3702,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.13
-        },
         "limit": {
           "context": 128000,
           "output": 16384
@@ -4403,10 +3727,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 2.5,
-          "output": 10
-        },
         "limit": {
           "context": 128000,
           "output": 4000
@@ -4432,10 +3752,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 2.68,
-          "output": 3.54
-        },
         "limit": {
           "context": 8192,
           "output": 2048
@@ -4461,10 +3777,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.13,
-          "output": 0.52
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -4490,10 +3802,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.3,
-          "output": 0.61
-        },
         "limit": {
           "context": 8192,
           "output": 2048
@@ -4522,12 +3830,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 15,
-          "output": 75,
-          "cache_read": 1.5,
-          "cache_write": 18.75
-        },
         "limit": {
           "context": 200000,
           "output": 32000
@@ -4560,11 +3862,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 1.25,
-          "cache_read": 0.02
-        },
         "limit": {
           "context": 400000,
           "input": 272000,
@@ -4591,10 +3888,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 60,
-          "output": 120
-        },
         "limit": {
           "context": 32768,
           "output": 32768
@@ -4621,10 +3914,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.4,
-          "output": 2
-        },
         "limit": {
           "context": 128000,
           "output": 128000
@@ -4650,10 +3939,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 60,
-          "output": 120
-        },
         "limit": {
           "context": 8192,
           "output": 8192
@@ -4681,11 +3966,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.75,
-          "output": 14,
-          "cache_read": 0.175
-        },
         "limit": {
           "context": 128000,
           "output": 16384
@@ -4712,10 +3992,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 2.04,
-          "output": 2.04
-        },
         "limit": {
           "context": 128000,
           "output": 8192
@@ -4741,10 +4017,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.58,
-          "output": 1.68
-        },
         "limit": {
           "context": 128000,
           "output": 128000
@@ -4768,10 +4040,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.1,
-          "output": 0
-        },
         "limit": {
           "context": 8192,
           "output": 1536
@@ -4797,10 +4065,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.04,
-          "output": 0.04
-        },
         "limit": {
           "context": 128000,
           "output": 8192
@@ -4826,10 +4090,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.15,
-          "output": 0.15
-        },
         "limit": {
           "context": 128000,
           "output": 128000
@@ -4857,11 +4117,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.75,
-          "output": 14,
-          "cache_read": 0.175
-        },
         "limit": {
           "context": 128000,
           "output": 16384
@@ -4889,11 +4144,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.75,
-          "output": 14,
-          "cache_read": 0.125
-        },
         "limit": {
           "context": 400000,
           "output": 128000
@@ -4919,10 +4169,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.5,
-          "output": 2
-        },
         "limit": {
           "context": 4096,
           "output": 4096
@@ -4948,10 +4194,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.125,
-          "output": 0.5
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -4977,11 +4219,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 0.5,
-          "cache_read": 0.05
-        },
         "limit": {
           "context": 128000,
           "input": 128000,
@@ -5014,11 +4251,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.125
-        },
         "limit": {
           "context": 272000,
           "output": 128000
@@ -5044,10 +4276,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.56,
-          "output": 1.68
-        },
         "limit": {
           "context": 131072,
           "output": 131072
@@ -5073,10 +4301,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.15,
-          "output": 0.6
-        },
         "limit": {
           "context": 128000,
           "output": 4000
@@ -5103,11 +4327,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.4,
-          "output": 1.6,
-          "cache_read": 0.1
-        },
         "limit": {
           "context": 1047576,
           "output": 32768
@@ -5133,10 +4352,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.17,
-          "output": 0.68
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -5162,10 +4377,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 5.33,
-          "output": 16
-        },
         "limit": {
           "context": 128000,
           "output": 32768
@@ -5191,10 +4402,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.16,
-          "output": 0.64
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -5221,11 +4428,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 0.5,
-          "cache_read": 0.05
-        },
         "limit": {
           "context": 2000000,
           "output": 30000
@@ -5252,11 +4454,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.05,
-          "output": 0.4,
-          "cache_read": 0.01
-        },
         "limit": {
           "context": 272000,
           "output": 128000
@@ -5282,10 +4479,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 2.5,
-          "output": 10
-        },
         "limit": {
           "context": 256000,
           "output": 8000
@@ -5311,10 +4504,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.125,
-          "output": 0.5
-        },
         "limit": {
           "context": 32000,
           "output": 4096
@@ -5340,10 +4529,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.12,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "output": 1536
@@ -5370,10 +4555,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.25,
-          "output": 1
-        },
         "limit": {
           "context": 128000,
           "output": 8192
@@ -5399,10 +4580,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 1.35,
-          "output": 5.4
-        },
         "limit": {
           "context": 163840,
           "output": 163840
@@ -5428,10 +4605,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.15,
-          "output": 0.6
-        },
         "limit": {
           "context": 128000,
           "output": 4096
@@ -5457,10 +4630,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 2.68,
-          "output": 3.54
-        },
         "limit": {
           "context": 128000,
           "output": 32768
@@ -5487,11 +4656,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.1,
-          "output": 0.4,
-          "cache_read": 0.03
-        },
         "limit": {
           "context": 1047576,
           "output": 32768
@@ -5520,12 +4684,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 3,
-          "output": 15,
-          "cache_read": 0.3,
-          "cache_write": 3.75
-        },
         "limit": {
           "context": 200000,
           "output": 64000
@@ -5555,11 +4713,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 16.5,
-          "output": 66,
-          "cache_read": 8.25
-        },
         "limit": {
           "context": 128000,
           "output": 32768
@@ -5585,10 +4738,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.58,
-          "output": 1.68
-        },
         "limit": {
           "context": 128000,
           "output": 128000
@@ -5614,10 +4763,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.5,
-          "output": 1.5
-        },
         "limit": {
           "context": 16384,
           "output": 16384
@@ -5641,10 +4786,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.02,
-          "output": 0
-        },
         "limit": {
           "context": 8191,
           "output": 1536
@@ -5671,11 +4812,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.13
-        },
         "limit": {
           "context": 400000,
           "output": 128000
@@ -5702,11 +4838,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.1,
-          "output": 4.4,
-          "cache_read": 0.28
-        },
         "limit": {
           "context": 200000,
           "output": 100000
@@ -5735,12 +4866,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cache_read": 0.1,
-          "cache_write": 1.25
-        },
         "limit": {
           "context": 200000,
           "output": 64000
@@ -5775,11 +4900,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.25,
-          "output": 10,
-          "cache_read": 0.125
-        },
         "limit": {
           "context": 400000,
           "output": 128000
@@ -5805,11 +4925,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.1,
-          "output": 4.4,
-          "cache_read": 0.55
-        },
         "limit": {
           "context": 128000,
           "output": 65536
@@ -5848,10 +4963,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 400000,
           "input": 272000,
@@ -5879,10 +4990,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 400000,
           "input": 128000,
@@ -5910,10 +5017,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 144000,
           "input": 128000,
@@ -5942,10 +5045,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 400000,
           "input": 272000,
@@ -5973,10 +5072,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "output": 128000
@@ -6003,10 +5098,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 144000,
           "input": 128000,
@@ -6035,10 +5126,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "input": 128000,
@@ -6069,10 +5156,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "input": 128000,
@@ -6100,10 +5183,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "input": 64000,
@@ -6130,10 +5209,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "input": 128000,
@@ -6161,10 +5236,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 400000,
           "input": 272000,
@@ -6192,10 +5263,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 264000,
           "input": 128000,
@@ -6223,10 +5290,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 400000,
           "input": 128000,
@@ -6254,10 +5317,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "input": 64000,
@@ -6285,10 +5344,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 400000,
           "input": 272000,
@@ -6319,10 +5374,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "input": 128000,
@@ -6349,10 +5400,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 200000,
           "input": 128000,
@@ -6382,10 +5429,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 128000,
           "input": 128000,
@@ -6413,10 +5456,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 216000,
           "input": 128000,
@@ -6444,10 +5483,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 264000,
           "input": 128000,
@@ -6475,10 +5510,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 264000,
           "input": 128000,
@@ -6506,10 +5537,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 160000,
           "input": 128000,
@@ -6537,10 +5564,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 80000,
           "output": 16000
@@ -6567,10 +5590,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 144000,
           "input": 128000,
@@ -6598,10 +5617,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
         "limit": {
           "context": 400000,
           "input": 128000,
@@ -6660,10 +5675,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 1.4,
-          "output": 5.6
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -6689,10 +5700,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.45,
-          "output": 2.25
-        },
         "limit": {
           "context": 262144,
           "output": 65536
@@ -6718,11 +5725,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.18,
-          "output": 0.7,
-          "reasoning": 2.1
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -6748,10 +5750,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 2.46,
-          "output": 7.37
-        },
         "limit": {
           "context": 16384,
           "output": 8192
@@ -6779,11 +5777,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.4,
-          "output": 2.4,
-          "reasoning": 2.4
-        },
         "limit": {
           "context": 1000000,
           "output": 65536
@@ -6813,11 +5806,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.1,
-          "output": 0.4,
-          "input_audio": 6.76
-        },
         "limit": {
           "context": 32768,
           "output": 2048
@@ -6843,11 +5831,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.05,
-          "output": 0.2,
-          "reasoning": 0.5
-        },
         "limit": {
           "context": 1000000,
           "output": 16384
@@ -6874,10 +5857,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.8,
-          "output": 3.2
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -6906,12 +5885,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.27,
-          "output": 1.07,
-          "input_audio": 4.44,
-          "output_audio": 8.89
-        },
         "limit": {
           "context": 32768,
           "output": 2048
@@ -6938,10 +5911,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.21,
-          "output": 0.63
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -6967,10 +5936,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.6,
-          "output": 6.4
-        },
         "limit": {
           "context": 32768,
           "output": 8192
@@ -6997,10 +5962,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.2,
-          "output": 4.8
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -7026,10 +5987,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.5,
-          "output": 1.4
-        },
         "limit": {
           "context": 8192,
           "output": 512
@@ -7055,10 +6012,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.8,
-          "output": 2.4
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -7088,12 +6041,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.43,
-          "output": 1.66,
-          "input_audio": 3.81,
-          "output_audio": 15.11
-        },
         "limit": {
           "context": 65536,
           "output": 16384
@@ -7119,11 +6066,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.35,
-          "output": 1.4,
-          "reasoning": 4.2
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -7149,11 +6091,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.4,
-          "output": 1.2,
-          "reasoning": 4
-        },
         "limit": {
           "context": 1000000,
           "output": 32768
@@ -7179,10 +6116,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.175,
-          "output": 0.7
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -7208,10 +6141,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.7,
-          "output": 2.8
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -7241,12 +6170,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.52,
-          "output": 1.99,
-          "input_audio": 4.57,
-          "output_audio": 18.13
-        },
         "limit": {
           "context": 65536,
           "output": 16384
@@ -7272,10 +6195,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 1.5,
-          "output": 7.5
-        },
         "limit": {
           "context": 262144,
           "output": 65536
@@ -7301,10 +6220,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.5,
-          "output": 6
-        },
         "limit": {
           "context": 131072,
           "output": 32768
@@ -7331,11 +6246,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.2,
-          "output": 0.8,
-          "reasoning": 2.4
-        },
         "limit": {
           "context": 131072,
           "output": 32768
@@ -7361,10 +6271,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.5,
-          "output": 2
-        },
         "limit": {
           "context": 131072,
           "output": 32768
@@ -7390,10 +6296,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.16,
-          "output": 0.49
-        },
         "limit": {
           "context": 16384,
           "output": 8192
@@ -7420,11 +6322,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.2,
-          "output": 1.6,
-          "reasoning": 4.8
-        },
         "limit": {
           "context": 262144,
           "output": 32768
@@ -7450,11 +6347,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.7,
-          "output": 2.8,
-          "reasoning": 8.4
-        },
         "limit": {
           "context": 131072,
           "output": 16384
@@ -7481,10 +6373,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.35,
-          "output": 1.05
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -7511,10 +6399,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.72,
-          "output": 0.72
-        },
         "limit": {
           "context": 34096,
           "output": 4096
@@ -7544,12 +6428,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.07,
-          "output": 0.27,
-          "input_audio": 4.44,
-          "output_audio": 8.89
-        },
         "limit": {
           "context": 32768,
           "output": 2048
@@ -7577,11 +6455,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.6,
-          "output": 3.6,
-          "reasoning": 3.6
-        },
         "limit": {
           "context": 262144,
           "output": 65536
@@ -7611,12 +6484,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 10,
-          "output": 10,
-          "input_audio": 10,
-          "output_audio": 38
-        },
         "limit": {
           "context": 53248,
           "output": 4096
@@ -7642,10 +6509,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 1,
-          "output": 5
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -7671,10 +6534,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.05,
-          "output": 0.4
-        },
         "limit": {
           "context": 1000000,
           "output": 32768
@@ -7700,10 +6559,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 1.2,
-          "output": 6
-        },
         "limit": {
           "context": 262144,
           "output": 65536
@@ -7730,10 +6585,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 2.8,
-          "output": 8.4
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -7759,11 +6610,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.7,
-          "output": 2.8,
-          "reasoning": 8.4
-        },
         "limit": {
           "context": 131072,
           "output": 16384
@@ -7789,10 +6635,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.035,
-          "output": 0.035
-        },
         "limit": {
           "context": 53248,
           "output": 4096
@@ -7818,10 +6660,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0.3,
-          "output": 1.5
-        },
         "limit": {
           "context": 1000000,
           "output": 65536
@@ -7847,10 +6685,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.35,
-          "output": 1.4
-        },
         "limit": {
           "context": 131072,
           "output": 8192
@@ -7877,11 +6711,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0.7,
-          "output": 2.8,
-          "reasoning": 8.4
-        },
         "limit": {
           "context": 131072,
           "output": 32768
@@ -7921,12 +6750,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 1000000,
           "output": 65536
@@ -7952,12 +6775,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 1048576,
           "output": 65536
@@ -7983,12 +6800,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 262144,
           "output": 65536
@@ -8013,12 +6824,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 262144,
           "output": 65536
@@ -8043,12 +6848,6 @@
           ]
         },
         "open_weights": true,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 131072
@@ -8073,12 +6872,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 131072
@@ -8103,12 +6896,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 65536
@@ -8133,12 +6920,6 @@
           ]
         },
         "open_weights": false,
-        "cost": {
-          "input": 0,
-          "output": 0,
-          "cache_read": 0,
-          "cache_write": 0
-        },
         "limit": {
           "context": 200000,
           "output": 65536

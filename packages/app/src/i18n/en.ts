@@ -427,13 +427,11 @@ export const dict = {
   "context.stats.cacheTokens": "Cache Tokens (read/write)",
   "context.stats.userMessages": "User Messages",
   "context.stats.assistantMessages": "Assistant Messages",
-  "context.stats.totalCost": "Total Cost",
   "context.stats.sessionCreated": "Session Created",
   "context.stats.lastActivity": "Last Activity",
 
   "context.usage.tokens": "Tokens",
   "context.usage.usage": "Usage",
-  "context.usage.cost": "Cost",
   "context.usage.clickToView": "Click to view context",
   "context.usage.view": "View context usage",
 

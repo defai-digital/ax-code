@@ -32,11 +32,7 @@ export const SettingsProviders: Component = () => {
   const globalSync = useGlobalSync()
   const providers = useProviders()
 
-  const connected = createMemo(() => {
-    return providers
-      .connected()
-      .filter((p) => p.id !== "opencode" || Object.values(p.models).find((m) => m.cost?.input))
-  })
+  const connected = createMemo(() => providers.connected())
 
   const popular = createMemo(() => {
     const connectedIDs = new Set(connected().map((p) => p.id))

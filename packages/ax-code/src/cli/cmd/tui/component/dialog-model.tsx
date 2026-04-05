@@ -8,11 +8,23 @@ import { createDialogProviderOptions, DialogProvider } from "./dialog-provider"
 import { useKeybind } from "../context/keybind"
 import * as fuzzysort from "fuzzysort"
 
+// Providers whose models are free to use (hosted free tier, local inference,
+// or flat-fee subscription plans). Drives the "Free" footer tag and whether
+// the picker considers the user "connected".
+const FREE_PROVIDERS = new Set([
+  "opencode",
+  "ax-code",
+  "ollama",
+  "lmstudio",
+  "ax-studio",
+  "zai-coding-plan",
+  "alibaba-coding-plan",
+])
+const isFreeProvider = (id: string) => FREE_PROVIDERS.has(id)
+
 export function useConnected() {
   const sync = useSync()
-  return createMemo(() =>
-    sync.data.provider.some((x) => x.id !== "opencode" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
-  )
+  return createMemo(() => sync.data.provider.some((x) => x.id !== "opencode"))
 }
 
 export function DialogModel(props: { providerID?: string }) {
@@ -48,7 +60,7 @@ export function DialogModel(props: { providerID?: string }) {
             description: provider.name,
             category,
             disabled: provider.id === "opencode" && model.id.includes("-nano"),
-            footer: model.cost?.input === 0 && provider.id === "opencode" ? "Free" : undefined,
+            footer: isFreeProvider(provider.id) ? "Free" : undefined,
             onSelect: () => {
               dialog.clear()
               local.model.set({ providerID: provider.id, modelID: model.id }, { recent: true })
@@ -86,7 +98,7 @@ export function DialogModel(props: { providerID?: string }) {
               : undefined,
             category: connected() ? provider.name : undefined,
             disabled: provider.id === "opencode" && model.includes("-nano"),
-            footer: info.cost?.input === 0 && provider.id === "opencode" ? "Free" : undefined,
+            footer: isFreeProvider(provider.id) ? "Free" : undefined,
             onSelect() {
               dialog.clear()
               local.model.set({ providerID: provider.id, modelID: model }, { recent: true })

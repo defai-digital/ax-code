@@ -106,7 +106,6 @@ export namespace ACP {
     }
 
     const used = msg.tokens.input + (msg.tokens.cache?.read ?? 0)
-    const totalCost = assistantMessages.reduce((sum, m) => sum + m.info.cost, 0)
 
     await connection
       .sessionUpdate({
@@ -115,7 +114,6 @@ export namespace ACP {
           sessionUpdate: "usage_update",
           used,
           size,
-          cost: { amount: totalCost, currency: "USD" },
         },
       })
       .catch((error) => {

@@ -127,7 +127,6 @@ export type AssistantMessage = {
     root: string
   }
   summary?: boolean
-  cost: number
   tokens: {
     input: number
     output: number
@@ -319,7 +318,6 @@ export type StepFinishPart = {
   type: "step-finish"
   reason: string
   snapshot?: string
-  cost: number
   tokens: {
     input: number
     output: number
@@ -1044,18 +1042,6 @@ export type ProviderConfig = {
       reasoning?: boolean
       temperature?: boolean
       tool_call?: boolean
-      cost?: {
-        input: number
-        output: number
-        cache_read?: number
-        cache_write?: number
-        context_over_200k?: {
-          input: number
-          output: number
-          cache_read?: number
-          cache_write?: number
-        }
-      }
       limit?: {
         context: number
         output: number
@@ -1480,22 +1466,6 @@ export type Model = {
       image: boolean
       video: boolean
       pdf: boolean
-    }
-  }
-  cost: {
-    input: number
-    output: number
-    cache: {
-      read: number
-      write: number
-    }
-    experimentalOver200K?: {
-      input: number
-      output: number
-      cache: {
-        read: number
-        write: number
-      }
     }
   }
   limit: {
@@ -2991,18 +2961,6 @@ export type ProviderListResponses = {
           reasoning: boolean
           temperature: boolean
           tool_call: boolean
-          cost?: {
-            input: number
-            output: number
-            cache_read?: number
-            cache_write?: number
-            context_over_200k?: {
-              input: number
-              output: number
-              cache_read?: number
-              cache_write?: number
-            }
-          }
           limit: {
             context: number
             output: number

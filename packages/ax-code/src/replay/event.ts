@@ -44,7 +44,6 @@ export const LLMResponseEvent = Base.extend({
     reasoning: z.number().optional(),
     cache: z.object({ read: z.number(), write: z.number() }).optional(),
   }),
-  cost: z.number().optional(),
   latencyMs: z.number(),
 })
 
@@ -79,7 +78,6 @@ export const StepFinishEvent = Base.extend({
     reasoning: z.number().optional(),
     cache: z.object({ read: z.number(), write: z.number() }).optional(),
   }),
-  cost: z.number().optional(),
 })
 
 export const ToolCallEvent = Base.extend({

@@ -42,7 +42,6 @@ export interface Translations {
     tokens: string
     tokensIn: string
     tokensOut: string
-    estimatedCost: string
   }
   status: {
     thinking: string

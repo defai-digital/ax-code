@@ -251,7 +251,6 @@ export namespace MessageV2 {
     type: z.literal("step-finish"),
     reason: z.string(),
     snapshot: z.string().optional(),
-    cost: z.number(),
     tokens: z.object({
       total: z.number().optional(),
       input: z.number(),
@@ -427,7 +426,6 @@ export namespace MessageV2 {
       root: z.string(),
     }),
     summary: z.boolean().optional(),
-    cost: z.number(),
     tokens: z.object({
       total: z.number().optional(),
       input: z.number(),

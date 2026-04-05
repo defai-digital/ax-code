@@ -227,7 +227,6 @@ export type AssistantMessage = {
     root: string
   }
   summary?: boolean
-  cost: number
   tokens: {
     total?: number
     input: number
@@ -444,7 +443,6 @@ export type StepFinishPart = {
   type: "step-finish"
   reason: string
   snapshot?: string
-  cost: number
   tokens: {
     total?: number
     input: number
@@ -1145,18 +1143,6 @@ export type ProviderConfig = {
         | {
             field: "reasoning_content" | "reasoning_details"
           }
-      cost?: {
-        input: number
-        output: number
-        cache_read?: number
-        cache_write?: number
-        context_over_200k?: {
-          input: number
-          output: number
-          cache_read?: number
-          cache_write?: number
-        }
-      }
       limit?: {
         context: number
         input?: number
@@ -1580,22 +1566,6 @@ export type Model = {
       | {
           field: "reasoning_content" | "reasoning_details"
         }
-  }
-  cost: {
-    input: number
-    output: number
-    cache: {
-      read: number
-      write: number
-    }
-    experimentalOver200K?: {
-      input: number
-      output: number
-      cache: {
-        read: number
-        write: number
-      }
-    }
   }
   limit: {
     context: number
@@ -3819,18 +3789,6 @@ export type ProviderListResponses = {
             | {
                 field: "reasoning_content" | "reasoning_details"
               }
-          cost?: {
-            input: number
-            output: number
-            cache_read?: number
-            cache_write?: number
-            context_over_200k?: {
-              input: number
-              output: number
-              cache_read?: number
-              cache_write?: number
-            }
-          }
           limit: {
             context: number
             input?: number

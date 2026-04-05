@@ -19,7 +19,6 @@ describe("transcript", () => {
       mode: "",
       parentID: "msg_parent",
       path: { cwd: "/test", root: "/test" },
-      cost: 0.001,
       tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
       time: { created: 1000000, completed: 1005400 },
     }
@@ -224,7 +223,6 @@ describe("transcript", () => {
         mode: "",
         parentID: "msg_parent",
         path: { cwd: "/test", root: "/test" },
-        cost: 0.001,
         tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
         time: { created: 1000000, completed: 1005400 },
       }
@@ -265,7 +263,6 @@ describe("transcript", () => {
             mode: "",
             parentID: "msg_1",
             path: { cwd: "/test", root: "/test" },
-            cost: 0.001,
             tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
             time: { created: 1000000000100, completed: 1000000000600 },
           },
@@ -303,7 +300,6 @@ describe("transcript", () => {
             mode: "",
             parentID: "msg_0",
             path: { cwd: "/test", root: "/test" },
-            cost: 0.001,
             tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
             time: { created: 1000000000100, completed: 1000000000600 },
           },

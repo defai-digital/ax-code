@@ -10,7 +10,6 @@ import { Instance } from "../../project/instance"
 interface SessionStats {
   totalSessions: number
   totalMessages: number
-  totalCost: number
   totalTokens: {
     input: number
     output: number
@@ -33,7 +32,6 @@ interface SessionStats {
           write: number
         }
       }
-      cost: number
     }
   >
   dateRange: {
@@ -41,14 +39,13 @@ interface SessionStats {
     latest: number
   }
   days: number
-  costPerDay: number
   tokensPerSession: number
   medianTokensPerSession: number
 }
 
 export const StatsCommand = cmd({
   command: "stats",
-  describe: "show token usage and cost statistics",
+  describe: "show token usage statistics",
   builder: (yargs: Argv) => {
     return yargs
       .option("days", {
@@ -129,7 +126,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
   const stats: SessionStats = {
     totalSessions: filteredSessions.length,
     totalMessages: 0,
-    totalCost: 0,
     totalTokens: {
       input: 0,
       output: 0,
@@ -146,7 +142,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
       latest: Date.now(),
     },
     days: 0,
-    costPerDay: 0,
     tokensPerSession: 0,
     medianTokensPerSession: 0,
   }
@@ -172,7 +167,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
     const batchPromises = batch.map(async (session) => {
       const messages = await Session.messages({ sessionID: session.id })
 
-      let sessionCost = 0
       let sessionTokens = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
       let sessionToolUsage: Record<string, number> = {}
       let sessionModelUsage: Record<
@@ -187,24 +181,19 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
               write: number
             }
           }
-          cost: number
         }
       > = {}
 
       for (const message of messages) {
         if (message.info.role === "assistant") {
-          sessionCost += message.info.cost || 0
-
           const modelKey = `${message.info.providerID}/${message.info.modelID}`
           if (!sessionModelUsage[modelKey]) {
             sessionModelUsage[modelKey] = {
               messages: 0,
               tokens: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-              cost: 0,
             }
           }
           sessionModelUsage[modelKey].messages++
-          sessionModelUsage[modelKey].cost += message.info.cost || 0
 
           if (message.info.tokens) {
             sessionTokens.input += message.info.tokens.input || 0
@@ -230,7 +219,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
 
       return {
         messageCount: messages.length,
-        sessionCost,
         sessionTokens,
         sessionTotalTokens:
           sessionTokens.input +
@@ -253,7 +241,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
       sessionTotalTokens.push(result.sessionTotalTokens)
 
       stats.totalMessages += result.messageCount
-      stats.totalCost += result.sessionCost
       stats.totalTokens.input += result.sessionTokens.input
       stats.totalTokens.output += result.sessionTokens.output
       stats.totalTokens.reasoning += result.sessionTokens.reasoning
@@ -269,7 +256,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
           stats.modelUsage[model] = {
             messages: 0,
             tokens: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-            cost: 0,
           }
         }
         stats.modelUsage[model].messages += usage.messages
@@ -277,7 +263,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
         stats.modelUsage[model].tokens.output += usage.tokens.output
         stats.modelUsage[model].tokens.cache.read += usage.tokens.cache.read
         stats.modelUsage[model].tokens.cache.write += usage.tokens.cache.write
-        stats.modelUsage[model].cost += usage.cost
       }
     }
   }
@@ -289,7 +274,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
     latest: latestTime,
   }
   stats.days = effectiveDays
-  stats.costPerDay = stats.totalCost / effectiveDays
   const totalTokens =
     stats.totalTokens.input +
     stats.totalTokens.output +
@@ -329,15 +313,11 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   console.log("└────────────────────────────────────────────────────────┘")
   console.log()
 
-  // Cost & Tokens section
+  // Token Usage section
   console.log("┌────────────────────────────────────────────────────────┐")
-  console.log("│                    COST & TOKENS                       │")
+  console.log("│                      TOKEN USAGE                       │")
   console.log("├────────────────────────────────────────────────────────┤")
-  const cost = isNaN(stats.totalCost) ? 0 : stats.totalCost
-  const costPerDay = isNaN(stats.costPerDay) ? 0 : stats.costPerDay
   const tokensPerSession = isNaN(stats.tokensPerSession) ? 0 : stats.tokensPerSession
-  console.log(renderRow("Total Cost", `$${cost.toFixed(2)}`))
-  console.log(renderRow("Avg Cost/Day", `$${costPerDay.toFixed(2)}`))
   console.log(renderRow("Avg Tokens/Session", formatNumber(Math.round(tokensPerSession))))
   const medianTokensPerSession = isNaN(stats.medianTokensPerSession) ? 0 : stats.medianTokensPerSession
   console.log(renderRow("Median Tokens/Session", formatNumber(Math.round(medianTokensPerSession))))
@@ -364,7 +344,6 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
       console.log(renderRow("  Output Tokens", formatNumber(usage.tokens.output)))
       console.log(renderRow("  Cache Read", formatNumber(usage.tokens.cache.read)))
       console.log(renderRow("  Cache Write", formatNumber(usage.tokens.cache.write)))
-      console.log(renderRow("  Cost", `$${usage.cost.toFixed(4)}`))
       console.log("├────────────────────────────────────────────────────────┤")
     }
     // Remove last separator and add bottom border

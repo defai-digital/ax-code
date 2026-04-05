@@ -35,8 +35,7 @@
   "usage": {
     "tokens": "tokens",
     "tokensIn": "Input tokens",
-    "tokensOut": "Output tokens",
-    "estimatedCost": "Estimated cost"
+    "tokensOut": "Output tokens"
   },
   "status": {
     "thinking": "Thinking",

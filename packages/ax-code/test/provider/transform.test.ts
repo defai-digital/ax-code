@@ -25,11 +25,6 @@ describe("ProviderTransform.options - setCacheKey", () => {
       output: { text: true, audio: false, image: false, video: false, pdf: false },
       interleaved: false,
     },
-    cost: {
-      input: 0.003,
-      output: 0.015,
-      cache: { read: 0.0003, write: 0.00375 },
-    },
     limit: {
       context: 200000,
       output: 8192,
@@ -94,11 +89,6 @@ describe("ProviderTransform.options - google thinkingConfig gating", () => {
         output: { text: true, audio: false, image: false, video: false, pdf: false },
         interleaved: false,
       },
-      cost: {
-        input: 0.001,
-        output: 0.002,
-        cache: { read: 0.0001, write: 0.0002 },
-      },
       limit: {
         context: 1_000_000,
         output: 8192,
@@ -158,11 +148,6 @@ describe("ProviderTransform.providerOptions", () => {
         input: { text: true, audio: false, image: true, video: false, pdf: false },
         output: { text: true, audio: false, image: false, video: false, pdf: false },
         interleaved: false,
-      },
-      cost: {
-        input: 0.001,
-        output: 0.002,
-        cache: { read: 0.0001, write: 0.0002 },
       },
       limit: {
         context: 200_000,
@@ -563,11 +548,6 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
             field: "reasoning_content",
           },
         },
-        cost: {
-          input: 0.001,
-          output: 0.002,
-          cache: { read: 0.0001, write: 0.0002 },
-        },
         limit: {
           context: 128000,
           output: 8192,
@@ -623,11 +603,6 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
           output: { text: true, audio: false, image: false, video: false, pdf: false },
           interleaved: false,
         },
-        cost: {
-          input: 0.03,
-          output: 0.06,
-          cache: { read: 0.001, write: 0.002 },
-        },
         limit: {
           context: 128000,
           output: 4096,
@@ -666,11 +641,6 @@ describe("ProviderTransform.message - empty image handling", () => {
       input: { text: true, audio: false, image: true, video: false, pdf: true },
       output: { text: true, audio: false, image: false, video: false, pdf: false },
       interleaved: false,
-    },
-    cost: {
-      input: 0.003,
-      output: 0.015,
-      cache: { read: 0.0003, write: 0.00375 },
     },
     limit: {
       context: 200000,
@@ -769,11 +739,6 @@ describe("ProviderTransform.variants", () => {
       input: { text: true, audio: false, image: true, video: false, pdf: false },
       output: { text: true, audio: false, image: false, video: false, pdf: false },
       interleaved: false,
-    },
-    cost: {
-      input: 0.001,
-      output: 0.002,
-      cache: { read: 0.0001, write: 0.0002 },
     },
     limit: {
       context: 200_000,

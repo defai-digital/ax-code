@@ -15,8 +15,19 @@ import { DialogManageModels } from "./dialog-manage-models"
 import { ModelTooltip } from "./model-tooltip"
 import { useLanguage } from "@/context/language"
 
-const isFree = (provider: string, cost: { input: number } | undefined) =>
-  provider === "opencode" && (!cost || cost.input === 0)
+// Providers that are free to use: the hosted "opencode"/"ax-code" provider,
+// local inference runtimes (Ollama, LM Studio, AX Studio), and flat-fee
+// subscription plans where per-call cost is bundled into the subscription.
+const FREE_PROVIDERS = new Set([
+  "opencode",
+  "ax-code",
+  "ollama",
+  "lmstudio",
+  "ax-studio",
+  "zai-coding-plan",
+  "alibaba-coding-plan",
+])
+const isFree = (provider: string) => FREE_PROVIDERS.has(provider)
 
 type ModelState = ReturnType<typeof useLocal>["model"]
 
@@ -60,7 +71,7 @@ const ModelList: Component<{
           class="w-full"
           placement="right-start"
           gutter={12}
-          value={<ModelTooltip model={item} latest={item.latest} free={isFree(item.provider.id, item.cost)} />}
+          value={<ModelTooltip model={item} latest={item.latest} free={isFree(item.provider.id)} />}
         >
           {node}
         </Tooltip>
@@ -75,7 +86,7 @@ const ModelList: Component<{
       {(i) => (
         <div class="w-full flex items-center gap-x-2 text-13-regular">
           <span class="truncate">{i.name}</span>
-          <Show when={isFree(i.provider.id, i.cost)}>
+          <Show when={isFree(i.provider.id)}>
             <Tag>{language.t("model.tag.free")}</Tag>
           </Show>
           <Show when={i.latest}>

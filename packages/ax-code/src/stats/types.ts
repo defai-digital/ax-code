@@ -30,18 +30,4 @@ export interface ContextReport {
     messageCount: number
     toolCallCount: number
   }
-  cost: CostEstimate
-}
-
-export interface CostEstimate {
-  inputCost: number
-  outputCost: number
-  totalCost: number
-  currency: string
-}
-
-export interface ProviderPricing {
-  inputPer1kTokens: number
-  outputPer1kTokens: number
-  cachedPer1kTokens?: number
 }

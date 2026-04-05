@@ -58,7 +58,6 @@ describe("revert + compact workflow", () => {
             cwd: tmp.path,
             root: tmp.path,
           },
-          cost: 0,
           tokens: {
             output: 0,
             input: 0,
@@ -118,7 +117,6 @@ describe("revert + compact workflow", () => {
             cwd: tmp.path,
             root: tmp.path,
           },
-          cost: 0,
           tokens: {
             output: 0,
             input: 0,
@@ -232,7 +230,6 @@ describe("revert + compact workflow", () => {
             cwd: tmp.path,
             root: tmp.path,
           },
-          cost: 0,
           tokens: {
             output: 0,
             input: 0,

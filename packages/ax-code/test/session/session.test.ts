@@ -112,7 +112,6 @@ describe("step-finish token propagation via Bus event", () => {
             sessionID: session.id,
             type: "step-finish" as const,
             reason: "stop",
-            cost: 0.005,
             tokens,
           }
 
@@ -129,7 +128,6 @@ describe("step-finish token propagation via Bus event", () => {
           expect(finish.tokens.total).toBe(1500)
           expect(finish.tokens.cache.read).toBe(100)
           expect(finish.tokens.cache.write).toBe(50)
-          expect(finish.cost).toBe(0.005)
           expect(received).not.toBe(partInput)
 
           unsub()

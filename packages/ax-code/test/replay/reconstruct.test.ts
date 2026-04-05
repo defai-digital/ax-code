@@ -24,7 +24,6 @@ const model: Provider.Model = {
     output: { text: true, audio: false, image: false, video: false, pdf: false },
     interleaved: false,
   },
-  cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
   limit: { context: 128_000, output: 8_192 },
   status: "active", options: {}, headers: {}, release_date: "2026-01-01",
 }
@@ -69,7 +68,6 @@ describe("replay.reconstructStream", () => {
           stepIndex: 0,
           finishReason: "tool-calls",
           tokens: { input: 100, output: 50 },
-          cost: 0.001,
         })
         Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 1 })
         Recorder.emit({
@@ -84,7 +82,6 @@ describe("replay.reconstructStream", () => {
           stepIndex: 1,
           finishReason: "stop",
           tokens: { input: 150, output: 30 },
-          cost: 0.002,
         })
         Recorder.emit({ type: "session.end", sessionID: sid, reason: "completed", totalSteps: 2 })
 
@@ -243,7 +240,6 @@ describe("replay.reconstructStream", () => {
           mode: "build",
           agent: "build",
           path: { cwd: tmp.path, root: tmp.path },
-          cost: 0,
           tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
           modelID: model.id,
           providerID: model.providerID,

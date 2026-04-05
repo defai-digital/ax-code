@@ -13,7 +13,10 @@ import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
 import { SessionCompaction } from "./compaction"
-import { MAX_CONSECUTIVE_ERRORS as _MAX_CONSECUTIVE_ERRORS, GLOBAL_STEP_LIMIT as _GLOBAL_STEP_LIMIT } from "@/constants/session"
+import {
+  MAX_CONSECUTIVE_ERRORS as _MAX_CONSECUTIVE_ERRORS,
+  GLOBAL_STEP_LIMIT as _GLOBAL_STEP_LIMIT,
+} from "@/constants/session"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
@@ -56,6 +59,9 @@ import { Truncate } from "@/tool/truncate"
 import { decodeDataUrl } from "@/util/data-url"
 import { Process } from "@/util/process"
 import {
+  commandModel,
+  commandParts,
+  commandTemplate,
   resolvePromptParts as _resolvePromptParts,
   createStructuredOutputTool as _createStructuredOutputTool,
   lastModel as _lastModel,
@@ -125,7 +131,6 @@ export namespace SessionPrompt {
         cwd: Instance.directory,
         root: Instance.worktree,
       },
-      cost: 0,
       tokens: {
         input: 0,
         output: 0,
@@ -493,7 +498,9 @@ export namespace SessionPrompt {
         log.warn("global step limit reached", { step, sessionID })
         Bus.publish(Session.Event.Error, {
           sessionID,
-          error: new NamedError.Unknown({ message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT}). Stopping to prevent infinite loop. Try breaking the task into smaller parts.` }).toObject(),
+          error: new NamedError.Unknown({
+            message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT}). Stopping to prevent infinite loop. Try breaking the task into smaller parts.`,
+          }).toObject(),
         })
         reason = "step_limit"
         break
@@ -649,7 +656,6 @@ export namespace SessionPrompt {
             cwd: Instance.directory,
             root: Instance.worktree,
           },
-          cost: 0,
           tokens: {
             input: 0,
             output: 0,
@@ -695,10 +701,13 @@ export namespace SessionPrompt {
       }
 
       if (step === 1) {
-        SessionSummary.summarize({
-          sessionID: sessionID,
-          messageID: lastUser.id,
-        }, msgs).catch((e) => log.warn("summarize failed", { error: e }))
+        SessionSummary.summarize(
+          {
+            sessionID: sessionID,
+            messageID: lastUser.id,
+          },
+          msgs,
+        ).catch((e) => log.warn("summarize failed", { error: e }))
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
@@ -803,7 +812,9 @@ export namespace SessionPrompt {
           log.warn("too many consecutive errors, stopping", { consecutiveErrors, sessionID })
           Bus.publish(Session.Event.Error, {
             sessionID,
-            error: new NamedError.Unknown({ message: `Agent encountered ${consecutiveErrors} consecutive errors. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.` }).toObject(),
+            error: new NamedError.Unknown({
+              message: `Agent encountered ${consecutiveErrors} consecutive errors. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
+            }).toObject(),
           })
           reason = "error"
           break
@@ -896,11 +907,13 @@ export namespace SessionPrompt {
       input.agent,
     )) {
       const cacheKey = schemaCacheKey(item.id)
-      const schema = _schemaCache!.get(cacheKey) ?? (() => {
-        const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
-        _schemaCache!.set(cacheKey, s)
-        return s
-      })()
+      const schema =
+        _schemaCache!.get(cacheKey) ??
+        (() => {
+          const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+          _schemaCache!.set(cacheKey, s)
+          return s
+        })()
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
@@ -1701,7 +1714,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       parentID: userMsg.id,
       mode: input.agent,
       agent: input.agent,
-      cost: 0,
       path: {
         cwd: Instance.directory,
         root: Instance.worktree,
@@ -1817,7 +1829,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       if (part.state.status !== "running") return
       part.state.metadata = { output, description: "" }
       pending = pending
-        .then(async () => { await Session.updatePart(part) })
+        .then(async () => {
+          await Session.updatePart(part)
+        })
         .catch((e) => log.warn("shell metadata write failed", { error: e }))
     }
 
@@ -1909,10 +1923,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
   })
   export type CommandInput = z.infer<typeof CommandInput>
   const bashRegex = /!`([^`]+)`/g
-  // Match [Image N] as single token, quoted strings, or non-space sequences
-  const argsRegex = /(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)/gi
-  const placeholderRegex = /\$(\d+)/g
-  const quoteTrimRegex = /^["']|["']$/g
   /**
    * Regular expression to match @ file references in text
    * Matches @ followed by file paths, excluding commas, periods at end of sentences, and backticks
@@ -1934,34 +1944,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     }
     const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
 
-    const raw = input.arguments.match(argsRegex) ?? []
-    const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))
-
     const templateCommand = await command.template
-
-    const placeholders = templateCommand.match(placeholderRegex) ?? []
-    let last = 0
-    for (const item of placeholders) {
-      const value = Number(item.slice(1))
-      if (value > last) last = value
-    }
-
-    // Let the final placeholder swallow any extra arguments so prompts read naturally
-    const withArgs = templateCommand.replaceAll(placeholderRegex, (_, index) => {
-      const position = Number(index)
-      const argIndex = position - 1
-      if (argIndex >= args.length) return ""
-      if (position === last) return args.slice(argIndex).join(" ")
-      return args[argIndex]
-    })
-    const usesArgumentsPlaceholder = templateCommand.includes("$ARGUMENTS")
-    let template = withArgs.replaceAll("$ARGUMENTS", input.arguments)
-
-    // If command doesn't explicitly handle arguments (no $N or $ARGUMENTS placeholders)
-    // but user provided arguments, append them to the template
-    if (placeholders.length === 0 && !usesArgumentsPlaceholder && input.arguments.trim()) {
-      template = template + "\n\n" + input.arguments
-    }
+    let template = commandTemplate(templateCommand, input.arguments)
 
     const shellMatches = ConfigMarkdown.shell(template)
     if (shellMatches.length > 0) {
@@ -1977,19 +1961,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     }
     template = template.trim()
 
-    const taskModel = await (async () => {
-      if (command.model) {
-        return Provider.parseModel(command.model)
-      }
-      if (command.agent) {
-        const cmdAgent = await Agent.get(command.agent)
-        if (cmdAgent?.model) {
-          return cmdAgent.model
-        }
-      }
-      if (input.model) return Provider.parseModel(input.model)
-      return await lastModel(input.sessionID)
-    })()
+    const taskModel = await commandModel({
+      command,
+      model: input.model,
+      sessionID: input.sessionID,
+    })
 
     try {
       await Provider.getModel(taskModel.providerID, taskModel.modelID)
@@ -2016,24 +1992,14 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       throw error
     }
 
-    const templateParts = await resolvePromptParts(template)
-    const isSubtask = (agent.mode === "subagent" && command.subtask !== false) || command.subtask === true
-    const parts = isSubtask
-      ? [
-          {
-            type: "subtask" as const,
-            agent: agent.name,
-            description: command.description ?? "",
-            command: input.command,
-            model: {
-              providerID: taskModel.providerID,
-              modelID: taskModel.modelID,
-            },
-            // TODO: how can we make task tool accept a more complex input?
-            prompt: templateParts.find((y) => y.type === "text")?.text ?? "",
-          },
-        ]
-      : [...templateParts, ...(input.parts ?? [])]
+    const { subtask: isSubtask, parts } = await commandParts({
+      agent,
+      command,
+      name: input.command,
+      model: taskModel,
+      template,
+      parts: input.parts,
+    })
 
     const userAgent = isSubtask ? (input.agent ?? (await Agent.defaultAgent())) : agentName
     const userModel = isSubtask

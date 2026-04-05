@@ -151,7 +151,6 @@ export namespace SessionCompaction {
         cwd: Instance.directory,
         root: Instance.worktree,
       },
-      cost: 0,
       tokens: {
         output: 0,
         input: 0,

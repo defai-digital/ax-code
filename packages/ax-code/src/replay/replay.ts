@@ -331,7 +331,7 @@ export namespace Replay {
           lines.push(`[step]    #${event.stepIndex} start`)
           break
         case "step.finish":
-          lines.push(`[step]    #${event.stepIndex} finish reason=${event.finishReason} cost=${event.cost?.toFixed(4) ?? "?"}`)
+          lines.push(`[step]    #${event.stepIndex} finish reason=${event.finishReason}`)
           break
         case "tool.call":
           lines.push(`[tool]    call ${event.tool} id=${event.callID}`)

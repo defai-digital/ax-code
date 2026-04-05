@@ -70,11 +70,10 @@ describe("R21: SIEM-compatible audit schema", () => {
         })
         Recorder.emit({
           type: "step.finish", sessionID: sid, stepIndex: 0, finishReason: "stop",
-          tokens: { input: 100, output: 20 }, cost: 0.001,
-        })
+          tokens: { input: 100, output: 20 },        })
         Recorder.emit({
           type: "llm.response", sessionID: sid, stepIndex: 0, finishReason: "stop",
-          tokens: { input: 100, output: 20 }, cost: 0.001, latencyMs: 500,
+          tokens: { input: 100, output: 20 }, latencyMs: 500,
         })
         Recorder.emit({
           type: "permission.ask", sessionID: sid, permission: "read", patterns: ["/test"],

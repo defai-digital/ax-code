@@ -1,7 +1,6 @@
 import { type Accessor, createMemo, createSignal, Match, Show, Switch } from "solid-js"
 import { useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { pipe, sumBy } from "remeda"
 import { useTheme } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import type { AssistantMessage, Session } from "@ax-code/sdk/v2"
@@ -20,12 +19,12 @@ const Title = (props: { session: Accessor<Session> }) => {
   )
 }
 
-const ContextInfo = (props: { context: Accessor<string | undefined>; cost: Accessor<string> }) => {
+const ContextInfo = (props: { context: Accessor<string | undefined> }) => {
   const { theme } = useTheme()
   return (
     <Show when={props.context()}>
       <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
-        {props.context()} ({props.cost()})
+        {props.context()}
       </text>
     </Show>
   )
@@ -47,17 +46,6 @@ export function Header() {
   const sync = useSync()
   const session = createMemo(() => sync.session.get(route.sessionID)!)
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
-
-  const cost = createMemo(() => {
-    const total = pipe(
-      messages(),
-      sumBy((x) => (x.role === "assistant" ? x.cost : 0)),
-    )
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(total)
-  })
 
   const context = createMemo(() => {
     const last = Usage.last(messages()) as AssistantMessage
@@ -123,7 +111,7 @@ export function Header() {
                   </text>
                 )}
 
-                <ContextInfo context={context} cost={cost} />
+                <ContextInfo context={context} />
               </box>
               <box flexDirection="row" gap={2}>
                 <box
@@ -169,7 +157,7 @@ export function Header() {
               ) : (
                 <Title session={session} />
               )}
-              <ContextInfo context={context} cost={cost} />
+              <ContextInfo context={context} />
             </box>
           </Match>
         </Switch>

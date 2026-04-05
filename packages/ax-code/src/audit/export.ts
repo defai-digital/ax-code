@@ -35,7 +35,6 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
         result: event.finishReason,
         duration_ms: event.latencyMs,
         token_usage: { input: event.tokens.input, output: event.tokens.output },
-        cost: event.cost,
       }
     case "tool.call":
       return { ...base, tool: event.tool, action: "call", target: event.callID }
@@ -55,7 +54,6 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
         action: "step.finish",
         result: event.finishReason,
         token_usage: { input: event.tokens.input, output: event.tokens.output },
-        cost: event.cost,
       }
     case "permission.ask":
       return { ...base, action: "permission.ask", target: event.permission, tool: event.tool }
