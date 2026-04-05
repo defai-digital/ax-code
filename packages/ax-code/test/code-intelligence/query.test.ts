@@ -1,0 +1,393 @@
+import { describe, expect, test } from "bun:test"
+import { tmpdir } from "../fixture/fixture"
+import { Instance } from "../../src/project/instance"
+import { Log } from "../../src/util/log"
+import { CodeGraphQuery } from "../../src/code-intelligence/query"
+import { CodeNodeID, CodeEdgeID, CodeFileID } from "../../src/code-intelligence/id"
+import type { ProjectID } from "../../src/project/schema"
+
+Log.init({ print: false })
+
+// These tests exercise the low-level query layer directly with
+// hand-constructed rows. No LSP, no filesystem walk — just the
+// storage semantics. Phase 1's public API is a thin wrapper over
+// these functions, so covering them here covers most of the API.
+
+function now() {
+  return Date.now()
+}
+
+function makeNode(overrides: Partial<Parameters<typeof CodeGraphQuery.insertNode>[0]>) {
+  const t = now()
+  return {
+    id: CodeNodeID.ascending(),
+    project_id: "proj_test" as ProjectID,
+    kind: "function" as const,
+    name: "default",
+    qualified_name: "default",
+    file: "/tmp/file.ts",
+    range_start_line: 0,
+    range_start_char: 0,
+    range_end_line: 1,
+    range_end_char: 0,
+    signature: null,
+    visibility: null,
+    metadata: null,
+    time_created: t,
+    time_updated: t,
+    ...overrides,
+  }
+}
+
+function makeEdge(overrides: Partial<Parameters<typeof CodeGraphQuery.insertEdge>[0]>) {
+  const t = now()
+  return {
+    id: CodeEdgeID.ascending(),
+    project_id: "proj_test" as ProjectID,
+    kind: "calls" as const,
+    from_node: CodeNodeID.make("cnd_default"),
+    to_node: CodeNodeID.make("cnd_default"),
+    file: "/tmp/file.ts",
+    range_start_line: 0,
+    range_start_char: 0,
+    range_end_line: 1,
+    range_end_char: 0,
+    time_created: t,
+    time_updated: t,
+    ...overrides,
+  }
+}
+
+describe("CodeGraphQuery nodes", () => {
+  test("insertNode and findNodesByName roundtrip", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        const n = makeNode({ project_id: projectID, name: "foo", qualified_name: "foo" })
+        CodeGraphQuery.insertNode(n)
+
+        const found = CodeGraphQuery.findNodesByName(projectID, "foo")
+        expect(found.length).toBe(1)
+        expect(found[0].name).toBe("foo")
+        expect(found[0].kind).toBe("function")
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("findNodesByName filters by kind and file", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNode(
+          makeNode({ project_id: projectID, name: "bar", kind: "function", file: "/tmp/a.ts" }),
+        )
+        CodeGraphQuery.insertNode(
+          makeNode({ project_id: projectID, name: "bar", kind: "class", file: "/tmp/b.ts" }),
+        )
+
+        const fns = CodeGraphQuery.findNodesByName(projectID, "bar", { kind: "function" })
+        expect(fns.length).toBe(1)
+        expect(fns[0].kind).toBe("function")
+
+        const inA = CodeGraphQuery.findNodesByName(projectID, "bar", { file: "/tmp/a.ts" })
+        expect(inA.length).toBe(1)
+        expect(inA[0].file).toBe("/tmp/a.ts")
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("findNodesByNamePrefix returns name-prefixed matches", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "handleRequest" }))
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "handleResponse" }))
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "processPayment" }))
+
+        const handles = CodeGraphQuery.findNodesByNamePrefix(projectID, "handle")
+        expect(handles.length).toBe(2)
+        expect(handles.map((n) => n.name).sort()).toEqual(["handleRequest", "handleResponse"])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("nodesInFile returns only the requested file", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNodes([
+          makeNode({ project_id: projectID, name: "a", file: "/tmp/x.ts" }),
+          makeNode({ project_id: projectID, name: "b", file: "/tmp/x.ts" }),
+          makeNode({ project_id: projectID, name: "c", file: "/tmp/y.ts" }),
+        ])
+
+        const xs = CodeGraphQuery.nodesInFile(projectID, "/tmp/x.ts")
+        expect(xs.length).toBe(2)
+        expect(xs.map((n) => n.name).sort()).toEqual(["a", "b"])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("deleteNodesInFile removes only nodes in the given file", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNodes([
+          makeNode({ project_id: projectID, name: "a", file: "/tmp/doomed.ts" }),
+          makeNode({ project_id: projectID, name: "b", file: "/tmp/safe.ts" }),
+        ])
+        expect(CodeGraphQuery.countNodes(projectID)).toBe(2)
+
+        CodeGraphQuery.deleteNodesInFile(projectID, "/tmp/doomed.ts")
+        expect(CodeGraphQuery.countNodes(projectID)).toBe(1)
+
+        const remaining = CodeGraphQuery.nodesInFile(projectID, "/tmp/safe.ts")
+        expect(remaining[0].name).toBe("b")
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+})
+
+describe("CodeGraphQuery edges", () => {
+  test("edgesFrom and edgesTo roundtrip with kind filter", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        const caller = makeNode({ project_id: projectID, name: "caller" })
+        const callee = makeNode({ project_id: projectID, name: "callee" })
+        const other = makeNode({ project_id: projectID, name: "other" })
+        CodeGraphQuery.insertNodes([caller, callee, other])
+
+        CodeGraphQuery.insertEdge(
+          makeEdge({
+            project_id: projectID,
+            kind: "calls",
+            from_node: caller.id,
+            to_node: callee.id,
+          }),
+        )
+        CodeGraphQuery.insertEdge(
+          makeEdge({
+            project_id: projectID,
+            kind: "references",
+            from_node: caller.id,
+            to_node: other.id,
+          }),
+        )
+
+        const callsFromCaller = CodeGraphQuery.edgesFrom(projectID, caller.id, "calls")
+        expect(callsFromCaller.length).toBe(1)
+        expect(callsFromCaller[0].to_node).toBe(callee.id)
+
+        const allFromCaller = CodeGraphQuery.edgesFrom(projectID, caller.id)
+        expect(allFromCaller.length).toBe(2)
+
+        const callsToCallee = CodeGraphQuery.edgesTo(projectID, callee.id, "calls")
+        expect(callsToCallee.length).toBe(1)
+        expect(callsToCallee[0].from_node).toBe(caller.id)
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("deleteEdgesTouchingFile removes edges whose endpoints are in the file", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        const inFile = makeNode({ project_id: projectID, name: "inside", file: "/tmp/target.ts" })
+        const outsideFile = makeNode({ project_id: projectID, name: "outside", file: "/tmp/other.ts" })
+        CodeGraphQuery.insertNodes([inFile, outsideFile])
+
+        CodeGraphQuery.insertEdge(
+          makeEdge({
+            project_id: projectID,
+            from_node: inFile.id,
+            to_node: outsideFile.id,
+            file: "/tmp/target.ts",
+          }),
+        )
+        CodeGraphQuery.insertEdge(
+          makeEdge({
+            project_id: projectID,
+            from_node: outsideFile.id,
+            to_node: inFile.id,
+            file: "/tmp/other.ts",
+          }),
+        )
+        expect(CodeGraphQuery.countEdges(projectID)).toBe(2)
+
+        CodeGraphQuery.deleteEdgesTouchingFile(projectID, "/tmp/target.ts")
+        // Both edges touch inFile, so both should be gone.
+        expect(CodeGraphQuery.countEdges(projectID)).toBe(0)
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+})
+
+describe("CodeGraphQuery file state", () => {
+  test("upsertFile inserts on first call and updates on second", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        const fileId = CodeFileID.ascending()
+        const t1 = now()
+
+        CodeGraphQuery.upsertFile({
+          id: fileId,
+          project_id: projectID,
+          path: "/tmp/x.ts",
+          sha: "hash1",
+          size: 100,
+          lang: "typescript",
+          indexed_at: t1,
+          completeness: "lsp-only",
+          time_created: t1,
+          time_updated: t1,
+        })
+
+        let row = CodeGraphQuery.getFile(projectID, "/tmp/x.ts")
+        expect(row?.sha).toBe("hash1")
+        expect(row?.size).toBe(100)
+
+        const t2 = t1 + 1000
+        CodeGraphQuery.upsertFile({
+          id: fileId,
+          project_id: projectID,
+          path: "/tmp/x.ts",
+          sha: "hash2",
+          size: 200,
+          lang: "typescript",
+          indexed_at: t2,
+          completeness: "lsp-only",
+          time_created: t1,
+          time_updated: t2,
+        })
+
+        row = CodeGraphQuery.getFile(projectID, "/tmp/x.ts")
+        expect(row?.sha).toBe("hash2")
+        expect(row?.size).toBe(200)
+        expect(row?.indexed_at).toBe(t2)
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+})
+
+describe("CodeGraphQuery cursor", () => {
+  test("upsertCursor tracks commit and counts", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.upsertCursor(projectID, "abc123", 10, 20)
+        let c = CodeGraphQuery.getCursor(projectID)
+        expect(c?.commit_sha).toBe("abc123")
+        expect(c?.node_count).toBe(10)
+        expect(c?.edge_count).toBe(20)
+
+        CodeGraphQuery.upsertCursor(projectID, "def456", 15, 30)
+        c = CodeGraphQuery.getCursor(projectID)
+        expect(c?.commit_sha).toBe("def456")
+        expect(c?.node_count).toBe(15)
+        expect(c?.edge_count).toBe(30)
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+})
+
+describe("CodeGraphQuery project isolation", () => {
+  test("queries do not leak between projects", async () => {
+    // Two separate git repos give us two distinct project IDs that
+    // both exist in the `project` table, satisfying the foreign key
+    // constraint on code_node.project_id. Without {git: true}, both
+    // tmpdirs collapse to the same "global" project.
+    await using tmpA = await tmpdir({ git: true })
+    await using tmpB = await tmpdir({ git: true })
+
+    const projectA = await Instance.provide({
+      directory: tmpA.path,
+      fn: async () => {
+        const id = Instance.project.id
+        CodeGraphQuery.clearProject(id)
+        CodeGraphQuery.insertNode(makeNode({ project_id: id, name: "shared" }))
+        return id
+      },
+    })
+
+    const projectB = await Instance.provide({
+      directory: tmpB.path,
+      fn: async () => {
+        const id = Instance.project.id
+        CodeGraphQuery.clearProject(id)
+        CodeGraphQuery.insertNode(makeNode({ project_id: id, name: "shared" }))
+        return id
+      },
+    })
+
+    await Instance.provide({
+      directory: tmpA.path,
+      fn: async () => {
+        const fromA = CodeGraphQuery.findNodesByName(projectA, "shared")
+        const fromB = CodeGraphQuery.findNodesByName(projectB, "shared")
+        expect(fromA.length).toBe(1)
+        expect(fromB.length).toBe(1)
+        expect(fromA[0].project_id).toBe(projectA)
+        expect(fromB[0].project_id).toBe(projectB)
+        expect(projectA).not.toBe(projectB)
+        CodeGraphQuery.clearProject(projectA)
+        CodeGraphQuery.clearProject(projectB)
+      },
+    })
+  })
+})
