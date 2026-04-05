@@ -43,6 +43,46 @@ export const getAssistantSummary = (
   return getFirstLine(paragraph ?? text)
 }
 
+export const getHandoffVisible = (input: {
+  sessionID?: string
+  messagesReady: boolean
+  hasReview: boolean
+  lastUserID?: string
+  busy: boolean
+}) => {
+  if (!input.sessionID) return false
+  if (!input.messagesReady) return false
+  if (!input.lastUserID) return false
+  if (!input.hasReview) return false
+  return !input.busy
+}
+
+export const getHandoffTitle = (input: {
+  user?: { id: string; summary?: { title?: string; body?: string } }
+  sessionTitle?: string
+  fallback: string
+  line: (id: string) => string
+}) => {
+  const title = getFirstLine(input.user?.summary?.title)
+  if (title) return title
+  const body = getFirstLine(input.user?.summary?.body)
+  if (body) return body
+  const id = input.user?.id
+  if (id) return input.line(id)
+  return input.sessionTitle || input.fallback
+}
+
+export const getHandoffSummary = (input: {
+  user?: { summary?: { body?: string } }
+  title: string
+  assistant?: string
+}) => {
+  const body = getFirstLine(input.user?.summary?.body)
+  if (body && body !== input.title) return body
+  if (input.assistant && input.assistant !== input.title) return input.assistant
+  return undefined
+}
+
 export const getDiffKind = (diff: Diff) => {
   if (diff.status) return diff.status
   if (!diff.before && diff.after) return "added" as const
@@ -153,3 +193,27 @@ export const getHandoffText = (input: {
   ]
     .filter((item): item is string => !!item)
     .join("\n")
+
+export const copyText = async (value: string) => {
+  const body = typeof document === "undefined" ? undefined : document.body
+  if (body) {
+    const area = document.createElement("textarea")
+    area.value = value
+    area.setAttribute("readonly", "")
+    area.style.position = "fixed"
+    area.style.opacity = "0"
+    area.style.pointerEvents = "none"
+    body.appendChild(area)
+    area.select()
+    const copied = document.execCommand("copy")
+    body.removeChild(area)
+    if (copied) return true
+  }
+
+  const clip = typeof navigator === "undefined" ? undefined : navigator.clipboard
+  if (!clip?.writeText) return false
+  return clip.writeText(value).then(
+    () => true,
+    () => false,
+  )
+}

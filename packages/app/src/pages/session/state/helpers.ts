@@ -1,6 +1,7 @@
 import { batch, createMemo, onCleanup, onMount, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { AssistantMessage, UserMessage } from "@ax-code/sdk/v2"
+import type { Prompt } from "@/context/prompt"
 import { same } from "@/utils/same"
 
 const emptyTabs: string[] = []
@@ -142,6 +143,108 @@ export const filterReviewDiffs = <T>(
 export const selectedReviewFile = <T extends { file: string }>(diffs: readonly T[], active?: string) => {
   if (active && diffs.some((diff) => diff.file === active)) return active
   return diffs[0]?.file
+}
+
+type PromptPart = {
+  type: string
+  content?: string
+  filename?: string
+}
+
+export const promptDraftLine = (parts: PromptPart[], attachmentLabel: string) => {
+  const text = parts
+    .map((part) => (part.type === "image" ? `[image:${part.filename}]` : part.content ?? ""))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (text) return text
+  return `[${attachmentLabel}]`
+}
+
+export const updateSessionInfo = <T extends { id: string }>(list: readonly T[], next: T) => {
+  const idx = list.findIndex((item) => item.id === next.id)
+  if (idx < 0) return [...list]
+  const out = list.slice()
+  out[idx] = next
+  return out
+}
+
+export const updateSessionRevert = <T extends { id: string; revert?: unknown }>(
+  list: readonly T[],
+  sessionID: string,
+  revert: T["revert"],
+) => {
+  const idx = list.findIndex((item) => item.id === sessionID)
+  if (idx < 0) return [...list]
+  const out = list.slice()
+  out[idx] = { ...out[idx], revert }
+  return out
+}
+
+export const isSessionBusy = (
+  status: { type: string } | undefined,
+  messages: readonly (AssistantMessage | UserMessage)[],
+) => {
+  if ((status ?? { type: "idle" }).type !== "idle") return true
+  return messages.some((item) => item.role === "assistant" && typeof item.time.completed !== "number")
+}
+
+export const nextUserMessage = (messages: readonly UserMessage[], id: string) => messages.find((item) => item.id > id)
+
+export const revertPlan = (input: {
+  sessionID: string
+  messageID: string
+  draft: (id: string) => Prompt
+}) => ({
+  request: {
+    sessionID: input.sessionID,
+    messageID: input.messageID,
+  },
+  revert: {
+    messageID: input.messageID,
+  },
+  prompt: input.draft(input.messageID),
+})
+
+export const restorePlan = (input: {
+  sessionID: string
+  messageID: string
+  messages: readonly UserMessage[]
+  draft: (id: string) => Prompt
+}) => {
+  const next = nextUserMessage(input.messages, input.messageID)
+  if (!next) {
+    return {
+      request: {
+        type: "unrevert" as const,
+        sessionID: input.sessionID,
+      },
+      revert: undefined,
+      reset: true,
+    }
+  }
+
+  return {
+    request: {
+      type: "revert" as const,
+      sessionID: input.sessionID,
+      messageID: next.id,
+    },
+    revert: {
+      messageID: next.id,
+    },
+    prompt: input.draft(next.id),
+    reset: false,
+  }
+}
+
+export const rolledMessages = (
+  messages: readonly UserMessage[],
+  revertID: string | undefined,
+  text: (id: string) => string,
+) => {
+  if (!revertID) return []
+  return messages.filter((item) => item.id >= revertID).map((item) => ({ id: item.id, text: text(item.id) }))
 }
 
 export const shouldFocusTerminalOnKeyDown = (event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey">) => {

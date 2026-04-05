@@ -28,7 +28,13 @@ import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
-import { CUSTOM_LOADERS, type CustomModelLoader, type CustomVarsLoader, type CustomDiscoverModels, type CustomLoader } from "./loaders"
+import {
+  CUSTOM_LOADERS,
+  type CustomModelLoader,
+  type CustomVarsLoader,
+  type CustomDiscoverModels,
+  type CustomLoader,
+} from "./loaders"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -111,6 +117,14 @@ export namespace Provider {
     return sdk.responses === undefined && sdk.chat === undefined
   }
 
+  const Cost = z.object({
+    input: z.number(),
+    output: z.number(),
+    cache_read: z.number().optional(),
+    cache_write: z.number().optional(),
+    reasoning: z.number().optional(),
+  })
+
   export const Model = z
     .object({
       id: ModelID.zod,
@@ -153,6 +167,7 @@ export namespace Provider {
         input: z.number().optional(),
         output: z.number(),
       }),
+      cost: Cost,
       status: z.enum(["alpha", "beta", "deprecated", "active"]),
       options: z.record(z.string(), z.any()),
       headers: z.record(z.string(), z.string()),
@@ -198,6 +213,7 @@ export namespace Provider {
         input: model.limit.input,
         output: model.limit.output,
       },
+      cost: model.cost,
       capabilities: {
         temperature: model.temperature,
         reasoning: model.reasoning,
@@ -346,6 +362,13 @@ export namespace Provider {
             context: model.limit?.context ?? existingModel?.limit?.context ?? 0,
             output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
           },
+          cost: {
+            input: model.cost?.input ?? existingModel?.cost.input ?? 0,
+            output: model.cost?.output ?? existingModel?.cost.output ?? 0,
+            cache_read: model.cost?.cache_read ?? existingModel?.cost.cache_read,
+            cache_write: model.cost?.cache_write ?? existingModel?.cost.cache_write,
+            reasoning: model.cost?.reasoning ?? existingModel?.cost.reasoning,
+          },
           headers: mergeDeep(existingModel?.headers ?? {}, model.headers ?? {}),
           family: model.family ?? existingModel?.family ?? "",
           release_date: model.release_date ?? existingModel?.release_date ?? "",
@@ -447,8 +470,7 @@ export namespace Provider {
 
       for (const [modelID, model] of Object.entries(provider.models)) {
         model.api = { ...model.api, id: model.api.id ?? model.id ?? modelID }
-        if (modelID === "gpt-5-chat-latest")
-          delete provider.models[modelID]
+        if (modelID === "gpt-5-chat-latest") delete provider.models[modelID]
         if (model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
         if (model.status === "deprecated") delete provider.models[modelID]
         if (
@@ -603,7 +625,11 @@ export namespace Provider {
       if (!model.api.npm.startsWith("file://") && !NPM_ALLOWLIST.test(model.api.npm)) {
         throw new InitError(
           { providerID: model.providerID },
-          { cause: new Error(`Package '${model.api.npm}' is not an allowed provider SDK. Only @ai-sdk/* packages are permitted.`) },
+          {
+            cause: new Error(
+              `Package '${model.api.npm}' is not an allowed provider SDK. Only @ai-sdk/* packages are permitted.`,
+            ),
+          },
         )
       }
 
@@ -618,7 +644,11 @@ export namespace Provider {
       const mod = await import(installedPath)
 
       const createKey = Object.keys(mod).find((key) => key.startsWith("create"))
-      if (!createKey) throw new InitError({ providerID: model.providerID }, { cause: new Error(`No 'create*' export found in package ${model.api.npm}`) })
+      if (!createKey)
+        throw new InitError(
+          { providerID: model.providerID },
+          { cause: new Error(`No 'create*' export found in package ${model.api.npm}`) },
+        )
       const fn = mod[createKey]
       const loaded = fn({
         name: model.providerID,
@@ -716,12 +746,7 @@ export namespace Provider {
 
     const provider = await state().then((state) => state.providers[providerID])
     if (provider) {
-      let priority = [
-        "gemini-3-flash",
-        "gemini-flash",
-        "llama-3.1-8b",
-        "llama3-8b",
-      ]
+      let priority = ["gemini-3-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
       if (providerID.startsWith("zai")) {
         priority = ["glm-4.7-flash", "glm-4.5-flash", "glm-5-turbo"]
       }

@@ -1,8 +1,23 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
+import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"
-import { clangdAsset, venvBin, venvPaths, venvPython, zlsAsset } from "../../src/lsp/server-helpers"
+import {
+  bunServerArgs,
+  clangdAsset,
+  globalBin,
+  globalPath,
+  installReleaseBin,
+  releaseAsset,
+  spawnInfo,
+  toolBin,
+  toolServer,
+  venvBin,
+  venvPaths,
+  venvPython,
+  zlsAsset,
+} from "../../src/lsp/server-helpers"
 
 describe("lsp server helpers", () => {
   test("lists default venv search paths", async () => {
@@ -74,5 +89,130 @@ describe("lsp server helpers", () => {
         "linux",
       ),
     ).toBeUndefined()
+  })
+
+  test("finds a release asset by exact name", () => {
+    expect(
+      releaseAsset(
+        [
+          { name: "a.zip", browser_download_url: "https://example.com/a" },
+          { name: "b.zip", browser_download_url: "https://example.com/b" },
+        ],
+        "b.zip",
+      ),
+    ).toEqual({ name: "b.zip", browser_download_url: "https://example.com/b" })
+  })
+
+  test("builds bun run args for js-backed servers", () => {
+    expect(bunServerArgs("/tmp/server.js", ["--stdio"])).toEqual(["run", "/tmp/server.js", "--stdio"])
+    expect(bunServerArgs("/tmp/cli.js", ["start"])).toEqual(["run", "/tmp/cli.js", "start"])
+  })
+
+  test("builds global binary paths by platform", () => {
+    expect(globalBin("gopls", "darwin")).toBe(path.join(Global.Path.bin, "gopls"))
+    expect(globalBin("gopls", "win32")).toBe(path.join(Global.Path.bin, "gopls.exe"))
+  })
+
+  test("includes the shared bin directory in PATH lookups", () => {
+    expect(globalPath()).toContain(Global.Path.bin)
+  })
+
+  test("prefers an already installed global tool before install fallback", async () => {
+    const bin = await toolBin({
+      name: "gopls",
+      install: ["go", "install", "gopls"],
+      global: () => "/tmp/gopls",
+      ensure: async () => "/tmp/fallback",
+    })
+
+    expect(bin).toBe("/tmp/gopls")
+  })
+
+  test("falls back to installer when global tool is missing", async () => {
+    const bin = await toolBin({
+      name: "rubocop",
+      install: ["gem", "install", "rubocop"],
+      global: () => undefined,
+      ensure: async (input) => `${input.name}-bin`,
+    })
+
+    expect(bin).toBe("rubocop-bin")
+  })
+
+  test("builds spawn info with cwd and args", () => {
+    const info = spawnInfo("/tmp/server", "/tmp/root", ["--stdio"])
+
+    expect(info.process.spawnfile).toBe("/tmp/server")
+    expect(info.process.spawnargs.slice(1)).toEqual(["--stdio"])
+  })
+
+  test("builds tool-backed server info from the installed binary", async () => {
+    const info = await toolServer("/tmp/root", {
+      name: "gopls",
+      install: ["go", "install", "gopls"],
+      args: ["--stdio"],
+      global: () => "/tmp/gopls",
+    })
+
+    expect(info?.process.spawnfile).toBe("/tmp/gopls")
+    expect(info?.process.spawnargs.slice(1)).toEqual(["--stdio"])
+  })
+
+  test("skips tool-backed server info when the tool is unavailable", async () => {
+    const info = await toolServer("/tmp/root", {
+      name: "gopls",
+      install: ["go", "install", "gopls"],
+      global: () => undefined,
+      ensure: async () => undefined,
+    })
+
+    expect(info).toBeUndefined()
+  })
+
+  test("installs a zip release binary", async () => {
+    const calls: string[] = []
+    const bin = await installReleaseBin({
+      id: "texlab",
+      assetName: "texlab.zip",
+      url: "https://example.com/texlab.zip",
+      bin: "/tmp/texlab",
+      platform: "darwin",
+      fetcher: async () => ({ ok: true, body: "zip-stream" }),
+      writeStream: async (file) => void calls.push(`write:${file}`),
+      extractZip: async (from, to) => void calls.push(`zip:${from}:${to}`),
+      remove: async (file) => void calls.push(`rm:${file}`),
+      exists: async () => true,
+      chmod: async (file, mode) => void calls.push(`chmod:${file}:${mode}`),
+    })
+
+    expect(bin).toBe("/tmp/texlab")
+    expect(calls.some((item) => item.startsWith("write:"))).toBe(true)
+    expect(calls.some((item) => item.startsWith("zip:"))).toBe(true)
+    expect(calls.some((item) => item.startsWith("rm:"))).toBe(true)
+    expect(calls.some((item) => item.startsWith("chmod:/tmp/texlab:"))).toBe(true)
+  })
+
+  test("installs a tar release binary with custom args", async () => {
+    const calls: string[][] = []
+    const bin = await installReleaseBin({
+      id: "tinymist",
+      assetName: "tinymist.tar.gz",
+      url: "https://example.com/tinymist.tar.gz",
+      bin: "/tmp/tinymist",
+      platform: "linux",
+      fetcher: async () => ({ ok: true, body: "tar-stream" }),
+      writeStream: async () => {},
+      run: async (cmd) => {
+        calls.push(cmd)
+        return {} as any
+      },
+      remove: async () => {},
+      exists: async () => true,
+      chmod: async () => {},
+      tarArgs: ["-xzf", "--strip-components=1"],
+    })
+
+    expect(bin).toBe("/tmp/tinymist")
+    expect(calls).toEqual([["tar", "-xzf", "--strip-components=1", path.join(Global.Path.bin, "tinymist.tar.gz")]])
   })
 })

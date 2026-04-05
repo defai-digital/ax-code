@@ -12,7 +12,6 @@ import {
   useContext,
 } from "solid-js"
 import { Dynamic } from "solid-js/web"
-import path from "path"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
@@ -51,35 +50,33 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { Header } from "./header"
-import { parsePatch } from "diff"
 import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
-import type { PromptInfo } from "../../component/prompt/history"
-import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar } from "./sidebar"
 import { Flag } from "@/flag/flag"
 import parsers from "../../../../../../parsers-config.ts"
-import { Clipboard } from "../../util/clipboard"
 import { Toast, useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv.tsx"
-import { Editor } from "../../util/editor"
 import stripAnsi from "strip-ansi"
 import { Footer } from "./footer.tsx"
 import { usePromptRef } from "../../context/prompt"
 import { useExit } from "../../context/exit"
-import { Filesystem } from "@/util/filesystem"
 import { Global } from "@/global"
 import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
-import { DialogExportOptions } from "../../ui/dialog-export-options"
-import { formatTranscript } from "../../util/transcript"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 import { detail, diagnostics, filetype, normalize, workdir } from "./format"
+import { childAction, firstChildID, nextChildID } from "./child"
+import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
+import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
+import { RevertNotice } from "./revert-notice"
+import { revertState } from "./revert"
+import { displayCommands } from "./display-commands"
 
 addDefaultParsers(parsers.parsers)
 
@@ -265,49 +262,23 @@ export function Session() {
     }
   })
 
-  // Helper: Find next visible message boundary in direction
-  const findNextVisibleMessage = (direction: "next" | "prev"): string | null => {
-    const children = scroll.getChildren()
-    const messagesList = messages()
-    const scrollTop = scroll.y
-
-    // Get visible messages sorted by position, filtering for valid non-synthetic, non-ignored content
-    const visibleMessages = children
-      .filter((c) => {
-        if (!c.id) return false
-        const message = messagesList.find((m) => m.id === c.id)
-        if (!message) return false
-
-        // Check if message has valid non-synthetic, non-ignored text parts
-        const parts = sync.data.part[message.id]
-        if (!parts || !Array.isArray(parts)) return false
-
-        return parts.some((part) => part && part.type === "text" && !part.synthetic && !part.ignored)
-      })
-      .sort((a, b) => a.y - b.y)
-
-    if (visibleMessages.length === 0) return null
-
-    if (direction === "next") {
-      // Find first message below current position
-      return visibleMessages.find((c) => c.y > scrollTop + 10)?.id ?? null
-    }
-    // Find last message above current position
-    return [...visibleMessages].reverse().find((c) => c.y < scrollTop - 10)?.id ?? null
-  }
-
-  // Helper: Scroll to message in direction or fallback to page scroll
   const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => {
-    const targetID = findNextVisibleMessage(direction)
-
-    if (!targetID) {
-      scroll.scrollBy(direction === "next" ? scroll.height : -scroll.height)
-      dialog.clear()
-      return
-    }
-
-    const child = scroll.getChildren().find((c) => c.id === targetID)
-    if (child) scroll.scrollBy(child.y - scroll.y - 1)
+    const targetID = nextVisibleMessage({
+      direction,
+      children: scroll.getChildren(),
+      messages: messages(),
+      parts: sync.data.part,
+      scrollTop: scroll.y,
+    })
+    const child = targetID ? scroll.getChildren().find((item) => item.id === targetID) : undefined
+    scroll.scrollBy(
+      messageScroll({
+        direction,
+        target: child,
+        scrollTop: scroll.y,
+        height: scroll.height,
+      }),
+    )
     dialog.clear()
   }
 
@@ -321,160 +292,94 @@ export function Session() {
   const local = useLocal()
 
   function moveFirstChild() {
-    if (children().length === 1) return
-    const next = children().find((x) => !!x.parentID)
+    const next = firstChildID(children())
     if (next) {
       navigate({
         type: "session",
-        sessionID: next.id,
+        sessionID: next,
       })
     }
   }
 
   function moveChild(direction: number) {
-    if (children().length === 1) return
-
-    const sessions = children().filter((x) => !!x.parentID)
-    let next = sessions.findIndex((x) => x.id === session()?.id) + direction
-
-    if (next >= sessions.length) next = 0
-    if (next < 0) next = sessions.length - 1
-    if (sessions[next]) {
+    const next = nextChildID(children(), session()?.id, direction)
+    if (next) {
       navigate({
         type: "session",
-        sessionID: sessions[next].id,
+        sessionID: next,
       })
     }
   }
 
   function childSessionHandler(func: (dialog: DialogContext) => void) {
     return (dialog: DialogContext) => {
-      if (!session()?.parentID || dialog.stack.length > 0) return
+      if (!childAction(session()?.parentID, dialog.stack.length)) return
       func(dialog)
     }
   }
 
   const command = useCommandDialog()
   command.register(() => [
-    {
-      title: session()?.share?.url ? "Copy share link" : "Share session",
-      value: "session.share",
-      suggested: route.type === "session",
-      keybind: "session_share",
-      category: "Session",
-      enabled: sync.data.config.share !== "disabled",
-      slash: {
-        name: "share",
-      },
-      onSelect: async (dialog) => {
-        const copy = (url: string) =>
-          Clipboard.copy(url)
-            .then(() => toast.show({ message: "Share URL copied to clipboard!", variant: "success" }))
-            .catch(() => toast.show({ message: "Failed to copy URL to clipboard", variant: "error" }))
-        const url = session()?.share?.url
-        if (url) {
-          await copy(url)
-          dialog.clear()
-          return
-        }
-        await sdk.client.session
-          .share({
-            sessionID: route.sessionID,
-          })
-          .then((res) => copy(res.data!.share!.url))
-          .catch((error) => {
-            toast.show({
-              message: error instanceof Error ? error.message : "Failed to share session",
-              variant: "error",
-            })
-          })
-        dialog.clear()
-      },
-    },
-    {
-      title: "Rename session",
-      value: "session.rename",
-      keybind: "session_rename",
-      category: "Session",
-      slash: {
-        name: "rename",
-      },
-      onSelect: (dialog) => {
-        dialog.replace(() => <DialogSessionRename session={route.sessionID} />)
-      },
-    },
-    {
-      title: "Jump to message",
-      value: "session.timeline",
-      keybind: "session_timeline",
-      category: "Session",
-      slash: {
-        name: "timeline",
-      },
-      onSelect: (dialog) => {
+    ...displayCommands({
+      conceal,
+      currentModel: () => local.model.current(),
+      dialogReplaceTimeline: (dialog) =>
         dialog.replace(() => (
           <DialogTimeline
             onMove={(messageID) => {
-              const child = scroll.getChildren().find((child) => {
-                return child.id === messageID
-              })
+              const child = messageTarget(scroll.getChildren(), messageID)
               if (child) scroll.scrollBy(child.y - scroll.y - 1)
             }}
             sessionID={route.sessionID}
             setPrompt={(promptInfo) => prompt.set(promptInfo)}
           />
-        ))
-      },
-    },
-    {
-      title: "Fork from message",
-      value: "session.fork",
-      keybind: "session_fork",
-      category: "Session",
-      slash: {
-        name: "fork",
-      },
-      onSelect: (dialog) => {
+        )),
+      dialogReplaceFork: (dialog) =>
         dialog.replace(() => (
           <DialogForkFromTimeline
             onMove={(messageID) => {
-              const child = scroll.getChildren().find((child) => {
-                return child.id === messageID
-              })
+              const child = messageTarget(scroll.getChildren(), messageID)
               if (child) scroll.scrollBy(child.y - scroll.y - 1)
             }}
             sessionID={route.sessionID}
           />
-        ))
+        )),
+      dialogReplaceRename: (dialog) => dialog.replace(() => <DialogSessionRename session={route.sessionID} />),
+      jumpToLastUser: () => {
+        const list = sync.data.message[route.sessionID] ?? []
+        const id = lastUserMessageID(list, sync.data.part)
+        const child = messageTarget(scroll.getChildren(), id)
+        if (child) scroll.scrollBy(child.y - scroll.y - 1)
       },
-    },
-    {
-      title: "Compact session",
-      value: "session.compact",
-      keybind: "session_compact",
-      category: "Session",
-      slash: {
-        name: "compact",
-        aliases: ["summarize"],
-      },
-      onSelect: (dialog) => {
-        const selectedModel = local.model.current()
-        if (!selectedModel) {
-          toast.show({
-            variant: "warning",
-            message: "Connect a provider to summarize this session",
-            duration: 3000,
-          })
-          return
-        }
-        sdk.client.session.summarize({
-          sessionID: route.sessionID,
-          modelID: selectedModel.modelID,
-          providerID: selectedModel.providerID,
-        })
-        dialog.clear()
-      },
-    },
+      messages,
+      parts: sync.data.part,
+      renderer,
+      routeSessionID: route.sessionID,
+      scroll,
+      scrollToMessage,
+      sdk,
+      session,
+      setConceal,
+      setShowDetails,
+      setShowGenericToolOutput,
+      setShowHeader,
+      setShowScrollbar,
+      setShowThinking,
+      setSidebar,
+      setSidebarOpen,
+      setTimestamps,
+      shareEnabled: sync.data.config.share !== "disabled",
+      showAssistantMetadata,
+      showDetails,
+      showGenericToolOutput,
+      showHeader,
+      showScrollbar,
+      showThinking,
+      showTimestamps,
+      sidebarVisible,
+      suggested: route.type === "session",
+      toast,
+    }),
     {
       title: "Unshare session",
       value: "session.unshare",
@@ -510,30 +415,17 @@ export function Session() {
       onSelect: async (dialog) => {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
-        const revert = session()?.revert?.messageID
-        const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
-        if (!message) return
+        const messageID = undoMessageID(messages(), session()?.revert?.messageID)
+        if (!messageID) return
         sdk.client.session
           .revert({
             sessionID: route.sessionID,
-            messageID: message.id,
+            messageID,
           })
           .then(() => {
             toBottom()
           })
-        const parts = sync.data.part[message.id]
-        prompt.set(
-          parts.reduce(
-            (agg, part) => {
-              if (part.type === "text") {
-                if (!part.synthetic) agg.input += part.text
-              }
-              if (part.type === "file") agg.parts.push(part)
-              return agg
-            },
-            { input: "", parts: [] as PromptInfo["parts"] },
-          ),
-        )
+        prompt.set(promptState(sync.data.part[messageID]))
         dialog.clear()
       },
     },
@@ -548,10 +440,8 @@ export function Session() {
       },
       onSelect: (dialog) => {
         dialog.clear()
-        const messageID = session()?.revert?.messageID
-        if (!messageID) return
-        const message = messages().find((x) => x.role === "user" && x.id > messageID)
-        if (!message) {
+        const messageID = redoMessageID(messages(), session()?.revert?.messageID)
+        if (!messageID) {
           sdk.client.session.unrevert({
             sessionID: route.sessionID,
           })
@@ -560,366 +450,8 @@ export function Session() {
         }
         sdk.client.session.revert({
           sessionID: route.sessionID,
-          messageID: message.id,
+          messageID,
         })
-      },
-    },
-    {
-      title: sidebarVisible() ? "Hide sidebar" : "Show sidebar",
-      value: "session.sidebar.toggle",
-      keybind: "sidebar_toggle",
-      category: "Session",
-      onSelect: (dialog) => {
-        batch(() => {
-          const isVisible = sidebarVisible()
-          setSidebar(() => (isVisible ? "hide" : "auto"))
-          setSidebarOpen(!isVisible)
-        })
-        dialog.clear()
-      },
-    },
-    {
-      title: conceal() ? "Disable code concealment" : "Enable code concealment",
-      value: "session.toggle.conceal",
-      keybind: "messages_toggle_conceal" as any,
-      category: "Session",
-      onSelect: (dialog) => {
-        setConceal((prev) => !prev)
-        dialog.clear()
-      },
-    },
-    {
-      title: showTimestamps() ? "Hide timestamps" : "Show timestamps",
-      value: "session.toggle.timestamps",
-      category: "Session",
-      slash: {
-        name: "timestamps",
-        aliases: ["toggle-timestamps"],
-      },
-      onSelect: (dialog) => {
-        setTimestamps((prev) => (prev === "show" ? "hide" : "show"))
-        dialog.clear()
-      },
-    },
-    {
-      title: showThinking() ? "Hide thinking" : "Show thinking",
-      value: "session.toggle.thinking",
-      keybind: "display_thinking",
-      category: "Session",
-      slash: {
-        name: "thinking",
-        aliases: ["toggle-thinking"],
-      },
-      onSelect: (dialog) => {
-        setShowThinking((prev) => !prev)
-        dialog.clear()
-      },
-    },
-    {
-      title: showDetails() ? "Hide tool details" : "Show tool details",
-      value: "session.toggle.actions",
-      keybind: "tool_details",
-      category: "Session",
-      onSelect: (dialog) => {
-        setShowDetails((prev) => !prev)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Toggle session scrollbar",
-      value: "session.toggle.scrollbar",
-      keybind: "scrollbar_toggle",
-      category: "Session",
-      onSelect: (dialog) => {
-        setShowScrollbar((prev) => !prev)
-        dialog.clear()
-      },
-    },
-    {
-      title: showHeader() ? "Hide header" : "Show header",
-      value: "session.toggle.header",
-      category: "Session",
-      onSelect: (dialog) => {
-        setShowHeader((prev) => !prev)
-        dialog.clear()
-      },
-    },
-    {
-      title: showGenericToolOutput() ? "Hide generic tool output" : "Show generic tool output",
-      value: "session.toggle.generic_tool_output",
-      category: "Session",
-      onSelect: (dialog) => {
-        setShowGenericToolOutput((prev) => !prev)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Page up",
-      value: "session.page.up",
-      keybind: "messages_page_up",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        scroll.scrollBy(-scroll.height / 2)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Page down",
-      value: "session.page.down",
-      keybind: "messages_page_down",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        scroll.scrollBy(scroll.height / 2)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Line up",
-      value: "session.line.up",
-      keybind: "messages_line_up",
-      category: "Session",
-      disabled: true,
-      onSelect: (dialog) => {
-        scroll.scrollBy(-1)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Line down",
-      value: "session.line.down",
-      keybind: "messages_line_down",
-      category: "Session",
-      disabled: true,
-      onSelect: (dialog) => {
-        scroll.scrollBy(1)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Half page up",
-      value: "session.half.page.up",
-      keybind: "messages_half_page_up",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        scroll.scrollBy(-scroll.height / 4)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Half page down",
-      value: "session.half.page.down",
-      keybind: "messages_half_page_down",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        scroll.scrollBy(scroll.height / 4)
-        dialog.clear()
-      },
-    },
-    {
-      title: "First message",
-      value: "session.first",
-      keybind: "messages_first",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        scroll.scrollTo(0)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Last message",
-      value: "session.last",
-      keybind: "messages_last",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        scroll.scrollTo(scroll.scrollHeight)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Jump to last user message",
-      value: "session.messages_last_user",
-      keybind: "messages_last_user",
-      category: "Session",
-      hidden: true,
-      onSelect: () => {
-        const messages = sync.data.message[route.sessionID]
-        if (!messages || !messages.length) return
-
-        // Find the most recent user message with non-ignored, non-synthetic text parts
-        for (let i = messages.length - 1; i >= 0; i--) {
-          const message = messages[i]
-          if (!message || message.role !== "user") continue
-
-          const parts = sync.data.part[message.id]
-          if (!parts || !Array.isArray(parts)) continue
-
-          const hasValidTextPart = parts.some(
-            (part) => part && part.type === "text" && !part.synthetic && !part.ignored,
-          )
-
-          if (hasValidTextPart) {
-            const child = scroll.getChildren().find((child) => {
-              return child.id === message.id
-            })
-            if (child) scroll.scrollBy(child.y - scroll.y - 1)
-            break
-          }
-        }
-      },
-    },
-    {
-      title: "Next message",
-      value: "session.message.next",
-      keybind: "messages_next",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => scrollToMessage("next", dialog),
-    },
-    {
-      title: "Previous message",
-      value: "session.message.previous",
-      keybind: "messages_previous",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => scrollToMessage("prev", dialog),
-    },
-    {
-      title: "Copy last assistant message",
-      value: "messages.copy",
-      keybind: "messages_copy",
-      category: "Session",
-      onSelect: (dialog) => {
-        const revertID = session()?.revert?.messageID
-        const lastAssistantMessage = messages().findLast(
-          (msg) => msg.role === "assistant" && (!revertID || msg.id < revertID),
-        )
-        if (!lastAssistantMessage) {
-          toast.show({ message: "No assistant messages found", variant: "error" })
-          dialog.clear()
-          return
-        }
-
-        const parts = sync.data.part[lastAssistantMessage.id] ?? []
-        const textParts = parts.filter((part) => part.type === "text")
-        if (textParts.length === 0) {
-          toast.show({ message: "No text parts found in last assistant message", variant: "error" })
-          dialog.clear()
-          return
-        }
-
-        const text = textParts
-          .map((part) => part.text)
-          .join("\n")
-          .trim()
-        if (!text) {
-          toast.show({
-            message: "No text content found in last assistant message",
-            variant: "error",
-          })
-          dialog.clear()
-          return
-        }
-
-        Clipboard.copy(text)
-          .then(() => toast.show({ message: "Message copied to clipboard!", variant: "success" }))
-          .catch(() => toast.show({ message: "Failed to copy to clipboard", variant: "error" }))
-        dialog.clear()
-      },
-    },
-    {
-      title: "Copy session transcript",
-      value: "session.copy",
-      category: "Session",
-      slash: {
-        name: "copy",
-      },
-      onSelect: async (dialog) => {
-        try {
-          const sessionData = session()
-          if (!sessionData) return
-          const sessionMessages = messages()
-          const transcript = formatTranscript(
-            sessionData,
-            sessionMessages.map((msg) => ({ info: msg, parts: sync.data.part[msg.id] ?? [] })),
-            {
-              thinking: showThinking(),
-              toolDetails: showDetails(),
-              assistantMetadata: showAssistantMetadata(),
-            },
-          )
-          await Clipboard.copy(transcript)
-          toast.show({ message: "Session transcript copied to clipboard!", variant: "success" })
-        } catch (error) {
-          toast.show({ message: "Failed to copy session transcript", variant: "error" })
-        }
-        dialog.clear()
-      },
-    },
-    {
-      title: "Export session transcript",
-      value: "session.export",
-      keybind: "session_export",
-      category: "Session",
-      slash: {
-        name: "export",
-      },
-      onSelect: async (dialog) => {
-        try {
-          const sessionData = session()
-          if (!sessionData) return
-          const sessionMessages = messages()
-
-          const defaultFilename = `session-${sessionData.id.slice(0, 8)}.md`
-
-          const options = await DialogExportOptions.show(
-            dialog,
-            defaultFilename,
-            showThinking(),
-            showDetails(),
-            showAssistantMetadata(),
-            false,
-          )
-
-          if (options === null) return
-
-          const transcript = formatTranscript(
-            sessionData,
-            sessionMessages.map((msg) => ({ info: msg, parts: sync.data.part[msg.id] ?? [] })),
-            {
-              thinking: options.thinking,
-              toolDetails: options.toolDetails,
-              assistantMetadata: options.assistantMetadata,
-            },
-          )
-
-          if (options.openWithoutSaving) {
-            // Just open in editor without saving
-            await Editor.open({ value: transcript, renderer })
-          } else {
-            const exportDir = process.cwd()
-            const filename = options.filename.trim()
-            const filepath = path.join(exportDir, filename)
-
-            await Filesystem.write(filepath, transcript)
-
-            // Open with EDITOR if available
-            const result = await Editor.open({ value: transcript, renderer })
-            if (result !== undefined) {
-              await Filesystem.write(filepath, result)
-            }
-
-            toast.show({ message: `Session exported to ${filename}`, variant: "success" })
-          }
-        } catch (error) {
-          toast.show({ message: "Failed to export session", variant: "error" })
-        }
-        dialog.clear()
       },
     },
     {
@@ -980,49 +512,7 @@ export function Session() {
   const revertInfo = createMemo(() => session()?.revert)
   const revertMessageID = createMemo(() => revertInfo()?.messageID)
 
-  const revertDiffFiles = createMemo(() => {
-    const diffText = revertInfo()?.diff ?? ""
-    if (!diffText) return []
-
-    try {
-      const patches = parsePatch(diffText)
-      return patches.map((patch) => {
-        const filename = patch.newFileName || patch.oldFileName || "unknown"
-        const cleanFilename = filename.replace(/^[ab]\//, "")
-        return {
-          filename: cleanFilename,
-          additions: patch.hunks.reduce(
-            (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("+")).length,
-            0,
-          ),
-          deletions: patch.hunks.reduce(
-            (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("-")).length,
-            0,
-          ),
-        }
-      })
-    } catch (error) {
-      return []
-    }
-  })
-
-  const revertRevertedMessages = createMemo(() => {
-    const messageID = revertMessageID()
-    if (!messageID) return []
-    return messages().filter((x) => x.id >= messageID && x.role === "user")
-  })
-
-  const revert = createMemo(() => {
-    const info = revertInfo()
-    if (!info) return
-    if (!info.messageID) return
-    return {
-      messageID: info.messageID,
-      reverted: revertRevertedMessages(),
-      diff: info.diff,
-      diffFiles: revertDiffFiles(),
-    }
-  })
+  const revert = createMemo(() => revertState(revertInfo(), messages()))
 
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
@@ -1072,65 +562,7 @@ export function Session() {
                 {(message, index) => (
                   <Switch>
                     <Match when={message.id === revert()?.messageID}>
-                      {(function () {
-                        const command = useCommandDialog()
-                        const [hover, setHover] = createSignal(false)
-                        const dialog = useDialog()
-
-                        const handleUnrevert = async () => {
-                          const confirmed = await DialogConfirm.show(
-                            dialog,
-                            "Confirm Redo",
-                            "Are you sure you want to restore the reverted messages?",
-                          )
-                          if (confirmed) {
-                            command.trigger("session.redo")
-                          }
-                        }
-
-                        return (
-                          <box
-                            onMouseOver={() => setHover(true)}
-                            onMouseOut={() => setHover(false)}
-                            onMouseUp={handleUnrevert}
-                            marginTop={1}
-                            flexShrink={0}
-                            border={["left"]}
-                            customBorderChars={SplitBorder.customBorderChars}
-                            borderColor={theme.backgroundPanel}
-                          >
-                            <box
-                              paddingTop={1}
-                              paddingBottom={1}
-                              paddingLeft={2}
-                              backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
-                            >
-                              <text fg={theme.textMuted}>{revert()!.reverted.length} message reverted</text>
-                              <text fg={theme.textMuted}>
-                                <span style={{ fg: theme.text }}>{keybind.print("messages_redo")}</span> or /redo to
-                                restore
-                              </text>
-                              <Show when={revert()!.diffFiles?.length}>
-                                <box marginTop={1}>
-                                  <For each={revert()!.diffFiles}>
-                                    {(file) => (
-                                      <text fg={theme.text}>
-                                        {file.filename}
-                                        <Show when={file.additions > 0}>
-                                          <span style={{ fg: theme.diffAdded }}> +{file.additions}</span>
-                                        </Show>
-                                        <Show when={file.deletions > 0}>
-                                          <span style={{ fg: theme.diffRemoved }}> -{file.deletions}</span>
-                                        </Show>
-                                      </text>
-                                    )}
-                                  </For>
-                                </box>
-                              </Show>
-                            </box>
-                          </box>
-                        )
-                      })()}
+                      <RevertNotice count={revert()!.reverted.length} files={revert()!.diffFiles} />
                     </Match>
                     <Match when={revert()?.messageID && message.id >= revert()!.messageID}>
                       <></>

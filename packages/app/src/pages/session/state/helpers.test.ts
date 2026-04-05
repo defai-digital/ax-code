@@ -8,10 +8,18 @@ import {
   filterReviewDiffs,
   focusTerminalById,
   getTabReorderIndex,
+  isSessionBusy,
   lastCompletedAssistant,
+  nextUserMessage,
+  promptDraftLine,
   reviewStats,
+  revertPlan,
+  rolledMessages,
+  restorePlan,
   selectedReviewFile,
   shouldFocusTerminalOnKeyDown,
+  updateSessionInfo,
+  updateSessionRevert,
   visibleUserMessages,
 } from "./helpers"
 
@@ -250,5 +258,89 @@ describe("session review selectors", () => {
     const diffs = [{ file: "a" }, { file: "b" }]
     expect(selectedReviewFile(diffs, "b")).toBe("b")
     expect(selectedReviewFile(diffs, "missing")).toBe("a")
+  })
+})
+
+describe("session state transforms", () => {
+  test("formats prompt draft lines and falls back to attachment label", () => {
+    expect(promptDraftLine([{ type: "text", content: "hello\nworld" }], "Attachment")).toBe("hello world")
+    expect(promptDraftLine([{ type: "image", filename: "a.png" }], "Attachment")).toBe("[image:a.png]")
+    expect(promptDraftLine([], "Attachment")).toBe("[Attachment]")
+  })
+
+  test("updates session info and revert state immutably", () => {
+    const list: { id: string; revert?: { messageID: string }; title: string }[] = [
+      { id: "a", revert: undefined, title: "one" },
+      { id: "b", revert: undefined, title: "two" },
+    ]
+
+    expect(updateSessionInfo(list, { id: "b", revert: undefined, title: "next" })).toEqual([
+      { id: "a", revert: undefined, title: "one" },
+      { id: "b", revert: undefined, title: "next" },
+    ])
+
+    expect(updateSessionRevert(list, "a", { messageID: "m1" })).toEqual([
+      { id: "a", revert: { messageID: "m1" }, title: "one" },
+      { id: "b", revert: undefined, title: "two" },
+    ])
+  })
+
+  test("detects busy sessions from status or pending assistant messages", () => {
+    expect(isSessionBusy({ type: "busy" }, [user("1")])).toBe(true)
+    expect(isSessionBusy(undefined, [assistant({ id: "a" })])).toBe(true)
+    expect(isSessionBusy(undefined, [assistant({ id: "a", completed: 1 })])).toBe(false)
+  })
+
+  test("finds next user message and rolled messages from revert marker", () => {
+    const users = [user("1"), user("2"), user("3")]
+    expect(nextUserMessage(users, "1")?.id).toBe("2")
+    expect(rolledMessages(users, "2", (id) => `draft:${id}`)).toEqual([
+      { id: "2", text: "draft:2" },
+      { id: "3", text: "draft:3" },
+    ])
+  })
+
+  test("builds revert and restore plans", () => {
+    const users = [user("1"), user("2"), user("3")]
+    const draft = (id: string) => [{ type: "text", content: `draft:${id}`, start: 0, end: 7 }] as any
+
+    expect(
+      revertPlan({
+        sessionID: "s",
+        messageID: "2",
+        draft,
+      }),
+    ).toEqual({
+      request: { sessionID: "s", messageID: "2" },
+      revert: { messageID: "2" },
+      prompt: [{ type: "text", content: "draft:2", start: 0, end: 7 }],
+    })
+
+    expect(
+      restorePlan({
+        sessionID: "s",
+        messageID: "1",
+        messages: users,
+        draft,
+      }),
+    ).toEqual({
+      request: { type: "revert", sessionID: "s", messageID: "2" },
+      revert: { messageID: "2" },
+      prompt: [{ type: "text", content: "draft:2", start: 0, end: 7 }],
+      reset: false,
+    })
+
+    expect(
+      restorePlan({
+        sessionID: "s",
+        messageID: "3",
+        messages: users,
+        draft,
+      }),
+    ).toEqual({
+      request: { type: "unrevert", sessionID: "s" },
+      revert: undefined,
+      reset: true,
+    })
   })
 })

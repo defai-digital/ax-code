@@ -159,7 +159,6 @@ describe("ProviderTransform.providerOptions", () => {
       release_date: "2024-01-01",
       ...overrides,
     }) as any
-
 })
 
 describe("ProviderTransform.schema - gemini array items", () => {
@@ -552,6 +551,7 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
           context: 128000,
           output: 8192,
         },
+        cost: { input: 0, output: 0 },
         status: "active",
         options: {},
         headers: {},
@@ -607,6 +607,7 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
           context: 128000,
           output: 4096,
         },
+        cost: { input: 0, output: 0 },
         status: "active",
         options: {},
         headers: {},
@@ -945,5 +946,4 @@ describe("ProviderTransform.variants", () => {
       })
     })
   })
-
 })

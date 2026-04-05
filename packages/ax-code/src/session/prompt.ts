@@ -42,7 +42,6 @@ import { spawn } from "child_process"
 import { Command } from "../command"
 import { pathToFileURL, fileURLToPath } from "url"
 import { Config } from "@/config/config"
-import { ConfigMarkdown } from "../config/markdown"
 import { Isolation } from "@/isolation"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@ax-code/util/error"
@@ -57,12 +56,21 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncate"
 import { decodeDataUrl } from "@/util/data-url"
-import { Process } from "@/util/process"
 import {
+  commandSetup,
   commandModel,
   commandParts,
   commandTemplate,
+  shellArgs,
+  commandUser,
+  commandTemplateText,
+  agentInfo,
+  remindQueuedMessages,
   resolvePromptParts as _resolvePromptParts,
+  scanLoopMessages,
+  loopMessages,
+  modelInfo,
+  systemPrompt as getSystemPrompt,
   createStructuredOutputTool as _createStructuredOutputTool,
   lastModel as _lastModel,
   ensureTitle as _ensureTitle,
@@ -174,17 +182,7 @@ export namespace SessionPrompt {
       { args: taskArgs },
     )
     let executionError: Error | undefined
-    const taskAgent = await Agent.get(task.agent)
-    if (!taskAgent) {
-      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
-      const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-      const error = new NamedError.Unknown({ message: `Agent not found: "${task.agent}".${hint}` })
-      Bus.publish(Session.Event.Error, {
-        sessionID,
-        error: error.toObject(),
-      })
-      throw error
-    }
+    const taskAgent = await agentInfo({ sessionID, name: task.agent })
     const taskCtx: Tool.Context = {
       agent: task.agent,
       messageID: assistantMessage.id,
@@ -507,37 +505,9 @@ export namespace SessionPrompt {
       }
       // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
       let msgs: MessageV2.WithParts[]
-      if (!cachedMsgs) {
-        msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
-        cachedMsgs = msgs
-      } else {
-        // Fetch only messages newer than the last cached message
-        const lastID = cachedMsgs[cachedMsgs.length - 1]?.info.id
-        const newer = await MessageV2.after(sessionID, lastID)
-        if (newer.length > 0) cachedMsgs.push(...newer)
-        msgs = cachedMsgs
-      }
+      ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: cachedMsgs }))
 
-      let lastUser: MessageV2.User | undefined
-      let lastUserParts: MessageV2.Part[] | undefined
-      let lastAssistant: MessageV2.Assistant | undefined
-      let lastFinished: MessageV2.Assistant | undefined
-      let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        const msg = msgs[i]
-        if (!lastUser && msg.info.role === "user") {
-          lastUser = msg.info as MessageV2.User
-          lastUserParts = msg.parts
-        }
-        if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
-        if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
-          lastFinished = msg.info as MessageV2.Assistant
-        if (lastUser && lastFinished) break
-        const task = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
-        if (task && !lastFinished) {
-          tasks.push(...task)
-        }
-      }
+      let { lastUser, lastUserParts, lastAssistant, lastFinished, tasks } = scanLoopMessages(msgs)
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
       if (
@@ -568,16 +538,11 @@ export namespace SessionPrompt {
         sessionStarted = true
       }
 
-      const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID).catch((e) => {
-        if (Provider.ModelNotFoundError.isInstance(e)) {
-          const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
-          Bus.publish(Session.Event.Error, {
-            sessionID,
-            error: new NamedError.Unknown({
-              message: `Model not found: ${e.data.providerID}/${e.data.modelID}.${hint}`,
-            }).toObject(),
-          })
-        }
+      const model = await modelInfo({
+        sessionID,
+        providerID: lastUser.model.providerID,
+        modelID: lastUser.model.modelID,
+      }).catch((e) => {
         reason = "error"
         throw e
       })
@@ -624,18 +589,10 @@ export namespace SessionPrompt {
       }
 
       // normal processing
-      const agent = await Agent.get(lastUser.agent)
-      if (!agent) {
-        const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
-        const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-        const error = new NamedError.Unknown({ message: `Agent not found: "${lastUser.agent}".${hint}` })
-        Bus.publish(Session.Event.Error, {
-          sessionID,
-          error: error.toObject(),
-        })
+      const agent = await agentInfo({ sessionID, name: lastUser.agent }).catch((error) => {
         reason = "error"
         throw error
-      }
+      })
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
       msgs = await insertReminders({
@@ -711,43 +668,19 @@ export namespace SessionPrompt {
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
-      if (step > 1 && lastFinished) {
-        for (const msg of msgs) {
-          if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
-          for (const part of msg.parts) {
-            if (part.type !== "text" || part.ignored || part.synthetic) continue
-            if (!part.text.trim()) continue
-            part.text = [
-              "<system-reminder>",
-              "The user sent the following message:",
-              part.text,
-              "",
-              "Please address this message and continue with your tasks.",
-              "</system-reminder>",
-            ].join("\n")
-          }
-        }
-      }
+      if (step > 1) remindQueuedMessages(msgs, lastFinished)
 
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
       // Build system prompt — cache environment and instructions across steps
-      const skills = await SystemPrompt.skills(agent)
-      const modelKey = `${model.providerID}/${model.api.id}`
-      if (!cachedSystemPrompt.environment || cachedSystemPrompt.environmentModelKey !== modelKey) {
-        cachedSystemPrompt.environment = await SystemPrompt.environment(model)
-        cachedSystemPrompt.environmentModelKey = modelKey
-      }
-      if (!cachedSystemPrompt.instructions) cachedSystemPrompt.instructions = await InstructionPrompt.system()
-      const system = [
-        ...cachedSystemPrompt.environment,
-        ...(skills ? [skills] : []),
-        ...cachedSystemPrompt.instructions,
-      ]
       const format = lastUser.format ?? { type: "text" }
-      if (format.type === "json_schema") {
-        system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
-      }
+      const system = await getSystemPrompt({
+        agent,
+        model,
+        format,
+        cache: cachedSystemPrompt,
+        structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
+      })
 
       const result = await processor.process({
         user: lastUser,
@@ -1099,17 +1032,7 @@ export namespace SessionPrompt {
         }).catch(() => {})
       }
     }
-    const agent = await Agent.get(agentName)
-    if (!agent) {
-      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
-      const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-      const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
-      Bus.publish(Session.Event.Error, {
-        sessionID: input.sessionID,
-        error: error.toObject(),
-      })
-      throw error
-    }
+    const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
 
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const variant = input.variant ?? (!input.model && agent.variant ? agent.variant : undefined)
@@ -1672,17 +1595,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     if (session.revert) {
       await SessionRevert.cleanup(session)
     }
-    const agent = await Agent.get(input.agent)
-    if (!agent) {
-      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
-      const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-      const error = new NamedError.Unknown({ message: `Agent not found: "${input.agent}".${hint}` })
-      Bus.publish(Session.Event.Error, {
-        sessionID: input.sessionID,
-        error: error.toObject(),
-      })
-      throw error
-    }
+    const agent = await agentInfo({ sessionID: input.sessionID, name: input.agent })
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const userMsg: MessageV2.User = {
       id: MessageID.ascending(),
@@ -1751,59 +1664,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     }
     await Session.updatePart(part)
     const shell = Shell.preferred()
-    const shellName = (
-      process.platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)
-    ).toLowerCase()
-
-    const invocations: Record<string, { args: string[] }> = {
-      nu: {
-        args: ["-c", input.command],
-      },
-      fish: {
-        args: ["-c", input.command],
-      },
-      zsh: {
-        args: [
-          "-c",
-          "-l",
-          `
-            [[ -f ~/.zshenv ]] && source ~/.zshenv >/dev/null 2>&1 || true
-            [[ -f "\${ZDOTDIR:-$HOME}/.zshrc" ]] && source "\${ZDOTDIR:-$HOME}/.zshrc" >/dev/null 2>&1 || true
-            eval ${JSON.stringify(input.command)}
-          `,
-        ],
-      },
-      bash: {
-        args: [
-          "-c",
-          "-l",
-          `
-            shopt -s expand_aliases
-            [[ -f ~/.bashrc ]] && source ~/.bashrc >/dev/null 2>&1 || true
-            eval ${JSON.stringify(input.command)}
-          `,
-        ],
-      },
-      // Windows cmd
-      cmd: {
-        args: ["/c", input.command],
-      },
-      // Windows PowerShell
-      powershell: {
-        args: ["-NoProfile", "-Command", input.command],
-      },
-      pwsh: {
-        args: ["-NoProfile", "-Command", input.command],
-      },
-      // Fallback: any shell that doesn't match those above
-      //  - No -l, for max compatibility
-      "": {
-        args: ["-c", `${input.command}`],
-      },
-    }
-
-    const matchingInvocation = invocations[shellName] ?? invocations[""]
-    const args = matchingInvocation?.args
+    const args = shellArgs(shell, input.command)
 
     const cwd = Instance.directory
     const shellEnv = await Plugin.trigger(
@@ -1922,7 +1783,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       .optional(),
   })
   export type CommandInput = z.infer<typeof CommandInput>
-  const bashRegex = /!`([^`]+)`/g
   /**
    * Regular expression to match @ file references in text
    * Matches @ followed by file paths, excluding commas, periods at end of sentences, and backticks
@@ -1942,71 +1802,15 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       })
       throw error
     }
-    const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
-
-    const templateCommand = await command.template
-    let template = commandTemplate(templateCommand, input.arguments)
-
-    const shellMatches = ConfigMarkdown.shell(template)
-    if (shellMatches.length > 0) {
-      const sh = Shell.preferred()
-      const results = await Promise.all(
-        shellMatches.map(async ([, cmd]) => {
-          const out = await Process.text([cmd], { shell: sh, nothrow: true })
-          return out.text
-        }),
-      )
-      let index = 0
-      template = template.replace(bashRegex, () => results[index++])
-    }
-    template = template.trim()
-
-    const taskModel = await commandModel({
-      command,
-      model: input.model,
-      sessionID: input.sessionID,
-    })
-
-    try {
-      await Provider.getModel(taskModel.providerID, taskModel.modelID)
-    } catch (e) {
-      if (Provider.ModelNotFoundError.isInstance(e)) {
-        const { providerID, modelID, suggestions } = e.data
-        const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : ""
-        Bus.publish(Session.Event.Error, {
-          sessionID: input.sessionID,
-          error: new NamedError.Unknown({ message: `Model not found: ${providerID}/${modelID}.${hint}` }).toObject(),
-        })
-      }
-      throw e
-    }
-    const agent = await Agent.get(agentName)
-    if (!agent) {
-      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
-      const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-      const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
-      Bus.publish(Session.Event.Error, {
-        sessionID: input.sessionID,
-        error: error.toObject(),
-      })
-      throw error
-    }
-
-    const { subtask: isSubtask, parts } = await commandParts({
-      agent,
+    const prepared = await commandSetup({
       command,
       name: input.command,
-      model: taskModel,
-      template,
+      arguments: input.arguments,
+      sessionID: input.sessionID,
+      agent: input.agent,
+      model: input.model,
       parts: input.parts,
     })
-
-    const userAgent = isSubtask ? (input.agent ?? (await Agent.defaultAgent())) : agentName
-    const userModel = isSubtask
-      ? input.model
-        ? Provider.parseModel(input.model)
-        : await lastModel(input.sessionID)
-      : taskModel
 
     await Plugin.trigger(
       "command.execute.before",
@@ -2015,15 +1819,15 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         sessionID: input.sessionID,
         arguments: input.arguments,
       },
-      { parts },
+      { parts: prepared.parts },
     )
 
     const result = (await prompt({
       sessionID: input.sessionID,
       messageID: input.messageID,
-      model: userModel,
-      agent: userAgent,
-      parts,
+      model: prepared.user.model,
+      agent: prepared.user.agent,
+      parts: prepared.parts,
       variant: input.variant,
     })) as MessageV2.WithParts
 

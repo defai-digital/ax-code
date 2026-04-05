@@ -16,6 +16,12 @@ import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { NotFoundError } from "@/storage/db"
 import { Log } from "../util/log"
+import { NamedError } from "@ax-code/util/error"
+import { Bus } from "../bus"
+import { Process } from "@/util/process"
+import { Shell } from "@/shell/shell"
+import { SystemPrompt } from "./system"
+import { InstructionPrompt } from "./instruction"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -26,6 +32,397 @@ IMPORTANT:
 - The input must be valid JSON matching the required schema
 - Complete all necessary research and tool calls BEFORE calling this tool
 - This tool provides your final answer - no further actions are taken after calling it`
+
+const argsRegex = /(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)/gi
+const placeholderRegex = /\$(\d+)/g
+const quoteTrimRegex = /^["']|["']$/g
+const bashRegex = /!`([^`]+)`/g
+
+type AgentLike = {
+  hidden?: boolean
+  name: string
+}
+
+type AgentInfo = NonNullable<Awaited<ReturnType<typeof Agent.get>>>
+type ModelInfo = Awaited<ReturnType<typeof Provider.getModel>>
+
+export function shellKey(shell: string, platform = process.platform) {
+  const name = platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)
+  return name.toLowerCase()
+}
+
+export function shellArgs(shell: string, command: string, platform = process.platform) {
+  const name = shellKey(shell, platform)
+  const args: Record<string, string[]> = {
+    nu: ["-c", command],
+    fish: ["-c", command],
+    zsh: [
+      "-c",
+      "-l",
+      `
+            [[ -f ~/.zshenv ]] && source ~/.zshenv >/dev/null 2>&1 || true
+            [[ -f "\${ZDOTDIR:-$HOME}/.zshrc" ]] && source "\${ZDOTDIR:-$HOME}/.zshrc" >/dev/null 2>&1 || true
+            eval ${JSON.stringify(command)}
+          `,
+    ],
+    bash: [
+      "-c",
+      "-l",
+      `
+            shopt -s expand_aliases
+            [[ -f ~/.bashrc ]] && source ~/.bashrc >/dev/null 2>&1 || true
+            eval ${JSON.stringify(command)}
+          `,
+    ],
+    cmd: ["/c", command],
+    powershell: ["-NoProfile", "-Command", command],
+    pwsh: ["-NoProfile", "-Command", command],
+    "": ["-c", command],
+  }
+
+  return args[name] ?? args[""]
+}
+
+export function commandArgs(input: string) {
+  const raw = input.match(argsRegex) ?? []
+  return raw.map((item) => item.replace(quoteTrimRegex, ""))
+}
+
+export function commandTemplate(template: string, input: string) {
+  const args = commandArgs(input)
+  const placeholders = template.match(placeholderRegex) ?? []
+  let last = 0
+  for (const item of placeholders) {
+    const value = Number(item.slice(1))
+    if (value > last) last = value
+  }
+
+  const withArgs = template.replaceAll(placeholderRegex, (_, index) => {
+    const position = Number(index)
+    const arg = position - 1
+    if (arg >= args.length) return ""
+    if (position === last) return args.slice(arg).join(" ")
+    return args[arg]
+  })
+
+  if (placeholders.length === 0 && !template.includes("$ARGUMENTS") && input.trim()) {
+    return withArgs + "\n\n" + input
+  }
+
+  return withArgs.replaceAll("$ARGUMENTS", input)
+}
+
+export async function commandTemplateText(input: {
+  template: string
+  arguments: string
+  run?: (cmd: string) => Promise<string>
+}) {
+  let text = commandTemplate(input.template, input.arguments)
+  const matches = ConfigMarkdown.shell(text)
+  if (matches.length === 0) return text.trim()
+
+  const run =
+    input.run ??
+    (async (cmd: string) => {
+      const out = await Process.text([cmd], { shell: Shell.preferred(), nothrow: true })
+      return out.text
+    })
+
+  const results = await Promise.all(matches.map(async ([, cmd]) => run(cmd)))
+  let index = 0
+  text = text.replace(bashRegex, () => results[index++])
+  return text.trim()
+}
+
+export async function commandModel(input: {
+  command: { model?: string; agent?: string }
+  model?: string
+  sessionID: SessionID
+}) {
+  if (input.command.model) {
+    return Provider.parseModel(input.command.model)
+  }
+  if (input.command.agent) {
+    const agent = await Agent.get(input.command.agent)
+    if (agent?.model) {
+      return agent.model
+    }
+  }
+  if (input.model) return Provider.parseModel(input.model)
+  return lastModel(input.sessionID)
+}
+
+export async function commandUser(input: {
+  subtask: boolean
+  inputAgent?: string
+  inputModel?: string
+  agentName: string
+  taskModel: { providerID: ProviderID; modelID: ModelID }
+  sessionID: SessionID
+  defaultAgent?: () => Promise<string>
+  parseModel?: (model: string) => { providerID: ProviderID; modelID: ModelID }
+  last?: (sessionID: SessionID) => Promise<{ providerID: ProviderID; modelID: ModelID }>
+}) {
+  if (!input.subtask) {
+    return {
+      agent: input.agentName,
+      model: input.taskModel,
+    }
+  }
+
+  return {
+    agent: input.inputAgent ?? (await (input.defaultAgent ?? Agent.defaultAgent)()),
+    model: input.inputModel
+      ? (input.parseModel ?? Provider.parseModel)(input.inputModel)
+      : await (input.last ?? lastModel)(input.sessionID),
+  }
+}
+
+export async function commandSetup(input: {
+  command: {
+    agent?: string
+    model?: string
+    template: string | Promise<string>
+    description?: string
+    subtask?: boolean
+  }
+  name: string
+  arguments: string
+  sessionID: SessionID
+  agent?: string
+  model?: string
+  parts?: unknown[]
+}) {
+  const agentName = input.command.agent ?? input.agent ?? (await Agent.defaultAgent())
+  const template = await commandTemplateText({
+    template: await input.command.template,
+    arguments: input.arguments,
+  })
+
+  const taskModel = await commandModel({
+    command: input.command,
+    model: input.model,
+    sessionID: input.sessionID,
+  })
+  await modelInfo({
+    sessionID: input.sessionID,
+    providerID: taskModel.providerID,
+    modelID: taskModel.modelID,
+  })
+
+  const agent = await agentInfo({
+    sessionID: input.sessionID,
+    name: agentName,
+  })
+
+  const result = await commandParts({
+    agent,
+    command: input.command,
+    name: input.name,
+    model: taskModel,
+    template,
+    parts: input.parts,
+  })
+
+  const user = await commandUser({
+    subtask: result.subtask,
+    inputAgent: input.agent,
+    inputModel: input.model,
+    agentName,
+    taskModel,
+    sessionID: input.sessionID,
+  })
+
+  return {
+    agent,
+    agentName,
+    model: taskModel,
+    parts: result.parts,
+    subtask: result.subtask,
+    template,
+    user,
+  }
+}
+
+export async function agentInfo<T extends AgentLike = AgentInfo>(input: {
+  sessionID: SessionID
+  name: string
+  get?: (name: string) => Promise<T | undefined>
+  list?: () => Promise<T[]>
+  report?: (sessionID: SessionID, error: Record<string, unknown>) => unknown
+}) {
+  const agent = await (input.get ?? Agent.get)(input.name)
+  if (agent) return agent
+
+  const available = await (input.list ?? Agent.list)()
+    .then((items) => items.filter((item) => !item.hidden).map((item) => item.name))
+  const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
+  const error = new NamedError.Unknown({ message: `Agent not found: "${input.name}".${hint}` })
+  if (input.report) input.report(input.sessionID, error.toObject())
+  if (!input.report)
+    Bus.publish(Session.Event.Error, {
+      sessionID: input.sessionID,
+      error: error.toObject(),
+    })
+  throw error
+}
+
+export async function modelInfo<T = ModelInfo>(input: {
+  sessionID: SessionID
+  providerID: ProviderID
+  modelID: ModelID
+  get?: (providerID: ProviderID, modelID: ModelID) => Promise<T>
+  report?: (sessionID: SessionID, error: Record<string, unknown>) => unknown
+}) {
+  try {
+    return await (input.get ?? Provider.getModel)(input.providerID, input.modelID)
+  } catch (error) {
+    if (Provider.ModelNotFoundError.isInstance(error)) {
+      const { providerID, modelID, suggestions } = error.data
+      const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : ""
+      const payload = new NamedError.Unknown({ message: `Model not found: ${providerID}/${modelID}.${hint}` }).toObject()
+      if (input.report) input.report(input.sessionID, payload)
+      if (!input.report)
+        Bus.publish(Session.Event.Error, {
+          sessionID: input.sessionID,
+          error: payload,
+        })
+    }
+    throw error
+  }
+}
+
+export async function commandParts(input: {
+  agent: { mode?: string; name: string }
+  command: { subtask?: boolean; description?: string }
+  name: string
+  model: { providerID: ProviderID; modelID: ModelID }
+  template: string
+  parts?: any[]
+}) {
+  const base = await resolvePromptParts(input.template)
+  const subtask = (input.agent.mode === "subagent" && input.command.subtask !== false) || input.command.subtask === true
+  if (!subtask) return { subtask, parts: [...base, ...(input.parts ?? [])] }
+
+  return {
+    subtask,
+    parts: [
+      {
+        type: "subtask" as const,
+        agent: input.agent.name,
+        description: input.command.description ?? "",
+        command: input.name,
+        model: {
+          providerID: input.model.providerID,
+          modelID: input.model.modelID,
+        },
+        prompt: base.find((item) => item.type === "text")?.text ?? "",
+      },
+    ],
+  }
+}
+
+export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
+  let lastUser: MessageV2.User | undefined
+  let lastUserParts: MessageV2.Part[] | undefined
+  let lastAssistant: MessageV2.Assistant | undefined
+  let lastFinished: MessageV2.Assistant | undefined
+  let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
+
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const msg = msgs[i]
+    if (!lastUser && msg.info.role === "user") {
+      lastUser = msg.info as MessageV2.User
+      lastUserParts = msg.parts
+    }
+    if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
+    if (!lastFinished && msg.info.role === "assistant" && msg.info.finish) lastFinished = msg.info as MessageV2.Assistant
+    if (lastUser && lastFinished) break
+    const found = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
+    if (found.length > 0 && !lastFinished) tasks.push(...found)
+  }
+
+  return {
+    lastUser,
+    lastUserParts,
+    lastAssistant,
+    lastFinished,
+    tasks,
+  }
+}
+
+export function remindQueuedMessages(msgs: MessageV2.WithParts[], lastFinished?: MessageV2.Assistant) {
+  if (!lastFinished) return
+  for (const msg of msgs) {
+    if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
+    for (const part of msg.parts) {
+      if (part.type !== "text" || part.ignored || part.synthetic) continue
+      if (!part.text.trim()) continue
+      part.text = [
+        "<system-reminder>",
+        "The user sent the following message:",
+        part.text,
+        "",
+        "Please address this message and continue with your tasks.",
+        "</system-reminder>",
+      ].join("\n")
+    }
+  }
+}
+
+export async function loopMessages(input: {
+  sessionID: SessionID
+  cached?: MessageV2.WithParts[]
+  filterCompacted?: (items: AsyncIterable<MessageV2.WithParts>) => Promise<MessageV2.WithParts[]>
+  after?: (sessionID: SessionID, lastID: MessageV2.Info["id"] | undefined) => Promise<MessageV2.WithParts[]>
+}) {
+  if (!input.cached) {
+    const msgs = await (input.filterCompacted ?? MessageV2.filterCompacted)(MessageV2.stream(input.sessionID))
+    return {
+      msgs,
+      cached: msgs,
+    }
+  }
+
+  const lastID = input.cached[input.cached.length - 1]?.info.id
+  const newer = await (input.after ?? MessageV2.after)(input.sessionID, lastID)
+  if (newer.length > 0) input.cached.push(...newer)
+  return {
+    msgs: input.cached,
+    cached: input.cached,
+  }
+}
+
+export type SystemCache = {
+  environment?: string[]
+  environmentModelKey?: string
+  instructions?: string[]
+}
+
+export async function systemPrompt(input: {
+  agent: Agent.Info
+  model: { providerID: ProviderID; api: { id: string } }
+  format: { type: string }
+  cache: SystemCache
+  skills?: typeof SystemPrompt.skills
+  environment?: typeof SystemPrompt.environment
+  instructions?: typeof InstructionPrompt.system
+  structuredPrompt?: string
+}) {
+  const skills = await (input.skills ?? SystemPrompt.skills)(input.agent)
+  const modelKey = `${input.model.providerID}/${input.model.api.id}`
+  if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
+    input.cache.environment = await (input.environment ?? SystemPrompt.environment)(input.model as any)
+    input.cache.environmentModelKey = modelKey
+  }
+  if (!input.cache.instructions) input.cache.instructions = await (input.instructions ?? InstructionPrompt.system)()
+
+  const system = [...input.cache.environment, ...(skills ? [skills] : []), ...input.cache.instructions]
+  if (input.format.type === "json_schema" && input.structuredPrompt) {
+    system.push(input.structuredPrompt)
+  }
+  return system
+}
 
 export async function resolvePromptParts(template: string): Promise<any[]> {
   const parts: any[] = [

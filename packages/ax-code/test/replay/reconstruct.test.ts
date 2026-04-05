@@ -19,17 +19,27 @@ const model: Provider.Model = {
   family: "test",
   api: { id: "test-model", url: "https://example.com", npm: "@ai-sdk/openai-compatible" },
   capabilities: {
-    temperature: true, reasoning: false, attachment: false, toolcall: true,
+    temperature: true,
+    reasoning: false,
+    attachment: false,
+    toolcall: true,
     input: { text: true, audio: false, image: false, video: false, pdf: false },
     output: { text: true, audio: false, image: false, video: false, pdf: false },
     interleaved: false,
   },
   limit: { context: 128_000, output: 8_192 },
-  status: "active", options: {}, headers: {}, release_date: "2026-01-01",
+  cost: { input: 0, output: 0 },
+  status: "active",
+  options: {},
+  headers: {},
+  release_date: "2026-01-01",
 }
 
 let streamSpy: ReturnType<typeof spyOn> | undefined
-afterEach(() => { streamSpy?.mockRestore(); streamSpy = undefined })
+afterEach(() => {
+  streamSpy?.mockRestore()
+  streamSpy = undefined
+})
 
 describe("replay.reconstructStream", () => {
   test("reconstructs steps from recorded events", async () => {
@@ -41,7 +51,13 @@ describe("replay.reconstructStream", () => {
         const sid = session.id
         Recorder.begin(sid)
 
-        Recorder.emit({ type: "session.start", sessionID: sid, agent: "build", model: "test/model", directory: tmp.path })
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
         Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 })
         Recorder.emit({
           type: "llm.output",
@@ -74,7 +90,10 @@ describe("replay.reconstructStream", () => {
           type: "llm.output",
           sessionID: sid,
           stepIndex: 1,
-          parts: [{ type: "reasoning", text: "thinking about it" }, { type: "text", text: "Done!" }],
+          parts: [
+            { type: "reasoning", text: "thinking about it" },
+            { type: "text", text: "Done!" },
+          ],
         })
         Recorder.emit({
           type: "step.finish",
@@ -194,7 +213,13 @@ describe("replay.reconstructStream", () => {
         const sid = session.id
         Recorder.begin(sid)
 
-        Recorder.emit({ type: "session.start", sessionID: sid, agent: "build", model: "test/model", directory: tmp.path })
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
         Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 })
         Recorder.emit({
           type: "llm.output",

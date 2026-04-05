@@ -52,34 +52,59 @@ import {
   createSizing,
   focusTerminalById,
   filterReviewDiffs,
+  isSessionBusy,
   shouldFocusTerminalOnKeyDown,
   lastCompletedAssistant,
+  nextUserMessage,
+  promptDraftLine,
   reviewStats,
+  revertPlan,
+  rolledMessages,
+  restorePlan,
   selectedReviewFile,
+  updateSessionInfo,
+  updateSessionRevert,
   visibleUserMessages as selectVisibleUserMessages,
 } from "@/pages/session/helpers"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import {
+  copyText,
   getAssistantSummary,
   getDiffKind,
-  getFirstLine,
   getHandoffChecks,
   getHandoffFlags,
   getHandoffOpen,
   getHandoffRisks,
+  getHandoffSummary,
   getHandoffSteps,
   getHandoffText,
+  getHandoffTitle,
+  getHandoffVisible,
 } from "@/pages/session/review/session-handoff"
+import {
+  createTodoFollowupDraft,
+  openHandoffReviewAction,
+  runPromptAction,
+} from "@/pages/session/review/session-actions"
 import { SessionReviewHandoffCard } from "@/pages/session/session-review-handoff-card"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import {
-  appendFollowup,
-  getFollowupText,
-  removeFollowup as removeQueuedFollowup,
+  editFollowupState,
+  editingFollowup as editingFollowupFor,
+  failedFollowup as failedFollowupFor,
+  followupDock as followupDockItems,
+  followupPending,
+  followupSending as currentFollowupSending,
+  getFollowup,
+  pausedFollowup as pausedFollowupFor,
+  queueEnabled as followupQueueEnabled,
+  queueFollowupState,
+  queuedFollowups as queuedFollowupsFor,
+  removeFollowupState,
   shouldAutoSendFollowup,
   updateRecentChecks,
 } from "@/pages/session/hooks/session-followup"
@@ -1226,15 +1251,7 @@ export default function Page() {
       attachmentName: language.t("common.attachment"),
     })
 
-  const line = (id: string) => {
-    const text = draft(id)
-      .map((part) => (part.type === "image" ? `[image:${part.filename}]` : part.content))
-      .join("")
-      .replace(/\s+/g, " ")
-      .trim()
-    if (text) return text
-    return `[${language.t("common.attachment")}]`
-  }
+  const line = (id: string) => promptDraftLine(draft(id), language.t("common.attachment"))
 
   const fail = (err: unknown) => {
     showToast({
@@ -1245,56 +1262,39 @@ export default function Page() {
   }
 
   const merge = (next: NonNullable<ReturnType<typeof info>>) =>
-    sync.set("session", (list) => {
-      const idx = list.findIndex((item) => item.id === next.id)
-      if (idx < 0) return list
-      const out = list.slice()
-      out[idx] = next
-      return out
-    })
+    sync.set("session", (list) => updateSessionInfo(list, next))
 
   const roll = (sessionID: string, next: NonNullable<ReturnType<typeof info>>["revert"]) =>
-    sync.set("session", (list) => {
-      const idx = list.findIndex((item) => item.id === sessionID)
-      if (idx < 0) return list
-      const out = list.slice()
-      out[idx] = { ...out[idx], revert: next }
-      return out
-    })
+    sync.set("session", (list) => updateSessionRevert(list, sessionID, next))
 
-  const busy = (sessionID: string) => {
-    if ((sync.data.session_status[sessionID] ?? { type: "idle" as const }).type !== "idle") return true
-    return (sync.data.message[sessionID] ?? []).some(
-      (item) => item.role === "assistant" && typeof item.time.completed !== "number",
-    )
-  }
+  const busy = (sessionID: string) => isSessionBusy(sync.data.session_status[sessionID], sync.data.message[sessionID] ?? [])
 
-  const handoffVisible = createMemo(() => {
-    const id = params.id
-    if (!id) return false
-    if (!messagesReady()) return false
-    if (!lastUserMessage()) return false
-    if (!hasReview()) return false
-    return !busy(id)
-  })
+  const handoffVisible = createMemo(() =>
+    getHandoffVisible({
+      sessionID: params.id,
+      messagesReady: messagesReady(),
+      hasReview: hasReview(),
+      lastUserID: lastUserMessage()?.id,
+      busy: !!params.id && busy(params.id),
+    }),
+  )
 
-  const handoffTitle = createMemo(() => {
-    const title = getFirstLine(lastUserMessage()?.summary?.title)
-    if (title) return title
-    const body = getFirstLine(lastUserMessage()?.summary?.body)
-    if (body) return body
-    const id = lastUserMessage()?.id
-    if (id) return line(id)
-    return info()?.title || language.t("session.handoff.title")
-  })
+  const handoffTitle = createMemo(() =>
+    getHandoffTitle({
+      user: lastUserMessage(),
+      sessionTitle: info()?.title,
+      fallback: language.t("session.handoff.title"),
+      line,
+    }),
+  )
 
-  const handoffSummary = createMemo(() => {
-    const body = getFirstLine(lastUserMessage()?.summary?.body)
-    if (body && body !== handoffTitle()) return body
-    const assistant = assistantSummary()
-    if (assistant && assistant !== handoffTitle()) return assistant
-    return undefined
-  })
+  const handoffSummary = createMemo(() =>
+    getHandoffSummary({
+      user: lastUserMessage(),
+      title: handoffTitle(),
+      assistant: assistantSummary(),
+    }),
+  )
 
   const handoffFlags = createMemo(() => getHandoffFlags(handoffDiffs()))
 
@@ -1327,33 +1327,9 @@ export default function Page() {
     })
   })
 
-  const write = async (value: string) => {
-    const body = typeof document === "undefined" ? undefined : document.body
-    if (body) {
-      const area = document.createElement("textarea")
-      area.value = value
-      area.setAttribute("readonly", "")
-      area.style.position = "fixed"
-      area.style.opacity = "0"
-      area.style.pointerEvents = "none"
-      body.appendChild(area)
-      area.select()
-      const copied = document.execCommand("copy")
-      body.removeChild(area)
-      if (copied) return true
-    }
-
-    const clip = typeof navigator === "undefined" ? undefined : navigator.clipboard
-    if (!clip?.writeText) return false
-    return clip.writeText(value).then(
-      () => true,
-      () => false,
-    )
-  }
-
   const copyHandoff = async () => {
     const value = handoffText()
-    const ok = await write(value)
+    const ok = await copyText(value)
     if (!ok) {
       fail(new Error(language.t("toast.session.share.copyFailed.title")))
       return
@@ -1368,22 +1344,21 @@ export default function Page() {
   }
 
   const openHandoffReview = () => {
-    if (!isDesktop()) {
-      setStore("mobileTab", "changes")
-      return
-    }
-    const file = handoffDiffs()[0]?.file
-    if (file) {
-      focusReviewDiff(file)
-      return
-    }
-    openReviewPanel()
+    openHandoffReviewAction({
+      desktop: isDesktop(),
+      file: handoffDiffs()[0]?.file,
+      setMobileTab: () => setStore("mobileTab", "changes"),
+      focusReviewDiff,
+      openReviewPanel,
+    })
   }
 
   const runHandoffChecks = () => {
-    const text = language.t("session.handoff.action.checks.prompt")
-    prompt.set(quickPrompt(text), text.length)
-    requestAnimationFrame(() => focusInput())
+    runPromptAction({
+      text: language.t("session.handoff.action.checks.prompt"),
+      set: prompt.set,
+      focus: focusInput,
+    })
   }
 
   const runHandoffCheck = (item: { command: string; title?: string }) => {
@@ -1391,69 +1366,55 @@ export default function Page() {
     if (cmd) {
       setVerify("recent", (list) => updateRecentChecks(list, item))
     }
-    const text = language.t("session.handoff.action.command.prompt", { command: item.command })
-    prompt.set(quickPrompt(text), text.length)
-    requestAnimationFrame(() => focusInput())
-  }
-
-  const askTodoStep = (step: string) => {
-    const text = language.t("session.todo.ask.prompt", { step })
-    prompt.set(quickPrompt(text), text.length)
-    requestAnimationFrame(() => focusInput())
-  }
-
-  const explainTodoStep = (step: string) => {
-    const text = language.t("session.todo.explain.prompt", { step })
-    prompt.set(quickPrompt(text), text.length)
-    requestAnimationFrame(() => focusInput())
-  }
-
-  const queueTodoStep = (step: string) => {
-    const id = params.id
-    const model = local.model.current()
-    const agent = local.agent.current()
-    if (!id || !queueEnabled() || !model || !agent) return
-
-    const text = language.t("session.todo.queue.prompt", { step })
-    queueFollowup({
-      sessionID: id,
-      sessionDirectory: sdk.directory,
-      prompt: quickPrompt(text),
-      context: [],
-      agent: agent.name,
-      model: {
-        providerID: model.provider.id,
-        modelID: model.id,
-      },
-      variant: local.model.variant.current(),
+    runPromptAction({
+      text: language.t("session.handoff.action.command.prompt", { command: item.command }),
+      set: prompt.set,
+      focus: focusInput,
     })
   }
 
+  const askTodoStep = (step: string) => {
+    runPromptAction({
+      text: language.t("session.todo.ask.prompt", { step }),
+      set: prompt.set,
+      focus: focusInput,
+    })
+  }
+
+  const explainTodoStep = (step: string) => {
+    runPromptAction({
+      text: language.t("session.todo.explain.prompt", { step }),
+      set: prompt.set,
+      focus: focusInput,
+    })
+  }
+
+  const queueTodoStep = (step: string) => {
+    if (!queueEnabled()) return
+    const draft = createTodoFollowupDraft({
+      sessionID: params.id,
+      sessionDirectory: sdk.directory,
+      step,
+      agent: local.agent.current(),
+      model: local.model.current(),
+      variant: local.model.variant.current(),
+      t: language.t,
+    })
+    if (!draft) return
+    queueFollowup(draft)
+  }
+
   const queuedFollowups = createMemo(() => {
-    const id = params.id
-    if (!id) return emptyFollowups
-    return followup.items[id] ?? emptyFollowups
+    return queuedFollowupsFor(followup.items, params.id, emptyFollowups)
   })
 
-  const editingFollowup = createMemo(() => {
-    const id = params.id
-    if (!id) return
-    return followup.edit[id]
-  })
-  const pausedFollowup = createMemo(() => {
-    const id = params.id
-    if (!id) return false
-    return !!followup.paused[id]
-  })
-  const failedFollowup = createMemo(() => {
-    const id = params.id
-    if (!id) return
-    return followup.failed[id]
-  })
+  const editingFollowup = createMemo(() => editingFollowupFor(followup.edit, params.id))
+  const pausedFollowup = createMemo(() => pausedFollowupFor(followup.paused, params.id))
+  const failedFollowup = createMemo(() => failedFollowupFor(followup.failed, params.id))
 
   const followupMutation = useMutation(() => ({
     mutationFn: async (input: { sessionID: string; id: string; manual?: boolean }) => {
-      const item = (followup.items[input.sessionID] ?? []).find((entry) => entry.id === input.id)
+      const item = getFollowup(followup.items, input.sessionID, input.id)
       if (!item) return
 
       if (input.manual) setFollowup("paused", input.sessionID, undefined)
@@ -1478,32 +1439,31 @@ export default function Page() {
   }))
 
   const followupBusy = (sessionID: string) =>
-    followupMutation.isPending && followupMutation.variables?.sessionID === sessionID
+    followupPending(followupMutation.isPending, followupMutation.variables, sessionID)
 
   const sendingFollowup = createMemo(() => {
-    const id = params.id
-    if (!id) return
-    if (!followupBusy(id)) return
-    return followupMutation.variables?.id
+    return currentFollowupSending(followupMutation.isPending, followupMutation.variables, params.id)
   })
 
   const queueEnabled = createMemo(() => {
-    const id = params.id
-    if (!id) return false
-    return settings.general.followup() === "queue" && busy(id) && !composer.blocked()
+    return followupQueueEnabled({
+      sessionID: params.id,
+      mode: settings.general.followup(),
+      busy: !!params.id && busy(params.id),
+      blocked: composer.blocked(),
+    })
   })
 
   const queueFollowup = (draft: FollowupDraft) => {
-    setFollowup("items", draft.sessionID, (items) => appendFollowup(items, draft, Identifier.ascending("message")))
-    setFollowup("failed", draft.sessionID, undefined)
+    const next = queueFollowupState(followup.items[draft.sessionID], draft, Identifier.ascending("message"))
+    setFollowup("items", draft.sessionID, next.items)
+    setFollowup("failed", draft.sessionID, next.failed)
   }
 
-  const followupDock = createMemo(() =>
-    queuedFollowups().map((item) => ({ id: item.id, text: getFollowupText(item, language.t("common.attachment")) })),
-  )
+  const followupDock = createMemo(() => followupDockItems(queuedFollowups(), language.t("common.attachment")))
 
   const sendFollowup = (sessionID: string, id: string, opts?: { manual?: boolean }) => {
-    const item = (followup.items[sessionID] ?? []).find((entry) => entry.id === id)
+    const item = getFollowup(followup.items, sessionID, id)
     if (!item) return Promise.resolve()
     if (followupBusy(sessionID)) return Promise.resolve()
 
@@ -1515,16 +1475,11 @@ export default function Page() {
     if (!sessionID) return
     if (followupBusy(sessionID)) return
 
-    const item = queuedFollowups().find((entry) => entry.id === id)
-    if (!item) return
-
-    setFollowup("items", sessionID, (items) => removeQueuedFollowup(items, id))
-    setFollowup("failed", sessionID, (value) => (value === id ? undefined : value))
-    setFollowup("edit", sessionID, {
-      id: item.id,
-      prompt: item.prompt,
-      context: item.context,
-    })
+    const next = editFollowupState(followup.items[sessionID], followup.failed[sessionID], id)
+    if (!next) return
+    setFollowup("items", sessionID, next.items)
+    setFollowup("failed", sessionID, next.failed)
+    setFollowup("edit", sessionID, next.edit)
   }
 
   const clearFollowupEdit = () => {
@@ -1537,8 +1492,9 @@ export default function Page() {
     const sessionID = params.id
     if (!sessionID) return
     if (followupBusy(sessionID) && sendingFollowup() === id) return
-    setFollowup("items", sessionID, (items) => removeQueuedFollowup(items, id))
-    setFollowup("failed", sessionID, (value) => (value === id ? undefined : value))
+    const next = removeFollowupState(followup.items[sessionID], followup.failed[sessionID], id)
+    setFollowup("items", sessionID, next.items)
+    setFollowup("failed", sessionID, next.failed)
   }
 
   const resumeFollowups = () => {
@@ -1554,13 +1510,17 @@ export default function Page() {
     mutationFn: async (input: { sessionID: string; messageID: string }) => {
       const prev = prompt.current().slice()
       const last = info()?.revert
-      const value = draft(input.messageID)
+      const next = revertPlan({
+        sessionID: input.sessionID,
+        messageID: input.messageID,
+        draft,
+      })
       batch(() => {
-        roll(input.sessionID, { messageID: input.messageID })
-        prompt.set(value)
+        roll(input.sessionID, next.revert)
+        prompt.set(next.prompt)
       })
       await halt(input.sessionID)
-        .then(() => sdk.client.session.revert(input))
+        .then(() => sdk.client.session.revert(next.request))
         .then((result) => {
           if (result.data) merge(result.data)
         })
@@ -1579,27 +1539,28 @@ export default function Page() {
       const sessionID = params.id
       if (!sessionID) return
 
-      const next = userMessages().find((item) => item.id > id)
+      const next = restorePlan({
+        sessionID,
+        messageID: id,
+        messages: userMessages(),
+        draft,
+      })
       const prev = prompt.current().slice()
       const last = info()?.revert
 
       batch(() => {
-        roll(sessionID, next ? { messageID: next.id } : undefined)
-        if (next) {
-          prompt.set(draft(next.id))
+        roll(sessionID, next.revert)
+        if (next.prompt) {
+          prompt.set(next.prompt)
           return
         }
         prompt.reset()
       })
 
-      const task = !next
-        ? halt(sessionID).then(() => sdk.client.session.unrevert({ sessionID }))
-        : halt(sessionID).then(() =>
-            sdk.client.session.revert({
-              sessionID,
-              messageID: next.id,
-            }),
-          )
+      const task =
+        next.request.type === "unrevert"
+          ? halt(sessionID).then(() => sdk.client.session.unrevert({ sessionID }))
+          : halt(sessionID).then(() => sdk.client.session.revert(next.request))
 
       await task
         .then((result) => {
@@ -1649,11 +1610,7 @@ export default function Page() {
   }
 
   const rolled = createMemo(() => {
-    const id = revertMessageID()
-    if (!id) return []
-    return userMessages()
-      .filter((item) => item.id >= id)
-      .map((item) => ({ id: item.id, text: line(item.id) }))
+    return rolledMessages(userMessages(), revertMessageID(), line)
   })
 
   const actions = { fork, revert }

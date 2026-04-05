@@ -35,6 +35,7 @@ const model: Provider.Model = {
     context: 128_000,
     output: 8_192,
   },
+  cost: { input: 0, output: 0 },
   status: "active",
   options: {},
   headers: {},
@@ -204,11 +205,9 @@ describe("session.prompt flow", () => {
             yield { type: "text-delta", id: "text_1", text: "partial answer" }
             readyResolve()
             await new Promise((_, reject) => {
-              input.abort.addEventListener(
-                "abort",
-                () => reject(new DOMException("Aborted", "AbortError")),
-                { once: true },
-              )
+              input.abort.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {
+                once: true,
+              })
             })
           })(),
         } as any
@@ -263,7 +262,9 @@ describe("session.prompt flow", () => {
         })
 
         expect(recovered.info.role).toBe("assistant")
-        expect(recovered.parts.some((part) => part.type === "text" && part.text.includes("recovered answer"))).toBe(true)
+        expect(recovered.parts.some((part) => part.type === "text" && part.text.includes("recovered answer"))).toBe(
+          true,
+        )
 
         const all = await Session.messages({ sessionID: session.id })
         expect(all).toHaveLength(4)
@@ -350,9 +351,9 @@ describe("session.prompt flow", () => {
         })
 
         expect(recovered.info.role).toBe("assistant")
-        expect(recovered.parts.some((part) => part.type === "text" && part.text.includes("continued after denial"))).toBe(
-          true,
-        )
+        expect(
+          recovered.parts.some((part) => part.type === "text" && part.text.includes("continued after denial")),
+        ).toBe(true)
 
         const all = await Session.messages({ sessionID: session.id })
         expect(all).toHaveLength(4)

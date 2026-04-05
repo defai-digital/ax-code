@@ -9,6 +9,14 @@ const snapshotPath = path.join(import.meta.dirname, "models-snapshot.json")
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
 
+  const Cost = z.object({
+    input: z.number(),
+    output: z.number(),
+    cache_read: z.number().optional(),
+    cache_write: z.number().optional(),
+    reasoning: z.number().optional(),
+  })
+
   function gemini3(id: string) {
     return id.toLowerCase().includes("gemini-3")
   }
@@ -35,9 +43,7 @@ export namespace ModelsDev {
         id,
         {
           ...provider,
-          models: Object.fromEntries(
-            Object.entries(provider.models).filter(([modelID]) => supported(id, modelID)),
-          ),
+          models: Object.fromEntries(Object.entries(provider.models).filter(([modelID]) => supported(id, modelID))),
         },
       ]),
     ) as Record<string, Provider>
@@ -67,6 +73,7 @@ export namespace ModelsDev {
       input: z.number().optional(),
       output: z.number(),
     }),
+    cost: Cost,
     modalities: z
       .object({
         input: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),
@@ -124,6 +131,6 @@ export namespace ModelsDev {
   })
 
   export async function get() {
-    return sanitize(await Data() as Record<string, Provider>)
+    return sanitize((await Data()) as Record<string, Provider>)
   }
 }

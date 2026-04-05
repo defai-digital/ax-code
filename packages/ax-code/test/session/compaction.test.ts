@@ -10,12 +10,7 @@ import type { Provider } from "../../src/provider/provider"
 
 Log.init({ print: false })
 
-function createModel(opts: {
-  context: number
-  output: number
-  input?: number
-  npm?: string
-}): Provider.Model {
+function createModel(opts: { context: number; output: number; input?: number; npm?: string }): Provider.Model {
   return {
     id: "test-model",
     providerID: "test",
@@ -34,7 +29,11 @@ function createModel(opts: {
       output: { text: true, image: false, audio: false, video: false },
     },
     api: { npm: opts.npm ?? "@ai-sdk/openai" },
+    cost: { input: 0, output: 0 },
+    status: "active",
     options: {},
+    headers: {},
+    release_date: "2026-01-01",
   } as Provider.Model
 }
 
@@ -347,33 +346,30 @@ describe("session.getUsage", () => {
     expect(result.tokens.cache.write).toBe(0)
   })
 
-  test.each(["@ai-sdk/google-vertex/anthropic"])(
-    "computes total from components for %s models",
-    (npm) => {
-      const model = createModel({ context: 100_000, output: 32_000, npm })
-      const usage = {
-        inputTokens: 1000,
-        outputTokens: 500,
-        // These providers typically report total as input + output only,
-        // excluding cache read/write.
-        totalTokens: 1500,
-        cachedInputTokens: 200,
-      }
+  test.each(["@ai-sdk/google-vertex/anthropic"])("computes total from components for %s models", (npm) => {
+    const model = createModel({ context: 100_000, output: 32_000, npm })
+    const usage = {
+      inputTokens: 1000,
+      outputTokens: 500,
+      // These providers typically report total as input + output only,
+      // excluding cache read/write.
+      totalTokens: 1500,
+      cachedInputTokens: 200,
+    }
 
-      const result = Session.getUsage({
-        model,
-        usage,
-        metadata: {
-          anthropic: {
-            cacheCreationInputTokens: 300,
-          },
+    const result = Session.getUsage({
+      model,
+      usage,
+      metadata: {
+        anthropic: {
+          cacheCreationInputTokens: 300,
         },
-      })
+      },
+    })
 
-      expect(result.tokens.input).toBe(1000)
-      expect(result.tokens.cache.read).toBe(200)
-      expect(result.tokens.cache.write).toBe(300)
-      expect(result.tokens.total).toBe(2000)
-    },
-  )
+    expect(result.tokens.input).toBe(1000)
+    expect(result.tokens.cache.read).toBe(200)
+    expect(result.tokens.cache.write).toBe(300)
+    expect(result.tokens.total).toBe(2000)
+  })
 })

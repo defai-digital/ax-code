@@ -167,6 +167,7 @@ export namespace Message {
                 cwd: z.string(),
                 root: z.string(),
               }),
+              cost: z.number().optional(),
               summary: z.boolean().optional(),
               tokens: z.object({
                 input: z.number(),

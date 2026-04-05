@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  copyText,
   getAssistantSummary,
   getDiffKind,
   getFirstLine,
@@ -7,8 +8,11 @@ import {
   getHandoffFlags,
   getHandoffOpen,
   getHandoffRisks,
+  getHandoffSummary,
   getHandoffSteps,
   getHandoffText,
+  getHandoffTitle,
+  getHandoffVisible,
 } from "./session-handoff"
 
 describe("getFirstLine", () => {
@@ -107,5 +111,80 @@ describe("handoff helpers", () => {
         steps: ["step"],
       }),
     ).toContain("Handoff: Title")
+  })
+
+  test("copies text through the DOM fallback", async () => {
+    const exec = document.execCommand
+    document.body.innerHTML = ""
+    ;(document as Document & { execCommand: (cmd: string) => boolean }).execCommand = (cmd: string) => cmd === "copy"
+    try {
+      await expect(copyText("hello")).resolves.toBe(true)
+      expect(document.querySelector("textarea")).toBeNull()
+    } finally {
+      ;(document as Document & { execCommand?: typeof exec }).execCommand = exec
+    }
+  })
+
+  test("derives handoff visibility, title, and summary", () => {
+    expect(
+      getHandoffVisible({
+        sessionID: "s",
+        messagesReady: true,
+        hasReview: true,
+        lastUserID: "u1",
+        busy: false,
+      }),
+    ).toBe(true)
+    expect(
+      getHandoffVisible({
+        sessionID: "s",
+        messagesReady: true,
+        hasReview: true,
+        busy: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      getHandoffTitle({
+        user: { id: "u1", summary: { title: " Ship it ", body: "Body" } },
+        sessionTitle: "Session",
+        fallback: "Fallback",
+        line: () => "line",
+      }),
+    ).toBe("Ship it")
+
+    expect(
+      getHandoffTitle({
+        user: { id: "u1", summary: { body: "Explain this" } },
+        sessionTitle: "Session",
+        fallback: "Fallback",
+        line: () => "line",
+      }),
+    ).toBe("Explain this")
+
+    expect(
+      getHandoffTitle({
+        user: { id: "u1" },
+        sessionTitle: "Session",
+        fallback: "Fallback",
+        line: () => "line text",
+      }),
+    ).toBe("line text")
+
+    expect(
+      getHandoffSummary({
+        user: { summary: { body: "Body text" } },
+        title: "Title",
+        assistant: "Assistant",
+      }),
+    ).toBe("Body text")
+
+    expect(
+      getHandoffSummary({
+        user: { summary: { body: "Title" } },
+        title: "Title",
+        assistant: "Assistant",
+      }),
+    ).toBe("Assistant")
   })
 })

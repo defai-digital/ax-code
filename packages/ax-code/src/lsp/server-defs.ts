@@ -14,12 +14,20 @@ import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
 import { JS_LOCKFILES } from "@/constants/lsp"
 import {
+  bunServer,
   clangdAsset,
+  ensureTool,
+  globalTool,
+  installReleaseBin,
   log,
   NearestRoot,
   output,
   pathExists,
+  releaseAsset,
   run,
+  spawnInfo,
+  toolServer,
+  toolBin,
   venvBin,
   venvPython,
   zlsAsset,
@@ -87,34 +95,14 @@ export const Vue: Info = {
   extensions: [".vue"],
   root: NearestRoot([...JS_LOCKFILES]),
   async spawn(root) {
-    let binary = which("vue-language-server")
-    const args: string[] = []
-    if (!binary) {
-      const js = path.join(Global.Path.bin, "node_modules", "@vue", "language-server", "bin", "vue-language-server.js")
-      if (!(await Filesystem.exists(js))) {
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        await Process.spawn([BunProc.which(), "install", "@vue/language-server"], {
-          cwd: Global.Path.bin,
-          env: {
-            ...process.env,
-            BUN_BE_BUN: "1",
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: "pipe",
-        }).exited
-      }
-      binary = BunProc.which() ?? null
-      args.push("run", js)
-    }
-    args.push("--stdio")
-    const proc = spawn(binary, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        BUN_BE_BUN: "1",
-      },
+    const proc = await bunServer({
+      root,
+      binary: "vue-language-server",
+      script: path.join(Global.Path.bin, "node_modules", "@vue", "language-server", "bin", "vue-language-server.js"),
+      pkg: "@vue/language-server",
+      args: ["--stdio"],
     })
+    if (!proc) return
     return {
       process: proc,
       initialization: {
@@ -326,35 +314,12 @@ export const Gopls: Info = {
   },
   extensions: [".go"],
   async spawn(root) {
-    let bin = which("gopls", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+    return toolServer(root, {
+      name: "gopls",
+      install: ["go", "install", "golang.org/x/tools/gopls@latest"],
+      env: { ...process.env, GOBIN: Global.Path.bin },
+      require: ["go"],
     })
-    if (!bin) {
-      if (!which("go")) return
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-
-      log.info("installing gopls")
-      const proc = Process.spawn(["go", "install", "golang.org/x/tools/gopls@latest"], {
-        env: { ...process.env, GOBIN: Global.Path.bin },
-        stdout: "pipe",
-        stderr: "pipe",
-        stdin: "pipe",
-      })
-      const exit = await proc.exited
-      if (exit !== 0) {
-        log.error("Failed to install gopls")
-        return
-      }
-      bin = path.join(Global.Path.bin, "gopls" + (process.platform === "win32" ? ".exe" : ""))
-      log.info(`installed gopls`, {
-        bin,
-      })
-    }
-    return {
-      process: spawn(bin!, {
-        cwd: root,
-      }),
-    }
   },
 }
 
@@ -363,38 +328,14 @@ export const Rubocop: Info = {
   root: NearestRoot(["Gemfile"]),
   extensions: [".rb", ".rake", ".gemspec", ".ru"],
   async spawn(root) {
-    let bin = which("rubocop", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+    return toolServer(root, {
+      name: "rubocop",
+      install: ["gem", "install", "rubocop", "--bindir", Global.Path.bin],
+      require: ["ruby", "gem"],
+      missing: "Ruby not found, please install Ruby first",
+      missingLevel: "info",
+      args: ["--lsp"],
     })
-    if (!bin) {
-      const ruby = which("ruby")
-      const gem = which("gem")
-      if (!ruby || !gem) {
-        log.info("Ruby not found, please install Ruby first")
-        return
-      }
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("installing rubocop")
-      const proc = Process.spawn(["gem", "install", "rubocop", "--bindir", Global.Path.bin], {
-        stdout: "pipe",
-        stderr: "pipe",
-        stdin: "pipe",
-      })
-      const exit = await proc.exited
-      if (exit !== 0) {
-        log.error("Failed to install rubocop")
-        return
-      }
-      bin = path.join(Global.Path.bin, "rubocop" + (process.platform === "win32" ? ".exe" : ""))
-      log.info(`installed rubocop`, {
-        bin,
-      })
-    }
-    return {
-      process: spawn(bin!, ["--lsp"], {
-        cwd: root,
-      }),
-    }
   },
 }
 
@@ -447,36 +388,18 @@ export const Pyright: Info = {
   extensions: [".py", ".pyi"],
   root: NearestRoot(["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "pyrightconfig.json"]),
   async spawn(root) {
-    let binary = which("pyright-langserver")
-    const args = []
-    if (!binary) {
-      const js = path.join(Global.Path.bin, "node_modules", "pyright", "dist", "pyright-langserver.js")
-      if (!(await Filesystem.exists(js))) {
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        await Process.spawn([BunProc.which(), "install", "pyright"], {
-          cwd: Global.Path.bin,
-          env: {
-            ...process.env,
-            BUN_BE_BUN: "1",
-          },
-        }).exited
-      }
-      binary = BunProc.which()
-      args.push(...["run", js])
-    }
-    args.push("--stdio")
-
     const initialization: Record<string, string> = {}
     const python = await venvPython(root)
     if (python) initialization["pythonPath"] = python
 
-    const proc = spawn(binary, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        BUN_BE_BUN: "1",
-      },
+    const proc = await bunServer({
+      root,
+      binary: "pyright-langserver",
+      script: path.join(Global.Path.bin, "node_modules", "pyright", "dist", "pyright-langserver.js"),
+      pkg: "pyright",
+      args: ["--stdio"],
     })
+    if (!proc) return
     return {
       process: proc,
       initialization,
@@ -586,47 +509,19 @@ export const Zls: Info = {
       }
 
       const asset = release.assets.find((a) => a.name === assetName)
-      if (!asset) {
+      if (!asset?.browser_download_url) {
         log.error(`Could not find asset ${assetName} in latest zls release`)
         return
       }
-
-      const downloadUrl = asset.browser_download_url
-      const downloadResponse = await fetch(downloadUrl)
-      if (!downloadResponse.ok) {
-        log.error("Failed to download zls")
-        return
-      }
-
-      const tempPath = path.join(Global.Path.bin, assetName)
-      if (downloadResponse.body) await Filesystem.writeStream(tempPath, downloadResponse.body)
-
-      if (assetName.endsWith(".zip")) {
-        const ok = await Archive.extractZip(tempPath, Global.Path.bin)
-          .then(() => true)
-          .catch((error) => {
-            log.error("Failed to extract zls archive", { error })
-            return false
-          })
-        if (!ok) return
-      } else {
-        await run(["tar", "-xf", tempPath], { cwd: Global.Path.bin })
-      }
-
-      await fs.rm(tempPath, { force: true })
-
-      bin = path.join(Global.Path.bin, "zls" + (platform === "win32" ? ".exe" : ""))
-
-      if (!(await Filesystem.exists(bin))) {
-        log.error("Failed to extract zls binary")
-        return
-      }
-
-      if (platform !== "win32") {
-        await fs.chmod(bin, 0o755).catch(() => {})
-      }
-
-      log.info(`installed zls`, { bin })
+      bin = (await installReleaseBin({
+        id: "zls",
+        assetName,
+        url: asset.browser_download_url,
+        bin: path.join(Global.Path.bin, "zls" + (platform === "win32" ? ".exe" : "")),
+        platform,
+        tarArgs: ["-xf"],
+      })) ?? null
+      if (!bin) return
     }
 
     return {
@@ -642,37 +537,13 @@ export const CSharp: Info = {
   root: NearestRoot([".slnx", ".sln", ".csproj", "global.json"]),
   extensions: [".cs"],
   async spawn(root) {
-    let bin = which("csharp-ls", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+    return toolServer(root, {
+      name: "csharp-ls",
+      install: ["dotnet", "tool", "install", "csharp-ls", "--tool-path", Global.Path.bin],
+      require: ["dotnet"],
+      missing: ".NET SDK is required to install csharp-ls",
+      title: "installing csharp-ls via dotnet tool",
     })
-    if (!bin) {
-      if (!which("dotnet")) {
-        log.error(".NET SDK is required to install csharp-ls")
-        return
-      }
-
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("installing csharp-ls via dotnet tool")
-      const proc = Process.spawn(["dotnet", "tool", "install", "csharp-ls", "--tool-path", Global.Path.bin], {
-        stdout: "pipe",
-        stderr: "pipe",
-        stdin: "pipe",
-      })
-      const exit = await proc.exited
-      if (exit !== 0) {
-        log.error("Failed to install csharp-ls")
-        return
-      }
-
-      bin = path.join(Global.Path.bin, "csharp-ls" + (process.platform === "win32" ? ".exe" : ""))
-      log.info(`installed csharp-ls`, { bin })
-    }
-
-    return {
-      process: spawn(bin, {
-        cwd: root,
-      }),
-    }
   },
 }
 
@@ -681,37 +552,13 @@ export const FSharp: Info = {
   root: NearestRoot([".slnx", ".sln", ".fsproj", "global.json"]),
   extensions: [".fs", ".fsi", ".fsx", ".fsscript"],
   async spawn(root) {
-    let bin = which("fsautocomplete", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+    return toolServer(root, {
+      name: "fsautocomplete",
+      install: ["dotnet", "tool", "install", "fsautocomplete", "--tool-path", Global.Path.bin],
+      require: ["dotnet"],
+      missing: ".NET SDK is required to install fsautocomplete",
+      title: "installing fsautocomplete via dotnet tool",
     })
-    if (!bin) {
-      if (!which("dotnet")) {
-        log.error(".NET SDK is required to install fsautocomplete")
-        return
-      }
-
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("installing fsautocomplete via dotnet tool")
-      const proc = Process.spawn(["dotnet", "tool", "install", "fsautocomplete", "--tool-path", Global.Path.bin], {
-        stdout: "pipe",
-        stderr: "pipe",
-        stdin: "pipe",
-      })
-      const exit = await proc.exited
-      if (exit !== 0) {
-        log.error("Failed to install fsautocomplete")
-        return
-      }
-
-      bin = path.join(Global.Path.bin, "fsautocomplete" + (process.platform === "win32" ? ".exe" : ""))
-      log.info(`installed fsautocomplete`, { bin })
-    }
-
-    return {
-      process: spawn(bin, {
-        cwd: root,
-      }),
-    }
   },
 }
 
@@ -929,34 +776,14 @@ export const Svelte: Info = {
   extensions: [".svelte"],
   root: NearestRoot([...JS_LOCKFILES]),
   async spawn(root) {
-    let binary = which("svelteserver")
-    const args: string[] = []
-    if (!binary) {
-      const js = path.join(Global.Path.bin, "node_modules", "svelte-language-server", "bin", "server.js")
-      if (!(await Filesystem.exists(js))) {
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        await Process.spawn([BunProc.which(), "install", "svelte-language-server"], {
-          cwd: Global.Path.bin,
-          env: {
-            ...process.env,
-            BUN_BE_BUN: "1",
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: "pipe",
-        }).exited
-      }
-      binary = BunProc.which()
-      args.push("run", js)
-    }
-    args.push("--stdio")
-    const proc = spawn(binary, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        BUN_BE_BUN: "1",
-      },
+    const proc = await bunServer({
+      root,
+      binary: "svelteserver",
+      script: path.join(Global.Path.bin, "node_modules", "svelte-language-server", "bin", "server.js"),
+      pkg: "svelte-language-server",
+      args: ["--stdio"],
     })
+    if (!proc) return
     return {
       process: proc,
       initialization: {},
@@ -976,34 +803,14 @@ export const Astro: Info = {
     }
     const tsdk = path.dirname(tsserver)
 
-    let binary = which("astro-ls")
-    const args: string[] = []
-    if (!binary) {
-      const js = path.join(Global.Path.bin, "node_modules", "@astrojs", "language-server", "bin", "nodeServer.js")
-      if (!(await Filesystem.exists(js))) {
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        await Process.spawn([BunProc.which(), "install", "@astrojs/language-server"], {
-          cwd: Global.Path.bin,
-          env: {
-            ...process.env,
-            BUN_BE_BUN: "1",
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: "pipe",
-        }).exited
-      }
-      binary = BunProc.which()
-      args.push("run", js)
-    }
-    args.push("--stdio")
-    const proc = spawn(binary, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        BUN_BE_BUN: "1",
-      },
+    const proc = await bunServer({
+      root,
+      binary: "astro-ls",
+      script: path.join(Global.Path.bin, "node_modules", "@astrojs", "language-server", "bin", "nodeServer.js"),
+      pkg: "@astrojs/language-server",
+      args: ["--stdio"],
     })
+    if (!proc) return
     return {
       process: proc,
       initialization: {
@@ -1240,35 +1047,14 @@ export const YamlLS: Info = {
   extensions: [".yaml", ".yml"],
   root: NearestRoot([...JS_LOCKFILES]),
   async spawn(root) {
-    let binary = which("yaml-language-server")
-    const args: string[] = []
-    if (!binary) {
-      const js = path.join(Global.Path.bin, "node_modules", "yaml-language-server", "out", "server", "src", "server.js")
-      const exists = await Filesystem.exists(js)
-      if (!exists) {
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        await Process.spawn([BunProc.which(), "install", "yaml-language-server"], {
-          cwd: Global.Path.bin,
-          env: {
-            ...process.env,
-            BUN_BE_BUN: "1",
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: "pipe",
-        }).exited
-      }
-      binary = BunProc.which()
-      args.push("run", js)
-    }
-    args.push("--stdio")
-    const proc = spawn(binary, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        BUN_BE_BUN: "1",
-      },
+    const proc = await bunServer({
+      root,
+      binary: "yaml-language-server",
+      script: path.join(Global.Path.bin, "node_modules", "yaml-language-server", "out", "server", "src", "server.js"),
+      pkg: "yaml-language-server",
+      args: ["--stdio"],
     })
+    if (!proc) return
     return {
       process: proc,
     }
@@ -1426,34 +1212,14 @@ export const PHPIntelephense: Info = {
   extensions: [".php"],
   root: NearestRoot(["composer.json", "composer.lock", ".php-version"]),
   async spawn(root) {
-    let binary = which("intelephense")
-    const args: string[] = []
-    if (!binary) {
-      const js = path.join(Global.Path.bin, "node_modules", "intelephense", "lib", "intelephense.js")
-      if (!(await Filesystem.exists(js))) {
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        await Process.spawn([BunProc.which(), "install", "intelephense"], {
-          cwd: Global.Path.bin,
-          env: {
-            ...process.env,
-            BUN_BE_BUN: "1",
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: "pipe",
-        }).exited
-      }
-      binary = BunProc.which()
-      args.push("run", js)
-    }
-    args.push("--stdio")
-    const proc = spawn(binary, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        BUN_BE_BUN: "1",
-      },
+    const proc = await bunServer({
+      root,
+      binary: "intelephense",
+      script: path.join(Global.Path.bin, "node_modules", "intelephense", "lib", "intelephense.js"),
+      pkg: "intelephense",
+      args: ["--stdio"],
     })
+    if (!proc) return
     return {
       process: proc,
       initialization: {
@@ -1523,34 +1289,14 @@ export const BashLS: Info = {
   extensions: [".sh", ".bash", ".zsh", ".ksh"],
   root: async () => Instance.directory,
   async spawn(root) {
-    let binary = which("bash-language-server")
-    const args: string[] = []
-    if (!binary) {
-      const js = path.join(Global.Path.bin, "node_modules", "bash-language-server", "out", "cli.js")
-      if (!(await Filesystem.exists(js))) {
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        await Process.spawn([BunProc.which(), "install", "bash-language-server"], {
-          cwd: Global.Path.bin,
-          env: {
-            ...process.env,
-            BUN_BE_BUN: "1",
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: "pipe",
-        }).exited
-      }
-      binary = BunProc.which()
-      args.push("run", js)
-    }
-    args.push("start")
-    const proc = spawn(binary, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        BUN_BE_BUN: "1",
-      },
+    const proc = await bunServer({
+      root,
+      binary: "bash-language-server",
+      script: path.join(Global.Path.bin, "node_modules", "bash-language-server", "out", "cli.js"),
+      pkg: "bash-language-server",
+      args: ["start"],
     })
+    if (!proc) return
     return {
       process: proc,
     }
@@ -1678,48 +1424,20 @@ export const TexLab: Info = {
       const assetName = `texlab-${texArch}-${texPlatform}.${ext}`
 
       const assets = release.assets ?? []
-      const asset = assets.find((a) => a.name === assetName)
+      const asset = releaseAsset(assets, assetName)
       if (!asset?.browser_download_url) {
         log.error(`Could not find asset ${assetName} in texlab release`)
         return
       }
-
-      const downloadResponse = await fetch(asset.browser_download_url)
-      if (!downloadResponse.ok) {
-        log.error("Failed to download texlab")
-        return
-      }
-
-      const tempPath = path.join(Global.Path.bin, assetName)
-      if (downloadResponse.body) await Filesystem.writeStream(tempPath, downloadResponse.body)
-
-      if (ext === "zip") {
-        const ok = await Archive.extractZip(tempPath, Global.Path.bin)
-          .then(() => true)
-          .catch((error) => {
-            log.error("Failed to extract texlab archive", { error })
-            return false
-          })
-        if (!ok) return
-      }
-      if (ext === "tar.gz") {
-        await run(["tar", "-xzf", tempPath], { cwd: Global.Path.bin })
-      }
-
-      await fs.rm(tempPath, { force: true })
-
-      bin = path.join(Global.Path.bin, "texlab" + (platform === "win32" ? ".exe" : ""))
-
-      if (!(await Filesystem.exists(bin))) {
-        log.error("Failed to extract texlab binary")
-        return
-      }
-
-      if (platform !== "win32") {
-        await fs.chmod(bin, 0o755).catch(() => {})
-      }
-
-      log.info("installed texlab", { bin })
+      bin = (await installReleaseBin({
+        id: "texlab",
+        assetName,
+        url: asset.browser_download_url,
+        bin: path.join(Global.Path.bin, "texlab" + (platform === "win32" ? ".exe" : "")),
+        platform,
+        tarArgs: ext === "tar.gz" ? ["-xzf"] : undefined,
+      })) ?? null
+      if (!bin) return
     }
 
     return {
@@ -1735,34 +1453,14 @@ export const DockerfileLS: Info = {
   extensions: [".dockerfile", "Dockerfile"],
   root: async () => Instance.directory,
   async spawn(root) {
-    let binary = which("docker-langserver")
-    const args: string[] = []
-    if (!binary) {
-      const js = path.join(Global.Path.bin, "node_modules", "dockerfile-language-server-nodejs", "lib", "server.js")
-      if (!(await Filesystem.exists(js))) {
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        await Process.spawn([BunProc.which(), "install", "dockerfile-language-server-nodejs"], {
-          cwd: Global.Path.bin,
-          env: {
-            ...process.env,
-            BUN_BE_BUN: "1",
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: "pipe",
-        }).exited
-      }
-      binary = BunProc.which()
-      args.push("run", js)
-    }
-    args.push("--stdio")
-    const proc = spawn(binary, args, {
-      cwd: root,
-      env: {
-        ...process.env,
-        BUN_BE_BUN: "1",
-      },
+    const proc = await bunServer({
+      root,
+      binary: "docker-langserver",
+      script: path.join(Global.Path.bin, "node_modules", "dockerfile-language-server-nodejs", "lib", "server.js"),
+      pkg: "dockerfile-language-server-nodejs",
+      args: ["--stdio"],
     })
+    if (!proc) return
     return {
       process: proc,
     }
@@ -1884,47 +1582,20 @@ export const Tinymist: Info = {
       const assetName = `tinymist-${tinymistArch}-${tinymistPlatform}.${ext}`
 
       const assets = release.assets ?? []
-      const asset = assets.find((a) => a.name === assetName)
+      const asset = releaseAsset(assets, assetName)
       if (!asset?.browser_download_url) {
         log.error(`Could not find asset ${assetName} in tinymist release`)
         return
       }
-
-      const downloadResponse = await fetch(asset.browser_download_url)
-      if (!downloadResponse.ok) {
-        log.error("Failed to download tinymist")
-        return
-      }
-
-      const tempPath = path.join(Global.Path.bin, assetName)
-      if (downloadResponse.body) await Filesystem.writeStream(tempPath, downloadResponse.body)
-
-      if (ext === "zip") {
-        const ok = await Archive.extractZip(tempPath, Global.Path.bin)
-          .then(() => true)
-          .catch((error) => {
-            log.error("Failed to extract tinymist archive", { error })
-            return false
-          })
-        if (!ok) return
-      } else {
-        await run(["tar", "-xzf", tempPath, "--strip-components=1"], { cwd: Global.Path.bin })
-      }
-
-      await fs.rm(tempPath, { force: true })
-
-      bin = path.join(Global.Path.bin, "tinymist" + (platform === "win32" ? ".exe" : ""))
-
-      if (!(await Filesystem.exists(bin))) {
-        log.error("Failed to extract tinymist binary")
-        return
-      }
-
-      if (platform !== "win32") {
-        await fs.chmod(bin, 0o755).catch(() => {})
-      }
-
-      log.info("installed tinymist", { bin })
+      bin = (await installReleaseBin({
+        id: "tinymist",
+        assetName,
+        url: asset.browser_download_url,
+        bin: path.join(Global.Path.bin, "tinymist" + (platform === "win32" ? ".exe" : "")),
+        platform,
+        tarArgs: ext === "zip" ? undefined : ["-xzf", "--strip-components=1"],
+      })) ?? null
+      if (!bin) return
     }
 
     return {

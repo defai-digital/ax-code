@@ -425,6 +425,7 @@ export namespace MessageV2 {
       cwd: z.string(),
       root: z.string(),
     }),
+    cost: z.number().optional(),
     summary: z.boolean().optional(),
     tokens: z.object({
       total: z.number().optional(),

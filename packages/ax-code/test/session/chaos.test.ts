@@ -31,6 +31,7 @@ const model: Provider.Model = {
     interleaved: false,
   },
   limit: { context: 128_000, output: 8_192 },
+  cost: { input: 0, output: 0 },
   status: "active",
   options: {},
   headers: {},
@@ -110,7 +111,10 @@ function* finishStep(opts?: { tokens?: boolean; reason?: string }) {
   yield {
     type: "finish-step",
     finishReason: opts?.reason ?? "stop",
-    usage: opts?.tokens !== false ? { inputTokens: 100, outputTokens: 10, totalTokens: 110 } : { inputTokens: 0, outputTokens: 0 },
+    usage:
+      opts?.tokens !== false
+        ? { inputTokens: 100, outputTokens: 10, totalTokens: 110 }
+        : { inputTokens: 0, outputTokens: 0 },
   }
 }
 
@@ -164,7 +168,11 @@ describe("chaos: stream failures", () => {
           (async function* () {
             yield { type: "start" }
             yield { type: "start-step" }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 10, outputTokens: 0, totalTokens: 10 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 10, outputTokens: 0, totalTokens: 10 },
+            }
             yield { type: "finish" }
           })(),
         )
@@ -231,7 +239,11 @@ describe("chaos: stream failures", () => {
               yield { type: "text-start", id: "t1" }
               yield { type: "text-delta", id: "t1", text: "recovered" }
               yield { type: "text-end", id: "t1" }
-              yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 50, outputTokens: 5, totalTokens: 55 } }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 50, outputTokens: 5, totalTokens: 55 },
+              }
               yield { type: "finish" }
             })(),
           } as any
@@ -298,7 +310,11 @@ describe("chaos: abort signal", () => {
           (async function* () {
             yield { type: "start" }
             yield { type: "start-step" }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 10, outputTokens: 0, totalTokens: 10 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 10, outputTokens: 0, totalTokens: 10 },
+            }
             yield { type: "finish" }
           })(),
         )
@@ -327,7 +343,9 @@ describe("chaos: abort signal", () => {
         const { processor, process } = await setup(tmp)
         const controller = new AbortController()
         const err = new MessageV2.APIError({ message: "Rate limited", isRetryable: true }).toObject()
-        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => { throw err })
+        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+          throw err
+        })
         sleepSpy = spyOn(SessionRetry, "sleep").mockImplementation(async () => {
           controller.abort()
         })
@@ -354,8 +372,17 @@ describe("chaos: tool failures", () => {
             yield { type: "start-step" }
             yield { type: "tool-input-start", id: "call_1", toolName: "read" }
             yield { type: "tool-call", toolCallId: "call_1", toolName: "read", input: { file_path: "/nonexistent" } }
-            yield { type: "tool-error", toolCallId: "call_1", input: { file_path: "/nonexistent" }, error: new Error("File not found") }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 50, outputTokens: 5, totalTokens: 55 } }
+            yield {
+              type: "tool-error",
+              toolCallId: "call_1",
+              input: { file_path: "/nonexistent" },
+              error: new Error("File not found"),
+            }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 50, outputTokens: 5, totalTokens: 55 },
+            }
             yield { type: "finish" }
           })(),
         )
@@ -381,7 +408,11 @@ describe("chaos: tool failures", () => {
               input: {},
               output: { output: "phantom", title: "?", metadata: {}, attachments: [] },
             }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 10, outputTokens: 0, totalTokens: 10 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 10, outputTokens: 0, totalTokens: 10 },
+            }
             yield { type: "finish" }
           })(),
         )
@@ -402,7 +433,11 @@ describe("chaos: tool failures", () => {
             yield { type: "start" }
             yield { type: "start-step" }
             yield { type: "tool-error", toolCallId: "nonexistent", input: {}, error: new Error("unknown") }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 10, outputTokens: 0, totalTokens: 10 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 10, outputTokens: 0, totalTokens: 10 },
+            }
             yield { type: "finish" }
           })(),
         )
@@ -433,7 +468,11 @@ describe("chaos: tool failures", () => {
               output: { output: "found.txt", title: "Glob", metadata: {}, attachments: [] },
             }
             yield { type: "tool-error", toolCallId: "call_2", input: { file_path: "/bad" }, error: new Error("ENOENT") }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
             yield { type: "finish" }
           })(),
         )
@@ -516,12 +555,20 @@ describe("chaos: multi-step", () => {
               input: { pattern: "*" },
               output: { output: "file.ts", title: "Glob", metadata: {}, attachments: [] },
             }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
             yield { type: "start-step" }
             yield { type: "text-start", id: "t1" }
             yield { type: "text-delta", id: "t1", text: "Done." }
             yield { type: "text-end", id: "t1" }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 120, outputTokens: 5, totalTokens: 125 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 120, outputTokens: 5, totalTokens: 125 },
+            }
             yield { type: "finish" }
           })(),
         )
@@ -545,7 +592,11 @@ describe("chaos: multi-step", () => {
             yield { type: "text-start", id: "t1" }
             yield { type: "text-delta", id: "t1", text: "Step 1 complete." }
             yield { type: "text-end", id: "t1" }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+            }
             yield { type: "start-step" }
             throw new Error("Provider died mid-step-2")
           })(),
@@ -650,7 +701,11 @@ describe("chaos: reasoning", () => {
             yield { type: "text-start", id: "t1" }
             yield { type: "text-delta", id: "t1", text: "ok" }
             yield { type: "text-end", id: "t1" }
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 50, outputTokens: 5, totalTokens: 55 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 50, outputTokens: 5, totalTokens: 55 },
+            }
             yield { type: "finish" }
           })(),
         )
@@ -678,7 +733,11 @@ describe("chaos: incomplete tools", () => {
             yield { type: "tool-input-start", id: "call_1", toolName: "bash" }
             yield { type: "tool-call", toolCallId: "call_1", toolName: "bash", input: { command: "sleep 999" } }
             // No tool-result — stream ends
-            yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 50, outputTokens: 5, totalTokens: 55 } }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 50, outputTokens: 5, totalTokens: 55 },
+            }
             yield { type: "finish" }
           })(),
         )

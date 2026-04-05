@@ -35,7 +35,7 @@ import { useProviders } from "@/hooks/use-providers"
 import { showToast, Toast, toaster } from "@ax-code/ui/toast"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { clearWorkspaceTerminals } from "@/context/terminal"
-import { dropSessionCaches, pickSessionCacheEvictions } from "@/context/global-sync/session-cache"
+import { dropSessionCaches } from "@/context/global-sync/session-cache"
 import {
   clearSessionPrefetchInflight,
   clearSessionPrefetch,
@@ -49,7 +49,6 @@ import { useNotification } from "@/context/notification"
 import { usePermission } from "@/context/permission"
 import { Binary } from "@ax-code/util/binary"
 import { retry } from "@ax-code/util/retry"
-import { playSoundById } from "@/utils/sound"
 import { createAim } from "@/utils/aim"
 import { setNavigate } from "@/utils/notification-click"
 import { Worktree as WorktreeState } from "@/utils/worktree"
@@ -57,7 +56,7 @@ import { setSessionHandoff } from "@/pages/session/handoff"
 
 import { useDialog } from "@ax-code/ui/context/dialog"
 import { useTheme, type ColorScheme } from "@ax-code/ui/theme/context"
-import { useCommand, type CommandOption } from "@/context/command"
+import { useCommand } from "@/context/command"
 import { ConstrainDragXAxis, getDraggableId } from "@/utils/solid-dnd"
 import { DebugBar } from "@/components/debug-bar"
 import { Titlebar } from "@/components/titlebar"
@@ -82,7 +81,24 @@ import {
   drainPendingDeepLinks,
 } from "./layout/deep-links"
 import { projectByOffset, sessionIndexByOffset, unseenSessionIndex } from "./layout/navigation"
+import { buildLayoutCommands } from "./layout/commands"
+import { createDialogLoader } from "./layout/dialogs"
 import { nextInList } from "./layout/preferences"
+import {
+  lruFor,
+  markPrefetched,
+  prefetchChunk,
+  prefetchConcurrency,
+  prefetchLimit,
+  prefetchPendingLimit,
+  prefetchSpan,
+  queueFor,
+  queuePrefetch,
+  trimPrefetchedDirs,
+  trimPrefetchQueues,
+  type PrefetchQueue,
+  warmSessions,
+} from "./layout/prefetch"
 import { dropProjectSession, projectRootForDirectory, rememberProjectSession } from "./layout/route-state"
 import { createInlineEditorController } from "./layout/inline-editor"
 import {
@@ -94,6 +110,8 @@ import {
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { SidebarContent } from "./layout/sidebar-shell"
 import { ActivityInbox } from "./layout/activity-inbox"
+import { useSDKNotificationToasts } from "./layout/notifications"
+import { useUpdatePolling } from "./layout/updates"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
@@ -113,8 +131,7 @@ export default function Layout(props: ParentProps) {
   const pageReady = createMemo(() => ready())
 
   let scrollContainerRef: HTMLDivElement | undefined
-  let dialogRun = 0
-  let dialogDead = false
+  const dialogs = createDialogLoader()
 
   const params = useParams()
   const globalSDK = useGlobalSDK()
@@ -206,8 +223,7 @@ export default function Layout(props: ParentProps) {
   })
 
   onCleanup(() => {
-    dialogDead = true
-    dialogRun += 1
+    dialogs.stop()
     if (navLeave.current !== undefined) clearTimeout(navLeave.current)
     clearTimeout(sortNowTimeout)
     if (sortNowInterval) clearInterval(sortNowInterval)
@@ -372,180 +388,19 @@ export default function Layout(props: ParentProps) {
     setLocale(next)
   }
 
-  const useUpdatePolling = () =>
-    onMount(() => {
-      if (!platform.checkUpdate || !platform.update || !platform.restart) return
-
-      let toastId: number | undefined
-      let interval: ReturnType<typeof setInterval> | undefined
-
-      const pollUpdate = () =>
-        platform.checkUpdate!().then(({ updateAvailable, version }) => {
-          if (!updateAvailable) return
-          if (toastId !== undefined) return
-          toastId = showToast({
-            persistent: true,
-            icon: "download",
-            title: language.t("toast.update.title"),
-            description: language.t("toast.update.description", { version: version ?? "" }),
-            actions: [
-              {
-                label: language.t("toast.update.action.installRestart"),
-                onClick: async () => {
-                  await platform.update!()
-                  await platform.restart!()
-                },
-              },
-              {
-                label: language.t("toast.update.action.notYet"),
-                onClick: "dismiss",
-              },
-            ],
-          })
-        })
-
-      createEffect(() => {
-        if (!settings.ready()) return
-
-        if (!settings.updates.startup()) {
-          if (interval === undefined) return
-          clearInterval(interval)
-          interval = undefined
-          return
-        }
-
-        if (interval !== undefined) return
-        void pollUpdate()
-        interval = setInterval(pollUpdate, 10 * 60 * 1000)
-      })
-
-      onCleanup(() => {
-        if (interval === undefined) return
-        clearInterval(interval)
-      })
-    })
-
-  const useSDKNotificationToasts = () =>
-    onMount(() => {
-      const toastBySession = new Map<string, number>()
-      const alertedAtBySession = new Map<string, number>()
-      const cooldownMs = 5000
-
-      const dismissSessionAlert = (sessionKey: string) => {
-        const toastId = toastBySession.get(sessionKey)
-        if (toastId === undefined) return
-        toaster.dismiss(toastId)
-        toastBySession.delete(sessionKey)
-        alertedAtBySession.delete(sessionKey)
-      }
-
-      const unsub = globalSDK.event.listen((e) => {
-        if (e.details?.type === "worktree.ready") {
-          setBusy(e.name, false)
-          WorktreeState.ready(e.name)
-          return
-        }
-
-        if (e.details?.type === "worktree.failed") {
-          setBusy(e.name, false)
-          WorktreeState.failed(e.name, e.details.properties?.message ?? language.t("common.requestFailed"))
-          return
-        }
-
-        if (
-          e.details?.type === "question.replied" ||
-          e.details?.type === "question.rejected" ||
-          e.details?.type === "permission.replied"
-        ) {
-          const props = e.details.properties as { sessionID: string }
-          const sessionKey = `${e.name}:${props.sessionID}`
-          dismissSessionAlert(sessionKey)
-          return
-        }
-
-        if (e.details?.type !== "permission.asked" && e.details?.type !== "question.asked") return
-        const title =
-          e.details.type === "permission.asked"
-            ? language.t("notification.permission.title")
-            : language.t("notification.question.title")
-        const icon = e.details.type === "permission.asked" ? ("checklist" as const) : ("bubble-5" as const)
-        const directory = e.name
-        const props = e.details.properties
-        if (e.details.type === "permission.asked" && permission.autoResponds(e.details.properties, directory)) return
-
-        const [store] = globalSync.child(directory, { bootstrap: false })
-        const session = store.session.find((s) => s.id === props.sessionID)
-        const sessionKey = `${directory}:${props.sessionID}`
-
-        const sessionTitle = session?.title ?? language.t("command.session.new")
-        const projectName = getFilename(directory)
-        const description =
-          e.details.type === "permission.asked"
-            ? language.t("notification.permission.description", { sessionTitle, projectName })
-            : language.t("notification.question.description", { sessionTitle, projectName })
-        const href = `/${base64Encode(directory)}/session/${props.sessionID}`
-
-        const now = Date.now()
-        const lastAlerted = alertedAtBySession.get(sessionKey) ?? 0
-        if (now - lastAlerted < cooldownMs) return
-        alertedAtBySession.set(sessionKey, now)
-
-        if (e.details.type === "permission.asked") {
-          if (settings.sounds.permissionsEnabled()) {
-            void playSoundById(settings.sounds.permissions())
-          }
-          if (settings.notifications.permissions()) {
-            void platform.notify(title, description, href)
-          }
-        }
-
-        if (e.details.type === "question.asked") {
-          if (settings.notifications.agent()) {
-            void platform.notify(title, description, href)
-          }
-        }
-
-        const currentSession = params.id
-        if (workspaceKey(directory) === workspaceKey(currentDir()) && props.sessionID === currentSession) return
-        if (workspaceKey(directory) === workspaceKey(currentDir()) && session?.parentID === currentSession) return
-
-        dismissSessionAlert(sessionKey)
-
-        const toastId = showToast({
-          persistent: true,
-          icon,
-          title,
-          description,
-          actions: [
-            {
-              label: language.t("notification.action.goToSession"),
-              onClick: () => navigate(href),
-            },
-            {
-              label: language.t("common.dismiss"),
-              onClick: "dismiss",
-            },
-          ],
-        })
-        toastBySession.set(sessionKey, toastId)
-      })
-      onCleanup(unsub)
-
-      createEffect(() => {
-        const currentSession = params.id
-        if (!currentDir() || !currentSession) return
-        const sessionKey = `${currentDir()}:${currentSession}`
-        dismissSessionAlert(sessionKey)
-        const [store] = globalSync.child(currentDir(), { bootstrap: false })
-        const childSessions = store.session.filter((s) => s.parentID === currentSession)
-        for (const child of childSessions) {
-          dismissSessionAlert(`${currentDir()}:${child.id}`)
-        }
-      })
-    })
-
-  useUpdatePolling()
-  useSDKNotificationToasts()
+  useUpdatePolling({ language, platform, settings })
+  useSDKNotificationToasts({
+    currentDir,
+    currentSession: () => params.id,
+    globalSDK,
+    globalSync,
+    language,
+    navigate,
+    permission,
+    platform,
+    setBusy,
+    settings,
+  })
 
   function scrollToSession(sessionId: string, sessionKey: string) {
     if (!scrollContainerRef) return
@@ -672,47 +527,12 @@ export default function Layout(props: ParentProps) {
     return result
   })
 
-  type PrefetchQueue = {
-    inflight: Set<string>
-    pending: string[]
-    pendingSet: Set<string>
-    running: number
-  }
-
-  const prefetchChunk = 200
-  const prefetchConcurrency = 2
-  const prefetchPendingLimit = 10
-  const span = 4
   const prefetchToken = { value: 0 }
   const prefetchQueues = new Map<string, PrefetchQueue>()
-
-  const PREFETCH_MAX_SESSIONS_PER_DIR = 10
   const prefetchedByDir = new Map<string, Set<string>>()
 
-  const lruFor = (directory: string) => {
-    const existing = prefetchedByDir.get(directory)
-    if (existing) return existing
-    const created = new Set<string>()
-    prefetchedByDir.set(directory, created)
-    return created
-  }
-
-  const markPrefetched = (directory: string, sessionID: string) => {
-    const lru = lruFor(directory)
-    return pickSessionCacheEvictions({
-      seen: lru,
-      keep: sessionID,
-      limit: PREFETCH_MAX_SESSIONS_PER_DIR,
-      preserve: params.id && workspaceKey(directory) === workspaceKey(currentDir()) ? [params.id] : undefined,
-    })
-  }
-
   createEffect(() => {
-    const active = new Set(visibleSessionDirs())
-    for (const directory of [...prefetchedByDir.keys()]) {
-      if (active.has(directory)) continue
-      prefetchedByDir.delete(directory)
-    }
+    trimPrefetchedDirs(prefetchedByDir, visibleSessionDirs())
   })
 
   createEffect(() => {
@@ -725,28 +545,8 @@ export default function Layout(props: ParentProps) {
   })
 
   createEffect(() => {
-    const visible = new Set(visibleSessionDirs())
-    for (const [directory, q] of prefetchQueues) {
-      if (visible.has(directory)) continue
-      q.pending.length = 0
-      q.pendingSet.clear()
-      if (q.running === 0) prefetchQueues.delete(directory)
-    }
+    trimPrefetchQueues(prefetchQueues, visibleSessionDirs())
   })
-
-  const queueFor = (directory: string) => {
-    const existing = prefetchQueues.get(directory)
-    if (existing) return existing
-
-    const created: PrefetchQueue = {
-      inflight: new Set(),
-      pending: [],
-      pendingSet: new Set(),
-      running: 0,
-    }
-    prefetchQueues.set(directory, created)
-    return created
-  }
 
   async function prefetchMessages(directory: string, sessionID: string, token: number) {
     const [store, setStore] = globalSync.child(directory, { bootstrap: false })
@@ -763,7 +563,14 @@ export default function Layout(props: ParentProps) {
             const items = (messages.data ?? []).filter((x) => !!x?.info?.id)
             const next = items.map((x) => x.info).filter((m): m is Message => !!m?.id)
             const sorted = mergeByID([], next)
-            const stale = markPrefetched(directory, sessionID)
+            const stale = markPrefetched({
+              dirs: prefetchedByDir,
+              directory,
+              sessionID,
+              limit: prefetchLimit,
+              active: params.id,
+              current: currentDir(),
+            })
             const cursor = messages.response.headers.get("x-next-cursor") ?? undefined
             const meta = {
               limit: sorted.length,
@@ -817,7 +624,7 @@ export default function Layout(props: ParentProps) {
   }
 
   const pumpPrefetch = (directory: string) => {
-    const q = queueFor(directory)
+    const q = queueFor(prefetchQueues, directory)
     if (q.running >= prefetchConcurrency) return
 
     const sessionID = q.pending.shift()
@@ -851,43 +658,10 @@ export default function Layout(props: ParentProps) {
     })
     if (cached) return
 
-    const q = queueFor(directory)
-    if (q.inflight.has(session.id)) return
-    if (q.pendingSet.has(session.id)) {
-      if (priority !== "high") return
-      const index = q.pending.indexOf(session.id)
-      if (index > 0) {
-        q.pending.splice(index, 1)
-        q.pending.unshift(session.id)
-      }
-      return
-    }
-
-    const lru = lruFor(directory)
-    const known = lru.has(session.id)
-    if (!known && lru.size >= PREFETCH_MAX_SESSIONS_PER_DIR && priority !== "high") return
-
-    if (priority === "high") q.pending.unshift(session.id)
-    if (priority !== "high") q.pending.push(session.id)
-    q.pendingSet.add(session.id)
-
-    while (q.pending.length > prefetchPendingLimit) {
-      const dropped = q.pending.pop()
-      if (!dropped) continue
-      q.pendingSet.delete(dropped)
-    }
-
+    const q = queueFor(prefetchQueues, directory)
+    const lru = lruFor(prefetchedByDir, directory)
+    if (!queuePrefetch({ q, lru, sessionID: session.id, priority, limit: prefetchLimit, pendingLimit: prefetchPendingLimit })) return
     pumpPrefetch(directory)
-  }
-
-  const warm = (sessions: Session[], index: number) => {
-    for (let offset = 1; offset <= span; offset++) {
-      const next = sessions[index + offset]
-      if (next) prefetchSession(next, offset === 1 ? "high" : "low")
-
-      const prev = sessions[index - offset]
-      if (prev) prefetchSession(prev, offset === 1 ? "high" : "low")
-    }
   }
 
   createEffect(() => {
@@ -902,7 +676,7 @@ export default function Layout(props: ParentProps) {
       if (first) prefetchSession(first, "high")
     }
 
-    warm(sessions, index)
+    warmSessions(sessions, index, prefetchSpan, prefetchSession)
   })
 
   function navigateSessionByOffset(offset: number) {
@@ -913,7 +687,7 @@ export default function Layout(props: ParentProps) {
     if (!session) return
 
     prefetchSession(session, "high")
-    warm(sessions, targetIndex)
+    warmSessions(sessions, targetIndex, prefetchSpan, prefetchSession)
 
     navigateToSession(session)
   }
@@ -940,7 +714,7 @@ export default function Layout(props: ParentProps) {
     if (!session) return
 
     prefetchSession(session, "high")
-    warm(sessions, index)
+    warmSessions(sessions, index, prefetchSpan, prefetchSession)
     navigateToSession(session)
   }
 
@@ -971,212 +745,75 @@ export default function Layout(props: ParentProps) {
   }
 
   command.register("layout", () => {
-    const commands: CommandOption[] = [
-      {
-        id: "sidebar.toggle",
-        title: language.t("command.sidebar.toggle"),
-        category: language.t("command.category.view"),
-        keybind: "mod+b",
-        onSelect: () => layout.sidebar.toggle(),
+    return buildLayoutCommands({
+      t: language.t,
+      sidebarToggle: () => layout.sidebar.toggle(),
+      chooseProject,
+      projectOffset: navigateProjectByOffset,
+      connectProvider,
+      openServer,
+      openSettings,
+      sessionOffset: navigateSessionByOffset,
+      unseenOffset: navigateSessionByUnseen,
+      canArchive: !!params.dir && !!params.id,
+      archive: () => {
+        const session = currentSessions().find((s) => s.id === params.id)
+        if (session) archiveSession(session)
       },
-      {
-        id: "project.open",
-        title: language.t("command.project.open"),
-        category: language.t("command.category.project"),
-        keybind: "mod+o",
-        onSelect: () => chooseProject(),
+      workspaceEnabled: !!workspaceSetting(),
+      createWorkspace: () => {
+        const project = currentProject()
+        if (!project) return
+        return createWorkspace(project)
       },
-      {
-        id: "project.previous",
-        title: language.t("command.project.previous"),
-        category: language.t("command.category.project"),
-        keybind: "mod+alt+arrowup",
-        onSelect: () => navigateProjectByOffset(-1),
+      canToggleWorkspace: !!currentProject() && currentProject()?.vcs === "git",
+      toggleWorkspace: () => {
+        const project = currentProject()
+        if (!project) return
+        if (project.vcs !== "git") return
+        const wasEnabled = layout.sidebar.workspaces(project.worktree)()
+        layout.sidebar.toggleWorkspaces(project.worktree)
+        showToast({
+          title: wasEnabled ? language.t("toast.workspace.disabled.title") : language.t("toast.workspace.enabled.title"),
+          description: wasEnabled
+            ? language.t("toast.workspace.disabled.description")
+            : language.t("toast.workspace.enabled.description"),
+        })
       },
-      {
-        id: "project.next",
-        title: language.t("command.project.next"),
-        category: language.t("command.category.project"),
-        keybind: "mod+alt+arrowdown",
-        onSelect: () => navigateProjectByOffset(1),
-      },
-      {
-        id: "provider.connect",
-        title: language.t("command.provider.connect"),
-        category: language.t("command.category.provider"),
-        onSelect: () => connectProvider(),
-      },
-      {
-        id: "server.switch",
-        title: language.t("command.server.switch"),
-        category: language.t("command.category.server"),
-        onSelect: () => openServer(),
-      },
-      {
-        id: "settings.open",
-        title: language.t("command.settings.open"),
-        category: language.t("command.category.settings"),
-        keybind: "mod+comma",
-        onSelect: () => openSettings(),
-      },
-      {
-        id: "session.previous",
-        title: language.t("command.session.previous"),
-        category: language.t("command.category.session"),
-        keybind: "alt+arrowup",
-        onSelect: () => navigateSessionByOffset(-1),
-      },
-      {
-        id: "session.next",
-        title: language.t("command.session.next"),
-        category: language.t("command.category.session"),
-        keybind: "alt+arrowdown",
-        onSelect: () => navigateSessionByOffset(1),
-      },
-      {
-        id: "session.previous.unseen",
-        title: language.t("command.session.previous.unseen"),
-        category: language.t("command.category.session"),
-        keybind: "shift+alt+arrowup",
-        onSelect: () => navigateSessionByUnseen(-1),
-      },
-      {
-        id: "session.next.unseen",
-        title: language.t("command.session.next.unseen"),
-        category: language.t("command.category.session"),
-        keybind: "shift+alt+arrowdown",
-        onSelect: () => navigateSessionByUnseen(1),
-      },
-      {
-        id: "session.archive",
-        title: language.t("command.session.archive"),
-        category: language.t("command.category.session"),
-        keybind: "mod+shift+backspace",
-        disabled: !params.dir || !params.id,
-        onSelect: () => {
-          const session = currentSessions().find((s) => s.id === params.id)
-          if (session) archiveSession(session)
-        },
-      },
-      {
-        id: "workspace.new",
-        title: language.t("workspace.new"),
-        category: language.t("command.category.workspace"),
-        keybind: "mod+shift+w",
-        disabled: !workspaceSetting(),
-        onSelect: () => {
-          const project = currentProject()
-          if (!project) return
-          return createWorkspace(project)
-        },
-      },
-      {
-        id: "workspace.toggle",
-        title: language.t("command.workspace.toggle"),
-        description: language.t("command.workspace.toggle.description"),
-        category: language.t("command.category.workspace"),
-        slash: "workspace",
-        disabled: !currentProject() || currentProject()?.vcs !== "git",
-        onSelect: () => {
-          const project = currentProject()
-          if (!project) return
-          if (project.vcs !== "git") return
-          const wasEnabled = layout.sidebar.workspaces(project.worktree)()
-          layout.sidebar.toggleWorkspaces(project.worktree)
-          showToast({
-            title: wasEnabled
-              ? language.t("toast.workspace.disabled.title")
-              : language.t("toast.workspace.enabled.title"),
-            description: wasEnabled
-              ? language.t("toast.workspace.disabled.description")
-              : language.t("toast.workspace.enabled.description"),
-          })
-        },
-      },
-      {
-        id: "theme.cycle",
-        title: language.t("command.theme.cycle"),
-        category: language.t("command.category.theme"),
-        keybind: "mod+shift+t",
-        onSelect: () => cycleTheme(1),
-      },
-    ]
-
-    for (const [id] of availableThemeEntries()) {
-      commands.push({
-        id: `theme.set.${id}`,
-        title: language.t("command.theme.set", { theme: theme.name(id) }),
-        category: language.t("command.category.theme"),
-        onSelect: () => theme.commitPreview(),
-        onHighlight: () => {
-          theme.previewTheme(id)
-          return () => theme.cancelPreview()
-        },
-      })
-    }
-
-    commands.push({
-      id: "theme.scheme.cycle",
-      title: language.t("command.theme.scheme.cycle"),
-      category: language.t("command.category.theme"),
-      keybind: "mod+shift+s",
-      onSelect: () => cycleColorScheme(1),
+      cycleTheme,
+      themes: availableThemeEntries().map(([id]) => [id, theme.name(id)] as [string, string]),
+      setTheme: () => theme.commitPreview(),
+      previewTheme: (id) => theme.previewTheme(id),
+      cancelTheme: () => theme.cancelPreview(),
+      cycleScheme: cycleColorScheme,
+      schemes: [...colorSchemeOrder],
+      schemeLabel: colorSchemeLabel,
+      setScheme: () => theme.commitPreview(),
+      previewScheme: (scheme) => theme.previewColorScheme(scheme as ColorScheme),
+      cancelScheme: () => theme.cancelPreview(),
+      cycleLanguage,
+      locales: [...language.locales],
+      localeLabel: language.label,
+      setLocale,
     })
-
-    for (const scheme of colorSchemeOrder) {
-      commands.push({
-        id: `theme.scheme.${scheme}`,
-        title: language.t("command.theme.scheme.set", { scheme: colorSchemeLabel(scheme) }),
-        category: language.t("command.category.theme"),
-        onSelect: () => theme.commitPreview(),
-        onHighlight: () => {
-          theme.previewColorScheme(scheme)
-          return () => theme.cancelPreview()
-        },
-      })
-    }
-
-    commands.push({
-      id: "language.cycle",
-      title: language.t("command.language.cycle"),
-      category: language.t("command.category.language"),
-      onSelect: () => cycleLanguage(1),
-    })
-
-    for (const locale of language.locales) {
-      commands.push({
-        id: `language.set.${locale}`,
-        title: language.t("command.language.set", { language: language.label(locale) }),
-        category: language.t("command.category.language"),
-        onSelect: () => setLocale(locale),
-      })
-    }
-
-    return commands
   })
 
   function connectProvider() {
-    const run = ++dialogRun
-    void import("@/components/dialog-select-provider").then((x) => {
-      if (dialogDead || dialogRun !== run) return
-      dialog.show(() => <x.DialogSelectProvider />)
-    })
+    dialogs.open(
+      () => import("@/components/dialog-select-provider"),
+      (x) => dialog.show(() => <x.DialogSelectProvider />),
+    )
   }
 
   function openServer() {
-    const run = ++dialogRun
-    void import("@/components/dialog-select-server").then((x) => {
-      if (dialogDead || dialogRun !== run) return
-      dialog.show(() => <x.DialogSelectServer />)
-    })
+    dialogs.open(
+      () => import("@/components/dialog-select-server"),
+      (x) => dialog.show(() => <x.DialogSelectServer />),
+    )
   }
 
   function openSettings() {
-    const run = ++dialogRun
-    void import("@/components/dialog-settings").then((x) => {
-      if (dialogDead || dialogRun !== run) return
-      dialog.show(() => <x.DialogSettings />)
-    })
+    dialogs.open(() => import("@/components/dialog-settings"), (x) => dialog.show(() => <x.DialogSettings />))
   }
 
   function projectRoot(directory: string) {
@@ -1388,11 +1025,10 @@ export default function Layout(props: ParentProps) {
   }
 
   const showEditProjectDialog = (project: LocalProject) => {
-    const run = ++dialogRun
-    void import("@/components/dialog-edit-project").then((x) => {
-      if (dialogDead || dialogRun !== run) return
-      dialog.show(() => <x.DialogEditProject project={project} />)
-    })
+    dialogs.open(
+      () => import("@/components/dialog-edit-project"),
+      (x) => dialog.show(() => <x.DialogEditProject project={project} />),
+    )
   }
 
   async function chooseProject() {
@@ -1414,14 +1050,14 @@ export default function Layout(props: ParentProps) {
       })
       resolve(result)
     } else {
-      const run = ++dialogRun
-      void import("@/components/dialog-select-directory").then((x) => {
-        if (dialogDead || dialogRun !== run) return
-        dialog.show(
+      dialogs.open(
+        () => import("@/components/dialog-select-directory"),
+        (x) =>
+          dialog.show(
           () => <x.DialogSelectDirectory multiple={true} onSelect={resolve} />,
           () => resolve(null),
-        )
-      })
+          ),
+      )
     }
   }
 
