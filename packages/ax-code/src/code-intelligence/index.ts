@@ -306,9 +306,19 @@ export namespace CodeIntelligence {
     return CodeGraphBuilder.indexFile(projectID, absPath)
   }
 
-  export async function indexFiles(projectID: ProjectID, files: string[], concurrency?: number) {
-    return CodeGraphBuilder.indexFiles(projectID, files, concurrency)
+  export async function indexFiles(
+    projectID: ProjectID,
+    files: string[],
+    concurrencyOrOpts?: number | CodeGraphBuilder.IndexFilesOptions,
+  ) {
+    return CodeGraphBuilder.indexFiles(projectID, files, concurrencyOrOpts ?? 4)
   }
+
+  // Re-export so callers outside the `code-intelligence` module (auto-
+  // index, CLI command) can narrow on it without importing the builder
+  // directly.
+  export const LockHeldError = CodeGraphBuilder.LockHeldError
+  export type LockHeldError = CodeGraphBuilder.LockHeldError
 
   export function purgeFile(projectID: ProjectID, absPath: string): void {
     CodeGraphBuilder.purgeFile(projectID, absPath)

@@ -11,6 +11,7 @@ import { NamedError } from "@ax-code/util/error"
 import { LSP } from "../lsp"
 import { DebugEngine } from "../debug-engine"
 import { CodeIntelligence } from "../code-intelligence"
+import { AutoIndex } from "../code-intelligence/auto-index"
 import { Format } from "../format"
 import { TuiRoutes } from "./routes/tui"
 import { Instance } from "../project/instance"
@@ -1068,6 +1069,14 @@ export namespace Server {
                         nodeCount: z.number(),
                         edgeCount: z.number(),
                         lastIndexedAt: z.number().nullable(),
+                        // v2.3.13 additions — surface in-progress and failed
+                        // auto-index runs so the sidebar can distinguish
+                        // "not indexed, about to start" from "indexing"
+                        // from "indexing failed, here's why".
+                        state: z.union([z.literal("idle"), z.literal("indexing"), z.literal("failed")]),
+                        completed: z.number(),
+                        total: z.number(),
+                        error: z.string().nullable(),
                       }),
                     }),
                   ),
@@ -1087,7 +1096,15 @@ export namespace Server {
               count: 0,
               plans: [],
               toolCount: 0,
-              graph: { nodeCount: 0, edgeCount: 0, lastIndexedAt: null },
+              graph: {
+                nodeCount: 0,
+                edgeCount: 0,
+                lastIndexedAt: null,
+                state: "idle" as const,
+                completed: 0,
+                total: 0,
+                error: null,
+              },
             })
           }
           const projectID = Instance.project.id
@@ -1098,6 +1115,7 @@ export namespace Server {
           // change so the sidebar stays accurate.
           const DRE_TOOL_COUNT = 6
           const graph = CodeIntelligence.status(projectID)
+          const indexState = AutoIndex.getState(projectID)
           return c.json({
             count: plans.length,
             plans: plans.map((p) => ({
@@ -1116,6 +1134,10 @@ export namespace Server {
               nodeCount: graph.nodeCount,
               edgeCount: graph.edgeCount,
               lastIndexedAt: graph.lastUpdated,
+              state: indexState.state,
+              completed: indexState.completed,
+              total: indexState.total,
+              error: indexState.error,
             },
           })
         },

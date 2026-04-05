@@ -1,9 +1,13 @@
 import path from "path"
+import z from "zod"
 import { Log } from "../util/log"
 import { Ripgrep } from "../file/ripgrep"
 import { LANGUAGE_EXTENSIONS } from "../lsp/language"
 import { Flag } from "../flag/flag"
+import { Bus } from "../bus"
+import { BusEvent } from "../bus/bus-event"
 import { CodeIntelligence } from "./index"
+import { CodeGraphBuilder } from "./builder"
 import { CodeGraphQuery } from "./query"
 import { Instance } from "../project/instance"
 import type { ProjectID } from "../project/schema"
@@ -52,6 +56,91 @@ import type { ProjectID } from "../project/schema"
 
 export namespace AutoIndex {
   const log = Log.create({ service: "code-intelligence.auto-index" })
+
+  // Bus events. Defined here instead of in a shared module because
+  // auto-index is the only emitter right now (and the manual CLI
+  // command, which imports this namespace). Subscribers live in the
+  // server's /debug-engine/pending-plans endpoint and in the TUI's
+  // sync layer.
+  export const Event = {
+    Progress: BusEvent.define(
+      "code.index.progress",
+      z.object({
+        projectID: z.string(),
+        completed: z.number(),
+        total: z.number(),
+      }),
+    ),
+    State: BusEvent.define(
+      "code.index.state",
+      z.object({
+        projectID: z.string(),
+        state: z.union([z.literal("idle"), z.literal("indexing"), z.literal("failed")]),
+        error: z.string().optional(),
+      }),
+    ),
+  }
+
+  // Observable per-project indexing state. Both auto-index and the
+  // manual `ax-code index` command write here so the TUI sidebar can
+  // render a single, consistent "indexing in progress" / "indexing
+  // failed" signal regardless of which code path triggered it.
+  //
+  // Keyed by project id string. Process-lifetime — restarting ax-code
+  // resets all entries to implicit "idle" (absent entry).
+  export type IndexState = {
+    state: "idle" | "indexing" | "failed"
+    completed: number
+    total: number
+    startedAt: number | null
+    finishedAt: number | null
+    error: string | null
+  }
+
+  const stateByProject = new Map<string, IndexState>()
+
+  export function getState(projectID: ProjectID): IndexState {
+    const key = projectID as unknown as string
+    return (
+      stateByProject.get(key) ?? {
+        state: "idle",
+        completed: 0,
+        total: 0,
+        startedAt: null,
+        finishedAt: null,
+        error: null,
+      }
+    )
+  }
+
+  // Helper used by both auto-index and the CLI command. Transitions
+  // the project's state, updates counters, and publishes the
+  // corresponding bus event so the TUI picks it up without waiting
+  // on the 10s poll.
+  export function setState(
+    projectID: ProjectID,
+    patch: Partial<IndexState> & { state: IndexState["state"] },
+  ): void {
+    const key = projectID as unknown as string
+    const prev = getState(projectID)
+    const next: IndexState = { ...prev, ...patch }
+    stateByProject.set(key, next)
+    // Fire-and-forget: a publish failure on an observability event
+    // must never affect the index run. Bus.publish already catches
+    // subscriber errors internally.
+    void Bus.publish(Event.State, {
+      projectID: key,
+      state: next.state,
+      error: next.error ?? undefined,
+    }).catch(() => {})
+  }
+
+  export function reportProgress(projectID: ProjectID, completed: number, total: number): void {
+    const key = projectID as unknown as string
+    const prev = getState(projectID)
+    stateByProject.set(key, { ...prev, completed, total })
+    void Bus.publish(Event.Progress, { projectID: key, completed, total }).catch(() => {})
+  }
 
   // Projects currently being auto-indexed. Keyed by project id as a
   // string (ProjectID is a branded string so `as string` is safe).
@@ -117,6 +206,14 @@ export namespace AutoIndex {
     // is best-effort, it never propagates failures to the caller.
     ;(async () => {
       const start = Date.now()
+      setState(projectID, {
+        state: "indexing",
+        completed: 0,
+        total: 0,
+        startedAt: start,
+        finishedAt: null,
+        error: null,
+      })
       try {
         // Walk eligible files via ripgrep (honors .gitignore),
         // filter to LSP-supported languages. Same logic as the
@@ -131,11 +228,29 @@ export namespace AutoIndex {
 
         if (files.length === 0) {
           log.info("no indexable files found, skipping", { projectID, directory })
+          setState(projectID, {
+            state: "idle",
+            completed: 0,
+            total: 0,
+            startedAt: start,
+            finishedAt: Date.now(),
+            error: null,
+          })
           return
         }
 
         log.info("indexing files", { projectID, fileCount: files.length })
-        const result = await CodeIntelligence.indexFiles(projectID, files, 4)
+        reportProgress(projectID, 0, files.length)
+        // `lock: "try"` — if another ax-code process (a second TUI,
+        // an `ax-code index` in another terminal) already holds the
+        // index lock, auto-index silently skips rather than queueing.
+        // The other process will populate the graph and our next
+        // session will see it via the empty-graph check.
+        const result = await CodeIntelligence.indexFiles(projectID, files, {
+          concurrency: 4,
+          lock: "try",
+          onProgress: (completed, total) => reportProgress(projectID, completed, total),
+        })
         const elapsed = Date.now() - start
         log.info("background auto-index complete", {
           projectID,
@@ -146,14 +261,44 @@ export namespace AutoIndex {
           failed: result.failed,
           elapsedMs: elapsed,
         })
+        setState(projectID, {
+          state: "idle",
+          completed: files.length,
+          total: files.length,
+          startedAt: start,
+          finishedAt: Date.now(),
+          error: null,
+        })
       } catch (err) {
         // Never crash the caller. An auto-index failure is a
-        // missing-feature condition, not a fatal error — the
-        // user can still run `ax-code index` manually, and the
-        // sidebar will keep showing "graph not indexed · run
-        // ax-code index" in the meantime.
+        // missing-feature condition, not a fatal error — the user
+        // can still run `ax-code index` manually. The "failed"
+        // state is surfaced to the TUI sidebar so the user sees a
+        // concrete error instead of a silent "graph not indexed".
+        //
+        // LockHeldError is treated as benign: another process is
+        // already indexing, so we return to "idle" without a
+        // failure marker.
+        if (err instanceof CodeGraphBuilder.LockHeldError) {
+          log.info("auto-index skipped: another process holds the lock", { projectID })
+          setState(projectID, {
+            state: "idle",
+            completed: 0,
+            total: 0,
+            startedAt: start,
+            finishedAt: Date.now(),
+            error: null,
+          })
+          return
+        }
         log.warn("background auto-index failed", {
           projectID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        setState(projectID, {
+          state: "failed",
+          startedAt: start,
+          finishedAt: Date.now(),
           error: err instanceof Error ? err.message : String(err),
         })
       } finally {

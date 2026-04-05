@@ -2,9 +2,12 @@ import type { Argv } from "yargs"
 import path from "path"
 import { Instance } from "../../project/instance"
 import { CodeIntelligence } from "../../code-intelligence"
+import { CodeGraphBuilder } from "../../code-intelligence/builder"
 import { CodeGraphQuery } from "../../code-intelligence/query"
+import { AutoIndex } from "../../code-intelligence/auto-index"
 import { Ripgrep } from "../../file/ripgrep"
 import { LANGUAGE_EXTENSIONS } from "../../lsp/language"
+import { LSP } from "../../lsp"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 
@@ -23,6 +26,108 @@ function isIndexableFile(file: string): boolean {
   return lang !== undefined && lang !== "plaintext"
 }
 
+// Group a file list by detected LSP language. Files whose extension
+// doesn't map to an LSP language are grouped under "unknown" and
+// filtered out by the caller. Exported for the unit test.
+export function groupFilesByLanguage(files: string[]): Map<string, string[]> {
+  const groups = new Map<string, string[]>()
+  for (const file of files) {
+    const ext = path.extname(file)
+    const lang = LANGUAGE_EXTENSIONS[ext] ?? "unknown"
+    const bucket = groups.get(lang) ?? []
+    bucket.push(file)
+    groups.set(lang, bucket)
+  }
+  return groups
+}
+
+// Probe LSP availability for each language present in the project.
+// For each language with at least one file, we pick a representative
+// file and call LSP.touchFile to force the server to spawn. Then we
+// call LSP.status() to see which servers are actually connected.
+//
+// This is the pre-flight check users needed in v2.3.12: the earlier
+// flow silently produced `nodes=0` when an LSP server couldn't spawn,
+// leaving users with no diagnostic. Now we print a readiness table
+// before the batch so missing LSPs are visible upfront.
+//
+// Returns the set of languages that have at least one connected
+// server. The CLI uses this to decide whether to warn the user that
+// a subset of their project won't be indexed.
+async function probeLspServers(
+  groups: Map<string, string[]>,
+): Promise<{ ready: Set<string>; missing: Map<string, number> }> {
+  const ready = new Set<string>()
+  const missing = new Map<string, number>()
+
+  // Touch one file per language. LSP.touchFile triggers a lazy spawn
+  // of any client that matches the file's extension. Do this
+  // sequentially per-language so the output of status() reflects all
+  // probed languages rather than a subset racing against spawn.
+  for (const [lang, files] of groups) {
+    if (lang === "unknown" || lang === "plaintext") continue
+    const first = files[0]
+    if (!first) continue
+    await LSP.touchFile(first, false).catch(() => {})
+  }
+
+  // Read the set of connected clients. Each client has a `root` and a
+  // list of extensions it serves. We don't get the language name
+  // directly from status(), so we cross-reference by checking which
+  // of our groups have a client whose root matches any file's
+  // directory prefix. In practice ax-code's clients are all rooted at
+  // Instance.directory so a simpler check works: if status() returns
+  // a client at all and its extensions include an extension present
+  // in the group, mark the language ready.
+  const statuses = await LSP.status().catch(() => [])
+  for (const [lang, files] of groups) {
+    if (lang === "unknown" || lang === "plaintext") continue
+    // If any file in this language group has a corresponding LSP
+    // client, mark the language ready. hasClients() is a cheap
+    // in-memory lookup.
+    let languageReady = false
+    const first = files[0]
+    if (first) {
+      languageReady = await LSP.hasClients(first).catch(() => false)
+    }
+    if (languageReady) {
+      ready.add(lang)
+    } else {
+      missing.set(lang, files.length)
+    }
+  }
+
+  // Ignore the unused `statuses` — it's captured here so a future
+  // enhancement can print per-server health (root path, error state)
+  // without a second round-trip. Silence the unused-variable lint.
+  void statuses
+
+  return { ready, missing }
+}
+
+// Install hints for the LSP servers most commonly missing in real
+// projects. Keyed by the LSP language id (matching LANGUAGE_EXTENSIONS
+// values). Covers the top ~10 most-used languages; less common ones
+// fall back to a generic "check ~/.local/share/ax-code/log/" hint.
+const INSTALL_HINTS: Record<string, string> = {
+  typescript: "typescript-language-server is bundled with ax-code — if missing, check the log for spawn errors",
+  typescriptreact: "typescript-language-server is bundled with ax-code — if missing, check the log for spawn errors",
+  javascript: "typescript-language-server is bundled with ax-code — if missing, check the log for spawn errors",
+  javascriptreact: "typescript-language-server is bundled with ax-code — if missing, check the log for spawn errors",
+  go: "install gopls: go install golang.org/x/tools/gopls@latest",
+  rust: "install rust-analyzer: rustup component add rust-analyzer",
+  python: "install pyright: pip install pyright  (or enable ty with AX_CODE_EXPERIMENTAL_LSP_TY=1)",
+  ruby: "install solargraph or rubocop",
+  java: "JDTLS is bundled — if missing, ensure a JDK is on PATH",
+  kotlin: "install kotlin-language-server",
+  csharp: "install omnisharp-roslyn",
+  swift: "sourcekit-lsp ships with Xcode — ensure `xcode-select --install` has been run",
+  dart: "install dart SDK and dart analyzer",
+  elixir: "install elixir-ls",
+  zig: "install zls: https://github.com/zigtools/zls",
+  haskell: "install haskell-language-server",
+}
+
 export const IndexCommand = cmd({
   command: "index",
   describe: "populate the Code Intelligence graph for this project",
@@ -36,6 +141,11 @@ export const IndexCommand = cmd({
       .option("limit", {
         describe: "cap the number of files to index (for benchmarking)",
         type: "number",
+      })
+      .option("probe", {
+        describe: "run an LSP pre-flight probe before indexing",
+        type: "boolean",
+        default: true,
       })
   },
   handler: async (args) => {
@@ -68,6 +178,48 @@ export const IndexCommand = cmd({
           return
         }
 
+        // LSP pre-flight probe. Groups the candidate files by language
+        // and attempts to spawn a client per language. Prints a ready/
+        // missing table so users can tell upfront which slice of their
+        // project will actually produce symbols. This replaces the old
+        // post-run "No symbols were extracted" fallback with an
+        // up-front, actionable diagnostic.
+        //
+        // Skippable with --no-probe for cases where the user is
+        // running in a constrained env and just wants the indexer to
+        // try everything.
+        const groups = groupFilesByLanguage(files)
+        if (args.probe) {
+          UI.println("")
+          UI.println(`${UI.Style.TEXT_DIM}Probing LSP servers...${UI.Style.TEXT_NORMAL}`)
+          const { ready, missing } = await probeLspServers(groups)
+          for (const [lang, langFiles] of groups) {
+            if (lang === "unknown" || lang === "plaintext") continue
+            const count = langFiles.length
+            if (ready.has(lang)) {
+              UI.println(`  ${UI.Style.TEXT_SUCCESS}✓${UI.Style.TEXT_NORMAL} ${lang} (${count} file${count === 1 ? "" : "s"})`)
+            } else {
+              const hint = INSTALL_HINTS[lang] ?? "check ~/.local/share/ax-code/log/ for spawn errors"
+              UI.println(`  ${UI.Style.TEXT_WARNING}✗${UI.Style.TEXT_NORMAL} ${lang} (${count} file${count === 1 ? "" : "s"}) — ${hint}`)
+            }
+          }
+          if (ready.size === 0) {
+            UI.println("")
+            UI.println(
+              `${UI.Style.TEXT_WARNING}No LSP servers are available for any language in this project.${UI.Style.TEXT_NORMAL}`,
+            )
+            UI.println(`Indexing will run but is very likely to produce zero symbols. Install at least one of`)
+            UI.println(`the language servers listed above, or run with --no-probe to bypass this warning.`)
+          }
+          if (missing.size > 0 && ready.size > 0) {
+            const missingFiles = [...missing.values()].reduce((a, b) => a + b, 0)
+            UI.println("")
+            UI.println(
+              `${UI.Style.TEXT_DIM}${missingFiles.toLocaleString()} file(s) across ${missing.size} language(s) will be skipped due to missing LSP servers.${UI.Style.TEXT_NORMAL}`,
+            )
+          }
+        }
+
         // Progress heartbeat. LSP-driven indexing for a medium codebase
         // (~600 files) takes several minutes and this command prints
         // nothing between "files: N indexable" and "Indexing complete"
@@ -91,6 +243,21 @@ export const IndexCommand = cmd({
         UI.println("")
         UI.println(`${UI.Style.TEXT_DIM}Indexing in progress. This takes several minutes for larger projects.${UI.Style.TEXT_NORMAL}`)
         UI.println("")
+
+        // Transition AutoIndex state so the TUI sidebar (which polls
+        // /debug-engine/pending-plans every 10s) reflects this manual
+        // run as "indexing" instead of "not indexed". Without this,
+        // users running `ax-code index` in a second terminal still
+        // see the stale sidebar state until the run completes.
+        AutoIndex.setState(projectID, {
+          state: "indexing",
+          completed: 0,
+          total: files.length,
+          startedAt: Date.now(),
+          finishedAt: null,
+          error: null,
+        })
+
         const heartbeatStart = Date.now()
         let lastNodeCount = CodeGraphQuery.countNodes(projectID)
         const heartbeat = setInterval(() => {
@@ -106,13 +273,56 @@ export const IndexCommand = cmd({
         const start = Date.now()
         let result: Awaited<ReturnType<typeof CodeIntelligence.indexFiles>>
         try {
-          result = await CodeIntelligence.indexFiles(projectID, files, args.concurrency)
-        } finally {
+          result = await CodeIntelligence.indexFiles(projectID, files, {
+            concurrency: args.concurrency,
+            // Block on the cross-process lock — another ax-code
+            // process may be indexing the same project right now
+            // and we want to queue rather than race. 30-minute
+            // timeout is generous enough for the largest realistic
+            // index run (any longer and the user should upgrade
+            // their machine).
+            lock: "acquire",
+            lockTimeoutMs: 30 * 60 * 1000,
+            onLockWait: () => {
+              UI.println(
+                `${UI.Style.TEXT_WARNING}Another ax-code process is currently indexing this project. Waiting...${UI.Style.TEXT_NORMAL}`,
+              )
+            },
+            onProgress: (completed, total) => AutoIndex.reportProgress(projectID, completed, total),
+          })
+        } catch (err) {
           clearInterval(heartbeat)
+          AutoIndex.setState(projectID, {
+            state: "failed",
+            startedAt: start,
+            finishedAt: Date.now(),
+            error: err instanceof Error ? err.message : String(err),
+          })
+          if (err instanceof CodeGraphBuilder.LockHeldError) {
+            UI.println("")
+            UI.println(
+              `${UI.Style.TEXT_WARNING}Timed out waiting for another ax-code process to finish indexing.${UI.Style.TEXT_NORMAL}`,
+            )
+            UI.println(`Retry after the other process completes, or investigate a stale lockfile under ~/.local/share/ax-code/locks/.`)
+            return
+          }
+          throw err
         }
+        clearInterval(heartbeat)
         const elapsed = Date.now() - start
 
         const status = CodeIntelligence.status(projectID)
+        // Transition to idle now that the run is over. This is the
+        // signal the TUI sidebar uses to flip out of its "indexing"
+        // state back to the normal "N symbols indexed" display.
+        AutoIndex.setState(projectID, {
+          state: "idle",
+          completed: files.length,
+          total: files.length,
+          startedAt: start,
+          finishedAt: Date.now(),
+          error: null,
+        })
         UI.println("")
         // Pick the headline wording based on whether we actually wrote
         // any nodes. "Indexing complete" with nodes=0 is confusing:
@@ -147,6 +357,7 @@ export const IndexCommand = cmd({
           UI.println(`  • LSP server for the project's language failed to spawn (check the log)`)
           UI.println(`  • Project contains only unsupported file types`)
           UI.println(`  • Files are empty or contain no top-level symbols`)
+          UI.println(`  • Re-run with --probe (default on) to see which languages lacked a server`)
         }
 
         // Per-phase breakdown — aggregated wall-clock across all files.
@@ -170,7 +381,7 @@ export const IndexCommand = cmd({
         // the sidebar's `/debug-engine/pending-plans` endpoint read
         // node counts from the cached `code_index_cursor` row, which
         // was only updated at the end of a full indexing run. The
-        // fix in `code-intelligence/index.ts:status()` (this release)
+        // fix in `code-intelligence/index.ts:status()` (v2.3.11)
         // makes that endpoint compute counts live via `countNodes`,
         // so a running TUI picks up the new graph on its next poll
         // automatically — no restart needed.

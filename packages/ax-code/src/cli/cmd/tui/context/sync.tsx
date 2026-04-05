@@ -99,6 +99,15 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           nodeCount: number
           edgeCount: number
           lastIndexedAt: number | null
+          // v2.3.13: indexing progress & failure. `state` drives
+          // which sidebar message is shown (idle vs. indexing vs.
+          // failed). `completed/total` feeds the progress counter
+          // while a run is in flight. `error` holds a short
+          // human-readable message when state === "failed".
+          state: "idle" | "indexing" | "failed"
+          completed: number
+          total: number
+          error: string | null
         }
       }
       mcp: {
@@ -137,7 +146,15 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         pendingPlans: 0,
         plans: [],
         toolCount: 0,
-        graph: { nodeCount: 0, edgeCount: 0, lastIndexedAt: null },
+        graph: {
+          nodeCount: 0,
+          edgeCount: 0,
+          lastIndexedAt: null,
+          state: "idle",
+          completed: 0,
+          total: 0,
+          error: null,
+        },
       },
       mcp: {},
       mcp_resource: {},
@@ -191,6 +208,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             nodeCount: number
             edgeCount: number
             lastIndexedAt: number | null
+            // v2.3.13 fields — older servers omit them, so default
+            // to idle/zero to stay backward compatible.
+            state?: "idle" | "indexing" | "failed"
+            completed?: number
+            total?: number
+            error?: string | null
           }
         }
         setStore(
@@ -199,7 +222,15 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             pendingPlans: body.count,
             plans: body.plans,
             toolCount: body.toolCount ?? 0,
-            graph: body.graph ?? { nodeCount: 0, edgeCount: 0, lastIndexedAt: null },
+            graph: {
+              nodeCount: body.graph?.nodeCount ?? 0,
+              edgeCount: body.graph?.edgeCount ?? 0,
+              lastIndexedAt: body.graph?.lastIndexedAt ?? null,
+              state: body.graph?.state ?? "idle",
+              completed: body.graph?.completed ?? 0,
+              total: body.graph?.total ?? 0,
+              error: body.graph?.error ?? null,
+            },
           }),
         )
       } catch {
@@ -440,6 +471,18 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           // release. LSP updates fire frequently enough to keep the
           // pending-plans chip reasonably fresh without adding a
           // separate timer.
+          syncDebugEngine()
+          break
+        }
+
+        // v2.3.13 code-index events. The SDK types for these are not
+        // regenerated yet, so the type narrowing below casts through
+        // `any`. Each event triggers a re-sync of the debug-engine
+        // endpoint — the server is the single source of truth for
+        // graph.state / graph.completed / graph.total, so we just
+        // refetch rather than maintaining parallel state in the TUI.
+        case "code.index.progress" as never:
+        case "code.index.state" as never: {
           syncDebugEngine()
           break
         }

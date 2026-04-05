@@ -290,28 +290,44 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         </text>
                       </box>
                     </Show>
-                    {/* Row 2: graph readiness. Green dot + symbol
-                        count when indexed, warning dot + "not
-                        indexed" when empty. This is the honest
-                        signal that distinguishes "DRE works" from
-                        "DRE is loaded but will return empty
-                        results". */}
+                    {/* Row 2: graph readiness. Four cases:
+                        - indexing: blue dot + "indexing... (N/M)"
+                          so users see live progress from auto-index
+                          or a sibling `ax-code index` run in
+                          another terminal.
+                        - failed: error dot + short error message.
+                          Previously failures were silently logged
+                          and the sidebar stayed stuck on "not
+                          indexed", which is what the v2.3.12 user
+                          report flagged.
+                        - nodeCount > 0: success dot + count. DRE
+                          tools will produce real results.
+                        - otherwise: warning dot + "not indexed ·
+                          run ax-code index". */}
                     <box flexDirection="row" gap={1}>
                       <text
                         flexShrink={0}
                         style={{
                           fg:
-                            sync.data.debugEngine.graph.nodeCount > 0
-                              ? theme.success
-                              : theme.warning,
+                            sync.data.debugEngine.graph.state === "failed"
+                              ? theme.error
+                              : sync.data.debugEngine.graph.state === "indexing"
+                                ? theme.info
+                                : sync.data.debugEngine.graph.nodeCount > 0
+                                  ? theme.success
+                                  : theme.warning,
                         }}
                       >
                         •
                       </text>
                       <text fg={theme.textMuted}>
-                        {sync.data.debugEngine.graph.nodeCount > 0
-                          ? `${sync.data.debugEngine.graph.nodeCount.toLocaleString()} symbols indexed`
-                          : "graph not indexed · run `ax-code index`"}
+                        {sync.data.debugEngine.graph.state === "failed"
+                          ? `index failed: ${sync.data.debugEngine.graph.error ?? "unknown error"}`
+                          : sync.data.debugEngine.graph.state === "indexing"
+                            ? `indexing... (${sync.data.debugEngine.graph.completed.toLocaleString()}/${sync.data.debugEngine.graph.total.toLocaleString()})`
+                            : sync.data.debugEngine.graph.nodeCount > 0
+                              ? `${sync.data.debugEngine.graph.nodeCount.toLocaleString()} symbols indexed`
+                              : "graph not indexed · run `ax-code index`"}
                       </text>
                     </box>
                     {/* Row 3: discoverability hint. Points at the

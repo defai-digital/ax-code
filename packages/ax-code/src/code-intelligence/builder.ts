@@ -7,6 +7,7 @@ import { LANGUAGE_EXTENSIONS } from "../lsp/language"
 import { Database } from "../storage/db"
 import { CodeGraphQuery } from "./query"
 import { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
+import { IndexLock } from "./lockfile"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
 
@@ -622,14 +623,84 @@ export namespace CodeGraphBuilder {
     return { nodes: nodeCount, edges: edgeInserts.length, completeness, timings }
   }
 
+  // Options passed to indexFiles. `onProgress` fires after each
+  // completed batch with the running count. `lock` controls the
+  // cross-process lockfile behavior (see IndexLock) — callers that
+  // need to cooperate with other ax-code processes set this to
+  // "acquire" (wait) or "try" (skip if held). "none" skips the lock
+  // entirely and is reserved for tests that run in isolated temp
+  // directories.
+  export type IndexFilesOptions = {
+    concurrency?: number
+    onProgress?: (completed: number, total: number) => void
+    lock?: "acquire" | "try" | "none"
+    lockTimeoutMs?: number
+    onLockWait?: () => void
+  }
+
+  // Raised when `lock: "try"` is requested and another process holds
+  // the lock. Callers (auto-index) swallow this silently; the CLI
+  // never passes "try".
+  export class LockHeldError extends Error {
+    constructor(public readonly projectID: ProjectID) {
+      super(`code-index lock held by another process for project ${projectID}`)
+      this.name = "LockHeldError"
+    }
+  }
+
   // Index a batch of files with a concurrency cap. Returns cumulative
   // counts. The cap exists because each indexFile call can trigger LSP
   // RPCs and we don't want to saturate slow servers; 4 concurrent files
   // is a conservative default.
+  //
+  // The batch runs inside a cross-process advisory lock (see
+  // code-intelligence/lockfile.ts). Without it, `ax-code index` in one
+  // terminal and auto-index in another terminal's TUI could race on
+  // SQLite upserts, blow past the 5s busy_timeout, and leave one
+  // writer with a half-populated graph. The per-file `indexFile` call
+  // is NOT wrapped because the watcher fires it on every save and
+  // blocking on a cross-process lock would kill editor responsiveness.
   export async function indexFiles(
     projectID: ProjectID,
     files: string[],
-    concurrency = 4,
+    concurrencyOrOpts: number | IndexFilesOptions = 4,
+  ): Promise<{
+    nodes: number
+    edges: number
+    files: number
+    skipped: number
+    failed: number
+    timings: IndexTimings
+  }> {
+    const opts: IndexFilesOptions =
+      typeof concurrencyOrOpts === "number" ? { concurrency: concurrencyOrOpts } : concurrencyOrOpts
+    const concurrency = opts.concurrency ?? 4
+    const lockMode = opts.lock ?? "acquire"
+
+    let lockHandle: Disposable | undefined
+    if (lockMode === "acquire") {
+      lockHandle = await IndexLock.acquire(projectID, {
+        timeoutMs: opts.lockTimeoutMs ?? 10 * 60 * 1000,
+        onWait: opts.onLockWait,
+      })
+    }
+    if (lockMode === "try") {
+      lockHandle = await IndexLock.tryAcquire(projectID)
+      if (!lockHandle) throw new LockHeldError(projectID)
+    }
+
+    try {
+      return await indexFilesLocked(projectID, files, concurrency, opts.onProgress)
+    } finally {
+      lockHandle?.[Symbol.dispose]()
+    }
+  }
+
+  async function indexFilesLocked(
+    projectID: ProjectID,
+    files: string[],
+    concurrency: number,
+    onProgress: ((completed: number, total: number) => void) | undefined,
   ): Promise<{
     nodes: number
     edges: number
@@ -690,6 +761,7 @@ export namespace CodeGraphBuilder {
         aggregate.dbTransaction += r.timings.dbTransaction
         aggregate.total += r.timings.total
       }
+      onProgress?.(Math.min(i + concurrency, files.length), files.length)
     }
 
     const totalNodes = CodeGraphQuery.countNodes(projectID)
