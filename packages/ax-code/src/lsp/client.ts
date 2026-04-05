@@ -4,6 +4,7 @@ import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node"
 import type { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types"
+import { diffLines } from "diff"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
 import { LANGUAGE_EXTENSIONS } from "./language"
@@ -21,6 +22,94 @@ const DIAGNOSTICS_DEBOUNCE_MS = 150
 // bounding memory. LRU eviction: the oldest entry (by insertion order) is
 // removed when the cap is reached.
 const MAX_CACHED_DIAGNOSTICS = 1000
+
+// Maximum file size (in bytes) for which we compute incremental diffs on
+// change. Above this threshold, the diff cost (linear in the larger of the
+// two texts) approaches the cost of just sending the whole file, so we fall
+// back to full sync. 1 MB is generous — typical source files are well under.
+export const MAX_INCREMENTAL_SYNC_BYTES = 1_000_000
+
+// If the incremental change list would contain more than this many hunks, the
+// diff is pathological (e.g. random shuffles). Fall back to full sync so we
+// don't ship an enormous payload of small ranges.
+export const MAX_INCREMENTAL_HUNKS = 256
+
+// Exported shape for tests.
+export type LspContentChange = {
+  range: {
+    start: { line: number; character: number }
+    end: { line: number; character: number }
+  }
+  text: string
+}
+
+/**
+ * Compute LSP incremental contentChanges from a previously-sent text to a
+ * new text. Returns null when the caller should fall back to full-document
+ * sync — either the inputs are too large, or the diff is pathological, or
+ * incremental would serialize larger than a full replace.
+ *
+ * Strategy: line-level diff via the `diff` package. For each hunk of
+ * removed/added lines we emit a single LSP range replacement whose range
+ * spans the removed lines and whose text is the added lines (as a single
+ * string including trailing newlines for each line).
+ *
+ * LSP range semantics: 0-indexed {line, character}. A range covering full
+ * lines 3 through 5 inclusive is start={line:3, char:0}, end={line:6, char:0}
+ * — the end position is at the start of the line *after* the last removed
+ * line, so the range is exclusive at the end.
+ */
+export function computeIncrementalChanges(oldText: string, newText: string): LspContentChange[] | null {
+  if (oldText.length > MAX_INCREMENTAL_SYNC_BYTES || newText.length > MAX_INCREMENTAL_SYNC_BYTES) {
+    return null
+  }
+
+  const parts = diffLines(oldText, newText)
+  const changes: LspContentChange[] = []
+
+  let oldLine = 0
+  let i = 0
+  while (i < parts.length) {
+    const part = parts[i]
+    const lineCount = part.count ?? 0
+
+    if (!part.added && !part.removed) {
+      oldLine += lineCount
+      i++
+      continue
+    }
+
+    const hunkStartLine = oldLine
+    let removedLines = 0
+    let addedText = ""
+    while (i < parts.length && (parts[i].added || parts[i].removed)) {
+      const p = parts[i]
+      if (p.removed) removedLines += p.count ?? 0
+      if (p.added) addedText += p.value
+      i++
+    }
+    const hunkEndLine = hunkStartLine + removedLines
+    changes.push({
+      range: {
+        start: { line: hunkStartLine, character: 0 },
+        end: { line: hunkEndLine, character: 0 },
+      },
+      text: addedText,
+    })
+    oldLine = hunkEndLine
+
+    if (changes.length > MAX_INCREMENTAL_HUNKS) return null
+  }
+
+  // If incremental would ship more text than a full replace, skip. We only
+  // count the .text payload here — range metadata is small and symmetric
+  // across comparisons, so including it would bias against incremental
+  // even for reasonable diffs on small files.
+  const incrementalTextBytes = changes.reduce((acc, c) => acc + c.text.length, 0)
+  if (incrementalTextBytes >= newText.length) return null
+
+  return changes
+}
 
 export namespace LSPClient {
   const log = Log.create({ service: "lsp.client" })
@@ -160,17 +249,20 @@ export namespace LSPClient {
       [path: string]: number
     } = {}
 
-    // Per-file content fingerprint of the last text we sent to the server.
-    // Used to skip redundant didChange notifications when touchFile() is
-    // called repeatedly with no actual disk change. Non-cryptographic hash
-    // — we're deduplicating, not signing. We compare both the length and
-    // the hash to make accidental collisions astronomically unlikely.
+    // Per-file snapshot of the last text we sent to the server, used both
+    // for the hash-skip path (quick equality check) and for computing
+    // incremental diffs on the next didChange. We keep the full text rather
+    // than just a fingerprint so we can reproduce the server's notion of
+    // the document and diff against it line-by-line.
+    //
+    // Memory budget: text is held only for files the server has open. The
+    // diagnostics LRU cap and notify.close cleanup bound this indirectly.
     const lastContent: {
-      [path: string]: { hash: string; length: number }
+      [path: string]: { hash: string; length: number; text: string }
     } = {}
 
     function contentFingerprint(text: string) {
-      return { hash: Bun.hash(text).toString(), length: text.length }
+      return { hash: Bun.hash(text).toString(), length: text.length, text }
     }
 
     function contentUnchanged(filePath: string, text: string) {
@@ -179,6 +271,7 @@ export namespace LSPClient {
       if (prev.length !== text.length) return false
       return prev.hash === Bun.hash(text).toString()
     }
+
 
     function diagnosticsWait(input: { path: string }) {
       log.info("waiting for diagnostics", { path: input.path })
@@ -260,16 +353,42 @@ export namespace LSPClient {
 
             const next = version + 1
             files[input.path] = next
-            log.info("textDocument/didChange", {
-              path: input.path,
-              version: next,
-            })
+
+            // Try incremental sync first. If we have the previously-sent
+            // text cached and computeIncrementalChanges produces a reasonable
+            // hunk list, send ranges. Otherwise fall back to full-document
+            // sync — which works on every server regardless of their
+            // declared sync kind, since LSP treats a range-less change as
+            // "replace the whole document".
+            let contentChanges: Array<
+              | { text: string }
+              | {
+                  range: { start: { line: number; character: number }; end: { line: number; character: number } }
+                  text: string
+                }
+            >
+            const prevText = lastContent[input.path]?.text
+            const incremental = prevText ? computeIncrementalChanges(prevText, text) : null
+            if (incremental && incremental.length > 0) {
+              contentChanges = incremental
+              log.info("textDocument/didChange (incremental)", {
+                path: input.path,
+                version: next,
+                hunks: incremental.length,
+              })
+            } else {
+              contentChanges = [{ text }]
+              log.info("textDocument/didChange (full)", {
+                path: input.path,
+                version: next,
+              })
+            }
             await connection.sendNotification("textDocument/didChange", {
               textDocument: {
                 uri: pathToFileURL(input.path).href,
                 version: next,
               },
-              contentChanges: [{ text }],
+              contentChanges,
             })
             lastContent[input.path] = contentFingerprint(text)
             await wait
