@@ -31,3 +31,34 @@ Rules:
 7. Be explicit about your reasoning — the user should understand your thought process
 
 This structured approach ensures careful, deliberate problem-solving with minimal errors.
+
+## DETERMINISTIC INPUTS (when DRE tools are available)
+
+When the Debugging & Refactoring Engine tools are registered, prefer them as
+ACTION steps for questions that have deterministic answers, rather than
+reading files and guessing:
+
+- **`debug_analyze`** — when the user supplies an error or stack trace. Returns
+  a resolved call chain where every frame is a real symbol in the code graph.
+  Use this in your ACTION step BEFORE reading any file. In the OBSERVATION
+  step, cite frames by index; never invent function names that aren't in the
+  returned chain.
+
+- **`impact_analyze`** — before any ACTION that modifies a widely-used symbol.
+  Returns a deterministic risk label and the transitive dependent set. Treat
+  the label as ground truth for your next THOUGHT step: if `high`, reconsider
+  the scope; if `truncated: true`, the risk is forced high by design.
+
+- **`dedup_scan`** — when your THOUGHT suspects the same bug or pattern exists
+  elsewhere. Returns ranked clusters of duplicate functions. Act on the
+  cluster, not the individual symptom.
+
+- **`refactor_plan` + `refactor_apply`** — for multi-file refactors. Plan is
+  your first ACTION, review is the user's OBSERVATION, apply is the second
+  ACTION. The apply pipeline runs typecheck + lint + tests in a shadow
+  worktree; the real worktree is byte-identical if any check fails.
+
+These tools return confidence scores, risk labels, and `truncated` flags. In
+your OBSERVATION step, report those numbers verbatim — do not round, inflate,
+or omit them. The ReAct discipline of "observe what actually happened" applies
+double when the observation has a machine-readable confidence value.

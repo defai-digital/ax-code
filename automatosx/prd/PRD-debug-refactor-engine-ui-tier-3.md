@@ -294,3 +294,113 @@ None of the five should be scheduled as a single release. They ship when their i
 4. **Compose, don't replace.** Reuse `BlockTool` / `InlineTool` in the TUI; reuse the app's existing tool-part registry pattern when it exists.
 5. **Humans in the loop on writes.** All existing `ask` flows remain — Tier 3 doesn't change any permission behavior.
 6. **Scope discipline.** Five items. Not six. New polish requests go into a new section or a follow-up PRD.
+
+---
+
+## 6. Known gaps fixed in patches
+
+This section is **not part of the five deferred items above**. It records gaps
+that were discovered *after* v2.3.1 shipped and fixed in patch releases as
+execution corrections, not as new features. The distinction matters: the five
+items in §2 are planned work waiting for triggers; entries here are things the
+v2.3.1 release *should have included* but didn't.
+
+### 6.1 Agent prompt coverage (v2.3.2)
+
+**Discovered:** v2.3.1 added a "PREFERRED TOOLS" section to `prompt/debug.txt`
+so the `debug` agent would know when to invoke DRE tools autonomously. The
+release notes claimed this as Tier 1b, but only one prompt file was actually
+updated. A post-release review found that **other agents that have their own
+prompt files were not updated**, meaning they saw DRE tools in their tool
+registry but had no system-prompt guidance on when to use them. Users running
+those agents would see inconsistent DRE usage: the LLM might call DRE tools,
+might not, depending on its own inference from tool names alone.
+
+This is an **execution gap**, not a deferred design decision. The work was
+in v2.3.1's scope but was incompletely done.
+
+**Fixed in v2.3.2:** Updated `prompt/react.txt` with a "DETERMINISTIC INPUTS"
+section mapping DRE tools to ReAct ACTION / OBSERVATION steps. The wording is
+tuned to the react agent's tone (Thought / Action / Observation loops) rather
+than copy-pasted from debug.txt.
+
+### 6.2 Per-agent decision matrix
+
+After the v2.3.2 fix, this is the definitive table of which agents know about
+DRE and why. Any future agent prompt additions should check this table first.
+
+| Agent | Has prompt file | DRE mentioned in prompt | Shipped in | Reasoning |
+|---|---|---|---|---|
+| `debug` | ✅ `prompt/debug.txt` | ✅ | v2.3.1 | Primary DRE consumer — users invoke this agent specifically for bug investigation |
+| `react` | ✅ `prompt/react.txt` | ✅ | v2.3.2 (this patch) | ReAct's structured reasoning benefits from deterministic tool results as OBSERVATION inputs |
+| `architect` | ✅ `prompt/architect.txt` | ❌ | (deliberately excluded) | Planning/design layer — should not be invoking tools directly, DRE output would be noise in high-level design discussions |
+| `explore` | ✅ `prompt/explore.txt` | ❌ | (deliberately excluded) | Pure discovery/search. Adding dedup/hardcode scope-creeps the agent away from its tight "find things quickly" mandate |
+| `perf` | ✅ `prompt/perf.txt` | ❌ | (deliberately excluded) | Performance profiling is an independent workflow. DRE is not a profiler and conflating them would confuse both domains |
+| `security` | ✅ `prompt/security.txt` | ❌ | (deliberately excluded) | Security auditing focuses on vulnerabilities. hardcode_scan could technically find secret-shaped strings, but the security agent already has its own scanning workflow |
+| `build` | ❌ (no prompt file) | N/A | (not applicable) | Uses provider default system prompt via `llm.ts:71` fallback. Giving build a DRE-aware prompt means *creating a new prompt file*, which is a design change, not an execution fix. Deferred to a future release where the build agent's prompt strategy is revisited holistically |
+| `plan` | ❌ (no prompt file) | N/A | (not applicable) | Same as build — uses provider default. Plan mode explicitly denies edit tools, so `refactor_apply` is already inaccessible; the remaining read-only DRE tools (`debug_analyze`, `impact_analyze`, `dedup_scan`, `hardcode_scan`, `refactor_plan`) would be usable but guiding them is out of scope for this patch |
+| `general` | ❌ (no prompt file) | N/A | (not applicable) | Same as build — uses provider default. General is the fallback subagent; adding a prompt file for it is a broader design decision |
+
+### 6.3 Why `build`, `plan`, `general` were deliberately not fixed in v2.3.2
+
+The temptation during a patch release is to "fix it everywhere." Resisted for
+three reasons:
+
+1. **Those three agents have no prompt file at all.** They use
+   `SystemPrompt.provider(input.model)` as their system prompt (see
+   `session/llm.ts:70-71`). Adding DRE guidance means *creating* new
+   `build.txt`, `plan.txt`, `general.txt` files and wiring them into
+   `agent/agent.ts` imports — which is a significant behavioral change. These
+   three agents currently behave the same regardless of provider; adding a
+   custom prompt changes that baseline.
+
+2. **The provider default system prompt is a deliberate choice.** `build` is
+   the default agent for most users. Adding project-specific narrative to its
+   system prompt is a decision that deserves its own design conversation, not
+   to be bundled into a DRE UI patch. The same applies to `general` (the
+   fallback subagent used when the router can't classify a task) and `plan`
+   (which has restrictive permission rules enforced at the tool layer, not
+   at the prompt layer).
+
+3. **Users of `build` can still use DRE through slash commands.** The Tier 1b
+   slash commands shipped in v2.3.1 (`/debug`, `/impact`, `/dedup`, etc.) work
+   in every agent, because they inject a prompt scaffold that names the tool
+   explicitly. The gap is only for "autonomous" invocation — the agent
+   deciding on its own to call DRE without user prompting. For build/general,
+   autonomous DRE invocation is a genuine design question ("should the default
+   agent proactively dedupe code?") that a patch release shouldn't answer.
+
+### 6.4 When `build` / `general` prompt files should be created
+
+Trigger conditions for lifting the §6.3 deferral:
+
+- **If** ax-code introduces per-agent prompt files for `build` or `general`
+  for any other reason (e.g., tone guidance, project convention embedding,
+  tool hint injection), DRE mentions should be added in the same change.
+- **If** user telemetry shows a significant number of sessions where users
+  manually invoke DRE slash commands in the `build` agent (suggesting the
+  default agent should have surfaced them autonomously), reconsider.
+- **If** a future release graduates `AX_CODE_EXPERIMENTAL_DEBUG_ENGINE` from
+  experimental to default-on, the build/general prompts should be revisited
+  as part of that graduation — a default-on feature that the default agent
+  doesn't mention would be an inconsistency.
+
+Until one of these triggers fires, build/plan/general continue using the
+provider default system prompt.
+
+### 6.5 Principle: distinguish execution gaps from deferred features
+
+This section exists to keep two very different kinds of "not done" separate:
+
+- **Deferred features** (§2 Items 1–5): planned work with acceptance criteria,
+  waiting for explicit triggers. Each is a design decision that says "we know
+  what to build, we know why we're not building it yet."
+
+- **Execution gaps** (§6): things a shipped release *meant* to cover but
+  didn't. These are patch-fix material, not roadmap material. Recording them
+  here (rather than as new items in §2) preserves the integrity of the
+  deferred-items list.
+
+Future contributors should add entries to §6 when they discover similar gaps
+in past releases. Do not add execution gaps to §2 — that list is for planned
+future work only.
