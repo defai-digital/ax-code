@@ -1,0 +1,22 @@
+Analyze an error or stack trace and return a resolved call chain plus a root-cause skeleton. This is the deterministic "why did this break" layer — every frame in the chain is resolved to a real symbol in the code graph, never hallucinated.
+
+Use this tool when the user asks "why is X failing" or pastes a stack trace. Prefer it over manually reading the files in the trace — the tool already walks the call graph for you and returns cross-referenced symbols.
+
+Input:
+- error: the error message or short description (required)
+- stackTrace: the raw stack trace text (optional but strongly recommended — without it the chain is empty)
+- entrySymbol: an alternative seed symbol id (from findSymbol) when no stack trace is available
+- chainDepth: how far to walk up from the entry frame via findCallers (default 5, max 8)
+
+Output:
+- chain: an array of stack frames, each with a role (failure/intermediate/entry) and a resolved CodeIntelligence symbol (or null if the frame couldn't be resolved to the graph)
+- rootCauseHypothesis: null in Phase 1; agents layer their own constrained LLM reasoning on top and MUST validate every cited frame index against the chain before surfacing it
+- confidence: 0..0.95 (never 1.0) derived from the fraction of stack frames that resolved to real graph nodes
+- truncated: true when the caller-walk hit the depth cap
+- explain: which graph queries were consulted and which heuristics applied
+
+Guidance for using the result:
+- Treat the chain as ground truth — the symbols are real.
+- Do NOT invent function names in your reply. If you reference a frame, cite it by index.
+- If confidence is below 0.5, say so explicitly in your response instead of guessing.
+- If truncated is true, there may be additional callers beyond what was walked.

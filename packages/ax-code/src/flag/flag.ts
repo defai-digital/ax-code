@@ -66,6 +66,11 @@ export namespace Flag {
   export const AX_CODE_EXPERIMENTAL_LSP_TOOL = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_LSP_TOOL")
   export const AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE =
     AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE")
+  // Gates the Debugging & Refactoring Engine (DRE) tools while the feature
+  // stabilizes. When the flag is off, no DRE tools register and no DRE
+  // command surface is exposed. See PRD-debug-refactor-engine.md §5.2.
+  export const AX_CODE_EXPERIMENTAL_DEBUG_ENGINE =
+    AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_DEBUG_ENGINE")
   export const AX_CODE_DISABLE_FILETIME_CHECK = Config.boolean("AX_CODE_DISABLE_FILETIME_CHECK").pipe(
     Config.withDefault(false),
   )

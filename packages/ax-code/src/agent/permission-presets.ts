@@ -20,6 +20,16 @@ export const readOnlyWithWeb = (whitelistedDirs: string[]) =>
     codesearch: "allow",
     webfetch: "allow",
     websearch: "allow",
+    // Debugging & Refactoring Engine read-only tools. Only effective
+    // when AX_CODE_EXPERIMENTAL_DEBUG_ENGINE is set; otherwise the
+    // registry never registers them and the allow entries are inert.
+    // See ADR-010 for why presets are edited directly rather than
+    // extended via a registry.
+    debug_analyze: "allow",
+    refactor_plan: "allow",
+    dedup_scan: "allow",
+    impact_analyze: "allow",
+    hardcode_scan: "allow",
     external_directory: {
       "*": "ask",
       ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
@@ -36,6 +46,12 @@ export const readOnlyNoWeb = (whitelistedDirs: string[]) =>
     bash: "allow",
     read: "allow",
     codesearch: "allow",
+    // Debugging & Refactoring Engine read-only tools — see note above.
+    debug_analyze: "allow",
+    refactor_plan: "allow",
+    dedup_scan: "allow",
+    impact_analyze: "allow",
+    hardcode_scan: "allow",
     external_directory: {
       "*": "ask",
       ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),

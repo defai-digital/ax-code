@@ -1,0 +1,39 @@
+Scan the project for hardcoded values that belong in configuration: magic numbers, inline URLs, inline filesystem paths, and high-entropy strings that look like secrets. Deterministic regex + entropy heuristics, no LLM, no cloud calls.
+
+Input:
+- patterns: which detectors to run (default: all four)
+- excludeTests: skip test files by default (default true)
+- include: glob patterns to scan (default: TS/JS/JSX/MJS/CJS)
+- maxFiles: hard cap on files scanned (default 500)
+- maxFindingsPerFile: hard cap per file (default 20) — prevents one generated file from dominating the result
+
+Output:
+- findings: sorted by severity desc, then file, then line. Each finding has:
+  - file, line, column
+  - kind: "magic_number" | "inline_url" | "inline_path" | "inline_secret_shape"
+  - value: the literal (truncated to 120 chars)
+  - suggestion: where this value should live instead
+  - severity: "low" | "medium" | "high"
+- filesScanned: count of files actually inspected
+- truncated: true if maxFiles cap was hit
+- explain: heuristics applied
+
+What counts:
+- magic_number: numeric literal other than 0/1/-1/2, not in const/enum declarations, not a year 1900–2100, not inside an array index bracket
+- inline_url: http(s):// URL outside comments. localhost URLs get severity "low"
+- inline_path: absolute path in a string literal (/Users, /home, /opt, /var, /etc, /tmp, or Windows drive letter)
+- inline_secret_shape: string ≥ 20 chars of base64/base64url alphabet with Shannon entropy ≥ 3.5. Excludes hex-only strings ≤ 40 chars (sha1/sha256 hashes)
+
+What does not count:
+- values inside `const NAMED_CONSTANT = ...` declarations (they're already extracted)
+- values inside `enum` or `type` declarations
+- values inside line comments
+
+When to use:
+- During a tech debt cleanup pass
+- Before a production deploy to catch accidental dev-config bleed
+- When the user asks "is there any hardcoded X in this codebase"
+
+When NOT to use:
+- As a linter replacement — ESLint has richer rules
+- To detect duplicated code — use dedup_scan

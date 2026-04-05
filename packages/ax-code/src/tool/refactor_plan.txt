@@ -1,0 +1,30 @@
+Produce an auditable refactor plan for a set of target symbols without writing any files. Use this tool before making multi-file refactors — the plan enumerates every affected call site, classifies risk, and is persisted so a human (or a follow-up apply step) can review it.
+
+Input:
+- intent: a free-text description of what you want ("extract a PricingService", "rename handleRequest", "collapse these three functions") (required)
+- targets: array of CodeNodeID strings identifying the symbols to refactor (required — use findSymbol to get them)
+- kind: optional explicit refactor kind ("extract" | "rename" | "collapse" | "move" | "inline" | "other"). If omitted, the tool classifies the intent via keyword matching.
+
+Output:
+- planId: identifier you pass to the (future) apply tool
+- kind: the classified refactor kind
+- summary: markdown overview
+- edits: machine-readable list of operations (create_symbol, replace_call_site, delete_symbol, move_file, update_signature)
+- affectedFiles: every file the refactor touches
+- affectedSymbols: every symbol the refactor touches
+- risk: "low" | "medium" | "high"
+- explain: which graph queries were consulted
+
+Hard guarantees:
+- This tool NEVER writes files. It only reads the code graph and persists the plan in an internal table.
+- Every affectedSymbol is a real symbol in the graph — targets that can't be resolved are dropped.
+- Risk is deterministic for a fixed graph state.
+
+When to use:
+- Before proposing a refactor that touches more than one file
+- When the user wants to review changes before any edits are made
+- When you're uncertain how many call sites a change will affect — the plan gives you a concrete count
+
+When NOT to use:
+- For single-file cosmetic edits — just use edit/write
+- For writing new code — planning is for restructuring existing code

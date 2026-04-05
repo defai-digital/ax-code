@@ -1,0 +1,30 @@
+Find duplicate or near-duplicate functions and methods across the project. Uses normalized signature bucketing for structural duplicates and token-Jaccard similarity for near-matches. Deterministic, no LLM, no cloud calls.
+
+Input:
+- kinds: which node kinds to scan (default: function, method)
+- minSignatureLength: skip symbols with shorter signatures (default 20 characters — avoids matching trivial getters/setters)
+- similarityThreshold: 0..1 for near-match clustering (default 0.85)
+- excludeTests: skip files under test/tests/__tests__/__mocks__/spec directories (default true)
+- maxCandidates: hard cap on the number of symbols inspected (default 2000; sets truncated=true if hit)
+
+Output:
+- clusters: ranked list of duplicate groups, each with:
+  - members: the symbols in the cluster
+  - tier: "exact" (byte-identical signature) | "structural" (identical after parameter/literal normalization) | "semantic" (high token overlap)
+  - similarityScore: 1.0 for exact/structural, ≥ threshold for semantic
+  - sharedLines: estimated lines that could be eliminated by extracting a shared version
+  - suggestedExtractionTarget: longest common directory of the members
+- totalDuplicateLines: sum across clusters
+- truncated: true if maxCandidates was hit
+- explain: heuristics applied
+
+Ranking: clusters are ordered by (cluster size × shared lines × cross-file spread). Three copies of a helper scattered across three files rank higher than three copies of the same length sitting in one file.
+
+When to use:
+- When the user asks "is this logic duplicated anywhere"
+- As a preparatory step before proposing an extract refactor
+- When cleaning up technical debt
+
+When NOT to use:
+- To find exact text matches inside function bodies — use grep for that
+- To find duplicated constants or configuration — that's the hardcode detector (coming in Phase 2)
