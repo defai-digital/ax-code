@@ -504,7 +504,9 @@ describe("session.llm.stream", () => {
     })
   })
 
-  test("normalizes interleaved reasoning into provider request payload", { timeout: 60_000 }, async () => {
+  test(
+    "normalizes interleaved reasoning into provider request payload",
+    async () => {
     const providerID = "moonshotai-cn"
     const modelID = "kimi-k2-thinking"
     const fixture = await loadFixture(providerID, modelID)
@@ -590,9 +592,11 @@ describe("session.llm.stream", () => {
         expect(text).not.toContain("\"type\":\"reasoning\"")
       },
     })
-  })
+  }, 60_000)
 
-  test("adds noop tool for LiteLLM-compatible histories with prior tool calls", { timeout: 60_000 }, async () => {
+  test(
+    "adds noop tool for LiteLLM-compatible histories with prior tool calls",
+    async () => {
     const providerID = "alibaba"
     const modelID = "qwen-plus"
     const fixture = await loadFixture(providerID, modelID)
@@ -675,7 +679,7 @@ describe("session.llm.stream", () => {
         expect(tools?.some((item) => item.function?.name === "_noop")).toBe(true)
       },
     })
-  })
+  }, 60_000)
 
   test("sends Google API payload for Gemini models", async () => {
     const providerID = "google"
