@@ -12,6 +12,7 @@ import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
 import PROMPT_ADR from "./template/adr.txt"
 import PROMPT_IMPACT from "./template/impact.txt"
+import PROMPT_PRD from "./template/prd.txt"
 
 export namespace Command {
   const log = Log.create({ service: "command" })
@@ -67,6 +68,7 @@ export namespace Command {
     REVIEW: "review",
     ADR: "adr",
     IMPACT: "impact",
+    PRD: "prd",
   } as const
 
   export interface Interface {
@@ -119,6 +121,15 @@ export namespace Command {
             return PROMPT_IMPACT.replace("${path}", ctx.worktree)
           },
           hints: hints(PROMPT_IMPACT),
+        }
+        commands[Default.PRD] = {
+          name: Default.PRD,
+          description: "generate a Product Requirements Document for a feature",
+          source: "command",
+          get template() {
+            return PROMPT_PRD.replace("${path}", ctx.worktree)
+          },
+          hints: hints(PROMPT_PRD),
         }
 
         for (const [name, command] of Object.entries(cfg.command ?? {})) {

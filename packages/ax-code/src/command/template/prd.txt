@@ -1,0 +1,93 @@
+You are creating a Product Requirements Document (PRD) for the following feature or change:
+
+$ARGUMENTS
+
+Follow these steps:
+
+1. Analyze the codebase to understand the current state. Read relevant source files, configs, dependencies, and existing documentation (README, AGENTS.md, docs/).
+2. Write the PRD to docs/prd/ using the filename format: PRD-<YYYY-MM-DD>-<slugified-title>.md. Create the docs/prd/ directory if it does not exist.
+3. Present the PRD to the user and ask for approval before any implementation begins.
+
+Use this exact format:
+
+---
+
+# PRD: <Title>
+
+**Date:** <today's date YYYY-MM-DD>
+**Status:** Draft
+**Author:** ax-code agent
+
+---
+
+## Problem Statement
+
+What problem does this solve? Why is it needed? Reference specific user pain points or technical debt.
+
+## Goals
+
+- Goal 1: What success looks like
+- Goal 2: Measurable outcome
+- Non-goal: What is explicitly out of scope
+
+## Current State
+
+Describe the relevant parts of the codebase as they exist today. Reference specific files and modules.
+
+## Proposed Solution
+
+### Overview
+High-level description of the approach.
+
+### Technical Design
+- Architecture changes
+- New files/modules to create
+- Existing files to modify
+- Key interfaces and data flow
+
+### API / Interface Changes
+Document any new or modified APIs, CLI commands, config options, or UI changes.
+
+## Alternatives Considered
+
+### Alternative 1: <Name>
+- Description, pros, cons, why not chosen
+
+### Alternative 2: <Name>
+- Description, pros, cons, why not chosen
+
+## Implementation Plan
+
+Break the work into ordered phases:
+
+### Phase 1: <Name>
+- [ ] Task 1
+- [ ] Task 2
+
+### Phase 2: <Name>
+- [ ] Task 1
+- [ ] Task 2
+
+## Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Risk 1 | Low/Medium/High | Low/Medium/High | How to handle |
+
+## Testing Strategy
+
+- Unit tests to add
+- Integration tests to add
+- Manual verification steps
+
+## Dependencies
+
+- External packages needed
+- Internal modules affected
+- Breaking changes to existing APIs
+
+## Success Criteria
+
+How to verify the feature is complete and working correctly.
+
+$ARGUMENTS
