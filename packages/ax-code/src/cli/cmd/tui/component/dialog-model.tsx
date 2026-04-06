@@ -23,6 +23,7 @@ const FREE_PROVIDERS = new Set([
   "gemini-cli",
   "codex-cli",
 ])
+const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
 const isFreeProvider = (id: string) => FREE_PROVIDERS.has(id)
 
 export function useConnected() {
@@ -92,7 +93,7 @@ export function DialogModel(props: { providerID?: string }) {
           provider.models,
           entries(),
           filter(([_, info]) => info.status !== "deprecated"),
-          filter(([_, info]) => info.capabilities.toolcall !== false),
+          filter(([_, info]) => info.capabilities.toolcall !== false || CLI_PROVIDERS.has(provider.id)),
           filter(([_, info]) => (props.providerID ? info.providerID === props.providerID : true)),
           map(([model, info]) => ({
             value: { providerID: provider.id, modelID: model },

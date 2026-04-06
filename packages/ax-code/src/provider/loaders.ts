@@ -62,27 +62,55 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
   }
 }
 
+const CLI_MODELS: Record<string, { id: string; name: string; context: number; output: number }[]> = {
+  "claude-code": [
+    { id: "claude-opus-4-6", name: "Opus 4.6", context: 200000, output: 16384 },
+    { id: "claude-sonnet-4-6", name: "Sonnet 4.6", context: 200000, output: 16384 },
+    { id: "claude-haiku-4-5", name: "Haiku 4.5", context: 200000, output: 8192 },
+  ],
+  "gemini-cli": [
+    { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 1000000, output: 65536 },
+    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000, output: 65536 },
+  ],
+  "codex-cli": [
+    { id: "gpt-5.4", name: "GPT-5.4", context: 200000, output: 16384 },
+    { id: "gpt-5.3-codex", name: "GPT-5.3 Codex", context: 200000, output: 16384 },
+    { id: "gpt-5-codex", name: "GPT-5 Codex", context: 200000, output: 16384 },
+  ],
+}
+
+function cliModels(providerID: string, provider: Provider.Info, currentModel: string): Record<string, Provider.Model> {
+  const base = Object.values(provider.models)[0]
+  if (!base) return {}
+  const list = CLI_MODELS[providerID] ?? []
+  const models: Record<string, Provider.Model> = {}
+  for (const m of list) {
+    const id = ModelID.make(m.id)
+    models[id] = {
+      ...base,
+      id,
+      providerID: ProviderID.make(providerID),
+      name: m.id === currentModel ? `${m.name} (active)` : m.name,
+      limit: { context: m.context, output: m.output },
+    }
+  }
+  return models
+}
+
 function cliLoader(providerID: string, binary: string, args: string[], parser: CliOutputParser): CustomLoader {
   return async (provider) => {
     const path = which(binary)
     const info = resolveCliModel(providerID)
     return {
-      autoload: path !== null,
+      // Don't autoload — require explicit connect via auth.json
+      autoload: false,
       async getModel(_sdk: any, modelID: string) {
         if (!path) throw new Error(`${binary} CLI not found in PATH`)
         return new CliLanguageModel({ providerID, modelID, binary: path, args, parser })
       },
       async discoverModels() {
-        const id = ModelID.make(providerID)
-        const base = provider.models[id] ?? Object.values(provider.models)[0]
-        if (!base) return {}
-        return {
-          [id]: {
-            ...base,
-            id,
-            name: `${provider.name} (${info.model})`,
-          },
-        }
+        if (!path) return {}
+        return cliModels(providerID, provider, info.model)
       },
     }
   }

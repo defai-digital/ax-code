@@ -14,6 +14,13 @@ import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
 import { resolveCliModel } from "@/provider/cli/resolve"
+import { which } from "@/util/which"
+
+const CLI_BINARIES: Record<string, string> = {
+  "claude-code": "claude",
+  "gemini-cli": "gemini",
+  "codex-cli": "codex",
+}
 
 const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama", "lmstudio"])
 const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
@@ -39,33 +46,12 @@ export function createDialogProviderOptions() {
         async onSelect() {
           const isConnected = sync.data.provider_next.connected.includes(provider.id)
 
-          // CLI providers don't use API keys — show model info or install help
+          // CLI providers — check binary availability, support connect/disconnect
           if (CLI_PROVIDERS.has(provider.id)) {
-            if (isConnected) {
-              const info = resolveCliModel(provider.id)
-              const action = await new Promise<"use" | null>((resolve) => {
-                dialog.replace(
-                  () => (
-                    <DialogSelect
-                      title={`${provider.name} — connected`}
-                      options={[
-                        {
-                          title: "Use this provider",
-                          value: "use" as const,
-                          description: `Model: ${info.model}`,
-                          footer: info.source !== "default" ? `from ${info.source}` : "default",
-                        },
-                      ]}
-                      onSelect={(option) => resolve(option.value)}
-                    />
-                  ),
-                  () => resolve(null),
-                )
-              })
-              if (action === "use") {
-                dialog.replace(() => <DialogModel providerID={provider.id} />)
-              }
-            } else {
+            const binary = CLI_BINARIES[provider.id]
+            const available = binary ? which(binary) !== null : false
+
+            if (!available) {
               dialog.replace(() => (
                 <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
                   <box flexDirection="row" justifyContent="space-between">
@@ -81,6 +67,54 @@ export function createDialogProviderOptions() {
                   </text>
                 </box>
               ))
+              return
+            }
+
+            const info = resolveCliModel(provider.id)
+
+            if (isConnected) {
+              const action = await new Promise<"use" | "disconnect" | null>((resolve) => {
+                dialog.replace(
+                  () => (
+                    <DialogSelect
+                      title={`${provider.name} — connected`}
+                      options={[
+                        {
+                          title: "Select a model",
+                          value: "use" as const,
+                          description: `Current: ${info.model}`,
+                        },
+                        {
+                          title: "Disconnect",
+                          value: "disconnect" as const,
+                          description: "Remove this CLI provider",
+                        },
+                      ]}
+                      onSelect={(option) => resolve(option.value)}
+                    />
+                  ),
+                  () => resolve(null),
+                )
+              })
+              if (action === "use") {
+                dialog.replace(() => <DialogModel providerID={provider.id} />)
+              } else if (action === "disconnect") {
+                await sdk.client.auth.remove({ providerID: provider.id })
+                await sdk.client.instance.dispose()
+                await sync.bootstrap()
+                toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
+                dialog.clear()
+              }
+            } else {
+              // Connect: store a marker in auth.json so provider persists as connected
+              await sdk.client.auth.set({
+                providerID: provider.id,
+                auth: { type: "api", key: "cli" },
+              })
+              await sdk.client.instance.dispose()
+              await sync.bootstrap()
+              toast.show({ variant: "success", message: `Connected ${provider.name}` })
+              dialog.replace(() => <DialogModel providerID={provider.id} />)
             }
             return
           }

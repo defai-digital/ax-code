@@ -25,9 +25,13 @@ export class CliLanguageModel implements LanguageModelV2 {
     this.modelId = config.modelID
   }
 
+  private buildCmd() {
+    return [this.config.binary, ...this.config.args, "--model", this.config.modelID]
+  }
+
   async doGenerate(options: LanguageModelV2CallOptions) {
     const text = promptToText(options.prompt)
-    const proc = Process.spawn([this.config.binary, ...this.config.args], {
+    const proc = Process.spawn(this.buildCmd(), {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
@@ -55,7 +59,7 @@ export class CliLanguageModel implements LanguageModelV2 {
 
   async doStream(options: LanguageModelV2CallOptions) {
     const text = promptToText(options.prompt)
-    const proc = Process.spawn([this.config.binary, ...this.config.args], {
+    const proc = Process.spawn(this.buildCmd(), {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
