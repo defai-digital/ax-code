@@ -207,7 +207,7 @@ export namespace Agent {
               options: {},
               mode: "primary",
               native: true,
-              steps: 20,
+              steps: 25,
             },
             security: {
               name: "security",
@@ -254,6 +254,7 @@ export namespace Agent {
                 policy,
                 Permission.fromConfig({
                   question: "allow",
+                  plan_enter: "allow",
                 }),
                 user,
               ),
@@ -271,7 +272,7 @@ export namespace Agent {
               permission: Permission.merge(
                 defaults,
                 policy,
-                readOnlyNoWeb(whitelistedDirs),
+                readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
               options: {},
@@ -290,6 +291,7 @@ export namespace Agent {
                 policy,
                 Permission.fromConfig({
                   question: "allow",
+                  plan_enter: "allow",
                 }),
                 user,
               ),
