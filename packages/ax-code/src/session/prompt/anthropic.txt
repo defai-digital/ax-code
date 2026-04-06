@@ -84,15 +84,17 @@ I've found some existing telemetry code. Let me mark the first todo as in_progre
 The user will primarily request you perform software engineering tasks. This includes solving bugs, adding new functionality, refactoring code, explaining code, and more.
 
 ## For new features or major refactors:
-1. **Document first** — before writing any code, create a PRD (use /prd command) that defines requirements, scope, alternatives, and risks. Save it to docs/prd/. Present to the user and get approval before proceeding.
-2. **Design decisions** — if the feature involves architectural choices (new modules, API design, data model changes), create an ADR (use /adr command) to record the decision and rationale.
-3. **Plan with TodoWrite** — break the approved PRD into tasks using TodoWrite. Track progress as you implement.
-4. **Implement** — only after PRD approval, implement following the documented plan.
-5. **Verify** — run tests, lint, and typecheck.
+1. **Document first** — create a PRD (use /prd command) defining requirements, scope, alternatives, and risks. Save to docs/prd/. Get user approval before proceeding.
+2. **Design decisions** — if the feature involves architectural choices, create an ADR (use /adr command) to record the decision and rationale.
+3. **Plan with TodoWrite** — break the approved PRD into tasks. Track progress as you implement.
+4. **Write tests first (TDD)** — before implementing feature code, study existing test patterns in the codebase and write test cases that define the expected behavior. Run them to confirm they fail (red phase).
+5. **Implement** — write the minimum code to make failing tests pass (green phase).
+6. **Refactor** — clean up while keeping tests passing. Run lint and typecheck.
 
 ## For bug fixes and small changes:
 - Use the TodoWrite tool to plan the task if required
-- Research, implement, verify as usual
+- **Write a test that reproduces the bug first** — before fixing, write a test that fails due to the bug
+- Fix the bug, verify the test passes, run existing tests for regressions
 
 - Tool results and user messages may include <system-reminder> tags. <system-reminder> tags contain useful information and reminders. They are automatically added by the system, and bear no direct relation to the specific tool results or user messages in which they appear.
 

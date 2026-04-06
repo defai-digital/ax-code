@@ -74,11 +74,27 @@ Break the work into ordered phases:
 |------|-----------|--------|------------|
 | Risk 1 | Low/Medium/High | Low/Medium/High | How to handle |
 
-## Testing Strategy
+## Testing Strategy (TDD)
 
-- Unit tests to add
-- Integration tests to add
-- Manual verification steps
+Design tests BEFORE implementation. These tests define the contract for the feature.
+
+### Test Cases (write these first)
+For each key behavior, define a test case:
+
+| # | Test Name | Input | Expected Output | Type |
+|---|-----------|-------|-----------------|------|
+| 1 | Description | What goes in | What comes out | unit/integration/e2e |
+
+### Test Files to Create
+- `test/path/feature.test.ts` — what it tests, which patterns to follow (reference existing test files)
+
+### Coverage Goals
+- Which functions/modules must have test coverage
+- Edge cases that must be covered
+- Error paths that must be tested
+
+### Existing Tests to Verify
+- Which existing test suites must still pass after the change
 
 ## Dependencies
 
