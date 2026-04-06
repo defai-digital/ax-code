@@ -131,8 +131,8 @@ Within AutomatosX, `ax-code` is the developer-facing execution layer. `AX Engine
 ### Install
 
 ```bash
-# macOS (Homebrew)
-brew install defai-digital/tap/ax
+# macOS / Linux (Homebrew)
+brew install defai-digital/ax-code/ax-code
 
 # npm (any platform)
 npm i -g @defai.digital/ax-code
