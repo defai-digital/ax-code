@@ -141,6 +141,12 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
           await assertExternalDirectory(ctx, movePath)
+          if (movePath && Filesystem.contains(Instance.directory, movePath)) {
+            const realMovePath = await fs.realpath(movePath).catch(() => null)
+            if (realMovePath && !Filesystem.contains(Instance.directory, realMovePath)) {
+              throw new Error("Access denied: move_path symlink target escapes project directory")
+            }
+          }
           if (movePath) Isolation.assertWrite(ctx.extra?.isolation, movePath, Instance.directory, Instance.worktree)
 
           fileChanges.push({

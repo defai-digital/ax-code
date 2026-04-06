@@ -365,11 +365,14 @@ export namespace ShareNext {
     }
     if (chunk.length > 0) chunks.push(chunk)
 
-    const models = await Promise.all(
+    const results = await Promise.allSettled(
       Array.from(modelMap.values()).map((m) =>
         Provider.getModel(ProviderID.make(m.providerID), ModelID.make(m.modelID)).then((item) => item),
       ),
     )
+    const models = results
+      .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof Provider.getModel>>> => r.status === "fulfilled")
+      .map((r) => r.value)
 
     // First chunk includes session metadata, models, and diffs
     const first: Data[] = [

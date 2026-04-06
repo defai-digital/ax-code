@@ -350,6 +350,8 @@ export namespace MCP {
     }
     s.clients[name] = result.mcpClient
     s.status[name] = result.status
+    cachedTools = undefined
+    toolsCacheGeneration++
 
     return {
       status: s.status,
@@ -439,6 +441,7 @@ export namespace MCP {
 
             // Check if this is a "needs registration" error
             if (lastError.message.includes("registration") || lastError.message.includes("client_id")) {
+              await transport.close?.().catch(() => {})
               status = {
                 status: "needs_client_registration" as const,
                 error: "Server does not support dynamic client registration. Please provide clientId in config.",
@@ -501,10 +504,11 @@ export namespace MCP {
           ...mcp.environment,
         },
       })
-      transport.stderr?.on("data", (chunk: Buffer) => {
+      const onStderr = (chunk: Buffer) => {
         const line = chunk.toString().trimEnd()
         if (line) log.info("mcp stderr", { key, line })
-      })
+      }
+      transport.stderr?.on("data", onStderr)
 
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       try {
@@ -624,6 +628,7 @@ export namespace MCP {
 
   async function connectImpl(name: string) {
     cachedTools = undefined
+    toolsCacheGeneration++
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
     const mcp = config[name]
@@ -664,6 +669,7 @@ export namespace MCP {
 
   export async function disconnect(name: string) {
     cachedTools = undefined
+    toolsCacheGeneration++
     const s = await state()
     const client = s.clients[name]
     if (client) {

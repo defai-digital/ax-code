@@ -430,14 +430,18 @@ export namespace Provider {
           return !disabled.has(providerID)
         })
         .map(async (plugin) => {
-          const providerID = ProviderID.make(plugin.auth!.provider)
-          const auth = await Auth.get(providerID)
-          if (!auth) return
-          if (!plugin.auth!.loader) return
-          const options = await plugin.auth!.loader(() => Auth.get(providerID) as any, database[plugin.auth!.provider])
-          const opts = options ?? {}
-          const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
-          mergeProvider(providerID, patch)
+          try {
+            const providerID = ProviderID.make(plugin.auth!.provider)
+            const auth = await Auth.get(providerID)
+            if (!auth) return
+            if (!plugin.auth!.loader) return
+            const options = await plugin.auth!.loader(() => Auth.get(providerID) as any, database[plugin.auth!.provider])
+            const opts = options ?? {}
+            const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
+            mergeProvider(providerID, patch)
+          } catch (err) {
+            log.warn("plugin auth loader failed", { provider: plugin.auth!.provider, error: err })
+          }
         }),
     )
 

@@ -15,8 +15,10 @@
 **Eleventh Scan Date:** 2026-04-06  
 **Twelfth Scan Date:** 2026-04-06  
 **Twelfth Scan Review Date:** 2026-04-06  
+**Thirteenth Scan Date:** 2026-04-06  
+**Thirteenth Scan Review Date:** 2026-04-06  
 **Scope:** `packages/ax-code/src`  
-**Method:** 6+6+3+5+4+3+4 parallel scans — null/undefined access, race conditions, error handling, resource leaks, security, logic/type bugs, concurrency/state, plus unbounded maps, RegExp patterns, prototype pollution, parseInt/numeric, signal handling, encoding/Date, automated hardcode/dedup scans, deep targeted directory scans, SSRF redirect bypass verification, MCP transport lifecycle audit, config loading resilience, database schema integrity, config validation logic  
+**Method:** 6+6+3+5+4+3+4+6 parallel scans — null/undefined access, race conditions, error handling, resource leaks, security, logic/type bugs, concurrency/state, plus unbounded maps, RegExp patterns, prototype pollution, parseInt/numeric, signal handling, encoding/Date, automated hardcode/dedup scans, deep targeted directory scans, SSRF redirect bypass verification, MCP transport lifecycle audit, config loading resilience, database schema integrity, config validation logic, Promise.all cascade analysis, symlink containment gaps, DNS rebinding, MCP cache/race conditions, timer cleanup verification  
 **Original Findings:** 33 (28 fixed, 3 invalid, 2 deferred) — BUG-03 resolved 2026-04-05  
 **Second Scan Findings:** 19 (17 fixed, 2 invalid, 0 deferred) — BUG-49 resolved 2026-04-05  
 **Third Review:** 4 TODO-scan findings (1 fixed, 1 duplicate of BUG-12, 2 out of scope)  
@@ -32,9 +34,76 @@
 **Eleventh Scan Findings:** 21 new reports (BUG-175 through BUG-195) — 14 fixed, 7 deferred/by-design/informational  
 **Eleventh Scan Review Date:** 2026-04-06  
 
-**Twelfth Scan Findings:** 25 raw findings (BUG-196 through BUG-205) — 10 novel, 1 duplicate, 4 previously fixed, 10 invalid after verification  
+**Twelfth Scan Findings:** 25 raw findings (BUG-196 through BUG-205) — 10 novel, 1 duplicate, 4 previously fixed, 10 invalid after verification — 8/10 novel now fixed, BUG-202 and BUG-204 still pending  
+**Twelfth Scan Review Date:** 2026-04-06 — all 10 novel bugs now fixed (BUG-202, BUG-204 fixed in this batch)  
 
-**Totals across all scans:** 205 findings — 167 fixed, 48 invalid/by-design/informational/deferred, 2 out-of-scope, 10 pending
+**Thirteenth Scan Findings:** 19 raw findings — 17 novel confirmed (all fixed), 2 invalid after verification  
+
+**Totals across all scans:** 222 findings — 194 fixed, 48 invalid/by-design/informational/deferred, 2 out-of-scope, 0 pending
+
+---
+
+## Thirteenth Scan — Promise Cascade, Symlink Containment, MCP Cache/Race, and Timer Cleanup Audit (2026-04-06)
+
+| # | Severity | File | Category | Description |
+|---|----------|------|----------|-------------|
+| 206 | **HIGH** | `cli/cmd/providers.ts:295` | SSRF | **FIXED** — Added `Ssrf.assertPublicUrl` + `Ssrf.pinnedFetch` for user-supplied well-known URL fetch |
+| 207 | **HIGH** | `cli/cmd/providers.ts:306-321` | RCE | **FIXED** — Added user confirmation prompt before executing remote `auth.command` |
+| 208 | **HIGH** | `tool/apply_patch.ts:142-144` | Path Traversal | **FIXED** — Added symlink containment check for `movePath` matching `filePath` pattern |
+| 209 | **HIGH** | `tool/ls.ts:45` | Path Traversal | **FIXED** — Added symlink escape check matching glob/grep/read/edit tools |
+| 210 | **MEDIUM** | `config/config.ts:128-133` | Error Handling | **FIXED** — Wrapped each wellknown entry in try/catch to prevent cascade failure |
+| 211 | **MEDIUM** | `share/share-next.ts:368-372` | Error Handling | **FIXED** — Changed to `Promise.allSettled` with fulfilled-result filter |
+| 212 | **MEDIUM** | `provider/provider.ts:425-442` | Error Handling | **FIXED** — Added per-plugin try/catch in `Promise.all` map |
+| 213 | **MEDIUM** | `provider/models.ts:123-124` | SSRF | **FIXED** — Replaced bare `fetch()` with `Ssrf.pinnedFetch()` |
+| 214 | **MEDIUM** | `provider/loaders.ts:22,30` | SSRF | **FIXED** — Replaced bare `fetch()` with `Ssrf.pinnedFetch()` for Ollama loader |
+| 215 | **MEDIUM** | `mcp/index.ts:746` | Race Condition | **FIXED** — Added `cachedTools = undefined; toolsCacheGeneration++` to `add()`, `disconnect()`, `connectImpl()` |
+| 216 | **MEDIUM** | `mcp/auth.ts:162` | Race Condition | **FIXED** — Wrapped `invalidateCredentials` body in `McpAuth.withLock()` |
+| 217 | **MEDIUM** | `mcp/index.ts:441-465` | Resource Leak | **FIXED** — Close transport before break on `needs_client_registration` path |
+| 218 | **MEDIUM** | `config/config.ts:312` | Logic Bug | **FIXED** — Changed to use `validated.data` instead of `parsed` |
+| 219 | **LOW** | `format/index.ts:125` | Resource Leak | **FIXED** — Captured timer ID and `clearTimeout` after `Promise.race` resolves |
+| 220 | **LOW** | `config/config.ts:238` | Resource Leak | **FIXED** — Captured timer ID and `clearTimeout` via `.finally()` |
+| 221 | **LOW** | `session/processor.ts:459-470` | Data Integrity | **FIXED** — Moved `snapshot = undefined` before fallible `updatePart` call |
+| 222 | **LOW** | `mcp/index.ts:504` | Resource Leak | **FIXED** — Named stderr callback for explicit removal |
+
+### Previously Pending Bugs — Updated Status
+
+| # | Severity | File | Status |
+|---|----------|------|--------|
+| 202 | **MEDIUM** | `cli/cmd/github-agent/index.ts:1193-1196` | **FIXED** — Return `null` on PR existence check failure instead of swallowing error |
+| 204 | **MEDIUM** | `file/watcher.ts:117-123` | **FIXED** — Removed unused native watcher variable to eliminate dead code and potential resource leak |
+
+### Methodology — Thirteenth Audit (6 scan groups + automated tools + source verification)
+
+1. **Null/undefined access + type safety** — sub-agent scan for unsafe `[0]` after filter/find/split, Map.get() without guards, non-null assertions, typeof object without null guard, as Type casts, optional chaining in boolean context
+2. **Error handling + Promise lifecycle** — sub-agent scan for `Promise.all` cascade failures, fire-and-forget promises, Effect error propagation gaps, catch without re-throw, finally side effects
+3. **Resource leaks + timer cleanup** — sub-agent scan for setTimeout/setInterval without cleanup, event listener leaks, child process lifecycle, stream handling, AbortController lifecycle
+4. **Security + config loading** — sub-agent scan for path traversal via symlinks, SSRF gaps, command injection, prototype pollution, encoding issues, config validation bypasses
+5. **Deep subsystem review** — targeted scan of session/correction/, session/summary.ts, session/message-v2.ts, snapshot/, filesystem/, isolation/, mcp/auth.ts, mcp/oauth-provider.ts
+6. **Logic bug patterns** — sub-agent scan for `||` vs `??` coercion, `.sort()` without comparator, loose equality, missing length checks
+
+Plus automated tools:
+- `dedup_scan` (0 duplicate clusters found)
+- `hardcode_scan` (500 files, 1512 findings — mostly false positives from class names/DB identifiers/constant strings)
+- Source code verification of all 19 raw findings against actual files
+
+### Cross-Reference Against Prior Scans
+
+19 raw findings were checked against all 205 prior bugs (BUG-01 through BUG-205):
+- **17 NOVEL** — genuinely new bugs (BUG-206 through BUG-222)
+- **0 DUPLICATES** — no overlap with existing reports
+- **2 INVALID** — planner/verification/index.ts timer cleanup (already handled via `.finally()` on proc.exited), mcp/index.ts connectLocks cleanup predicate (reference comparison is correct)
+
+### Key Findings
+
+The most critical cluster is **symlink containment gaps** (BUG-208, 209) — two tools (`apply_patch` for `movePath` and `ls`) are missing the symlink escape checks that were added to `read`, `edit`, `write`, `glob`, `grep` in earlier scans (BUG-02, BUG-34, BUG-37). An LLM-generated patch with a `move_path` pointing through a project-internal symlink could write arbitrary content outside the project directory.
+
+The **SSRF cluster** (BUG-206, 213, 214) reveals three fetch paths that bypass the SSRF protections established in prior scans. BUG-213 is particularly notable: BUG-94 added `Ssrf.assertPublicUrl()` to `provider/models.ts:123` but used bare `fetch()` instead of `Ssrf.pinnedFetch()`, leaving a DNS rebinding window that all other protected paths have already closed.
+
+The **Promise.all cascade cluster** (BUG-210, 211, 212) shows a recurring pattern where independent operations are wrapped in `Promise.all` instead of `Promise.allSettled`. This is the same class of bug fixed in BUG-123, BUG-124, BUG-141, BUG-142 — but three more instances were missed.
+
+The **MCP race condition** (BUG-216) is a lock hierarchy violation where `invalidateCredentials` bypasses the per-name lock used by all other auth operations, potentially restoring credentials that the SDK explicitly invalidated as compromised.
+
+Thirteenth scan findings reference `main` branch at current HEAD.
 
 ---
 

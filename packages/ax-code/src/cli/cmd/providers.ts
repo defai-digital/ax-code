@@ -13,6 +13,7 @@ import { Instance } from "../../project/instance"
 import type { Hooks } from "@ax-code/plugin"
 import { Process } from "../../util/process"
 import { text } from "node:stream/consumers"
+import { Ssrf } from "../../util/ssrf"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -290,9 +291,11 @@ export const ProvidersLoginCommand = cmd({
       async fn() {
         if (args.url) {
           const url = args.url.replace(/\/+$/, "")
+          const endpoint = `${url}/.well-known/ax-code`
           let res: Response
           try {
-            res = await fetch(`${url}/.well-known/ax-code`)
+            await Ssrf.assertPublicUrl(endpoint, "providers-add")
+            res = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(10_000) })
           } catch (err) {
             prompts.log.error(`Failed to reach ${url}: ${err instanceof Error ? err.message : String(err)}`)
             prompts.outro("Done")
@@ -314,6 +317,13 @@ export const ProvidersLoginCommand = cmd({
           if (!wellknown?.auth?.command || !Array.isArray(wellknown.auth.command)) {
             prompts.log.error("Well-known config missing auth.command")
             prompts.outro("Done")
+            return
+          }
+          const confirmed = await prompts.confirm({
+            message: `Run authentication command: ${wellknown.auth.command.join(" ")}?`,
+          })
+          if (prompts.isCancel(confirmed) || !confirmed) {
+            prompts.outro("Aborted")
             return
           }
           prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)

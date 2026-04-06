@@ -114,37 +114,42 @@ export namespace Config {
     }
     const wellknownConfigs = await Promise.all(
       wellknownEntries.map(async ({ url }) => {
-        const endpoint = `${url}/.well-known/ax-code`
-        const legacy = `${url}/.well-known/opencode`
-        log.debug("fetching remote config", { url: endpoint, legacy })
         try {
-          await Ssrf.assertPublicUrl(endpoint, "wellknown-config")
-          await Ssrf.assertPublicUrl(legacy, "wellknown-config")
-        } catch (err) {
-          log.warn("wellknown config URL rejected by SSRF guard", { url, err })
-          return undefined
-        }
-        const fetchOpts = { signal: AbortSignal.timeout(10_000) }
-        const response = await Ssrf.pinnedFetch(endpoint, fetchOpts)
-          .then((res) => {
-            if (res.ok || res.status !== 404) return res
-            return Ssrf.pinnedFetch(legacy, fetchOpts)
+          const endpoint = `${url}/.well-known/ax-code`
+          const legacy = `${url}/.well-known/opencode`
+          log.debug("fetching remote config", { url: endpoint, legacy })
+          try {
+            await Ssrf.assertPublicUrl(endpoint, "wellknown-config")
+            await Ssrf.assertPublicUrl(legacy, "wellknown-config")
+          } catch (err) {
+            log.warn("wellknown config URL rejected by SSRF guard", { url, err })
+            return undefined
+          }
+          const fetchOpts = { signal: AbortSignal.timeout(10_000) }
+          const response = await Ssrf.pinnedFetch(endpoint, fetchOpts)
+            .then((res) => {
+              if (res.ok || res.status !== 404) return res
+              return Ssrf.pinnedFetch(legacy, fetchOpts)
+            })
+            .catch(() => Ssrf.pinnedFetch(legacy, fetchOpts))
+          if (!response.ok) {
+            log.warn("failed to fetch remote config", { url, status: response.status })
+            return undefined
+          }
+          const wellknown = (await response.json()) as Record<string, unknown>
+          const remoteConfig = (wellknown.config ?? {}) as Record<string, unknown>
+          if (!remoteConfig.$schema) remoteConfig.$schema = CONFIG_SCHEMA_URL
+          const loaded = await load(JSON.stringify(remoteConfig), {
+            dir: Instance.directory,
+            source: response.url || endpoint,
+            trusted: false,
           })
-          .catch(() => Ssrf.pinnedFetch(legacy, fetchOpts))
-        if (!response.ok) {
-          log.warn("failed to fetch remote config", { url, status: response.status })
+          log.debug("loaded remote config from well-known", { url })
+          return loaded
+        } catch (err) {
+          log.warn("failed to load wellknown config", { url, error: err })
           return undefined
         }
-        const wellknown = (await response.json()) as Record<string, unknown>
-        const remoteConfig = (wellknown.config ?? {}) as Record<string, unknown>
-        if (!remoteConfig.$schema) remoteConfig.$schema = CONFIG_SCHEMA_URL
-        const loaded = await load(JSON.stringify(remoteConfig), {
-          dir: Instance.directory,
-          source: response.url || endpoint,
-          trusted: false,
-        })
-        log.debug("loaded remote config from well-known", { url })
-        return loaded
       }),
     )
     for (const cfg of wellknownConfigs) {
@@ -234,16 +239,17 @@ export namespace Config {
     const active = await Account.active()
     if (active?.active_org_id) {
       try {
-        const accountTimeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("account config fetch timed out")), 10_000),
-        )
+        let accountTimer: ReturnType<typeof setTimeout>
+        const accountTimeout = new Promise<never>((_, reject) => {
+          accountTimer = setTimeout(() => reject(new Error("account config fetch timed out")), 10_000)
+        })
         const [config, token] = await Promise.race([
           Promise.all([
             Account.config(active.id, active.active_org_id),
             Account.token(active.id),
           ]),
           accountTimeout.then(() => { throw new Error("timeout") }),
-        ])
+        ]).finally(() => clearTimeout(accountTimer!))
         if (token) {
           process.env["AX_CODE_CONSOLE_TOKEN"] = token
           Env.set("AX_CODE_CONSOLE_TOKEN", token)
@@ -309,7 +315,7 @@ export namespace Config {
         const parsed = JSON.parse(Flag.AX_CODE_PERMISSION)
         const validated = ConfigSchema.Permission.safeParse(parsed)
         if (validated.success) {
-          result.permission = mergeDeep(result.permission ?? {}, parsed)
+          result.permission = mergeDeep(result.permission ?? {}, validated.data)
         } else {
           log.warn("AX_CODE_PERMISSION does not match permission schema, ignoring", {
             value: Flag.AX_CODE_PERMISSION,

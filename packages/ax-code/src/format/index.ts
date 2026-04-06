@@ -119,16 +119,18 @@ export namespace Format {
                         },
                       )
                       const FORMATTER_TIMEOUT = 30_000
+                      let timer: ReturnType<typeof setTimeout>
                       const exit = await Promise.race([
                         proc.exited,
-                        new Promise<number>((resolve) =>
-                          setTimeout(() => {
+                        new Promise<number>((resolve) => {
+                          timer = setTimeout(() => {
                             proc.kill()
                             log.warn("formatter timed out", { command: item.command, file })
                             resolve(-1)
-                          }, FORMATTER_TIMEOUT),
-                        ),
+                          }, FORMATTER_TIMEOUT)
+                        }),
                       ])
+                      clearTimeout(timer!)
                       if (exit !== 0) {
                         log.error("failed", {
                           command: item.command,

@@ -33,7 +33,7 @@ export namespace McpAuth {
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
   const locks = new Map<string, Promise<void>>()
-  async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
     const prev = locks.get(key) ?? Promise.resolve()
     let result: T
     const next = prev.then(async () => { result = await fn() })

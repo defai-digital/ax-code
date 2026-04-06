@@ -106,8 +106,6 @@ export namespace FileWatcher {
 
             log.info("init", { directory: Instance.directory })
 
-            const native = watcher()
-
             const subs: Array<() => Promise<unknown>> = []
             yield* Effect.addFinalizer(() =>
               Effect.promise(() => Promise.allSettled(subs.map((close) => close()))),
@@ -149,7 +147,7 @@ export namespace FileWatcher {
                   log.error("failed to subscribe", {
                     dir,
                     cause: Cause.pretty(cause),
-                    native: !!native,
+                    native: false,
                   })
                   return Effect.void
                 }),

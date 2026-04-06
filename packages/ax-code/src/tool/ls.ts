@@ -1,10 +1,12 @@
 import z from "zod"
 import { Tool } from "./tool"
 import * as path from "path"
+import * as fs from "fs/promises"
 import DESCRIPTION from "./ls.txt"
 import { Instance } from "../project/instance"
 import { Ripgrep } from "../file/ripgrep"
 import { assertExternalDirectory } from "./external-directory"
+import { Filesystem } from "../util/filesystem"
 
 export const IGNORE_PATTERNS = [
   "node_modules/",
@@ -44,6 +46,12 @@ export const ListTool = Tool.define("list", {
   async execute(params, ctx) {
     const searchPath = path.resolve(Instance.directory, params.path || ".")
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
+    if (Filesystem.contains(Instance.directory, searchPath)) {
+      const realSearchPath = await fs.realpath(searchPath).catch(() => null)
+      if (realSearchPath && !Filesystem.contains(Instance.directory, realSearchPath)) {
+        throw new Error("Access denied: symlink target escapes project directory")
+      }
+    }
 
     await ctx.ask({
       permission: "list",

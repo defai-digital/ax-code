@@ -1,6 +1,7 @@
 import type { Provider } from "./provider"
 import { ProviderID, ModelID } from "./schema"
 import { which } from "../util/which"
+import { Ssrf } from "../util/ssrf"
 import { CliLanguageModel } from "./cli/cli-language-model"
 import { claudeCodeParser, geminiCliParser, codexCliParser, type CliOutputParser } from "./cli/parser"
 import { resolveCliModel } from "./cli/resolve"
@@ -19,7 +20,7 @@ export type CustomLoader = (provider: Provider.Info) => Promise<{
 function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
   return async () => {
     const host = process.env[envKey] || defaultHost
-    const reachable = await fetch(`${host}/api/tags`, { signal: AbortSignal.timeout(2000) })
+    const reachable = await Ssrf.pinnedFetch(`${host}/api/tags`, { signal: AbortSignal.timeout(2000) })
       .then((r) => r.ok)
       .catch(() => false)
 
@@ -27,7 +28,7 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
       autoload: reachable,
       options: reachable ? { baseURL: `${host}/v1` } : {},
       async discoverModels() {
-        const res = await fetch(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(() => null)
+        const res = await Ssrf.pinnedFetch(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(() => null)
         if (!res?.ok) return {}
         const data = (await res.json()) as { models?: { name: string }[] }
         const models: Record<string, Provider.Model> = {}
