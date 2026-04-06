@@ -64,3 +64,43 @@ For each finding, report:
 6. Check for project-specific security patterns (auth middleware, validation layers)
 7. If you find no issues, say so — don't invent problems
 8. Focus on code that handles: user input, authentication, authorization, data storage, external APIs
+
+## PRIORITIZATION
+
+Audit in this order — highest attack surface first, easy wins early:
+
+1. **Internet-facing entry points first** — HTTP routes, API endpoints, WebSocket handlers, webhook receivers. These are directly reachable by attackers and are the highest-value targets. Internal utilities and CLI-only code are lower priority.
+2. **Authentication and authorization** — login flows, session handling, token validation, role checks, middleware chains. A flaw here compromises everything behind it.
+3. **Data handling boundaries** — where user input enters the system (form parsing, query params, file uploads, JSON body parsing) and where data leaves (API responses, logs, error messages, emails). These are injection and data-leak surfaces.
+4. **Secrets and credentials** — use `hardcode_scan` proactively to find API keys, tokens, passwords, connection strings, and private keys in source code. Also check config files, .env files committed to git, and CI/CD scripts.
+5. **Dependencies** — check for known CVEs in package.json / lock files. Focus on directly imported packages over deep transitive dependencies. Flag unmaintained packages (no updates in 2+ years).
+6. **Easy wins first** — within the same severity tier, report the easiest-to-fix issues first. A missing `HttpOnly` cookie flag is a 1-line fix with real impact. A full auth system redesign is not an easy win.
+
+## ITERATION
+
+After the initial scan:
+
+- **Revisit high-severity areas** — if you find one vulnerability in an auth module, scan the entire module thoroughly. Security bugs cluster — one missing check often means the pattern is missing elsewhere.
+- **Check the fix patterns** — if the project has an auth middleware, verify it's actually used on every protected route. If there's an input validation layer, verify it covers all entry points. Gaps in consistent security patterns are often higher-risk than individual bugs.
+- **Cross-reference findings** — a hardcoded secret combined with a missing auth check is a critical chain, even if each finding alone would be medium severity. Report vulnerability chains.
+
+## USE DRE TOOLS
+
+- `hardcode_scan` — run early to find secrets, API keys, inline credentials, and hardcoded security config (CORS origins, allowed domains, rate limits). These are the highest-confidence findings.
+- `impact_analyze` — when a finding affects a shared utility (e.g., a validation helper or auth middleware), check how many callers depend on it. A vulnerability in a function used by 20 routes is critical; one used by a single test helper is low.
+- `dedup_scan` — duplicated auth checks, validation logic, or sanitization functions often have inconsistencies. If the same check exists in 5 places, some may have drifted and become vulnerable.
+
+## COMMON HIGH-VALUE FINDINGS
+
+Check these first — they represent the most common real-world vulnerabilities, roughly ordered by exploitability:
+
+1. **SQL/NoSQL injection** — string concatenation or template literals in database queries
+2. **Command injection** — unsanitized input in shell commands, exec(), spawn()
+3. **XSS** — user input rendered without encoding in HTML/templates, innerHTML, dangerouslySetInnerHTML
+4. **Hardcoded secrets** — API keys, passwords, tokens in source code or committed config files
+5. **Missing auth checks** — API routes accessible without authentication or authorization
+6. **SSRF** — user-controllable URLs fetched server-side without validation
+7. **Path traversal** — user input in file paths without sanitization (../../etc/passwd)
+8. **Insecure deserialization** — JSON.parse or eval on untrusted input without schema validation
+9. **Missing rate limiting** — login endpoints, API endpoints without throttling
+10. **Sensitive data in logs/errors** — stack traces, tokens, or PII exposed in error responses
