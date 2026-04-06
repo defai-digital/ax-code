@@ -17,7 +17,7 @@ export function promptToText(prompt: LanguageModelV2Prompt): string {
       for (const p of message.content) {
         if (p.type === "text") chunks.push(p.text)
         else if (p.type === "reasoning") chunks.push(p.text)
-        else if (p.type === "tool-call") chunks.push(`[Tool: ${p.toolName}(${JSON.stringify(p.input)})`)
+        else if (p.type === "tool-call") chunks.push(`[Tool: ${p.toolName}(${JSON.stringify(p.input)})]`)
       }
       if (chunks.length) parts.push(`[Assistant]: ${chunks.join("\n")}`)
     } else if (message.role === "tool") {

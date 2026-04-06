@@ -64,18 +64,21 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
 
 const CLI_MODELS: Record<string, { id: string; name: string; context: number; output: number }[]> = {
   "claude-code": [
-    { id: "claude-opus-4-6", name: "Opus 4.6", context: 200000, output: 16384 },
-    { id: "claude-sonnet-4-6", name: "Sonnet 4.6", context: 200000, output: 16384 },
-    { id: "claude-haiku-4-5", name: "Haiku 4.5", context: 200000, output: 8192 },
+    { id: "claude-opus-4-6", name: "Claude Opus 4.6", context: 200000, output: 16384 },
+    { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", context: 200000, output: 16384 },
+    { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", context: 200000, output: 8192 },
   ],
   "gemini-cli": [
-    { id: "gemini-3", name: "Gemini 3", context: 1000000, output: 65536 },
-    { id: "gemini-2.5", name: "Gemini 2.5", context: 1000000, output: 65536 },
+    { id: "gemini-3-pro-preview", name: "Gemini 3 Pro", context: 1000000, output: 65536 },
+    { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", context: 1000000, output: 65536 },
+    { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 1000000, output: 65536 },
+    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000, output: 65536 },
   ],
   "codex-cli": [
     { id: "gpt-5.4", name: "GPT-5.4", context: 200000, output: 16384 },
+    { id: "gpt-5.4-mini", name: "GPT-5.4 Mini", context: 200000, output: 16384 },
     { id: "gpt-5.3-codex", name: "GPT-5.3 Codex", context: 200000, output: 16384 },
-    { id: "gpt-5-codex", name: "GPT-5 Codex", context: 200000, output: 16384 },
+    { id: "gpt-5.3-codex-spark", name: "GPT-5.3 Codex Spark", context: 200000, output: 16384 },
   ],
 }
 
@@ -130,6 +133,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
   "ax-studio": ollamaCompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:11434"),
   "claude-code": cliLoader("claude-code", "claude", ["--print", "--output-format", "stream-json", "--verbose"], claudeCodeParser),
-  "gemini-cli": cliLoader("gemini-cli", "gemini", ["--approval-mode", "auto_edit", "--output-format", "stream-json"], geminiCliParser),
+  "gemini-cli": cliLoader("gemini-cli", "gemini", ["-p", "", "--approval-mode", "auto_edit", "--output-format", "stream-json"], geminiCliParser),
   "codex-cli": cliLoader("codex-cli", "codex", ["exec", "--json", "--skip-git-repo-check"], codexCliParser),
 }

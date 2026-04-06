@@ -111,8 +111,7 @@ export class CliLanguageModel implements LanguageModelV2 {
         })
 
         proc.exited.then((code) => {
-          if (code !== 0 && !controller.desiredSize) return // already closed
-          // If process exits non-zero before stdout ends, emit error
+          if (controller.desiredSize === null) return // stream already closed
           if (code !== 0) {
             controller.enqueue({ type: "error", error: new Error(`CLI exited with code ${code}`) })
             controller.close()

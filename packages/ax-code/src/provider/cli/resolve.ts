@@ -9,7 +9,7 @@ interface CliModelInfo {
 
 const DEFAULTS: Record<string, string> = {
   "claude-code": "claude-sonnet-4-6",
-  "gemini-cli": "gemini-3",
+  "gemini-cli": "gemini-2.5-pro",
   "codex-cli": "gpt-5.4",
 }
 
