@@ -1,0 +1,19 @@
+# Keep GitHub Actions up to date automatically.
+#
+# Node.js 20 actions (checkout@v4, setup-node@v4, pnpm/action-setup@v4)
+# are deprecated and will stop working after 2026-09-16. Dependabot
+# will open PRs when @v5 versions ship with Node 24 support.
+# See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"
