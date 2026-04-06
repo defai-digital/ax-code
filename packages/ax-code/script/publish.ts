@@ -15,41 +15,31 @@ for (const filepath of new Bun.Glob("*/package.json").scanSync({ cwd: "./dist" }
 console.log("binaries", binaries)
 const version = Object.values(binaries)[0]
 
-// Shared files for npm packages
-const license = await Bun.file("../../LICENSE").text()
-const postinstall = await Bun.file("./script/postinstall.mjs").text()
+const npmName = "@defai.digital/ax-code"
+const distDir = `./dist/${pkg.name}`
 
-// Helper to create an npm wrapper package (bin + postinstall + optional deps)
-async function createNpmPackage(distName: string, npmName: string) {
-  await $`mkdir -p ./dist/${distName}`
-  await $`cp -r ./bin ./dist/${distName}/bin`
-  await Bun.file(`./dist/${distName}/postinstall.mjs`).write(postinstall)
-  await Bun.file(`./dist/${distName}/LICENSE`).write(license)
-  await Bun.file(`./dist/${distName}/package.json`).write(
-    JSON.stringify(
-      {
-        name: npmName,
-        bin: {
-          [pkg.name]: `./bin/${pkg.name}`,
-        },
-        scripts: {
-          postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
-        },
-        version: version,
-        license: pkg.license,
-        optionalDependencies: binaries,
+await $`mkdir -p ${distDir}`
+await $`cp -r ./bin ${distDir}/bin`
+await $`cp ./script/postinstall.mjs ${distDir}/postinstall.mjs`
+await Bun.file(`${distDir}/LICENSE`).write(await Bun.file("../../LICENSE").text())
+await Bun.file(`${distDir}/package.json`).write(
+  JSON.stringify(
+    {
+      name: npmName,
+      bin: {
+        [pkg.name]: `./bin/${pkg.name}`,
       },
-      null,
-      2,
-    ),
-  )
-}
-
-// Create both npm packages:
-// 1. ax-code-ai (legacy unscoped name)
-// 2. @defai.digital/ax-code (scoped name)
-await createNpmPackage(pkg.name, pkg.name + "-ai")
-await createNpmPackage(`${pkg.name}-scoped`, "@defai.digital/ax-code")
+      scripts: {
+        postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
+      },
+      version: version,
+      license: pkg.license,
+      optionalDependencies: binaries,
+    },
+    null,
+    2,
+  ),
+)
 
 // Publish platform-specific binaries
 const tasks = Object.entries(binaries).map(async ([name]) => {
@@ -61,10 +51,8 @@ const tasks = Object.entries(binaries).map(async ([name]) => {
 })
 await Promise.all(tasks)
 
-// Publish unscoped package (ax-code-ai)
-await $`cd ./dist/${pkg.name} && pnpm pack && npm publish *.tgz --access public --tag ${Script.channel}`
-// Publish scoped package (@defai.digital/ax-code)
-await $`cd ./dist/${pkg.name}-scoped && pnpm pack && npm publish *.tgz --access public --tag ${Script.channel}`
+// Publish @defai.digital/ax-code
+await $`cd ${distDir} && pnpm pack && npm publish *.tgz --access public --tag ${Script.channel}`
 
 const image = "ghcr.io/defai-digital/ax-code"
 const platforms = "linux/amd64,linux/arm64"

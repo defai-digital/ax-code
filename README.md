@@ -136,7 +136,6 @@ brew install defai-digital/tap/ax
 
 # npm (any platform)
 npm i -g @defai.digital/ax-code
-# or: npm i -g ax-code-ai
 
 # or download a binary from GitHub Releases
 # https://github.com/defai-digital/ax-code/releases
