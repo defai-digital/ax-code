@@ -77,7 +77,7 @@ export namespace DebugEngineQuery {
     // On node_id collision, replace. We key the cache by (project_id,
     // node_id) rather than the surrogate `id`, so the only sensible
     // conflict policy is "newest wins".
-    Database.use((db) => {
+    Database.transaction((db) => {
       db.delete(EmbeddingCacheTable)
         .where(
           and(

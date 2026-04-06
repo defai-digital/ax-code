@@ -651,19 +651,25 @@ export namespace Session {
 
   export const remove = fn(SessionID.zod, async (sessionID) => {
     const session = await get(sessionID)
-    const kids = await children(sessionID)
-    // Delete children and parent in one transaction
-    Database.transaction((db) => {
+    // Collect all descendants recursively, not just immediate children
+    const allDescendants: Info[] = []
+    const queue = [sessionID]
+    while (queue.length > 0) {
+      const parentID = queue.pop()!
+      const kids = await children(parentID)
       for (const child of kids) {
-        db.delete(SessionTable).where(eq(SessionTable.id, child.id)).run()
+        allDescendants.push(child)
+        queue.push(child.id)
+      }
+    }
+    Database.transaction((db) => {
+      for (const desc of allDescendants) {
+        db.delete(SessionTable).where(eq(SessionTable.id, desc.id)).run()
       }
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
       Database.effect(() => Bus.publish(Event.Deleted, { info: session }))
     })
-    // Free any self-correction budgets held by this session and its
-    // children so the in-memory map doesn't leak entries for deleted
-    // sessions over the lifetime of the process.
-    for (const child of kids) SelfCorrection.reset(child.id)
+    for (const desc of allDescendants) SelfCorrection.reset(desc.id)
     SelfCorrection.reset(sessionID)
     await unshare(sessionID).catch((e) => log.warn("session unshare failed", { error: e }))
   })

@@ -99,60 +99,56 @@ export namespace Config {
     // 6) Inline config (AX_CODE_CONFIG_CONTENT)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
+    // Set env tokens synchronously, then fetch all wellknown configs in parallel
+    const wellknownEntries: { url: string; key: string; token: string }[] = []
     for (const [key, value] of Object.entries(auth)) {
       if (value.type === "wellknown") {
         const url = key.replace(/\/+$/, "")
+        if (!/^[A-Z][A-Z0-9_]*$/.test(value.key)) {
+          log.warn("ignoring wellknown auth with invalid env var name", { key: value.key, url: key })
+          continue
+        }
         process.env[value.key] = value.token
+        wellknownEntries.push({ url, key: value.key, token: value.token })
+      }
+    }
+    const wellknownConfigs = await Promise.all(
+      wellknownEntries.map(async ({ url }) => {
         const endpoint = `${url}/.well-known/ax-code`
         const legacy = `${url}/.well-known/opencode`
         log.debug("fetching remote config", { url: endpoint, legacy })
-        // SSRF guard. The auth provider key is user-controllable via
-        // `ax-code auth login <url>` — if an attacker can influence
-        // the auth URL (social engineering, a compromised auth.json,
-        // or the PUT /auth/:providerID API), they can point it at
-        // http://169.254.169.254/ or any internal service and have
-        // the fetched content deep-merged into the user's config.
-        // Validate both endpoints before the network call. If SSRF
-        // rejects, skip this provider entirely instead of throwing
-        // — we still want to load other providers' configs.
         try {
           await Ssrf.assertPublicUrl(endpoint, "wellknown-config")
           await Ssrf.assertPublicUrl(legacy, "wellknown-config")
         } catch (err) {
           log.warn("wellknown config URL rejected by SSRF guard", { url, err })
-          continue
+          return undefined
         }
-        const response = await Ssrf.pinnedFetch(endpoint)
+        const fetchOpts = { signal: AbortSignal.timeout(10_000) }
+        const response = await Ssrf.pinnedFetch(endpoint, fetchOpts)
           .then((res) => {
             if (res.ok || res.status !== 404) return res
-            return Ssrf.pinnedFetch(legacy)
+            return Ssrf.pinnedFetch(legacy, fetchOpts)
           })
-          .catch(() => Ssrf.pinnedFetch(legacy))
+          .catch(() => Ssrf.pinnedFetch(legacy, fetchOpts))
         if (!response.ok) {
           log.warn("failed to fetch remote config", { url, status: response.status })
-          continue
+          return undefined
         }
         const wellknown = (await response.json()) as Record<string, unknown>
         const remoteConfig = (wellknown.config ?? {}) as Record<string, unknown>
-        // Add $schema to prevent load() from trying to write back to a non-existent file
         if (!remoteConfig.$schema) remoteConfig.$schema = CONFIG_SCHEMA_URL
-        // Remote well-known configs are untrusted by definition: a
-        // compromised or typosquatted `.well-known/ax-code` endpoint
-        // could otherwise embed `{file:/etc/shadow}` and exfiltrate
-        // host secrets through the next LLM call. Anchor the config
-        // dir to the local Instance directory so any `{file:}`
-        // references resolve inside the worktree (the untrusted
-        // check then confines them further).
-        result = mergeConfigConcatArrays(
-          result,
-          await load(JSON.stringify(remoteConfig), {
-            dir: Instance.directory,
-            source: response.url || endpoint,
-            trusted: false,
-          }),
-        )
+        const loaded = await load(JSON.stringify(remoteConfig), {
+          dir: Instance.directory,
+          source: response.url || endpoint,
+          trusted: false,
+        })
         log.debug("loaded remote config from well-known", { url })
-      }
+        return loaded
+      }),
+    )
+    for (const cfg of wellknownConfigs) {
+      if (cfg) result = mergeConfigConcatArrays(result, cfg)
     }
 
     // Global user config overrides remote config.
@@ -238,9 +234,15 @@ export namespace Config {
     const active = await Account.active()
     if (active?.active_org_id) {
       try {
-        const [config, token] = await Promise.all([
-          Account.config(active.id, active.active_org_id),
-          Account.token(active.id),
+        const accountTimeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("account config fetch timed out")), 10_000),
+        )
+        const [config, token] = await Promise.race([
+          Promise.all([
+            Account.config(active.id, active.active_org_id),
+            Account.token(active.id),
+          ]),
+          accountTimeout.then(() => { throw new Error("timeout") }),
         ])
         if (token) {
           process.env["AX_CODE_CONSOLE_TOKEN"] = token

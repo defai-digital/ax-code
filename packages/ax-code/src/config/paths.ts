@@ -115,7 +115,7 @@ export namespace ConfigPaths {
     // e.g. their own custom endpoint URLs stored in env vars.
     const envSource = trusted ? process.env : Env.sanitize(process.env)
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      return envSource[varName] || ""
+      return envSource[varName] ?? ""
     })
 
     const fileMatches = Array.from(text.matchAll(/\{file:[^}]+\}/g))

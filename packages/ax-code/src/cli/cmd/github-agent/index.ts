@@ -276,7 +276,7 @@ export const GithubRunCommand = cmd({
       }),
   async handler(args) {
     await bootstrap(process.cwd(), async () => {
-      const isMock = args.token || args.event
+      const isMock = !!(args.token && args.event)
 
       const context = isMock ? (JSON.parse(args.event!) as Context) : github.context
       if (!SUPPORTED_EVENTS.includes(context.eventName as (typeof SUPPORTED_EVENTS)[number])) {
@@ -1191,8 +1191,7 @@ export const GithubRunCommand = cmd({
             return existing.data[0].number
           }
         } catch (e) {
-          // If the check fails, proceed to create - we'll get a clear error if a PR already exists
-          console.log(`Failed to check for existing PR: ${e}`)
+          core.warning(`Failed to check for existing PR, skipping duplicate check: ${e}`)
         }
 
         // Verify there are commits between base and head before creating the PR.

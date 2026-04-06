@@ -61,7 +61,8 @@ export namespace ShareNext {
     return { headers, api: consoleApi, baseUrl: active.url }
   }
 
-  const disabled = process.env["AX_CODE_DISABLE_SHARE"] === "true" || process.env["AX_CODE_DISABLE_SHARE"] === "1"
+  const disableValue = process.env["AX_CODE_DISABLE_SHARE"]?.toLowerCase()
+  const disabled = disableValue === "true" || disableValue === "1"
 
   // Track active subscriptions so repeated init() calls do not stack up
   // duplicate listeners. Each entry is an unsubscribe function returned

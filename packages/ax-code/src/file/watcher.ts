@@ -1,7 +1,6 @@
 import { Cause, Effect, Layer, Scope, ServiceMap } from "effect"
 // @ts-ignore
 import { createWrapper } from "@parcel/watcher/wrapper"
-import type ParcelWatcher from "@parcel/watcher"
 import { readdir, stat } from "fs/promises"
 import path from "path"
 import z from "zod"
@@ -113,15 +112,6 @@ export namespace FileWatcher {
             yield* Effect.addFinalizer(() =>
               Effect.promise(() => Promise.allSettled(subs.map((close) => close()))),
             )
-
-            const cb: ParcelWatcher.SubscribeCallback = Instance.bind((err, evts) => {
-              if (err) return
-              for (const evt of evts) {
-                if (evt.type === "create") Bus.publish(Event.Updated, { file: evt.path, event: "add" })
-                if (evt.type === "update") Bus.publish(Event.Updated, { file: evt.path, event: "change" })
-                if (evt.type === "delete") Bus.publish(Event.Updated, { file: evt.path, event: "unlink" })
-              }
-            })
 
             const subscribe = (dir: string, ignore: string[]) => {
               return Effect.tryPromise(async () => {
