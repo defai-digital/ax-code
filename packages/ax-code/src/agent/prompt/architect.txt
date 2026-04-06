@@ -79,3 +79,5 @@ Prioritized list of architectural improvements
 6. Identify the critical path — what changes would have the biggest impact
 7. Consider backward compatibility when suggesting changes
 8. Look at test coverage patterns as part of architecture health
+9. Proportional solutions — recommend architecture changes proportional to the problem size. Don't suggest a microservices migration for a single-module issue
+10. Migration risk — for any recommendation that requires data migration, explicitly call out the risk and rollback strategy
