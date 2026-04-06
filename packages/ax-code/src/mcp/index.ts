@@ -134,17 +134,22 @@ export namespace MCP {
       description: mcpTool.description ?? "",
       inputSchema: jsonSchema(schema),
       execute: async (args: unknown) => {
-        return client.callTool(
-          {
-            name: mcpTool.name,
-            arguments: (args || {}) as Record<string, unknown>,
-          },
-          CallToolResultSchema,
-          {
-            resetTimeoutOnProgress: true,
-            timeout,
-          },
-        )
+        try {
+          return await client.callTool(
+            {
+              name: mcpTool.name,
+              arguments: (args || {}) as Record<string, unknown>,
+            },
+            CallToolResultSchema,
+            {
+              resetTimeoutOnProgress: true,
+              timeout,
+            },
+          )
+        } catch (e) {
+          log.error("MCP tool call failed", { tool: mcpTool.name, error: e instanceof Error ? e.message : String(e) })
+          throw e
+        }
       },
     })
   }
@@ -244,7 +249,9 @@ export namespace MCP {
         for (const dpid of await descendants(pid)) {
           try {
             process.kill(dpid, "SIGTERM")
-          } catch {}
+          } catch (e: any) {
+            if (e?.code !== "ESRCH") log.debug("failed to kill descendant", { dpid, error: e?.code })
+          }
         }
       }
 
@@ -458,6 +465,7 @@ export namespace MCP {
             break
           }
 
+          await transport.close?.().catch(() => {})
           log.debug("transport connection failed", {
             key,
             transport: name,
@@ -908,6 +916,7 @@ export namespace MCP {
         pendingOAuthTransports.set(mcpName, transport)
         return { authorizationUrl: capturedUrl.toString() }
       }
+      await transport.close?.().catch(() => {})
       throw error
     }
   }
@@ -1016,8 +1025,8 @@ export namespace MCP {
       }
 
       // Re-add the MCP server to establish connection
-      pendingOAuthTransports.delete(mcpName)
       const result = await add(mcpName, mcpConfig)
+      pendingOAuthTransports.delete(mcpName)
 
       const statusRecord = result.status as Record<string, Status>
       return statusRecord[mcpName] ?? { status: "failed", error: "Unknown error after auth" }

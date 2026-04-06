@@ -40,10 +40,13 @@ export namespace Terminal {
         if (colorStr.startsWith("rgb:")) {
           const parts = colorStr.substring(4).split("/")
           if (parts.length !== 3) return null
-          const r = parseInt(parts[0], 16) >> 8
-          const g = parseInt(parts[1], 16) >> 8
-          const b = parseInt(parts[2], 16) >> 8
-          if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null
+          const rRaw = parseInt(parts[0], 16)
+          const gRaw = parseInt(parts[1], 16)
+          const bRaw = parseInt(parts[2], 16)
+          if (!Number.isFinite(rRaw) || !Number.isFinite(gRaw) || !Number.isFinite(bRaw)) return null
+          const r = rRaw >> 8
+          const g = gRaw >> 8
+          const b = bRaw >> 8
           return RGBA.fromInts(r, g, b, 255)
         }
         if (colorStr.startsWith("#")) {

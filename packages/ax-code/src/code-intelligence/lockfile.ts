@@ -65,8 +65,11 @@ export namespace IndexLock {
     }
     // wx = create+exclusive. Throws EEXIST if the file exists.
     const handle = await fs.open(target, "wx")
-    await handle.writeFile(JSON.stringify(body))
-    await handle.close()
+    try {
+      await handle.writeFile(JSON.stringify(body))
+    } finally {
+      await handle.close()
+    }
   }
 
   async function readLockBody(target: string): Promise<LockBody | undefined> {

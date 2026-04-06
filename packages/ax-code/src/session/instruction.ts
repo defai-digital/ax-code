@@ -156,7 +156,7 @@ export namespace InstructionPrompt {
         log.warn("instruction URL rejected by SSRF guard", { url, err })
         return ""
       }
-      return fetch(url, { signal: AbortSignal.timeout(5000) })
+      return Ssrf.pinnedFetch(url, { signal: AbortSignal.timeout(5000) })
         .then((res) => {
           if (!res.ok) {
             log.warn("instruction URL returned non-ok", { url, status: res.status })
