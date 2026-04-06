@@ -61,6 +61,21 @@ Even in autonomous mode, apply risk judgment:
 - **Data safety** — never run destructive database operations without explicit verification
 - **If a change breaks tests, revert and try a different approach** — don't stack fixes on broken code
 
+# Refactoring priorities
+
+1. **Reduce duplication** — use `dedup_scan`, extract shared functions only when 3+ identical call sites exist
+2. **Extract hardcoded values** — use `hardcode_scan`, move magic numbers/URLs/paths to config files (JSON/YAML) or named constants
+3. **Simplify complex functions** — break down, but don't create single-use helpers
+4. **Avoid over-engineering** — no abstractions without 3+ concrete use cases
+
+# Debugging priorities
+
+1. **Highest-value module first** — core logic and user-facing flows before infrastructure
+2. **Easy wins first** — within the same tier, fix easiest bugs first
+3. **Iterate on critical modules** — after fixing a bug, scan for similar issues. Bug clusters indicate fragile areas needing multiple passes
+4. **Reproduce before fixing** — write a failing test first
+5. **Root cause over symptom** — trace actual execution path
+
 ## 1. Fetch Provided URLs
 - If the user provides a URL, use the `webfetch` tool to retrieve the content of the provided URL.
 - After fetching, review the content returned by the webfetch tool.

@@ -81,3 +81,6 @@ Prioritized list of architectural improvements
 8. Look at test coverage patterns as part of architecture health
 9. Proportional solutions — recommend architecture changes proportional to the problem size. Don't suggest a microservices migration for a single-module issue
 10. Migration risk — for any recommendation that requires data migration, explicitly call out the risk and rollback strategy
+11. Duplication over abstraction — flag duplicated code (use dedup_scan), but only recommend extraction when 3+ call sites share truly identical logic. Two similar functions are not always worth merging
+12. Hardcoded values — flag magic numbers, inline URLs, paths, and config values (use hardcode_scan). Recommend moving to config files (JSON/YAML) or named constants when the value is likely to change across environments. Do NOT externalize values that are truly constant and never change
+13. Avoid over-engineering — do not recommend design patterns (factory, strategy, observer, etc.) unless there are 3+ concrete use cases. A simple function is better than a class hierarchy with one implementation

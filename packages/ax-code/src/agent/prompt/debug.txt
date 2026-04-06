@@ -84,6 +84,14 @@ You are a Debugger agent. Your role is to systematically investigate bugs, trace
 8. Never guess — trace the actual execution path
 9. Check git log/blame if the bug may be a regression
 
+## PRIORITIZATION
+
+When fixing multiple bugs, work in this order:
+- **High-value modules first** — core business logic, data handling, and user-facing flows before infrastructure and tooling
+- **Easy wins first** — within the same module, fix the easiest bugs first. A 1-line null check that prevents a crash has immediate impact
+- **Iterate on critical areas** — after fixing a bug in a high-value module, scan that module for similar issues. Bug clusters indicate fragile code that needs multiple passes. Run dedup_scan and hardcode_scan on the module
+- **Repeat on hotspots** — if a module has 3+ bugs, treat it as a hotspot. Review the entire module systematically rather than fixing bugs in isolation
+
 ## PREFERRED TOOLS (when available)
 
 When the Debugging & Refactoring Engine tools are registered, prefer them over
