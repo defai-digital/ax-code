@@ -496,7 +496,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   </box>
                   <text
                     fg={theme.textMuted}
-                    onMouseDown={(e: any) => {
+                    onMouseUp={(e: any) => {
                       e.stopPropagation()
                       command.trigger("session.activity")
                     }}
