@@ -70,8 +70,11 @@ export const IsolationRoutes = lazy(() =>
         const network = mode === "full-access"
         // Write to config file directly (no Instance.dispose) for persistence across restarts
         const filepath = path.join(Instance.directory, "ax-code.json")
-        const existing = await Filesystem.readText(filepath).then((t) => JSON.parse(t)).catch(() => ({}))
-        existing.isolation = { ...existing.isolation, mode, network }
+        const existing = await Filesystem.readText(filepath).then((t) => {
+          const parsed = JSON.parse(t)
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
+        }).catch(() => ({}))
+        existing.isolation = { mode, network }
         await Filesystem.writeJson(filepath, existing).catch((err) => {
           log.warn("failed to persist isolation config", { error: err instanceof Error ? err.message : String(err) })
         })

@@ -196,23 +196,23 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
           sessionModelUsage[modelKey].messages++
 
           if (message.info.tokens) {
-            sessionTokens.input += message.info.tokens.input || 0
-            sessionTokens.output += message.info.tokens.output || 0
-            sessionTokens.reasoning += message.info.tokens.reasoning || 0
-            sessionTokens.cache.read += message.info.tokens.cache?.read || 0
-            sessionTokens.cache.write += message.info.tokens.cache?.write || 0
+            sessionTokens.input += message.info.tokens.input ?? 0
+            sessionTokens.output += message.info.tokens.output ?? 0
+            sessionTokens.reasoning += message.info.tokens.reasoning ?? 0
+            sessionTokens.cache.read += message.info.tokens.cache?.read ?? 0
+            sessionTokens.cache.write += message.info.tokens.cache?.write ?? 0
 
-            sessionModelUsage[modelKey].tokens.input += message.info.tokens.input || 0
+            sessionModelUsage[modelKey].tokens.input += message.info.tokens.input ?? 0
             sessionModelUsage[modelKey].tokens.output +=
-              (message.info.tokens.output || 0) + (message.info.tokens.reasoning || 0)
-            sessionModelUsage[modelKey].tokens.cache.read += message.info.tokens.cache?.read || 0
-            sessionModelUsage[modelKey].tokens.cache.write += message.info.tokens.cache?.write || 0
+              (message.info.tokens.output ?? 0) + (message.info.tokens.reasoning ?? 0)
+            sessionModelUsage[modelKey].tokens.cache.read += message.info.tokens.cache?.read ?? 0
+            sessionModelUsage[modelKey].tokens.cache.write += message.info.tokens.cache?.write ?? 0
           }
         }
 
         for (const part of message.parts) {
           if (part.type === "tool" && part.tool) {
-            sessionToolUsage[part.tool] = (sessionToolUsage[part.tool] || 0) + 1
+            sessionToolUsage[part.tool] = (sessionToolUsage[part.tool] ?? 0) + 1
           }
         }
       }
@@ -248,7 +248,7 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
       stats.totalTokens.cache.write += result.sessionTokens.cache.write
 
       for (const [tool, count] of Object.entries(result.sessionToolUsage)) {
-        stats.toolUsage[tool] = (stats.toolUsage[tool] || 0) + count
+        stats.toolUsage[tool] = (stats.toolUsage[tool] ?? 0) + count
       }
 
       for (const [model, usage] of Object.entries(result.sessionModelUsage)) {

@@ -494,7 +494,8 @@ export namespace MCP {
         },
       })
       transport.stderr?.on("data", (chunk: Buffer) => {
-        log.info(`mcp stderr: ${chunk.toString()}`, { key })
+        const line = chunk.toString().trimEnd()
+        if (line) log.info("mcp stderr", { key, line })
       })
 
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT

@@ -1,5 +1,5 @@
 import path from "path"
-import { exec } from "child_process"
+import { execFile } from "child_process"
 import { Filesystem } from "../../../util/filesystem"
 import * as prompts from "@clack/prompts"
 import { map, pipe, sortBy, values } from "remeda"
@@ -177,14 +177,9 @@ export const GithubInstallCommand = cmd({
 
             // Open browser
             const url = "https://github.com/apps/ax-code-agent"
-            const command =
-              process.platform === "darwin"
-                ? `open "${url}"`
-                : process.platform === "win32"
-                  ? `start "" "${url}"`
-                  : `xdg-open "${url}"`
-
-            exec(command, (error) => {
+            const open = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open"
+            const args = process.platform === "win32" ? ["", url] : [url]
+            execFile(open, args, (error) => {
               if (error) {
                 prompts.log.warn(`Could not open browser. Please visit: ${url}`)
               }

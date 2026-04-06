@@ -83,6 +83,8 @@ export function hooks() {
     Log.Default.error("exception", {
       e: err instanceof Error ? err.message : err,
     })
+    // Process state is unreliable after uncaught exception — exit after flushing
+    setTimeout(() => process.exit(1), 100)
   })
 }
 

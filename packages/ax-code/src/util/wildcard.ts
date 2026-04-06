@@ -55,12 +55,12 @@ export namespace Wildcard {
     return result
   }
 
-  function matchSequence(items: string[], patterns: string[]): boolean {
+  function matchSequence(items: string[], patterns: string[], startIdx = 0): boolean {
     if (patterns.length === 0) return true
     const [pattern, ...rest] = patterns
-    if (pattern === "*") return matchSequence(items, rest)
-    for (let i = 0; i < items.length; i++) {
-      if (match(items[i], pattern) && matchSequence(items.slice(i + 1), rest)) {
+    if (pattern === "*") return matchSequence(items, rest, startIdx)
+    for (let i = startIdx; i < items.length; i++) {
+      if (match(items[i], pattern) && matchSequence(items, rest, i + 1)) {
         return true
       }
     }

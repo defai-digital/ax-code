@@ -1824,14 +1824,25 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
     abort.addEventListener("abort", abortHandler, { once: true })
 
+    // Default shell timeout to prevent hung commands from blocking forever
+    const SHELL_TIMEOUT = 300_000 // 5 minutes
+    const shellTimer = setTimeout(() => {
+      if (!exited) {
+        log.warn("shell command timed out", { shell, args })
+        void kill()
+      }
+    }, SHELL_TIMEOUT)
+
     await new Promise<void>((resolve, reject) => {
       proc.once("close", () => {
         exited = true
+        clearTimeout(shellTimer)
         abort.removeEventListener("abort", abortHandler)
         resolve()
       })
       proc.once("error", (err) => {
         exited = true
+        clearTimeout(shellTimer)
         abort.removeEventListener("abort", abortHandler)
         reject(err)
       })
