@@ -43,7 +43,7 @@ catalog:
   "typescript": "5.8.2"
   "ulid": "3.0.1"
   "virtua": "0.42.3"
-  "vite": "7.1.11"
+  "vite": "7.3.2"
   "vite-plugin-solid": "2.11.10"
   "zod": "4.1.8"
 
