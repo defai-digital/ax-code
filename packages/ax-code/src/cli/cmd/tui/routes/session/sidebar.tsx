@@ -473,19 +473,31 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <box
                   flexDirection="row"
                   gap={1}
+                  justifyContent="space-between"
                   onMouseDown={() => activityItems().length > 2 && setExpanded("activity", !expanded.activity)}
                 >
-                  <Show when={activityItems().length > 2}>
-                    <text fg={theme.text}>{expanded.activity ? "\u25BC" : "\u25B6"}</text>
-                  </Show>
-                  <text fg={theme.text}>
-                    <b>Activity</b>
-                    <Show when={!expanded.activity}>
-                      <span style={{ fg: theme.textMuted }}>
-                        {" "}
-                        ({activityItems().length} actions)
-                      </span>
+                  <box flexDirection="row" gap={1}>
+                    <Show when={activityItems().length > 2}>
+                      <text fg={theme.text}>{expanded.activity ? "\u25BC" : "\u25B6"}</text>
                     </Show>
+                    <text fg={theme.text}>
+                      <b>Activity</b>
+                      <Show when={!expanded.activity}>
+                        <span style={{ fg: theme.textMuted }}>
+                          {" "}
+                          ({activityItems().length} actions)
+                        </span>
+                      </Show>
+                    </text>
+                  </box>
+                  <text
+                    fg={theme.textMuted}
+                    onMouseDown={(e: any) => {
+                      e.stopPropagation()
+                      command.trigger("session.activity")
+                    }}
+                  >
+                    view all
                   </text>
                 </box>
                 <Show when={activityItems().length <= 2 || expanded.activity}>

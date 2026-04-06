@@ -57,6 +57,7 @@ import { Header } from "./header"
 import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
+import { DialogActivity } from "./dialog-activity"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
@@ -324,6 +325,8 @@ export function Session() {
     ...displayCommands({
       conceal,
       currentModel: () => local.model.current(),
+      dialogReplaceActivity: (dialog) =>
+        dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
       dialogReplaceTimeline: (dialog) =>
         dialog.replace(() => (
           <DialogTimeline

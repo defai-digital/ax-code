@@ -32,6 +32,7 @@ type Toast = {
 export function displayCommands(input: {
   conceal: Accessor<boolean>
   currentModel: () => Model | undefined
+  dialogReplaceActivity: (dialog: DialogContext) => void
   dialogReplaceTimeline: (dialog: DialogContext) => void
   dialogReplaceFork: (dialog: DialogContext) => void
   dialogReplaceRename: (dialog: DialogContext) => void
@@ -121,6 +122,15 @@ export function displayCommands(input: {
         name: "rename",
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceRename(dialog),
+    },
+    {
+      title: "View activity history",
+      value: "session.activity",
+      category: "Session",
+      slash: {
+        name: "activity",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceActivity(dialog),
     },
     {
       title: "Jump to message",
