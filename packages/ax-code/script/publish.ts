@@ -48,7 +48,8 @@ const tasks = Object.entries(binaries).map(async ([name]) => {
   }
   await $`pnpm pack`.cwd(`./dist/${name}`)
   await $`npm publish *.tgz --access public --tag ${Script.channel}`.cwd(`./dist/${name}`).catch((err) => {
-    if (String(err).includes("previously published")) {
+    const msg = String(err?.stderr ?? err)
+    if (msg.includes("previously published") || msg.includes("cannot publish over")) {
       console.warn(`${name}@${version} already published, skipping`)
     } else {
       throw err
@@ -59,7 +60,8 @@ await Promise.all(tasks)
 
 // Publish @defai.digital/ax-code (skip if already published)
 await $`cd ${distDir} && pnpm pack && npm publish *.tgz --access public --tag ${Script.channel}`.catch((err) => {
-  if (String(err).includes("previously published")) {
+  const msg = String(err?.stderr ?? err)
+  if (msg.includes("previously published") || msg.includes("cannot publish over")) {
     console.warn(`@defai.digital/ax-code@${version} already published, skipping`)
   } else {
     throw err
