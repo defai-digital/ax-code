@@ -55,7 +55,7 @@ export const geminiCliParser: CliOutputParser = {
       if (!event) continue
       if (event.type === "result" && typeof event.text === "string") return { text: event.text }
       if (event.type === "result" && typeof event.content === "string") return { text: event.content }
-      if (event.type === "message") {
+      if (event.type === "message" && event.role !== "user") {
         const text = typeof event.content === "string"
           ? event.content
           : typeof event.text === "string"
@@ -69,7 +69,11 @@ export const geminiCliParser: CliOutputParser = {
   parseStreamLine(line: string) {
     const event = tryParse(line)
     if (!event) return null
-    if (event.type === "message" || event.type === "result") {
+    if (event.type === "result") {
+      if (typeof event.content === "string") return event.content
+      if (typeof event.text === "string") return event.text
+    }
+    if (event.type === "message" && event.role !== "user") {
       if (typeof event.content === "string") return event.content
       if (typeof event.text === "string") return event.text
     }

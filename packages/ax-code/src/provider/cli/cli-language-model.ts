@@ -10,6 +10,8 @@ export interface CliLanguageModelConfig {
   binary: string
   args: string[]
   parser: CliOutputParser
+  promptMode: "stdin" | "arg"
+  promptFlag?: string
 }
 
 const CLI_ENV = { TERM: "dumb", NO_COLOR: "1", CI: "true" }
@@ -25,22 +27,30 @@ export class CliLanguageModel implements LanguageModelV2 {
     this.modelId = config.modelID
   }
 
-  private buildCmd() {
-    return [this.config.binary, ...this.config.args, "--model", this.config.modelID]
+  private buildCmd(prompt: string) {
+    const cmd = [this.config.binary, ...this.config.args, "--model", this.config.modelID]
+    if (this.config.promptMode === "arg") cmd.push(this.config.promptFlag ?? "-p", prompt)
+    return cmd
+  }
+
+  private useStdin() {
+    return this.config.promptMode === "stdin"
   }
 
   async doGenerate(options: LanguageModelV2CallOptions) {
     const text = promptToText(options.prompt)
-    const proc = Process.spawn(this.buildCmd(), {
-      stdin: "pipe",
+    const proc = Process.spawn(this.buildCmd(text), {
+      stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
       env: CLI_ENV,
       abort: options.abortSignal,
     })
 
-    proc.stdin!.write(text)
-    proc.stdin!.end()
+    if (this.useStdin()) {
+      proc.stdin!.write(text)
+      proc.stdin!.end()
+    }
 
     const [code, stdout, stderr] = await Promise.all([proc.exited, buffer(proc.stdout!), buffer(proc.stderr!)])
     if (code !== 0 && stdout.length === 0) {
@@ -59,16 +69,18 @@ export class CliLanguageModel implements LanguageModelV2 {
 
   async doStream(options: LanguageModelV2CallOptions) {
     const text = promptToText(options.prompt)
-    const proc = Process.spawn(this.buildCmd(), {
-      stdin: "pipe",
+    const proc = Process.spawn(this.buildCmd(text), {
+      stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
       env: CLI_ENV,
       abort: options.abortSignal,
     })
 
-    proc.stdin!.write(text)
-    proc.stdin!.end()
+    if (this.useStdin()) {
+      proc.stdin!.write(text)
+      proc.stdin!.end()
+    }
 
     const parser = this.config.parser
     const textId = "cli-0"

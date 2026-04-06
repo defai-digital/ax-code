@@ -101,20 +101,36 @@ function cliModels(providerID: string, provider: Provider.Info, currentModel: st
   return models
 }
 
-function cliLoader(providerID: string, binary: string, args: string[], parser: CliOutputParser): CustomLoader {
+interface CliLoaderOpts {
+  providerID: string
+  binary: string
+  args: string[]
+  parser: CliOutputParser
+  promptMode: "stdin" | "arg"
+  promptFlag?: string
+}
+
+function cliLoader(opts: CliLoaderOpts): CustomLoader {
   return async (provider) => {
-    const path = which(binary)
-    const info = await resolveCliModel(providerID)
+    const path = which(opts.binary)
+    const info = await resolveCliModel(opts.providerID)
     return {
-      // Don't autoload — require explicit connect via auth.json
       autoload: false,
       async getModel(_sdk: any, modelID: string) {
-        if (!path) throw new Error(`${binary} CLI not found in PATH`)
-        return new CliLanguageModel({ providerID, modelID, binary: path, args, parser })
+        if (!path) throw new Error(`${opts.binary} CLI not found in PATH`)
+        return new CliLanguageModel({
+          providerID: opts.providerID,
+          modelID,
+          binary: path,
+          args: opts.args,
+          parser: opts.parser,
+          promptMode: opts.promptMode,
+          promptFlag: opts.promptFlag,
+        })
       },
       async discoverModels() {
         if (!path) return {}
-        return cliModels(providerID, provider, info.model)
+        return cliModels(opts.providerID, provider, info.model)
       },
     }
   }
@@ -132,7 +148,26 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   },
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
   "ax-studio": ollamaCompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:11434"),
-  "claude-code": cliLoader("claude-code", "claude", ["--print", "--bare", "--output-format", "stream-json"], claudeCodeParser),
-  "gemini-cli": cliLoader("gemini-cli", "gemini", ["-p", "", "--approval-mode", "auto_edit", "--output-format", "stream-json"], geminiCliParser),
-  "codex-cli": cliLoader("codex-cli", "codex", ["exec", "--json", "--skip-git-repo-check"], codexCliParser),
+  "claude-code": cliLoader({
+    providerID: "claude-code",
+    binary: "claude",
+    args: ["--print", "--bare", "--verbose", "--output-format", "stream-json"],
+    parser: claudeCodeParser,
+    promptMode: "stdin",
+  }),
+  "gemini-cli": cliLoader({
+    providerID: "gemini-cli",
+    binary: "gemini",
+    args: ["--output-format", "stream-json"],
+    parser: geminiCliParser,
+    promptMode: "arg",
+    promptFlag: "-p",
+  }),
+  "codex-cli": cliLoader({
+    providerID: "codex-cli",
+    binary: "codex",
+    args: ["exec", "--json", "--skip-git-repo-check"],
+    parser: codexCliParser,
+    promptMode: "stdin",
+  }),
 }
