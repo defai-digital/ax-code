@@ -19,7 +19,6 @@ AX Code is an AI execution system for software development. It combines agent ro
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
 [![ax-code](https://github.com/defai-digital/ax-code/actions/workflows/ax-code-ci.yml/badge.svg)](https://github.com/defai-digital/ax-code/actions/workflows/ax-code-ci.yml)
-[![Release](https://img.shields.io/github/v/release/defai-digital/ax-code?display_name=tag)](https://github.com/defai-digital/ax-code/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
