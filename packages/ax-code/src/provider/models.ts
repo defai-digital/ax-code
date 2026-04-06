@@ -103,8 +103,9 @@ export namespace ModelsDev {
     const read = async (file: string, source: string) => {
       try {
         return (await Filesystem.readJson(file)) as Record<string, unknown>
-      } catch (error) {
-        log.warn("failed to load model data", { source, file, error })
+      } catch (error: any) {
+        const level = error?.code === "ENOENT" ? "debug" : "warn"
+        log[level]("failed to load model data", { source, file, error })
       }
     }
 

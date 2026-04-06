@@ -790,7 +790,7 @@ export namespace Server {
         validator(
           "json",
           z.object({
-            service: z.string().meta({ description: "Service name for the log entry" }),
+            service: z.string().max(64).regex(/^[a-zA-Z0-9._-]+$/).meta({ description: "Service name for the log entry" }),
             level: z.enum(["debug", "info", "error", "warn"]).meta({ description: "Log level" }),
             message: z.string().meta({ description: "Log message" }),
             extra: z

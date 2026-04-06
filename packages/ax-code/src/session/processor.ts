@@ -386,7 +386,7 @@ export namespace SessionProcessor {
                     : (value.finishReason as { type?: string })?.type ?? String(value.finishReason ?? "stop")
                   input.assistantMessage.finish = usedTools ? "tool-calls" : finishReason
                   input.assistantMessage.tokens = {
-                    total: (usage.tokens.total ?? 0) + (input.assistantMessage.tokens.total ?? 0) || undefined,
+                    total: (usage.tokens.total ?? 0) + (input.assistantMessage.tokens.total ?? 0),
                     input: usage.tokens.input + input.assistantMessage.tokens.input,
                     output: usage.tokens.output + input.assistantMessage.tokens.output,
                     reasoning: usage.tokens.reasoning + input.assistantMessage.tokens.reasoning,
