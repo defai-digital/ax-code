@@ -45,6 +45,10 @@
     "printWidth": 120
   },
   "trustedDependencies": [
+    "@ax-code/diff",
+    "@ax-code/fs",
+    "@ax-code/index-core",
+    "@ax-code/parser",
     "esbuild",
     "protobufjs",
     "tree-sitter",

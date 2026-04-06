@@ -1,0 +1,8 @@
+# Cross-compilation targets for CI
+# darwin-arm64: native on Apple Silicon runners
+# darwin-x64: native on Intel Mac runners
+# linux-x64-gnu: native on ubuntu-latest
+# linux-arm64-gnu: cross-compile on ubuntu-latest with aarch64 linker
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"

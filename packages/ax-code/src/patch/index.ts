@@ -3,6 +3,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { readFileSync } from "fs"
 import { Log } from "../util/log"
+import { Flag } from "../flag/flag"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
@@ -463,6 +464,13 @@ export namespace Patch {
   }
 
   function seekSequence(lines: string[], pattern: string[], startIndex: number, eof = false): number {
+    if (Flag.AX_CODE_NATIVE_DIFF) {
+      try {
+        const native = require("@ax-code/diff")
+        return native.seekSequence(lines, pattern, startIndex, eof)
+      } catch {}
+    }
+
     if (pattern.length === 0) return -1
 
     // Pass 1: exact match
@@ -489,6 +497,13 @@ export namespace Patch {
   }
 
   function generateUnifiedDiff(oldContent: string, newContent: string): string {
+    if (Flag.AX_CODE_NATIVE_DIFF) {
+      try {
+        const native = require("@ax-code/diff")
+        return native.unifiedDiff("file", oldContent, newContent)
+      } catch {}
+    }
+
     const oldLines = oldContent.split("\n")
     const newLines = newContent.split("\n")
 

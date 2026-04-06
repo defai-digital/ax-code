@@ -13,6 +13,7 @@ import { text } from "node:stream/consumers"
 
 import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
 import { Log } from "@/util/log"
+import { Flag } from "../flag/flag"
 
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })
@@ -227,6 +228,22 @@ export namespace Ripgrep {
     signal?: AbortSignal
   }) {
     input.signal?.throwIfAborted()
+
+    // Native fast-path: in-process file walker via Rust addon
+    if (Flag.AX_CODE_NATIVE_FS) {
+      try {
+        const native = require("@ax-code/fs")
+        const results = native.walkFiles(input.cwd, JSON.stringify({
+          glob: input.glob,
+          hidden: input.hidden,
+          maxDepth: input.maxDepth,
+        }))
+        for (const file of results) {
+          yield file
+        }
+        return
+      } catch {}
+    }
 
     const args = [await filepath(), "--files", "--glob=!.git/*"]
     if (input.follow) args.push("--follow")

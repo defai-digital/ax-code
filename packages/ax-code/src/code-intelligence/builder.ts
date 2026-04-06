@@ -8,6 +8,8 @@ import { Database } from "../storage/db"
 import { CodeGraphQuery } from "./query"
 import { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import { IndexLock } from "./lockfile"
+import { Flag } from "../flag/flag"
+import { NativeStore } from "./native-store"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
 
@@ -100,7 +102,14 @@ function resolveContainingNodeInMemory(
   bookmarks: Array<{ nodeId: CodeNodeID; kind: CodeNodeKind }>,
   line: number,
   char: number,
+  nativeTree?: any,
 ): CodeNodeID | undefined {
+  // Native fast-path: use Rust IntervalTree for O(log n) lookup
+  if (nativeTree) {
+    const result = nativeTree.findInnermostContainer(line, char)
+    return result ? (result as CodeNodeID) : undefined
+  }
+
   const bookmarkKind = new Map(bookmarks.map((b) => [b.nodeId, b.kind]))
   let best: { id: CodeNodeID; size: number } | undefined
   for (const node of nodeInserts) {
@@ -503,6 +512,18 @@ export namespace CodeGraphBuilder {
 
     timings.symbolWalk = performance.now() - tWalk
 
+    // Build native IntervalTree for O(log n) containing-node resolution
+    const nativeTree = Flag.AX_CODE_NATIVE_INDEX ? NativeStore.createIntervalTree() : undefined
+    if (nativeTree) {
+      for (const node of nodeInserts) {
+        nativeTree.insert(
+          node.range_start_line, node.range_start_char,
+          node.range_end_line, node.range_end_char,
+          node.id, node.kind, node.name,
+        )
+      }
+    }
+
     const edgeInserts: Parameters<typeof CodeGraphQuery.insertEdges>[0] = []
 
     // Sort bookmarks by range size descending — biggest (top-level)
@@ -579,7 +600,7 @@ export namespace CodeGraphBuilder {
           // falls back to CodeGraphQuery for other files.
           const sameFile = refFile === absPath
           const callerNodeId = sameFile
-            ? resolveContainingNodeInMemory(nodeInserts, refBookmarks, loc.range.start.line, loc.range.start.character)
+            ? resolveContainingNodeInMemory(nodeInserts, refBookmarks, loc.range.start.line, loc.range.start.character, nativeTree)
             : resolveContainingNodeFromDb(projectID, refFile, loc.range.start.line, loc.range.start.character)
           if (!callerNodeId) continue
 

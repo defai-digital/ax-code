@@ -1,5 +1,6 @@
 import { sep } from "node:path"
 import { Glob } from "../util/glob"
+import { Flag } from "../flag/flag"
 
 export namespace FileIgnore {
   const FOLDERS = new Set([
@@ -63,6 +64,14 @@ export namespace FileIgnore {
       whitelist?: string[]
     },
   ) {
+    // Native fast-path: in-process ignore check via Rust addon
+    if (Flag.AX_CODE_NATIVE_FS) {
+      try {
+        const native = require("@ax-code/fs")
+        return native.isIgnored(filepath, JSON.stringify(opts?.extra ?? []))
+      } catch {}
+    }
+
     for (const pattern of opts?.whitelist || []) {
       if (Glob.match(pattern, filepath)) return false
     }

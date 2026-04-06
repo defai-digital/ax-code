@@ -111,7 +111,44 @@ export namespace FileWatcher {
               Effect.promise(() => Promise.allSettled(subs.map((close) => close()))),
             )
 
+            // Native watcher: OS-level events via Rust addon (fsevents/inotify)
+            const subscribeNative = (dir: string, ignore: string[]) => {
+              return Effect.tryPromise(async () => {
+                const native = require("@ax-code/fs")
+                const watcher = new native.NativeWatcher(dir, JSON.stringify(ignore))
+
+                const pollInterval = setInterval(Instance.bind(() => {
+                  try {
+                    const eventsJson = watcher.poll()
+                    const events = JSON.parse(eventsJson) as Array<{ eventType: string; path: string }>
+                    for (const evt of events) {
+                      const file = path.resolve(dir, evt.path)
+                      Bus.publish(Event.Updated, { file, event: evt.eventType as "add" | "change" | "unlink" })
+                    }
+                  } catch {}
+                }), 50) // Poll native event queue every 50ms (lightweight — no filesystem scan)
+
+                subs.push(async () => {
+                  clearInterval(pollInterval)
+                  watcher.stop()
+                })
+              }).pipe(
+                Effect.timeout(SUBSCRIBE_TIMEOUT_MS),
+                Effect.catchCause((cause) => {
+                  log.error("native watcher failed, falling back to polling", {
+                    dir,
+                    cause: Cause.pretty(cause),
+                  })
+                  return Effect.void
+                }),
+              )
+            }
+
             const subscribe = (dir: string, ignore: string[]) => {
+              // Try native watcher first (< 0.1% CPU vs ~2-5% for polling)
+              if (Flag.AX_CODE_NATIVE_FS) {
+                return subscribeNative(dir, ignore)
+              }
               return Effect.tryPromise(async () => {
                 let prev = await snapshot(dir, ignore)
                 let busy = false

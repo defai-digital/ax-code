@@ -16,6 +16,7 @@ import { Snapshot } from "@/snapshot"
 import { assertExternalDirectory } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
+import { Flag } from "../flag/flag"
 
 function normalizeLineEndings(text: string): string {
   return text.replaceAll("\r\n", "\n")
@@ -636,6 +637,15 @@ export function trimDiff(diff: string): string {
 }
 
 export function replace(content: string, oldString: string, newString: string, replaceAll = false): string {
+  if (Flag.AX_CODE_NATIVE_DIFF) {
+    try {
+      const native = require("@ax-code/diff")
+      const json = native.editReplace(content, oldString, newString, replaceAll ?? false)
+      const result = JSON.parse(json)
+      return result.new_content
+    } catch {}
+  }
+
   if (oldString === newString) {
     throw new Error("No changes to apply: oldString and newString are identical.")
   }

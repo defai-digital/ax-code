@@ -7,6 +7,7 @@ import DESCRIPTION from "./glob.txt"
 import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
+import { Flag } from "../flag/flag"
 
 export const GlobTool = Tool.define("glob", {
   description: DESCRIPTION,
@@ -42,6 +43,31 @@ export const GlobTool = Tool.define("glob", {
       if (realSearch && !Filesystem.contains(Instance.directory, realSearch)) {
         throw new Error("Access denied: symlink target escapes project directory")
       }
+    }
+
+    // Native fast-path: in-process glob via Rust addon
+    if (Flag.AX_CODE_NATIVE_FS) {
+      try {
+        const native = require("@ax-code/fs")
+        const json = native.globFiles(search, params.pattern, 100)
+        const entries = JSON.parse(json) as Array<{path: string, mtime: number, size: number}>
+        entries.sort((a, b) => b.mtime - a.mtime)
+
+        const output = []
+        if (entries.length === 0) output.push("No files found")
+        if (entries.length > 0) {
+          output.push(...entries.map((f) => f.path))
+        }
+
+        return {
+          title: path.relative(Instance.worktree, search),
+          metadata: {
+            count: entries.length,
+            truncated: false,
+          },
+          output: output.join("\n"),
+        }
+      } catch {}
     }
 
     const limit = 100

@@ -9,17 +9,25 @@ import {
 } from "./schema.sql"
 import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import type { ProjectID } from "../project/schema"
+import { Flag } from "../flag/flag"
+import { NativeStore } from "./native-store"
 
 // Low-level CRUD and lookups for the code graph. All functions are
 // synchronous against Database.use (the Drizzle layer buffers writes),
 // and every query is project-scoped — callers pass a ProjectID explicitly
 // rather than relying on an ambient context.
 //
+// When AX_CODE_NATIVE_INDEX is enabled and the native addon is available,
+// operations are dispatched to the Rust-backed IndexStore for better
+// performance. The Drizzle path remains as fallback.
+//
 // This file is the only place that touches CodeNodeTable / CodeEdgeTable
 // / CodeFileTable / CodeIndexCursorTable directly. The public API in
 // index.ts and the builder in builder.ts go through here so we can
 // evolve the schema without scattering migration concerns across
 // multiple call sites.
+
+const useNative = Flag.AX_CODE_NATIVE_INDEX && NativeStore.available
 
 export namespace CodeGraphQuery {
   // ─── Node CRUD ──────────────────────────────────────────────────────
@@ -28,11 +36,13 @@ export namespace CodeGraphQuery {
   export type NodeInsert = typeof CodeNodeTable.$inferInsert
 
   export function insertNode(row: NodeInsert): void {
+    if (useNative) return NativeStore.insertNodes([row])
     Database.use((db) => db.insert(CodeNodeTable).values(row).run())
   }
 
   export function insertNodes(rows: NodeInsert[]): void {
     if (rows.length === 0) return
+    if (useNative) return NativeStore.insertNodes(rows)
     Database.use((db) => db.insert(CodeNodeTable).values(rows).run())
   }
 
@@ -40,6 +50,7 @@ export namespace CodeGraphQuery {
   // the query for project isolation even if the same node id somehow
   // appeared in two projects (schema permits it, policy forbids it).
   export function getNode(projectID: ProjectID, id: CodeNodeID): NodeRow | undefined {
+    if (useNative) return NativeStore.getNode(projectID, id)
     return Database.use((db) =>
       db
         .select()
@@ -55,6 +66,7 @@ export namespace CodeGraphQuery {
     name: string,
     opts?: { kind?: CodeNodeKind; file?: string; limit?: number },
   ): NodeRow[] {
+    if (useNative) return NativeStore.findNodesByName(projectID, name, opts)
     const filters = [eq(CodeNodeTable.project_id, projectID), eq(CodeNodeTable.name, name)]
     if (opts?.kind) filters.push(eq(CodeNodeTable.kind, opts.kind))
     if (opts?.file) filters.push(eq(CodeNodeTable.file, opts.file))
@@ -73,12 +85,7 @@ export namespace CodeGraphQuery {
     prefix: string,
     opts?: { kind?: CodeNodeKind; limit?: number },
   ): NodeRow[] {
-    // Use range comparison instead of `LIKE prefix%` so SQLite can use
-    // code_node_project_name_idx. LIKE with a parameter is opaque to the
-    // planner — it does a full scan even when an index on `name` exists.
-    // The range [prefix, prefix + U+FFFF) is identical in semantics for
-    // any realistic symbol name (no identifier contains U+FFFF, the
-    // Unicode "not a character" sentinel).
+    if (useNative) return NativeStore.findNodesByNamePrefix(projectID, prefix, opts)
     const upper = prefix + "\uFFFF"
     const filters = [
       eq(CodeNodeTable.project_id, projectID),
@@ -97,6 +104,7 @@ export namespace CodeGraphQuery {
   }
 
   export function nodesInFile(projectID: ProjectID, file: string): NodeRow[] {
+    if (useNative) return NativeStore.nodesInFile(projectID, file)
     return Database.use((db) =>
       db
         .select()
@@ -108,6 +116,7 @@ export namespace CodeGraphQuery {
   }
 
   export function deleteNodesInFile(projectID: ProjectID, file: string): void {
+    if (useNative) return NativeStore.deleteNodesInFile(projectID, file)
     Database.use((db) =>
       db
         .delete(CodeNodeTable)
@@ -117,6 +126,7 @@ export namespace CodeGraphQuery {
   }
 
   export function countNodes(projectID: ProjectID): number {
+    if (useNative) return NativeStore.countNodes(projectID)
     // Use `COUNT(*)` via `.get()` instead of loading all IDs with
     // `.all().length`. For 200K nodes the previous implementation
     // allocated ~8MB per call; this is O(1) memory and much faster.
@@ -136,15 +146,18 @@ export namespace CodeGraphQuery {
   export type EdgeInsert = typeof CodeEdgeTable.$inferInsert
 
   export function insertEdge(row: EdgeInsert): void {
+    if (useNative) return NativeStore.insertEdges([row])
     Database.use((db) => db.insert(CodeEdgeTable).values(row).run())
   }
 
   export function insertEdges(rows: EdgeInsert[]): void {
     if (rows.length === 0) return
+    if (useNative) return NativeStore.insertEdges(rows)
     Database.use((db) => db.insert(CodeEdgeTable).values(rows).run())
   }
 
   export function edgesFrom(projectID: ProjectID, fromNode: CodeNodeID, kind?: CodeEdgeKind): EdgeRow[] {
+    if (useNative) return NativeStore.edgesFrom(projectID, fromNode, kind)
     const filters = [eq(CodeEdgeTable.project_id, projectID), eq(CodeEdgeTable.from_node, fromNode)]
     if (kind) filters.push(eq(CodeEdgeTable.kind, kind))
     return Database.use((db) =>
@@ -157,6 +170,7 @@ export namespace CodeGraphQuery {
   }
 
   export function edgesTo(projectID: ProjectID, toNode: CodeNodeID, kind?: CodeEdgeKind): EdgeRow[] {
+    if (useNative) return NativeStore.edgesTo(projectID, toNode, kind)
     const filters = [eq(CodeEdgeTable.project_id, projectID), eq(CodeEdgeTable.to_node, toNode)]
     if (kind) filters.push(eq(CodeEdgeTable.kind, kind))
     return Database.use((db) =>
@@ -199,6 +213,7 @@ export namespace CodeGraphQuery {
   //       If the first succeeds and the second throws, we'd leave dangling
   //       edges. Wrap the whole operation in a transaction.
   export function deleteEdgesTouchingFile(projectID: ProjectID, file: string): void {
+    if (useNative) return NativeStore.deleteEdgesTouchingFile(projectID, file)
     const fileNodes = nodesInFile(projectID, file).map((n) => n.id)
     if (fileNodes.length === 0) return
     const CHUNK = 500
@@ -221,6 +236,7 @@ export namespace CodeGraphQuery {
   }
 
   export function countEdges(projectID: ProjectID): number {
+    if (useNative) return NativeStore.countEdges(projectID)
     // Same rationale as countNodes — use COUNT(*) via .get() instead of
     // materializing every edge ID.
     const row = Database.use((db) =>
@@ -239,6 +255,7 @@ export namespace CodeGraphQuery {
   export type FileInsert = typeof CodeFileTable.$inferInsert
 
   export function upsertFile(row: FileInsert): void {
+    if (useNative) return NativeStore.upsertFile(row)
     Database.use((db) => {
       // Conflict target is (project_id, path) via the unique index
       // code_file_project_path_idx. Targeting `id` (which used to be
@@ -264,6 +281,7 @@ export namespace CodeGraphQuery {
   }
 
   export function getFile(projectID: ProjectID, path: string): FileRow | undefined {
+    if (useNative) return NativeStore.getFile(projectID, path)
     return Database.use((db) =>
       db
         .select()
@@ -275,6 +293,7 @@ export namespace CodeGraphQuery {
   }
 
   export function listFiles(projectID: ProjectID): FileRow[] {
+    if (useNative) return NativeStore.listFiles(projectID)
     return Database.use((db) =>
       db.select().from(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).orderBy(CodeFileTable.path).all(),
     )
@@ -316,6 +335,7 @@ export namespace CodeGraphQuery {
     livePaths: Set<string>,
     scopePrefix: string,
   ): { files: number; nodes: number; edges: number } {
+    if (useNative) return NativeStore.pruneOrphanFiles(projectID, [...livePaths], scopePrefix)
     const rows = Database.use((db) =>
       db
         .select({ path: CodeFileTable.path })
@@ -392,6 +412,7 @@ export namespace CodeGraphQuery {
   export type CursorRow = typeof CodeIndexCursorTable.$inferSelect
 
   export function getCursor(projectID: ProjectID): CursorRow | undefined {
+    if (useNative) return NativeStore.getCursor(projectID)
     return Database.use((db) =>
       db
         .select()
@@ -403,6 +424,7 @@ export namespace CodeGraphQuery {
   }
 
   export function upsertCursor(projectID: ProjectID, commitSha: string | null, nodeCount: number, edgeCount: number) {
+    if (useNative) return NativeStore.upsertCursor(projectID, commitSha, nodeCount, edgeCount)
     Database.use((db) => {
       db.insert(CodeIndexCursorTable)
         .values({
@@ -429,9 +451,7 @@ export namespace CodeGraphQuery {
   // ─── Project-wide delete (used by tests and manual reset) ───────────
 
   export function clearProject(projectID: ProjectID): void {
-    // Use a transaction so a crash between any two deletes cannot leave
-    // the graph tables referentially inconsistent. `Database.use` with
-    // multiple `.run()` calls issues four auto-commits.
+    if (useNative) return NativeStore.clearProject(projectID)
     Database.transaction((db) => {
       db.delete(CodeEdgeTable).where(eq(CodeEdgeTable.project_id, projectID)).run()
       db.delete(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).run()
@@ -466,6 +486,7 @@ export namespace CodeGraphQuery {
   // Scoped to our tables via ANALYZE <table> to avoid touching other
   // subsystems' indexes in the shared DB.
   export function analyze(): void {
+    if (useNative) return NativeStore.analyze()
     Database.use((db) => {
       db.run(sql`ANALYZE code_node`)
       db.run(sql`ANALYZE code_edge`)

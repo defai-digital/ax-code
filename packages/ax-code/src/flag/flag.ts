@@ -43,6 +43,12 @@ export namespace Flag {
   export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
   export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
 
+  // Native Rust addons
+  export const AX_CODE_NATIVE_INDEX = truthy("AX_CODE_NATIVE_INDEX")
+  export const AX_CODE_NATIVE_FS = truthy("AX_CODE_NATIVE_FS")
+  export const AX_CODE_NATIVE_DIFF = truthy("AX_CODE_NATIVE_DIFF")
+  export const AX_CODE_NATIVE_PARSER = truthy("AX_CODE_NATIVE_PARSER")
+
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")
   export const AX_CODE_EXPERIMENTAL_FILEWATCHER = Config.boolean("AX_CODE_EXPERIMENTAL_FILEWATCHER").pipe(

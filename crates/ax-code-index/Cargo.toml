@@ -1,0 +1,22 @@
+[package]
+name = "ax-code-index"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+napi = { workspace = true }
+napi-derive = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+rusqlite = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+libc = "0.2"
+
+[build-dependencies]
+napi-build = { workspace = true }

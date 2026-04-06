@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = ["ax-code-index", "ax-code-fs", "ax-code-diff", "ax-code-parser"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+napi = { version = "3", features = ["serde-json", "napi9"] }
+napi-derive = "3"
+napi-build = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+# Phase 1: indexing core
+rusqlite = { version = "0.34", features = ["bundled", "column_decltype"] }
+sha2 = "0.10"
+rand = "0.9"
+
+# Phase 2: file scanning
+ignore = "0.4"
+globset = "0.4"
+grep-matcher = "0.1"
+grep-regex = "0.1"
+grep-searcher = "0.1"
+notify = { version = "7", features = ["macos_fsevent"] }
+
+# Phase 3: diff engine
+similar = "2"
+strsim = "0.11"
+unicode-normalization = "0.1"
+
+# Phase 4: parser
+tree-sitter = "0.24"
+rayon = "1"
+
+[profile.release]
+lto = true
+strip = "symbols"
+codegen-units = 1
+opt-level = 3

@@ -2,6 +2,8 @@ import fs from "fs/promises"
 import path from "path"
 import { Global } from "../global"
 import { Log } from "../util/log"
+import { Flag } from "../flag/flag"
+import { NativeStore } from "./native-store"
 import type { ProjectID } from "../project/schema"
 
 // Cross-process advisory lock for code-graph indexing runs.
@@ -126,6 +128,15 @@ export namespace IndexLock {
   // another process currently holds the lock. Callers (auto-index) use
   // this when they'd rather skip than wait.
   export async function tryAcquire(projectID: ProjectID): Promise<Disposable | undefined> {
+    // Native fast-path: kernel-level flock() with auto-release on crash
+    if (Flag.AX_CODE_NATIVE_INDEX && NativeStore.available) {
+      const target = lockPath(projectID)
+      const nativeLock = NativeStore.createAdvisoryLock(target)
+      if (nativeLock?.tryAcquire()) {
+        return { [Symbol.dispose]: () => nativeLock.release() }
+      }
+      return undefined
+    }
     const target = lockPath(projectID)
     await fs.mkdir(path.dirname(target), { recursive: true })
     const result = await writeLockFile(target)

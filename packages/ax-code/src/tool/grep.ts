@@ -11,6 +11,7 @@ import { Instance } from "../project/instance"
 import path from "path"
 import { assertExternalDirectory } from "./external-directory"
 import { MAX_LINE_LENGTH } from "@/constants/tool"
+import { Flag } from "../flag/flag"
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
@@ -48,6 +49,51 @@ export const GrepTool = Tool.define("grep", {
       if (realSearchPath && !Filesystem.contains(Instance.directory, realSearchPath)) {
         throw new Error("Access denied: symlink target escapes project directory")
       }
+    }
+
+    // Native fast-path: in-process search via Rust addon
+    if (Flag.AX_CODE_NATIVE_FS) {
+      try {
+        const native = require("@ax-code/fs")
+        const json = native.searchContent(searchPath, params.pattern, JSON.stringify({
+          glob: params.include,
+          limit: 100,
+          contextLines: 0,
+        }))
+        const matches = JSON.parse(json) as Array<{path: string, lineNum: number, lineText: string, modTime: number}>
+        matches.sort((a, b) => b.modTime - a.modTime)
+
+        if (matches.length === 0) {
+          return {
+            title: params.pattern,
+            metadata: { matches: 0, truncated: false },
+            output: "No files found",
+          }
+        }
+
+        const totalMatches = matches.length
+        const outputLines = [`Found ${totalMatches} matches`]
+        let currentFile = ""
+        for (const match of matches) {
+          if (currentFile !== match.path) {
+            if (currentFile !== "") outputLines.push("")
+            currentFile = match.path
+            outputLines.push(`${match.path}:`)
+          }
+          const truncatedLineText =
+            match.lineText.length > MAX_LINE_LENGTH ? match.lineText.substring(0, MAX_LINE_LENGTH) + "..." : match.lineText
+          outputLines.push(`  Line ${match.lineNum}: ${truncatedLineText}`)
+        }
+
+        return {
+          title: params.pattern,
+          metadata: {
+            matches: totalMatches,
+            truncated: false,
+          },
+          output: outputLines.join("\n"),
+        }
+      } catch {}
     }
 
     const rgPath = await Ripgrep.filepath()
