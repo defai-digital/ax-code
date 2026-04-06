@@ -41,18 +41,30 @@ await Bun.file(`${distDir}/package.json`).write(
   ),
 )
 
-// Publish platform-specific binaries
+// Publish platform-specific binaries (skip already-published versions)
 const tasks = Object.entries(binaries).map(async ([name]) => {
   if (process.platform !== "win32") {
     await $`chmod -R 755 .`.cwd(`./dist/${name}`)
   }
   await $`pnpm pack`.cwd(`./dist/${name}`)
-  await $`npm publish *.tgz --access public --tag ${Script.channel}`.cwd(`./dist/${name}`)
+  await $`npm publish *.tgz --access public --tag ${Script.channel}`.cwd(`./dist/${name}`).catch((err) => {
+    if (String(err).includes("previously published")) {
+      console.warn(`${name}@${version} already published, skipping`)
+    } else {
+      throw err
+    }
+  })
 })
 await Promise.all(tasks)
 
-// Publish @defai.digital/ax-code
-await $`cd ${distDir} && pnpm pack && npm publish *.tgz --access public --tag ${Script.channel}`
+// Publish @defai.digital/ax-code (skip if already published)
+await $`cd ${distDir} && pnpm pack && npm publish *.tgz --access public --tag ${Script.channel}`.catch((err) => {
+  if (String(err).includes("previously published")) {
+    console.warn(`@defai.digital/ax-code@${version} already published, skipping`)
+  } else {
+    throw err
+  }
+})
 
 // Docker image publish — requires buildx with multi-platform support.
 // Skip gracefully in CI environments without docker buildx configured.
