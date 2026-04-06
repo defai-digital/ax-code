@@ -418,12 +418,13 @@ export async function systemPrompt(input: {
   model: { providerID: ProviderID; api: { id: string } }
   format: { type: string }
   cache: SystemCache
+  messages?: MessageV2.WithParts[]
   skills?: typeof SystemPrompt.skills
   environment?: typeof SystemPrompt.environment
   instructions?: typeof InstructionPrompt.system
   structuredPrompt?: string
 }) {
-  const skills = await (input.skills ?? SystemPrompt.skills)(input.agent)
+  const skills = await (input.skills ?? SystemPrompt.skills)(input.agent, input.messages)
   const modelKey = `${input.model.providerID}/${input.model.api.id}`
   if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
     input.cache.environment = await (input.environment ?? SystemPrompt.environment)(input.model as any)

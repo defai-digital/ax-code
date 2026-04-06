@@ -1,3 +1,4 @@
+import path from "path"
 import { Ripgrep } from "../file/ripgrep"
 
 import { Instance } from "../project/instance"
@@ -12,6 +13,7 @@ import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
 import { Skill } from "@/skill"
+import type { MessageV2 } from "./message-v2"
 
 export namespace SystemPrompt {
   export function provider(model: Provider.Model) {
@@ -50,17 +52,50 @@ export namespace SystemPrompt {
     ]
   }
 
-  export async function skills(agent: Agent.Info) {
+  export async function skills(agent: Agent.Info, messages?: MessageV2.WithParts[]) {
     if (Permission.disabled(["skill"], agent.permission).has("skill")) return
 
     const list = await Skill.available(agent)
 
+    let recommended: Set<string> | undefined
+    if (messages) {
+      const filePaths = extractFilePaths(messages)
+      const matched = Skill.matchByPaths(list, filePaths)
+      if (matched.length > 0) recommended = new Set(matched.map((s) => s.name))
+    }
+
     return [
       "Skills provide specialized instructions and workflows for specific tasks.",
       "Use the skill tool to load a skill when a task matches its description.",
+      ...(recommended?.size
+        ? ["Some skills below match files in the current conversation and are recommended for loading."]
+        : []),
       // the agents seem to ingest the information about skills a bit better if we present a more verbose
       // version of them here and a less verbose version in tool description, rather than vice versa.
-      Skill.fmt(list, { verbose: true }),
+      Skill.fmt(list, { verbose: true, recommended }),
     ].join("\n")
+  }
+
+  const FILE_TOOLS = new Set(["read", "edit", "write", "multiedit"])
+
+  export function extractFilePaths(messages: MessageV2.WithParts[]): string[] {
+    const worktree = Instance.worktree
+    const result = new Set<string>()
+    for (const msg of messages) {
+      for (const part of msg.parts) {
+        if (part.type !== "tool") continue
+        if (!FILE_TOOLS.has(part.tool)) continue
+        const input = part.state.input
+        if (typeof input?.file_path === "string") result.add(path.relative(worktree, input.file_path))
+        if (typeof input?.filePath === "string") result.add(path.relative(worktree, input.filePath))
+        if (Array.isArray(input?.edits)) {
+          for (const edit of input.edits) {
+            if (typeof edit?.filePath === "string") result.add(path.relative(worktree, edit.filePath))
+            if (typeof edit?.file_path === "string") result.add(path.relative(worktree, edit.file_path))
+          }
+        }
+      }
+    }
+    return Array.from(result)
   }
 }

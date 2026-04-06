@@ -749,6 +749,7 @@ export namespace SessionPrompt {
         model,
         format,
         cache: cachedSystemPrompt,
+        messages: msgs,
         structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
       })
 

@@ -331,6 +331,145 @@ description: A skill in the .agents/skills directory.
   })
 })
 
+test("parses paths from YAML array in frontmatter", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".ax-code", "skill", "ts-skill")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: ts-skill
+description: TypeScript skill.
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
+---
+
+# TS Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(skills.length).toBe(1)
+      expect(skills[0].paths).toEqual(["**/*.ts", "**/*.tsx"])
+    },
+  })
+})
+
+test("parses paths from comma-separated string in frontmatter", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".ax-code", "skill", "css-skill")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: css-skill
+description: CSS skill.
+paths: "**/*.css, **/*.scss"
+---
+
+# CSS Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(skills.length).toBe(1)
+      expect(skills[0].paths).toEqual(["**/*.css", "**/*.scss"])
+    },
+  })
+})
+
+test("skills without paths have no paths field", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".ax-code", "skill", "plain-skill")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: plain-skill
+description: A plain skill.
+---
+
+# Plain Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(skills.length).toBe(1)
+      expect(skills[0].paths).toBeUndefined()
+    },
+  })
+})
+
+test("matchByPaths returns skills matching file paths", () => {
+  const skills: Skill.Info[] = [
+    { name: "ts-skill", description: "TS", location: "/a/SKILL.md", content: "", paths: ["**/*.ts", "**/*.tsx"] },
+    { name: "css-skill", description: "CSS", location: "/b/SKILL.md", content: "", paths: ["**/*.css"] },
+    { name: "plain-skill", description: "Plain", location: "/c/SKILL.md", content: "" },
+  ]
+
+  const matched = Skill.matchByPaths(skills, ["src/index.ts", "src/app.tsx"])
+  expect(matched.length).toBe(1)
+  expect(matched[0].name).toBe("ts-skill")
+
+  const matched2 = Skill.matchByPaths(skills, ["styles/main.css"])
+  expect(matched2.length).toBe(1)
+  expect(matched2[0].name).toBe("css-skill")
+
+  const matched3 = Skill.matchByPaths(skills, ["README.md"])
+  expect(matched3.length).toBe(0)
+
+  const matched4 = Skill.matchByPaths(skills, [])
+  expect(matched4.length).toBe(0)
+})
+
+test("fmt marks recommended skills in verbose mode", () => {
+  const skills: Skill.Info[] = [
+    { name: "alpha", description: "Alpha skill", location: "/a/SKILL.md", content: "" },
+    { name: "beta", description: "Beta skill", location: "/b/SKILL.md", content: "" },
+  ]
+
+  const recommended = new Set(["beta"])
+  const output = Skill.fmt(skills, { verbose: true, recommended })
+
+  expect(output).toContain(`<skill auto_activated="true">`)
+  expect(output).toContain("<name>beta</name>")
+  expect(output).toContain("This skill matches files in the current context")
+  // alpha should NOT be auto-activated
+  expect(output).not.toContain(`<skill auto_activated="true">\n    <name>alpha</name>`)
+})
+
+test("fmt marks recommended skills in non-verbose mode", () => {
+  const skills: Skill.Info[] = [
+    { name: "alpha", description: "Alpha skill", location: "/a/SKILL.md", content: "" },
+    { name: "beta", description: "Beta skill", location: "/b/SKILL.md", content: "" },
+  ]
+
+  const recommended = new Set(["alpha"])
+  const output = Skill.fmt(skills, { verbose: false, recommended })
+
+  expect(output).toContain("**alpha**: Alpha skill (recommended - matches current files)")
+  expect(output).not.toContain("**beta**: Beta skill (recommended")
+})
+
 test("properly resolves directories that skills live in", async () => {
   await using tmp = await tmpdir({
     git: true,

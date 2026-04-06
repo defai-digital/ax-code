@@ -30,6 +30,7 @@ export namespace Skill {
     description: z.string(),
     location: z.string(),
     content: z.string(),
+    paths: z.array(z.string()).optional(),
   })
   export type Info = z.infer<typeof Info>
 
@@ -88,12 +89,20 @@ export namespace Skill {
         })
       }
 
+      const raw = md.data.paths
+      const paths = Array.isArray(raw)
+        ? raw.filter((p: unknown) => typeof p === "string")
+        : typeof raw === "string"
+          ? raw.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : undefined
+
       state.dirs.add(path.dirname(match))
       state.skills[parsed.data.name] = {
         name: parsed.data.name,
         description: parsed.data.description,
         location: match,
         content: md.content,
+        ...(paths?.length ? { paths } : {}),
       }
     })
 
@@ -205,24 +214,42 @@ export namespace Skill {
 
   export const defaultLayer: Layer.Layer<Service> = layer.pipe(Layer.provide(Discovery.defaultLayer))
 
-  export function fmt(list: Info[], opts: { verbose: boolean }) {
+  export function fmt(list: Info[], opts: { verbose: boolean; recommended?: Set<string> }) {
     if (list.length === 0) return "No skills are currently available."
 
     if (opts.verbose) {
       return [
         "<available_skills>",
-        ...list.flatMap((skill) => [
-          "  <skill>",
-          `    <name>${skill.name}</name>`,
-          `    <description>${skill.description}</description>`,
-          `    <location>${pathToFileURL(skill.location).href}</location>`,
-          "  </skill>",
-        ]),
+        ...list.flatMap((skill) => {
+          const auto = opts.recommended?.has(skill.name)
+          return [
+            auto ? `  <skill auto_activated="true">` : "  <skill>",
+            `    <name>${skill.name}</name>`,
+            `    <description>${skill.description}</description>`,
+            `    <location>${pathToFileURL(skill.location).href}</location>`,
+            ...(auto ? [`    <note>This skill matches files in the current context. Consider loading it.</note>`] : []),
+            "  </skill>",
+          ]
+        }),
         "</available_skills>",
       ].join("\n")
     }
 
-    return ["## Available Skills", ...list.map((skill) => `- **${skill.name}**: ${skill.description}`)].join("\n")
+    return [
+      "## Available Skills",
+      ...list.map((skill) => {
+        const marker = opts.recommended?.has(skill.name) ? " (recommended - matches current files)" : ""
+        return `- **${skill.name}**: ${skill.description}${marker}`
+      }),
+    ].join("\n")
+  }
+
+  export function matchByPaths(skills: Info[], filePaths: string[]): Info[] {
+    if (filePaths.length === 0) return []
+    return skills.filter((skill) => {
+      if (!skill.paths?.length) return false
+      return skill.paths.some((pattern) => filePaths.some((fp) => Glob.match(pattern, fp)))
+    })
   }
 
   const runPromise = makeRunPromise(Service, defaultLayer)
