@@ -420,21 +420,33 @@ async function resolveConfigPath(baseDir: string, global = false) {
   return candidates[0]
 }
 
+const configLocks = new Map<string, Promise<void>>()
 async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: string) {
-  let text = "{}"
-  if (await Filesystem.exists(configPath)) {
-    text = await Filesystem.readText(configPath)
+  const prev = configLocks.get(configPath) ?? Promise.resolve()
+  let resolve: () => void
+  const next = new Promise<void>((r) => { resolve = r })
+  configLocks.set(configPath, next)
+  await prev
+
+  try {
+    let text = "{}"
+    if (await Filesystem.exists(configPath)) {
+      text = await Filesystem.readText(configPath)
+    }
+
+    // Use jsonc-parser to modify while preserving comments
+    const edits = modify(text, ["mcp", name], mcpConfig, {
+      formattingOptions: { tabSize: 2, insertSpaces: true },
+    })
+    const result = applyEdits(text, edits)
+
+    await Filesystem.write(configPath, result)
+
+    return configPath
+  } finally {
+    resolve!()
+    if (configLocks.get(configPath) === next) configLocks.delete(configPath)
   }
-
-  // Use jsonc-parser to modify while preserving comments
-  const edits = modify(text, ["mcp", name], mcpConfig, {
-    formattingOptions: { tabSize: 2, insertSpaces: true },
-  })
-  const result = applyEdits(text, edits)
-
-  await Filesystem.write(configPath, result)
-
-  return configPath
 }
 
 export const McpAddCommand = cmd({

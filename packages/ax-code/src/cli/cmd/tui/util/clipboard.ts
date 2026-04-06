@@ -116,7 +116,7 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          await proc.exited.catch(() => {})
+          await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
         }
       }
       if (which("xclip")) {
@@ -130,7 +130,7 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          await proc.exited.catch(() => {})
+          await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
         }
       }
       if (which("xsel")) {
@@ -144,7 +144,7 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          await proc.exited.catch(() => {})
+          await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
         }
       }
     }
@@ -171,13 +171,13 @@ export namespace Clipboard {
         if (!proc.stdin) return
         proc.stdin.write(text)
         proc.stdin.end()
-        await proc.exited.catch(() => {})
+        await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
       }
     }
 
     console.log("clipboard: no native support")
     return async (text: string) => {
-      await clipboardy.write(text).catch(() => {})
+      await Promise.race([clipboardy.write(text), new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
     }
   })
 

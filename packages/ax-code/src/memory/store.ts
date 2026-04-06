@@ -41,8 +41,8 @@ export async function load(projectRoot: string): Promise<ProjectMemory | null> {
   }
   try {
     return JSON.parse(text) as ProjectMemory
-  } catch {
-    return null
+  } catch (err) {
+    throw new Error(`memory store: corrupt JSON in ${memoryPath}`, { cause: err })
   }
 }
 

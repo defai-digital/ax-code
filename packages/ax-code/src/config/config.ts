@@ -451,7 +451,7 @@ export namespace Config {
     const depVersion = dependencies["@ax-code/plugin"]
     if (!depVersion) return true
 
-    const targetVersion = Installation.isLocal() ? "latest" : Installation.VERSION
+    const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
     if (targetVersion === "latest") {
       const isOutdated = await PackageRegistry.isOutdated("@ax-code/plugin", depVersion, dir)
       if (!isOutdated) return false

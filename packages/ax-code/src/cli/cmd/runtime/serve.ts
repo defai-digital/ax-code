@@ -15,7 +15,13 @@ export const ServeCommand = cmd({
     const server = Server.listen(opts)
     console.log(`ax-code server listening on http://${server.hostname}:${server.port}`)
 
+    const shutdown = async () => {
+      await server.stop()
+      process.exit(0)
+    }
+    process.on("SIGINT", shutdown)
+    process.on("SIGTERM", shutdown)
+
     await new Promise(() => {})
-    await server.stop()
   },
 })

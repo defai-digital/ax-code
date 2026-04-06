@@ -10,7 +10,14 @@ export const WorkspaceServeCommand = cmd({
     const opts = await resolveNetworkOptions(args)
     const server = WorkspaceServer.Listen(opts)
     console.log(`workspace event server listening on http://${server.hostname}:${server.port}/event`)
+
+    const shutdown = async () => {
+      await server.stop()
+      process.exit(0)
+    }
+    process.on("SIGINT", shutdown)
+    process.on("SIGTERM", shutdown)
+
     await new Promise(() => {})
-    await server.stop()
   },
 })
