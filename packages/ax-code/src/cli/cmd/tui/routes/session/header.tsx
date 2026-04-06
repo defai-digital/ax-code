@@ -123,7 +123,7 @@ export function Header() {
                   paddingRight={1}
                 >
                   <text fg={hover() === "parent" ? theme.text : theme.background}>
-                    Parent <span style={{ fg: hover() === "parent" ? theme.textMuted : theme.background }}>{keybind.print("session_parent")}</span>
+                    Back to Parent <span style={{ fg: hover() === "parent" ? theme.textMuted : theme.background }}>{keybind.print("session_parent")}</span>
                   </text>
                 </box>
                 <box
