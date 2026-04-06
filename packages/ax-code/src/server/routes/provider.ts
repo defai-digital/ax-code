@@ -13,6 +13,22 @@ import { Log } from "../../util/log"
 
 const log = Log.create({ service: "server" })
 
+// Natively supported providers — shown by default when enabled_providers is not configured.
+// Users can expand this list via enabled_providers in ax-code.json.
+const NATIVE_PROVIDERS = new Set([
+  "ax-studio",
+  "ollama",
+  "lmstudio",
+  "google",
+  "xai",
+  "groq",
+  "azure",
+  "alibaba",
+  "alibaba-coding-plan",
+  "zai-coding-plan",
+  "github-copilot",
+])
+
 export const ProviderRoutes = lazy(() =>
   new Hono()
     .get(
@@ -46,7 +62,8 @@ export const ProviderRoutes = lazy(() =>
         const allProviders = await ModelsDev.get()
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
         for (const [key, value] of Object.entries(allProviders)) {
-          if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {
+          if (disabled.has(key)) continue
+          if (enabled ? enabled.has(key) : NATIVE_PROVIDERS.has(key)) {
             filteredProviders[key] = value
           }
         }
