@@ -75,11 +75,14 @@ export class CliLanguageModel implements LanguageModelV2 {
 
     const stream = new ReadableStream<LanguageModelV2StreamPart>({
       start(controller) {
+        const closed = () => controller.desiredSize === null
+
         controller.enqueue({ type: "stream-start", warnings: [] })
         controller.enqueue({ type: "text-start", id: textId })
 
         let buf = ""
         proc.stdout!.on("data", (chunk: Buffer) => {
+          if (closed()) return
           buf += chunk.toString()
           const lines = buf.split("\n")
           buf = lines.pop() ?? ""
@@ -91,6 +94,7 @@ export class CliLanguageModel implements LanguageModelV2 {
         })
 
         proc.stdout!.on("end", () => {
+          if (closed()) return
           if (buf.trim()) {
             const delta = parser.parseStreamLine(buf)
             if (delta) controller.enqueue({ type: "text-delta", id: textId, delta })
@@ -106,12 +110,13 @@ export class CliLanguageModel implements LanguageModelV2 {
 
         proc.stdout!.on("error", (err: Error) => {
           proc.kill("SIGTERM")
+          if (closed()) return
           controller.enqueue({ type: "error", error: err })
           controller.close()
         })
 
         proc.exited.then((code) => {
-          if (controller.desiredSize === null) return // stream already closed
+          if (closed()) return
           if (code !== 0) {
             controller.enqueue({ type: "error", error: new Error(`CLI exited with code ${code}`) })
             controller.close()
