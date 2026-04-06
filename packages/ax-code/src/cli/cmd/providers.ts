@@ -488,7 +488,7 @@ export const ProvidersLoginCommand = cmd({
         }
 
         if (provider === "ax-code") {
-          prompts.log.info("Create an api key at https://ax-code.ai/auth")
+          prompts.log.info("Create an api key in your provider's dashboard")
         }
 
         if (["cloudflare", "cloudflare-ai-gateway"].includes(provider)) {

@@ -689,6 +689,26 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
+      title: sync.data.autonomous ? "Turn autonomous off" : "Turn autonomous on",
+      value: "app.toggle.autonomous",
+      category: "System",
+      slash: { name: "autonomous", aliases: ["toggle-autonomous"] },
+      onSelect: (dialog) => {
+        const next = !sync.data.autonomous
+        sync.set("autonomous", next)
+        sdk
+          .fetch(`${sdk.url}/autonomous`, {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ enabled: next }),
+          })
+          .catch(() => {
+            sync.set("autonomous", !next)
+          })
+        dialog.clear()
+      },
+    },
+    {
       title: sync.data.isolation.mode === "full-access" ? "Turn sandbox on" : "Turn sandbox off",
       value: "app.toggle.sandbox",
       category: "System",

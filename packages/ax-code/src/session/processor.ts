@@ -87,7 +87,8 @@ export namespace SessionProcessor {
       async process(streamInput: LLM.StreamInput) {
         log.info("process")
         needsCompaction = false
-        const shouldBreak = cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true
+        const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
+        const shouldBreak = autonomous ? false : (cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true)
         while (true) {
           blocked = false
           let currentText: MessageV2.TextPart | undefined

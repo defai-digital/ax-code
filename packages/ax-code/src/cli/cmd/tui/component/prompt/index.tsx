@@ -1171,9 +1171,6 @@ export function Prompt(props: PromptProps) {
                   })()}
                 </box>
               </box>
-              <Show when={tokenInfo()}>
-                <text fg={theme.textMuted}>{tokenInfo()}</text>
-              </Show>
               <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
                 esc{" "}
                 <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
@@ -1184,9 +1181,13 @@ export function Prompt(props: PromptProps) {
           </Show>
           <Show when={status().type !== "retry"}>
             <box gap={2} flexDirection="row">
-              <Show when={tokenInfo() && status().type === "idle"}>
-                <text fg={theme.textMuted}>{tokenInfo()}</text>
-              </Show>
+              {sync.data.autonomous ? (
+                <box backgroundColor="yellow" paddingLeft={1} paddingRight={1}>
+                  <text fg="red"><b>autonomous on</b></text>
+                </box>
+              ) : (
+                <text fg={theme.success}>autonomous off</text>
+              )}
               <text fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}>
                 {sync.data.isolation.mode === "full-access" ? "sandbox off" : "sandbox on"}
               </text>

@@ -114,6 +114,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         mode: "read-only" | "workspace-write" | "full-access"
         network: boolean
       }
+      autonomous: boolean
       mcp: {
         [key: string]: McpStatus
       }
@@ -161,6 +162,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         },
       },
       isolation: { mode: "full-access", network: true },
+      autonomous: false,
       mcp: {},
       mcp_resource: {},
       formatter: [],
@@ -244,6 +246,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       }
     }
 
+    async function syncAutonomous() {
+      try {
+        const res = await sdk.fetch(`${sdk.url}/autonomous`)
+        if (!res.ok) return
+        const body = (await res.json()) as { enabled: boolean }
+        setStore("autonomous", body.enabled)
+      } catch {
+        // Silent fallback for older servers without the endpoint.
+      }
+    }
+
     async function syncIsolation() {
       try {
         const headers: Record<string, string> = { accept: "application/json" }
@@ -286,6 +299,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
         case "permission.asked": {
           const request = event.properties
+          if (store.autonomous) {
+            sdk.client.permission.reply({ reply: "once", requestID: request.id })
+            break
+          }
           const requests = store.permission[request.sessionID]
           if (!requests) {
             setStore("permission", request.sessionID, [request])
@@ -324,6 +341,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
         case "question.asked": {
           const request = event.properties
+          if (store.autonomous) {
+            const answers = request.questions.map((q: { options: { label: string }[] }) =>
+              q.options.length > 0 ? [q.options[0].label] : [],
+            )
+            sdk.client.question.reply({ requestID: request.id, answers })
+            break
+          }
           const requests = store.question[request.sessionID]
           if (!requests) {
             setStore("question", request.sessionID, [request])
@@ -599,6 +623,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             syncWorkspaces(),
             syncDebugEngine(),
             syncIsolation(),
+            syncAutonomous(),
           ]).then((results) => {
             for (const r of results) {
               if (r.status === "rejected") Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })

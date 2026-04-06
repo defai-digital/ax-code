@@ -42,6 +42,7 @@ import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { AuditRoutes } from "./routes/audit"
 import { IsolationRoutes } from "./routes/isolation"
+import { AutonomousRoutes } from "./routes/autonomous"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
@@ -630,6 +631,7 @@ export namespace Server {
       .route("/pty", PtyRoutes())
       .route("/config", ConfigRoutes())
       .route("/isolation", IsolationRoutes())
+      .route("/autonomous", AutonomousRoutes())
       .route("/experimental", ExperimentalRoutes())
       .route("/session", SessionRoutes())
       .route("/permission", PermissionRoutes())
