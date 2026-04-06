@@ -5,9 +5,16 @@ import { buildClientParams, type Client, type Options as Options2, type TDataSha
 import type {
   AgentPartInput,
   AppAgentsResponses,
+  AppContextMemoryClearResponses,
+  AppContextMemoryWarmupResponses,
+  AppContextResponses,
+  AppContextTemplateCreateResponses,
   AppLogErrors,
   AppLogResponses,
   AppSkillsResponses,
+  AuditExportAllResponses,
+  AuditExportResponses,
+  AuditReplayResponses,
   Auth as Auth3,
   AuthRemoveErrors,
   AuthRemoveResponses,
@@ -19,6 +26,7 @@ import type {
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
+  DebugEnginePendingPlansResponses,
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiPromptAppend,
@@ -44,6 +52,9 @@ import type {
   GlobalUpgradeErrors,
   GlobalUpgradeResponses,
   InstanceDisposeResponses,
+  InstanceRestartResponses,
+  IsolationGetResponses,
+  IsolationSetResponses,
   LspStatusResponses,
   McpAddErrors,
   McpAddResponses,
@@ -764,6 +775,62 @@ export class Config2 extends HeyApiClient {
       url: "/config/providers",
       ...options,
       ...params,
+    })
+  }
+}
+
+export class Isolation extends HeyApiClient {
+  /**
+   * Get resolved isolation state
+   *
+   * Returns the effective isolation mode after resolving CLI flags, environment variables, and config file settings.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<IsolationGetResponses, unknown, ThrowOnError>({
+      url: "/isolation",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Set isolation mode
+   *
+   * Update the runtime isolation mode. Sets the environment variable so it takes effect immediately.
+   */
+  public set<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      mode?: "read-only" | "workspace-write" | "full-access"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "mode" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<IsolationSetResponses, unknown, ThrowOnError>({
+      url: "/isolation",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -2081,6 +2148,100 @@ export class Permission extends HeyApiClient {
   }
 }
 
+export class Audit extends HeyApiClient {
+  /**
+   * Export audit events
+   *
+   * Export all audit events for a session as JSON Lines.
+   */
+  public export<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AuditExportResponses, unknown, ThrowOnError>({
+      url: "/audit/export/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Export all audit events
+   *
+   * Export all audit events, optionally filtered by date.
+   */
+  public exportAll<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      since?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "since" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AuditExportAllResponses, unknown, ThrowOnError>({
+      url: "/audit/export",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Reconstruct replay
+   *
+   * Reconstruct session replay steps from recorded events.
+   */
+  public replay<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      fromStep?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "fromStep" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AuditReplayResponses, unknown, ThrowOnError>({
+      url: "/audit/replay/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Question extends HeyApiClient {
   /**
    * List pending questions
@@ -3131,6 +3292,25 @@ export class Instance extends HeyApiClient {
       ...params,
     })
   }
+
+  /**
+   * Restart instance
+   *
+   * Dispose and reinitialize the ax-code instance, reloading all configuration and provider data.
+   */
+  public restart<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<InstanceRestartResponses, unknown, ThrowOnError>({
+      url: "/instance/restart",
+      ...options,
+      ...params,
+    })
+  }
 }
 
 export class Path extends HeyApiClient {
@@ -3241,6 +3421,98 @@ export class App extends HeyApiClient {
   }
 
   /**
+   * Get project context
+   *
+   * Get instruction-file and cached-memory metadata for the current project context.
+   */
+  public context<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<AppContextResponses, unknown, ThrowOnError>({
+      url: "/context",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create project context template
+   *
+   * Create a recommended rules or checklist file for the current project context.
+   */
+  public contextTemplateCreate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      key?: "repo-rules" | "dir-rules" | "review-checklist" | "frontend-style-guide" | "release-checklist"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "key" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AppContextTemplateCreateResponses, unknown, ThrowOnError>({
+      url: "/context/template",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Refresh project memory
+   *
+   * Generate and cache fresh project memory for the current context.
+   */
+  public contextMemoryWarmup<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<AppContextMemoryWarmupResponses, unknown, ThrowOnError>({
+      url: "/context/memory/warmup",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Clear project memory
+   *
+   * Delete cached project memory for the current context.
+   */
+  public contextMemoryClear<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).delete<AppContextMemoryClearResponses, unknown, ThrowOnError>({
+      url: "/context/memory",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * List agents
    *
    * Get a list of all available AI agents in the ax-code system.
@@ -3294,6 +3566,27 @@ export class Lsp extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<LspStatusResponses, unknown, ThrowOnError>({
       url: "/lsp",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class DebugEngine extends HeyApiClient {
+  /**
+   * DRE status and pending refactor plans
+   *
+   * Return the current project's pending refactor plans plus DRE health information (graph node count, last-indexed timestamp, registered tool count). The TUI footer uses the plans count for its chip; the TUI sidebar uses the graph and tool fields to render the DRE section empty state so users can tell at a glance whether DRE is ready to use. Fields default to zero / null when the experimental DRE flag is off, so callers can poll unconditionally. The `graph` and `toolCount` fields were added in v2.3.6 — older clients ignore unknown fields and continue to work against the original `{ count, plans }` shape.
+   */
+  public pendingPlans<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<DebugEnginePendingPlansResponses, unknown, ThrowOnError>({
+      url: "/debug-engine/pending-plans",
       ...options,
       ...params,
     })
@@ -3354,6 +3647,11 @@ export class OpencodeClient extends HeyApiClient {
     return (this._config ??= new Config2({ client: this.client }))
   }
 
+  private _isolation?: Isolation
+  get isolation(): Isolation {
+    return (this._isolation ??= new Isolation({ client: this.client }))
+  }
+
   private _tool?: Tool
   get tool(): Tool {
     return (this._tool ??= new Tool({ client: this.client }))
@@ -3382,6 +3680,11 @@ export class OpencodeClient extends HeyApiClient {
   private _permission?: Permission
   get permission(): Permission {
     return (this._permission ??= new Permission({ client: this.client }))
+  }
+
+  private _audit?: Audit
+  get audit(): Audit {
+    return (this._audit ??= new Audit({ client: this.client }))
   }
 
   private _question?: Question
@@ -3447,6 +3750,11 @@ export class OpencodeClient extends HeyApiClient {
   private _lsp?: Lsp
   get lsp(): Lsp {
     return (this._lsp ??= new Lsp({ client: this.client }))
+  }
+
+  private _debugEngine?: DebugEngine
+  get debugEngine(): DebugEngine {
+    return (this._debugEngine ??= new DebugEngine({ client: this.client }))
   }
 
   private _formatter?: Formatter

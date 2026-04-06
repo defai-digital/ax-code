@@ -83,6 +83,32 @@ export type EventLspUpdated = {
   }
 }
 
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
+  properties: {
+    file: string
+    event: "add" | "change" | "unlink"
+  }
+}
+
+export type EventCodeIndexProgress = {
+  type: "code.index.progress"
+  properties: {
+    projectID: string
+    completed: number
+    total: number
+  }
+}
+
+export type EventCodeIndexState = {
+  type: "code.index.state"
+  properties: {
+    projectID: string
+    state: "idle" | "indexing" | "failed"
+    error?: string
+  }
+}
+
 export type EventFileEdited = {
   type: "file.edited"
   properties: {
@@ -226,6 +252,7 @@ export type AssistantMessage = {
     cwd: string
     root: string
   }
+  cost?: number
   summary?: boolean
   tokens: {
     total?: number
@@ -683,14 +710,6 @@ export type EventSessionCompacted = {
   }
 }
 
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
 export type Todo = {
   /**
    * Brief description of the task
@@ -949,6 +968,9 @@ export type Event =
   | EventGlobalDisposed
   | EventLspClientDiagnostics
   | EventLspUpdated
+  | EventFileWatcherUpdated
+  | EventCodeIndexProgress
+  | EventCodeIndexState
   | EventFileEdited
   | EventMessageUpdated
   | EventMessageRemoved
@@ -963,7 +985,6 @@ export type Event =
   | EventQuestionReplied
   | EventQuestionRejected
   | EventSessionCompacted
-  | EventFileWatcherUpdated
   | EventTodoUpdated
   | EventTuiPromptAppend
   | EventTuiCommandExecute
@@ -1147,6 +1168,13 @@ export type ProviderConfig = {
         context: number
         input?: number
         output: number
+      }
+      cost?: {
+        input: number
+        output: number
+        cache_read?: number
+        cache_write?: number
+        reasoning?: number
       }
       modalities?: {
         input: Array<"text" | "audio" | "image" | "video" | "pdf">
@@ -1572,6 +1600,13 @@ export type Model = {
     input?: number
     output: number
   }
+  cost: {
+    input: number
+    output: number
+    cache_read?: number
+    cache_write?: number
+    reasoning?: number
+  }
   status: "alpha" | "beta" | "deprecated" | "active"
   options: {
     [key: string]: unknown
@@ -1599,6 +1634,11 @@ export type Provider = {
   models: {
     [key: string]: Model
   }
+}
+
+export type IsolationState = {
+  mode: "read-only" | "workspace-write" | "full-access"
+  network: boolean
 }
 
 export type ToolIds = Array<string>
@@ -1881,6 +1921,7 @@ export type Agent = {
   }
   variant?: string
   prompt?: string
+  displayName?: string
   options: {
     [key: string]: unknown
   }
@@ -2423,6 +2464,44 @@ export type ConfigProvidersResponses = {
 }
 
 export type ConfigProvidersResponse = ConfigProvidersResponses[keyof ConfigProvidersResponses]
+
+export type IsolationGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/isolation"
+}
+
+export type IsolationGetResponses = {
+  /**
+   * Resolved isolation state
+   */
+  200: IsolationState
+}
+
+export type IsolationGetResponse = IsolationGetResponses[keyof IsolationGetResponses]
+
+export type IsolationSetData = {
+  body?: {
+    mode: "read-only" | "workspace-write" | "full-access"
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/isolation"
+}
+
+export type IsolationSetResponses = {
+  /**
+   * Updated isolation state
+   */
+  200: IsolationState
+}
+
+export type IsolationSetResponse = IsolationSetResponses[keyof IsolationSetResponses]
 
 export type ToolIdsData = {
   body?: never
@@ -3410,10 +3489,8 @@ export type SessionPromptAsyncResponses = {
   /**
    * Prompt accepted
    */
-  204: void
+  202: unknown
 }
-
-export type SessionPromptAsyncResponse = SessionPromptAsyncResponses[keyof SessionPromptAsyncResponses]
 
 export type SessionCommandData = {
   body?: {
@@ -3665,6 +3742,60 @@ export type PermissionListResponses = {
 
 export type PermissionListResponse = PermissionListResponses[keyof PermissionListResponses]
 
+export type AuditExportData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/audit/export/{sessionID}"
+}
+
+export type AuditExportResponses = {
+  /**
+   * JSON Lines audit export
+   */
+  200: unknown
+}
+
+export type AuditExportAllData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    since?: string
+  }
+  url: "/audit/export"
+}
+
+export type AuditExportAllResponses = {
+  /**
+   * JSON Lines audit export
+   */
+  200: unknown
+}
+
+export type AuditReplayData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    fromStep?: number
+  }
+  url: "/audit/replay/{sessionID}"
+}
+
+export type AuditReplayResponses = {
+  /**
+   * Reconstructed replay steps
+   */
+  200: unknown
+}
+
 export type QuestionListData = {
   body?: never
   path?: never
@@ -3793,6 +3924,13 @@ export type ProviderListResponses = {
             context: number
             input?: number
             output: number
+          }
+          cost: {
+            input: number
+            output: number
+            cache_read?: number
+            cache_write?: number
+            reasoning?: number
           }
           modalities?: {
             input: Array<"text" | "audio" | "image" | "video" | "pdf">
@@ -4625,6 +4763,24 @@ export type InstanceDisposeResponses = {
 
 export type InstanceDisposeResponse = InstanceDisposeResponses[keyof InstanceDisposeResponses]
 
+export type InstanceRestartData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/instance/restart"
+}
+
+export type InstanceRestartResponses = {
+  /**
+   * Instance restarted
+   */
+  200: boolean
+}
+
+export type InstanceRestartResponse = InstanceRestartResponses[keyof InstanceRestartResponses]
+
 export type PathGetData = {
   body?: never
   path?: never
@@ -4725,6 +4881,131 @@ export type AppLogResponses = {
 
 export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
 
+export type AppContextData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/context"
+}
+
+export type AppContextResponses = {
+  /**
+   * Current project context information
+   */
+  200: {
+    directory: string
+    worktree: string
+    files: Array<{
+      name: string
+      path: string
+      exists: boolean
+      scope: "project" | "global"
+    }>
+    instructions: Array<{
+      name: string
+      path: string
+      exists: boolean
+      scope: "project" | "global"
+    }>
+    templates: Array<{
+      key: "repo-rules" | "dir-rules" | "review-checklist" | "frontend-style-guide" | "release-checklist"
+      title: string
+      description: string
+      path: string
+      exists: boolean
+      kind: "instruction" | "checklist"
+    }>
+    checks: Array<{
+      id: string
+      title: string
+      command: string
+      cwd: string
+      source: "root" | "directory"
+    }>
+    memory: {
+      exists: boolean
+      totalTokens: number
+      lastUpdated: string
+      contentHash: string
+      sections: Array<string>
+    } | null
+  }
+}
+
+export type AppContextResponse = AppContextResponses[keyof AppContextResponses]
+
+export type AppContextTemplateCreateData = {
+  body?: {
+    key: "repo-rules" | "dir-rules" | "review-checklist" | "frontend-style-guide" | "release-checklist"
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/context/template"
+}
+
+export type AppContextTemplateCreateResponses = {
+  /**
+   * Template file metadata
+   */
+  200: {
+    key: "repo-rules" | "dir-rules" | "review-checklist" | "frontend-style-guide" | "release-checklist"
+    title: string
+    description: string
+    path: string
+    exists: boolean
+    kind: "instruction" | "checklist"
+  }
+}
+
+export type AppContextTemplateCreateResponse =
+  AppContextTemplateCreateResponses[keyof AppContextTemplateCreateResponses]
+
+export type AppContextMemoryWarmupData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/context/memory/warmup"
+}
+
+export type AppContextMemoryWarmupResponses = {
+  /**
+   * Refreshed project memory metadata
+   */
+  200: {
+    exists: boolean
+    totalTokens: number
+    lastUpdated: string
+    contentHash: string
+    sections: Array<string>
+  }
+}
+
+export type AppContextMemoryWarmupResponse = AppContextMemoryWarmupResponses[keyof AppContextMemoryWarmupResponses]
+
+export type AppContextMemoryClearData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/context/memory"
+}
+
+export type AppContextMemoryClearResponses = {
+  /**
+   * Whether cached memory was cleared
+   */
+  200: boolean
+}
+
+export type AppContextMemoryClearResponse = AppContextMemoryClearResponses[keyof AppContextMemoryClearResponses]
+
 export type AppAgentsData = {
   body?: never
   path?: never
@@ -4783,6 +5064,45 @@ export type LspStatusResponses = {
 }
 
 export type LspStatusResponse = LspStatusResponses[keyof LspStatusResponses]
+
+export type DebugEnginePendingPlansData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/debug-engine/pending-plans"
+}
+
+export type DebugEnginePendingPlansResponses = {
+  /**
+   * DRE status + pending refactor plans
+   */
+  200: {
+    count: number
+    plans: Array<{
+      planId: string
+      kind: string
+      risk: string
+      summary: string
+      affectedFileCount: number
+      affectedSymbolCount: number
+      timeCreated: number
+    }>
+    toolCount: number
+    graph: {
+      nodeCount: number
+      edgeCount: number
+      lastIndexedAt: number | null
+      state: "idle" | "indexing" | "failed"
+      completed: number
+      total: number
+      error: string | null
+    }
+  }
+}
+
+export type DebugEnginePendingPlansResponse = DebugEnginePendingPlansResponses[keyof DebugEnginePendingPlansResponses]
 
 export type FormatterStatusData = {
   body?: never

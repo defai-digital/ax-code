@@ -50,6 +50,7 @@ export namespace Agent {
         .optional(),
       variant: z.string().optional(),
       prompt: z.string().optional(),
+      displayName: z.string().optional(),
       options: z.record(z.string(), z.any()),
       steps: z.number().int().positive().optional(),
     })
@@ -113,6 +114,7 @@ export namespace Agent {
           const agents: Record<string, Info> = {
             build: {
               name: "build",
+              displayName: "Developer",
               description: "The default agent. Executes tools based on configured permissions.",
               options: {},
               permission: Permission.merge(
@@ -129,6 +131,7 @@ export namespace Agent {
             },
             plan: {
               name: "plan",
+              displayName: "Planner",
               description: "Plan mode. Disallows all edit tools.",
               options: {},
               permission: Permission.merge(
@@ -154,6 +157,7 @@ export namespace Agent {
             },
             general: {
               name: "general",
+              displayName: "Assistant",
               description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
               prompt: PROMPT_GENERAL,
               permission: Permission.merge(
@@ -171,6 +175,7 @@ export namespace Agent {
             },
             explore: {
               name: "explore",
+              displayName: "Researcher",
               permission: Permission.merge(
                 defaults,
                 policy,
@@ -185,6 +190,7 @@ export namespace Agent {
             },
             react: {
               name: "react",
+              displayName: "Reasoner",
               description:
                 "ReAct mode agent. Uses structured Thought → Action → Observation loops for careful, step-by-step reasoning. Best for complex debugging, multi-step investigation, and tasks requiring deliberate analysis.",
               prompt: PROMPT_REACT,
@@ -204,6 +210,7 @@ export namespace Agent {
             },
             security: {
               name: "security",
+              displayName: "Security Auditor",
               description:
                 "Security Auditor agent. Scans code for vulnerabilities, secrets, OWASP issues, and compliance problems. Read-only — reports findings without modifying code.",
               prompt: PROMPT_SECURITY,
@@ -220,6 +227,7 @@ export namespace Agent {
             },
             architect: {
               name: "architect",
+              displayName: "Architect",
               description:
                 "Architecture Analyst agent. Analyzes system design, dependencies, coupling, patterns, and suggests structural improvements. Read-only — analyzes without modifying code.",
               prompt: PROMPT_ARCHITECT,
@@ -236,6 +244,7 @@ export namespace Agent {
             },
             debug: {
               name: "debug",
+              displayName: "Debugger",
               description:
                 "Debugger agent. Systematically investigates bugs — reproduces, isolates, traces root cause, and fixes. Uses all tools to diagnose and resolve issues.",
               prompt: PROMPT_DEBUG,
@@ -254,6 +263,7 @@ export namespace Agent {
             },
             perf: {
               name: "perf",
+              displayName: "Performance Analyst",
               description:
                 "Performance Analyst agent. Finds bottlenecks, inefficient algorithms, memory issues, and optimization opportunities. Read-only — benchmarks and reports without modifying code.",
               prompt: PROMPT_PERF,

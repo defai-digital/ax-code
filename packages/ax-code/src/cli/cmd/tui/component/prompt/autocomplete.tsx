@@ -337,7 +337,7 @@ export function Autocomplete(props: {
       .filter((agent) => !agent.hidden && agent.mode !== "primary")
       .map(
         (agent): AutocompleteOption => ({
-          display: "@" + agent.name,
+          display: "@" + (agent.displayName ?? agent.name),
           onSelect: () => {
             insertPart(agent.name, {
               type: "agent",
