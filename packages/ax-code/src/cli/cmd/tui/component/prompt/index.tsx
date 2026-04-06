@@ -1182,13 +1182,16 @@ export function Prompt(props: PromptProps) {
           <Show when={status().type !== "retry"}>
             <box gap={2} flexDirection="row">
               {sync.data.autonomous ? (
-                <box backgroundColor="yellow" paddingLeft={1} paddingRight={1}>
+                <box backgroundColor="yellow" paddingLeft={1} paddingRight={1} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
                   <text fg="red"><b>autonomous on</b></text>
                 </box>
               ) : (
-                <text fg={theme.success}>autonomous off</text>
+                <text fg={theme.success} onMouseUp={() => command.trigger("app.toggle.autonomous")}>autonomous off</text>
               )}
-              <text fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}>
+              <text
+                fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}
+                onMouseUp={() => command.trigger("app.toggle.sandbox")}
+              >
                 {sync.data.isolation.mode === "full-access" ? "sandbox off" : "sandbox on"}
               </text>
               <Switch>
