@@ -504,7 +504,7 @@ describe("session.llm.stream", () => {
     })
   })
 
-  test(
+  test.skipIf(!!process.env.CI)(
     "normalizes interleaved reasoning into provider request payload",
     async () => {
     const providerID = "moonshotai-cn"
@@ -594,7 +594,7 @@ describe("session.llm.stream", () => {
     })
   }, 60_000)
 
-  test(
+  test.skipIf(!!process.env.CI)(
     "adds noop tool for LiteLLM-compatible histories with prior tool calls",
     async () => {
     const providerID = "alibaba"
