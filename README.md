@@ -131,14 +131,40 @@ Within AutomatosX, `ax-code` is the developer-facing execution layer. `AX Engine
 ### Install
 
 ```bash
-# macOS / Linux (Homebrew)
+# macOS / Linux (Homebrew) — recommended
 brew install defai-digital/ax-code/ax-code
 
 # npm (any platform)
 npm i -g @defai.digital/ax-code
 
-# or download a binary from GitHub Releases
-# https://github.com/defai-digital/ax-code/releases
+# curl (Linux / macOS)
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/ax-code-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').tar.gz | tar -xz -C /usr/local/bin
+```
+
+### Update
+
+```bash
+# Homebrew
+brew upgrade ax-code
+
+# npm
+npm update -g @defai.digital/ax-code
+
+# Built-in (any method)
+ax-code upgrade
+```
+
+### Uninstall
+
+```bash
+# Homebrew
+brew uninstall ax-code && brew untap defai-digital/ax-code
+
+# npm
+npm uninstall -g @defai.digital/ax-code
+
+# Built-in
+ax-code uninstall
 ```
 
 ### From Source (contributors)
