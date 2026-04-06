@@ -139,6 +139,22 @@ export function cli(argv = hideBin(process.argv)) {
 }
 
 export async function run() {
+  const argv = hideBin(process.argv)
+  if (argv.includes("--uninstall") || argv.includes("-uninstall")) {
+    const cmd = cli(["uninstall"])
+    try {
+      await cmd.parse()
+    } catch (err) {
+      fatal(err, {
+        format: FormatError,
+        ui: UI.error,
+        file: Log.file,
+        text: NamedError.message,
+      })
+      process.exitCode = 1
+    }
+    return
+  }
   const cmd = cli()
   try {
     await cmd.parse()
