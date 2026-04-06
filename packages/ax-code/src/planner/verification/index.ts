@@ -63,12 +63,13 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       timedOut = true
       proc.kill()
     }, timeout)
-    const code = await proc.exited.finally(() => {
-      clearTimeout(timer)
-    })
-
-    const stdout = await new Response(proc.stdout).text()
-    const stderr = await new Response(proc.stderr).text()
+    const [code, stdout, stderr] = await Promise.all([
+      proc.exited.finally(() => {
+        clearTimeout(timer)
+      }),
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ])
     const output = (stdout + stderr).trim()
     const issues = parseTypeScriptErrors(output)
 
@@ -125,12 +126,13 @@ export async function custom(cmd: string, cwd: string, timeout = 60_000): Promis
       timedOut = true
       proc.kill()
     }, timeout)
-    const code = await proc.exited.finally(() => {
-      clearTimeout(timer)
-    })
-
-    const stdout = await new Response(proc.stdout).text()
-    const stderr = await new Response(proc.stderr).text()
+    const [code, stdout, stderr] = await Promise.all([
+      proc.exited.finally(() => {
+        clearTimeout(timer)
+      }),
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ])
     const passed = code === 0
 
     return {

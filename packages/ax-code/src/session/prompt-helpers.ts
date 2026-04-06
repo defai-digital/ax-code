@@ -132,7 +132,8 @@ export async function commandTemplateText(input: {
       return out.text
     })
 
-  const results = await Promise.all(matches.map(async ([, cmd]) => run(cmd)))
+  const settled = await Promise.allSettled(matches.map(async ([, cmd]) => run(cmd)))
+  const results = settled.map((r) => (r.status === "fulfilled" ? r.value : "<shell command failed>"))
   let index = 0
   text = text.replace(bashRegex, () => results[index++])
   return text.trim()

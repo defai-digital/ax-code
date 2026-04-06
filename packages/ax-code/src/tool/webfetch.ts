@@ -84,7 +84,7 @@ export const WebFetchTool = Tool.define("webfetch", {
       const MAX_REDIRECTS = 10
       let currentUrl = params.url
       let response: Response | undefined
-      for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
         const attemptHeaders = hop === 0 ? headers : { ...headers }
         let res = await pinnedFetch(currentUrl, { signal, headers: attemptHeaders, redirect: "manual" })
 

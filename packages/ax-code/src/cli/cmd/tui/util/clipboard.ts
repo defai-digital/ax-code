@@ -91,7 +91,7 @@ export namespace Clipboard {
       }
     }
 
-    const text = await clipboardy.read().catch(() => {})
+    const text = await clipboardy.read().catch(() => "")
     if (text) {
       return { data: text, mime: "text/plain" }
     }

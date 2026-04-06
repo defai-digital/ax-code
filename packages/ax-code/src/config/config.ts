@@ -826,7 +826,9 @@ export namespace Config {
     using _ = await Lock.write(filepath)
     const existing = await loadFile(filepath)
     await Filesystem.writeJson(filepath, mergeDeep(existing, config))
-    await Instance.dispose()
+    await Instance.reload({
+      directory: Instance.directory,
+    })
   }
 
   function globalConfigFile() {

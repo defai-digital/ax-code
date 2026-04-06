@@ -100,7 +100,9 @@ export namespace JsonMigration {
         db.insert(table).values(values).onConflictDoNothing().run()
         return values.length
       } catch (e) {
-        errs.push(`failed to migrate ${label} batch: ${e}`)
+        const msg = `failed to migrate ${label} batch (${values.length} records): ${e}`
+        errs.push(msg)
+        log.error(msg)
         return 0
       }
     }

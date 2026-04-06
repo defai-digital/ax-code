@@ -508,8 +508,13 @@ async function* streamEvents(
         // delta is empty and we still update `text` to reflect
         // the latest state.
         if (currentText !== text) {
-          const delta = currentText.slice(text.length)
-          if (delta.length > 0) yield { type: "text", text: delta }
+          if (currentText.startsWith(text)) {
+            const delta = currentText.slice(text.length)
+            if (delta.length > 0) yield { type: "text", text: delta }
+          } else {
+            // Content was edited (not just appended) — emit full replacement
+            yield { type: "text", text: currentText }
+          }
           text = currentText
         }
       }
@@ -736,7 +741,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
       // otherwise the first prompt can race against a pending
       // registration and the LLM won't see the user's tools.
       if (options.tools?.length) {
-        await Promise.all(options.tools.map((t) => ToolRegistry.register(fromSdkTool(t))))
+        await Promise.allSettled(options.tools.map((t) => ToolRegistry.register(fromSdkTool(t))))
       }
 
       sdk = createInProcessClient(options.directory)

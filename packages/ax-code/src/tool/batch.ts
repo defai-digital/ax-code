@@ -142,7 +142,13 @@ export const BatchTool = Tool.define("batch", async () => {
         }
       }
 
-      const results = await Promise.all(toolCalls.map((call, idx) => executeCall(call, idx)))
+      const results = await Promise.allSettled(toolCalls.map((call, idx) => executeCall(call, idx))).then((settled) =>
+        settled.map((r, idx) =>
+          r.status === "fulfilled"
+            ? r.value
+            : { success: false as const, tool: toolCalls[idx].tool, error: r.reason instanceof Error ? r.reason : new Error(String(r.reason)) },
+        ),
+      )
 
       // Add discarded calls as errors
       const now = Date.now()

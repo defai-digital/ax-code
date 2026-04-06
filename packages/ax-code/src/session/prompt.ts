@@ -1825,7 +1825,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     abort.addEventListener("abort", abortHandler, { once: true })
 
     await new Promise<void>((resolve, reject) => {
-      proc.on("close", () => {
+      proc.once("close", () => {
         exited = true
         abort.removeEventListener("abort", abortHandler)
         resolve()

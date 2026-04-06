@@ -65,27 +65,29 @@ export namespace LLM {
     ])
 
     const system: string[] = []
-    system.push(
-      [
-        // use agent prompt otherwise provider prompt
-        ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
-        // any custom prompt passed into this call
-        ...input.system,
-        // any custom prompt from last user message
-        ...(input.user.system ? [input.user.system] : []),
-      ]
-        .filter((x) => x)
-        .join("\n"),
-    )
+    const joined = [
+      // use agent prompt otherwise provider prompt
+      ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
+      // any custom prompt passed into this call
+      ...input.system,
+      // any custom prompt from last user message
+      ...(input.user.system ? [input.user.system] : []),
+    ]
+      .filter((x) => x)
+      .join("\n")
+    if (joined) system.push(joined)
 
     const header = system[0]
+    const prePluginLength = system.length
     await Plugin.trigger(
       "experimental.chat.system.transform",
       { sessionID: input.sessionID, model: input.model },
       { system },
     )
-    // rejoin to maintain 2-part structure for caching if header unchanged
-    if (system.length > 2 && system[0] === header) {
+    // Rejoin to maintain 2-part structure for caching if header unchanged.
+    // Only apply this normalization if the plugin didn't modify the array
+    // (same length) — otherwise we'd overwrite plugin additions.
+    if (system.length > 2 && system.length === prePluginLength && system[0] === header) {
       const rest = system.slice(1)
       system.length = 0
       system.push(header, rest.join("\n"))

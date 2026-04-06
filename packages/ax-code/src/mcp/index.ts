@@ -606,6 +606,9 @@ export namespace MCP {
     const next = prev.then(() => connectImpl(name), () => connectImpl(name))
     connectLocks.set(name, next.catch((err) => {
       log.warn("MCP connect failed", { name, error: err instanceof Error ? err.message : String(err) })
+    }).finally(() => {
+      // Clean up settled entries to prevent unbounded Map growth
+      if (connectLocks.get(name) === next) connectLocks.delete(name)
     }))
     return next
   }
@@ -666,6 +669,7 @@ export namespace MCP {
   let cachedTools: Record<string, Tool> | undefined
   let toolsPromise: Promise<Record<string, Tool>> | undefined
   let toolsCacheSubscribed = false
+  let toolsCacheGeneration = 0
 
   export async function tools() {
     if (!toolsCacheSubscribed) {
@@ -673,6 +677,7 @@ export namespace MCP {
       Bus.subscribe(ToolsChanged, () => {
         cachedTools = undefined
         toolsPromise = undefined
+        toolsCacheGeneration++
       })
     }
     if (cachedTools) return cachedTools
@@ -683,6 +688,7 @@ export namespace MCP {
     // reference into the shared cache while the other completed a
     // clean fetch.
     if (toolsPromise) return toolsPromise
+    const generation = toolsCacheGeneration
     toolsPromise = (async () => {
       const result: Record<string, Tool> = {}
       const s = await state()
@@ -720,7 +726,8 @@ export namespace MCP {
           result[sanitize(clientName) + "_" + sanitize(mcpTool.name)] = await convertMcpTool(mcpTool, client, timeout)
         }
       }
-      cachedTools = result
+      // Only cache if no invalidation occurred during computation
+      if (toolsCacheGeneration === generation) cachedTools = result
       return result
     })()
     try {

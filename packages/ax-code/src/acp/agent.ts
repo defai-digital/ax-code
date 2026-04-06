@@ -291,6 +291,8 @@ export namespace ACP {
                 this.permissionQueues.delete(permission.sessionID)
               }
             })
+          // Set immediately after chain construction (synchronous) to prevent
+          // a re-entrant event handler from reading the stale `prev` chain.
           this.permissionQueues.set(permission.sessionID, next)
           return
         }
@@ -1678,7 +1680,7 @@ export namespace ACP {
   ): { type: "file"; url: string; filename: string; mime: string } | { type: "text"; text: string } {
     try {
       if (uri.startsWith("file://")) {
-        const path = uri.slice(7)
+        const path = new URL(uri).pathname
         const name = path.split("/").pop() || path
         return {
           type: "file",

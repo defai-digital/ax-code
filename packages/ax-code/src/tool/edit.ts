@@ -224,7 +224,7 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
     searchLines.pop()
   }
 
-  if (searchLines.length < 2) return
+  if (searchLines.length < 1) return
 
   const firstLineSearch = searchLines[0].trim()
   const lastLineSearch = searchLines[searchLines.length - 1].trim()
@@ -234,6 +234,12 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
   const candidates: Array<{ startLine: number; endLine: number }> = []
   for (let i = 0; i < originalLines.length; i++) {
     if (originalLines[i].trim() !== firstLineSearch) {
+      continue
+    }
+
+    // Single-line search: first and last line are the same
+    if (searchBlockSize === 1) {
+      candidates.push({ startLine: i, endLine: i })
       continue
     }
 
