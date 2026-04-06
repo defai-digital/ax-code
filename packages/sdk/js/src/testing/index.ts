@@ -115,12 +115,12 @@ export function createMockAgent(options: MockAgentOptions): Agent {
     throw new Error("createMockAgent requires at least one reply in options.replies")
   }
   let callIndex = 0
-  const toolCallStubs = Object.freeze((options.toolCalls ?? []).map((tc) => ({
+  const toolCallStubs: ToolCallInfo[] = (options.toolCalls ?? []).map((tc) => ({
     tool: tc.tool,
     input: tc.input,
     output: tc.output,
     status: "completed" as const,
-  })))
+  }))
 
   function nextReply(): string {
     const reply = options.replies[callIndex % options.replies.length]
