@@ -15,6 +15,7 @@ export function Footer() {
   const mcp = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
   const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
   const lsp = createMemo(() => Object.keys(sync.data.lsp))
+  const isolationMode = createMemo(() => sync.data.isolation.mode)
   // DRE footer chip state (v2.3.8). The chip has three visible states:
   //   1. Pending plans exist    → "◆ N Plans"    (warning-colored)
   //   2. Graph indexed, no plans → "◆ DRE ready" (success-colored)
@@ -124,6 +125,9 @@ export function Footer() {
             <text fg={theme.textMuted}>/status</text>
           </Match>
         </Switch>
+        <text fg={isolationMode() === "full-access" ? theme.error : theme.success}>
+          {isolationMode() === "full-access" ? "sandbox off" : "sandbox on"}
+        </text>
         <text fg={theme.textMuted}>v{Installation.VERSION}</text>
       </box>
     </box>

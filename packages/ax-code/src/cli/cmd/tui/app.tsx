@@ -688,6 +688,37 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         dialog.clear()
       },
     },
+    {
+      title: sync.data.isolation.mode === "full-access" ? "Turn sandbox on" : "Turn sandbox off",
+      value: "app.toggle.sandbox",
+      category: "System",
+      slash: { name: "sandbox", aliases: ["toggle-sandbox"] },
+      onSelect: (dialog) => {
+        const on = sync.data.isolation.mode !== "full-access"
+        const next = on ? "full-access" : "workspace-write"
+        sync.set("isolation", "mode", next)
+        sync.set("isolation", "network", next === "full-access")
+        const headers: Record<string, string> = { "content-type": "application/json" }
+        if (sdk.directory) {
+          const encoded = /[^\x00-\x7F]/.test(sdk.directory)
+            ? encodeURIComponent(sdk.directory)
+            : sdk.directory
+          headers["x-ax-code-directory"] = encoded
+          headers["x-opencode-directory"] = encoded
+        }
+        sdk
+          .fetch(`${sdk.url}/isolation`, {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({ mode: next }),
+          })
+          .catch(() => {
+            sync.set("isolation", "mode", on ? "workspace-write" : "full-access")
+            sync.set("isolation", "network", !on ? false : true)
+          })
+        dialog.clear()
+      },
+    },
   ])
 
   sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {

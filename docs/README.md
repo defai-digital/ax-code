@@ -19,6 +19,12 @@ This folder holds repository documentation that should be stable, discoverable, 
 | [`bugs/`](bugs/)   | Bug inventories, audits, and defect tracking notes |
 | [`todos/`](todos/) | Deferred work and follow-up plans                  |
 
+## Guides
+
+| Document                   | Summary                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| [Sandbox Mode](sandbox.md) | Execution sandbox — toggle, configuration, isolation modes, enforcement details |
+
 ## Reference
 
 | Document                                        | Summary                                                                |

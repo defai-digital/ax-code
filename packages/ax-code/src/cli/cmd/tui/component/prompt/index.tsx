@@ -610,6 +610,14 @@ export function Prompt(props: PromptProps) {
     } else if (
       inputText.startsWith("/") &&
       iife(() => {
+        const name = inputText.split("\n")[0].split(" ")[0].slice(1)
+        return command.trySlash(name)
+      })
+    ) {
+      // Client-side slash command handled by trySlash
+    } else if (
+      inputText.startsWith("/") &&
+      iife(() => {
         const firstLine = inputText.split("\n")[0]
         const command = firstLine.split(" ")[0].slice(1)
         return sync.data.command.some((x) => x.name === command)
@@ -1179,6 +1187,9 @@ export function Prompt(props: PromptProps) {
               <Show when={tokenInfo() && status().type === "idle"}>
                 <text fg={theme.textMuted}>{tokenInfo()}</text>
               </Show>
+              <text fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}>
+                {sync.data.isolation.mode === "full-access" ? "sandbox off" : "sandbox on"}
+              </text>
               <Switch>
                 <Match when={store.mode === "normal"}>
                   <Show when={local.model.variant.list().length > 0}>

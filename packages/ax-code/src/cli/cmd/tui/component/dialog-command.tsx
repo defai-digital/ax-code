@@ -92,6 +92,17 @@ function init() {
         }
       })
     },
+    trySlash(name: string): boolean {
+      for (const option of entries()) {
+        if (!option.slash) continue
+        if (!isEnabled(option)) continue
+        if (option.slash.name === name || option.slash.aliases?.includes(name)) {
+          option.onSelect?.(dialog)
+          return true
+        }
+      }
+      return false
+    },
     keybinds(enabled: boolean) {
       setSuspendCount((count) => count + (enabled ? -1 : 1))
     },

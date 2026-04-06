@@ -110,6 +110,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           error: string | null
         }
       }
+      isolation: {
+        mode: "read-only" | "workspace-write" | "full-access"
+        network: boolean
+      }
       mcp: {
         [key: string]: McpStatus
       }
@@ -156,6 +160,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           error: null,
         },
       },
+      isolation: { mode: "full-access", network: true },
       mcp: {},
       mcp_resource: {},
       formatter: [],
@@ -236,6 +241,25 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       } catch {
         // Silent fallback — an older server returns 404 and we leave
         // the field at its default zero state.
+      }
+    }
+
+    async function syncIsolation() {
+      try {
+        const headers: Record<string, string> = { accept: "application/json" }
+        if (sdk.directory) {
+          const encoded = /[^\x00-\x7F]/.test(sdk.directory)
+            ? encodeURIComponent(sdk.directory)
+            : sdk.directory
+          headers["x-ax-code-directory"] = encoded
+          headers["x-opencode-directory"] = encoded
+        }
+        const res = await sdk.fetch(`${sdk.url}/isolation`, { headers })
+        if (!res.ok) return
+        const body = (await res.json()) as { mode: "read-only" | "workspace-write" | "full-access"; network: boolean }
+        setStore("isolation", reconcile(body))
+      } catch {
+        // Silent fallback for older servers without the endpoint.
       }
     }
 
@@ -568,6 +592,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.path.get().then((x) => setStore("path", reconcile(x.data!))),
             syncWorkspaces(),
             syncDebugEngine(),
+            syncIsolation(),
           ]).then((results) => {
             for (const r of results) {
               if (r.status === "rejected") Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })

@@ -110,7 +110,7 @@ export type IsolationMode = z.infer<typeof IsolationMode>
 
 export const Isolation = z
   .object({
-    mode: IsolationMode.default("workspace-write").describe(
+    mode: IsolationMode.default("full-access").describe(
       "Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation",
     ),
     network: z

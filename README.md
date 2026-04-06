@@ -317,19 +317,19 @@ Catches hardcoded colors, raw spacing values, inline styles, missing alt text, a
 
 ### Execution Sandbox
 
-Control what the AI agent can access with three isolation modes:
+Control what the AI agent can access. Sandbox is **off by default** — toggle it on from the TUI with `/sandbox` or `Ctrl+P` → "Turn sandbox on". The status bar shows **sandbox on** (green) or **sandbox off** (red) at all times.
 
-| Mode                            | Behavior                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------- |
-| **Read-only**                   | Blocks all file mutations and shell commands                                    |
-| **Workspace write** _(default)_ | Allows writes only inside the workspace; `.git` and `.ax-code` always protected |
-| **Full access**                 | Disables isolation (explicit opt-in)                                            |
+| Mode | Status Bar | Behavior |
+| --- | --- | --- |
+| **Full access** _(default)_ | sandbox off | No restrictions |
+| **Workspace write** | sandbox on | Writes confined to workspace; `.git` and `.ax-code` protected; network disabled |
+| **Read-only** | sandbox on | All mutations and bash commands blocked |
 
 ```bash
-ax-code --sandbox read-only
+ax-code --sandbox workspace-write   # start with sandbox on
 ```
 
-Network access for tools is disabled by default in read-only and workspace-write modes. Isolation violations trigger an approval prompt.
+The setting persists in `ax-code.json` across sessions. See the [full sandbox documentation](docs/sandbox.md) for configuration details, protected paths, and enforcement behavior.
 
 ### Permission System
 
@@ -526,12 +526,6 @@ ax-code/
 │   └── integration-github/   # GitHub Actions integration
 └── docs/                     # Documentation
 ```
-
----
-
-## Built With
-
-[Bun](https://bun.sh) | [TypeScript](https://typescriptlang.org) | [Vercel AI SDK](https://sdk.vercel.ai) | [Hono](https://hono.dev) | [Drizzle ORM](https://orm.drizzle.team) | [Effect](https://effect.website)
 
 ---
 
