@@ -66,10 +66,6 @@ export namespace SessionProcessor {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const recentToolRing: { tool: string; input: string }[] = []
     const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
-    // Debounce snapshot tracking — skip if called within 500ms of last track
-    let lastSnapshotTime = 0
-    let lastSnapshotHash: string | undefined
-    const SNAPSHOT_DEBOUNCE_MS = 500
     const partBase = () => ({
       id: PartID.ascending(),
       messageID: input.assistantMessage.id,
@@ -163,8 +159,7 @@ export namespace SessionProcessor {
                 case "tool-input-start":
                   usedTools = true
                   const base = partBase()
-                  // DB write deferred to tool-call — part tracked in memory via toolcalls map
-                  toolcalls[value.id] = {
+                  const part = await Session.updatePart({
                     ...base,
                     id: toolcalls[value.id]?.id ?? base.id,
                     type: "tool",
@@ -175,7 +170,8 @@ export namespace SessionProcessor {
                       input: {},
                       raw: "",
                     },
-                  } as MessageV2.ToolPart
+                  })
+                  toolcalls[value.id] = part as MessageV2.ToolPart
                   break
 
                 case "tool-input-delta":
@@ -400,16 +396,7 @@ export namespace SessionProcessor {
                       write: usage.tokens.cache.write + input.assistantMessage.tokens.cache.write,
                     },
                   }
-                  if (usedTools) {
-                    const now = Date.now()
-                    if (now - lastSnapshotTime < SNAPSHOT_DEBOUNCE_MS && lastSnapshotHash) {
-                      snapshot = lastSnapshotHash
-                    } else {
-                      snapshot = await Snapshot.track()
-                      lastSnapshotTime = now
-                      lastSnapshotHash = snapshot
-                    }
-                  }
+                  if (usedTools) snapshot = await Snapshot.track()
                   await Session.updatePart({
                     id: PartID.ascending(),
                     reason: usedTools ? "tool-calls" : finishReason,
@@ -458,6 +445,7 @@ export namespace SessionProcessor {
                   }
                   if (snapshot) {
                     const patch = await Snapshot.patch(snapshot)
+                    snapshot = undefined
                     if (patch.files.length) {
                       await Session.updatePart({
                         ...partBase(),
@@ -466,7 +454,6 @@ export namespace SessionProcessor {
                         files: patch.files,
                       })
                     }
-                    snapshot = undefined
                   }
                   SessionSummary.summarize({
                     sessionID: input.sessionID,

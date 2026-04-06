@@ -15,14 +15,13 @@ import { ShareNext } from "@/share/share-next"
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
   await Plugin.init()
-  // After plugins, remaining inits are independent — run in parallel
   ShareNext.init()
   Format.init()
+  await LSP.init()
   File.init()
   FileWatcher.init()
   Vcs.init()
   Snapshot.init()
-  await LSP.init()
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {
