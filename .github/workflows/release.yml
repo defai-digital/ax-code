@@ -70,9 +70,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Install cross-platform native deps
+        run: |
+          bun install --os="*" --cpu="*" @opentui/core@0.1.90
+          bun install --os="*" --cpu="*" @parcel/watcher@2.5.1
+
       - name: Build
         working-directory: packages/ax-code
-        run: bun run script/build.ts
+        run: bun run script/build.ts --skip-install
         env:
           AX_CODE_VERSION: ${{ github.ref_name }}
           AX_CODE_CHANNEL: latest
@@ -119,8 +124,7 @@ jobs:
           merge-multiple: true
 
       - name: Publish to npm
-        working-directory: packages/ax-code
-        run: bun run script/publish.ts
+        run: cd packages/ax-code && bun run script/publish.ts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
