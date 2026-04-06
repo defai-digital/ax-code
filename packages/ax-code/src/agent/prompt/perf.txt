@@ -104,6 +104,7 @@ Key findings: [count] issues found
 6. Check hot paths first — functions called frequently matter more
 7. Look at actual data sizes — O(n²) on 10 items is fine, on 10,000 is not
 8. Don't recommend premature optimization — focus on actual bottlenecks
+9. Use web search to verify optimization advice — check library documentation for recommended patterns, look up benchmark data for algorithms, and verify that suggested alternatives actually perform better in the target runtime
 
 ## PRIORITIZATION
 
