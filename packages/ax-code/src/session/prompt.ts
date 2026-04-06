@@ -449,7 +449,21 @@ export namespace SessionPrompt {
       })
     }
 
-    await using _ = defer(() => cancel(sessionID))
+    await using _ = defer(() => {
+      if (reason !== "completed") {
+        return cancel(sessionID)
+      }
+      const callbacks = state()[sessionID]?.callbacks ?? []
+      if (callbacks.length === 0) {
+        return cancel(sessionID)
+      }
+      // Queued messages are waiting — re-enter the loop to process them.
+      // Mirrors the pattern in shell() at lines 1681-1692.
+      loop({ sessionID, resume_existing: true }).catch((error) => {
+        log.error("session loop failed to resume for queued messages", { sessionID, error })
+        cancel(sessionID)
+      })
+    })
     let sessionStarted = false
     await using _recorder = defer(() => {
       if (sessionStarted) {
@@ -826,9 +840,11 @@ export namespace SessionPrompt {
     SessionCompaction.prune({ sessionID }).catch((e) => log.warn("prune failed", { error: e }))
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
-      const queued = state()[sessionID]?.callbacks ?? []
-      for (const q of queued) {
-        q.resolve(item)
+      if (resume_existing) {
+        const queued = state()[sessionID]?.callbacks ?? []
+        if (queued.length > 0) {
+          queued.shift()!.resolve(item)
+        }
       }
       return item
     }
