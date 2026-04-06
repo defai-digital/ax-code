@@ -11,6 +11,7 @@ import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
+import { useCommandDialog } from "../../component/dialog-command"
 import { Usage } from "./usage"
 import { Flag } from "@/flag/flag"
 
@@ -31,20 +32,40 @@ function bar(input: { pct?: number | null; busy: boolean; tick: number }) {
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
   const { theme } = useTheme()
+  const command = useCommandDialog()
   const session = createMemo(() => sync.session.get(props.sessionID)!)
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
   const status = createMemo(() => sync.data.session_status?.[props.sessionID] ?? { type: "idle" as const })
   const [tick, setTick] = createSignal(0)
+  const [timerTick, setTimerTick] = createSignal(0)
 
   onMount(() => {
     const id = setInterval(() => {
       if (status().type === "idle") return
       setTick((x) => x + 1)
     }, 120)
+    const timerId = setInterval(() => setTimerTick((x) => x + 1), 10_000)
+    onCleanup(() => {
+      clearInterval(id)
+      clearInterval(timerId)
+    })
+  })
 
-    onCleanup(() => clearInterval(id))
+  const elapsed = createMemo(() => {
+    timerTick()
+    tick()
+    const s = session()
+    if (!s?.time?.created) return ""
+    const ms = Date.now() - s.time.created
+    const total = Math.floor(ms / 1000)
+    const h = Math.floor(total / 3600)
+    const m = Math.floor((total % 3600) / 60)
+    const sec = total % 60
+    if (h > 0) return `${h}h ${m}m`
+    if (m > 0) return `${m}m ${sec}s`
+    return `${sec}s`
   })
 
   const [expanded, setExpanded] = createStore({
@@ -132,9 +153,16 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
               <text fg={theme.text}>
                 <b>Context</b>
               </text>
-              <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens</text>
-              <text fg={theme.textMuted}>{context()?.percentage ?? 0}% used</text>
+              <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens · {elapsed()}</text>
+              <text fg={(context()?.percentage ?? 0) >= 95 ? theme.error : (context()?.percentage ?? 0) >= 80 ? theme.warning : theme.textMuted}>
+                {context()?.percentage ?? 0}% used
+              </text>
               <text fg={status().type === "idle" ? theme.textMuted : theme.primary}>{usageBar()}</text>
+              <Show when={(context()?.percentage ?? 0) >= 80}>
+                <text fg={(context()?.percentage ?? 0) >= 95 ? theme.error : theme.warning}>
+                  {(context()?.percentage ?? 0) >= 95 ? "Context nearly full — " : "Consider "}/compact
+                </text>
+              </Show>
             </box>
             <Show when={mcpEntries().length > 0}>
               <box>
@@ -387,23 +415,40 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <box
                   flexDirection="row"
                   gap={1}
+                  justifyContent="space-between"
                   onMouseDown={() => diff().length > 2 && setExpanded("diff", !expanded.diff)}
                 >
-                  <Show when={diff().length > 2}>
-                    <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
-                  </Show>
-                  <text fg={theme.text}>
-                    <b>Modified Files</b>
+                  <box flexDirection="row" gap={1}>
+                    <Show when={diff().length > 2}>
+                      <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
+                    </Show>
+                    <text fg={theme.text}>
+                      <b>Modified Files</b>
+                    </text>
+                  </box>
+                  <text
+                    fg={theme.textMuted}
+                    onMouseDown={(e: any) => {
+                      e.stopPropagation()
+                      command.trigger("session.undo")
+                    }}
+                  >
+                    revert
                   </text>
                 </box>
                 <Show when={diff().length <= 2 || expanded.diff}>
                   <For each={diff() || []}>
                     {(item) => {
+                      const icon = item.status === "added" ? "+" : item.status === "deleted" ? "-" : "~"
+                      const iconColor = item.status === "added" ? theme.diffAdded : item.status === "deleted" ? theme.diffRemoved : theme.warning
                       return (
                         <box flexDirection="row" gap={1} justifyContent="space-between">
-                          <text fg={theme.textMuted} wrapMode="none">
-                            {item.file}
-                          </text>
+                          <box flexDirection="row" gap={1} flexShrink={1}>
+                            <text flexShrink={0} fg={iconColor}>{icon}</text>
+                            <text fg={theme.textMuted} wrapMode="none">
+                              {item.file.split("/").pop()}
+                            </text>
+                          </box>
                           <box flexDirection="row" gap={1} flexShrink={0}>
                             <Show when={item.additions}>
                               <text fg={theme.diffAdded}>+{item.additions}</text>

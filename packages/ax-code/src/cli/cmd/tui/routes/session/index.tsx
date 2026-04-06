@@ -681,6 +681,34 @@ export function Session() {
             <Show when={showHeader() && (!sidebarVisible() || !wide())}>
               <Header />
             </Show>
+            {(() => {
+              const tasks = createMemo(() => {
+                const msgs = sync.data.message[route.sessionID] ?? []
+                let running = 0
+                let done = 0
+                for (const msg of msgs) {
+                  const parts = sync.data.part[msg.id] ?? []
+                  for (const part of parts) {
+                    if (part.type !== "tool" || (part as any).tool !== "task") continue
+                    const s = (part as any).state?.status
+                    if (s === "running" || s === "pending") running++
+                    else if (s === "completed") done++
+                  }
+                }
+                return { running, done, total: running + done }
+              })
+              return (
+                <Show when={tasks().total > 0}>
+                  <box flexShrink={0} paddingLeft={1}>
+                    <text fg={theme.textMuted}>
+                      {tasks().total} subagent{tasks().total !== 1 ? "s" : ""}
+                      {tasks().running > 0 ? <span style={{ fg: theme.primary }}> · {tasks().running} active</span> : null}
+                      {tasks().done > 0 ? <span style={{ fg: theme.success }}> · {tasks().done} done</span> : null}
+                    </text>
+                  </box>
+                </Show>
+              )
+            })()}
             <scrollbox
               ref={(r) => (scroll = r)}
               viewportOptions={{
