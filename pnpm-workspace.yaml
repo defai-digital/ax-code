@@ -23,7 +23,7 @@ catalog:
   "@types/node": "22.13.9"
   "@types/semver": "7.7.1"
   "@typescript/native-preview": "7.0.0-dev.20251207.1"
-  "ai": "5.0.124"
+  "ai": "6.0.146"
   "diff": "8.0.3"
   "drizzle-kit": "1.0.0-beta.19-d95b7a4"
   "drizzle-orm": "1.0.0-beta.19-d95b7a4"
