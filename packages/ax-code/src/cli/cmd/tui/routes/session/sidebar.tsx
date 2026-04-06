@@ -40,7 +40,7 @@ function activityLabel(part: Part): string {
   }
   if (state.status === "pending") return `${part.tool} (pending)`
   if (state.status === "error" && state.error) {
-    const label = `${part.tool}: ${state.error}`
+    const label = `${part.tool}: ${state.error.replace(/\n/g, " ")}`
     return label.length > 33 ? label.slice(0, 30) + "..." : label
   }
   return part.tool

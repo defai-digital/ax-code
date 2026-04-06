@@ -52,7 +52,7 @@ export function DialogActivity(props: { sessionID: string }) {
           error?: string
           time?: { start: number; end?: number }
         }
-        const title = state.title || (state.status === "error" && state.error ? `${part.tool}: ${state.error}` : part.tool)
+        const title = state.title || (state.status === "error" && state.error ? `${part.tool}: ${state.error.replace(/\n/g, " ")}` : part.tool)
         const duration = state.time?.end != null && state.time?.start != null
           ? `${((state.time.end - state.time.start) / 1000).toFixed(1)}s`
           : undefined
