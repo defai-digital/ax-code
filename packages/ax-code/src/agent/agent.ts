@@ -11,6 +11,7 @@ import { Auth } from "../auth"
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
+import PROMPT_GENERAL from "./prompt/general.txt"
 import PROMPT_REACT from "./prompt/react.txt"
 import PROMPT_SECURITY from "./prompt/security.txt"
 import PROMPT_ARCHITECT from "./prompt/architect.txt"
@@ -154,6 +155,7 @@ export namespace Agent {
             general: {
               name: "general",
               description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
+              prompt: PROMPT_GENERAL,
               permission: Permission.merge(
                 defaults,
                 policy,

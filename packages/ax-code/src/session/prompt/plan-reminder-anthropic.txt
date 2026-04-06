@@ -54,6 +54,16 @@ Once you have all the information you need, ensure that the plan file has been u
 - Recommended approach with rationale
 - Key insights from different perspectives
 - Critical files that need modification
+- Test strategy — what tests to write first and which existing tests must pass
+- Risk assessment — what could go wrong, blast radius, rollback approach
+
+### Planning Principles
+
+- **Proportional depth** — match plan detail to task size. A 1-file fix needs 3 sentences, not a 5-phase plan.
+- **High-value items first** — order so the most impactful work comes first.
+- **Reuse over create** — search for existing utilities and patterns before planning new ones.
+- **Avoid over-engineering** — no abstractions without 3+ use cases. Simplest approach wins.
+- **Blast radius** — use `impact_analyze` for changes to shared code. Note affected callers.
 
 ### Phase 5: Call ExitPlanMode
 
