@@ -153,7 +153,27 @@ describe("replay code.graph.snapshot", () => {
       fn: async () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
-        CodeGraphQuery.upsertCursor(projectID, "deadbeef", 42, 7)
+        // Insert a real node so countNodes() returns 1.
+        // status() reads live counts, not the cursor summary.
+        const now = Date.now()
+        CodeGraphQuery.insertNode({
+          id: CodeNodeID.ascending(),
+          project_id: projectID,
+          kind: "function",
+          name: "beta",
+          qualified_name: "beta",
+          file: "/tmp/b.ts",
+          range_start_line: 0,
+          range_start_char: 0,
+          range_end_line: 1,
+          range_end_char: 0,
+          signature: null,
+          visibility: null,
+          metadata: null,
+          time_created: now,
+          time_updated: now,
+        })
+        CodeGraphQuery.upsertCursor(projectID, "deadbeef", 1, 0)
 
         const session = await Session.create({})
         const sid = session.id
@@ -178,8 +198,8 @@ describe("replay code.graph.snapshot", () => {
         expect(snap).toBeDefined()
         expect(snap.action).toBe("snapshot")
         expect(snap.target).toBe(projectID)
-        expect(snap.result).toContain("nodes=42")
-        expect(snap.result).toContain("edges=7")
+        expect(snap.result).toContain("nodes=1")
+        expect(snap.result).toContain("edges=0")
         expect(snap.result).toContain("sha=deadbeef")
 
         CodeIntelligence.__clearProject(projectID)

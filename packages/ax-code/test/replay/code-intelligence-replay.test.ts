@@ -7,6 +7,7 @@ import { EventQuery } from "../../src/replay/query"
 import { AuditExport } from "../../src/audit/export"
 import { CodeIntelligence } from "../../src/code-intelligence"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
+import { CodeNodeID } from "../../src/code-intelligence/id"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -34,7 +35,29 @@ describe("replay with code intelligence queries", () => {
       fn: async () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
-        CodeGraphQuery.upsertCursor(projectID, "cafed00d", 5, 2)
+        // Insert real nodes so countNodes() returns the expected count.
+        // status() reads live counts, not the cursor summary.
+        const now = Date.now()
+        for (const name of ["a", "b", "c", "d", "e"]) {
+          CodeGraphQuery.insertNode({
+            id: CodeNodeID.ascending(),
+            project_id: projectID,
+            kind: "function",
+            name,
+            qualified_name: name,
+            file: `/tmp/${name}.ts`,
+            range_start_line: 0,
+            range_start_char: 0,
+            range_end_line: 1,
+            range_end_char: 0,
+            signature: null,
+            visibility: null,
+            metadata: null,
+            time_created: now,
+            time_updated: now,
+          })
+        }
+        CodeGraphQuery.upsertCursor(projectID, "cafed00d", 5, 0)
 
         const session = await Session.create({})
         const sid = session.id
@@ -137,7 +160,7 @@ describe("replay with code intelligence queries", () => {
         expect(snap).toBeDefined()
         if (snap?.type !== "code.graph.snapshot") throw new Error("narrowing")
         expect(snap.nodeCount).toBe(5)
-        expect(snap.edgeCount).toBe(2)
+        expect(snap.edgeCount).toBe(0)
         expect(snap.commitSha).toBe("cafed00d")
 
         // ── Assertion 2: reconstructStream handles the tool call ──
@@ -163,7 +186,7 @@ describe("replay with code intelligence queries", () => {
         const graphLine = lines.find((l) => l.includes("[graph]"))
         expect(graphLine).toBeDefined()
         expect(graphLine).toContain("nodes=5")
-        expect(graphLine).toContain("edges=2")
+        expect(graphLine).toContain("edges=0")
         expect(graphLine).toContain("sha=cafed00d")
 
         // ── Assertion 4: audit export covers both families ────────
