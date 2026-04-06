@@ -9,7 +9,7 @@ interface CliModelInfo {
 
 const DEFAULTS: Record<string, string> = {
   "claude-code": "claude-sonnet-4-6",
-  "gemini-cli": "gemini-2.5-pro",
+  "gemini-cli": "gemini-3",
   "codex-cli": "gpt-5.4",
 }
 
@@ -35,7 +35,7 @@ function resolveClaudeModel(): CliModelInfo {
   // Project-level settings take precedence, but we don't know the project dir here.
   // Check global settings.
   const settings = readJson(join(home, ".claude", "settings.json"))
-  if (settings?.model) return { model: settings.model, source: "~/.claude/settings.json" }
+  if (typeof settings?.model === "string") return { model: settings.model, source: "~/.claude/settings.json" }
 
   // Check env var
   if (process.env.ANTHROPIC_MODEL) return { model: process.env.ANTHROPIC_MODEL, source: "ANTHROPIC_MODEL" }
@@ -50,9 +50,9 @@ function resolveGeminiModel(): CliModelInfo {
   if (process.env.GEMINI_MODEL) return { model: process.env.GEMINI_MODEL, source: "GEMINI_MODEL" }
 
   const settings = readJson(join(home, ".gemini", "settings.json"))
-  if (settings?.model) return { model: settings.model, source: "~/.gemini/settings.json" }
-  // Some versions use model.name
-  if (settings?.model?.name) return { model: settings.model.name, source: "~/.gemini/settings.json" }
+  // model can be a string or { name: "..." } depending on version
+  if (typeof settings?.model === "string") return { model: settings.model, source: "~/.gemini/settings.json" }
+  if (typeof settings?.model?.name === "string") return { model: settings.model.name, source: "~/.gemini/settings.json" }
 
   return { model: DEFAULTS["gemini-cli"]!, source: "default" }
 }

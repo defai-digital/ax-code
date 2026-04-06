@@ -105,9 +105,19 @@ export class CliLanguageModel implements LanguageModelV2 {
         })
 
         proc.stdout!.on("error", (err: Error) => {
+          proc.kill("SIGTERM")
           controller.enqueue({ type: "error", error: err })
           controller.close()
         })
+
+        proc.exited.then((code) => {
+          if (code !== 0 && !controller.desiredSize) return // already closed
+          // If process exits non-zero before stdout ends, emit error
+          if (code !== 0) {
+            controller.enqueue({ type: "error", error: new Error(`CLI exited with code ${code}`) })
+            controller.close()
+          }
+        }).catch(() => {})
       },
       cancel() {
         proc.kill("SIGTERM")

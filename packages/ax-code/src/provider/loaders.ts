@@ -69,8 +69,8 @@ const CLI_MODELS: Record<string, { id: string; name: string; context: number; ou
     { id: "claude-haiku-4-5", name: "Haiku 4.5", context: 200000, output: 8192 },
   ],
   "gemini-cli": [
-    { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 1000000, output: 65536 },
-    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000, output: 65536 },
+    { id: "gemini-3", name: "Gemini 3", context: 1000000, output: 65536 },
+    { id: "gemini-2.5", name: "Gemini 2.5", context: 1000000, output: 65536 },
   ],
   "codex-cli": [
     { id: "gpt-5.4", name: "GPT-5.4", context: 200000, output: 16384 },
@@ -90,6 +90,7 @@ function cliModels(providerID: string, provider: Provider.Info, currentModel: st
       ...base,
       id,
       providerID: ProviderID.make(providerID),
+      api: { ...base.api, id: m.id },
       name: m.id === currentModel ? `${m.name} (active)` : m.name,
       limit: { context: m.context, output: m.output },
     }
