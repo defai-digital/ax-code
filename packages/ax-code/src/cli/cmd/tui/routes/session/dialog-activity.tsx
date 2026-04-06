@@ -46,16 +46,21 @@ export function DialogActivity(props: { sessionID: string }) {
       if (!parts) continue
       for (const part of parts) {
         if (part.type !== "tool") continue
-        const state = part.state as { status: string; title?: string; time?: { start: number; end?: number } }
-        const title = state.title || part.tool
-        const duration = state.time?.end && state.time?.start
+        const state = part.state as {
+          status: string
+          title?: string
+          error?: string
+          time?: { start: number; end?: number }
+        }
+        const title = state.title || (state.status === "error" && state.error ? `${part.tool}: ${state.error}` : part.tool)
+        const duration = state.time?.end != null && state.time?.start != null
           ? `${((state.time.end - state.time.start) / 1000).toFixed(1)}s`
           : undefined
         items.push({
           title: `${toolIcon(part.tool)} ${title}`,
           value: part.id,
           description: `[${statusLabel(state.status)}]${duration ? ` ${duration}` : ""}`,
-          footer: state.time?.start ? Locale.time(state.time.start) : undefined,
+          footer: state.time?.start != null ? Locale.time(state.time.start) : undefined,
           category: part.tool,
         })
       }

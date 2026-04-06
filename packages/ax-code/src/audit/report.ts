@@ -21,6 +21,7 @@ function formatDuration(ms: number): string {
   const s = total % 60
   if (h > 0) return `${h}h ${m}m ${s}s`
   if (m > 0) return `${m}m ${s}s`
+  if (s === 0) return `${ms}ms`
   return `${s}.${Math.floor((ms % 1000) / 100)}s`
 }
 
@@ -133,7 +134,7 @@ export namespace AuditReport {
             // Check for validation commands
             if (call.tool === "bash") {
               const cmd = call.target.toLowerCase()
-              if (/(test|typecheck|tsc|lint|check|eslint|biome)/.test(cmd)) {
+              if (/\b(bun test|npm test|vitest|jest|typecheck|tsc\b|eslint|biome check|lint)/.test(cmd)) {
                 validations.push({
                   command: call.target,
                   passed: event.status === "completed",

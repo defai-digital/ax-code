@@ -34,11 +34,15 @@ function activityIcon(tool: string): string {
 
 function activityLabel(part: Part): string {
   if (part.type !== "tool") return ""
-  const state = part.state as { status: string; title?: string; input?: Record<string, unknown> }
+  const state = part.state as { status: string; title?: string; error?: string }
   if (state.title) {
     return state.title.length > 33 ? state.title.slice(0, 30) + "..." : state.title
   }
   if (state.status === "pending") return `${part.tool} (pending)`
+  if (state.status === "error" && state.error) {
+    const label = `${part.tool}: ${state.error}`
+    return label.length > 33 ? label.slice(0, 30) + "..." : label
+  }
   return part.tool
 }
 
