@@ -1,11 +1,9 @@
 import { Log } from "../util/log"
-import path from "path"
 import z from "zod"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "../util/filesystem"
 import { Ssrf } from "../util/ssrf"
-
-const snapshotPath = path.join(import.meta.dirname, "models-snapshot.json")
+import bundledSnapshot from "./models-snapshot.json"
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
@@ -131,7 +129,7 @@ export namespace ModelsDev {
     }
 
     log.info("loading bundled model snapshot")
-    return ((await Filesystem.readJson(snapshotPath)) ?? {}) as Record<string, unknown>
+    return (bundledSnapshot ?? {}) as Record<string, unknown>
   })
 
   export async function get() {
