@@ -11,6 +11,7 @@ import { Global } from "../../src/global"
 import { ProjectID } from "../../src/project/schema"
 import { Filesystem } from "../../src/util/filesystem"
 import { BunProc } from "../../src/bun"
+import { Ssrf } from "../../src/util/ssrf"
 
 // Get managed config directory from environment (set in preload.ts)
 const managedConfigDir = process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR!
@@ -1588,12 +1589,13 @@ test("local .ax-code config can override MCP from project config", async () => {
 })
 
 test("project config overrides remote well-known config", async () => {
-  const originalFetch = globalThis.fetch
   let fetchedUrl: string | undefined
-  const mockFetch = mock((url: string | URL | Request) => {
-    const urlStr = url.toString()
-    if (urlStr.includes(".well-known/opencode")) {
-      fetchedUrl = urlStr
+  const originalPinnedFetch = Ssrf.pinnedFetch
+  const originalAssert = Ssrf.assertPublicUrl
+  Ssrf.assertPublicUrl = mock(() => Promise.resolve())
+  Ssrf.pinnedFetch = mock((url: string) => {
+    fetchedUrl = url
+    if (url.includes(".well-known/")) {
       return Promise.resolve(
         new Response(
           JSON.stringify({
@@ -1611,9 +1613,8 @@ test("project config overrides remote well-known config", async () => {
         ),
       )
     }
-    return originalFetch(url)
-  })
-  globalThis.fetch = mockFetch as unknown as typeof fetch
+    return Promise.resolve(new Response("", { status: 404 }))
+  }) as typeof Ssrf.pinnedFetch
 
   const originalAuthAll = Auth.all
   Auth.all = mock(() =>
@@ -1651,24 +1652,26 @@ test("project config overrides remote well-known config", async () => {
       fn: async () => {
         const config = await Config.get()
         // Verify fetch was called for wellknown config
-        expect(fetchedUrl).toBe("https://example.com/.well-known/opencode")
+        expect(fetchedUrl).toBe("https://example.com/.well-known/ax-code")
         // Project config (enabled: true) should override remote (enabled: false)
         expect(config.mcp?.jira?.enabled).toBe(true)
       },
     })
   } finally {
-    globalThis.fetch = originalFetch
+    Ssrf.pinnedFetch = originalPinnedFetch
+    Ssrf.assertPublicUrl = originalAssert
     Auth.all = originalAuthAll
   }
 })
 
 test("wellknown URL with trailing slash is normalized", async () => {
-  const originalFetch = globalThis.fetch
   let fetchedUrl: string | undefined
-  const mockFetch = mock((url: string | URL | Request) => {
-    const urlStr = url.toString()
-    if (urlStr.includes(".well-known/opencode")) {
-      fetchedUrl = urlStr
+  const originalPinnedFetch = Ssrf.pinnedFetch
+  const originalAssert = Ssrf.assertPublicUrl
+  Ssrf.assertPublicUrl = mock(() => Promise.resolve())
+  Ssrf.pinnedFetch = mock((url: string) => {
+    fetchedUrl = url
+    if (url.includes(".well-known/")) {
       return Promise.resolve(
         new Response(
           JSON.stringify({
@@ -1686,9 +1689,8 @@ test("wellknown URL with trailing slash is normalized", async () => {
         ),
       )
     }
-    return originalFetch(url)
-  })
-  globalThis.fetch = mockFetch as unknown as typeof fetch
+    return Promise.resolve(new Response("", { status: 404 }))
+  }) as typeof Ssrf.pinnedFetch
 
   const originalAuthAll = Auth.all
   Auth.all = mock(() =>
@@ -1718,11 +1720,12 @@ test("wellknown URL with trailing slash is normalized", async () => {
       fn: async () => {
         await Config.get()
         // Trailing slash should be stripped — no double slash in the fetch URL
-        expect(fetchedUrl).toBe("https://example.com/.well-known/opencode")
+        expect(fetchedUrl).toBe("https://example.com/.well-known/ax-code")
       },
     })
   } finally {
-    globalThis.fetch = originalFetch
+    Ssrf.pinnedFetch = originalPinnedFetch
+    Ssrf.assertPublicUrl = originalAssert
     Auth.all = originalAuthAll
   }
 })
