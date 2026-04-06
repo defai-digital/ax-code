@@ -104,3 +104,32 @@ Key findings: [count] issues found
 6. Check hot paths first — functions called frequently matter more
 7. Look at actual data sizes — O(n²) on 10 items is fine, on 10,000 is not
 8. Don't recommend premature optimization — focus on actual bottlenecks
+
+## PRIORITIZATION
+
+Analyze in this order — highest impact first, avoid over-engineering:
+
+1. **Hot paths in core modules first** — focus on request handling, data processing, and user-facing flows before infrastructure, logging, or startup. A 10ms saving on a path called 1000x/sec is worth more than a 1s saving on startup code that runs once.
+2. **Easy wins first** — within the same tier, report the simplest fixes first. Replacing `Array.find` with `Map.get` is a 1-line fix with measurable impact. Rewriting an entire module is not an easy win.
+3. **Iterate on critical modules** — after finding a bottleneck in a module, scan the entire module for related issues. Performance problems cluster — a function with O(n²) complexity often has nearby functions with unnecessary allocations, redundant I/O, or missing caches.
+4. **Use DRE tools proactively:**
+   - `dedup_scan` — duplicated logic often means duplicated computation. If the same calculation runs in 3 places, consolidation is both a refactoring and a performance improvement.
+   - `hardcode_scan` — hardcoded timeout values, buffer sizes, batch limits, and concurrency caps are common perf bottlenecks. Report them so they can be moved to config and tuned per environment.
+   - `impact_analyze` — before recommending changes to shared utilities, check how many callers exist. A fix to a hot utility has multiplied impact.
+5. **Proportional recommendations** — match the complexity of the fix to the size of the problem. Don't recommend rewriting a module for a 5% improvement. Don't recommend adding a caching layer for data that's accessed once. A simple `Promise.all` is better than a custom concurrency pool when there are only 3 parallel tasks.
+6. **Quantify everything** — every recommendation must include an estimated impact (e.g., "~200ms → ~20ms", "reduces allocations by ~80%", "eliminates N+1 query, ~50 fewer DB calls"). If you can't estimate the impact, the recommendation is likely a micro-optimization.
+
+## COMMON HIGH-VALUE PATTERNS TO CHECK
+
+These are the most impactful patterns to look for, roughly ordered by typical ROI:
+
+1. **Synchronous I/O on hot paths** — readFileSync, writeFileSync in request handlers or loops. Move to async or cache the result.
+2. **N+1 queries** — database/API calls inside loops. Batch or prefetch.
+3. **Sequential awaits** — independent promises awaited one-by-one instead of `Promise.all`.
+4. **Unbounded growth** — caches, listeners, or buffers that grow without eviction or cleanup.
+5. **Redundant computation** — same expensive calculation repeated in a loop or across renders. Memoize or hoist.
+6. **String concatenation in loops** — `str += chunk` is O(n²). Use array + join.
+7. **Large imports on startup** — modules loaded eagerly that could be lazy-loaded or dynamically imported.
+8. **Missing indexes** — database queries on unindexed fields under load.
+9. **Over-fetching** — SELECT * or full-object serialization when only a few fields are needed.
+10. **Hardcoded concurrency/batch limits** — fixed values that should be configurable per environment.
