@@ -164,7 +164,7 @@ export namespace Installation {
 
         const upgradeCurl = Effect.fnUntraced(
           function* (target: string) {
-            const response = yield* httpOk.execute(HttpClientRequest.get("https://ax-code.ai/install"))
+            const response = yield* httpOk.execute(HttpClientRequest.get("https://raw.githubusercontent.com/defai-digital/ax-code/main/install"))
             const body = yield* response.text
             const bodyBytes = new TextEncoder().encode(body)
             const proc = ChildProcess.make("bash", [], {
