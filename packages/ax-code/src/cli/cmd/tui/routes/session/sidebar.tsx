@@ -15,7 +15,7 @@ import { Usage } from "./usage"
 import { Flag } from "@/flag/flag"
 
 function bar(input: { pct?: number | null; busy: boolean; tick: number }) {
-  const width = 20
+  const width = 37
   const pct = Math.max(0, Math.min(100, input.pct ?? 0))
   const fill = Math.max(0, Math.min(width, Math.round((pct / 100) * width)))
   const cells: string[] = Array.from({ length: width }, (_, i) => (i < fill ? "█" : "░"))
