@@ -56,7 +56,7 @@
       "serialize-javascript": ">=7.0.5",
       "seroval": ">=1.4.1",
       "diff@<8.0.3": "8.0.3",
-      "undici@<6": "6.21.3"
+      "undici@<6.24.0": "6.24.0"
     }
   },
   "patchedDependencies": {
