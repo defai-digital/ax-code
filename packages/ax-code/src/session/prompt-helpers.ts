@@ -414,6 +414,7 @@ export type SystemCache = {
   skills?: string | undefined
   skillsAgentKey?: string
   skillsMsgCount?: number
+  skillsFn?: Function
 }
 
 export async function systemPrompt(input: {
@@ -428,14 +429,17 @@ export async function systemPrompt(input: {
   structuredPrompt?: string
 }) {
   // Cache skills per agent — only recompute when agent changes or new messages arrive
+  const skillsFn = input.skills ?? SystemPrompt.skills
   const msgCount = input.messages?.length ?? 0
   if (
     input.cache.skillsAgentKey !== input.agent.name ||
-    input.cache.skillsMsgCount !== msgCount
+    input.cache.skillsMsgCount !== msgCount ||
+    input.cache.skillsFn !== skillsFn
   ) {
-    input.cache.skills = await (input.skills ?? SystemPrompt.skills)(input.agent, input.messages)
+    input.cache.skills = await skillsFn(input.agent, input.messages)
     input.cache.skillsAgentKey = input.agent.name
     input.cache.skillsMsgCount = msgCount
+    input.cache.skillsFn = skillsFn
   }
   const skills = input.cache.skills
 
