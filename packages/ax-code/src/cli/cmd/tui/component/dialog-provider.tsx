@@ -13,6 +13,7 @@ import { DialogModel } from "./dialog-model"
 import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
+import { resolveCliModel } from "@/provider/cli/resolve"
 
 const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama", "lmstudio"])
 const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
@@ -38,10 +39,32 @@ export function createDialogProviderOptions() {
         async onSelect() {
           const isConnected = sync.data.provider_next.connected.includes(provider.id)
 
-          // CLI providers don't use API keys — go straight to model selection or show install help
+          // CLI providers don't use API keys — show model info or install help
           if (CLI_PROVIDERS.has(provider.id)) {
             if (isConnected) {
-              dialog.replace(() => <DialogModel providerID={provider.id} />)
+              const info = resolveCliModel(provider.id)
+              const action = await new Promise<"use" | null>((resolve) => {
+                dialog.replace(
+                  () => (
+                    <DialogSelect
+                      title={`${provider.name} — connected`}
+                      options={[
+                        {
+                          title: "Use this provider",
+                          value: "use" as const,
+                          description: `Model: ${info.model}`,
+                          footer: info.source !== "default" ? `from ${info.source}` : "default",
+                        },
+                      ]}
+                      onSelect={(option) => resolve(option.value)}
+                    />
+                  ),
+                  () => resolve(null),
+                )
+              })
+              if (action === "use") {
+                dialog.replace(() => <DialogModel providerID={provider.id} />)
+              }
             } else {
               dialog.replace(() => (
                 <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
