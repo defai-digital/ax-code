@@ -269,6 +269,7 @@ export namespace Worktree {
 
   async function candidate(root: string, base?: string) {
     for (const attempt of Array.from({ length: 26 }, (_, i) => i)) {
+      // Use randomName for all non-first attempts to reduce TOCTOU collision window
       const name = base ? (attempt === 0 ? base : `${base}-${randomName()}`) : randomName()
       const branch = `ax-code/${name}`
       const directory = path.join(root, name)
@@ -280,6 +281,16 @@ export namespace Worktree {
         cwd: Instance.worktree,
       })
       if (branchCheck.exitCode === 0) continue
+
+      // Attempt to create the directory atomically to close the TOCTOU window.
+      // If another process created it between our exists() check and now, mkdir
+      // throws EEXIST and we retry with a new name.
+      try {
+        await fs.mkdir(directory, { recursive: false })
+      } catch (e: unknown) {
+        if ((e as { code?: string }).code === "EEXIST") continue
+        throw e
+      }
 
       return Info.parse({ name, branch, directory })
     }

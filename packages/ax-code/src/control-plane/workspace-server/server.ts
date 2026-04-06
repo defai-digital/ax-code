@@ -26,9 +26,15 @@ export namespace WorkspaceServer {
           q.push(JSON.stringify(event.payload))
         }
 
+        const heartbeat = setInterval(() => {
+          if (done) return
+          q.push(JSON.stringify({ type: "server.heartbeat", properties: {} }))
+        }, 10_000)
+
         const stop = () => {
           if (done) return
           done = true
+          clearInterval(heartbeat)
           GlobalBus.off("event", listener)
           q.push(null)
         }

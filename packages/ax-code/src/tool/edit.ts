@@ -437,7 +437,7 @@ export const IndentationFlexibleReplacer: Replacer = function* (content, find) {
 
 export const EscapeNormalizedReplacer: Replacer = function* (content, find) {
   const unescapeString = (str: string): string => {
-    return str.replace(/\\(n|t|r|'|"|`|\\|\n|\$)/g, (match, capturedChar) => {
+    return str.replace(/\\(n|t|r|'|"|`|\\|\$)/g, (match, capturedChar) => {
       switch (capturedChar) {
         case "n":
           return "\n"
@@ -453,8 +453,6 @@ export const EscapeNormalizedReplacer: Replacer = function* (content, find) {
           return "`"
         case "\\":
           return "\\"
-        case "\n":
-          return "\n"
         case "$":
           return "$"
         default:

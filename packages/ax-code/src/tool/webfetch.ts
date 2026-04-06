@@ -7,11 +7,12 @@ import { Ssrf } from "../util/ssrf"
 import { WEBFETCH_MAX_RESPONSE_SIZE as MAX_RESPONSE_SIZE, WEBFETCH_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT, WEBFETCH_MAX_TIMEOUT as MAX_TIMEOUT } from "@/constants/network"
 import { Isolation } from "@/isolation"
 
-// Block SSRF to private/reserved IP ranges. The range checks live in
-// `src/util/ssrf.ts` so the remote .well-known config fetch (config.ts)
-// and the instruction URL fetch (session/instruction.ts) can share the
-// exact same guard. See Ssrf.assertPublicUrl for the detailed rationale.
+// Block SSRF to private/reserved IP ranges. Uses pinnedFetch to
+// resolve DNS once and connect to the validated IP directly —
+// prevents DNS rebinding attacks (BUG-15).
 const assertPublicUrl = (url: string) => Ssrf.assertPublicUrl(url, "webfetch")
+const pinnedFetch = (url: string, init?: RequestInit) =>
+  Ssrf.pinnedFetch(url, { ...init, label: "webfetch" })
 
 export const WebFetchTool = Tool.define("webfetch", {
   description: DESCRIPTION,
@@ -75,26 +76,25 @@ export const WebFetchTool = Tool.define("webfetch", {
     }
 
     try {
-      // Manual redirect handling so each hop gets re-validated by
-      // assertPublicUrl. The default `fetch` follows redirects
-      // internally without any hook to inspect the target — a public
-      // attacker-controlled URL returning `Location: http://169.254.169.254/…`
-      // (AWS/GCP cloud metadata) or `http://127.0.0.1:4096/…` would
-      // otherwise bypass the SSRF guard entirely.
+      // Manual redirect handling so each hop gets DNS-pinned and
+      // re-validated. Uses pinnedFetch which resolves DNS once and
+      // connects to the validated IP directly — closes the DNS
+      // rebinding window (BUG-15). The default `fetch` follows
+      // redirects internally without any hook to inspect the target.
       const MAX_REDIRECTS = 10
       let currentUrl = params.url
       let response: Response | undefined
       for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
         const attemptHeaders = hop === 0 ? headers : { ...headers }
-        let res = await fetch(currentUrl, { signal, headers: attemptHeaders, redirect: "manual" })
+        let res = await pinnedFetch(currentUrl, { signal, headers: attemptHeaders, redirect: "manual" })
 
         // Retry with honest UA only on the initial request if blocked
         // by Cloudflare bot detection (TLS fingerprint mismatch).
         if (hop === 0 && res.status === 403 && res.headers.get("cf-mitigated") === "challenge") {
           await res.body?.cancel().catch(() => {})
-          res = await fetch(currentUrl, {
+          res = await pinnedFetch(currentUrl, {
             signal,
-            headers: { ...headers, "User-Agent": "ax-code" },
+            headers: { ...attemptHeaders, "User-Agent": "ax-code" },
             redirect: "manual",
           })
         }
@@ -109,7 +109,6 @@ export const WebFetchTool = Tool.define("webfetch", {
             throw new Error(`Redirect response missing Location header (status ${res.status})`)
           }
           const next = new URL(location, currentUrl).toString()
-          await assertPublicUrl(next)
           currentUrl = next
           continue
         }

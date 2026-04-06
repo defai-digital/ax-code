@@ -34,6 +34,7 @@ export function getModelLimit(modelID: string): number {
 
   // Check partial match
   for (const [key, limit] of Object.entries(MODEL_LIMITS)) {
+    if (key === "default") continue
     if (modelID.includes(key)) return limit
   }
 

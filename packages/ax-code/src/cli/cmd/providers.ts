@@ -290,7 +290,18 @@ export const ProvidersLoginCommand = cmd({
       async fn() {
         if (args.url) {
           const url = args.url.replace(/\/+$/, "")
-          const wellknown = await fetch(`${url}/.well-known/ax-code`).then((x) => x.json() as Promise<Record<string, any>>)
+          const res = await fetch(`${url}/.well-known/ax-code`)
+          if (!res.ok) {
+            prompts.log.error(`Failed to fetch well-known config: HTTP ${res.status}`)
+            prompts.outro("Done")
+            return
+          }
+          const wellknown = (await res.json()) as Record<string, any>
+          if (!wellknown?.auth?.command) {
+            prompts.log.error("Well-known config missing auth.command")
+            prompts.outro("Done")
+            return
+          }
           prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
           const proc = Process.spawn(wellknown.auth.command, {
             stdout: "pipe",

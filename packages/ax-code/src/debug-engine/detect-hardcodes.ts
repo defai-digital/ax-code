@@ -94,8 +94,9 @@ function stripComments(line: string): string {
   const lineIdx = out.indexOf("//")
   if (lineIdx >= 0) {
     const prefix = out.slice(0, lineIdx)
-    const quotes = (prefix.match(/"/g) ?? []).length + (prefix.match(/'/g) ?? []).length
-    if (quotes % 2 === 0) return prefix
+    const dblQuotes = (prefix.match(/"/g) ?? []).length
+    const sglQuotes = (prefix.match(/'/g) ?? []).length
+    if (dblQuotes % 2 === 0 && sglQuotes % 2 === 0) return prefix
   }
   return out
 }

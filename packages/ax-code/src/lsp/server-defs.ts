@@ -124,7 +124,7 @@ export const ESLint: Info = {
     if (!(await Filesystem.exists(serverPath))) {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
       log.info("downloading and building VS Code ESLint server")
-      const response = await fetch("https://github.com/microsoft/vscode-eslint/archive/refs/heads/main.zip")
+      const response = await fetch("https://github.com/microsoft/vscode-eslint/archive/refs/heads/main.zip", { signal: AbortSignal.timeout(60_000) })
       if (!response.ok) return
 
       const zipPath = path.join(Global.Path.bin, "vscode-eslint.zip")
@@ -437,7 +437,7 @@ export const ElixirLS: Info = {
         if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
         log.info("downloading elixir-ls from GitHub releases")
 
-        const response = await fetch("https://github.com/elixir-lsp/elixir-ls/archive/refs/heads/master.zip")
+        const response = await fetch("https://github.com/elixir-lsp/elixir-ls/archive/refs/heads/master.zip", { signal: AbortSignal.timeout(60_000) })
         if (!response.ok) return
         const zipPath = path.join(Global.Path.bin, "elixir-ls.zip")
         if (response.body) await Filesystem.writeStream(zipPath, response.body)
@@ -494,7 +494,7 @@ export const Zls: Info = {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
       log.info("downloading zls from GitHub releases")
 
-      const releaseResponse = await fetch("https://api.github.com/repos/zigtools/zls/releases/latest")
+      const releaseResponse = await fetch("https://api.github.com/repos/zigtools/zls/releases/latest", { signal: AbortSignal.timeout(30_000) })
       if (!releaseResponse.ok) {
         log.error("Failed to fetch zls release info")
         return
@@ -689,7 +689,7 @@ export const Clangd: Info = {
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
     log.info("downloading clangd from GitHub releases")
 
-    const releaseResponse = await fetch("https://api.github.com/repos/clangd/clangd/releases/latest")
+    const releaseResponse = await fetch("https://api.github.com/repos/clangd/clangd/releases/latest", { signal: AbortSignal.timeout(30_000) })
     if (!releaseResponse.ok) {
       log.error("Failed to fetch clangd release info")
       return
@@ -718,7 +718,7 @@ export const Clangd: Info = {
     }
 
     const name = asset.name
-    const downloadResponse = await fetch(asset.browser_download_url)
+    const downloadResponse = await fetch(asset.browser_download_url, { signal: AbortSignal.timeout(60_000) })
     if (!downloadResponse.ok) {
       log.error("Failed to download clangd")
       return
@@ -880,7 +880,7 @@ export const JDTLS: Info = {
       const archiveName = "release.tar.gz"
 
       log.info("Downloading JDTLS archive", { url: releaseURL, dest: distPath })
-      const download = await fetch(releaseURL)
+      const download = await fetch(releaseURL, { signal: AbortSignal.timeout(60_000) })
       if (!download.ok || !download.body) {
         log.error("Failed to download JDTLS", { status: download.status, statusText: download.statusText })
         return
@@ -900,7 +900,11 @@ export const JDTLS: Info = {
     const jarFileName =
       (await fs.readdir(launcherDir).catch(() => []))
         .find((item) => /^org\.eclipse\.equinox\.launcher_.*\.jar$/.test(item))
-        ?.trim() ?? ""
+        ?.trim()
+    if (!jarFileName) {
+      log.error(`Failed to locate the JDTLS launcher jar in: ${launcherDir}`)
+      return
+    }
     const launcherJar = path.join(launcherDir, jarFileName)
     if (!(await pathExists(launcherJar))) {
       log.error(`Failed to locate the JDTLS launcher module in the installed directory: ${distPath}.`)
@@ -991,7 +995,7 @@ export const KotlinLS: Info = {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
       log.info("Downloading Kotlin Language Server from GitHub.")
 
-      const releaseResponse = await fetch("https://api.github.com/repos/Kotlin/kotlin-lsp/releases/latest")
+      const releaseResponse = await fetch("https://api.github.com/repos/Kotlin/kotlin-lsp/releases/latest", { signal: AbortSignal.timeout(30_000) })
       if (!releaseResponse.ok) {
         log.error("Failed to fetch kotlin-lsp release info")
         return
@@ -1031,7 +1035,7 @@ export const KotlinLS: Info = {
 
       await fs.mkdir(distPath, { recursive: true })
       const archivePath = path.join(distPath, "kotlin-ls.zip")
-      const download = await fetch(releaseURL)
+      const download = await fetch(releaseURL, { signal: AbortSignal.timeout(60_000) })
       if (!download.ok || !download.body) {
         log.error("Failed to download Kotlin Language Server", {
           status: download.status,
@@ -1111,7 +1115,7 @@ export const LuaLS: Info = {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
       log.info("downloading lua-language-server from GitHub releases")
 
-      const releaseResponse = await fetch("https://api.github.com/repos/LuaLS/lua-language-server/releases/latest")
+      const releaseResponse = await fetch("https://api.github.com/repos/LuaLS/lua-language-server/releases/latest", { signal: AbortSignal.timeout(30_000) })
       if (!releaseResponse.ok) {
         log.error("Failed to fetch lua-language-server release info")
         return
@@ -1162,7 +1166,7 @@ export const LuaLS: Info = {
       }
 
       const downloadUrl = asset.browser_download_url
-      const downloadResponse = await fetch(downloadUrl)
+      const downloadResponse = await fetch(downloadUrl, { signal: AbortSignal.timeout(60_000) })
       if (!downloadResponse.ok) {
         log.error("Failed to download lua-language-server")
         return
@@ -1350,7 +1354,7 @@ export const TerraformLS: Info = {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
       log.info("downloading terraform-ls from HashiCorp releases")
 
-      const releaseResponse = await fetch("https://api.releases.hashicorp.com/v1/releases/terraform-ls/latest")
+      const releaseResponse = await fetch("https://api.releases.hashicorp.com/v1/releases/terraform-ls/latest", { signal: AbortSignal.timeout(30_000) })
       if (!releaseResponse.ok) {
         log.error("Failed to fetch terraform-ls release info")
         return
@@ -1374,7 +1378,7 @@ export const TerraformLS: Info = {
         return
       }
 
-      const downloadResponse = await fetch(build.url)
+      const downloadResponse = await fetch(build.url, { signal: AbortSignal.timeout(60_000) })
       if (!downloadResponse.ok) {
         log.error("Failed to download terraform-ls")
         return
@@ -1439,7 +1443,7 @@ export const TexLab: Info = {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
       log.info("downloading texlab from GitHub releases")
 
-      const response = await fetch("https://api.github.com/repos/latex-lsp/texlab/releases/latest")
+      const response = await fetch("https://api.github.com/repos/latex-lsp/texlab/releases/latest", { signal: AbortSignal.timeout(30_000) })
       if (!response.ok) {
         log.error("Failed to fetch texlab release info")
         return
@@ -1590,7 +1594,7 @@ export const Tinymist: Info = {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
       log.info("downloading tinymist from GitHub releases")
 
-      const response = await fetch("https://api.github.com/repos/Myriad-Dreamin/tinymist/releases/latest")
+      const response = await fetch("https://api.github.com/repos/Myriad-Dreamin/tinymist/releases/latest", { signal: AbortSignal.timeout(30_000) })
       if (!response.ok) {
         log.error("Failed to fetch tinymist release info")
         return

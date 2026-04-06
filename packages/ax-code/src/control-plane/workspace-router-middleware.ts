@@ -5,6 +5,7 @@ import { Flag } from "@/flag/flag"
 import { getAdaptor } from "./adaptors"
 import { WorkspaceContext } from "./workspace-context"
 import { Workspace } from "./workspace"
+import type { WorkspaceID } from "./schema"
 
 export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
   if (!Flag.AX_CODE_EXPERIMENTAL_WORKSPACES) return next()
@@ -19,7 +20,7 @@ export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
     throw error
   }
 
-  const row = Workspace.get(workspaceID as any)
+  const row = Workspace.get(workspaceID as WorkspaceID)
   if (!row || row.type === "worktree") return next()
 
   const adaptor = getAdaptor(row.type)

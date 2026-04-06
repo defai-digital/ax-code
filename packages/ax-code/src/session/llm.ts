@@ -252,25 +252,26 @@ export namespace LLM {
   }
 
   async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">, cfg: Awaited<ReturnType<typeof Config.get>>) {
+    const tools = { ...input.tools }
     const disabled = Permission.disabled(
-      Object.keys(input.tools),
+      Object.keys(tools),
       Permission.merge(input.agent.permission, input.permission ?? []),
     )
-    for (const tool of Object.keys(input.tools)) {
+    for (const tool of Object.keys(tools)) {
       if (input.user.tools?.[tool] === false || disabled.has(tool)) {
-        delete input.tools[tool]
+        delete tools[tool]
       }
     }
 
     const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
     if (isolation.mode === "read-only") {
-      for (const t of ["edit", "write", "apply_patch", "multiedit", "bash"]) delete input.tools[t]
+      for (const t of ["edit", "write", "apply_patch", "multiedit", "bash"]) delete tools[t]
     }
     if (!isolation.network) {
-      for (const t of ["webfetch", "websearch", "codesearch"]) delete input.tools[t]
+      for (const t of ["webfetch", "websearch", "codesearch"]) delete tools[t]
     }
 
-    return input.tools
+    return tools
   }
 
   // Check if messages contain any tool-call content

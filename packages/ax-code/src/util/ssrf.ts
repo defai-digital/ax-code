@@ -17,12 +17,10 @@ import net from "net"
 // otherwise exfiltrate cloud credentials through the next LLM
 // prompt.
 //
-// NOTE: This check runs before `fetch()`, so it does NOT close the
-// DNS-rebinding window where the OS's second resolution returns a
-// different address. Closing that gap requires a custom HTTP agent
-// that pins the pre-verified IP through to connect — tracked as
-// BUG-15 in BUGS/. Use this helper anyway; it closes the much more
-// common case of a static private URL in an untrusted config.
+// `pinnedFetch` closes the DNS-rebinding window (BUG-15) by resolving
+// DNS once, validating the IP, then connecting to that exact IP with
+// the original Host header — preventing a second resolution that
+// could return a different address.
 
 export namespace Ssrf {
   function isPrivateIPv4(addr: string): boolean {
@@ -78,5 +76,70 @@ export namespace Ssrf {
         throw new Error(`${label}: refusing to fetch ${hostname} — resolves to private/reserved address ${address}`)
       }
     }
+  }
+
+  /**
+   * Resolve DNS once, validate the IP, then fetch using the resolved IP
+   * directly. Prevents DNS rebinding attacks where a second DNS lookup
+   * returns a different (private) address between the SSRF check and
+   * the actual connection.
+   *
+   * The URL is rewritten to use the resolved IP, and the original Host
+   * header is set so TLS SNI and virtual hosting work correctly.
+   */
+  export async function pinnedFetch(
+    url: string,
+    init?: RequestInit & { label?: string },
+  ): Promise<Response> {
+    const label = init?.label ?? "ssrf"
+    const parsed = new URL(url)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error(`${label}: unsupported URL scheme: ${parsed.protocol}`)
+    }
+
+    const hostname = parsed.hostname
+
+    // If already an IP literal, just validate and fetch directly
+    if (net.isIP(hostname)) {
+      const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
+      if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
+      return fetch(url, init)
+    }
+
+    // Resolve DNS once
+    const addresses = await dns.lookup(hostname, { all: true }).catch(() => [])
+    if (addresses.length === 0) {
+      throw new Error(`${label}: could not resolve hostname: ${hostname}`)
+    }
+
+    // Validate ALL resolved addresses
+    for (const { address, family } of addresses) {
+      const bad = family === 4 ? isPrivateIPv4(address) : isPrivateIPv6(address)
+      if (bad) {
+        throw new Error(`${label}: refusing to fetch ${hostname} — resolves to private/reserved address ${address}`)
+      }
+    }
+
+    // Use the first valid address. Rewrite the URL to connect to the
+    // resolved IP directly, preventing a second DNS lookup.
+    const resolved = addresses[0]
+    const pinnedUrl = new URL(url)
+    const isIPv6 = resolved.family === 6
+    pinnedUrl.hostname = isIPv6 ? `[${resolved.address}]` : resolved.address
+
+    // Preserve the original Host header for TLS SNI and virtual hosting
+    const headers = new Headers(init?.headers)
+    if (!headers.has("Host")) {
+      headers.set("Host", parsed.port ? `${hostname}:${parsed.port}` : hostname)
+    }
+
+    const { label: _, ...fetchInit } = init ?? {}
+    return fetch(pinnedUrl.toString(), {
+      ...fetchInit,
+      headers,
+      // Bun supports `tls.serverName` for SNI override when connecting
+      // to an IP that differs from the Host header
+      ...(parsed.protocol === "https:" ? { tls: { serverName: hostname } } : {}),
+    } as RequestInit)
   }
 }

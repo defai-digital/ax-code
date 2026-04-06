@@ -136,6 +136,9 @@ export namespace ShareNext {
   export function dispose() {
     for (const unsub of activeUnsubs) unsub()
     activeUnsubs = []
+    for (const [, entry] of queue) clearTimeout(entry.timeout)
+    queue.clear()
+    inflight.clear()
   }
 
   export async function create(sessionID: SessionID) {

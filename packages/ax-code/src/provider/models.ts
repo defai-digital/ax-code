@@ -122,7 +122,9 @@ export namespace ModelsDev {
       log.info("loading model data from url", { url })
       try {
         await Ssrf.assertPublicUrl(url, "AX_CODE_MODELS_URL")
-        return (await fetch(url).then((res) => res.json())) as Record<string, unknown>
+        const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return (await res.json()) as Record<string, unknown>
       } catch (error) {
         log.warn("failed to load model data", { source: "url", url, error })
       }

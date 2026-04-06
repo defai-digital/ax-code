@@ -5,6 +5,7 @@ import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { lazy } from "../util/lazy"
 import { Lock } from "../util/lock"
+import { FileLock } from "../util/filelock"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
 import { Glob } from "../util/glob"
@@ -194,19 +195,12 @@ export namespace Storage {
     const dir = await state().then((x) => x.dir)
     const target = path.join(dir, ...key) + ".json"
     return withErrorHandling(async () => {
-      // Lock.write is in-process only (a Map-backed mutex). Two
-      // ax-code processes on the same directory (CLI + desktop app,
-      // multiple terminals) would otherwise read-modify-write race
-      // and lose one of the two updates. We can't pull in a file
-      // locking dependency for SQLite-style cross-process locks, but
-      // we can at least keep the read + write tightly coupled and
-      // document the limitation. TODO(BUG-12): proper cross-process
-      // lock via a lockfile or O_EXCL sentinel. The v2.3.13 code-
-      // intelligence lockfile (src/code-intelligence/lockfile.ts)
-      // already proves this pattern end-to-end — extracting that
-      // module into `util/lockfile.ts` and wiring it here is the
-      // expected path.
-      using _ = await Lock.write(target)
+      // In-process lock prevents concurrent reads/writes within this process.
+      using _inProcess = await Lock.write(target)
+      // Cross-process lock via O_EXCL lockfile prevents concurrent
+      // read-modify-write across separate ax-code processes (CLI +
+      // desktop app, multiple terminals). See BUG-12.
+      using _crossProcess = await FileLock.acquire(target)
       const content = await Filesystem.readJson<T>(target)
       fn(content as T)
       await Filesystem.writeJson(target, content)

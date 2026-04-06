@@ -1302,7 +1302,7 @@ export namespace SessionPrompt {
                   .then(async (t) => {
                     const readCtx: Tool.Context = {
                       sessionID: input.sessionID,
-                      abort: new AbortController().signal,
+                      abort: AbortSignal.timeout(30_000),
                       agent: input.agent!,
                       messageID: info.id,
                       extra: { bypassCwdCheck: true },

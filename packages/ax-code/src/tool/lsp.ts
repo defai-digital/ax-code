@@ -86,6 +86,8 @@ export const LspTool = Tool.define("lsp", {
           return LSP.incomingCalls(position)
         case "outgoingCalls":
           return LSP.outgoingCalls(position)
+        default:
+          return []
       }
     })()
 
