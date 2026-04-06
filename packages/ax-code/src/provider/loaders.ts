@@ -3,6 +3,7 @@ import { ProviderID, ModelID } from "./schema"
 import { which } from "../util/which"
 import { CliLanguageModel } from "./cli/cli-language-model"
 import { claudeCodeParser, geminiCliParser, codexCliParser, type CliOutputParser } from "./cli/parser"
+import { resolveCliModel } from "./cli/resolve"
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
 export type CustomVarsLoader = (options: Record<string, any>) => Record<string, string>
@@ -62,13 +63,26 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
 }
 
 function cliLoader(providerID: string, binary: string, args: string[], parser: CliOutputParser): CustomLoader {
-  return async () => {
+  return async (provider) => {
     const path = which(binary)
+    const info = resolveCliModel(providerID)
     return {
       autoload: path !== null,
       async getModel(_sdk: any, modelID: string) {
         if (!path) throw new Error(`${binary} CLI not found in PATH`)
         return new CliLanguageModel({ providerID, modelID, binary: path, args, parser })
+      },
+      async discoverModels() {
+        const id = ModelID.make(providerID)
+        const base = provider.models[id] ?? Object.values(provider.models)[0]
+        if (!base) return {}
+        return {
+          [id]: {
+            ...base,
+            id,
+            name: `${provider.name} (${info.model})`,
+          },
+        }
       },
     }
   }

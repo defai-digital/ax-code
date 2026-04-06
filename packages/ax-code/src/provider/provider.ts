@@ -513,17 +513,18 @@ export namespace Provider {
       log.info("found", { providerID })
     }
 
-    const gitlab = ProviderID.make("gitlab")
-    if (discoveryLoaders[gitlab] && providers[gitlab]) {
-      await (async () => {
-        const discovered = await discoveryLoaders[gitlab]()
-        for (const [modelID, model] of Object.entries(discovered)) {
-          if (!providers[gitlab].models[modelID]) {
-            providers[gitlab].models[modelID] = model
+    await Promise.all(
+      Object.entries(discoveryLoaders).map(async ([id, loader]) => {
+        const providerID = ProviderID.make(id)
+        if (!providers[providerID]) return
+        await (async () => {
+          const discovered = await loader()
+          for (const [modelID, model] of Object.entries(discovered)) {
+            providers[providerID].models[modelID] = model
           }
-        }
-      })().catch((e) => log.warn("state discovery error", { id: "gitlab", error: e }))
-    }
+        })().catch((e) => log.warn("state discovery error", { id, error: e }))
+      }),
+    )
 
     return {
       models: languages,
