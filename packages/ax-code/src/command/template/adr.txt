@@ -1,0 +1,70 @@
+You are creating an Architecture Decision Record (ADR) for the following decision:
+
+$ARGUMENTS
+
+Follow these steps:
+
+1. Use Glob to find existing ADRs in docs/adr/ matching pattern "ADR-*.md" to determine the next ADR number. If no ADRs exist, start at ADR-001.
+2. Analyze the codebase for context related to this decision. Read relevant source files, configs, dependencies, and tests to understand the current state.
+3. Write the ADR file to docs/adr/ using the filename format: ADR-NNN-<slugified-title>.md (e.g., ADR-005-use-redis-for-caching.md). Create the docs/adr/ directory if it does not exist.
+4. After writing the ADR, read ALL ADR files in docs/adr/ and create/update docs/adr/INDEX.md with a table listing every ADR.
+
+Use this exact format for the ADR:
+
+---
+
+# ADR-NNN: <Title>
+
+**Status:** Proposed
+**Date:** <today's date YYYY-MM-DD>
+**Deciders:** (to be filled by team)
+**Supersedes:** None
+
+---
+
+## Context
+
+Explain the business or technical background. What problem or need prompted this decision? Reference specific code, modules, or patterns in the codebase.
+
+## Decision
+
+State the decision clearly in 1-2 sentences. Then explain the approach in detail.
+
+## Alternatives Considered
+
+### Alternative 1: <Name>
+- **Pros:** ...
+- **Cons:** ...
+- **Why not chosen:** ...
+
+### Alternative 2: <Name>
+- **Pros:** ...
+- **Cons:** ...
+- **Why not chosen:** ...
+
+## Consequences
+
+### Positive
+- What improves as a result of this decision
+
+### Negative
+- What gets harder, more complex, or riskier
+
+### Risks
+- What could go wrong and how to mitigate each risk
+
+## Related
+- List any related ADRs, PRDs, or design documents
+
+---
+
+For the INDEX.md file, use this format:
+
+# Architecture Decision Records
+
+| # | Title | Status | Date |
+|---|-------|--------|------|
+| [ADR-001](ADR-001-title.md) | Title | Status | Date |
+| ... | ... | ... | ... |
+
+$ARGUMENTS

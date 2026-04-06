@@ -10,6 +10,8 @@ import { Skill } from "../skill"
 import { Log } from "../util/log"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
+import PROMPT_ADR from "./template/adr.txt"
+import PROMPT_IMPACT from "./template/impact.txt"
 
 export namespace Command {
   const log = Log.create({ service: "command" })
@@ -63,6 +65,8 @@ export namespace Command {
   export const Default = {
     INIT: "init",
     REVIEW: "review",
+    ADR: "adr",
+    IMPACT: "impact",
   } as const
 
   export interface Interface {
@@ -97,6 +101,24 @@ export namespace Command {
           },
           subtask: true,
           hints: hints(PROMPT_REVIEW),
+        }
+        commands[Default.ADR] = {
+          name: Default.ADR,
+          description: "generate an Architecture Decision Record",
+          source: "command",
+          get template() {
+            return PROMPT_ADR.replace("${path}", ctx.worktree)
+          },
+          hints: hints(PROMPT_ADR),
+        }
+        commands[Default.IMPACT] = {
+          name: Default.IMPACT,
+          description: "generate an Impact Assessment for a proposed change",
+          source: "command",
+          get template() {
+            return PROMPT_IMPACT.replace("${path}", ctx.worktree)
+          },
+          hints: hints(PROMPT_IMPACT),
         }
 
         for (const [name, command] of Object.entries(cfg.command ?? {})) {

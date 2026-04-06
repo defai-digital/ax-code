@@ -1,0 +1,65 @@
+You are creating an Impact Assessment for the following proposed change:
+
+$ARGUMENTS
+
+Follow these steps:
+
+1. Use impact_analyze, grep, and glob to understand the blast radius of this change. Identify all files and modules that would be affected.
+2. Assess the risk level based on the number of dependents, data implications, and reversibility.
+3. Write the assessment to docs/impact/ using the filename format: IMPACT-<YYYY-MM-DD>-<slugified-title>.md. Create the docs/impact/ directory if it does not exist.
+
+Use this exact format:
+
+---
+
+# Impact Assessment: <Title>
+
+**Date:** <today's date YYYY-MM-DD>
+**Scope:** <number of files affected>
+**Risk Level:** HIGH | MEDIUM | LOW
+
+---
+
+## Proposed Change
+
+What is being changed and why. Reference specific files, functions, or APIs.
+
+## Blast Radius
+
+### Files Directly Modified
+List each file that would need changes, with a brief description of what changes:
+- `path/to/file.ts` — what changes and why
+
+### Files Indirectly Affected
+List files that depend on the modified code and may need updates or testing:
+- `path/to/dependent.ts` — depends on modified API/type
+
+### Modules / Packages Affected
+List which packages in the monorepo are impacted.
+
+## Risk Analysis
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Describe each risk | Low/Medium/High | Low/Medium/High | How to prevent or handle |
+
+## Breaking Changes
+
+List any changes that break existing APIs, types, or behavior. For each, explain the migration path.
+
+## Rollback Strategy
+
+How to undo this change if it causes problems. Be specific — which commits to revert, which migrations to roll back.
+
+## Test Plan
+
+What tests to run to verify the change is safe:
+- Existing test suites to run
+- New tests that should be written
+- Manual verification steps
+
+## Recommendation
+
+Based on the analysis, state whether to proceed, proceed with caution, or reconsider. Justify the recommendation.
+
+$ARGUMENTS
