@@ -238,13 +238,9 @@ if (Script.release) {
       await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
     }
   }
-  const archives = [
-    ...new Bun.Glob("*.zip").scanSync({ cwd: "./dist" }),
-    ...new Bun.Glob("*.tar.gz").scanSync({ cwd: "./dist" }),
-  ].map((f) => `./dist/${f}`)
-  if (archives.length > 0) {
-    await $`gh release upload v${Script.version} ${archives} --clobber --repo ${process.env.GH_REPO}`
-  }
+  // Archive upload is handled by the CI workflow's "Upload release assets" step.
+  // The build script only creates the archives; the workflow uploads them after
+  // all platform runners finish and artifacts are collected.
 }
 
 export { binaries }
