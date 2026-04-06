@@ -27,6 +27,9 @@ const NATIVE_PROVIDERS = new Set([
   "alibaba-coding-plan",
   "zai-coding-plan",
   "github-copilot",
+  "claude-code",
+  "gemini-cli",
+  "codex-cli",
 ])
 
 export const ProviderRoutes = lazy(() =>

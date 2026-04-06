@@ -34,6 +34,7 @@ export interface DialogSelectOption<T = any> {
   title: string
   value: T
   description?: string
+  descriptionFg?: RGBA
   footer?: JSX.Element | string
   category?: string
   disabled?: boolean
@@ -323,6 +324,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           title={option.title}
                           footer={flatten() ? (option.category ?? option.footer) : option.footer}
                           description={option.description !== category ? option.description : undefined}
+                          descriptionFg={option.descriptionFg}
                           active={active()}
                           current={current()}
                           gutter={option.gutter}
@@ -357,6 +359,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 function Option(props: {
   title: string
   description?: string
+  descriptionFg?: RGBA
   active?: boolean
   current?: boolean
   footer?: JSX.Element | string
@@ -388,7 +391,7 @@ function Option(props: {
       >
         {Locale.truncate(props.title, 61)}
         <Show when={props.description}>
-          <span style={{ fg: props.active ? fg : theme.textMuted }}> {props.description}</span>
+          <span style={{ fg: props.active ? fg : (props.descriptionFg ?? theme.textMuted) }}> {props.description}</span>
         </Show>
       </text>
       <Show when={props.footer}>

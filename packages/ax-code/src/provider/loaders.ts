@@ -1,5 +1,8 @@
 import type { Provider } from "./provider"
 import { ProviderID, ModelID } from "./schema"
+import { which } from "../util/which"
+import { CliLanguageModel } from "./cli/cli-language-model"
+import { claudeCodeParser, geminiCliParser, codexCliParser, type CliOutputParser } from "./cli/parser"
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
 export type CustomVarsLoader = (options: Record<string, any>) => Record<string, string>
@@ -58,6 +61,19 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
   }
 }
 
+function cliLoader(providerID: string, binary: string, args: string[], parser: CliOutputParser): CustomLoader {
+  return async () => {
+    const path = which(binary)
+    return {
+      autoload: path !== null,
+      async getModel(_sdk: any, modelID: string) {
+        if (!path) throw new Error(`${binary} CLI not found in PATH`)
+        return new CliLanguageModel({ providerID, modelID, binary: path, args, parser })
+      },
+    }
+  }
+}
+
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   xai: async () => {
     return {
@@ -70,4 +86,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   },
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
   "ax-studio": ollamaCompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:11434"),
+  "claude-code": cliLoader("claude-code", "claude", ["--print", "--output-format", "stream-json", "--verbose"], claudeCodeParser),
+  "gemini-cli": cliLoader("gemini-cli", "gemini", ["--approval-mode", "auto_edit", "--output-format", "stream-json"], geminiCliParser),
+  "codex-cli": cliLoader("codex-cli", "codex", ["exec", "--json", "--skip-git-repo-check"], codexCliParser),
 }

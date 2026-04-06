@@ -757,6 +757,17 @@ export namespace Provider {
     if (s.models.has(key)) return s.models.get(key)!
 
     const provider = s.providers[model.providerID]
+
+    // CLI providers bypass SDK loading — their custom loaders handle everything
+    if (s.modelLoaders[model.providerID] && model.api.npm === "cli") {
+      const language = await s.modelLoaders[model.providerID](null, model.api.id, {
+        ...provider.options,
+        ...model.options,
+      })
+      s.models.set(key, language as Lang)
+      return language as Lang
+    }
+
     const sdk = await getSDK(model)
 
     try {

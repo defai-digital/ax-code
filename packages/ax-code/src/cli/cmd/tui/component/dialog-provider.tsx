@@ -15,6 +15,7 @@ import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
 
 const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama", "lmstudio"])
+const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "alibaba"])
 
 export function createDialogProviderOptions() {
@@ -22,18 +23,44 @@ export function createDialogProviderOptions() {
   const dialog = useDialog()
   const sdk = useSDK()
   const toast = useToast()
+  const { theme } = useTheme()
   const options = createMemo(() => {
     return pipe(
       sync.data.provider_next.all,
       filter((x) => !HIDDEN_PROVIDERS.has(x.id)),
-      sortBy((x) => (OFFLINE_PROVIDERS.has(x.id) ? 0 : 1), (x) => x.name),
+      sortBy((x) => (OFFLINE_PROVIDERS.has(x.id) ? 0 : CLI_PROVIDERS.has(x.id) ? 1 : 2), (x) => x.name),
       map((provider) => ({
         title: provider.name,
         value: provider.id,
         description: sync.data.provider_next.connected.includes(provider.id) ? "Connected" : undefined,
-        category: OFFLINE_PROVIDERS.has(provider.id) ? "Offline" : "Online",
+        descriptionFg: sync.data.provider_next.connected.includes(provider.id) ? theme.warning : undefined,
+        category: OFFLINE_PROVIDERS.has(provider.id) ? "Offline" : CLI_PROVIDERS.has(provider.id) ? "Online - CLI" : "Online",
         async onSelect() {
           const isConnected = sync.data.provider_next.connected.includes(provider.id)
+
+          // CLI providers don't use API keys — go straight to model selection or show install help
+          if (CLI_PROVIDERS.has(provider.id)) {
+            if (isConnected) {
+              dialog.replace(() => <DialogModel providerID={provider.id} />)
+            } else {
+              dialog.replace(() => (
+                <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+                  <box flexDirection="row" justifyContent="space-between">
+                    <text attributes={TextAttributes.BOLD} fg={theme.text}>
+                      {provider.name} — CLI not found
+                    </text>
+                    <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+                      esc
+                    </text>
+                  </box>
+                  <text fg={theme.textMuted}>
+                    Install the CLI and ensure it is available in your PATH, then restart ax-code.
+                  </text>
+                </box>
+              ))
+            }
+            return
+          }
 
           // If provider already has a saved key, offer to use it or replace it
           if (isConnected) {

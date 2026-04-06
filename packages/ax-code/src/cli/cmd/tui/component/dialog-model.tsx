@@ -19,6 +19,9 @@ const FREE_PROVIDERS = new Set([
   "ax-studio",
   "zai-coding-plan",
   "alibaba-coding-plan",
+  "claude-code",
+  "gemini-cli",
+  "codex-cli",
 ])
 const isFreeProvider = (id: string) => FREE_PROVIDERS.has(id)
 

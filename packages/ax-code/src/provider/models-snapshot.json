@@ -6977,5 +6977,101 @@
         }
       }
     }
+  },
+  "claude-code": {
+    "id": "claude-code",
+    "name": "Anthropic (Claude Code)",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "claude-code": {
+        "id": "claude-code",
+        "name": "Claude Code",
+        "family": "claude",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2025-01-01",
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "limit": {
+          "context": 200000,
+          "output": 16384
+        },
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
+  "gemini-cli": {
+    "id": "gemini-cli",
+    "name": "Google (Gemini CLI)",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "gemini-cli": {
+        "id": "gemini-cli",
+        "name": "Gemini CLI",
+        "family": "gemini",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2025-06-01",
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 65536
+        },
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
+  "codex-cli": {
+    "id": "codex-cli",
+    "name": "OpenAI (Codex CLI)",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "codex-cli": {
+        "id": "codex-cli",
+        "name": "Codex CLI",
+        "family": "codex",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2025-04-01",
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "limit": {
+          "context": 200000,
+          "output": 16384
+        },
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
   }
 }
