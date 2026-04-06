@@ -72,7 +72,7 @@ jobs:
 
       - name: Build
         working-directory: packages/ax-code
-        run: bun run script/build.ts --single
+        run: bun run script/build.ts --single --skip-install
         env:
           AX_CODE_VERSION: ${{ github.ref_name }}
           AX_CODE_CHANNEL: latest
