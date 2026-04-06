@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "2.7.2",
+  "version": "2.7.3",
   "name": "ax-code",
   "type": "module",
   "license": "MIT",
@@ -101,7 +101,7 @@
     "@standard-schema/spec": "1.0.0",
     "@zip.js/zip.js": "2.7.62",
     "ai": "catalog:",
-    "ai-gateway-provider": "3.1.3",
+    "ai-gateway-provider": "2.3.1",
     "bonjour-service": "1.3.0",
     "bun-pty": "0.4.8",
     "chokidar": "4.0.3",
