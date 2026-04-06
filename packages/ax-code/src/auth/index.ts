@@ -72,6 +72,10 @@ export namespace Auth {
         return value
       }
 
+      function needsReEncrypt(entry: unknown): boolean {
+        return !!(entry && typeof entry === "object" && "__needsReEncrypt" in entry)
+      }
+
       function encryptEntry(info: Info): unknown {
         const raw = { ...info } as Record<string, unknown>
         if (info.type === "api") return encryptField(raw, "key")
@@ -82,9 +86,26 @@ export namespace Auth {
 
       const all = Effect.fn("Auth.all")(() =>
         readRaw().pipe(
-          Effect.map((data) =>
-            Record.filterMap(data, (value) => Result.fromOption(decode(decryptEntry(value)), () => undefined)),
-          ),
+          Effect.flatMap((data) => {
+            let migrate = false
+            const entries = Record.filterMap(data, (value) => {
+              const decrypted = decryptEntry(value)
+              if (needsReEncrypt(decrypted)) migrate = true
+              return Result.fromOption(decode(decrypted), () => undefined)
+            })
+            if (migrate) {
+              // Re-encrypt legacy entries with proper 32-byte salt
+              const updated = { ...data }
+              for (const [key, info] of Object.entries(entries)) {
+                updated[key] = encryptEntry(info)
+              }
+              return Effect.tryPromise({
+                try: () => Filesystem.writeJson(file, updated, 0o600),
+                catch: fail("Failed to migrate legacy auth entries"),
+              }).pipe(Effect.map(() => entries))
+            }
+            return Effect.succeed(entries)
+          }),
         ),
       )
 

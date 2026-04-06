@@ -290,14 +290,28 @@ export const ProvidersLoginCommand = cmd({
       async fn() {
         if (args.url) {
           const url = args.url.replace(/\/+$/, "")
-          const res = await fetch(`${url}/.well-known/ax-code`)
+          let res: Response
+          try {
+            res = await fetch(`${url}/.well-known/ax-code`)
+          } catch (err) {
+            prompts.log.error(`Failed to reach ${url}: ${err instanceof Error ? err.message : String(err)}`)
+            prompts.outro("Done")
+            return
+          }
           if (!res.ok) {
             prompts.log.error(`Failed to fetch well-known config: HTTP ${res.status}`)
             prompts.outro("Done")
             return
           }
-          const wellknown = (await res.json()) as Record<string, any>
-          if (!wellknown?.auth?.command) {
+          let wellknown: Record<string, any>
+          try {
+            wellknown = (await res.json()) as Record<string, any>
+          } catch {
+            prompts.log.error("Well-known config returned invalid JSON")
+            prompts.outro("Done")
+            return
+          }
+          if (!wellknown?.auth?.command || !Array.isArray(wellknown.auth.command)) {
             prompts.log.error("Well-known config missing auth.command")
             prompts.outro("Done")
             return

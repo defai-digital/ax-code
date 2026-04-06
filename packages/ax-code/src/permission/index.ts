@@ -172,21 +172,31 @@ export namespace Permission {
         }),
       )
 
+      // Permissions that must always require interactive user confirmation
+      // and cannot be auto-approved by wildcard rules. This prevents agent
+      // default rules like {permission:"*",action:"allow",pattern:"*"} from
+      // silently bypassing critical safety checks.
+      const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation"])
+
       const ask = Effect.fn("Permission.ask")(function* (input: z.infer<typeof AskInput>) {
         const { approved, pending } = yield* InstanceState.get(state)
         const { ruleset, ...request } = input
         let needsAsk = false
 
-        for (const pattern of request.patterns) {
-          const rule = evaluate(request.permission, pattern, ruleset, approved)
-          log.info("evaluated", { permission: request.permission, pattern, action: rule })
-          if (rule.action === "deny") {
-            return yield* new DeniedError({
-              ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
-            })
-          }
-          if (rule.action === "allow") continue
+        if (INTERACTIVE_ONLY.has(request.permission)) {
           needsAsk = true
+        } else {
+          for (const pattern of request.patterns) {
+            const rule = evaluate(request.permission, pattern, ruleset, approved)
+            log.info("evaluated", { permission: request.permission, pattern, action: rule })
+            if (rule.action === "deny") {
+              return yield* new DeniedError({
+                ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
+              })
+            }
+            if (rule.action === "allow") continue
+            needsAsk = true
+          }
         }
 
         if (!needsAsk) return

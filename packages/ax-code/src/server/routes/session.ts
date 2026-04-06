@@ -828,7 +828,7 @@ export const SessionRoutes = lazy(() =>
           "Create and send a new message to a session asynchronously, starting the session if needed and returning immediately.",
         operationId: "session.prompt_async",
         responses: {
-          204: {
+          202: {
             description: "Prompt accepted",
           },
           ...errors(400, 404),
@@ -842,19 +842,16 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
-        c.status(204)
-        c.header("Content-Type", "application/json")
-        return stream(c, async () => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          SessionPrompt.prompt({ ...body, sessionID }).catch((err) => {
-            log.error("prompt_async failed", { sessionID, error: err })
-            Bus.publish(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
-            })
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+        SessionPrompt.prompt({ ...body, sessionID }).catch((err) => {
+          log.error("prompt_async failed", { sessionID, error: err })
+          Bus.publish(Session.Event.Error, {
+            sessionID,
+            error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
           })
         })
+        return c.body(null, 202)
       },
     )
     .post(

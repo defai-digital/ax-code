@@ -74,6 +74,12 @@ export function decrypt(value: EncryptedValue): string {
   const encrypted = Buffer.from(value.encrypted, "base64")
   const iv = Buffer.from(value.iv, "base64")
   const tag = Buffer.from(value.tag, "base64")
+  // Legacy entries lack an explicit salt field. For those, the IV was
+  // used as the salt during encryption. iv.subarray(0, SALT_LENGTH)
+  // returns only 16 bytes (IV_LENGTH) instead of the full 32-byte
+  // SALT_LENGTH — this is a known limitation preserved for backward
+  // compatibility. Callers should re-encrypt via encrypt() to migrate
+  // legacy entries to a proper 32-byte random salt.
   const salt = value.salt ? Buffer.from(value.salt, "base64") : iv.subarray(0, SALT_LENGTH)
 
   // Try current iterations first
@@ -93,6 +99,14 @@ function decryptWith(encrypted: Buffer, iv: Buffer, salt: Buffer, tag: Buffer, i
   const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH })
   decipher.setAuthTag(tag)
   return decipher.update(encrypted) + decipher.final("utf8")
+}
+
+/**
+ * Check if an encrypted value uses the legacy salt derivation (no explicit salt field).
+ * Legacy entries should be re-encrypted via encrypt() to use a proper 32-byte random salt.
+ */
+export function isLegacySalt(value: EncryptedValue): boolean {
+  return !value.salt
 }
 
 /**
@@ -133,7 +147,12 @@ export function decryptField<T extends Record<string, unknown>>(obj: T, field: s
   const val = obj[field]
   if (!isEncrypted(val)) return obj
   try {
-    return { ...obj, [field]: decrypt(val) }
+    const plaintext = decrypt(val)
+    if (isLegacySalt(val)) {
+      // Re-encrypt with a proper 32-byte random salt to migrate legacy entries
+      return { ...obj, [field]: plaintext, __needsReEncrypt: true }
+    }
+    return { ...obj, [field]: plaintext }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(`auth/encryption: failed to decrypt field "${field}"`, err)

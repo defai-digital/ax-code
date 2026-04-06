@@ -604,7 +604,9 @@ export namespace MCP {
   export async function connect(name: string) {
     const prev = connectLocks.get(name) ?? Promise.resolve()
     const next = prev.then(() => connectImpl(name), () => connectImpl(name))
-    connectLocks.set(name, next.catch(() => {}))
+    connectLocks.set(name, next.catch((err) => {
+      log.warn("MCP connect failed", { name, error: err instanceof Error ? err.message : String(err) })
+    }))
     return next
   }
 

@@ -940,7 +940,7 @@ export namespace SessionPrompt {
                 permission: "isolation_escalation",
                 patterns: [e.message],
                 always: [],
-                metadata: { reason: e.reason },
+                metadata: { reason: e.reason, requireInteractive: true },
               })
               const bypassed = context(args, options)
               bypassed.extra = { ...bypassed.extra, isolation: undefined }
