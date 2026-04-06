@@ -114,7 +114,7 @@ export namespace Agent {
           const agents: Record<string, Info> = {
             build: {
               name: "build",
-              displayName: "Developer",
+              displayName: "Dev",
               description: "The default agent. Executes tools based on configured permissions.",
               options: {},
               permission: Permission.merge(
@@ -210,7 +210,7 @@ export namespace Agent {
             },
             security: {
               name: "security",
-              displayName: "Security Auditor",
+              displayName: "Security",
               description:
                 "Security Auditor agent. Scans code for vulnerabilities, secrets, OWASP issues, and compliance problems. Read-only — reports findings without modifying code.",
               prompt: PROMPT_SECURITY,
@@ -263,7 +263,7 @@ export namespace Agent {
             },
             perf: {
               name: "perf",
-              displayName: "Performance Analyst",
+              displayName: "Perf",
               description:
                 "Performance Analyst agent. Finds bottlenecks, inefficient algorithms, memory issues, and optimization opportunities. Read-only — benchmarks and reports without modifying code.",
               prompt: PROMPT_PERF,
