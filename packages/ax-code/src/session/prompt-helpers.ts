@@ -411,6 +411,9 @@ export type SystemCache = {
   environment?: string[]
   environmentModelKey?: string
   instructions?: string[]
+  skills?: string | undefined
+  skillsAgentKey?: string
+  skillsMsgCount?: number
 }
 
 export async function systemPrompt(input: {
@@ -424,7 +427,18 @@ export async function systemPrompt(input: {
   instructions?: typeof InstructionPrompt.system
   structuredPrompt?: string
 }) {
-  const skills = await (input.skills ?? SystemPrompt.skills)(input.agent, input.messages)
+  // Cache skills per agent — only recompute when agent changes or new messages arrive
+  const msgCount = input.messages?.length ?? 0
+  if (
+    input.cache.skillsAgentKey !== input.agent.name ||
+    input.cache.skillsMsgCount !== msgCount
+  ) {
+    input.cache.skills = await (input.skills ?? SystemPrompt.skills)(input.agent, input.messages)
+    input.cache.skillsAgentKey = input.agent.name
+    input.cache.skillsMsgCount = msgCount
+  }
+  const skills = input.cache.skills
+
   const modelKey = `${input.model.providerID}/${input.model.api.id}`
   if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
     input.cache.environment = await (input.environment ?? SystemPrompt.environment)(input.model as any)

@@ -28,13 +28,13 @@ export namespace SessionProcessor {
 
   /** Batches delta events by time window to reduce event fan-out */
   function createDeltaBatcher(sessionID: SessionID, messageID: MessageID) {
-    const pending = new Map<PartID, string>() // partID -> accumulated delta
+    const pending = new Map<PartID, string[]>() // partID -> accumulated delta chunks
     let timer: ReturnType<typeof setTimeout> | undefined
 
     const flush = () => {
       timer = undefined
-      for (const [partID, delta] of pending) {
-        Bus.publish(MessageV2.Event.PartDelta, { sessionID, messageID, partID, field: "text", delta })
+      for (const [partID, chunks] of pending) {
+        Bus.publish(MessageV2.Event.PartDelta, { sessionID, messageID, partID, field: "text", delta: chunks.join("") })
       }
       pending.clear()
     }
@@ -42,7 +42,8 @@ export namespace SessionProcessor {
     return {
       push(partID: PartID, delta: string) {
         const existing = pending.get(partID)
-        pending.set(partID, existing ? existing + delta : delta)
+        if (existing) existing.push(delta)
+        else pending.set(partID, [delta])
         if (!timer) timer = setTimeout(flush, DELTA_BATCH_MS)
       },
       flush() {
@@ -65,6 +66,10 @@ export namespace SessionProcessor {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const recentToolRing: { tool: string; input: string }[] = []
     const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
+    // Debounce snapshot tracking — skip if called within 500ms of last track
+    let lastSnapshotTime = 0
+    let lastSnapshotHash: string | undefined
+    const SNAPSHOT_DEBOUNCE_MS = 500
     const partBase = () => ({
       id: PartID.ascending(),
       messageID: input.assistantMessage.id,
@@ -126,7 +131,7 @@ export namespace SessionProcessor {
                     metadata: value.providerMetadata,
                   }
                   reasoningMap[value.id] = reasoningPart
-                  await Session.updatePart(reasoningPart)
+                  // DB write deferred to reasoning-end — part exists in memory for delta tracking
                   break
 
                 case "reasoning-delta":
@@ -158,7 +163,8 @@ export namespace SessionProcessor {
                 case "tool-input-start":
                   usedTools = true
                   const base = partBase()
-                  const part = await Session.updatePart({
+                  // DB write deferred to tool-call — part tracked in memory via toolcalls map
+                  toolcalls[value.id] = {
                     ...base,
                     id: toolcalls[value.id]?.id ?? base.id,
                     type: "tool",
@@ -169,8 +175,7 @@ export namespace SessionProcessor {
                       input: {},
                       raw: "",
                     },
-                  })
-                  toolcalls[value.id] = part as MessageV2.ToolPart
+                  } as MessageV2.ToolPart
                   break
 
                 case "tool-input-delta":
@@ -395,7 +400,16 @@ export namespace SessionProcessor {
                       write: usage.tokens.cache.write + input.assistantMessage.tokens.cache.write,
                     },
                   }
-                  if (usedTools) snapshot = await Snapshot.track()
+                  if (usedTools) {
+                    const now = Date.now()
+                    if (now - lastSnapshotTime < SNAPSHOT_DEBOUNCE_MS && lastSnapshotHash) {
+                      snapshot = lastSnapshotHash
+                    } else {
+                      snapshot = await Snapshot.track()
+                      lastSnapshotTime = now
+                      lastSnapshotHash = snapshot
+                    }
+                  }
                   await Session.updatePart({
                     id: PartID.ascending(),
                     reason: usedTools ? "tool-calls" : finishReason,
@@ -476,7 +490,7 @@ export namespace SessionProcessor {
                     },
                     metadata: value.providerMetadata,
                   }
-                  await Session.updatePart(currentText)
+                  // DB write deferred to text-end — part exists in memory for delta tracking
                   break
 
                 case "text-delta":

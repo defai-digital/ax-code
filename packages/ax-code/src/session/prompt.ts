@@ -493,11 +493,14 @@ export namespace SessionPrompt {
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
     const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
-    const cachedSystemPrompt = {
-      environment: undefined as string[] | undefined,
-      environmentModelKey: undefined as string | undefined,
-      instructions: undefined as string[] | undefined,
+    const cachedSystemPrompt: import("./prompt-helpers").SystemCache = {
+      environment: undefined,
+      environmentModelKey: undefined,
+      instructions: undefined,
     }
+    // Cache agent/model info per loop to avoid repeated async lookups
+    let cachedAgent: { key: string; value: Agent.Info } | undefined
+    let cachedModel: { key: string; value: Provider.Model } | undefined
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
     while (true) {
@@ -605,14 +608,18 @@ export namespace SessionPrompt {
         sessionStarted = true
       }
 
-      const model = await modelInfo({
-        sessionID,
-        providerID: lastUser.model.providerID,
-        modelID: lastUser.model.modelID,
-      }).catch((e) => {
-        reason = "error"
-        throw e
-      })
+      const modelKey = `${lastUser.model.providerID}/${lastUser.model.modelID}`
+      const model = cachedModel?.key === modelKey
+        ? cachedModel.value
+        : await modelInfo({
+          sessionID,
+          providerID: lastUser.model.providerID,
+          modelID: lastUser.model.modelID,
+        }).catch((e) => {
+          reason = "error"
+          throw e
+        })
+      cachedModel = { key: modelKey, value: model }
       const task = tasks.pop()
 
       // pending subtask
@@ -656,10 +663,13 @@ export namespace SessionPrompt {
       }
 
       // normal processing
-      const agent = await agentInfo({ sessionID, name: lastUser.agent }).catch((error) => {
-        reason = "error"
-        throw error
-      })
+      const agent = cachedAgent?.key === lastUser.agent
+        ? cachedAgent.value
+        : await agentInfo({ sessionID, name: lastUser.agent }).catch((error) => {
+          reason = "error"
+          throw error
+        })
+      cachedAgent = { key: lastUser.agent, value: agent }
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
       msgs = await insertReminders({
@@ -913,14 +923,18 @@ export namespace SessionPrompt {
       input.agent,
     )) {
       const cacheKey = schemaCacheKey(item.id)
-      const schema =
-        _schemaCache!.get(cacheKey) ??
-        (() => {
+      const cached = _schemaCache!.get(cacheKey)
+      const schema = cached !== undefined
+        ? (// LRU: move to end so recently-used entries survive eviction
+          _schemaCache!.delete(cacheKey),
+          _schemaCache!.set(cacheKey, cached),
+          cached)
+        : (() => {
           const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
           // Bound the cache to avoid a slow memory leak in long-running
           // processes (TUI/daemon) that accumulate tool×model entries
-          // across session lifetimes. Simple FIFO eviction: when we
-          // reach the cap, drop the oldest 100 entries. Maps preserve
+          // across session lifetimes. LRU eviction: when we reach the
+          // cap, drop the 100 least-recently-used entries. Maps preserve
           // insertion order, so `.keys()` iterates oldest first.
           const SCHEMA_CACHE_MAX = 500
           if (_schemaCache!.size >= SCHEMA_CACHE_MAX) {
@@ -1003,7 +1017,16 @@ export namespace SessionPrompt {
       // producing malformed input for the LLM. Clone to a fresh object so
       // the transformation is idempotent across iterations.
       const mcpTool = { ...item }
-      const transformed = ProviderTransform.schema(input.model, await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema))
+      const mcpCacheKey = schemaCacheKey(`mcp:${key}`)
+      let transformed = _schemaCache!.get(mcpCacheKey)
+      if (transformed !== undefined) {
+        // LRU: move to end
+        _schemaCache!.delete(mcpCacheKey)
+        _schemaCache!.set(mcpCacheKey, transformed)
+      } else {
+        transformed = ProviderTransform.schema(input.model, await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema))
+        _schemaCache!.set(mcpCacheKey, transformed)
+      }
       mcpTool.inputSchema = jsonSchema(transformed)
       // Wrap execute to add plugin hooks and format output
       mcpTool.execute = async (args, opts) => {

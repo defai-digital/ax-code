@@ -679,11 +679,15 @@ export namespace MCP {
   let toolsPromise: Promise<Record<string, Tool>> | undefined
   let toolsCacheSubscribed = false
   let toolsCacheGeneration = 0
+  let toolsCacheTime = 0
+  const TOOLS_CACHE_TTL_MS = 10_000 // Minimum time between tool re-fetches
 
   export async function tools() {
     if (!toolsCacheSubscribed) {
       toolsCacheSubscribed = true
       Bus.subscribe(ToolsChanged, () => {
+        // Respect TTL: if cache was just populated, defer invalidation
+        if (cachedTools && Date.now() - toolsCacheTime < TOOLS_CACHE_TTL_MS) return
         cachedTools = undefined
         toolsPromise = undefined
         toolsCacheGeneration++
@@ -736,7 +740,10 @@ export namespace MCP {
         }
       }
       // Only cache if no invalidation occurred during computation
-      if (toolsCacheGeneration === generation) cachedTools = result
+      if (toolsCacheGeneration === generation) {
+        cachedTools = result
+        toolsCacheTime = Date.now()
+      }
       return result
     })()
     try {
