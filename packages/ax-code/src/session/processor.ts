@@ -127,7 +127,7 @@ export namespace SessionProcessor {
                     metadata: value.providerMetadata,
                   }
                   reasoningMap[value.id] = reasoningPart
-                  // DB write deferred to reasoning-end — part exists in memory for delta tracking
+                  await Session.updatePart(reasoningPart)
                   break
 
                 case "reasoning-delta":
@@ -445,7 +445,6 @@ export namespace SessionProcessor {
                   }
                   if (snapshot) {
                     const patch = await Snapshot.patch(snapshot)
-                    snapshot = undefined
                     if (patch.files.length) {
                       await Session.updatePart({
                         ...partBase(),
@@ -454,6 +453,7 @@ export namespace SessionProcessor {
                         files: patch.files,
                       })
                     }
+                    snapshot = undefined
                   }
                   SessionSummary.summarize({
                     sessionID: input.sessionID,
@@ -477,7 +477,7 @@ export namespace SessionProcessor {
                     },
                     metadata: value.providerMetadata,
                   }
-                  // DB write deferred to text-end — part exists in memory for delta tracking
+                  await Session.updatePart(currentText)
                   break
 
                 case "text-delta":

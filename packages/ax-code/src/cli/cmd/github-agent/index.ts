@@ -1191,8 +1191,8 @@ export const GithubRunCommand = cmd({
             return existing.data[0].number
           }
         } catch (e) {
-          core.error(`Failed to check for existing PR: ${e}`)
-          return null
+          // If the check fails, proceed to create — we'll get a clear error if a PR already exists
+          core.warning(`Failed to check for existing PR: ${e}`)
         }
 
         // Verify there are commits between base and head before creating the PR.

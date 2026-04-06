@@ -125,13 +125,12 @@ export namespace Config {
             log.warn("wellknown config URL rejected by SSRF guard", { url, err })
             return undefined
           }
-          const fetchOpts = { signal: AbortSignal.timeout(10_000) }
-          const response = await Ssrf.pinnedFetch(endpoint, fetchOpts)
+          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(10_000) })
             .then((res) => {
               if (res.ok || res.status !== 404) return res
-              return Ssrf.pinnedFetch(legacy, fetchOpts)
+              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) })
             })
-            .catch(() => Ssrf.pinnedFetch(legacy, fetchOpts))
+            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) }))
           if (!response.ok) {
             log.warn("failed to fetch remote config", { url, status: response.status })
             return undefined
