@@ -238,7 +238,13 @@ if (Script.release) {
       await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
     }
   }
-  await $`gh release upload v${Script.version} ./dist/*.zip ./dist/*.tar.gz --clobber --repo ${process.env.GH_REPO}`
+  const archives = [
+    ...new Bun.Glob("*.zip").scanSync({ cwd: "./dist" }),
+    ...new Bun.Glob("*.tar.gz").scanSync({ cwd: "./dist" }),
+  ].map((f) => `./dist/${f}`)
+  if (archives.length > 0) {
+    await $`gh release upload v${Script.version} ${archives} --clobber --repo ${process.env.GH_REPO}`
+  }
 }
 
 export { binaries }
