@@ -491,6 +491,57 @@
           "context": 2000000,
           "output": 30000
         }
+      },
+      "grok-beta": {
+        "id": "grok-beta",
+        "name": "Grok Beta",
+        "family": "grok",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-08-13",
+        "last_updated": "2025-08-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 131072,
+          "output": 4096
+        }
+      },
+      "grok-vision-beta": {
+        "id": "grok-vision-beta",
+        "name": "Grok Vision Beta",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-09-10",
+        "last_updated": "2025-09-10",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 4096
+        }
       }
     }
   },
