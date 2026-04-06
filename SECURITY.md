@@ -7,7 +7,7 @@ predates the project's rename to `ax-code` and is end of life — upgrade
 to the current minor before reporting a vulnerability.
 
 | Version | Supported |
-|---------|-----------|
+| ------- | --------- |
 | 2.3.x   | Yes       |
 | < 2.3   | No        |
 
@@ -34,13 +34,14 @@ ax-code is an AI-powered coding assistant that runs locally on your machine. It 
 
 ax-code includes a built-in execution isolation sandbox that restricts what the AI agent can access at the tool level. Three modes are available:
 
-| Mode | Behavior |
-|------|----------|
-| **Read-only** | Blocks all file mutations and shell commands |
+| Mode                          | Behavior                                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| **Read-only**                 | Blocks all file mutations and shell commands                                        |
 | **Workspace write** (default) | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
-| **Full access** | Disables isolation entirely (explicit opt-in) |
+| **Full access**               | Disables isolation entirely (explicit opt-in)                                       |
 
 Key properties:
+
 - **Default safe** — workspace-write mode with network disabled is the default
 - **Tool-level enforcement** — all mutation tools (bash, edit, write, apply_patch) and network tools (webfetch, websearch, codesearch) check isolation policy before executing
 - **Protected paths** — `.git` and `.ax-code` directories are always protected from writes, even in workspace-write mode
@@ -71,21 +72,37 @@ MCP OAuth tokens, client secrets, and account access/refresh tokens are also enc
 
 ### In Scope
 
-| Category | Examples |
-| --- | --- |
-| **Sandbox bypass** | Executing commands or writing files outside allowed boundaries |
-| **Authentication bypass** | Circumventing `AX_CODE_SERVER_PASSWORD` in server mode |
-| **Key exfiltration** | Extracting stored API keys without local machine access |
-| **Path traversal** | Tools reading/writing outside the intended working directory |
-| **Command injection** | Crafted input that executes arbitrary commands bypassing isolation |
-| **Dependency vulnerabilities** | Known CVEs in bundled dependencies with a viable attack path |
+| Category                       | Examples                                                           |
+| ------------------------------ | ------------------------------------------------------------------ |
+| **Sandbox bypass**             | Executing commands or writing files outside allowed boundaries     |
+| **Authentication bypass**      | Circumventing `AX_CODE_SERVER_PASSWORD` in server mode             |
+| **Key exfiltration**           | Extracting stored API keys without local machine access            |
+| **Path traversal**             | Tools reading/writing outside the intended working directory       |
+| **Command injection**          | Crafted input that executes arbitrary commands bypassing isolation |
+| **Dependency vulnerabilities** | Known CVEs in bundled dependencies with a viable attack path       |
 
 ### Out of Scope
 
-| Category | Rationale |
-| --- | --- |
-| **LLM provider data handling** | Data sent to your configured provider is governed by their policies |
-| **MCP server behavior** | External MCP servers you configure are outside our trust boundary |
-| **Malicious config files** | Users control their own config; modifying it requires local access |
-| **Social engineering** | Prompt injection via untrusted repos is a known LLM-agent limitation |
-| **OS-level sandbox escapes** | The isolation sandbox operates at the application layer, not the OS process layer |
+| Category                       | Rationale                                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| **LLM provider data handling** | Data sent to your configured provider is governed by their policies               |
+| **MCP server behavior**        | External MCP servers you configure are outside our trust boundary                 |
+| **Malicious config files**     | Users control their own config; modifying it requires local access                |
+| **Social engineering**         | Prompt injection via untrusted repos is a known LLM-agent limitation              |
+| **OS-level sandbox escapes**   | The isolation sandbox operates at the application layer, not the OS process layer |
+
+## Enterprise Security Capabilities
+
+AX Code is designed for enterprise use with the following hardening features:
+
+- **Fine-grained Permissions**: Agent-specific and pattern-based rulesets (`allow`/`deny`/`ask`). Security agent defaults to read-only. Rules evaluated across project, agent, and approved lists.
+- **Session Audit Trails**: Every tool call, permission decision, and file change is recorded in SQLite with snapshots. Supports replay, fork, and export for compliance reviews.
+- **Deterministic Refactoring (DRE)**: `impact_analyze`, `refactor_plan`, and `refactor_apply` (shadow worktree + lint/typecheck/tests) provide auditable, reversible changes.
+- **Credential Management**: AES-256-GCM encryption for all keys/tokens. Per-directory isolation via `InstanceState`.
+- **Sandbox Enforcement**: Application-level isolation with bash command parsing (tree-sitter). Protected paths (`.git`, `.ax-code`). Persists in config.
+- **Server Hardening**: Localhost-only by default; password-protected remote access with Basic Auth.
+- **Code Intelligence & Scanning**: Built-in secret/hardcode detection, dependency impact analysis.
+
+For full enterprise governance (RBAC, policy-as-code, SIEM export, cryptographic audit), integrate with **AX Trust** (roadmap item).
+
+See [docs/sandbox.md](docs/sandbox.md) for configuration and [ADR-003](docs/adr/ADR-003-hardening-program-review.md) for hardening assessment.

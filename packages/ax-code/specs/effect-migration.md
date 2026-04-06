@@ -1,6 +1,6 @@
 # Effect patterns
 
-Practical reference for new and migrated Effect code in `packages/opencode`.
+Practical reference for new and migrated Effect code in `packages/ax-code`.
 
 ## Choose scope
 
@@ -23,7 +23,7 @@ export namespace Foo {
     readonly get: (id: FooID) => Effect.Effect<FooInfo, FooError>
   }
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@opencode/Foo") {}
+  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Foo") {}
 
   export const layer = Layer.effect(
     Service,

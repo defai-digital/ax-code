@@ -45,13 +45,13 @@ Most AI coding products stop at chat plus tool calls. AX Code is designed as a r
 
 Teams adopt `ax-code` when they need AI coding to behave like an execution system they can reason about, integrate, and operate, rather than a suggestion layer they can only observe after the fact.
 
-| Requirement                                                 | Typical AI coding tooling                     | AX Code                                                                |
-| ----------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Use multiple model providers without rewriting the workflow | Often tied to one vendor or one API surface   | Provider-agnostic runtime with cloud and local backends                |
-| Keep tool execution controlled                              | Tooling is often implicit or loosely governed | Explicit tools, session state, sandbox, and permission boundaries      |
-| Reuse the same coding engine across products                | Usually bound to one UI                       | Same runtime can power CLI, TUI, server, SDK, and internal automation  |
-| Operate in stricter environments                            | Cloud assumptions are common                  | Local-first, localhost defaults, and air-gap-friendly deployment model |
-| Build on top of it                                          | Extensibility is limited or UI-specific       | SDK, MCP, plugins, LSP, and headless server mode                       |
+| Requirement                                      | Cursor / Claude Code / Copilot / Aider | AX Code                                                            |
+| ------------------------------------------------ | -------------------------------------- | ------------------------------------------------------------------ |
+| Multi-provider without workflow changes          | Mostly vendor-tied (one primary model) | Provider-agnostic (10+ cloud + local/AX Engine/Ollama)             |
+| Controlled/safe tool execution                   | Often implicit or broad permissions    | Explicit tools, sandbox modes, permission rules, bash analysis     |
+| Reusable across surfaces (CLI, IDE, SDK, CI)     | UI-bound or chat-only                  | Same runtime powers TUI, VS Code, headless server, full SDK        |
+| Local-first / air-gapped / enterprise governance | Heavy cloud reliance                   | Local defaults, encrypted keys, session audit, deterministic DRE   |
+| Extensibility & integration                      | Limited plugins                        | SDK, MCP servers, plugins, LSP graph, deterministic refactor tools |
 
 ## Primary Users
 
@@ -90,10 +90,10 @@ The important distinction is that `ax-code` is not just a chat UI. It is a runti
 
 ## High-Value Use Cases
 
-1. **Large-codebase refactoring** with session memory, LSP support, and controlled tool execution
-2. **Internal coding agents and CI pipelines** built on the server or SDK surface
-3. **Secure enterprise coding workflows** where sandboxing, policy, and auditability matter
-4. **Offline or air-gapped development environments** using local or sovereign model backends
+1. **Large-codebase refactoring** — e.g. migrate legacy monolith, extract services, update frameworks using DRE (impact_analyze + refactor_apply), persistent sessions, and LSP graph
+2. **Internal coding agents & CI** — embed via SDK/headless server for automated reviews, security scans, or PR bots
+3. **Secure/auditable workflows** — sandbox + permission rules + encrypted sessions for enterprise or regulated environments
+4. **Offline/air-gapped dev** — run fully local with AX Engine/Ollama, no code leaves machine
 
 ## When To Use AX Code
 
@@ -224,21 +224,22 @@ Local providers auto-discover running models — no API key needed. Your code ne
 
 ### Specialized AI Agents
 
-AX Code doesn't use a single generic assistant. It ships with **9 purpose-built agents**, each with tailored system prompts, tool access, and permission boundaries.
+AX Code uses **10 purpose-built agents** with enterprise-focused roles (structured workflows, TDD/PRD/ADR enforcement, DRE tools for safe deterministic changes, prioritization, and high-value patterns). This differentiates us from general AI coders by supporting real business environments — governed processes, infra/DevOps, auditable refactoring, and quality gates instead of unstructured chat.
 
-| Agent         | What It Does                                                  | Auto-routes When You Say...                  |
-| ------------- | ------------------------------------------------------------- | -------------------------------------------- |
-| **build**     | General development — full tool access                        | _(default agent)_                            |
-| **security**  | Vulnerability scanning, secrets detection, OWASP analysis     | "scan for vulnerabilities", "security audit" |
-| **architect** | System design analysis, dependency review, coupling detection | "analyze architecture", "review structure"   |
-| **debug**     | Bug investigation, root cause analysis, systematic fixes      | "debug this", "why is it crashing"           |
-| **perf**      | Bottleneck detection, memory profiling, optimization          | "too slow", "optimize", "performance"        |
-| **plan**      | Read-only task decomposition and planning                     | _(manual switch via Tab)_                    |
-| **react**     | Structured Thought/Action/Observation reasoning               | _(manual switch via Tab)_                    |
-| **general**   | Parallel multi-step task execution                            | _(subagent)_                                 |
-| **explore**   | Fast codebase search and navigation                           | _(subagent)_                                 |
+| Agent          | What It Does                                                            | Auto-routes When You Say...                        |
+| -------------- | ----------------------------------------------------------------------- | -------------------------------------------------- |
+| **Dev**        | General development with full tools (default)                           | _(default agent)_                                  |
+| **Security**   | Vulnerability/secret scanning, OWASP, compliance (read-only + DRE)      | "scan", "security audit", "vulnerabilities"        |
+| **Architect**  | Design analysis, dependencies, coupling (read-only)                     | "architecture", "review structure"                 |
+| **Debugger**   | Root cause analysis, reproduction, systematic fixes (plan + DRE)        | "debug", "why is it crashing", "fix bug"           |
+| **Perf**       | Bottlenecks, profiling, optimization (web-enabled + DRE)                | "slow", "optimize", "performance"                  |
+| **DevOps**     | Infra, CI/CD, Docker, K8s, Terraform, deployments (write-enabled + DRE) | "deploy", "docker", "kubernetes", "ci/cd", "infra" |
+| **Planner**    | Task decomposition and planning (read-only)                             | _(manual via Tab)_                                 |
+| **Reasoner**   | Structured ReAct reasoning for complex tasks                            | _(manual via Tab)_                                 |
+| **Assistant**  | Parallel multi-step execution (subagent)                                | _(subagent)_                                       |
+| **Researcher** | Fast codebase exploration and search (subagent)                         | _(subagent)_                                       |
 
-**Agent auto-routing** analyzes your message and switches to the right agent automatically. A toast notification tells you when it happens. You can also switch manually with **Tab**.
+**Auto-routing** selects based on keywords/patterns with confidence scoring. Switch manually with **Tab**. All agents enforce enterprise best practices (TDD, PRD/ADR before features, DRE tools, prioritization). See `src/agent/agent.ts` for details.
 
 ### Language Server Integration (LSP)
 
@@ -340,15 +341,17 @@ Catches hardcoded colors, raw spacing values, inline styles, missing alt text, a
 
 ## Security & Governance
 
+**Enterprise-ready by design.** AX Code emphasizes controlled execution, auditability, and least-privilege through sandboxing, fine-grained permissions, encrypted credentials, session snapshots, and replayable audit trails. See [SECURITY.md](SECURITY.md) (threat model + scope), [docs/sandbox.md](docs/sandbox.md) (full config), and [ADR-003 hardening review](docs/adr/ADR-003-hardening-program-review.md).
+
 ### Execution Sandbox
 
 Control what the AI agent can access. Sandbox is **off by default** — toggle it on from the TUI with `/sandbox` or `Ctrl+P` → "Turn sandbox on". The status bar shows **sandbox on** (green) or **sandbox off** (red) at all times.
 
-| Mode | Status Bar | Behavior |
-| --- | --- | --- |
-| **Full access** _(default)_ | sandbox off | No restrictions |
-| **Workspace write** | sandbox on | Writes confined to workspace; `.git` and `.ax-code` protected; network disabled |
-| **Read-only** | sandbox on | All mutations and bash commands blocked |
+| Mode                        | Status Bar  | Behavior                                                                        |
+| --------------------------- | ----------- | ------------------------------------------------------------------------------- |
+| **Full access** _(default)_ | sandbox off | No restrictions                                                                 |
+| **Workspace write**         | sandbox on  | Writes confined to workspace; `.git` and `.ax-code` protected; network disabled |
+| **Read-only**               | sandbox on  | All mutations and bash commands blocked                                         |
 
 ```bash
 ax-code --sandbox workspace-write   # start with sandbox on
@@ -491,6 +494,18 @@ Config is hierarchical: remote org defaults -> global -> custom path -> project 
 | `AX_CODE_SERVER_PASSWORD`      | Required for network-bound server                      |
 
 ---
+
+## Best Practices
+
+- **Always initialize context**: Run `ax-code init` (or `--depth full`) first in new projects to generate AX.md for better agent understanding.
+- **Use the right agent**: Let auto-routing work, or switch manually (Tab). Use `debug` for bugs, `perf` for optimization, `security` for audits.
+- **Enable sandbox early**: Toggle with `/sandbox` or `--sandbox workspace-write` for safety, especially with untrusted code or bash.
+- **Leverage DRE tools**: For refactors use `refactor_plan` → review → `refactor_apply`; `impact_analyze` before edits; `dedup_scan`/`hardcode_scan` for cleanup.
+- **Index large codebases**: Run `ax-code index` for fast LSP/graph queries in big repos.
+- **Persist & audit**: Use sessions (`session list/export`), review permissions, enable MCP only for trusted servers.
+- **SDK usage**: Always `dispose()` agents; prefer typed hooks; handle `ToolError`/`PermissionError`.
+- **Config & isolation**: Use project `ax-code.json` + `.ax-code/` for custom agents/tools/plugins; set permissions per-agent.
+- **Providers**: Prefer local (Ollama/AX Engine) for sensitive work; test with Groq for speed.
 
 ## CLI Reference
 

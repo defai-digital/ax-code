@@ -711,6 +711,7 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
         architect: { disable: true },
         debug: { disable: true },
         perf: { disable: true },
+        devops: { disable: true },
       },
     },
   })
