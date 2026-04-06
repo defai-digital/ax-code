@@ -39,7 +39,11 @@ export async function load(projectRoot: string): Promise<ProjectMemory | null> {
     if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return null
     throw err
   }
-  return JSON.parse(text) as ProjectMemory
+  try {
+    return JSON.parse(text) as ProjectMemory
+  } catch {
+    return null
+  }
 }
 
 /**

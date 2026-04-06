@@ -58,7 +58,12 @@ export const PrCommand = cmd({
         if (prInfoResult.code === 0) {
           const prInfoText = prInfoResult.text
           if (prInfoText.trim()) {
-            const prInfo = JSON.parse(prInfoText)
+            let prInfo: any
+            try {
+              prInfo = JSON.parse(prInfoText)
+            } catch {
+              throw new Error(`Failed to parse PR info from gh CLI: ${prInfoText.slice(0, 200)}`)
+            }
 
             // Handle fork PRs
             if (prInfo && prInfo.isCrossRepository && prInfo.headRepository && prInfo.headRepositoryOwner) {

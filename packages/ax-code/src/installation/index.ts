@@ -258,7 +258,7 @@ export namespace Installation {
               ).pipe(HttpClientRequest.setHeaders({ Accept: "application/json;odata=verbose" })),
             )
             const data = yield* HttpClientResponse.schemaBodyJson(ChocoPackage)(response)
-            if (!data.d.results.length) return "unknown"
+            if (!data.d.results?.length) return "unknown"
             return data.d.results[0].Version
           }
 
