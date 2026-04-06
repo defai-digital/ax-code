@@ -77,6 +77,18 @@ When making changes to files, first understand the file's code conventions. Mimi
 # Code style
 - IMPORTANT: DO NOT ADD ***ANY*** COMMENTS unless asked
 
+# Implementation quality
+
+When writing or modifying code, follow these practices in priority order:
+
+1. **Understand before changing** — read the function, its callers, and its tests before editing. Use `impact_analyze` on shared symbols. A change that makes one caller work but breaks three others is a net negative.
+2. **Match scope to request** — implement exactly what was asked. A bug fix should fix the bug, not refactor the module. A feature request should add the feature, not redesign the architecture. If you see opportunities for improvement beyond the request, note them but don't act without asking.
+3. **Reuse before creating** — search for existing utilities, helpers, and patterns before writing new ones. Check imports in neighboring files. A codebase with one way to do something is better than one with three slightly different ways.
+4. **Error paths matter** — handle errors at system boundaries (user input, network, file I/O, external APIs). Use the project's existing error handling patterns. Don't add try/catch around code that can't fail. Don't swallow errors silently.
+5. **Make it testable** — write functions that take inputs and return outputs. Avoid side effects in business logic. If a function is hard to test, that's a design signal — break it down.
+6. **Verify holistically** — after changing multiple files, run the full test suite, not just the test for the file you changed. A change to a utility affects all callers.
+7. **Leave the code better** — if you encounter a minor issue adjacent to your change (unused import, obvious typo, dead code), fix it. But don't refactor unrelated code or add abstractions that aren't needed yet.
+
 # Decision-making
 
 When multiple approaches can solve a problem, evaluate them by value and risk:
