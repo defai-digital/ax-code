@@ -32,7 +32,7 @@ function extractTarget(tool: string, input: Record<string, unknown>): string {
     case "read":
     case "edit":
     case "write":
-      return input.file_path ? path.basename(String(input.file_path)) : ""
+      return (input.filePath ?? input.file_path) ? path.basename(String(input.filePath ?? input.file_path)) : ""
     case "glob":
       return truncate(String(input.pattern ?? ""), 40)
     case "grep":
