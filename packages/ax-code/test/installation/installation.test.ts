@@ -116,9 +116,11 @@ describe("installation", () => {
       const layer = testLayer(
         () => jsonResponse({ versions: { stable: "2.0.0" } }),
         (cmd, args) => {
-          // getBrewFormula: no tap formula, falls back to core formula HTTP lookup
-          if (cmd === "brew" && args.includes("--formula") && args.includes("defai-digital/tap/ax-code")) return ""
-          if (cmd === "brew" && args.includes("--formula") && args.includes("ax-code")) return ""
+          // getBrewFormula: no tap formula found, falls back to default tap
+          if (cmd === "brew" && args.includes("--formula")) return ""
+          // brew info --json=v2: return valid JSON so the parse doesn't fail
+          if (cmd === "brew" && args.includes("--json=v2"))
+            return JSON.stringify({ formulae: [{ versions: { stable: "2.0.0" } }] })
           return ""
         },
       )
