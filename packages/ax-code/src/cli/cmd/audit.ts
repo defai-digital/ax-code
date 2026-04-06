@@ -71,6 +71,43 @@ const AuditExportCommand = cmd({
   },
 })
 
+const AuditReportCommand = cmd({
+  command: "report <sessionID>",
+  describe: "generate a markdown audit report for a session",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("sessionID", {
+        describe: "session ID to generate report for",
+        type: "string",
+        demandOption: true,
+      })
+      .option("output", {
+        alias: "o",
+        describe: "write report to file instead of stdout",
+        type: "string",
+      }),
+  handler: async (args) => {
+    await bootstrap(process.cwd(), async () => {
+      const { AuditReport } = await import("../../audit/report")
+      const sid = SessionID.make(args.sessionID)
+      const count = EventQuery.count(sid)
+      if (count === 0) {
+        process.stderr.write(`No events found for session ${args.sessionID}${EOL}`)
+        process.exit(1)
+      }
+      process.stderr.write(`Generating audit report for session ${args.sessionID} (${count} events)${EOL}`)
+      const report = await AuditReport.generate(sid)
+      if (args.output) {
+        await Bun.write(args.output, report)
+        process.stderr.write(`Report written to ${args.output}${EOL}`)
+      } else {
+        process.stdout.write(report)
+        process.stdout.write(EOL)
+      }
+    })
+  },
+})
+
 const AuditOtlpCommand = cmd({
   command: "otlp <sessionID>",
   describe: "export session as OpenTelemetry trace spans",
@@ -109,6 +146,7 @@ export const AuditCommand = cmd({
       .command(AuditExportCommand as never)
       .command(AuditPruneCommand as never)
       .command(AuditOtlpCommand as never)
+      .command(AuditReportCommand as never)
       .demandCommand(),
   handler: async () => {},
 })

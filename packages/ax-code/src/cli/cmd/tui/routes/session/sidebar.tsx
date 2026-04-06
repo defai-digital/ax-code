@@ -14,6 +14,42 @@ import { TodoItem } from "../../component/todo-item"
 import { useCommandDialog } from "../../component/dialog-command"
 import { Usage } from "./usage"
 import { Flag } from "@/flag/flag"
+import type { Part } from "@ax-code/sdk/v2"
+
+function activityIcon(tool: string): string {
+  switch (tool) {
+    case "bash": return "$"
+    case "read": return "\u2192"
+    case "edit":
+    case "write": return "\u270E"
+    case "glob":
+    case "grep":
+    case "codesearch": return "\u2315"
+    case "webfetch":
+    case "websearch": return "\u2295"
+    case "task": return "\u25C8"
+    default: return "\u00B7"
+  }
+}
+
+function activityLabel(part: Part): string {
+  if (part.type !== "tool") return ""
+  const state = part.state as { status: string; title?: string; input?: Record<string, unknown> }
+  if (state.title) {
+    return state.title.length > 33 ? state.title.slice(0, 30) + "..." : state.title
+  }
+  if (state.status === "pending") return `${part.tool} (pending)`
+  return part.tool
+}
+
+function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
+  switch (status) {
+    case "running": return theme.primary
+    case "completed": return theme.success
+    case "error": return theme.error
+    default: return theme.textMuted
+  }
+}
 
 function bar(input: { pct?: number | null; busy: boolean; tick: number }) {
   const width = 37
@@ -78,6 +114,28 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     // enabling the experimental flag. Collapses if the plan list
     // grows beyond 2 entries, same rule as LSP / Todo.
     dre: true,
+    activity: true,
+  })
+
+  const activityItems = createMemo(() => {
+    const msgs = messages()
+    const items: Array<{ id: string; icon: string; label: string; status: string; tool: string }> = []
+    for (const msg of msgs) {
+      const parts = sync.data.part[msg.id]
+      if (!parts) continue
+      for (const part of parts) {
+        if (part.type !== "tool") continue
+        const state = part.state as { status: string }
+        items.push({
+          id: part.id,
+          icon: activityIcon(part.tool),
+          label: activityLabel(part),
+          status: state.status,
+          tool: part.tool,
+        })
+      }
+    }
+    return items.slice(-10).reverse()
   })
 
   // Sort MCP servers alphabetically for consistent display order
@@ -384,6 +442,45 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         <text fg={theme.textMuted}>
                           {plan.kind} · {plan.affectedFileCount} file
                           {plan.affectedFileCount === 1 ? "" : "s"}
+                        </text>
+                      </box>
+                    )}
+                  </For>
+                </Show>
+              </box>
+            </Show>
+            <Show when={activityItems().length > 0}>
+              <box>
+                <box
+                  flexDirection="row"
+                  gap={1}
+                  onMouseDown={() => activityItems().length > 2 && setExpanded("activity", !expanded.activity)}
+                >
+                  <Show when={activityItems().length > 2}>
+                    <text fg={theme.text}>{expanded.activity ? "\u25BC" : "\u25B6"}</text>
+                  </Show>
+                  <text fg={theme.text}>
+                    <b>Activity</b>
+                    <Show when={!expanded.activity}>
+                      <span style={{ fg: theme.textMuted }}>
+                        {" "}
+                        ({activityItems().length} actions)
+                      </span>
+                    </Show>
+                  </text>
+                </box>
+                <Show when={activityItems().length <= 2 || expanded.activity}>
+                  <For each={activityItems()}>
+                    {(item) => (
+                      <box flexDirection="row" gap={1}>
+                        <text
+                          flexShrink={0}
+                          style={{ fg: activityColor(item.status, theme) }}
+                        >
+                          {item.icon}
+                        </text>
+                        <text fg={theme.textMuted} wrapMode="none">
+                          {item.label}
                         </text>
                       </box>
                     )}
