@@ -6,6 +6,7 @@ import type { Permission } from "../permission"
 import type { ProjectID } from "../project/schema"
 import type { SessionID, MessageID, PartID } from "./schema"
 import type { WorkspaceID } from "../control-plane/schema"
+import { WorkspaceTable } from "../control-plane/workspace.sql"
 import { Timestamps } from "../storage/schema.sql"
 
 type PartData = Omit<MessageV2.Part, "id" | "sessionID" | "messageID">
@@ -34,7 +35,9 @@ export const SessionTable = sqliteTable(
     // workspace_id was added by migration 20260227213759_add_session_workspace_id
     // but was missing from the Drizzle schema, producing drift between the
     // live database and the ORM model. Declaring it here aligns the two.
-    workspace_id: text().$type<WorkspaceID>(),
+    workspace_id: text()
+      .$type<WorkspaceID>()
+      .references(() => WorkspaceTable.id, { onDelete: "set null" }),
     ...Timestamps,
     time_compacting: integer(),
     time_archived: integer(),
@@ -70,7 +73,10 @@ export const PartTable = sqliteTable(
       .$type<MessageID>()
       .notNull()
       .references(() => MessageTable.id, { onDelete: "cascade" }),
-    session_id: text().$type<SessionID>().notNull(),
+    session_id: text()
+      .$type<SessionID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
     ...Timestamps,
     data: text({ mode: "json" }).notNull().$type<PartData>(),
   },
