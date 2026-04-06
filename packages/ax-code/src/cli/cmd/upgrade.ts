@@ -24,6 +24,8 @@ export const UpgradeCommand = {
     UI.println(UI.logo("  "))
     UI.empty()
     prompts.intro("Upgrade")
+    prompts.log.info(`Current version: ${Installation.VERSION}`)
+
     const detectedMethod = await Installation.method()
     const method = (args.method as Installation.Method) ?? detectedMethod
     if (method === "unknown") {
@@ -41,23 +43,26 @@ export const UpgradeCommand = {
         return
       }
     }
-    prompts.log.info("Using method: " + method)
+    prompts.log.info(`Install method: ${method}`)
+
+    const checkSpinner = prompts.spinner()
+    checkSpinner.start("Checking for updates...")
     const target = args.target ? args.target.replace(/^v/, "") : await Installation.latest()
+    checkSpinner.stop(`Latest version: ${target}`)
 
     if (Installation.VERSION === target) {
-      prompts.log.warn(`ax-code upgrade skipped: ${target} is already installed`)
+      prompts.log.success(`Already up to date (v${target})`)
       prompts.outro("Done")
       return
     }
 
-    prompts.log.info(`From ${Installation.VERSION} → ${target}`)
+    prompts.log.step(`Upgrading: v${Installation.VERSION} → v${target}`)
     const spinner = prompts.spinner()
-    spinner.start("Upgrading...")
+    spinner.start("Downloading and installing...")
     const err = await Installation.upgrade(method, target).catch((err) => err)
     if (err) {
       spinner.stop("Upgrade failed", 1)
       if (err instanceof Installation.UpgradeFailedError) {
-        // necessary because choco only allows install/upgrade in elevated terminals
         if (method === "choco" && err.stderr.includes("not running from an elevated command shell")) {
           prompts.log.error("Please run the terminal as Administrator and try again")
         } else {
@@ -67,7 +72,8 @@ export const UpgradeCommand = {
       prompts.outro("Done")
       return
     }
-    spinner.stop("Upgrade complete")
+    spinner.stop(`Upgraded to v${target}`)
+    prompts.log.success(`v${Installation.VERSION} → v${target}`)
     prompts.outro("Done")
   },
 }
