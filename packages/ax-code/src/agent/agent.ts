@@ -16,6 +16,7 @@ import PROMPT_REACT from "./prompt/react.txt"
 import PROMPT_SECURITY from "./prompt/security.txt"
 import PROMPT_ARCHITECT from "./prompt/architect.txt"
 import PROMPT_DEBUG from "./prompt/debug.txt"
+import PROMPT_DEVOPS from "./prompt/devops.txt"
 import PROMPT_PERF from "./prompt/perf.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
@@ -277,6 +278,25 @@ export namespace Agent {
               mode: "primary",
               native: true,
               steps: 25,
+            },
+            devops: {
+              name: "devops",
+              displayName: "DevOps",
+              description:
+                "DevOps Engineer agent. Handles Docker, CI/CD, deployment, infrastructure config, and operational concerns. Can create and modify Dockerfiles, pipeline configs, K8s manifests, and deployment scripts.",
+              prompt: PROMPT_DEVOPS,
+              permission: Permission.merge(
+                defaults,
+                policy,
+                Permission.fromConfig({
+                  question: "allow",
+                }),
+                user,
+              ),
+              options: {},
+              mode: "primary",
+              native: true,
+              steps: 30,
             },
             compaction: {
               name: "compaction",

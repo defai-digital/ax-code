@@ -89,6 +89,28 @@ const RULES: RouteRule[] = [
     ],
     confidence: 0.7,
   },
+  {
+    agent: "devops",
+    keywords: [
+      "docker", "dockerfile", "container", "kubernetes", "k8s", "helm",
+      "ci/cd", "pipeline", "github actions", "gitlab ci", "jenkins",
+      "deploy", "deployment", "infrastructure", "terraform", "pulumi",
+      "cloudformation", "devops", "monitoring", "alerting", "grafana",
+      "nginx", "reverse proxy", "load balancer", "health check",
+      "rollback", "canary", "blue-green", "staging", "production",
+    ],
+    patterns: [
+      /\bdocker(file|compose)?\b/i,
+      /\bk(ubernetes|8s)\b/i,
+      /\bci\/?cd\b/i,
+      /\b(deploy|deployment|rollback)\b/i,
+      /\b(terraform|pulumi|cloudformation|cdk)\b/i,
+      /\bgithub\s+actions?\b/i,
+      /\b(infra(structure)?|devops)\b/i,
+      /\bhelm\b/i,
+    ],
+    confidence: 0.8,
+  },
   // react and plan are reasoning MODES, not topic domains
   // Users should explicitly switch to them (e.g., /react, /plan)
 ]
