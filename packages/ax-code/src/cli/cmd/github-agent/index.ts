@@ -1044,9 +1044,11 @@ export const GithubRunCommand = cmd({
           await gitStatus(["fetch", "origin", base, "--depth=1"])
           const retry = await gitStatus(["rev-list", "--count", `origin/${base}..${head}`])
           if (retry.exitCode !== 0) return true // assume dirty if we can't tell
-          return parseInt(retry.stdout.toString().trim()) > 0
+          const count = parseInt(retry.stdout.toString().trim(), 10)
+          return Number.isFinite(count) && count > 0
         }
-        return parseInt(result.stdout.toString().trim()) > 0
+        const count = parseInt(result.stdout.toString().trim(), 10)
+        return Number.isFinite(count) && count > 0
       }
 
       async function assertPermissions() {

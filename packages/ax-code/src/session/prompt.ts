@@ -717,7 +717,10 @@ export namespace SessionPrompt {
             messageID: lastUser.id,
           },
           msgs,
-        ).catch((e) => log.warn("summarize failed", { error: e }))
+        ).catch(async (e) => {
+          log.warn("summarize failed, setting fallback title", { error: e })
+          await Session.setTitle({ sessionID, title: "Untitled session" }).catch(() => {})
+        })
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track

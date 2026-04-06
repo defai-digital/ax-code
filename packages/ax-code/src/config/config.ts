@@ -122,14 +122,15 @@ export namespace Config {
           log.warn("wellknown config URL rejected by SSRF guard", { url, err })
           continue
         }
-        const response = await fetch(endpoint)
+        const response = await Ssrf.pinnedFetch(endpoint)
           .then((res) => {
             if (res.ok || res.status !== 404) return res
-            return fetch(legacy)
+            return Ssrf.pinnedFetch(legacy)
           })
-          .catch(() => fetch(legacy))
+          .catch(() => Ssrf.pinnedFetch(legacy))
         if (!response.ok) {
-          throw new Error(`failed to fetch remote config from ${url}: ${response.status}`)
+          log.warn("failed to fetch remote config", { url, status: response.status })
+          continue
         }
         const wellknown = (await response.json()) as Record<string, unknown>
         const remoteConfig = (wellknown.config ?? {}) as Record<string, unknown>
