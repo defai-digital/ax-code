@@ -70,7 +70,7 @@ export function createDialogProviderOptions() {
               return
             }
 
-            const info = resolveCliModel(provider.id)
+            const info = await resolveCliModel(provider.id)
 
             if (isConnected) {
               const action = await new Promise<"use" | "disconnect" | null>((resolve) => {

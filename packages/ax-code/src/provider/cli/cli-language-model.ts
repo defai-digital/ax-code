@@ -80,12 +80,12 @@ export class CliLanguageModel implements LanguageModelV2 {
         controller.enqueue({ type: "stream-start", warnings: [] })
         controller.enqueue({ type: "text-start", id: textId })
 
-        let buf = ""
+        let remainder = ""
         proc.stdout!.on("data", (chunk: Buffer) => {
           if (closed()) return
-          buf += chunk.toString()
-          const lines = buf.split("\n")
-          buf = lines.pop() ?? ""
+          const text = remainder + chunk.toString()
+          const lines = text.split("\n")
+          remainder = lines.pop() ?? ""
           for (const line of lines) {
             if (!line.trim()) continue
             const delta = parser.parseStreamLine(line)
@@ -95,8 +95,8 @@ export class CliLanguageModel implements LanguageModelV2 {
 
         proc.stdout!.on("end", () => {
           if (closed()) return
-          if (buf.trim()) {
-            const delta = parser.parseStreamLine(buf)
+          if (remainder.trim()) {
+            const delta = parser.parseStreamLine(remainder)
             if (delta) controller.enqueue({ type: "text-delta", id: textId, delta })
           }
           controller.enqueue({ type: "text-end", id: textId })

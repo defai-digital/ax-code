@@ -104,7 +104,7 @@ function cliModels(providerID: string, provider: Provider.Info, currentModel: st
 function cliLoader(providerID: string, binary: string, args: string[], parser: CliOutputParser): CustomLoader {
   return async (provider) => {
     const path = which(binary)
-    const info = resolveCliModel(providerID)
+    const info = await resolveCliModel(providerID)
     return {
       // Don't autoload — require explicit connect via auth.json
       autoload: false,
@@ -132,7 +132,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   },
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
   "ax-studio": ollamaCompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:11434"),
-  "claude-code": cliLoader("claude-code", "claude", ["--print", "--output-format", "stream-json", "--verbose"], claudeCodeParser),
+  "claude-code": cliLoader("claude-code", "claude", ["--print", "--bare", "--output-format", "stream-json"], claudeCodeParser),
   "gemini-cli": cliLoader("gemini-cli", "gemini", ["-p", "", "--approval-mode", "auto_edit", "--output-format", "stream-json"], geminiCliParser),
   "codex-cli": cliLoader("codex-cli", "codex", ["exec", "--json", "--skip-git-repo-check"], codexCliParser),
 }
