@@ -449,6 +449,25 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </Show>
               </box>
             </Show>
+            <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
+              <box>
+                <box
+                  flexDirection="row"
+                  gap={1}
+                  onMouseDown={() => todo().length > 2 && setExpanded("todo", !expanded.todo)}
+                >
+                  <Show when={todo().length > 2}>
+                    <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
+                  </Show>
+                  <text fg={theme.text}>
+                    <b>Todo</b>
+                  </text>
+                </box>
+                <Show when={todo().length <= 2 || expanded.todo}>
+                  <For each={todo()}>{(todo) => <TodoItem status={todo.status} content={todo.content} />}</For>
+                </Show>
+              </box>
+            </Show>
             <Show when={activityItems().length > 0}>
               <box>
                 <box
@@ -485,25 +504,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       </box>
                     )}
                   </For>
-                </Show>
-              </box>
-            </Show>
-            <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
-              <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseDown={() => todo().length > 2 && setExpanded("todo", !expanded.todo)}
-                >
-                  <Show when={todo().length > 2}>
-                    <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
-                  </Show>
-                  <text fg={theme.text}>
-                    <b>Todo</b>
-                  </text>
-                </box>
-                <Show when={todo().length <= 2 || expanded.todo}>
-                  <For each={todo()}>{(todo) => <TodoItem status={todo.status} content={todo.content} />}</For>
                 </Show>
               </box>
             </Show>
