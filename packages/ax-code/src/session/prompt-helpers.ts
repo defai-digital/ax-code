@@ -573,14 +573,14 @@ export async function ensureTitle(input: {
       },
       ...(hasOnlySubtaskParts
         ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-        : MessageV2.toModelMessages(contextMessages, model)),
+        : await MessageV2.toModelMessages(contextMessages, model)),
     ],
   })
   // Return undefined explicitly on failure — the previous code relied
   // on `log.error` happening to return void, which works accidentally
   // today but silently breaks if log.error ever returns something
   // truthy.
-  const text = await result.text.catch((err) => {
+  const text = await Promise.resolve(result.text).catch((err: any) => {
     log.error("failed to generate title", { error: err })
     return undefined
   })
@@ -588,8 +588,8 @@ export async function ensureTitle(input: {
     const cleaned = text
       .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
       .split("\n")
-      .map((line) => line.trim())
-      .find((line) => line.length > 0)
+      .map((line: string) => line.trim())
+      .find((line: string) => line.length > 0)
     if (!cleaned) return
 
     const title = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned

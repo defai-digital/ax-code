@@ -746,7 +746,7 @@ export namespace SessionPrompt {
         sessionID,
         system,
         messages: [
-          ...MessageV2.toModelMessages(msgs, model),
+          ...(await MessageV2.toModelMessages(msgs, model)),
           ...(isLastStep
             ? [
                 {
@@ -986,7 +986,7 @@ export namespace SessionPrompt {
       // producing malformed input for the LLM. Clone to a fresh object so
       // the transformation is idempotent across iterations.
       const mcpTool = { ...item }
-      const transformed = ProviderTransform.schema(input.model, asSchema(mcpTool.inputSchema).jsonSchema)
+      const transformed = ProviderTransform.schema(input.model, await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema))
       mcpTool.inputSchema = jsonSchema(transformed)
       // Wrap execute to add plugin hooks and format output
       mcpTool.execute = async (args, opts) => {

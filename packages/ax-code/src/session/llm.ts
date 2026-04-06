@@ -43,7 +43,7 @@ export namespace LLM {
     config?: Awaited<ReturnType<typeof Config.get>>
   }
 
-  export type StreamOutput = StreamTextResult<ToolSet, unknown>
+  export type StreamOutput = StreamTextResult<ToolSet, any>
 
   export async function stream(input: StreamInput) {
     const l = log
@@ -230,12 +230,12 @@ export namespace LLM {
       maxRetries: input.retries ?? 0,
       messages,
       model: wrapLanguageModel({
-        model: language,
+        model: language as any,
         middleware: [
           {
-            async transformParams(args) {
+            specificationVersion: "v3" as const,
+            async transformParams(args: any) {
               if (args.type === "stream") {
-                // @ts-expect-error
                 args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
               }
               return args.params
