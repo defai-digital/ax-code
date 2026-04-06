@@ -16,7 +16,6 @@ This folder holds repository documentation that should be stable, discoverable, 
 | [`adr/`](adr/)     | Architecture decision records                      |
 | [`prd/`](prd/)     | Product and engineering requirement documents      |
 | [`specs/`](specs/) | Stable product and technical specifications        |
-| [`bugs/`](bugs/)   | Bug inventories, audits, and defect tracking notes |
 | [`todos/`](todos/) | Deferred work and follow-up plans                  |
 
 ## Guides
