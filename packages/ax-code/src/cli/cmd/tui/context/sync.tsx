@@ -534,11 +534,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       const providerListPromise = sdk.client.provider.list({}, { throwOnError: true })
       const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
       const configPromise = sdk.client.config.get({}, { throwOnError: true })
+      const commandPromise = sdk.client.command.list()
       const blockingRequests: Promise<unknown>[] = [
         providersPromise,
         providerListPromise,
         agentsPromise,
         configPromise,
+        commandPromise,
         ...(args.continue ? [sessionListPromise] : []),
       ]
 
@@ -550,18 +552,22 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           const configResponse = configPromise.then((x) => x.data!)
           const sessionListResponse = args.continue ? sessionListPromise : undefined
 
+          const commandResponse = commandPromise.then((x) => x.data ?? [])
+
           return Promise.all([
             providersResponse,
             providerListResponse,
             agentsResponse,
             configResponse,
+            commandResponse,
             ...(sessionListResponse ? [sessionListResponse] : []),
           ]).then((responses) => {
             const providers = responses[0]
             const providerList = responses[1]
             const agents = responses[2]
             const config = responses[3]
-            const sessions = responses[4]
+            const commands = responses[4]
+            const sessions = responses[5]
 
             batch(() => {
               setStore("provider", reconcile(providers.providers))
@@ -569,6 +575,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
               setStore("provider_next", reconcile(providerList))
               setStore("agent", reconcile(agents))
               setStore("config", reconcile(config))
+              setStore("command", reconcile(commands))
               if (sessions !== undefined) setStore("session", reconcile(mergeSorted(store.session, sessions)))
             })
           })
@@ -579,7 +586,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           // doesn't prevent the rest from completing or status from advancing.
           Promise.allSettled([
             ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(mergeSorted(store.session, sessions))))]),
-            sdk.client.command.list().then((x) => setStore("command", reconcile(x.data ?? []))),
             sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data!))),
             sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))),
             sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),

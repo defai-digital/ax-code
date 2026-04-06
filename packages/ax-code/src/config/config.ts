@@ -303,7 +303,16 @@ export namespace Config {
 
     if (Flag.AX_CODE_PERMISSION) {
       try {
-        result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.AX_CODE_PERMISSION))
+        const parsed = JSON.parse(Flag.AX_CODE_PERMISSION)
+        const validated = ConfigSchema.Permission.safeParse(parsed)
+        if (validated.success) {
+          result.permission = mergeDeep(result.permission ?? {}, parsed)
+        } else {
+          log.warn("AX_CODE_PERMISSION does not match permission schema, ignoring", {
+            value: Flag.AX_CODE_PERMISSION,
+            errors: validated.error.issues.map((i) => i.message),
+          })
+        }
       } catch {
         log.warn("invalid AX_CODE_PERMISSION JSON, ignoring", { value: Flag.AX_CODE_PERMISSION })
       }

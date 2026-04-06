@@ -367,11 +367,12 @@ export namespace Provider {
                 model.modalities?.output?.includes("video") ?? existingModel?.capabilities?.output?.video ?? false,
               pdf: model.modalities?.output?.includes("pdf") ?? existingModel?.capabilities?.output?.pdf ?? false,
             },
-            interleaved: model.interleaved ?? false,
+            interleaved: model.interleaved ?? existingModel?.capabilities?.interleaved ?? false,
           },
           options: mergeDeep(existingModel?.options ?? {}, model.options ?? {}),
           limit: {
             context: model.limit?.context ?? existingModel?.limit?.context ?? 0,
+            input: model.limit?.input ?? existingModel?.limit?.input,
             output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
           },
           cost: {

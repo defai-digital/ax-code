@@ -410,10 +410,14 @@ export async function applySafeRefactorImpl(
     // and apply from there.
     const tmpPatch = path.join(Instance.worktree, ".dre-apply.patch")
     await fs.writeFile(tmpPatch, input.patch, "utf8")
-    const realResult = await git(["apply", "--whitespace=fix", tmpPatch], {
-      cwd: Instance.worktree,
-    })
-    await fs.rm(tmpPatch, { force: true }).catch(() => undefined)
+    let realResult: Awaited<ReturnType<typeof git>>
+    try {
+      realResult = await git(["apply", "--whitespace=fix", tmpPatch], {
+        cwd: Instance.worktree,
+      })
+    } finally {
+      await fs.rm(tmpPatch, { force: true }).catch(() => undefined)
+    }
 
     if (realResult.exitCode !== 0) {
       // Worktree is unchanged because git apply failed atomically.
