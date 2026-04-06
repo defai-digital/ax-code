@@ -54,19 +54,27 @@ await Promise.all(tasks)
 // Publish @defai.digital/ax-code
 await $`cd ${distDir} && pnpm pack && npm publish *.tgz --access public --tag ${Script.channel}`
 
+// Docker image publish — requires buildx with multi-platform support.
+// Skip gracefully in CI environments without docker buildx configured.
 const image = "ghcr.io/defai-digital/ax-code"
 const platforms = "linux/amd64,linux/arm64"
 const tags = [`${image}:${version}`, `${image}:${Script.channel}`]
 const tagFlags = tags.flatMap((t) => ["-t", t])
-await $`docker buildx build --platform ${platforms} ${tagFlags} --push .`
+await $`docker buildx build --platform ${platforms} ${tagFlags} --push .`.catch((err) => {
+  console.warn("docker buildx skipped:", err instanceof Error ? err.message : String(err))
+})
 
-// registries
+// registries (AUR + Homebrew) — requires all platform binaries.
+// Skip if any platform archive is missing (e.g., --single builds).
 if (!Script.preview) {
-  // Calculate SHA values
-  const arm64Sha = await $`sha256sum ./dist/ax-code-linux-arm64.tar.gz | cut -d' ' -f1`.text().then((x) => x.trim())
-  const x64Sha = await $`sha256sum ./dist/ax-code-linux-x64.tar.gz | cut -d' ' -f1`.text().then((x) => x.trim())
-  const macX64Sha = await $`sha256sum ./dist/ax-code-darwin-x64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
-  const macArm64Sha = await $`sha256sum ./dist/ax-code-darwin-arm64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
+  const sha = async (file: string) => $`sha256sum ${file} | cut -d' ' -f1`.text().then((x) => x.trim())
+  const arm64Sha = await sha("./dist/ax-code-linux-arm64.tar.gz").catch(() => "")
+  const x64Sha = await sha("./dist/ax-code-linux-x64.tar.gz").catch(() => "")
+  const macX64Sha = await sha("./dist/ax-code-darwin-x64.zip").catch(() => "")
+  const macArm64Sha = await sha("./dist/ax-code-darwin-arm64.zip").catch(() => "")
+  if (!arm64Sha || !x64Sha || !macX64Sha || !macArm64Sha) {
+    console.warn("skipping AUR/Homebrew — not all platform archives present")
+  } else {
 
   const [pkgver, _subver = ""] = Script.version.split(/(-.*)/, 2)
 
@@ -183,4 +191,5 @@ if (!Script.preview) {
   await $`cd ./dist/homebrew-tap && git add ax-code.rb`
   await $`cd ./dist/homebrew-tap && git commit -m "Update to v${Script.version}"`
   await $`cd ./dist/homebrew-tap && git push`
+  }
 }
