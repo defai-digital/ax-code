@@ -118,6 +118,8 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
       const result = await authorize.callback()
       if (result.type === "failed") {
         spinner.stop("Failed to authorize", 1)
+        prompts.outro("Failed")
+        return true
       }
       if (result.type === "success") {
         await saveAuthResult(result)
@@ -134,6 +136,8 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
       const result = await authorize.callback(code)
       if (result.type === "failed") {
         prompts.log.error("Failed to authorize")
+        prompts.outro("Failed")
+        return true
       }
       if (result.type === "success") {
         await saveAuthResult(result)
@@ -150,6 +154,8 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
       const result = await method.authorize(inputs)
       if (result.type === "failed") {
         prompts.log.error("Failed to authorize")
+        prompts.outro("Failed")
+        return true
       }
       if (result.type === "success") {
         const saveProvider = result.provider ?? provider
@@ -319,6 +325,11 @@ export const ProvidersLoginCommand = cmd({
             prompts.outro("Done")
             return
           }
+          if (typeof wellknown.auth.env !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(wellknown.auth.env)) {
+            prompts.log.error("Well-known config has missing or invalid auth.env (expected uppercase env var name)")
+            prompts.outro("Done")
+            return
+          }
           const confirmed = await prompts.confirm({
             message: `Run authentication command: ${wellknown.auth.command.join(" ")}?`,
           })
@@ -329,15 +340,22 @@ export const ProvidersLoginCommand = cmd({
           prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
           const proc = Process.spawn(wellknown.auth.command, {
             stdout: "pipe",
+            stderr: "pipe",
           })
           if (!proc.stdout) {
-            prompts.log.error("Failed")
+            prompts.log.error("Auth command failed to start")
             prompts.outro("Done")
             return
           }
-          const [exit, token] = await Promise.all([proc.exited, text(proc.stdout)])
+          const timeout = setTimeout(() => proc.kill(), 30_000)
+          const [exit, token, stderr] = await Promise.all([
+            proc.exited,
+            text(proc.stdout),
+            proc.stderr ? text(proc.stderr) : Promise.resolve(""),
+          ])
+          clearTimeout(timeout)
           if (exit !== 0) {
-            prompts.log.error("Failed")
+            prompts.log.error(`Auth command failed (exit ${exit})${stderr ? ": " + stderr.trim() : ""}`)
             prompts.outro("Done")
             return
           }
@@ -465,7 +483,7 @@ export const ProvidersLoginCommand = cmd({
           }
 
           prompts.log.warn(
-            `This only stores a credential for ${provider} - you will need configure it in ax-code.json, check the docs for examples.`,
+            `This only stores a credential for ${provider} - you will need to configure it in ax-code.json, check the docs for examples.`,
           )
         }
 
