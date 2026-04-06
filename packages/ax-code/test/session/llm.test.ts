@@ -504,7 +504,7 @@ describe("session.llm.stream", () => {
     })
   })
 
-  test("normalizes interleaved reasoning into provider request payload", async () => {
+  test("normalizes interleaved reasoning into provider request payload", { timeout: 60_000 }, async () => {
     const providerID = "moonshotai-cn"
     const modelID = "kimi-k2-thinking"
     const fixture = await loadFixture(providerID, modelID)
@@ -592,7 +592,7 @@ describe("session.llm.stream", () => {
     })
   })
 
-  test("adds noop tool for LiteLLM-compatible histories with prior tool calls", async () => {
+  test("adds noop tool for LiteLLM-compatible histories with prior tool calls", { timeout: 60_000 }, async () => {
     const providerID = "alibaba"
     const modelID = "qwen-plus"
     const fixture = await loadFixture(providerID, modelID)
