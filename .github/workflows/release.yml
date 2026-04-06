@@ -150,5 +150,5 @@ jobs:
 
       - name: Update Homebrew formula
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
