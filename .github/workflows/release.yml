@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --dir packages/ax-code run typecheck
+
+      - name: Test
+        run: pnpm --dir packages/ax-code run test:ci -- deterministic
+        env:
+          AX_CODE_DISABLE_SHARE: "true"
+
+  build:
+    needs: typecheck
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            targets: linux
+          - os: macos-latest
+            targets: darwin
+          - os: windows-latest
+            targets: win32
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: packages/ax-code
+        run: bun run script/build.ts
+        env:
+          AX_CODE_VERSION: ${{ github.ref_name }}
+          AX_CODE_CHANNEL: latest
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.targets }}
+          path: packages/ax-code/dist/
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: packages/ax-code/dist/
+          merge-multiple: true
+
+      - name: Publish to npm
+        working-directory: packages/ax-code
+        run: bun run script/publish.ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AX_CODE_VERSION: ${{ github.ref_name }}
+          AX_CODE_CHANNEL: latest
+          AX_CODE_RELEASE: "true"
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip; do
+            [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
+          done
