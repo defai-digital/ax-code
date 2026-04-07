@@ -2,6 +2,7 @@ import { Global } from "../../../global"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
 import { ConfigCommand } from "./config"
+import { ExplainCommand } from "./explain"
 import { FileCommand } from "./file"
 import { LSPCommand } from "./lsp"
 import { RipgrepCommand } from "./ripgrep"
@@ -16,6 +17,7 @@ export const DebugCommand = cmd({
   builder: (yargs) =>
     yargs
       .command(ConfigCommand)
+      .command(ExplainCommand)
       .command(LSPCommand)
       .command(RipgrepCommand)
       .command(FileCommand)
