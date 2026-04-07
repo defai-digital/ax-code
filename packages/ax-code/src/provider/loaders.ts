@@ -118,7 +118,7 @@ async function checkClaudeAuth(binary: string): Promise<boolean> {
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, TERM: "dumb", NO_COLOR: "1", CI: "true" },
+      env: { ...process.env, TERM: "dumb", NO_COLOR: "1" },
     })
     const timer = setTimeout(() => proc.kill(), 5000)
     const stdout = await new Response(proc.stdout).text().catch(() => "")
