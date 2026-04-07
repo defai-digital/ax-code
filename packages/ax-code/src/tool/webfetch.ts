@@ -238,26 +238,19 @@ export const WebFetchTool = Tool.define("webfetch", {
 
 async function extractTextFromHTML(html: string) {
   let text = ""
-  let skipContent = false
+  const SKIP_TAGS = new Set(["script", "style", "noscript", "iframe", "object", "embed"])
+  let skipDepth = 0
 
   const rewriter = new HTMLRewriter()
     .on("script, style, noscript, iframe, object, embed", {
-      element() {
-        skipContent = true
-      },
-      text() {
-        // Skip text content inside these elements
+      element(element) {
+        skipDepth++
+        element.onEndTag(() => { skipDepth-- })
       },
     })
     .on("*", {
-      element(element) {
-        // Reset skip flag when entering other elements
-        if (!["script", "style", "noscript", "iframe", "object", "embed"].includes(element.tagName)) {
-          skipContent = false
-        }
-      },
       text(input) {
-        if (!skipContent) {
+        if (skipDepth === 0) {
           text += input.text
         }
       },

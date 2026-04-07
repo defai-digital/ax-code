@@ -96,7 +96,7 @@ export namespace SessionSummary {
       },
     })
     await Storage.write(["session_diff", input.sessionID], diffs)
-    Bus.publish(Session.Event.Diff, {
+    await Bus.publish(Session.Event.Diff, {
       sessionID: input.sessionID,
       diff: diffs,
     })

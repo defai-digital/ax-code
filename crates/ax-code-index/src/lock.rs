@@ -141,9 +141,12 @@ impl AdvisoryLock {
 
     self.file = None;
     self.acquired = false;
-
-    // Try to remove the lock file (best-effort)
-    let _ = fs::remove_file(&self.path);
+    // Lock file is intentionally NOT deleted. Removing it after unlock
+    // creates a TOCTOU race: another process that opened the same path
+    // and is blocked on flock() would acquire the lock on the deleted
+    // inode, while a third process creates a new file at the same path
+    // — both believe they hold the exclusive lock. Stale lock files are
+    // harmless (flock is advisory and tied to the fd, not the file).
     Ok(())
   }
 

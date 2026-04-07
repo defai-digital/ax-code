@@ -255,12 +255,26 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
       depth = 0;
     }
     if scope_start.is_some() {
-      for ch in line.chars() {
-        match ch {
-          '{' => depth += 1,
-          '}' => depth -= 1,
+      let bytes = line.as_bytes();
+      let len = bytes.len();
+      let mut j = 0;
+      while j < len {
+        match bytes[j] {
+          b'/' if j + 1 < len && bytes[j + 1] == b'/' => break, // line comment
+          b'"' | b'\'' | b'`' => {
+            let quote = bytes[j];
+            j += 1;
+            while j < len {
+              if bytes[j] == b'\\' { j += 1; } // skip escaped char
+              else if bytes[j] == quote { break; }
+              j += 1;
+            }
+          }
+          b'{' => depth += 1,
+          b'}' => depth -= 1,
           _ => {}
         }
+        j += 1;
       }
       if depth <= 0 && scope_start.is_some() {
         let start = scope_start.unwrap();

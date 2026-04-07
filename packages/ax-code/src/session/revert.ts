@@ -78,7 +78,7 @@ export namespace SessionRevert {
       const rangeMessages = all.filter((msg) => msg.info.id >= narrowed.messageID)
       const diffs = await SessionSummary.computeDiff({ messages: rangeMessages })
       await Storage.write(["session_diff", input.sessionID], diffs)
-      Bus.publish(Session.Event.Diff, {
+      await Bus.publish(Session.Event.Diff, {
         sessionID: input.sessionID,
         diff: diffs,
       })

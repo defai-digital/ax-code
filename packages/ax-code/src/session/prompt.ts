@@ -903,7 +903,7 @@ export namespace SessionPrompt {
               status: "running",
               input: args,
               time: {
-                start: Date.now(),
+                start: match.state.time?.start ?? Date.now(),
               },
             },
           })

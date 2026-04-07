@@ -10,13 +10,12 @@ use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct Command {
   cmd: String,
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pattern: Option<String>,
-  #[allow(dead_code)]
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   path: Option<String>,
 }
 
@@ -108,13 +107,23 @@ fn handle_client(stream: &UnixStream, state: &Arc<Mutex<DaemonState>>) {
   }
   let response = match serde_json::from_str::<Command>(line.trim()) {
     Ok(cmd) => dispatch(cmd, state),
-    Err(e) => serde_json::to_string(&ErrorResponse { error: e.to_string() }).unwrap(),
+    Err(e) => error_json(&e.to_string()),
   };
   if let Ok(mut writer) = stream.try_clone() {
     let _ = writer.write_all(response.as_bytes());
     let _ = writer.write_all(b"\n");
     let _ = writer.flush();
   }
+}
+
+fn json_or_error<T: Serialize>(value: &T) -> String {
+  serde_json::to_string(value).unwrap_or_else(|e| error_json(&e.to_string()))
+}
+
+fn error_json(msg: &str) -> String {
+  // Manual construction with proper escaping via serde
+  serde_json::to_string(&ErrorResponse { error: msg.to_string() })
+    .unwrap_or_else(|_| r#"{"error":"serialization failed"}"#.into())
 }
 
 fn dispatch(cmd: Command, state: &Arc<Mutex<DaemonState>>) -> String {
@@ -124,22 +133,20 @@ fn dispatch(cmd: Command, state: &Arc<Mutex<DaemonState>>) -> String {
     Err(poisoned) => poisoned.into_inner(),
   };
   match cmd.cmd.as_str() {
-    "status" => serde_json::to_string(&st.status()).unwrap(),
-    "scan" => serde_json::to_string(&st.scan()).unwrap(),
+    "status" => json_or_error(&st.status()),
+    "scan" => json_or_error(&st.scan()),
     "glob" => {
       let pattern = cmd.pattern.unwrap_or_else(|| "**/*".into());
       match st.glob(&pattern) {
-        Ok(files) => serde_json::to_string(&files).unwrap(),
-        Err(e) => serde_json::to_string(&ErrorResponse { error: e }).unwrap(),
+        Ok(files) => json_or_error(&files),
+        Err(e) => error_json(&e),
       }
     }
     "stop" => {
       st.running.store(false, Ordering::Relaxed);
       r#"{"stopped":true}"#.into()
     }
-    other => serde_json::to_string(&ErrorResponse {
-      error: format!("unknown command: {}", other),
-    }).unwrap(),
+    other => error_json(&format!("unknown command: {}", other)),
   }
 }
 
@@ -239,10 +246,10 @@ pub fn daemon_send(socket_path: String, command: String) -> napi::Result<String>
   } else {
     let parts: Vec<&str> = command.splitn(2, ' ').collect();
     match parts[0] {
-      "scan" | "status" | "stop" => format!(r#"{{"cmd":"{}"}}"#, parts[0]),
-      "glob" => format!(r#"{{"cmd":"glob","pattern":"{}"}}"#, parts.get(1).unwrap_or(&"**/*")),
-      "reindex" => format!(r#"{{"cmd":"scan","path":"{}"}}"#, parts.get(1).unwrap_or(&"")),
-      cmd => format!(r#"{{"cmd":"{}"}}"#, cmd),
+      "scan" | "status" | "stop" => serde_json::to_string(&Command { cmd: parts[0].into(), pattern: None, path: None }).unwrap_or_default(),
+      "glob" => serde_json::to_string(&Command { cmd: "glob".into(), pattern: Some(parts.get(1).unwrap_or(&"**/*").to_string()), path: None }).unwrap_or_default(),
+      "reindex" => serde_json::to_string(&Command { cmd: "scan".into(), pattern: None, path: Some(parts.get(1).unwrap_or(&"").to_string()) }).unwrap_or_default(),
+      cmd => serde_json::to_string(&Command { cmd: cmd.into(), pattern: None, path: None }).unwrap_or_default(),
     }
   };
   send_command(&socket_path, &json)

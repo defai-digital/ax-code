@@ -67,12 +67,17 @@ pub fn ascending(prefix_name: &str) -> Result<String, String> {
     }
     // Same timestamp: just bump the counter
     let c = COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
+    if c > 255 {
+      // Counter overflow — spin until the next millisecond so IDs stay unique.
+      std::thread::yield_now();
+      continue;
+    }
     break (current, c);
   };
 
   // BUG-028: Reduced shift from 12 to 8 bits to prevent 48-bit overflow.
   // 40 bits for timestamp (~34,800 years of ms) + 8 bits for counter (256/ms).
-  let now = (((ts as u64) << 8) | ((cnt as u64) & 0xFF)) & 0xFFFF_FFFF_FFFF;
+  let now = (((ts as u64) << 8) | (cnt as u64)) & 0xFFFF_FFFF_FFFF;
 
   let mut time_bytes = [0u8; 6];
   for i in 0..6 {
