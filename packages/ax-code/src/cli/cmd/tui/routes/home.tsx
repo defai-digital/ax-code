@@ -16,9 +16,6 @@ import { useKV } from "../context/kv"
 import { useCommandDialog } from "../component/dialog-command"
 import { useLocal } from "../context/local"
 
-// TODO: what is the best way to do this?
-let once = false
-
 export function Home() {
   const sync = useSync()
   const kv = useKV()
@@ -76,6 +73,7 @@ export function Home() {
   )
 
   let prompt: PromptRef
+  let once = false
   const args = useArgs()
   const local = useLocal()
   onMount(() => {

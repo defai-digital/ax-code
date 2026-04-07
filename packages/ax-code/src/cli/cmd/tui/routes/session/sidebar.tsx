@@ -14,17 +14,24 @@ import type { Part } from "@ax-code/sdk/v2"
 
 function activityIcon(tool: string): string {
   switch (tool) {
-    case "bash": return "$"
-    case "read": return "\u2192"
+    case "bash":
+      return "$"
+    case "read":
+      return "\u2192"
     case "edit":
-    case "write": return "\u270E"
+    case "write":
+      return "\u270E"
     case "glob":
     case "grep":
-    case "codesearch": return "\u2315"
+    case "codesearch":
+      return "\u2315"
     case "webfetch":
-    case "websearch": return "\u2295"
-    case "task": return "\u25C8"
-    default: return "\u00B7"
+    case "websearch":
+      return "\u2295"
+    case "task":
+      return "\u25C8"
+    default:
+      return "\u00B7"
   }
 }
 
@@ -44,10 +51,14 @@ function activityLabel(part: Part): string {
 
 function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
-    case "running": return theme.primary
-    case "completed": return theme.success
-    case "error": return theme.error
-    default: return theme.textMuted
+    case "running":
+      return theme.primary
+    case "completed":
+      return theme.success
+    case "error":
+      return theme.error
+    default:
+      return theme.textMuted
   }
 }
 
@@ -69,7 +80,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
   const { theme } = useTheme()
   const command = useCommandDialog()
-  const session = createMemo(() => sync.session.get(props.sessionID)!)
+  const session = createMemo(() => sync.session.get(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
@@ -78,9 +89,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const [timerTick, setTimerTick] = createSignal(0)
   const [etaTick, setEtaTick] = createSignal(0)
   const [countdownTick, setCountdownTick] = createSignal(0)
-  // Last computed ETA anchor for smooth countdown
+  const [etaAnchor, setEtaAnchor] = createSignal<{
+    computedAt: number
+    remainSec: number
+    elapsedSec: number
+  }>()
   let etaAnchorSessionID = ""
-  let etaAnchor: { computedAt: number; remainSec: number; elapsedSec: number } | undefined
 
   onMount(() => {
     const id = setInterval(() => {
@@ -183,41 +197,38 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     etaTick()
     const ctx = context()
     if (!ctx || !ctx.limit || !ctx.raw) return
-    // Reset anchor if session changed
     if (etaAnchorSessionID !== props.sessionID) {
       etaAnchorSessionID = props.sessionID
-      etaAnchor = undefined
+      setEtaAnchor(undefined)
     }
     const now = Date.now()
     const s = session()
     if (!s?.time?.created) return
     const elapsedSec = Math.round((now - s.time.created) / 1000)
-    if (elapsedSec < 30) return // need at least 30s of data for stable velocity
-    const pct = ctx.raw / ctx.limit
-    if (pct < 0.05) return // too early — estimate is meaningless below 5% usage
+    if (elapsedSec < 30) return
+    if (ctx.raw / ctx.limit < 0.05) return
     const tokPerSec = ctx.raw / elapsedSec
     if (tokPerSec <= 0) return
     const remaining = ctx.limit - ctx.raw
     if (remaining <= 0) {
-      etaAnchor = { computedAt: now, remainSec: 0, elapsedSec: 0 }
+      setEtaAnchor({ computedAt: now, remainSec: 0, elapsedSec: 0 })
       return
     }
-    // Cap estimate at 60 minutes to avoid absurd numbers
     const remainSec = Math.min(3600, Math.round(remaining / tokPerSec))
-    etaAnchor = { computedAt: now, remainSec, elapsedSec: elapsedSec + remainSec }
+    setEtaAnchor({ computedAt: now, remainSec, elapsedSec: elapsedSec + remainSec })
     return
   })
 
   // Countdown display: ticks every 1s, counts down from last anchor
   const eta = createMemo(() => {
     countdownTick()
-    etaEstimate() // ensure dependency on recalculation
-    if (!etaAnchor || etaAnchor.remainSec <= 0) return
-    const sinceLast = Math.round((Date.now() - etaAnchor.computedAt) / 1000)
-    const remainSec = etaAnchor.remainSec - sinceLast
-    if (remainSec <= 0) return // countdown expired, hide until next recalc
-    // remainPct: how much of the anchored estimate is left (starts high, drains to 0%)
-    const remainPct = Math.min(100, Math.round((remainSec / etaAnchor.elapsedSec) * 100))
+    etaEstimate()
+    const anchor = etaAnchor()
+    if (!anchor || anchor.remainSec <= 0) return
+    const sinceLast = Math.round((Date.now() - anchor.computedAt) / 1000)
+    const remainSec = anchor.remainSec - sinceLast
+    if (remainSec <= 0) return
+    const remainPct = Math.min(100, Math.round((remainSec / anchor.elapsedSec) * 100))
     const h = Math.floor(remainSec / 3600)
     const m = Math.floor((remainSec % 3600) / 60)
     const sec = remainSec % 60
@@ -272,9 +283,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const directory = useDirectory()
   const kv = useKV()
 
-  const hasProviders = createMemo(() =>
-    sync.data.provider.length > 0,
-  )
+  const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
 
   return (
@@ -301,31 +310,48 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
           <box flexShrink={0} gap={1} paddingRight={1}>
             <box paddingRight={1}>
               <text fg={theme.text}>
-                <b>{session().title}</b>
+                <b>{session()!.title}</b>
               </text>
-              <Show when={session().share?.url}>
-                <text fg={theme.textMuted}>{session().share!.url}</text>
+              <Show when={session()!.share?.url}>
+                <text fg={theme.textMuted}>{session()!.share!.url}</text>
               </Show>
             </box>
             <box>
-              <Show when={eta()} fallback={
-                <>
-                  <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens · {elapsed()}</text>
-                  <text fg={usageBarColor()}>{usageBar()}</text>
-                  <text fg={usageBarColor()}>📊 {context()?.percentage ?? 0}% used</text>
-                </>
-              }>
+              <Show
+                when={eta()}
+                fallback={
+                  <>
+                    <text fg={theme.textMuted}>
+                      {context()?.tokens ?? 0} tokens · {elapsed()}
+                    </text>
+                    <text fg={usageBarColor()}>{usageBar()}</text>
+                    <text fg={usageBarColor()}>📊 {context()?.percentage ?? 0}% used</text>
+                  </>
+                }
+              >
                 <box flexDirection="row" gap={1}>
-                  <text width={18} fg={theme.textMuted}>{context()?.tokens ?? 0} tokens</text>
-                  <text width={18} fg={theme.textMuted}>Elapsed {elapsed()}</text>
+                  <text width={18} fg={theme.textMuted}>
+                    {context()?.tokens ?? 0} tokens
+                  </text>
+                  <text width={18} fg={theme.textMuted}>
+                    Elapsed {elapsed()}
+                  </text>
                 </box>
                 <box flexDirection="row" gap={1}>
-                  <text width={18} fg={usageBarColor()}>{usageBarHalf()}</text>
-                  <text width={18} fg={etaBarColor()}>{etaBarHalf()}</text>
+                  <text width={18} fg={usageBarColor()}>
+                    {usageBarHalf()}
+                  </text>
+                  <text width={18} fg={etaBarColor()}>
+                    {etaBarHalf()}
+                  </text>
                 </box>
                 <box flexDirection="row" gap={1}>
-                  <text width={18} fg={usageBarColor()}>📊 {context()?.percentage ?? 0}% used</text>
-                  <text width={18} fg={etaBarColor()}>⏳ {eta()!.label}(Est.)</text>
+                  <text width={18} fg={usageBarColor()}>
+                    📊 {context()?.percentage ?? 0}% used
+                  </text>
+                  <text width={18} fg={etaBarColor()}>
+                    ⏳ {eta()!.label} (Est.)
+                  </text>
                 </box>
               </Show>
               <Show when={(context()?.percentage ?? 0) >= 80}>
@@ -450,9 +476,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <box
                   flexDirection="row"
                   gap={1}
-                  onMouseDown={() =>
-                    sync.data.debugEngine.plans.length > 2 && setExpanded("dre", !expanded.dre)
-                  }
+                  onMouseDown={() => sync.data.debugEngine.plans.length > 2 && setExpanded("dre", !expanded.dre)}
                 >
                   <Show when={sync.data.debugEngine.plans.length > 2}>
                     <text fg={theme.text}>{expanded.dre ? "▼" : "▶"}</text>
@@ -478,9 +502,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         <text flexShrink={0} style={{ fg: theme.success }}>
                           •
                         </text>
-                        <text fg={theme.textMuted}>
-                          {sync.data.debugEngine.toolCount} tools ready
-                        </text>
+                        <text fg={theme.textMuted}>{sync.data.debugEngine.toolCount} tools ready</text>
                       </box>
                     </Show>
                     {/* Row 2: graph readiness. Four cases:
@@ -585,10 +607,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     <text fg={theme.text}>
                       <b>Activity</b>
                       <Show when={!expanded.activity}>
-                        <span style={{ fg: theme.textMuted }}>
-                          {" "}
-                          ({activityItems().length} actions)
-                        </span>
+                        <span style={{ fg: theme.textMuted }}> ({activityItems().length} actions)</span>
                       </Show>
                     </text>
                   </box>
@@ -606,10 +625,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <For each={activityItems()}>
                     {(item) => (
                       <box flexDirection="row" gap={1}>
-                        <text
-                          flexShrink={0}
-                          style={{ fg: activityColor(item.status, theme) }}
-                        >
+                        <text flexShrink={0} style={{ fg: activityColor(item.status, theme) }}>
                           {item.icon}
                         </text>
                         <text fg={theme.textMuted} wrapMode="none">
@@ -651,11 +667,18 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <For each={diff() || []}>
                     {(item) => {
                       const icon = item.status === "added" ? "+" : item.status === "deleted" ? "-" : "~"
-                      const iconColor = item.status === "added" ? theme.diffAdded : item.status === "deleted" ? theme.diffRemoved : theme.warning
+                      const iconColor =
+                        item.status === "added"
+                          ? theme.diffAdded
+                          : item.status === "deleted"
+                            ? theme.diffRemoved
+                            : theme.warning
                       return (
                         <box flexDirection="row" gap={1} justifyContent="space-between">
                           <box flexDirection="row" gap={1} flexShrink={1}>
-                            <text flexShrink={0} fg={iconColor}>{icon}</text>
+                            <text flexShrink={0} fg={iconColor}>
+                              {icon}
+                            </text>
                             <text fg={theme.textMuted} wrapMode="none">
                               {item.file.split("/").pop()}
                             </text>

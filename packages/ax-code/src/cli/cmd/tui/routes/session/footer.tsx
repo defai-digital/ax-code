@@ -44,27 +44,26 @@ export function Footer() {
   })
 
   onMount(() => {
-    // Track all timeouts to ensure proper cleanup
-    const timeouts: ReturnType<typeof setTimeout>[] = []
+    let pending: ReturnType<typeof setTimeout> | undefined
 
     function tick() {
       if (connected()) return
       if (!store.welcome) {
         setStore("welcome", true)
-        timeouts.push(setTimeout(() => tick(), 5000))
+        pending = setTimeout(() => tick(), 5000)
         return
       }
 
       if (store.welcome) {
         setStore("welcome", false)
-        timeouts.push(setTimeout(() => tick(), 10_000))
+        pending = setTimeout(() => tick(), 10_000)
         return
       }
     }
-    timeouts.push(setTimeout(() => tick(), 10_000))
+    pending = setTimeout(() => tick(), 10_000)
 
     onCleanup(() => {
-      timeouts.forEach(clearTimeout)
+      if (pending !== undefined) clearTimeout(pending)
     })
   })
 

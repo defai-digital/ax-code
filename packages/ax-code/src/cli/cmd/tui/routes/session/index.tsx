@@ -7,6 +7,7 @@ import {
   For,
   Match,
   on,
+  onCleanup,
   Show,
   Switch,
   useContext,
@@ -208,15 +209,8 @@ export function Session() {
   const toast = useToast()
   const sdk = useSDK()
 
-  // Handle initial prompt from fork
-  createEffect(() => {
-    if (route.initialPrompt && prompt) {
-      prompt.set(route.initialPrompt)
-    }
-  })
-
   let lastSwitch: string | undefined = undefined
-  sdk.event.on("message.part.updated", (evt) => {
+  const unsubAgentSwitch = sdk.event.on("message.part.updated", (evt) => {
     const part = evt.properties.part
     if (part.type !== "tool") return
     if (part.sessionID !== route.sessionID) return
@@ -231,6 +225,7 @@ export function Session() {
       lastSwitch = part.id
     }
   })
+  onCleanup(() => unsubAgentSwitch())
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
@@ -325,8 +320,7 @@ export function Session() {
     ...displayCommands({
       conceal,
       currentModel: () => local.model.current(),
-      dialogReplaceActivity: (dialog) =>
-        dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
+      dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
       dialogReplaceTimeline: (dialog) =>
         dialog.replace(() => (
           <DialogTimeline
@@ -706,7 +700,9 @@ export function Session() {
                   <box flexShrink={0} paddingLeft={1}>
                     <text fg={theme.textMuted}>
                       {tasks().total} subagent{tasks().total !== 1 ? "s" : ""}
-                      {tasks().running > 0 ? <span style={{ fg: theme.primary }}> · {tasks().running} active</span> : null}
+                      {tasks().running > 0 ? (
+                        <span style={{ fg: theme.primary }}> · {tasks().running} active</span>
+                      ) : null}
                       {tasks().done > 0 ? <span style={{ fg: theme.success }}> · {tasks().done} done</span> : null}
                     </text>
                   </box>
@@ -1009,7 +1005,10 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               >
                 ▣{" "}
               </span>{" "}
-              <span style={{ fg: theme.text }}>{sync.data.agent.find((a) => a.name === props.message.agent)?.displayName ?? Locale.titlecase(props.message.agent)}</span>
+              <span style={{ fg: theme.text }}>
+                {sync.data.agent.find((a) => a.name === props.message.agent)?.displayName ??
+                  Locale.titlecase(props.message.agent)}
+              </span>
               <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
@@ -2000,11 +1999,7 @@ function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
                   ok={checks()?.typecheck.ok}
                   errorCount={checks()?.typecheck.errors.length ?? 0}
                 />
-                <CheckRow
-                  label="lint"
-                  ok={checks()?.lint.ok}
-                  errorCount={checks()?.lint.errors.length ?? 0}
-                />
+                <CheckRow label="lint" ok={checks()?.lint.ok} errorCount={checks()?.lint.errors.length ?? 0} />
                 <box flexDirection="row" gap={1}>
                   <text
                     fg={
@@ -2030,9 +2025,7 @@ function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
             <Show when={applied() && filesChanged().length > 0}>
               <box flexDirection="column">
                 <text fg={theme.textMuted}>Files changed</text>
-                <For each={filesChanged()}>
-                  {(file) => <text fg={theme.text}>{"  " + normalize(file)}</text>}
-                </For>
+                <For each={filesChanged()}>{(file) => <text fg={theme.text}>{"  " + normalize(file)}</text>}</For>
               </box>
             </Show>
           </box>
