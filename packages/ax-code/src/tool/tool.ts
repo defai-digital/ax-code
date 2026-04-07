@@ -4,6 +4,9 @@ import type { Agent } from "../agent/agent"
 import type { Permission } from "../permission"
 import type { SessionID, MessageID } from "../session/schema"
 import { Truncate } from "./truncate"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "tool" })
 
 export namespace Tool {
   interface Metadata {
@@ -67,7 +70,17 @@ export namespace Tool {
               { cause: error },
             )
           }
-          const result = await execute(args, ctx)
+          const toolStart = Date.now()
+          let result: Awaited<ReturnType<typeof execute>>
+          try {
+            result = await execute(args, ctx)
+          } catch (err) {
+            const durationMs = Date.now() - toolStart
+            log.error("tool failed", { toolName: id, sessionId: ctx.sessionID, durationMs, status: "error", errorCode: err instanceof Error ? err.name : "Unknown" })
+            throw err
+          }
+          const durationMs = Date.now() - toolStart
+          log.info("tool completed", { toolName: id, sessionId: ctx.sessionID, durationMs, status: "ok" })
           // skip truncation for tools that handle it themselves
           if (result.metadata.truncated !== undefined) {
             return result

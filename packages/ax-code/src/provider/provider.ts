@@ -283,7 +283,7 @@ export namespace Provider {
     } = {}
     const sdk = new Map<string, SDK>()
 
-    log.info("init")
+    log.info("provider init started", { command: "provider.init", status: "started" })
 
     const configProviders = Object.entries(config.provider ?? {})
 
@@ -447,21 +447,25 @@ export namespace Provider {
 
     await Promise.all(
       Object.entries(CUSTOM_LOADERS).map(async ([id, fn]) => {
-        const providerID = ProviderID.make(id)
-        if (disabled.has(providerID)) return
-        const data = database[providerID]
-        if (!data) {
-          log.error("Provider does not exist in model list " + providerID)
-          return
-        }
-        const result = await fn(data)
-        if (result && (result.autoload || providers[providerID])) {
-          if (result.getModel) modelLoaders[providerID] = result.getModel
-          if (result.vars) varsLoaders[providerID] = result.vars
-          if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels
-          const opts = result.options ?? {}
-          const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
-          mergeProvider(providerID, patch)
+        try {
+          const providerID = ProviderID.make(id)
+          if (disabled.has(providerID)) return
+          const data = database[providerID]
+          if (!data) {
+            log.error("Provider does not exist in model list " + providerID)
+            return
+          }
+          const result = await fn(data)
+          if (result && (result.autoload || providers[providerID])) {
+            if (result.getModel) modelLoaders[providerID] = result.getModel
+            if (result.vars) varsLoaders[providerID] = result.vars
+            if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels
+            const opts = result.options ?? {}
+            const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
+            mergeProvider(providerID, patch)
+          }
+        } catch (err) {
+          log.warn("custom provider loader failed", { provider: id, error: err })
         }
       }),
     )

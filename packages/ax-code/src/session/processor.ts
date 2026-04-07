@@ -85,7 +85,7 @@ export namespace SessionProcessor {
         return toolcalls[toolCallID]
       },
       async process(streamInput: LLM.StreamInput) {
-        log.info("process")
+        log.info("process started", { sessionId: input.sessionID, command: "session.process", status: "started" })
         needsCompaction = false
         const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
         const shouldBreak = autonomous ? false : (cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true)
@@ -546,7 +546,11 @@ export namespace SessionProcessor {
             const errStack = e instanceof Error ? e.stack : undefined
             const errName = e instanceof Error ? e.name : (e as { constructor?: { name?: string } })?.constructor?.name
             const errMessage = e instanceof Error ? e.message : String(e)
-            log.error("process", {
+            log.error("process failed", {
+              sessionId: input.sessionID,
+              command: "session.process",
+              status: "error",
+              errorCode: errName ?? "Unknown",
               error: e,
               stack: JSON.stringify(errStack),
             })
