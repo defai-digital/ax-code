@@ -218,6 +218,18 @@ export namespace SessionProcessor {
                         (p) => p.tool === value.toolName && p.input === inputStr,
                       )
                     ) {
+                      if (autonomous) {
+                        // In autonomous mode, skip Permission.ask() (which
+                        // would auto-approve and waste the detection). Clear
+                        // the ring buffer so the tool call proceeds this time
+                        // but the detector rearms for the next batch. The
+                        // model sees the identical results in its history
+                        // which should prompt a strategy change. Step limits
+                        // bound total damage if the model keeps repeating.
+                        log.warn("autonomous doom_loop detected, clearing ring buffer", { tool: value.toolName, sessionID: input.sessionID })
+                        recentToolRing.length = 0
+                        break
+                      }
                       // `Agent.get()` returns undefined if the agent
                       // was removed or renamed mid-session (e.g. via
                       // config reload). Accessing `.permission` on

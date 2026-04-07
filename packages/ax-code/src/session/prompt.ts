@@ -471,7 +471,7 @@ export namespace SessionPrompt {
           type: "session.end",
           sessionID,
           reason,
-          totalSteps: step,
+          totalSteps,
         })
       }
       Recorder.end(sessionID)
@@ -485,13 +485,17 @@ export namespace SessionPrompt {
     let structuredOutput: unknown | undefined
 
     let step = 0
+    let totalSteps = 0
     let reason: "completed" | "aborted" | "error" | "step_limit" = "error"
     let consecutiveErrors = 0
+    let continuations = 0
     const MAX_CONSECUTIVE_ERRORS = _MAX_CONSECUTIVE_ERRORS
-    const GLOBAL_STEP_LIMIT = _GLOBAL_STEP_LIMIT
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
+    const GLOBAL_STEP_LIMIT = cfg.session?.max_steps ?? _GLOBAL_STEP_LIMIT
+    const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
+    const maxContinuations = cfg.session?.max_continuations ?? 3
     const cachedSystemPrompt: import("./prompt-helpers").SystemCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -509,7 +513,7 @@ export namespace SessionPrompt {
       // populated via the onSuccess callback only when the current step
       // is actually using structured output mode.
       structuredOutput = undefined
-      await SessionStatus.set(sessionID, { type: "busy" })
+      await SessionStatus.set(sessionID, { type: "busy", step, maxSteps: GLOBAL_STEP_LIMIT })
       log.info("loop", { command: "session.prompt.loop", status: "started", step, sessionID, consecutiveErrors })
       if (step > 0 && step % 10 === 0) {
         log.warn("long-running task", { command: "session.prompt.loop", status: "ok", step, sessionID, message: `Agent has been working for ${step} steps` })
@@ -521,11 +525,34 @@ export namespace SessionPrompt {
 
       // Safety: prevent infinite loops
       if (step >= GLOBAL_STEP_LIMIT) {
-        log.warn("global step limit reached", { command: "session.prompt.loop", status: "error", errorCode: "STEP_LIMIT", step, sessionID })
+        // In autonomous mode, auto-continue by injecting a synthetic
+        // continuation message so the model picks up where it left off.
+        // Capped by maxContinuations to prevent truly infinite runs.
+        if (autonomous && continuations < maxContinuations) {
+          continuations++
+          step = 0
+          consecutiveErrors = 0
+          cachedMsgs = undefined
+          cachedAgent = undefined
+          cachedModel = undefined
+          log.info("autonomous auto-continue", { command: "session.prompt.loop", status: "ok", sessionID, continuation: continuations, maxContinuations })
+          const lastMsgs = await Session.messages({ sessionID })
+          const lastUserInfo = lastMsgs.filter((m) => m.info.role === "user").pop()?.info as MessageV2.User | undefined
+          await createUserMessage({
+            sessionID,
+            parts: [{ type: "text", text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations}/${maxContinuations}. Prioritize completing the most important remaining work.` }],
+            agent: lastUserInfo?.agent,
+            model: lastUserInfo?.model,
+          })
+          continue
+        }
+        log.warn("global step limit reached", { command: "session.prompt.loop", status: "error", errorCode: "STEP_LIMIT", step, sessionID, continuations })
         Bus.publish(Session.Event.Error, {
           sessionID,
           error: new NamedError.Unknown({
-            message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT}). Stopping to prevent infinite loop. Try breaking the task into smaller parts.`,
+            message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT} steps${continuations > 0 ? ` after ${continuations} auto-continuations` : ""}). `
+              + `To increase, set "session.max_steps" in ax-code.json. `
+              + `Try breaking the task into smaller parts or increase the limit for complex autonomous tasks.`,
           }).toObject(),
         })
         reason = "step_limit"
@@ -549,7 +576,8 @@ export namespace SessionPrompt {
       }
 
       step++
-      if (step === 1) {
+      totalSteps++
+      if (!sessionStarted) {
         ensureTitle({
           session,
           modelID: lastUser.model.modelID,
@@ -737,7 +765,7 @@ export namespace SessionPrompt {
         })
       }
 
-      if (step === 1) {
+      if (step === 1 && continuations === 0) {
         SessionSummary.summarize(
           {
             sessionID: sessionID,
@@ -830,7 +858,7 @@ export namespace SessionPrompt {
           Bus.publish(Session.Event.Error, {
             sessionID,
             error: new NamedError.Unknown({
-              message: `Agent encountered ${consecutiveErrors} consecutive errors. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
+              message: `Agent encountered ${consecutiveErrors} consecutive errors at step ${step}. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
             }).toObject(),
           })
           reason = "error"

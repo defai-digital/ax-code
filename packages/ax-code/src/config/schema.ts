@@ -678,6 +678,18 @@ export const Info = z
           .boolean()
           .optional()
           .describe("Automatically prune expired sessions on startup (default: true)"),
+        max_steps: z
+          .number()
+          .int()
+          .min(10)
+          .optional()
+          .describe("Maximum agentic steps per session turn before stopping (default: 200)"),
+        max_continuations: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)"),
       })
       .optional()
       .describe("Session lifecycle management"),
