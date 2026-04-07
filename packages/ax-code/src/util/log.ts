@@ -6,8 +6,9 @@ import { Global } from "../global"
 import z from "zod"
 import { Glob } from "./glob"
 
-// Pino instance — initialized lazily via init(). Before init, logs go to stderr.
-let pinoLogger: pino.Logger = pino({ level: "debug" }, pino.destination(2)) // fd 2 = stderr
+// Pino instance — only active when logging to file (not stderr).
+// Avoids interleaving JSON and text on the same stream.
+let pinoLogger: pino.Logger | undefined
 
 export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
@@ -68,11 +69,13 @@ export namespace Log {
 
   export async function init(options: Options) {
     if (options.level) level = options.level
-    // Update Pino log level to match
     const pinoLevel = level === "DEBUG" ? "debug" : level === "INFO" ? "info" : level === "WARN" ? "warn" : "error"
-    pinoLogger.level = pinoLevel
     cleanup(Global.Path.log)
-    if (options.print) return
+    if (options.print) {
+      // Print mode: stderr only, no Pino (avoid JSON/text interleaving)
+      pinoLogger = undefined
+      return
+    }
     logpath = path.join(
       Global.Path.log,
       options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
@@ -102,8 +105,9 @@ export namespace Log {
       }
     })
     currentStream = stream
-    // Re-create Pino with file destination for JSON structured logging
-    pinoLogger = pino({ level: pinoLevel }, pino.destination({ dest: logpath, append: true, sync: false }))
+    // Pino writes to a separate .json.log file to avoid interleaving with text format
+    const jsonLogPath = logpath.replace(/\.log$/, ".json.log")
+    pinoLogger = pino({ level: pinoLevel }, pino.destination({ dest: jsonLogPath, append: true, sync: false }))
     write = (msg: string) => {
       // Fast path: if the stream was already ended (by a concurrent
       // re-init, or by Node during shutdown) don't even attempt the
@@ -180,30 +184,32 @@ export namespace Log {
       last = next.getTime()
       return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, message].filter(Boolean).join(" ") + "\n"
     }
-    const child = pinoLogger.child(tags || {})
+    // Pino child is created lazily — only when pinoLogger is active (file mode)
+    let child: pino.Logger | undefined
+    const pino_child = () => child ??= pinoLogger?.child(tags || {})
     const result: Logger = {
       debug(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("DEBUG")) {
           write("DEBUG " + build(message, extra))
-          child.debug(extra || {}, String(message ?? ""))
+          pino_child()?.debug(extra || {}, String(message ?? ""))
         }
       },
       info(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("INFO")) {
           write("INFO  " + build(message, extra))
-          child.info(extra || {}, String(message ?? ""))
+          pino_child()?.info(extra || {}, String(message ?? ""))
         }
       },
       error(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("ERROR")) {
           write("ERROR " + build(message, extra))
-          child.error(extra || {}, String(message ?? ""))
+          pino_child()?.error(extra || {}, String(message ?? ""))
         }
       },
       warn(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("WARN")) {
           write("WARN  " + build(message, extra))
-          child.warn(extra || {}, String(message ?? ""))
+          pino_child()?.warn(extra || {}, String(message ?? ""))
         }
       },
       tag(key: string, value: string) {
