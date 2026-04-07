@@ -51,7 +51,7 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
   const name = "typecheck"
 
   try {
-    const proc = Bun.spawn(["npx", "tsc", "--noEmit", "--pretty", "false"], {
+    const proc = Bun.spawn(["bun", "typecheck"], {
       cwd,
       stdout: "pipe",
       stderr: "pipe",

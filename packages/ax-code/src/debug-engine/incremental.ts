@@ -89,8 +89,8 @@ export namespace Incremental {
     // Build import patterns from changed file basenames
     const patterns = changedFiles.map((f) => {
       const base = path.basename(f, path.extname(f))
-      // Match import statements referencing this module
-      return base
+      // Match import statements referencing this module — escape regex metacharacters
+      return base.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
     })
 
     if (patterns.length === 0) return []

@@ -125,16 +125,38 @@ export const WebFetchTool = Tool.define("webfetch", {
         throw new Error(`Request failed with status code: ${response.status}`)
       }
 
-      // Check content length
+      // Check content length header first
       const contentLength = response.headers.get("content-length")
       if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_SIZE) {
         throw new Error("Response too large (exceeds 5MB limit)")
       }
 
-      const arrayBuffer = await response.arrayBuffer()
-      if (arrayBuffer.byteLength > MAX_RESPONSE_SIZE) {
-        throw new Error("Response too large (exceeds 5MB limit)")
+      // Stream response with size limit to prevent OOM from chunked
+      // responses that omit Content-Length. Previously the entire body
+      // was buffered via response.arrayBuffer() before the size check,
+      // meaning a malicious server could send gigabytes before we
+      // noticed.
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("Response has no body")
+      const chunks: Uint8Array[] = []
+      let totalBytes = 0
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        totalBytes += value.byteLength
+        if (totalBytes > MAX_RESPONSE_SIZE) {
+          reader.cancel()
+          throw new Error("Response too large (exceeds 5MB limit)")
+        }
+        chunks.push(value)
       }
+      const assembled = new Uint8Array(totalBytes)
+      let byteOffset = 0
+      for (const chunk of chunks) {
+        assembled.set(chunk, byteOffset)
+        byteOffset += chunk.byteLength
+      }
+      const arrayBuffer = assembled.buffer
 
       const contentType = response.headers.get("content-type") || ""
       const mime = contentType.split(";")[0]?.trim().toLowerCase() || ""

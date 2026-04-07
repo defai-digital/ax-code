@@ -25,6 +25,16 @@ const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 *
 
 const log = Log.create({ service: "bash-tool" })
 
+// Track detached process groups so we can clean them up if the parent
+// process exits unexpectedly (crash, SIGKILL, etc.). Without this,
+// detached child processes become orphans that keep running.
+const trackedPIDs = new Set<number>()
+process.on("exit", () => {
+  for (const pid of trackedPIDs) {
+    try { process.kill(-pid, "SIGTERM") } catch {}
+  }
+})
+
 const resolveWasm = (asset: string) => {
   if (asset.startsWith("file://")) return fileURLToPath(asset)
   if (asset.startsWith("/") || /^[a-z]:/i.test(asset)) return asset
@@ -79,12 +89,13 @@ export const BashTool = Tool.define("bash", async () => {
     }),
     async execute(params, ctx) {
       const cwd = params.workdir || Instance.directory
-      if (params.timeout !== undefined && params.timeout < 1) {
-        // Reject 0 as well as negatives: timeout=0 combined with the
-        // `+ 100` in the kill timer fires ~100ms later, giving
-        // commands almost no time to run. The error message still
-        // says "positive number" which was already accurate.
-        throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
+      if (params.timeout !== undefined && (!Number.isFinite(params.timeout) || params.timeout < 1)) {
+        // Reject NaN, Infinity, 0, and negatives: timeout=0 combined
+        // with the `+ 100` in the kill timer fires ~100ms later,
+        // giving commands almost no time to run. NaN would bypass the
+        // comparison entirely, producing undefined behaviour
+        // downstream.
+        throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a finite positive number.`)
       }
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
       const tree = await parser().then((p) => p.parse(params.command))
@@ -203,6 +214,7 @@ export const BashTool = Tool.define("bash", async () => {
         detached: process.platform !== "win32",
         windowsHide: process.platform === "win32",
       })
+      if (proc.pid) trackedPIDs.add(proc.pid)
 
       let output = ""
       // Hard cap on raw output to protect process memory against
@@ -269,6 +281,7 @@ export const BashTool = Tool.define("bash", async () => {
         const cleanup = () => {
           clearTimeout(timeoutTimer)
           ctx.abort.removeEventListener("abort", abortHandler)
+          if (proc.pid) trackedPIDs.delete(proc.pid)
         }
 
         proc.once("close", () => {

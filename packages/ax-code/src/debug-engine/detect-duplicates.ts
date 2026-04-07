@@ -48,12 +48,16 @@ export function normalizeSignature(sig: string): string {
     sig
       // Collapse whitespace
       .replace(/\s+/g, " ")
-      // Drop parameter names: match `(name: Type)` → `(Type)`. Loose by
-      // design — we'd rather over-normalize and catch more duplicates
-      // than under-normalize and miss them.
-      .replace(/\b([a-zA-Z_$][\w$]*)\s*:/g, ":")
-      // Drop default values: `= 0`, `= "foo"`, `= something`
-      .replace(/=\s*[^,)]+/g, "")
+      // Drop parameter names within parenthesized parameter lists:
+      // match `(name: Type)` → `(Type)`. Scoped to parens so that
+      // object property keys like `{ foo: bar }` are preserved.
+      .replace(/\(([^)]*)\)/g, (_, params) =>
+        "(" + params.replace(/\b([a-zA-Z_$][\w$]*)\s*:/g, ":") + ")"
+      )
+      // Drop default values within parameter lists: `= 0`, `= "foo"`
+      .replace(/\(([^)]*)\)/g, (_, params) =>
+        "(" + params.replace(/=\s*[^,)]+/g, "") + ")"
+      )
       // Bucket number literals
       .replace(/\b\d+(\.\d+)?\b/g, "N")
       // Bucket string literals

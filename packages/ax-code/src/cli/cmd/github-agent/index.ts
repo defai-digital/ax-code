@@ -688,12 +688,22 @@ export const GithubRunCommand = cmd({
           const start = m.index
           const filename = path.basename(url)
 
+          // Only fetch from trusted GitHub domains — defence-in-depth
+          // against crafted URLs that might bypass the regex or redirect
+          // to internal hosts while carrying the auth bearer token.
+          const parsed = new URL(url)
+          if (parsed.hostname !== "github.com" && !parsed.hostname.endsWith(".githubusercontent.com")) {
+            console.error(`Skipping non-GitHub URL: ${url}`)
+            continue
+          }
+
           // Download image
           const res = await fetch(url, {
             headers: {
               Authorization: `Bearer ${appToken}`,
               Accept: "application/vnd.github.v3+json",
             },
+            redirect: "manual",
           })
           if (!res.ok) {
             console.error(`Failed to download image: ${url}`)

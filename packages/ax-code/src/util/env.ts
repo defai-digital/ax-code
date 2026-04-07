@@ -9,7 +9,18 @@ export namespace Env {
   // allowlist covers the few legitimate cases where a secret-looking
   // keyword IS a real substring we want to keep.
   const SECRET_PATTERN = /(?:^|_)(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)(?:_|$)/i
-  const SAFE_ALLOWLIST = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS", "GIT_CREDENTIAL_HELPER"])
+  const SAFE_ALLOWLIST = new Set([
+    "SSH_AUTH_SOCK",
+    "GIT_ASKPASS",
+    "SUDO_ASKPASS",
+    "GIT_CREDENTIAL_HELPER",
+    "PYTHON_KEYRING_BACKEND",
+    "XAUTHORITY",
+    "DOTNET_CLI_TELEMETRY_SESSION_TOKEN",
+    "COMPOSER_AUTH",
+    "GPG_AGENT_INFO",
+    "DBUS_SESSION_BUS_ADDRESS",
+  ])
 
   export function sanitize(env: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
     const out: Record<string, string | undefined> = {}

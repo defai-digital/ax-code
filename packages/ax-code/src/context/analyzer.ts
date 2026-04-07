@@ -352,7 +352,8 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
         fileCount++
         try {
           const content = await Bun.file(path.join(root, sourceDir, file)).text()
-          loc += content.split("\n").length
+          const lines = content.split("\n")
+          loc += content.endsWith("\n") ? lines.length - 1 : lines.length
         } catch {
           // skip unreadable files
         }

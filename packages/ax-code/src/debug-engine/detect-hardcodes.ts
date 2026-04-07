@@ -166,10 +166,10 @@ const pathDetector: Detector = (original, trimmed) => {
   if (isConstAssignment(trimmed)) return []
   const results: Array<{ value: string; column: number }> = []
   // Unix absolute path in a string literal: "/Users/...", "/home/..."
-  const re = /"((?:\/Users\/|\/home\/|\/opt\/|\/var\/|\/etc\/|\/tmp\/|[A-Z]:\\)[^"]*)"/g
+  const re = /(["'`])((?:\/Users\/|\/home\/|\/opt\/|\/var\/|\/etc\/|\/tmp\/|[A-Z]:\\)[^"'`]*)\1/g
   let m: RegExpExecArray | null
   while ((m = re.exec(line)) !== null) {
-    results.push({ value: m[1], column: m.index })
+    results.push({ value: m[2], column: m.index })
   }
   return results
 }
@@ -211,10 +211,10 @@ function hasCharClassDiversity(s: string): boolean {
 const secretShapeDetector: Detector = (original) => {
   const line = stripComments(original)
   const results: Array<{ value: string; column: number }> = []
-  const re = /"([A-Za-z0-9_\-+/=]{20,})"/g
+  const re = /(["'`])([A-Za-z0-9_\-+/=]{20,})\1/g
   let m: RegExpExecArray | null
   while ((m = re.exec(line)) !== null) {
-    const candidate = m[1]
+    const candidate = m[2]
     if (candidate.length < SECRET_SHAPE_MIN_LEN) continue
     // Skip obvious non-secrets: UUIDs with dashes in fixed positions,
     // file hashes (all hex), base64 of a short word.

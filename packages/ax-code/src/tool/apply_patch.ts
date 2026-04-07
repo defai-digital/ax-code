@@ -263,11 +263,13 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         case "move":
           if (change.movePath) {
             const dest = change.movePath
-            await fs.mkdir(path.dirname(dest), { recursive: true })
-            await FileTime.withLock(dest, async () => {
-              await fs.writeFile(dest, change.newContent, "utf-8")
+            await FileTime.withLock(change.filePath, async () => {
+              await fs.mkdir(path.dirname(dest), { recursive: true })
+              await FileTime.withLock(dest, async () => {
+                await fs.writeFile(dest, change.newContent, "utf-8")
+              })
+              await fs.unlink(change.filePath)
             })
-            await fs.unlink(change.filePath)
             await FileTime.read(ctx.sessionID, dest)
             updates.push({ file: change.filePath, event: "unlink" })
             updates.push({ file: dest, event: "add" })
@@ -275,7 +277,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           break
 
         case "delete":
-          await fs.unlink(change.filePath)
+          await FileTime.withLock(change.filePath, async () => {
+            await fs.unlink(change.filePath)
+          })
           updates.push({ file: change.filePath, event: "unlink" })
           break
       }

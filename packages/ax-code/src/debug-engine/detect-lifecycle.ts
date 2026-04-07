@@ -66,9 +66,9 @@ const RESOURCE_RULES: ResourceRule[] = [
   },
   {
     type: "timer",
-    createRe: /(?:setInterval)\s*\(/g,
-    cleanupPatterns: [/clearInterval\s*\(/],
-    description: "setInterval without clearInterval — timer will run indefinitely",
+    createRe: /(?:setInterval|setTimeout)\s*\(/g,
+    cleanupPatterns: [/clearInterval\s*\(/, /clearTimeout\s*\(/],
+    description: "setInterval/setTimeout without corresponding clear — timer will run indefinitely",
     severity: "high",
   },
   {
@@ -117,7 +117,7 @@ function findFunctionScopes(content: string): FunctionScope[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     // Detect function-like declarations (function, method, arrow)
-    if (/(?:function\s+\w+|(?:async\s+)?(?:\w+\s*\(|=>\s*\{)|\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{)/.test(line) && depth === 0) {
+    if (/(?!.*\b(?:if|for|while|switch|catch|class)\s*\()(?:function\s+\w+|(?:async\s+)?(?:\w+\s*\(|=>\s*\{)|\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{)/.test(line) && depth === 0) {
       isFunctionLike = true
       scopeStart = i
     }

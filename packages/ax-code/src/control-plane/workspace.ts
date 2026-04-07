@@ -108,26 +108,31 @@ export namespace Workspace {
       .map(async (item) => {
         const adaptor = getAdaptor(item.type)
         if (!adaptor) return
-        const response = await adaptor.fetch(item.extra, "http://workspace.test/event", {
-          signal: stop.signal,
-        })
-        if (!response.body) return
-        await parseSSE(response.body, stop.signal, (payload) => {
-          GlobalBus.emit("event", {
-            directory: item.id,
-            payload,
-          })
-        }).catch((err) => {
-          // Log SSE sync failures so a dead workspace connection is
-          // visible. Previously this swallowed everything and a
-          // broken workspace looked like a healthy one that never
-          // received events.
-          log.warn("workspace SSE sync lost", {
-            workspaceID: item.id,
-            type: item.type,
-            err,
-          })
-        })
+        let backoff = 1000
+        while (!stop.signal.aborted) {
+          try {
+            const response = await adaptor.fetch(item.extra, "http://workspace.test/event", {
+              signal: stop.signal,
+            })
+            if (!response.body) return
+            backoff = 1000
+            await parseSSE(response.body, stop.signal, (payload) => {
+              GlobalBus.emit("event", {
+                directory: item.id,
+                payload,
+              })
+            })
+          } catch (err) {
+            if (stop.signal.aborted) break
+            log.warn("workspace SSE sync lost, reconnecting...", {
+              workspaceID: item.id,
+              type: item.type,
+              err,
+            })
+            await new Promise((r) => setTimeout(r, backoff))
+            backoff = Math.min(backoff * 2, 30000)
+          }
+        }
       })
 
     return {

@@ -418,7 +418,7 @@ export namespace Server {
 
   export const Default = lazy(() => createApp({}))
 
-  export const createApp = (opts: { cors?: string[] }): Hono => {
+  export const createApp = (opts: { port?: number, cors?: string[] }): Hono => {
     const app = new Hono()
     return app
       .onError((err, c) => {
@@ -478,11 +478,13 @@ export namespace Server {
           origin(input) {
             if (!input) return
 
-            if (input.startsWith("http://localhost:")) return input
-            if (input.startsWith("http://127.0.0.1:")) return input
-            if (opts?.cors?.includes(input)) {
-              return input
-            }
+            const serverPort = opts?.port ?? 4096
+            const serverOrigins = [
+              `http://localhost:${serverPort}`,
+              `http://127.0.0.1:${serverPort}`,
+            ]
+            if (serverOrigins.includes(input)) return input
+            if (opts?.cors?.includes(input)) return input
 
             return
           },

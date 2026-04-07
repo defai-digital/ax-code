@@ -50,7 +50,7 @@ function detectPathTraversal(
 ): DebugEngine.SecurityFinding[] {
   const findings: DebugEngine.SecurityFinding[] = []
   // Match path.join or path.resolve with a variable (not a string literal)
-  const pathJoinRe = /path\.(?:join|resolve)\s*\([^)]*\b(\w+)\b[^)]*\)/
+  const pathJoinRe = /path\.(?:join|resolve)\s*\((.+)/
   // Containment checks we look for nearby
   const containmentRe = /(?:contains|containsPath|isSubpath|startsWith|Filesystem\.contains|within|inside)\s*\(/
 

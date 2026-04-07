@@ -442,6 +442,7 @@ export namespace Provider {
             mergeProvider(providerID, patch)
           } catch (err) {
             log.warn("plugin auth loader failed", { provider: plugin.auth!.provider, error: err })
+            delete providers[ProviderID.make(plugin.auth!.provider)]
           }
         }),
     )
@@ -537,6 +538,7 @@ export namespace Provider {
 
     return {
       models: languages,
+      modelPending: new Map<string, Promise<Lang>>(),
       providers,
       sdk,
       sdkPending,
@@ -783,36 +785,50 @@ export namespace Provider {
     const key = `${model.providerID}/${model.id}`
     if (s.models.has(key)) return s.models.get(key)!
 
+    // Deduplicate concurrent loads — without this, parallel calls
+    // both pass the cache-miss check and load the same SDK twice.
+    const pending = s.modelPending.get(key)
+    if (pending) return pending
+
     const provider = s.providers[model.providerID]
 
-    // CLI providers bypass SDK loading — their custom loaders handle everything
-    if (s.modelLoaders[model.providerID] && model.api?.npm === "cli") {
-      const language = await s.modelLoaders[model.providerID](null, model.api.id, {
-        ...provider.options,
-        ...model.options,
-      })
-      s.models.set(key, language as Lang)
-      return language as Lang
-    }
+    const promise = (async (): Promise<Lang> => {
+      // CLI providers bypass SDK loading — their custom loaders handle everything
+      if (s.modelLoaders[model.providerID] && model.api?.npm === "cli") {
+        const language = await s.modelLoaders[model.providerID](null, model.api.id, {
+          ...provider.options,
+          ...model.options,
+        })
+        s.models.set(key, language as Lang)
+        return language as Lang
+      }
 
-    const sdk = await getSDK(model)
+      const sdk = await getSDK(model)
 
+      try {
+        const language = s.modelLoaders[model.providerID]
+          ? await s.modelLoaders[model.providerID](sdk, model.api.id, { ...provider.options, ...model.options })
+          : sdk.languageModel(model.api.id)
+        s.models.set(key, language as Lang)
+        return language as Lang
+      } catch (e) {
+        if (e instanceof NoSuchModelError)
+          throw new ModelNotFoundError(
+            {
+              modelID: model.id,
+              providerID: model.providerID,
+            },
+            { cause: e },
+          )
+        throw e
+      }
+    })()
+
+    s.modelPending.set(key, promise)
     try {
-      const language = s.modelLoaders[model.providerID]
-        ? await s.modelLoaders[model.providerID](sdk, model.api.id, { ...provider.options, ...model.options })
-        : sdk.languageModel(model.api.id)
-      s.models.set(key, language as Lang)
-      return language as Lang
-    } catch (e) {
-      if (e instanceof NoSuchModelError)
-        throw new ModelNotFoundError(
-          {
-            modelID: model.id,
-            providerID: model.providerID,
-          },
-          { cause: e },
-        )
-      throw e
+      return await promise
+    } finally {
+      s.modelPending.delete(key)
     }
   }
 

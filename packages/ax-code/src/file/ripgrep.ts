@@ -155,23 +155,27 @@ export namespace Ripgrep {
       const archivePath = path.join(Global.Path.bin, filename)
       await Filesystem.write(archivePath, Buffer.from(arrayBuffer))
       if (config.extension === "tar.gz") {
-        const args = ["tar", "-xzf", archivePath, "--strip-components=1"]
+        try {
+          const args = ["tar", "-xzf", archivePath, "--strip-components=1"]
 
-        if (platformKey.endsWith("-darwin")) args.push("--include=*/rg")
-        if (platformKey.endsWith("-linux")) args.push("--wildcards", "*/rg")
+          if (platformKey.endsWith("-darwin")) args.push("--include=*/rg")
+          if (platformKey.endsWith("-linux")) args.push("--wildcards", "*/rg")
 
-        const proc = Process.spawn(args, {
-          cwd: Global.Path.bin,
-          stderr: "pipe",
-          stdout: "pipe",
-        })
-        const exit = await proc.exited
-        if (exit !== 0) {
-          const stderr = proc.stderr ? await text(proc.stderr) : ""
-          throw new ExtractionFailedError({
-            filepath,
-            stderr,
+          const proc = Process.spawn(args, {
+            cwd: Global.Path.bin,
+            stderr: "pipe",
+            stdout: "pipe",
           })
+          const exit = await proc.exited
+          if (exit !== 0) {
+            const stderr = proc.stderr ? await text(proc.stderr) : ""
+            throw new ExtractionFailedError({
+              filepath,
+              stderr,
+            })
+          }
+        } finally {
+          await fs.unlink(archivePath).catch(() => {})
         }
       }
       if (config.extension === "zip") {
@@ -207,7 +211,7 @@ export namespace Ripgrep {
           await zipFileReader.close()
         }
       }
-      await fs.unlink(archivePath)
+      if (config.extension !== "tar.gz") await fs.unlink(archivePath)
       if (!platformKey.endsWith("-win32")) await fs.chmod(filepath, 0o755)
     }
 
@@ -244,7 +248,9 @@ export namespace Ripgrep {
           yield file
         }
         return
-      } catch {}
+      } catch (e: any) {
+        if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND") throw e
+      }
     }
 
     const args = [await filepath(), "--files", "--glob=!.git/*"]

@@ -246,6 +246,7 @@ export namespace ShadowWorktree {
     let directories = 0
 
     // Remove orphan DRE shadow branches
+    const shadowBase = path.join(Instance.directory, "automatosx", "tmp", "dre-shadow")
     const branchList = await git(["branch", "--list", "ax-code/dre/shadow/*"], { cwd })
     if (branchList.exitCode === 0) {
       const names = branchList
@@ -256,14 +257,15 @@ export namespace ShadowWorktree {
         .filter(Boolean)
       for (const name of names) {
         // Force-remove the worktree first (if it still exists), then the branch
-        await git(["worktree", "remove", "--force", name], { cwd }).catch(() => undefined)
+        const planId = name.replace("ax-code/dre/shadow/", "")
+        const worktreeDir = path.join(shadowBase, planId)
+        await git(["worktree", "remove", "--force", worktreeDir], { cwd }).catch(() => undefined)
         const del = await git(["branch", "-D", name], { cwd })
         if (del.exitCode === 0) branches++
       }
     }
 
     // Remove orphan shadow directories
-    const shadowBase = path.join(Instance.directory, "automatosx", "tmp", "dre-shadow")
     const entries = await fs.readdir(shadowBase).catch(() => [] as string[])
     for (const entry of entries) {
       const full = path.join(shadowBase, entry)

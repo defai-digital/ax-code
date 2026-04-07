@@ -249,9 +249,16 @@ function detectConflictingMutations(
     // Find the closing `])` — count brackets
     let depth = 1
     let i = match.index + match[0].length
+    let inString: string | null = null
     while (i < content.length && depth > 0) {
-      if (content[i] === "[") depth++
-      else if (content[i] === "]") depth--
+      const ch = content[i]
+      if (inString) {
+        if (ch === inString && content[i - 1] !== "\\") inString = null
+      } else {
+        if (ch === '"' || ch === "'" || ch === "`") inString = ch
+        else if (ch === "[") depth++
+        else if (ch === "]") depth--
+      }
       i++
     }
     const block = content.slice(match.index, i)
@@ -259,7 +266,7 @@ function detectConflictingMutations(
 
     // Look for repeated identifiers being mutated inside the block
     const mutatedIds = new Map<string, number[]>()
-    const mutationRe = /(\w+)\s*(?:\.(?:set|delete|push|pop|shift|unshift|splice|write|append)\s*\(|\s*(?:\+\+|--|=(?![>=])))/g
+    const mutationRe = /(\w+)\s*(?:\.(?:set|delete|push|pop|shift|unshift|splice|write|append)\s*\(|\s*(?:\+\+|--|(?<!=)=(?![=>])))/g
     let mMatch: RegExpExecArray | null
     while ((mMatch = mutationRe.exec(block)) !== null) {
       const name = mMatch[1]

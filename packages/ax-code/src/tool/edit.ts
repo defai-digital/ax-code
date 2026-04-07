@@ -644,8 +644,12 @@ export function replace(content: string, oldString: string, newString: string, r
       const native = _require("@ax-code/diff")
       const json = native.editReplace(content, oldString, newString, replaceAll ?? false)
       const result = JSON.parse(json)
+      if (typeof result.new_content !== "string")
+        throw new Error("Native diff returned invalid result: new_content is not a string")
       return result.new_content
-    } catch {}
+    } catch (e: any) {
+      if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND") throw e
+    }
   }
 
   if (oldString === newString) {

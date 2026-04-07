@@ -24,7 +24,6 @@ export const IGNORE_PATTERNS = [
   "zig-out",
   ".coverage",
   "coverage/",
-  "vendor/",
   "tmp/",
   "temp/",
   ".cache/",
