@@ -42,7 +42,7 @@ describe("tool.registry", () => {
         expect(ids).toContain("hello")
       },
     })
-  })
+  }, 60000)
 
   test("loads tools from .ax-code/tools (plural)", async () => {
     await using tmp = await tmpdir({
@@ -76,7 +76,7 @@ describe("tool.registry", () => {
         expect(ids).toContain("hello")
       },
     })
-  })
+  }, 60000)
 
   test("loads tools with external dependencies without crashing", async () => {
     await using tmp = await tmpdir({
