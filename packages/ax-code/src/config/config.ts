@@ -171,13 +171,9 @@ export namespace Config {
       // in by anyone — treat them as untrusted so a malicious
       // `ax-code.json` committed to a shared repo cannot read files
       // outside the config's directory.
-      const settled = await Promise.allSettled(projectFiles.map((file) => loadFile(file, { trusted: false })))
-      for (const [i, entry] of settled.entries()) {
-        if (entry.status === "fulfilled") {
-          result = mergeConfigConcatArrays(result, entry.value)
-        } else {
-          log.warn("failed to load project config", { path: projectFiles[i], err: entry.reason })
-        }
+      const configs = await Promise.all(projectFiles.map((file) => loadFile(file, { trusted: false })))
+      for (const cfg of configs) {
+        result = mergeConfigConcatArrays(result, cfg)
       }
     }
 
