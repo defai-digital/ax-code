@@ -104,13 +104,19 @@ export class CliLanguageModel implements LanguageModelV3 {
 
     const stream = new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
-        const closed = () => controller.desiredSize === null
+        let done = false
+        const closed = () => done || controller.desiredSize === null
+        const safeClose = () => {
+          if (done) return
+          done = true
+          controller.close()
+        }
 
         const timer = setTimeout(() => {
           proc.kill("SIGTERM")
           if (closed()) return
           controller.enqueue({ type: "error", error: new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`) })
-          controller.close()
+          safeClose()
         }, CLI_TIMEOUT_MS)
 
         controller.enqueue({ type: "stream-start", warnings: [] })
@@ -142,7 +148,7 @@ export class CliLanguageModel implements LanguageModelV3 {
             usage: EMPTY_USAGE,
             finishReason: { unified: "stop", raw: undefined },
           })
-          controller.close()
+          safeClose()
         })
 
         proc.stdout!.on("error", (err: Error) => {
@@ -150,7 +156,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           proc.kill("SIGTERM")
           if (closed()) return
           controller.enqueue({ type: "error", error: err })
-          controller.close()
+          safeClose()
         })
 
         proc.exited.then((code) => {
@@ -158,13 +164,13 @@ export class CliLanguageModel implements LanguageModelV3 {
           if (closed()) return
           if (code !== 0) {
             controller.enqueue({ type: "error", error: new Error(`CLI exited with code ${code}`) })
-            controller.close()
+            safeClose()
           }
         }).catch((err) => {
           clearTimeout(timer)
           if (closed()) return
           controller.enqueue({ type: "error", error: err ?? new Error("CLI process killed by signal") })
-          controller.close()
+          safeClose()
         })
       },
       cancel() {
