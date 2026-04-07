@@ -569,16 +569,17 @@ describe("session.llm.stream", () => {
           system: ["Continue from the prior step."],
           abort: new AbortController().signal,
           messages: [
-            { role: "user", content: "Use the previous result." },
+            { role: "user", content: [{ type: "text", text: "Use the previous result." }] },
             {
               role: "assistant",
               content: [
                 { type: "reasoning", text: "Let me think through the prior tool result." },
-                { type: "tool-call", toolCallId: "call-1", toolName: "bash", input: { command: "pwd" } },
+                { type: "tool-call", toolCallId: "call-1", toolName: "bash", args: { command: "pwd" } },
               ],
-            } as any,
-            { role: "user", content: "Continue." },
-          ],
+            },
+            { role: "tool", content: [{ type: "tool-result", toolCallId: "call-1", toolName: "bash", output: { type: "text", value: "/home/user" } }] },
+            { role: "user", content: [{ type: "text", text: "Continue." }] },
+          ] as any,
           tools: {},
         })
 
@@ -660,14 +661,15 @@ describe("session.llm.stream", () => {
           system: ["Continue the tool-assisted exchange."],
           abort: new AbortController().signal,
           messages: [
-            { role: "user", content: "Run the command." },
+            { role: "user", content: [{ type: "text", text: "Run the command." }] },
             {
               role: "assistant",
               content: [
-                { type: "tool-call", toolCallId: "call-1", toolName: "bash", input: { command: "pwd" } },
+                { type: "tool-call", toolCallId: "call-1", toolName: "bash", args: { command: "pwd" } },
               ],
-            } as any,
-          ],
+            },
+            { role: "tool", content: [{ type: "tool-result", toolCallId: "call-1", toolName: "bash", output: { type: "text", value: "/home/user" } }] },
+          ] as any,
           tools: {},
         })
 

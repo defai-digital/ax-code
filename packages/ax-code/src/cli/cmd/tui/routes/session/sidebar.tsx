@@ -192,7 +192,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     const s = session()
     if (!s?.time?.created) return
     const elapsedSec = Math.round((now - s.time.created) / 1000)
-    if (elapsedSec < 10) return // need at least 10s of data
+    if (elapsedSec < 30) return // need at least 30s of data for stable velocity
+    const pct = ctx.raw / ctx.limit
+    if (pct < 0.05) return // too early — estimate is meaningless below 5% usage
     const tokPerSec = ctx.raw / elapsedSec
     if (tokPerSec <= 0) return
     const remaining = ctx.limit - ctx.raw

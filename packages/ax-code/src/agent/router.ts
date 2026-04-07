@@ -222,7 +222,7 @@ export function keywordRoute(message: string, currentAgent: string): RouteResult
   return null
 }
 
-const LLM_TIMEOUT = 3000
+const LLM_TIMEOUT = 1500
 
 /** Max characters sent for classification. ~125 tokens is sufficient for intent detection. */
 const CLASSIFY_MAX_CHARS = 500
@@ -290,7 +290,10 @@ export async function route(message: string, currentAgent: string): Promise<Rout
   const keyword = keywordRoute(message, currentAgent)
   if (keyword && keyword.confidence >= 0.5) return keyword
 
-  // Tier 2 only applies for substantial messages with low/no keyword confidence
+  // No keyword matches at all — message is generic, skip LLM
+  if (!keyword) return null
+
+  // Tier 2 only applies for substantial messages with low keyword confidence
   if (message.length < 30) return keyword
 
   // Check if LLM fallback is enabled (set by server via env var)

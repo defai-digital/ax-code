@@ -20,6 +20,7 @@ import { PartID } from "./schema"
 import type { SessionID, MessageID } from "./schema"
 import { NamedError } from "@ax-code/util/error"
 import { Recorder } from "@/replay/recorder"
+import { Database } from "@/storage/db"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
@@ -129,7 +130,7 @@ export namespace SessionProcessor {
                     metadata: value.providerMetadata,
                   }
                   reasoningMap[value.id] = reasoningPart
-                  await Session.updatePart(reasoningPart)
+                  await Session.updatePart.force(reasoningPart)
                   break
 
                 case "reasoning-delta":
@@ -153,7 +154,7 @@ export namespace SessionProcessor {
                     }
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     stepParts.push({ type: "reasoning", text: part.text })
-                    await Session.updatePart(part)
+                    await Session.updatePart.force(part)
                     delete reasoningMap[value.id]
                   }
                   break
@@ -161,7 +162,7 @@ export namespace SessionProcessor {
                 case "tool-input-start":
                   usedTools = true
                   const base = partBase()
-                  const part = await Session.updatePart({
+                  const part = await Session.updatePart.force({
                     ...base,
                     id: toolcalls[value.id]?.id ?? base.id,
                     type: "tool",
@@ -196,7 +197,7 @@ export namespace SessionProcessor {
                   })
                   const match = toolcalls[value.toolCallId]
                   if (match) {
-                    const part = await Session.updatePart({
+                    const part = await Session.updatePart.force({
                       ...match,
                       tool: value.toolName,
                       state: {
@@ -263,7 +264,7 @@ export namespace SessionProcessor {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const toolEndTime = Date.now()
-                    await Session.updatePart({
+                    await Session.updatePart.force({
                       ...match,
                       state: {
                         status: "completed",
@@ -332,7 +333,7 @@ export namespace SessionProcessor {
                       }
                     }
 
-                    await Session.updatePart({
+                    await Session.updatePart.force({
                       ...match,
                       state: {
                         status: "error",
@@ -384,7 +385,7 @@ export namespace SessionProcessor {
                     messageID: input.assistantMessage.id,
                     stepIndex: attempt,
                   })
-                  await Session.updatePart({
+                  await Session.updatePart.force({
                     ...partBase(),
                     snapshot,
                     type: "step-start",
@@ -414,16 +415,35 @@ export namespace SessionProcessor {
                     },
                   }
                   if (usedTools) snapshot = await Snapshot.track()
-                  await Session.updatePart({
-                    id: PartID.ascending(),
-                    reason: usedTools ? "tool-calls" : finishReason,
-                    snapshot,
-                    messageID: input.assistantMessage.id,
-                    sessionID: input.assistantMessage.sessionID,
-                    type: "step-finish",
-                    tokens: usage.tokens,
+                  // Resolve async snapshot patch before batching synchronous DB writes
+                  const stepSnapshot = snapshot
+                  let patchData: { hash: string; files: string[] } | undefined
+                  if (snapshot) {
+                    const patch = await Snapshot.patch(snapshot)
+                    if (patch.files.length) patchData = patch
+                    snapshot = undefined
+                  }
+                  // Batch step-finish + message update + patch in one transaction
+                  Database.transaction(() => {
+                    Session.updatePart.force({
+                      id: PartID.ascending(),
+                      reason: usedTools ? "tool-calls" : finishReason,
+                      snapshot: stepSnapshot,
+                      messageID: input.assistantMessage.id,
+                      sessionID: input.assistantMessage.sessionID,
+                      type: "step-finish",
+                      tokens: usage.tokens,
+                    })
+                    Session.updateMessage.force(input.assistantMessage)
+                    if (patchData) {
+                      Session.updatePart.force({
+                        ...partBase(),
+                        type: "patch",
+                        hash: patchData.hash,
+                        files: patchData.files,
+                      })
+                    }
                   })
-                  await Session.updateMessage(input.assistantMessage)
                   Recorder.emit({
                     type: "step.finish",
                     sessionID: input.sessionID,
@@ -460,18 +480,6 @@ export namespace SessionProcessor {
                       parts: stepParts,
                     })
                   }
-                  if (snapshot) {
-                    const patch = await Snapshot.patch(snapshot)
-                    if (patch.files.length) {
-                      await Session.updatePart({
-                        ...partBase(),
-                        type: "patch",
-                        hash: patch.hash,
-                        files: patch.files,
-                      })
-                    }
-                    snapshot = undefined
-                  }
                   SessionSummary.summarize({
                     sessionID: input.sessionID,
                     messageID: input.assistantMessage.parentID,
@@ -494,7 +502,7 @@ export namespace SessionProcessor {
                     },
                     metadata: value.providerMetadata,
                   }
-                  await Session.updatePart(currentText)
+                  await Session.updatePart.force(currentText)
                   break
 
                 case "text-delta":
@@ -525,7 +533,7 @@ export namespace SessionProcessor {
                     }
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     stepParts.push({ type: "text", text: currentText.text })
-                    await Session.updatePart(currentText)
+                    await Session.updatePart.force(currentText)
                   }
                   currentText = undefined
                   break
@@ -549,7 +557,6 @@ export namespace SessionProcessor {
                 start: currentText.time?.start ?? Date.now(),
                 end: Date.now(),
               }
-              await Session.updatePart(currentText)
             }
             for (const part of Object.values(reasoningMap)) {
               part.text = part.text.trimEnd()
@@ -557,7 +564,16 @@ export namespace SessionProcessor {
                 start: part.time?.start ?? Date.now(),
                 end: Date.now(),
               }
-              await Session.updatePart(part)
+            }
+            // Batch error-recovery writes in one transaction
+            const errorParts = [
+              ...(currentText ? [currentText] : []),
+              ...Object.values(reasoningMap),
+            ]
+            if (errorParts.length > 0) {
+              Database.transaction(() => {
+                for (const p of errorParts) Session.updatePart.force(p)
+              })
             }
             const errStack = e instanceof Error ? e.stack : undefined
             const errName = e instanceof Error ? e.name : (e as { constructor?: { name?: string } })?.constructor?.name
@@ -620,41 +636,47 @@ export namespace SessionProcessor {
               await SessionStatus.set(input.sessionID, { type: "idle" })
             }
           }
+          // Resolve async snapshot before batching final DB writes
+          let finalPatch: { hash: string; files: string[] } | undefined
           if (snapshot) {
             const patch = await Snapshot.patch(snapshot)
-            if (patch.files.length) {
-              await Session.updatePart({
+            if (patch.files.length) finalPatch = patch
+            snapshot = undefined
+          }
+          // Batch final cleanup writes in one transaction
+          input.assistantMessage.time.completed = Date.now()
+          Database.transaction(() => {
+            if (finalPatch) {
+              Session.updatePart.force({
                 id: PartID.ascending(),
                 messageID: input.assistantMessage.id,
                 sessionID: input.sessionID,
                 type: "patch",
-                hash: patch.hash,
-                files: patch.files,
+                hash: finalPatch.hash,
+                files: finalPatch.files,
               })
             }
-            snapshot = undefined
-          }
-          // Use local toolcalls record instead of DB query to find incomplete tools
-          for (const part of Object.values(toolcalls)) {
-            if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
-              await Session.updatePart({
-                ...part,
-                state: {
-                  ...part.state,
-                  status: "error",
-                  error: "Tool execution aborted",
-                  time: {
-                    start: part.state.status === "running" && "time" in part.state
-                      ? part.state.time.start
-                      : Date.now(),
-                    end: Date.now(),
+            // Use local toolcalls record instead of DB query to find incomplete tools
+            for (const part of Object.values(toolcalls)) {
+              if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
+                Session.updatePart.force({
+                  ...part,
+                  state: {
+                    ...part.state,
+                    status: "error",
+                    error: "Tool execution aborted",
+                    time: {
+                      start: part.state.status === "running" && "time" in part.state
+                        ? part.state.time.start
+                        : Date.now(),
+                      end: Date.now(),
+                    },
                   },
-                },
-              })
+                })
+              }
             }
-          }
-          input.assistantMessage.time.completed = Date.now()
-          await Session.updateMessage(input.assistantMessage)
+            Session.updateMessage.force(input.assistantMessage)
+          })
           if (needsCompaction) return "compact"
           if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"
