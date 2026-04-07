@@ -123,7 +123,7 @@ export const BashTool = Tool.define("bash", async () => {
         if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
           for (const arg of command.slice(1)) {
             if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
-            const resolved = await fs.realpath(path.resolve(cwd, arg)).catch(() => "")
+            const resolved = await fs.realpath(path.resolve(cwd, arg)).catch(() => path.resolve(cwd, arg))
             log.info("resolved path", { arg, resolved })
             if (resolved) {
               const normalized =

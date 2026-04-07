@@ -193,7 +193,7 @@ export namespace Log {
         }
       },
       tag(key: string, value: string) {
-        if (tags) tags[key] = value
+        tags = { ...tags, [key]: value }
         return result
       },
       clone() {

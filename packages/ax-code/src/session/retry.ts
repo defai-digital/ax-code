@@ -34,7 +34,7 @@ export namespace SessionRetry {
         if (retryAfterMs) {
           const parsedMs = Number.parseFloat(retryAfterMs)
           if (!Number.isNaN(parsedMs)) {
-            return parsedMs
+            return Math.min(parsedMs, RETRY_MAX_DELAY_NO_HEADERS)
           }
         }
 
@@ -43,12 +43,12 @@ export namespace SessionRetry {
           const parsedSeconds = Number.parseFloat(retryAfter)
           if (!Number.isNaN(parsedSeconds)) {
             // convert seconds to milliseconds
-            return Math.ceil(parsedSeconds * 1000)
+            return Math.min(Math.ceil(parsedSeconds * 1000), RETRY_MAX_DELAY_NO_HEADERS)
           }
           // Try parsing as HTTP date format
           const parsed = Date.parse(retryAfter) - Date.now()
           if (!Number.isNaN(parsed) && parsed > 0) {
-            return Math.ceil(parsed)
+            return Math.min(Math.ceil(parsed), RETRY_MAX_DELAY_NO_HEADERS)
           }
         }
 

@@ -76,17 +76,21 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       ;(async () => {
         while (true) {
           if (abort.signal.aborted || ctrl.signal.aborted) break
-          const events = await sdk.event.subscribe({}, { signal: ctrl.signal })
-
-          for await (const event of events.stream) {
-            if (ctrl.signal.aborted) break
-            handleEvent(event)
+          try {
+            const events = await sdk.event.subscribe({}, { signal: ctrl.signal })
+            for await (const event of events.stream) {
+              if (ctrl.signal.aborted) break
+              handleEvent(event)
+            }
+          } catch {
+            if (abort.signal.aborted || ctrl.signal.aborted) break
+            await new Promise((r) => setTimeout(r, 2000))
           }
 
           if (timer) clearTimeout(timer)
           if (queue.length > 0) flush()
         }
-      })().catch(() => {})
+      })()
     }
 
     onMount(() => {

@@ -64,7 +64,13 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
     kind: z.enum(NODE_KINDS).optional().describe("Optional kind filter for findSymbol/findSymbolByPrefix"),
     limit: z.number().int().min(1).max(MAX_RESULTS).optional().describe(`Max results to return (default ${MAX_RESULTS})`),
   }),
-  execute: async (args) => {
+  execute: async (args, ctx) => {
+    await ctx.ask({
+      permission: "code_intelligence",
+      patterns: [args.operation],
+      always: ["*"],
+      metadata: {},
+    })
     const projectID = Instance.project.id
     const limit = args.limit ?? MAX_RESULTS
 

@@ -108,7 +108,7 @@ export namespace AuditReport {
 
       switch (event.type) {
         case "session.start":
-          startTime = ts
+          if (startTime === undefined) startTime = ts
           break
         case "session.end":
           endTime = ts

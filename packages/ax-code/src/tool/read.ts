@@ -212,7 +212,7 @@ export const ReadTool = Tool.define("read", {
     const truncated = hasMoreLines || truncatedByBytes
 
     if (truncatedByBytes) {
-      output += `\n\n(Output capped at ${MAX_BYTES_LABEL}. Showing lines ${offset}-${lastReadLine}. Use offset=${nextOffset} to continue.)`
+      output += `\n\n(Output capped at ${MAX_BYTES_LABEL}. Showing lines ${offset}-${lastReadLine} of file. Use offset=${nextOffset} to continue.)`
     } else if (hasMoreLines) {
       output += `\n\n(Showing lines ${offset}-${lastReadLine} of ${totalLines}. Use offset=${nextOffset} to continue.)`
     } else {

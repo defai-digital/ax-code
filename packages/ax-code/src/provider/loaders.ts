@@ -152,7 +152,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   "claude-code": cliLoader({
     providerID: "claude-code",
     binary: "claude",
-    args: ["--print", "--bare", "--verbose", "--output-format", "stream-json"],
+    args: ["--print", "--verbose", "--output-format", "stream-json"],
     parser: claudeCodeParser,
     promptMode: "stdin",
   }),

@@ -15,7 +15,9 @@ export namespace Rpc {
         return
       }
       if (parsed.type === "rpc.request") {
-        const result = await rpc[parsed.method](parsed.input)
+        const handler = rpc[parsed.method]
+        if (typeof handler !== "function") return
+        const result = await handler(parsed.input)
         postMessage(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
       }
     }

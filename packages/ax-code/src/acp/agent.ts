@@ -615,7 +615,7 @@ export namespace ACP {
     }
 
     async authenticate(_params: AuthenticateRequest) {
-      throw new Error("Authentication not implemented")
+      throw RequestError.methodNotFound("authenticate")
     }
 
     async newSession(params: NewSessionRequest) {

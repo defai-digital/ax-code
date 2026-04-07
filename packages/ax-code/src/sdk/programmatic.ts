@@ -694,7 +694,8 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
  * })
  * ```
  */
-export async function createAgent(options: AgentOptions): Promise<Agent> {
+export async function createAgent(options?: AgentOptions): Promise<Agent> {
+  const opts = { directory: process.cwd(), ...options }
   await ensureLog()
 
   let sdk: OpencodeClient
@@ -716,15 +717,15 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
   })
 
   const initPromise = new Promise<void>((resolve, reject) => {
-    bootstrap(options.directory, async () => {
+    bootstrap(opts.directory, async () => {
       // Set language for error messages
-      if (options.language === "en") {
-        setLanguage(options.language)
+      if (opts.language === "en") {
+        setLanguage(opts.language)
       }
 
       // Enhancement #5: Direct API key auth
-      if (options.auth) {
-        await Auth.set(options.auth.provider, { type: "api", key: options.auth.apiKey })
+      if (opts.auth) {
+        await Auth.set(opts.auth.provider, { type: "api", key: opts.auth.apiKey })
       }
 
       // Enhancement #6: Auto-detect env vars
@@ -740,11 +741,11 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
       // All registrations must complete BEFORE resolve() fires —
       // otherwise the first prompt can race against a pending
       // registration and the LLM won't see the user's tools.
-      if (options.tools?.length) {
-        await Promise.allSettled(options.tools.map((t) => ToolRegistry.register(fromSdkTool(t))))
+      if (opts.tools?.length) {
+        await Promise.allSettled(opts.tools.map((t) => ToolRegistry.register(fromSdkTool(t))))
       }
 
-      sdk = createInProcessClient(options.directory)
+      sdk = createInProcessClient(opts.directory)
       resolve()
 
       // Block the bootstrap callback until dispose() is called so
@@ -754,8 +755,8 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
   })
 
   // Enhancement #4: Timeout on createAgent
-  if (options.timeout) {
-    const timeoutMs = options.timeout
+  if (opts.timeout) {
+    const timeoutMs = opts.timeout
     await withSdkTimeout(initPromise, timeoutMs, () => new TimeoutError(timeoutMs, "createAgent"))
   } else {
     await initPromise
@@ -768,7 +769,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
         const session = await sdk.session.create()
         const sessionID = (session.data as any)?.id
         if (!sessionID) throw new Error("Failed to create session")
-        return createSessionHandle(sdk, sessionID, options, () => disposed).run(message, runOptions)
+        return createSessionHandle(sdk, sessionID, opts, () => disposed).run(message, runOptions)
       }
       if (runOptions?.timeout) {
         const timeoutMs = runOptions.timeout
@@ -790,7 +791,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
                 const session = await sdk.session.create()
                 const sessionID = (session.data as any)?.id
                 if (!sessionID) throw new Error("Failed to create session")
-                gen = createSessionHandle(sdk, sessionID, options, () => disposed).stream(message, runOptions)[Symbol.asyncIterator]() as AsyncGenerator<StreamEvent>
+                gen = createSessionHandle(sdk, sessionID, opts, () => disposed).stream(message, runOptions)[Symbol.asyncIterator]() as AsyncGenerator<StreamEvent>
               }
               return gen!.next()
             },
@@ -807,7 +808,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
       const session = await sdk.session.create()
       const sessionID = (session.data as any)?.id
       if (!sessionID) throw new Error("Failed to create session")
-      return createSessionHandle(sdk, sessionID, options, () => disposed)
+      return createSessionHandle(sdk, sessionID, opts, () => disposed)
     },
 
     async tool(name: string, input: Record<string, unknown>): Promise<unknown> {
@@ -820,7 +821,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
       const session = await sdk.session.create()
       const sessionID = (session.data as any)?.id
       if (!sessionID) throw new Error("Failed to create session")
-      const resultPromise = collectResult(sdk, sessionID, options.hooks)
+      const resultPromise = collectResult(sdk, sessionID, opts.hooks)
       await sdk.session.prompt({
         sessionID,
         agent: "build",

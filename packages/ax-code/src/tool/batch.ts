@@ -40,7 +40,10 @@ export const BatchTool = Tool.define("batch", async () => {
       const discardedCalls = params.tool_calls.slice(25)
 
       const { ToolRegistry } = await import("./registry")
-      const availableTools = await ToolRegistry.tools({ modelID: ModelID.make(""), providerID: ProviderID.make("") })
+      const availableTools = await ToolRegistry.tools({
+        modelID: ctx.extra?.model?.api?.id ? ModelID.make(ctx.extra.model.api.id) : ModelID.make(""),
+        providerID: ctx.extra?.model?.providerID ?? ProviderID.make(""),
+      })
       const toolMap = new Map(availableTools.map((t) => [t.id, t]))
 
       // Pre-generate all PartIDs in declaration order BEFORE the

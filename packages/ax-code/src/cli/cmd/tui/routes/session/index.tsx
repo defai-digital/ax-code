@@ -417,7 +417,7 @@ export function Session() {
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       slash: {
-        name: "impact",
+        name: "blast-radius",
       },
       onSelect: (dialog) => {
         promptRef.current?.set({

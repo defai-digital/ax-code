@@ -79,7 +79,10 @@ export function Header() {
   const command = useCommandDialog()
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   const dimensions = useTerminalDimensions()
-  const narrow = createMemo(() => dimensions().width < 80)
+  const narrow = createMemo(() => {
+    const sidebarWidth = dimensions().width > 120 ? 42 : 0
+    return (dimensions().width - sidebarWidth) < 100
+  })
 
   return (
     <box flexShrink={0}>

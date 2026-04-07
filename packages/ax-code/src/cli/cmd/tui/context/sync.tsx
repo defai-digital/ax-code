@@ -512,6 +512,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           break
         }
 
+        case "mcp.tools.changed":
+          sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))).catch(() => {})
+          break
+
         case "lsp.updated": {
           sdk.client.lsp.status().then((x) => setStore("lsp", x.data!))
           // Piggyback on lsp.updated as a cheap "project state changed"

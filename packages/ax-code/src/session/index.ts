@@ -791,11 +791,11 @@ export namespace Session {
         if (value && typeof value === "object" && "total" in value) return safe((value as { total: unknown }).total)
         return 0
       }
-      const inputTokens = safe(input.usage.inputTokens ?? 0)
-      const outputTokens = safe(input.usage.outputTokens ?? 0)
-      const reasoningTokens = safe(input.usage.reasoningTokens ?? 0)
+      const inputTokens = safe(input.usage?.inputTokens ?? 0)
+      const outputTokens = safe(input.usage?.outputTokens ?? 0)
+      const reasoningTokens = safe(input.usage?.reasoningTokens ?? 0)
 
-      const cacheReadInputTokens = safe(input.usage.cachedInputTokens ?? 0)
+      const cacheReadInputTokens = safe(input.usage?.cachedInputTokens ?? 0)
 
       const anthropicMeta = (input.metadata as Record<string, unknown>)?.["anthropic"] as Record<string, number> | undefined
       const cacheWriteInputTokens = safe(

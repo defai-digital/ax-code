@@ -15,6 +15,7 @@ export interface CliLanguageModelConfig {
 }
 
 const CLI_ENV = { TERM: "dumb", NO_COLOR: "1", CI: "true" }
+const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
 export class CliLanguageModel implements LanguageModelV2 {
   readonly specificationVersion = "v2" as const
@@ -52,7 +53,16 @@ export class CliLanguageModel implements LanguageModelV2 {
       proc.stdin!.end()
     }
 
-    const [code, stdout, stderr] = await Promise.all([proc.exited, buffer(proc.stdout!), buffer(proc.stderr!)])
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        proc.kill("SIGTERM")
+        reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
+      }, CLI_TIMEOUT_MS),
+    )
+    const [code, stdout, stderr] = await Promise.race([
+      Promise.all([proc.exited, buffer(proc.stdout!), buffer(proc.stderr!)]),
+      timeout,
+    ])
     if (code !== 0 && stdout.length === 0) {
       throw new Error(`CLI exited with code ${code}: ${stderr.toString().slice(0, 500)}`)
     }
@@ -89,6 +99,13 @@ export class CliLanguageModel implements LanguageModelV2 {
       start(controller) {
         const closed = () => controller.desiredSize === null
 
+        const timer = setTimeout(() => {
+          proc.kill("SIGTERM")
+          if (closed()) return
+          controller.enqueue({ type: "error", error: new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`) })
+          controller.close()
+        }, CLI_TIMEOUT_MS)
+
         controller.enqueue({ type: "stream-start", warnings: [] })
         controller.enqueue({ type: "text-start", id: textId })
 
@@ -106,6 +123,7 @@ export class CliLanguageModel implements LanguageModelV2 {
         })
 
         proc.stdout!.on("end", () => {
+          clearTimeout(timer)
           if (closed()) return
           if (remainder.trim()) {
             const delta = parser.parseStreamLine(remainder)
@@ -121,6 +139,7 @@ export class CliLanguageModel implements LanguageModelV2 {
         })
 
         proc.stdout!.on("error", (err: Error) => {
+          clearTimeout(timer)
           proc.kill("SIGTERM")
           if (closed()) return
           controller.enqueue({ type: "error", error: err })
@@ -128,6 +147,7 @@ export class CliLanguageModel implements LanguageModelV2 {
         })
 
         proc.exited.then((code) => {
+          clearTimeout(timer)
           if (closed()) return
           if (code !== 0) {
             controller.enqueue({ type: "error", error: new Error(`CLI exited with code ${code}`) })

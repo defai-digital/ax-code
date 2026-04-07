@@ -98,7 +98,7 @@ function decryptWith(encrypted: Buffer, iv: Buffer, salt: Buffer, tag: Buffer, i
   const key = deriveKey(salt, iterations)
   const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH })
   decipher.setAuthTag(tag)
-  return decipher.update(encrypted) + decipher.final("utf8")
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8")
 }
 
 /**

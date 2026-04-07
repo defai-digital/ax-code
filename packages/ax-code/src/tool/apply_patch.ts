@@ -241,25 +241,32 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       switch (change.type) {
         case "add":
           await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-          await fs.writeFile(change.filePath, change.newContent, "utf-8")
+          await FileTime.withLock(change.filePath, async () => {
+            await fs.writeFile(change.filePath, change.newContent, "utf-8")
+          })
           await FileTime.read(ctx.sessionID, change.filePath)
           updates.push({ file: change.filePath, event: "add" })
           break
 
         case "update":
-          await fs.writeFile(change.filePath, change.newContent, "utf-8")
+          await FileTime.withLock(change.filePath, async () => {
+            await fs.writeFile(change.filePath, change.newContent, "utf-8")
+          })
           await FileTime.read(ctx.sessionID, change.filePath)
           updates.push({ file: change.filePath, event: "change" })
           break
 
         case "move":
           if (change.movePath) {
-            await fs.mkdir(path.dirname(change.movePath), { recursive: true })
-            await fs.writeFile(change.movePath, change.newContent, "utf-8")
+            const dest = change.movePath
+            await fs.mkdir(path.dirname(dest), { recursive: true })
+            await FileTime.withLock(dest, async () => {
+              await fs.writeFile(dest, change.newContent, "utf-8")
+            })
             await fs.unlink(change.filePath)
-            await FileTime.read(ctx.sessionID, change.movePath)
+            await FileTime.read(ctx.sessionID, dest)
             updates.push({ file: change.filePath, event: "unlink" })
-            updates.push({ file: change.movePath, event: "add" })
+            updates.push({ file: dest, event: "add" })
           }
           break
 
