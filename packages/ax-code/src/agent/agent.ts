@@ -18,6 +18,7 @@ import PROMPT_ARCHITECT from "./prompt/architect.txt"
 import PROMPT_DEBUG from "./prompt/debug.txt"
 import PROMPT_DEVOPS from "./prompt/devops.txt"
 import PROMPT_PERF from "./prompt/perf.txt"
+import PROMPT_TEST from "./prompt/test.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { Permission } from "@/permission"
@@ -299,6 +300,26 @@ export namespace Agent {
               mode: "primary",
               native: true,
               steps: 30,
+            },
+            test: {
+              name: "test",
+              displayName: "Tester",
+              description:
+                "Test Engineer agent. Writes tests, analyzes failures, improves coverage, and maintains test infrastructure. Uses all tools to create, run, and verify tests across any framework.",
+              prompt: PROMPT_TEST,
+              permission: Permission.merge(
+                defaults,
+                policy,
+                Permission.fromConfig({
+                  question: "allow",
+                  plan_enter: "allow",
+                }),
+                user,
+              ),
+              options: {},
+              mode: "primary",
+              native: true,
+              steps: 25,
             },
             compaction: {
               name: "compaction",

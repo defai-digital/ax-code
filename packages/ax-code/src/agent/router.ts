@@ -111,6 +111,29 @@ const RULES: RouteRule[] = [
     ],
     confidence: 0.8,
   },
+  {
+    agent: "test",
+    keywords: [
+      "test", "tests", "testing", "unit test", "integration test",
+      "test coverage", "coverage", "test suite", "test case",
+      "test file", "spec", "specs", "assertion", "assertions",
+      "mock", "mocking", "fixture", "fixtures", "tdd",
+      "test driven", "write tests", "add tests", "missing tests",
+      "untested", "test failure", "test infrastructure",
+      "snapshot test", "regression test", "e2e test",
+      "test plan", "test strategy",
+    ],
+    patterns: [
+      /\b(write|add|create|generate|improve)\b.*\btests?\b/i,
+      /\btest\s+(coverage|suite|file|case|plan|strategy)\b/i,
+      /\b(unit|integration|regression|e2e|snapshot)\s+tests?\b/i,
+      /\btdd\b/i,
+      /\buntested\b/i,
+      /\bcoverage\b.*\b(gap|improve|increase|analyze|report)\b/i,
+      /\b(missing|need|lack)\b.*\btests?\b/i,
+    ],
+    confidence: 0.7,
+  },
   // react and plan are reasoning MODES, not topic domains
   // Users should explicitly switch to them (e.g., /react, /plan)
 ]
