@@ -8,6 +8,8 @@ import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
 import { Flag } from "../flag/flag"
+import { createRequire } from "node:module"
+const _require = createRequire(import.meta.url)
 
 export const GlobTool = Tool.define("glob", {
   description: DESCRIPTION,
@@ -48,7 +50,7 @@ export const GlobTool = Tool.define("glob", {
     // Native fast-path: in-process glob via Rust addon
     if (Flag.AX_CODE_NATIVE_FS) {
       try {
-        const native = require("@ax-code/fs")
+        const native = _require("@ax-code/fs")
         const json = native.globFiles(search, params.pattern, 100)
         const entries = JSON.parse(json) as Array<{path: string, mtime: number, size: number}>
         entries.sort((a, b) => b.mtime - a.mtime)

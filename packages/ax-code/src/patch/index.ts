@@ -4,6 +4,8 @@ import * as fs from "fs/promises"
 import { readFileSync } from "fs"
 import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
+import { createRequire } from "node:module"
+const _require = createRequire(import.meta.url)
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
@@ -466,7 +468,7 @@ export namespace Patch {
   function seekSequence(lines: string[], pattern: string[], startIndex: number, eof = false): number {
     if (Flag.AX_CODE_NATIVE_DIFF) {
       try {
-        const native = require("@ax-code/diff")
+        const native = _require("@ax-code/diff")
         return native.seekSequence(lines, pattern, startIndex, eof)
       } catch {}
     }
@@ -499,7 +501,7 @@ export namespace Patch {
   function generateUnifiedDiff(oldContent: string, newContent: string): string {
     if (Flag.AX_CODE_NATIVE_DIFF) {
       try {
-        const native = require("@ax-code/diff")
+        const native = _require("@ax-code/diff")
         return native.unifiedDiff("file", oldContent, newContent)
       } catch {}
     }

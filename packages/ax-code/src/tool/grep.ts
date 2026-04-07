@@ -12,6 +12,8 @@ import path from "path"
 import { assertExternalDirectory } from "./external-directory"
 import { MAX_LINE_LENGTH } from "@/constants/tool"
 import { Flag } from "../flag/flag"
+import { createRequire } from "node:module"
+const _require = createRequire(import.meta.url)
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
@@ -54,7 +56,7 @@ export const GrepTool = Tool.define("grep", {
     // Native fast-path: in-process search via Rust addon
     if (Flag.AX_CODE_NATIVE_FS) {
       try {
-        const native = require("@ax-code/fs")
+        const native = _require("@ax-code/fs")
         const json = native.searchContent(searchPath, params.pattern, JSON.stringify({
           glob: params.include,
           limit: 100,

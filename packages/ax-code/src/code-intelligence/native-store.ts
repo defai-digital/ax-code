@@ -6,11 +6,15 @@ import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 
 const log = Log.create({ service: "code-intelligence.native-store" })
 
-// Dynamic import of the native addon — fails gracefully if not available
+// Dynamic import of the native addon — fails gracefully if not available.
+// Use createRequire to prevent Bun's static analysis from failing the build
+// when the native addon isn't installed.
+import { createRequire } from "node:module"
+const _require = createRequire(import.meta.url)
 let native: any
 
 try {
-  native = require("@ax-code/index-core")
+  native = _require("@ax-code/index-core")
 } catch {
   // Native addon not available — will fall back to Drizzle
 }

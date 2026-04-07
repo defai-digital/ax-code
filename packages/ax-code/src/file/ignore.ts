@@ -1,6 +1,8 @@
 import { sep } from "node:path"
 import { Glob } from "../util/glob"
 import { Flag } from "../flag/flag"
+import { createRequire } from "node:module"
+const _require = createRequire(import.meta.url)
 
 export namespace FileIgnore {
   const FOLDERS = new Set([
@@ -67,7 +69,7 @@ export namespace FileIgnore {
     // Native fast-path: in-process ignore check via Rust addon
     if (Flag.AX_CODE_NATIVE_FS) {
       try {
-        const native = require("@ax-code/fs")
+        const native = _require("@ax-code/fs")
         return native.isIgnored(filepath, JSON.stringify(opts?.extra ?? []))
       } catch {}
     }
