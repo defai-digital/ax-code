@@ -1,6 +1,6 @@
-import type { LanguageModelV2Prompt } from "@ai-sdk/provider"
+import type { LanguageModelV3Prompt } from "@ai-sdk/provider"
 
-export function promptToText(prompt: LanguageModelV2Prompt): string {
+export function promptToText(prompt: LanguageModelV3Prompt): string {
   const parts: string[] = []
 
   for (const message of prompt) {
@@ -22,6 +22,7 @@ export function promptToText(prompt: LanguageModelV2Prompt): string {
       if (chunks.length) parts.push(`[Assistant]: ${chunks.join("\n")}`)
     } else if (message.role === "tool") {
       const text = message.content
+        .filter((p): p is Extract<typeof p, { type: "tool-result" }> => p.type === "tool-result")
         .map((p) => `[Tool Result: ${p.toolName}]: ${JSON.stringify(p.output)}`)
         .join("\n")
       if (text) parts.push(text)

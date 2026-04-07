@@ -109,16 +109,45 @@ interface CliLoaderOpts {
   parser: CliOutputParser
   promptMode: "stdin" | "arg"
   promptFlag?: string
+  authCheck?: (binary: string) => Promise<boolean>
+}
+
+async function checkClaudeAuth(binary: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn([binary, "--print", "--output-format", "stream-json", "ping"], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, TERM: "dumb", NO_COLOR: "1", CI: "true" },
+    })
+    const timer = setTimeout(() => proc.kill(), 5000)
+    const stdout = await new Response(proc.stdout).text().catch(() => "")
+    clearTimeout(timer)
+    for (const line of stdout.split("\n")) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed[0] !== "{") continue
+      try {
+        const event = JSON.parse(trimmed)
+        if (event.type === "system" && event.apiKeySource === "none") return false
+        if (event.type === "error" && event.error === "authentication_failed") return false
+      } catch {}
+    }
+    return true
+  } catch {
+    return true // if probe fails, let the actual request surface the error
+  }
 }
 
 function cliLoader(opts: CliLoaderOpts): CustomLoader {
   return async (provider) => {
     const path = which(opts.binary)
     const info = await resolveCliModel(opts.providerID)
+    const authenticated = path && opts.authCheck ? await opts.authCheck(path) : true
     return {
       autoload: false,
       async getModel(_sdk: any, modelID: string) {
         if (!path) throw new Error(`${opts.binary} CLI not found in PATH`)
+        if (!authenticated) throw new Error(`${opts.binary} CLI is not logged in — run \`${opts.binary} login\` first`)
         return new CliLanguageModel({
           providerID: opts.providerID,
           modelID,
@@ -130,7 +159,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         })
       },
       async discoverModels() {
-        if (!path) return {}
+        if (!path || !authenticated) return {}
         return cliModels(opts.providerID, provider, info.model)
       },
     }
@@ -155,6 +184,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     args: ["--print", "--verbose", "--output-format", "stream-json"],
     parser: claudeCodeParser,
     promptMode: "stdin",
+    authCheck: checkClaudeAuth,
   }),
   "gemini-cli": cliLoader({
     providerID: "gemini-cli",

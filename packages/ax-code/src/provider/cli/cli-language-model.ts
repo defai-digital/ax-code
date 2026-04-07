@@ -1,4 +1,4 @@
-import type { LanguageModelV2, LanguageModelV2CallOptions, LanguageModelV2StreamPart } from "@ai-sdk/provider"
+import type { LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3StreamPart, LanguageModelV3Usage } from "@ai-sdk/provider"
 import { Process } from "../../util/process"
 import { promptToText } from "./prompt"
 import type { CliOutputParser } from "./parser"
@@ -17,8 +17,13 @@ export interface CliLanguageModelConfig {
 const CLI_ENV = { TERM: "dumb", NO_COLOR: "1", CI: "true" }
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
-export class CliLanguageModel implements LanguageModelV2 {
-  readonly specificationVersion = "v2" as const
+const EMPTY_USAGE: LanguageModelV3Usage = {
+  inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
+  outputTokens: { total: undefined, text: undefined, reasoning: undefined },
+}
+
+export class CliLanguageModel implements LanguageModelV3 {
+  readonly specificationVersion = "v3" as const
   readonly provider: string
   readonly modelId: string
   readonly supportedUrls: Record<string, RegExp[]> = {}
@@ -38,7 +43,7 @@ export class CliLanguageModel implements LanguageModelV2 {
     return this.config.promptMode === "stdin"
   }
 
-  async doGenerate(options: LanguageModelV2CallOptions) {
+  async doGenerate(options: LanguageModelV3CallOptions) {
     const text = promptToText(options.prompt)
     const proc = Process.spawn(this.buildCmd(text), {
       stdin: this.useStdin() ? "pipe" : "ignore",
@@ -73,13 +78,13 @@ export class CliLanguageModel implements LanguageModelV2 {
 
     return {
       content: [{ type: "text" as const, text: parsed.text }],
-      finishReason: "stop" as const,
-      usage: { inputTokens: undefined, outputTokens: undefined, totalTokens: undefined },
+      finishReason: { unified: "stop" as const, raw: undefined },
+      usage: EMPTY_USAGE,
       warnings: [],
     }
   }
 
-  async doStream(options: LanguageModelV2CallOptions) {
+  async doStream(options: LanguageModelV3CallOptions) {
     const text = promptToText(options.prompt)
     const proc = Process.spawn(this.buildCmd(text), {
       stdin: this.useStdin() ? "pipe" : "ignore",
@@ -97,7 +102,7 @@ export class CliLanguageModel implements LanguageModelV2 {
     const parser = this.config.parser
     const textId = "cli-0"
 
-    const stream = new ReadableStream<LanguageModelV2StreamPart>({
+    const stream = new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
         const closed = () => controller.desiredSize === null
 
@@ -134,8 +139,8 @@ export class CliLanguageModel implements LanguageModelV2 {
           controller.enqueue({ type: "text-end", id: textId })
           controller.enqueue({
             type: "finish",
-            usage: { inputTokens: undefined, outputTokens: undefined, totalTokens: undefined },
-            finishReason: "stop",
+            usage: EMPTY_USAGE,
+            finishReason: { unified: "stop", raw: undefined },
           })
           controller.close()
         })
