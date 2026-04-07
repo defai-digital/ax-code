@@ -2,12 +2,8 @@ import { useSync } from "@tui/context/sync"
 import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
-import { Locale } from "@/util/locale"
-import path from "path"
 import type { AssistantMessage } from "@ax-code/sdk/v2"
-import { Global } from "@/global"
 import { Installation } from "@/installation"
-import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
@@ -55,8 +51,8 @@ function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme
   }
 }
 
-function bar(input: { pct?: number | null; busy: boolean; tick: number }) {
-  const width = 37
+function bar(input: { pct?: number | null; busy: boolean; tick: number; width?: number }) {
+  const width = input.width ?? 37
   const pct = Math.max(0, Math.min(100, input.pct ?? 0))
   const fill = Math.max(0, Math.min(width, Math.round((pct / 100) * width)))
   const cells: string[] = Array.from({ length: width }, (_, i) => (i < fill ? "█" : "░"))
@@ -80,6 +76,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const status = createMemo(() => sync.data.session_status?.[props.sessionID] ?? { type: "idle" as const })
   const [tick, setTick] = createSignal(0)
   const [timerTick, setTimerTick] = createSignal(0)
+  const [etaTick, setEtaTick] = createSignal(0)
+  const [countdownTick, setCountdownTick] = createSignal(0)
+  // Last computed ETA anchor for smooth countdown
+  let etaAnchorSessionID = ""
+  let etaAnchor: { computedAt: number; remainSec: number; elapsedSec: number } | undefined
 
   onMount(() => {
     const id = setInterval(() => {
@@ -87,9 +88,19 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       setTick((x) => x + 1)
     }, 120)
     const timerId = setInterval(() => setTimerTick((x) => x + 1), 10_000)
+    const etaId = setInterval(() => {
+      if (status().type === "idle") return
+      setEtaTick((x) => x + 1)
+    }, 2_000)
+    const countdownId = setInterval(() => {
+      if (status().type === "idle") return
+      setCountdownTick((x) => x + 1)
+    }, 1_000)
     onCleanup(() => {
       clearInterval(id)
       clearInterval(timerId)
+      clearInterval(etaId)
+      clearInterval(countdownId)
     })
   })
 
@@ -163,15 +174,98 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     return {
       tokens: total.toLocaleString(),
       percentage: model?.limit.context ? Math.round((total / model.limit.context) * 100) : null,
+      raw: total,
+      limit: model?.limit.context ?? 0,
     }
   })
-  const usageBar = createMemo(() =>
-    bar({
+  // Recalculate ETA every 2s using session-lifetime average velocity
+  const etaEstimate = createMemo(() => {
+    etaTick()
+    const ctx = context()
+    if (!ctx || !ctx.limit || !ctx.raw) return
+    // Reset anchor if session changed
+    if (etaAnchorSessionID !== props.sessionID) {
+      etaAnchorSessionID = props.sessionID
+      etaAnchor = undefined
+    }
+    const now = Date.now()
+    const s = session()
+    if (!s?.time?.created) return
+    const elapsedSec = Math.round((now - s.time.created) / 1000)
+    if (elapsedSec < 10) return // need at least 10s of data
+    const tokPerSec = ctx.raw / elapsedSec
+    if (tokPerSec <= 0) return
+    const remaining = ctx.limit - ctx.raw
+    if (remaining <= 0) {
+      etaAnchor = { computedAt: now, remainSec: 0, elapsedSec: 0 }
+      return
+    }
+    // Cap estimate at 60 minutes to avoid absurd numbers
+    const remainSec = Math.min(3600, Math.round(remaining / tokPerSec))
+    etaAnchor = { computedAt: now, remainSec, elapsedSec: elapsedSec + remainSec }
+    return
+  })
+
+  // Countdown display: ticks every 1s, counts down from last anchor
+  const eta = createMemo(() => {
+    countdownTick()
+    etaEstimate() // ensure dependency on recalculation
+    if (!etaAnchor || etaAnchor.remainSec <= 0) return
+    const sinceLast = Math.round((Date.now() - etaAnchor.computedAt) / 1000)
+    const remainSec = etaAnchor.remainSec - sinceLast
+    if (remainSec <= 0) return // countdown expired, hide until next recalc
+    // remainPct: how much of the anchored estimate is left (starts high, drains to 0%)
+    const remainPct = Math.min(100, Math.round((remainSec / etaAnchor.elapsedSec) * 100))
+    const h = Math.floor(remainSec / 3600)
+    const m = Math.floor((remainSec % 3600) / 60)
+    const sec = remainSec % 60
+    const label = h > 0 ? `~${h}h ${m}m` : m > 0 ? `~${m}m ${sec}s` : `~${sec}s`
+    return { remainPct, label, remainSec }
+  })
+
+  // Track whether ETA is active as a signal to avoid bar memos subscribing to countdown
+  const etaActive = createMemo(() => !!eta())
+
+  // Full-width bar: only computed when ETA is not active (fallback path)
+  const usageBar = createMemo(() => {
+    if (etaActive()) return ""
+    return bar({
       pct: context()?.percentage,
       busy: status().type !== "idle",
       tick: tick(),
-    }),
-  )
+    })
+  })
+  // Half-width bars: only computed when ETA is active (two-column path)
+  const usageBarHalf = createMemo(() => {
+    if (!etaActive()) return ""
+    return bar({
+      pct: context()?.percentage,
+      busy: status().type !== "idle",
+      tick: tick(),
+      width: 18,
+    })
+  })
+  const etaBarHalf = createMemo(() => {
+    const e = eta()
+    if (!e) return ""
+    const width = 18
+    const filled = Math.max(0, Math.min(width, Math.round((e.remainPct / 100) * width)))
+    return Array.from({ length: width }, (_, i) => (i < filled ? "▓" : "·")).join("")
+  })
+  const usageBarColor = createMemo(() => {
+    const pct = context()?.percentage ?? 0
+    if (pct >= 80) return theme.error
+    if (status().type === "idle") return theme.textMuted
+    if (pct < 30) return theme.success
+    return theme.primary
+  })
+  const etaBarColor = createMemo(() => {
+    const e = eta()
+    if (!e) return theme.textMuted
+    if (e.remainSec <= 180) return theme.success
+    if (e.remainSec <= 600) return theme.primary
+    return theme.warning
+  })
 
   const directory = useDirectory()
   const kv = useKV()
@@ -212,14 +306,26 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
               </Show>
             </box>
             <box>
-              <text fg={theme.text}>
-                <b>Context</b>
-              </text>
-              <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens · {elapsed()}</text>
-              <text fg={(context()?.percentage ?? 0) >= 95 ? theme.error : (context()?.percentage ?? 0) >= 80 ? theme.warning : theme.textMuted}>
-                {context()?.percentage ?? 0}% used
-              </text>
-              <text fg={status().type === "idle" ? theme.textMuted : theme.primary}>{usageBar()}</text>
+              <Show when={eta()} fallback={
+                <>
+                  <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens · {elapsed()}</text>
+                  <text fg={usageBarColor()}>{usageBar()}</text>
+                  <text fg={usageBarColor()}>📊 {context()?.percentage ?? 0}% used</text>
+                </>
+              }>
+                <box flexDirection="row" gap={1}>
+                  <text width={18} fg={theme.textMuted}>{context()?.tokens ?? 0} tokens</text>
+                  <text width={18} fg={theme.textMuted}>Elapsed {elapsed()}</text>
+                </box>
+                <box flexDirection="row" gap={1}>
+                  <text width={18} fg={usageBarColor()}>{usageBarHalf()}</text>
+                  <text width={18} fg={etaBarColor()}>{etaBarHalf()}</text>
+                </box>
+                <box flexDirection="row" gap={1}>
+                  <text width={18} fg={usageBarColor()}>📊 {context()?.percentage ?? 0}% used</text>
+                  <text width={18} fg={etaBarColor()}>⏳ {eta()!.label}(Est.)</text>
+                </box>
+              </Show>
               <Show when={(context()?.percentage ?? 0) >= 80}>
                 <text fg={(context()?.percentage ?? 0) >= 95 ? theme.error : theme.warning}>
                   {(context()?.percentage ?? 0) >= 95 ? "Context nearly full — " : "Consider "}/compact
@@ -335,13 +441,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 when empty, expand/collapse at >2 items) so users can
                 tell at a glance whether DRE is ready to use. Gated on
                 the experimental flag — when the flag is off, no
-                section appears. The server returns zero counts when
-                the flag is off, so the inner state branches here are
-                never reached in the "flag off" case. The empty-state
-                layout shows tool count, graph readiness, and a
-                discoverability hint pointing at the DRE slash
-                commands. See PRD-debug-refactor-engine-ui-tier-3.md
-                §6.9 for the design rationale. */}
+                section appears. The empty-state layout shows tool count
+                and graph readiness. */}
             <Show when={Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE}>
               <box>
                 <box
@@ -420,11 +521,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                               : "graph not indexed · run `ax-code index`"}
                       </text>
                     </box>
-                    {/* Row 3: discoverability hint. Points at the
-                        slash commands shipped in v2.3.1. Users who
-                        see the section but don't know what to type
-                        get a concrete next step. */}
-                    <text fg={theme.textMuted}>Try /debug /refactor /impact</text>
                   </Show>
                   {/* Non-empty state: per-plan rows unchanged from v2.3.3. */}
                   <For each={sync.data.debugEngine.plans}>
