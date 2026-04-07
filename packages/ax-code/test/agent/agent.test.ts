@@ -26,6 +26,7 @@ test("returns default native agents when no config", async () => {
       expect(names).toContain("plan")
       expect(names).toContain("general")
       expect(names).toContain("explore")
+      expect(names).toContain("test")
       expect(names).toContain("compaction")
       expect(names).toContain("title")
       expect(names).toContain("summary")
@@ -712,6 +713,7 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
         debug: { disable: true },
         perf: { disable: true },
         devops: { disable: true },
+        test: { disable: true },
       },
     },
   })

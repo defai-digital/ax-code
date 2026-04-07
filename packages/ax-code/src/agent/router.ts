@@ -114,7 +114,7 @@ const RULES: RouteRule[] = [
   {
     agent: "test",
     keywords: [
-      "test", "tests", "testing", "unit test", "integration test",
+      "tests", "testing", "unit test", "integration test",
       "test coverage", "coverage", "test suite", "test case",
       "test file", "spec", "specs", "assertion", "assertions",
       "mock", "mocking", "fixture", "fixtures", "tdd",
