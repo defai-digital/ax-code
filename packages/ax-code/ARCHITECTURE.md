@@ -79,7 +79,30 @@ Validate at edges (CLI args, config, tool input), trust internally. Use Zod, not
 
 ## Schema Library
 
-**Standard: Zod** (already in 117 files). Do not introduce Valibot or other schema libraries.
+**Standard: Zod** (already in 117+ files). Do not introduce Valibot or other schema libraries.
+
+### Validation Coverage
+
+| Component | Schema Type | Status |
+|---|---|---|
+| Tool parameters | Zod (`z.object()`) in all 27 tools | Validated at runtime |
+| Config | Pure Zod strict mode (709 lines in `config/schema.ts`) | Complete |
+| ID types | Effect Schema + Zod bridge (`util/effect-zod.ts`) | Keep bridge |
+| CLI args | Yargs type inference | Add Zod for critical args |
+
+### Effect-Zod Bridge
+
+`src/util/effect-zod.ts` (99 lines) converts Effect Schema ASTs to Zod schemas. This bridge is **kept** — it allows existing Effect Schema ID types (SessionID, ToolID, etc.) to work with Zod-based validation. Do not rewrite ID schemas to pure Zod unless the module is being fully migrated from Effect.
+
+### New Schema Pattern
+```typescript
+// New code: pure Zod
+const InputSchema = z.object({
+  path: z.string(),
+  content: z.string().optional(),
+})
+type Input = z.infer<typeof InputSchema>
+```
 
 ## Native Addons (Rust)
 

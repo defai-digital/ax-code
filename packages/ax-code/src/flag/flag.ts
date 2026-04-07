@@ -43,11 +43,14 @@ export namespace Flag {
   export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
   export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
 
-  // Native Rust addons
-  export const AX_CODE_NATIVE_INDEX = truthy("AX_CODE_NATIVE_INDEX")
-  export const AX_CODE_NATIVE_FS = truthy("AX_CODE_NATIVE_FS")
-  export const AX_CODE_NATIVE_DIFF = truthy("AX_CODE_NATIVE_DIFF")
-  export const AX_CODE_NATIVE_PARSER = truthy("AX_CODE_NATIVE_PARSER")
+  // Native Rust addons — default ON (opt-out with =0 or =false)
+  // These dispatch CPU-bound operations to Rust native addons via NAPI-RS.
+  // If the native addon isn't installed, the TypeScript fallback runs
+  // transparently via try/catch in each dispatch point.
+  export const AX_CODE_NATIVE_INDEX = !falsy("AX_CODE_NATIVE_INDEX")
+  export const AX_CODE_NATIVE_FS = !falsy("AX_CODE_NATIVE_FS")
+  export const AX_CODE_NATIVE_DIFF = !falsy("AX_CODE_NATIVE_DIFF")
+  export const AX_CODE_NATIVE_PARSER = !falsy("AX_CODE_NATIVE_PARSER")
 
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")
