@@ -1,0 +1,26 @@
+[package]
+name = "ax-code-bench"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "bench-index"
+path = "src/bench_index.rs"
+
+[[bin]]
+name = "bench-diff"
+path = "src/bench_diff.rs"
+
+[[bin]]
+name = "bench-fs"
+path = "src/bench_fs.rs"
+
+[dependencies]
+rusqlite = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+globset = { workspace = true }
+ignore = { workspace = true }
+similar = { workspace = true }
+strsim = { workspace = true }

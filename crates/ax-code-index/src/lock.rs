@@ -5,6 +5,9 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
 
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
+
 /// Advisory file lock using flock() on Unix.
 /// Auto-releases on process crash (kernel-level).
 #[napi]
@@ -58,9 +61,27 @@ impl AdvisoryLock {
       }
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
-      // On non-Unix, fall back to create-exclusive
+      use windows_sys::Win32::Storage::FileSystem::{LockFileEx, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
+      use windows_sys::Win32::Foundation::HANDLE;
+      let handle = file.as_raw_handle() as HANDLE;
+      let mut overlapped = unsafe { std::mem::zeroed::<windows_sys::Win32::System::IO::OVERLAPPED>() };
+      let result = unsafe {
+        LockFileEx(handle, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &mut overlapped)
+      };
+      if result != 0 {
+        self.file = Some(file);
+        self.acquired = true;
+        Ok(true)
+      } else {
+        Ok(false)
+      }
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+      // Fallback for other platforms: best-effort
       self.file = Some(file);
       self.acquired = true;
       Ok(true)
@@ -101,6 +122,15 @@ impl AdvisoryLock {
     if let Some(ref file) = self.file {
       let fd = file.as_raw_fd();
       unsafe { libc::flock(fd, libc::LOCK_UN) };
+    }
+
+    #[cfg(windows)]
+    if let Some(ref file) = self.file {
+      use windows_sys::Win32::Storage::FileSystem::UnlockFileEx;
+      use windows_sys::Win32::Foundation::HANDLE;
+      let handle = file.as_raw_handle() as HANDLE;
+      let mut overlapped = unsafe { std::mem::zeroed::<windows_sys::Win32::System::IO::OVERLAPPED>() };
+      unsafe { UnlockFileEx(handle, 0, 1, 0, &mut overlapped) };
     }
 
     self.file = None;

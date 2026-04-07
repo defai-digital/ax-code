@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["ax-code-index", "ax-code-fs", "ax-code-diff", "ax-code-parser"]
+members = ["ax-code-index", "ax-code-fs", "ax-code-diff", "ax-code-parser", "ax-code-daemon", "ax-code-bench"]
 
 [workspace.package]
 edition = "2021"

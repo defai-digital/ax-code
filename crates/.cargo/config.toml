@@ -3,6 +3,10 @@
 # darwin-x64: native on Intel Mac runners
 # linux-x64-gnu: native on ubuntu-latest
 # linux-arm64-gnu: cross-compile on ubuntu-latest with aarch64 linker
+# win32-x64: native on windows-latest
 
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
+
+# Windows MSVC builds natively on windows-latest runners
+# No cross-compilation config needed

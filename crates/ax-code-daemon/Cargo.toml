@@ -1,11 +1,11 @@
 [package]
-name = "ax-code-index"
+name = "ax-code-daemon"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 napi = { workspace = true }
@@ -13,13 +13,9 @@ napi-derive = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-rusqlite = { workspace = true }
+globset = { workspace = true }
+ignore = { workspace = true }
 sha2 = { workspace = true }
-rand = { workspace = true }
-libc = "0.2"
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem", "Win32_Foundation", "Win32_System_IO"] }
 
 [build-dependencies]
 napi-build = { workspace = true }

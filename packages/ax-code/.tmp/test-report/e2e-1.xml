@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="32" assertions="99" failures="0" skipped="0" time="8.494245">
+  <testsuite name="test/server/project-init-git.test.ts" file="test/server/project-init-git.test.ts" tests="2" assertions="15" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="project.initGit endpoint" file="test/server/project-init-git.test.ts" line="19" tests="2" assertions="15" failures="0" skipped="0" time="0.344" hostname="AK-UM-M2-MAX.local">
+      <testcase name="initializes git and reloads immediately" classname="project.initGit endpoint" time="0.23593" file="test/server/project-init-git.test.ts" line="20" assertions="9" />
+      <testcase name="does not reload when the project is already git" classname="project.initGit endpoint" time="0.109664" file="test/server/project-init-git.test.ts" line="77" assertions="6" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/server/global-session-list.test.ts" file="test/server/global-session-list.test.ts" tests="3" assertions="12" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="Session.listGlobal" file="test/server/global-session-list.test.ts" line="10" tests="3" assertions="12" failures="0" skipped="0" time="0.407" hostname="AK-UM-M2-MAX.local">
+      <testcase name="lists sessions across projects with project metadata" classname="Session.listGlobal" time="0.204403" file="test/server/global-session-list.test.ts" line="11" assertions="6" />
+      <testcase name="excludes archived sessions by default" classname="Session.listGlobal" time="0.100771" file="test/server/global-session-list.test.ts" line="42" assertions="2" />
+      <testcase name="supports cursor pagination" classname="Session.listGlobal" time="0.103521" file="test/server/global-session-list.test.ts" line="66" assertions="4" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/server/session-list.test.ts" file="test/server/session-list.test.ts" tests="5" assertions="8" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="Session.list" file="test/server/session-list.test.ts" line="10" tests="5" assertions="8" failures="0" skipped="0" time="0.044" hostname="AK-UM-M2-MAX.local">
+      <testcase name="filters by directory" classname="Session.list" time="0.04314" file="test/server/session-list.test.ts" line="11" assertions="2" />
+      <testcase name="filters root sessions" classname="Session.list" time="0.001424" file="test/server/session-list.test.ts" line="32" assertions="2" />
+      <testcase name="filters by start time" classname="Session.list" time="0.000528" file="test/server/session-list.test.ts" line="48" assertions="1" />
+      <testcase name="filters by search term" classname="Session.list" time="0.000536" file="test/server/session-list.test.ts" line="61" assertions="2" />
+      <testcase name="respects limit parameter" classname="Session.list" time="0.000667" file="test/server/session-list.test.ts" line="77" assertions="1" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/server/session-messages.test.ts" file="test/server/session-messages.test.ts" tests="5" assertions="16" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="session messages endpoint" file="test/server/session-messages.test.ts" line="39" tests="4" assertions="12" failures="0" skipped="0" time="0.12" hostname="AK-UM-M2-MAX.local">
+      <testcase name="returns cursor headers for older pages" classname="session messages endpoint" time="0.006425" file="test/server/session-messages.test.ts" line="40" assertions="6" />
+      <testcase name="keeps full-history responses when limit is omitted" classname="session messages endpoint" time="0.002116" file="test/server/session-messages.test.ts" line="66" assertions="2" />
+      <testcase name="rejects invalid cursors and missing sessions" classname="session messages endpoint" time="0.001601" file="test/server/session-messages.test.ts" line="84" assertions="2" />
+      <testcase name="does not truncate large legacy limit requests" classname="session messages endpoint" time="0.111916" file="test/server/session-messages.test.ts" line="102" assertions="2" />
+    </testsuite>
+    <testsuite name="session.prompt_async error handling" file="test/server/session-messages.test.ts" line="121" tests="1" assertions="4" failures="0" skipped="0" time="0.002" hostname="AK-UM-M2-MAX.local">
+      <testcase name="prompt_async route has error handler for detached prompt call" classname="session.prompt_async error handling" time="0.00243" file="test/server/session-messages.test.ts" line="122" assertions="4" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/server/session-select.test.ts" file="test/server/session-select.test.ts" tests="3" assertions="4" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="tui.selectSession endpoint" file="test/server/session-select.test.ts" line="11" tests="3" assertions="4" failures="0" skipped="0" time="0.001" hostname="AK-UM-M2-MAX.local">
+      <testcase name="should return 200 when called with valid session" classname="tui.selectSession endpoint" time="0.001741" file="test/server/session-select.test.ts" line="12" assertions="2" />
+      <testcase name="should return 404 when session does not exist" classname="tui.selectSession endpoint" time="0.000507" file="test/server/session-select.test.ts" line="37" assertions="1" />
+      <testcase name="should return 400 when session ID format is invalid" classname="tui.selectSession endpoint" time="0.000292" file="test/server/session-select.test.ts" line="58" assertions="1" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/cli/smoke.test.ts" file="test/cli/smoke.test.ts" tests="10" assertions="34" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="cli smoke" file="test/cli/smoke.test.ts" line="77" tests="10" assertions="34" failures="0" skipped="0" time="6.588" hostname="AK-UM-M2-MAX.local">
+      <testcase name="prints top-level help" classname="cli smoke" time="0.818979" file="test/cli/smoke.test.ts" line="78" assertions="4" />
+      <testcase name="returns non-zero for unknown top-level flags" classname="cli smoke" time="0.686518" file="test/cli/smoke.test.ts" line="90" assertions="3" />
+      <testcase name="runs db path command through the real entrypoint" classname="cli smoke" time="0.719485" file="test/cli/smoke.test.ts" line="102" assertions="2" />
+      <testcase name="prints subcommand help" classname="cli smoke" time="0.68612" file="test/cli/smoke.test.ts" line="112" assertions="3" />
+      <testcase name="lists sessions in json through the real entrypoint" classname="cli smoke" time="0.597835" file="test/cli/smoke.test.ts" line="123" assertions="2" />
+      <testcase name="deletes a session through the real entrypoint" classname="cli smoke" time="0.608884" file="test/cli/smoke.test.ts" line="147" assertions="3" />
+      <testcase name="returns non-zero when deleting a missing session" classname="cli smoke" time="0.587716" file="test/cli/smoke.test.ts" line="171" assertions="2" />
+      <testcase name="skips malformed sessions in cli session list" classname="cli smoke" time="0.635925" file="test/cli/smoke.test.ts" line="184" assertions="3" />
+      <testcase name="survives malformed sessions in cli stats" classname="cli smoke" time="0.629877" file="test/cli/smoke.test.ts" line="219" assertions="4" />
+      <testcase name="prints context stats through the real entrypoint" classname="cli smoke" time="0.623312" file="test/cli/smoke.test.ts" line="253" assertions="8" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/control-plane/workspace-sync.test.ts" file="test/control-plane/workspace-sync.test.ts" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="control-plane/workspace.startSyncing" file="test/control-plane/workspace-sync.test.ts" line="49" tests="1" assertions="0" failures="0" skipped="0" time="0.099" hostname="AK-UM-M2-MAX.local">
+      <testcase name="syncs only remote workspaces and emits remote SSE events" classname="control-plane/workspace.startSyncing" time="0.099861" file="test/control-plane/workspace-sync.test.ts" line="50" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/control-plane/session-proxy-middleware.test.ts" file="test/control-plane/session-proxy-middleware.test.ts" tests="2" assertions="6" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="control-plane/session-proxy-middleware" file="test/control-plane/session-proxy-middleware.test.ts" line="121" tests="2" assertions="6" failures="0" skipped="0" time="0.209" hostname="AK-UM-M2-MAX.local">
+      <testcase name="forwards non-GET session requests for workspaces" classname="control-plane/session-proxy-middleware" time="0.104416" file="test/control-plane/session-proxy-middleware.test.ts" line="122" assertions="3" />
+      <testcase name="sanitizes malformed workspace config before proxying" classname="control-plane/session-proxy-middleware" time="0.105449" file="test/control-plane/session-proxy-middleware.test.ts" line="150" assertions="3" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/control-plane/workspace-server-sse.test.ts" file="test/control-plane/workspace-server-sse.test.ts" tests="1" assertions="4" failures="0" skipped="0" time="0" hostname="AK-UM-M2-MAX.local">
+    <testsuite name="control-plane/workspace-server SSE" file="test/control-plane/workspace-server-sse.test.ts" line="15" tests="1" assertions="4" failures="0" skipped="0" time="0.074" hostname="AK-UM-M2-MAX.local">
+      <testcase name="streams GlobalBus events and parseSSE reads them" classname="control-plane/workspace-server SSE" time="0.074527" file="test/control-plane/workspace-server-sse.test.ts" line="16" assertions="4" />
+    </testsuite>
+  </testsuite>
+</testsuites>
