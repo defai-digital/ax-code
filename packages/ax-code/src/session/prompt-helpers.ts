@@ -547,6 +547,7 @@ export async function ensureTitle(input: {
   history: MessageV2.WithParts[]
   providerID: ProviderID
   modelID: ModelID
+  abort?: AbortSignal
 }) {
   if (input.session.parentID) return
   if (!Session.isDefaultTitle(input.session.title)) return
@@ -582,7 +583,7 @@ export async function ensureTitle(input: {
     small: true,
     tools: {},
     model,
-    abort: new AbortController().signal,
+    abort: input.abort ?? new AbortController().signal,
     sessionID: input.session.id,
     retries: 2,
     messages: [

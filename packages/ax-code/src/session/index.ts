@@ -386,8 +386,8 @@ export namespace Session {
     })
     const cfg = await Config.get()
     if (!result.parentID && (Flag.AX_CODE_AUTO_SHARE || cfg.share === "auto"))
-      share(result.id).catch(() => {
-        // Silently ignore sharing errors during session creation
+      share(result.id).catch((e) => {
+        log.warn("auto-share failed for session", { sessionID: result.id, error: e })
       })
     Bus.publish(Event.Updated, {
       info: result,

@@ -715,6 +715,10 @@ export const McpDebugCommand = cmd({
           }
         }
 
+        // SSRF guard: validate the URL before making requests (BUG-004)
+        const { Ssrf } = await import("../../util/ssrf")
+        await Ssrf.assertPublicUrl(serverConfig.url, "mcp-debug")
+
         const spinner = prompts.spinner()
         spinner.start("Testing connection...")
 

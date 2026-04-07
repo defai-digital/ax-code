@@ -86,7 +86,7 @@ export function hooks() {
       e: err instanceof Error ? err.message : err,
     })
     // Process state is unreliable after uncaught exception — exit after flushing
-    setTimeout(() => process.exit(1), 100)
+    setTimeout(() => process.exit(1), 100).unref()
   })
 }
 
@@ -174,6 +174,6 @@ export async function run() {
     // run using `docker run --init`.
     // Allow a brief window for async cleanup (DB WAL flush, MCP disconnect)
     // before forcing exit to avoid hanging subprocesses.
-    setTimeout(() => process.exit(), 500)
+    setTimeout(() => process.exit(), 500).unref()
   }
 }

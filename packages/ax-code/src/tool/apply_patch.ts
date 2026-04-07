@@ -146,9 +146,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
           await assertExternalDirectory(ctx, movePath)
           if (movePath && Filesystem.contains(Instance.directory, movePath)) {
-            const realMovePath = await fs.realpath(movePath).catch(() => null)
-            if (realMovePath && !Filesystem.contains(Instance.directory, realMovePath)) {
-              throw new Error("Access denied: move_path symlink target escapes project directory")
+            const parentDir = path.dirname(movePath)
+            const realParent = await fs.realpath(parentDir).catch(() => parentDir)
+            if (!Filesystem.contains(Instance.directory, realParent)) {
+              throw new Error("Access denied: move_path parent directory escapes project directory")
             }
           }
           if (movePath) Isolation.assertWrite(ctx.extra?.isolation, movePath, Instance.directory, Instance.worktree)
@@ -263,13 +264,22 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         case "move":
           if (change.movePath) {
             const dest = change.movePath
-            await FileTime.withLock(change.filePath, async () => {
-              await fs.mkdir(path.dirname(dest), { recursive: true })
-              await FileTime.withLock(dest, async () => {
+            await fs.mkdir(path.dirname(dest), { recursive: true })
+            // Acquire locks in sorted order to prevent ABBA deadlock (BUG-007)
+            const [first, second] = [change.filePath, dest].sort()
+            if (first === second) {
+              await FileTime.withLock(first, async () => {
                 await fs.writeFile(dest, change.newContent, "utf-8")
+                await fs.unlink(change.filePath)
               })
-              await fs.unlink(change.filePath)
-            })
+            } else {
+              await FileTime.withLock(first, async () => {
+                await FileTime.withLock(second, async () => {
+                  await fs.writeFile(dest, change.newContent, "utf-8")
+                  if (dest !== change.filePath) await fs.unlink(change.filePath)
+                })
+              })
+            }
             await FileTime.read(ctx.sessionID, dest)
             updates.push({ file: change.filePath, event: "unlink" })
             updates.push({ file: dest, event: "add" })

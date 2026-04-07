@@ -114,7 +114,8 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
+          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
+          if (result === "timeout") proc.kill()
         }
       }
       if (which("xclip")) {
@@ -127,7 +128,8 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
+          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
+          if (result === "timeout") proc.kill()
         }
       }
       if (which("xsel")) {
@@ -140,7 +142,8 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
+          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
+          if (result === "timeout") proc.kill()
         }
       }
     }
@@ -166,7 +169,8 @@ export namespace Clipboard {
         if (!proc.stdin) return
         proc.stdin.write(text)
         proc.stdin.end()
-        await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
+        const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
+        if (result === "timeout") proc.kill()
       }
     }
 

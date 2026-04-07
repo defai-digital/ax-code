@@ -1,6 +1,7 @@
 import path from "path"
 import { execFile } from "child_process"
 import { Filesystem } from "../../../util/filesystem"
+import { Ssrf } from "../../../util/ssrf"
 import * as prompts from "@clack/prompts"
 import { map, pipe, sortBy, values } from "remeda"
 import { Octokit } from "@octokit/rest"
@@ -697,8 +698,9 @@ export const GithubRunCommand = cmd({
             continue
           }
 
-          // Download image
-          const res = await fetch(url, {
+          // Download image (use Ssrf.pinnedFetch to prevent DNS rebinding)
+          const res = await Ssrf.pinnedFetch(url, {
+            label: "github-agent",
             headers: {
               Authorization: `Bearer ${appToken}`,
               Accept: "application/vnd.github.v3+json",

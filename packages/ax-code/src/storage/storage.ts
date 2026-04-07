@@ -44,9 +44,13 @@ export namespace Storage {
             cwd: path.join(project, projectDir),
             absolute: true,
           })) {
-            const json = await Filesystem.readJson<any>(msgFile)
-            worktree = json.path?.root
-            if (worktree) break
+            try {
+              const json = await Filesystem.readJson<any>(msgFile)
+              worktree = json.path?.root
+              if (worktree) break
+            } catch {
+              log.warn("skipping corrupted message file during migration", { file: msgFile })
+            }
           }
           if (!worktree) continue
           if (!(await Filesystem.isDir(worktree))) continue

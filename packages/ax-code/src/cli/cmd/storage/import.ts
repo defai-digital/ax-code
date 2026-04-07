@@ -106,6 +106,10 @@ export const ImportCommand = cmd({
           return
         }
 
+        // SSRF guard: validate the URL before fetching (BUG-009)
+        const { Ssrf } = await import("../../../util/ssrf")
+        await Ssrf.assertPublicUrl(args.file, "storage-import")
+
         const parsed = new URL(args.file)
         const baseUrl = parsed.origin
         const req = await ShareNext.request()

@@ -48,7 +48,7 @@ export async function withSpan<T>(
         span.setStatus({ code: SpanStatusCode.ERROR, message: err instanceof Error ? err.message : String(err) })
         throw err
       } finally {
-        span.end()
+        try { span.end() } catch {}
       }
     })
   } catch {

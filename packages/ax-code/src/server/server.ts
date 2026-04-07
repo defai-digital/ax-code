@@ -1214,15 +1214,20 @@ export namespace Server {
       fetch: app.fetch,
       websocket: websocket,
     } as const
+    let lastServeError: unknown
     const tryServe = (port: number) => {
       try {
         return Bun.serve({ ...args, port })
-      } catch {
+      } catch (e) {
+        lastServeError = e
         return undefined
       }
     }
     const server = opts.port === 0 ? (tryServe(4096) ?? tryServe(0)) : tryServe(opts.port)
-    if (!server) throw new Error(`Failed to start server on port ${opts.port}`)
+    if (!server) {
+      const reason = lastServeError instanceof Error ? lastServeError.message : String(lastServeError)
+      throw new Error(`Failed to start server on port ${opts.port}: ${reason}`)
+    }
     url = new URL(`http://${opts.hostname}:${server.port}`)
 
     const shouldPublishMDNS =

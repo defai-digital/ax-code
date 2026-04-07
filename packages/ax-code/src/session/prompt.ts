@@ -555,6 +555,7 @@ export namespace SessionPrompt {
           modelID: lastUser.model.modelID,
           providerID: lastUser.model.providerID,
           history: msgs,
+          abort,
         })
         Recorder.emit({
           type: "session.start",
@@ -853,11 +854,9 @@ export namespace SessionPrompt {
     SessionCompaction.prune({ sessionID }).catch((e) => log.warn("prune failed", { command: "session.prompt.prune", status: "error", sessionID, error: e }))
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
-      if (resume_existing) {
-        const queued = state()[sessionID]?.callbacks ?? []
-        if (queued.length > 0) {
-          queued.shift()!.resolve(item)
-        }
+      const queued = state()[sessionID]?.callbacks ?? []
+      if (queued.length > 0) {
+        queued.shift()!.resolve(item)
       }
       return item
     }
@@ -1279,6 +1278,35 @@ export namespace SessionPrompt {
               // have to normalize, symbol search returns absolute paths
               // Decode the pathname since URL constructor doesn't automatically decode it
               const filepath = fileURLToPath(part.url)
+
+              // Path containment: reject file:// paths outside the project directory
+              // and resolve symlinks to prevent symlink escapes (BUG-001, BUG-002)
+              if (!Instance.containsPath(filepath)) {
+                log.warn("file attachment outside project", { command: "session.prompt.fileAttach", status: "denied", sessionID: input.sessionID, filepath })
+                return [
+                  {
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    type: "text" as const,
+                    synthetic: true,
+                    text: `Access denied: file path is outside the project directory: ${filepath}`,
+                  },
+                ]
+              }
+              const realFilepath = await fs.realpath(filepath).catch(() => null)
+              if (realFilepath && !Instance.containsPath(realFilepath)) {
+                log.warn("file attachment symlink escapes project", { command: "session.prompt.fileAttach", status: "denied", sessionID: input.sessionID, filepath, realFilepath })
+                return [
+                  {
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    type: "text" as const,
+                    synthetic: true,
+                    text: `Access denied: symlink target is outside the project directory: ${filepath}`,
+                  },
+                ]
+              }
+
               const s = Filesystem.stat(filepath)
 
               if (s?.isDirectory()) {
@@ -1348,7 +1376,7 @@ export namespace SessionPrompt {
                     const readCtx: Tool.Context = {
                       sessionID: input.sessionID,
                       abort: AbortSignal.timeout(30_000),
-                      agent: input.agent!,
+                      agent: agentName,
                       messageID: info.id,
                       extra: { bypassCwdCheck: true },
                       messages: [],
@@ -1407,7 +1435,7 @@ export namespace SessionPrompt {
                 const listCtx: Tool.Context = {
                   sessionID: input.sessionID,
                   abort: AbortSignal.timeout(30_000),
-                  agent: input.agent!,
+                  agent: agentName,
                   messageID: info.id,
                   extra: { bypassCwdCheck: true },
                   messages: [],
@@ -1920,6 +1948,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
     let aborted = false
     let exited = false
+    let exitCode = 0
 
     const kill = () => Shell.killTree(proc, { exited: () => exited })
 
@@ -1945,8 +1974,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     }, SHELL_TIMEOUT)
 
     await new Promise<void>((resolve, reject) => {
-      proc.once("close", () => {
+      proc.once("close", (code) => {
         exited = true
+        exitCode = code ?? 0
         clearTimeout(shellTimer)
         abort.removeEventListener("abort", abortHandler)
         resolve()
@@ -1962,23 +1992,39 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     if (aborted) {
       output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n")
     }
+    await pending
     msg.time.completed = Date.now()
     await Session.updateMessage(msg)
     if (part.state.status === "running") {
-      part.state = {
-        status: "completed",
-        time: {
-          ...part.state.time,
-          end: Date.now(),
-        },
-        input: part.state.input,
-        title: "",
-        metadata: {
-          output,
-          description: "",
-        },
-        output,
-      }
+      part.state =
+        exitCode !== 0 && !aborted
+          ? {
+              status: "error",
+              time: {
+                ...part.state.time,
+                end: Date.now(),
+              },
+              input: part.state.input,
+              error: `Process exited with code ${exitCode}`,
+              metadata: {
+                output,
+                description: "",
+              },
+            }
+          : {
+              status: "completed",
+              time: {
+                ...part.state.time,
+                end: Date.now(),
+              },
+              input: part.state.input,
+              title: "",
+              metadata: {
+                output,
+                description: "",
+              },
+              output,
+            }
       await Session.updatePart(part)
     }
     return { info: msg, parts: [part] }

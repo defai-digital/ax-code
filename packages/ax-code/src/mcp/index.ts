@@ -727,20 +727,22 @@ export namespace MCP {
         connectedClients.map(async ([clientName, client]) => {
           const toolsResult = await client.listTools().catch((e) => {
             log.error("failed to get tools", { clientName, error: NamedError.message(e) })
-            const failedStatus = {
-              status: "failed" as const,
-              error: NamedError.message(e),
-            }
-            s.status[clientName] = failedStatus
-            delete s.clients[clientName]
-            return undefined
+            return { _failed: true as const, error: NamedError.message(e) }
           })
           return { clientName, client, toolsResult }
         }),
       )
 
+      // Apply state mutations after all concurrent reads complete (BUG-021)
+      for (const { clientName, toolsResult } of toolsResults) {
+        if (toolsResult && "_failed" in toolsResult) {
+          s.status[clientName] = { status: "failed" as const, error: (toolsResult as { error: string }).error }
+          delete s.clients[clientName]
+        }
+      }
+
       for (const { clientName, client, toolsResult } of toolsResults) {
-        if (!toolsResult) continue
+        if (!toolsResult || "_failed" in toolsResult) continue
         const mcpConfig = config[clientName]
         const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
         const timeout = entry?.timeout ?? defaultTimeout
@@ -879,6 +881,9 @@ export namespace MCP {
     if (mcpConfig.type !== "remote") {
       throw new Error(`MCP server ${mcpName} is not a remote server`)
     }
+
+    // SSRF guard: validate the URL before initiating OAuth flow (BUG-003)
+    await Ssrf.assertPublicUrl(mcpConfig.url, "mcp-auth")
 
     if (mcpConfig.oauth === false) {
       throw new Error(`MCP server ${mcpName} has OAuth explicitly disabled`)

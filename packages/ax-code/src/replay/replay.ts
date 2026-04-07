@@ -208,6 +208,13 @@ export namespace Replay {
                 error: new Error(result.error ?? "Replayed error"),
               }
             }
+          } else {
+            yield {
+              type: "tool-error",
+              toolCallId: part.callID,
+              input: part.input,
+              error: new Error("Tool result not found — session may have crashed during execution"),
+            }
           }
         }
       }

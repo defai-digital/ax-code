@@ -53,8 +53,9 @@ export class CliLanguageModel implements LanguageModelV2 {
       proc.stdin!.end()
     }
 
+    let timeoutTimer: ReturnType<typeof setTimeout>
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => {
+      timeoutTimer = setTimeout(() => {
         proc.kill("SIGTERM")
         reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
       }, CLI_TIMEOUT_MS),
@@ -62,6 +63,7 @@ export class CliLanguageModel implements LanguageModelV2 {
     const result = Promise.all([proc.exited, buffer(proc.stdout!), buffer(proc.stderr!)])
     result.catch(() => {})
     const [code, stdout, stderr] = await Promise.race([result, timeout])
+    clearTimeout(timeoutTimer!)
     if (code !== 0 && stdout.length === 0) {
       throw new Error(`CLI exited with code ${code}: ${stderr.toString().slice(0, 500)}`)
     }
@@ -152,7 +154,12 @@ export class CliLanguageModel implements LanguageModelV2 {
             controller.enqueue({ type: "error", error: new Error(`CLI exited with code ${code}`) })
             controller.close()
           }
-        }).catch(() => {})
+        }).catch((err) => {
+          clearTimeout(timer)
+          if (closed()) return
+          controller.enqueue({ type: "error", error: err ?? new Error("CLI process killed by signal") })
+          controller.close()
+        })
       },
       cancel() {
         proc.kill("SIGTERM")

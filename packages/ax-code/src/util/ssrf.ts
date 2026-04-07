@@ -42,7 +42,8 @@ export namespace Ssrf {
     const lower = addr.toLowerCase()
     if (lower === "::1" || lower === "::") return true
     if (lower.startsWith("fc") || lower.startsWith("fd")) return true // fc00::/7 ULA
-    if (lower.startsWith("fe80:")) return true // link-local
+    // fe80::/10 link-local covers fe80: through febf:
+    if (/^fe[89ab][0-9a-f]:/.test(lower)) return true
     if (lower.startsWith("ff")) return true // multicast
     const mapped = lower.match(/^::ffff:([0-9.]+)$/)
     if (mapped) return isPrivateIPv4(mapped[1])

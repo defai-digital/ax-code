@@ -373,7 +373,7 @@ export namespace LSP {
     // Pass 2: await all pending spawns in parallel. For a file that matches
     // N servers this turns init time from O(Σ init) into O(max init).
     if (pending.length > 0) {
-      const resolved = await Promise.all(pending.map((p) => p.task))
+      const resolved = await Promise.all(pending.map((p) => p.task.catch(() => undefined)))
       for (let i = 0; i < resolved.length; i++) {
         const client = resolved[i]
         if (!client) continue

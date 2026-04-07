@@ -39,6 +39,16 @@ function store(): any {
 export namespace NativeStore {
   export const available = !!native
 
+  // Safe JSON.parse wrapper — returns fallback on corrupted native output (BUG-005)
+  function safeParse<T>(json: string, fallback: T): T {
+    try {
+      return JSON.parse(json)
+    } catch {
+      log.warn("native store returned malformed JSON", { length: json?.length })
+      return fallback
+    }
+  }
+
   // ─── Node operations ──────────────────────────────────────────────
 
   export function insertNodes(rows: any[]): void {
@@ -47,22 +57,22 @@ export namespace NativeStore {
 
   export function getNode(projectID: ProjectID, id: CodeNodeID): any | undefined {
     const result = store()?.getNode(projectID, id)
-    return result ? JSON.parse(result) : undefined
+    return result ? safeParse(result, undefined) : undefined
   }
 
   export function findNodesByName(projectID: ProjectID, name: string, opts?: { kind?: CodeNodeKind; file?: string; limit?: number }): any[] {
     const result = store()?.findNodesByName(projectID, name, JSON.stringify(opts ?? {}))
-    return result ? JSON.parse(result) : []
+    return result ? safeParse(result, []) : []
   }
 
   export function findNodesByNamePrefix(projectID: ProjectID, prefix: string, opts?: { kind?: CodeNodeKind; limit?: number }): any[] {
     const result = store()?.findNodesByPrefix(projectID, prefix, JSON.stringify(opts ?? {}))
-    return result ? JSON.parse(result) : []
+    return result ? safeParse(result, []) : []
   }
 
   export function nodesInFile(projectID: ProjectID, file: string): any[] {
     const result = store()?.nodesInFile(projectID, file)
-    return result ? JSON.parse(result) : []
+    return result ? safeParse(result, []) : []
   }
 
   export function countNodes(projectID: ProjectID): number {
@@ -81,17 +91,17 @@ export namespace NativeStore {
 
   export function edgesFrom(projectID: ProjectID, fromNode: CodeNodeID, kind?: CodeEdgeKind): any[] {
     const result = store()?.edgesFrom(projectID, fromNode, kind ?? null)
-    return result ? JSON.parse(result) : []
+    return result ? safeParse(result, []) : []
   }
 
   export function edgesTo(projectID: ProjectID, toNode: CodeNodeID, kind?: CodeEdgeKind): any[] {
     const result = store()?.edgesTo(projectID, toNode, kind ?? null)
-    return result ? JSON.parse(result) : []
+    return result ? safeParse(result, []) : []
   }
 
   export function edgesInFile(projectID: ProjectID, file: string): any[] {
     const result = store()?.edgesInFile(projectID, file)
-    return result ? JSON.parse(result) : []
+    return result ? safeParse(result, []) : []
   }
 
   export function deleteEdgesTouchingFile(projectID: ProjectID, file: string): void {
@@ -110,24 +120,24 @@ export namespace NativeStore {
 
   export function getFile(projectID: ProjectID, path: string): any | undefined {
     const result = store()?.getFile(projectID, path)
-    return result ? JSON.parse(result) : undefined
+    return result ? safeParse(result, undefined) : undefined
   }
 
   export function listFiles(projectID: ProjectID): any[] {
     const result = store()?.listFiles(projectID)
-    return result ? JSON.parse(result) : []
+    return result ? safeParse(result, []) : []
   }
 
   export function pruneOrphanFiles(projectID: ProjectID, livePaths: string[], scopePrefix: string): { files: number; nodes: number; edges: number } {
     const result = store()?.pruneOrphanFiles(projectID, JSON.stringify(livePaths), scopePrefix)
-    return result ? JSON.parse(result) : { files: 0, nodes: 0, edges: 0 }
+    return result ? safeParse(result, { files: 0, nodes: 0, edges: 0 }) : { files: 0, nodes: 0, edges: 0 }
   }
 
   // ─── Cursor operations ──────���─────────────────────────────────────
 
   export function getCursor(projectID: ProjectID): any | undefined {
     const result = store()?.getCursor(projectID)
-    return result ? JSON.parse(result) : undefined
+    return result ? safeParse(result, undefined) : undefined
   }
 
   export function upsertCursor(projectID: ProjectID, commitSha: string | null, nodeCount: number, edgeCount: number): void {

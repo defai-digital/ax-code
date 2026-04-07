@@ -648,7 +648,7 @@ export function replace(content: string, oldString: string, newString: string, r
         throw new Error("Native diff returned invalid result: new_content is not a string")
       return result.new_content
     } catch (e: any) {
-      if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND") throw e
+      if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) throw e
     }
   }
 

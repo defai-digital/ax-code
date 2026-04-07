@@ -35,6 +35,9 @@ export const WriteTool = Tool.define("write", {
     }
     Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
 
+    const stats = await fs.promises.stat(filepath).catch(() => null)
+    if (stats?.isDirectory()) throw new Error(`Path is a directory, not a file: ${filepath}`)
+
     // Read + assert + diff computation must all happen inside the lock,
     // otherwise a concurrent tool call or external process modifying
     // the file between `Filesystem.readText` and `Filesystem.write`

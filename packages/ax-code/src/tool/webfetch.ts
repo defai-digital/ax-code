@@ -150,6 +150,7 @@ export const WebFetchTool = Tool.define("webfetch", {
         }
         chunks.push(value)
       }
+      reader.releaseLock()
       const assembled = new Uint8Array(totalBytes)
       let byteOffset = 0
       for (const chunk of chunks) {
