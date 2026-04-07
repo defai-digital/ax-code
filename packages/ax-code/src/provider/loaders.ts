@@ -2,6 +2,7 @@ import type { Provider } from "./provider"
 import { ProviderID, ModelID } from "./schema"
 import { which } from "../util/which"
 import { Ssrf } from "../util/ssrf"
+import { Env } from "../util/env"
 import { CliLanguageModel } from "./cli/cli-language-model"
 import { claudeCodeParser, geminiCliParser, codexCliParser, type CliOutputParser } from "./cli/parser"
 import { resolveCliModel } from "./cli/resolve"
@@ -118,7 +119,7 @@ async function checkClaudeAuth(binary: string): Promise<boolean> {
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, TERM: "dumb", NO_COLOR: "1" },
+      env: { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" },
     })
     const timer = setTimeout(() => proc.kill(), 5000)
     const stdout = await new Response(proc.stdout).text().catch(() => "")

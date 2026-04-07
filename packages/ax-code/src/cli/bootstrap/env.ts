@@ -40,16 +40,18 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
       stderr: "ignore",
       env: { ...env, TERM: "dumb", NO_COLOR: "1" },
     })
-    const timeout = new Promise<string>((_, reject) =>
-      setTimeout(() => {
+    let timeoutId: ReturnType<typeof setTimeout>
+    const timeout = new Promise<string>((_, reject) => {
+      timeoutId = setTimeout(() => {
         proc.kill()
         reject(new Error("timeout"))
-      }, 3000),
-    )
+      }, 3000)
+    })
     const stdout = await Promise.race([
       new Response(proc.stdout).text(),
       timeout,
     ]).catch(() => "")
+    clearTimeout(timeoutId!)
     if (!stdout) return
     for (const entry of stdout.split("\0")) {
       const eq = entry.indexOf("=")

@@ -1,5 +1,6 @@
 import type { LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3StreamPart, LanguageModelV3Usage } from "@ai-sdk/provider"
 import { Process } from "../../util/process"
+import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
 import type { CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
@@ -15,7 +16,7 @@ export interface CliLanguageModelConfig {
 }
 
 function cliEnv() {
-  return { ...process.env, TERM: "dumb", NO_COLOR: "1" }
+  return { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" }
 }
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
@@ -104,9 +105,11 @@ export class CliLanguageModel implements LanguageModelV3 {
     const parser = this.config.parser
     const textId = "cli-0"
 
+    let done = false
+    let timer: ReturnType<typeof setTimeout>
+
     const stream = new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
-        let done = false
         const closed = () => done || controller.desiredSize === null
         const safeClose = () => {
           if (done) return
@@ -114,7 +117,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           controller.close()
         }
 
-        const timer = setTimeout(() => {
+        timer = setTimeout(() => {
           proc.kill("SIGTERM")
           if (closed()) return
           controller.enqueue({ type: "error", error: new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`) })
@@ -176,6 +179,8 @@ export class CliLanguageModel implements LanguageModelV3 {
         })
       },
       cancel() {
+        done = true
+        clearTimeout(timer)
         proc.kill("SIGTERM")
       },
     })
