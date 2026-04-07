@@ -1,9 +1,13 @@
 import path from "path"
 import fs from "fs/promises"
 import { createWriteStream } from "fs"
+import pino from "pino"
 import { Global } from "../global"
 import z from "zod"
 import { Glob } from "./glob"
+
+// Pino instance — initialized lazily via init(). Before init, logs go to stderr.
+let pinoLogger: pino.Logger = pino({ level: "debug" }, pino.destination(2)) // fd 2 = stderr
 
 export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
@@ -64,6 +68,9 @@ export namespace Log {
 
   export async function init(options: Options) {
     if (options.level) level = options.level
+    // Update Pino log level to match
+    const pinoLevel = level === "DEBUG" ? "debug" : level === "INFO" ? "info" : level === "WARN" ? "warn" : "error"
+    pinoLogger.level = pinoLevel
     cleanup(Global.Path.log)
     if (options.print) return
     logpath = path.join(
@@ -95,6 +102,8 @@ export namespace Log {
       }
     })
     currentStream = stream
+    // Re-create Pino with file destination for JSON structured logging
+    pinoLogger = pino({ level: pinoLevel }, pino.destination({ dest: logpath, append: true, sync: false }))
     write = (msg: string) => {
       // Fast path: if the stream was already ended (by a concurrent
       // re-init, or by Node during shutdown) don't even attempt the
@@ -171,25 +180,30 @@ export namespace Log {
       last = next.getTime()
       return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, message].filter(Boolean).join(" ") + "\n"
     }
+    const child = pinoLogger.child(tags || {})
     const result: Logger = {
       debug(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("DEBUG")) {
           write("DEBUG " + build(message, extra))
+          child.debug(extra || {}, String(message ?? ""))
         }
       },
       info(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("INFO")) {
           write("INFO  " + build(message, extra))
+          child.info(extra || {}, String(message ?? ""))
         }
       },
       error(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("ERROR")) {
           write("ERROR " + build(message, extra))
+          child.error(extra || {}, String(message ?? ""))
         }
       },
       warn(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("WARN")) {
           write("WARN  " + build(message, extra))
+          child.warn(extra || {}, String(message ?? ""))
         }
       },
       tag(key: string, value: string) {

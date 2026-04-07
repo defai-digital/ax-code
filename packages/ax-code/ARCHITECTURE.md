@@ -22,3 +22,71 @@
 - tests live under `test/`
 - mirror runtime domains where practical
 - prefer real integration coverage over mocks
+
+---
+
+## Effect Framework Policy (as of v2.11.0)
+
+### Frozen: No New Effect Usage
+
+New code must NOT introduce Effect dependencies unless modifying an existing Effect-based module.
+
+**Disallowed in new code:**
+- `Effect.gen`, `Layer.effect`, `Layer.service`, `ServiceMap.Service`
+- `InstanceState.make`, `InstanceState.get`
+- `Schema.Class`, `Schema.Struct` (use Zod instead)
+
+**Allowed in new code:**
+- `async/await` for all async operations
+- `Result<T, E>` or `.catch()` for error handling
+- Zod (`z.object()`) for validation
+- `Log.create()` for structured logging
+- Plain TypeScript functions
+
+**Where Effect remains (core only):**
+- `src/effect/` — runtime infrastructure
+- `src/session/` — session processing loop
+- `src/file/watcher.ts` — subscription lifecycle
+
+## Coding Patterns (AI-first)
+
+### Linear Control Flow (Default)
+```typescript
+async function editFile(path: string): Promise<Result<void, EditError>> {
+  const exists = await fs.access(path).then(() => true).catch(() => false)
+  if (!exists) return { ok: false, error: { code: "NOT_FOUND" } }
+  await fs.writeFile(path, content)
+  return { ok: true, value: undefined }
+}
+```
+
+### Structured Logging
+```typescript
+const log = Log.create({ service: "tool.edit" })
+log.info("edit complete", { toolName: "edit", durationMs: 42, status: "ok" })
+```
+
+Required fields: `toolName`/`command`, `durationMs`, `status` ("ok"|"error"), `errorCode` (on error).
+
+### Boundary Validation
+Validate at edges (CLI args, config, tool input), trust internally. Use Zod, not Effect Schema.
+
+### Error Handling
+- `Result<T, E>` for: tool execution, file mutation, LLM response, config loading
+- `.catch()` for: simple fallbacks
+- `try/catch` for: boundary wrapping
+- NOT `Effect.gen` + error channel for new code
+
+## Schema Library
+
+**Standard: Zod** (already in 117 files). Do not introduce Valibot or other schema libraries.
+
+## Native Addons (Rust)
+
+CPU-bound hot paths dispatch to Rust when flags enabled:
+- `AX_CODE_NATIVE_INDEX=1` — SQLite graph, interval tree, lock
+- `AX_CODE_NATIVE_FS=1` — File walker, glob, grep, watcher
+- `AX_CODE_NATIVE_DIFF=1` — Edit replacer, fuzzy matcher, diff
+- `AX_CODE_NATIVE_PARSER=1` — Tree-sitter symbol extraction
+
+All native paths use `createRequire(import.meta.url)` with try/catch fallback.

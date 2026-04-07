@@ -124,6 +124,7 @@
     "open": "10.1.2",
     "opentui-spinner": "0.0.6",
     "partial-json": "0.1.7",
+    "pino": "^10.3.1",
     "remeda": "catalog:",
     "semver": "^7.6.3",
     "solid-js": "catalog:",
