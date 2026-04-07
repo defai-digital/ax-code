@@ -105,7 +105,7 @@ export namespace Config {
       if (value.type === "wellknown") {
         const url = key.replace(/\/+$/, "")
         if (!/^[A-Z][A-Z0-9_]*$/.test(value.key)) {
-          log.warn("ignoring wellknown auth with invalid env var name", { key: value.key, url: key })
+          log.warn("ignoring wellknown auth with invalid env var name", { command: "config.load", status: "error", errorCode: "INVALID_ENV_VAR", key: value.key, url: key })
           continue
         }
         process.env[value.key] = value.token
@@ -122,7 +122,7 @@ export namespace Config {
             await Ssrf.assertPublicUrl(endpoint, "wellknown-config")
             await Ssrf.assertPublicUrl(legacy, "wellknown-config")
           } catch (err) {
-            log.warn("wellknown config URL rejected by SSRF guard", { url, err })
+            log.warn("wellknown config URL rejected by SSRF guard", { command: "config.load", status: "error", errorCode: "SSRF_REJECTED", url, err })
             return undefined
           }
           const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(10_000) })
@@ -132,7 +132,7 @@ export namespace Config {
             })
             .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) }))
           if (!response.ok) {
-            log.warn("failed to fetch remote config", { url, status: response.status })
+            log.warn("failed to fetch remote config", { command: "config.load", status: "error", errorCode: "REMOTE_FETCH", url, httpStatus: response.status })
             return undefined
           }
           const wellknown = (await response.json()) as Record<string, unknown>
@@ -143,10 +143,10 @@ export namespace Config {
             source: response.url || endpoint,
             trusted: false,
           })
-          log.debug("loaded remote config from well-known", { url })
+          log.debug("loaded remote config from well-known", { command: "config.load", status: "ok", url })
           return loaded
         } catch (err) {
-          log.warn("failed to load wellknown config", { url, error: err })
+          log.warn("failed to load wellknown config", { command: "config.load", status: "error", errorCode: "WELLKNOWN_LOAD", url, error: err })
           return undefined
         }
       }),
@@ -161,7 +161,7 @@ export namespace Config {
     // Custom config path overrides global config.
     if (Flag.AX_CODE_CONFIG) {
       result = mergeConfigConcatArrays(result, await loadFile(Flag.AX_CODE_CONFIG))
-      log.debug("loaded custom config", { path: Flag.AX_CODE_CONFIG })
+      log.debug("loaded custom config", { command: "config.load", status: "ok", path: Flag.AX_CODE_CONFIG })
     }
 
     // Project config overrides global and remote config.
@@ -185,7 +185,7 @@ export namespace Config {
 
     // .ax-code directory config overrides (project and global) config sources.
     if (Flag.AX_CODE_CONFIG_DIR) {
-      log.debug("loading config from AX_CODE_CONFIG_DIR", { path: Flag.AX_CODE_CONFIG_DIR })
+      log.debug("loading config from AX_CODE_CONFIG_DIR", { command: "config.load", status: "started", path: Flag.AX_CODE_CONFIG_DIR })
     }
 
     const deps = []
@@ -232,7 +232,7 @@ export namespace Config {
           source: "AX_CODE_CONFIG_CONTENT",
         }),
       )
-      log.debug("loaded custom config from AX_CODE_CONFIG_CONTENT")
+      log.debug("loaded custom config from AX_CODE_CONFIG_CONTENT", { command: "config.load", status: "ok" })
     }
 
     const active = await Account.active()
@@ -373,6 +373,9 @@ export namespace Config {
     const pkg = path.join(dir, "package.json")
     const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
 
+    // Acquire install lock before read-modify-write to prevent races
+    using _ = await Lock.write("bun-install")
+
     const json = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => ({
       dependencies: {},
     }))
@@ -386,10 +389,6 @@ export namespace Config {
     const hasGitIgnore = await Filesystem.exists(gitignore)
     if (!hasGitIgnore)
       await Filesystem.write(gitignore, ["node_modules", "package.json", "bun.lock", ".gitignore"].join("\n"))
-
-    // Install any additional dependencies defined in the package.json
-    // This allows local plugins and custom tools to use external packages
-    using _ = await Lock.write("bun-install")
     await BunProc.run(
       [
         "install",

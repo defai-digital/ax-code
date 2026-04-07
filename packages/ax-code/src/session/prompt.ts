@@ -209,7 +209,7 @@ export namespace SessionPrompt {
     }
     const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
       executionError = error
-      log.error("subtask execution failed", { error, agent: task.agent, description: task.description })
+      log.error("subtask execution failed", { command: "session.prompt.subtask", status: "error", error, agent: task.agent, description: task.description, sessionID })
       return undefined
     })
     const attachments = result?.attachments?.map((attachment) => ({
@@ -409,7 +409,7 @@ export namespace SessionPrompt {
   }
 
   export async function cancel(sessionID: SessionID) {
-    log.info("cancel", { sessionID })
+    log.info("cancel", { command: "session.prompt.cancel", status: "started", sessionID })
     const s = state()
     const match = s[sessionID]
     if (!match) {
@@ -460,7 +460,7 @@ export namespace SessionPrompt {
       // Queued messages are waiting — re-enter the loop to process them.
       // Mirrors the pattern in shell() at lines 1681-1692.
       loop({ sessionID, resume_existing: true }).catch((error) => {
-        log.error("session loop failed to resume for queued messages", { sessionID, error })
+        log.error("session loop failed to resume for queued messages", { command: "session.prompt.loop", status: "error", sessionID, error })
         cancel(sessionID)
       })
     })
@@ -511,9 +511,9 @@ export namespace SessionPrompt {
       // is actually using structured output mode.
       structuredOutput = undefined
       await SessionStatus.set(sessionID, { type: "busy" })
-      log.info("loop", { step, sessionID, consecutiveErrors })
+      log.info("loop", { command: "session.prompt.loop", status: "started", step, sessionID, consecutiveErrors })
       if (step > 0 && step % 10 === 0) {
-        log.warn("long-running task", { step, sessionID, message: `Agent has been working for ${step} steps` })
+        log.warn("long-running task", { command: "session.prompt.loop", status: "ok", step, sessionID, message: `Agent has been working for ${step} steps` })
       }
       if (abort.aborted) {
         reason = "aborted"
@@ -522,7 +522,7 @@ export namespace SessionPrompt {
 
       // Safety: prevent infinite loops
       if (step >= GLOBAL_STEP_LIMIT) {
-        log.warn("global step limit reached", { step, sessionID })
+        log.warn("global step limit reached", { command: "session.prompt.loop", status: "error", errorCode: "STEP_LIMIT", step, sessionID })
         Bus.publish(Session.Event.Error, {
           sessionID,
           error: new NamedError.Unknown({
@@ -544,7 +544,7 @@ export namespace SessionPrompt {
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
         lastUser.id < lastAssistant.id
       ) {
-        log.info("exiting loop", { sessionID })
+        log.info("exiting loop", { command: "session.prompt.loop", status: "ok", sessionID })
         reason = "completed"
         break
       }
@@ -600,6 +600,9 @@ export namespace SessionPrompt {
             AutoIndex.maybeStart(Instance.project.id)
           } catch (e) {
             log.warn("code.graph init skipped", {
+              command: "session.prompt.codeGraph",
+              status: "error",
+              errorCode: "GRAPH_INIT_SKIPPED",
               sessionID,
               e: e instanceof Error ? e.message : String(e),
             })
@@ -742,7 +745,7 @@ export namespace SessionPrompt {
           },
           msgs,
         ).catch(async (e) => {
-          log.warn("summarize failed, setting fallback title", { error: e })
+          log.warn("summarize failed, setting fallback title", { command: "session.prompt.summarize", status: "error", sessionID, error: e })
           await Session.setTitle({ sessionID, title: "Untitled session" }).catch(() => {})
         })
       }
@@ -821,9 +824,9 @@ export namespace SessionPrompt {
       // Track consecutive errors — break if agent is stuck
       if (processor.message.error) {
         consecutiveErrors++
-        log.warn("consecutive error", { consecutiveErrors, step, sessionID, error: processor.message.error })
+        log.warn("consecutive error", { command: "session.prompt.loop", status: "error", errorCode: "CONSECUTIVE_ERROR", consecutiveErrors, step, sessionID, error: processor.message.error })
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-          log.warn("too many consecutive errors, stopping", { consecutiveErrors, sessionID })
+          log.warn("too many consecutive errors, stopping", { command: "session.prompt.loop", status: "error", errorCode: "MAX_CONSECUTIVE_ERRORS", consecutiveErrors, sessionID })
           Bus.publish(Session.Event.Error, {
             sessionID,
             error: new NamedError.Unknown({
@@ -848,7 +851,7 @@ export namespace SessionPrompt {
       }
       continue
     }
-    SessionCompaction.prune({ sessionID }).catch((e) => log.warn("prune failed", { error: e }))
+    SessionCompaction.prune({ sessionID }).catch((e) => log.warn("prune failed", { command: "session.prompt.prune", status: "error", sessionID, error: e }))
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       if (resume_existing) {
@@ -1139,7 +1142,7 @@ export namespace SessionPrompt {
           confidence: routeResult.confidence,
         })
         agentName = routeResult.agent
-        log.info("auto-routed to agent", { agent: routeResult.agent, confidence: routeResult.confidence })
+        log.info("auto-routed to agent", { command: "session.prompt.route", status: "ok", sessionID: input.sessionID, agent: routeResult.agent, confidence: routeResult.confidence })
         Bus.publish(TuiEvent.ToastShow, {
           title: "Agent Auto-Switched",
           message: `Switched to "${routeResult.agent}" agent for this task`,
@@ -1181,7 +1184,7 @@ export namespace SessionPrompt {
           // before checking the protocol we check if this is an mcp resource because it needs special handling
           if (part.source?.type === "resource") {
             const { clientName, uri } = part.source
-            log.info("mcp resource", { clientName, uri, mime: part.mime })
+            log.info("mcp resource", { command: "session.prompt.mcpResource", status: "started", sessionID: input.sessionID, clientName, uri, mime: part.mime })
 
             const pieces: Draft<MessageV2.Part>[] = [
               {
@@ -1232,7 +1235,7 @@ export namespace SessionPrompt {
                 sessionID: input.sessionID,
               })
             } catch (error: unknown) {
-              log.error("failed to read MCP resource", { error, clientName, uri })
+              log.error("failed to read MCP resource", { command: "session.prompt.mcpResource", status: "error", errorCode: "MCP_RESOURCE_READ", sessionID: input.sessionID, error, clientName, uri })
               const message = NamedError.message(error)
               pieces.push({
                 messageID: info.id,
@@ -1273,7 +1276,7 @@ export namespace SessionPrompt {
               }
               break
             case "file:":
-              log.info("file", { mime: part.mime })
+              log.info("file", { command: "session.prompt.fileAttach", status: "started", sessionID: input.sessionID, mime: part.mime })
               // have to normalize, symbol search returns absolute paths
               // Decode the pathname since URL constructor doesn't automatically decode it
               const filepath = fileURLToPath(part.url)
@@ -1380,7 +1383,7 @@ export namespace SessionPrompt {
                     }
                   })
                   .catch((error) => {
-                    log.error("failed to read file", { error })
+                    log.error("failed to read file", { command: "session.prompt.readFile", status: "error", errorCode: "FILE_READ", sessionID: input.sessionID, error })
                     const message = error instanceof Error ? error.message : error.toString()
                     Bus.publish(Session.Event.Error, {
                       sessionID: input.sessionID,
@@ -1412,50 +1415,92 @@ export namespace SessionPrompt {
                   metadata: async () => {},
                   ask: async () => {},
                 }
-                const result = await ReadTool.init().then((t) => t.execute(args, listCtx))
+                return await ReadTool.init()
+                  .then(async (t) => {
+                    const result = await t.execute(args, listCtx)
+                    return [
+                      {
+                        messageID: info.id,
+                        sessionID: input.sessionID,
+                        type: "text" as const,
+                        synthetic: true,
+                        text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
+                      },
+                      {
+                        messageID: info.id,
+                        sessionID: input.sessionID,
+                        type: "text" as const,
+                        synthetic: true,
+                        text: result.output,
+                      },
+                      {
+                        ...part,
+                        messageID: info.id,
+                        sessionID: input.sessionID,
+                      },
+                    ]
+                  })
+                  .catch((error) => {
+                    log.error("failed to read directory", { command: "session.prompt.readDir", status: "error", errorCode: "DIR_READ", sessionID: input.sessionID, error })
+                    const message = error instanceof Error ? error.message : error.toString()
+                    Bus.publish(Session.Event.Error, {
+                      sessionID: input.sessionID,
+                      error: new NamedError.Unknown({
+                        message,
+                      }).toObject(),
+                    })
+                    return [
+                      {
+                        messageID: info.id,
+                        sessionID: input.sessionID,
+                        type: "text" as const,
+                        synthetic: true,
+                        text: `Read tool failed to read ${filepath} with the following error: ${message}`,
+                      },
+                    ]
+                  })
+              }
+
+              try {
+                await FileTime.read(input.sessionID, filepath)
                 return [
                   {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
+                    text: `Called the Read tool with the following input: {"filePath":"${filepath}"}`,
                     synthetic: true,
-                    text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
                   },
+                  {
+                    id: part.id,
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    type: "file",
+                    url: `data:${part.mime};base64,` + (await Filesystem.readBytes(filepath)).toString("base64"),
+                    mime: part.mime,
+                    filename: part.filename!,
+                    source: part.source,
+                  },
+                ]
+              } catch (error) {
+                log.error("failed to read binary file", { command: "session.prompt.readBinaryFile", status: "error", errorCode: "BINARY_READ", sessionID: input.sessionID, error })
+                const message = error instanceof Error ? error.message : String(error)
+                Bus.publish(Session.Event.Error, {
+                  sessionID: input.sessionID,
+                  error: new NamedError.Unknown({
+                    message,
+                  }).toObject(),
+                })
+                return [
                   {
                     messageID: info.id,
                     sessionID: input.sessionID,
-                    type: "text",
+                    type: "text" as const,
                     synthetic: true,
-                    text: result.output,
-                  },
-                  {
-                    ...part,
-                    messageID: info.id,
-                    sessionID: input.sessionID,
+                    text: `Read tool failed to read ${filepath} with the following error: ${message}`,
                   },
                 ]
               }
-
-              await FileTime.read(input.sessionID, filepath)
-              return [
-                {
-                  messageID: info.id,
-                  sessionID: input.sessionID,
-                  type: "text",
-                  text: `Called the Read tool with the following input: {"filePath":"${filepath}"}`,
-                  synthetic: true,
-                },
-                {
-                  id: part.id,
-                  messageID: info.id,
-                  sessionID: input.sessionID,
-                  type: "file",
-                  url: `data:${part.mime};base64,` + (await Filesystem.readBytes(filepath)).toString("base64"),
-                  mime: part.mime,
-                  filename: part.filename!,
-                  source: part.source,
-                },
-              ]
           }
         }
 
@@ -1517,6 +1562,9 @@ export namespace SessionPrompt {
     const parsedInfo = MessageV2.Info.safeParse(info)
     if (!parsedInfo.success) {
       log.error("invalid user message before save", {
+        command: "session.prompt.validate",
+        status: "error",
+        errorCode: "INVALID_MESSAGE",
         sessionID: input.sessionID,
         messageID: info.id,
         agent: info.agent,
@@ -1533,6 +1581,9 @@ export namespace SessionPrompt {
       const parsedPart = MessageV2.Part.safeParse(part)
       if (parsedPart.success) return
       log.error("invalid user part before save", {
+        command: "session.prompt.validate",
+        status: "error",
+        errorCode: "INVALID_PART",
         sessionID: input.sessionID,
         messageID: info.id,
         partID: part.id,
@@ -1726,7 +1777,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       } else {
         // Otherwise, trigger the session loop to process queued items
         loop({ sessionID: input.sessionID, resume_existing: true }).catch((error) => {
-          log.error("session loop failed to resume after shell command", { sessionID: input.sessionID, error })
+          log.error("session loop failed to resume after shell command", { command: "session.prompt.shell", status: "error", sessionID: input.sessionID, error })
         })
       }
     })
@@ -1837,7 +1888,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         .then(async () => {
           await Session.updatePart(part)
         })
-        .catch((e) => log.warn("shell metadata write failed", { error: e }))
+        .catch((e) => log.warn("shell metadata write failed", { command: "session.prompt.shell", status: "error", errorCode: "METADATA_WRITE", error: e }))
     }
 
     proc.stdout?.on("data", (chunk) => {
@@ -1871,7 +1922,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     const SHELL_TIMEOUT = 300_000 // 5 minutes
     const shellTimer = setTimeout(() => {
       if (!exited) {
-        log.warn("shell command timed out", { shell, args })
+        log.warn("shell command timed out", { command: "session.prompt.shell", status: "error", errorCode: "SHELL_TIMEOUT", shell, args })
         void kill()
       }
     }, SHELL_TIMEOUT)
@@ -1945,7 +1996,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
    */
 
   export async function command(input: CommandInput) {
-    log.info("command", input)
+    log.info("command", { command: "session.prompt.command", status: "started", sessionID: input.sessionID, commandName: input.command })
     const command = await Command.get(input.command)
     if (!command) {
       const available = await Command.list().then((cmds) => cmds.map((c) => c.name))

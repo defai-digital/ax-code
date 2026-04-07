@@ -681,7 +681,7 @@ export namespace LSP {
         4: "HINT",
       }
 
-      const severity = severityMap[diagnostic.severity || 1]
+      const severity = severityMap[diagnostic.severity ?? 1]
       const line = diagnostic.range.start.line + 1
       const col = diagnostic.range.start.character + 1
 

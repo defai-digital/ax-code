@@ -18,6 +18,7 @@ import z from "zod/v4"
 import { Instance } from "../project/instance"
 import { Installation } from "../installation"
 import { withTimeout } from "@/util/timeout"
+import { Ssrf } from "@/util/ssrf"
 import { McpOAuthProvider } from "./oauth-provider"
 import { McpOAuthCallback } from "./oauth-callback"
 import { McpAuth } from "./auth"
@@ -394,6 +395,8 @@ export namespace MCP {
           },
         )
       }
+
+      await Ssrf.assertPublicUrl(mcp.url, "mcp")
 
       const transports: Array<{ name: string; transport: TransportWithAuth }> = [
         {
