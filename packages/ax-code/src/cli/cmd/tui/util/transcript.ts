@@ -24,7 +24,7 @@ export type MessageWithParts = {
 export function formatTranscript(
   session: SessionInfo,
   messages: MessageWithParts[],
-  options: TranscriptOptions,
+  options: TranscriptOptions & { agents?: Array<{ name: string; displayName?: string }> },
 ): string {
   let transcript = `# ${session.title}\n\n`
   transcript += `**Session ID:** ${session.id}\n`
@@ -40,13 +40,13 @@ export function formatTranscript(
   return transcript
 }
 
-export function formatMessage(msg: UserMessage | AssistantMessage, parts: Part[], options: TranscriptOptions): string {
+export function formatMessage(msg: UserMessage | AssistantMessage, parts: Part[], options: TranscriptOptions & { agents?: Array<{ name: string; displayName?: string }> }): string {
   let result = ""
 
   if (msg.role === "user") {
     result += `## User\n\n`
   } else {
-    result += formatAssistantHeader(msg, options.assistantMetadata)
+    result += formatAssistantHeader(msg, options.assistantMetadata, options.agents)
   }
 
   for (const part of parts) {
@@ -56,15 +56,16 @@ export function formatMessage(msg: UserMessage | AssistantMessage, parts: Part[]
   return result
 }
 
-export function formatAssistantHeader(msg: AssistantMessage, includeMetadata: boolean): string {
+export function formatAssistantHeader(msg: AssistantMessage, includeMetadata: boolean, agents?: Array<{ name: string; displayName?: string }>): string {
   if (!includeMetadata) {
     return `## Assistant\n\n`
   }
 
   const duration =
     msg.time.completed && msg.time.created ? ((msg.time.completed - msg.time.created) / 1000).toFixed(1) + "s" : ""
+  const label = agents?.find((a) => a.name === msg.agent)?.displayName ?? Locale.titlecase(msg.agent)
 
-  return `## Assistant (${Locale.titlecase(msg.agent)} · ${msg.modelID}${duration ? ` · ${duration}` : ""})\n\n`
+  return `## Assistant (${label} · ${msg.modelID}${duration ? ` · ${duration}` : ""})\n\n`
 }
 
 export function formatPart(part: Part, options: TranscriptOptions): string {

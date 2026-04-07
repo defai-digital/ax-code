@@ -452,7 +452,8 @@ export const RunCommand = cmd({
             toggles.get("start") !== true
           ) {
             UI.empty()
-            UI.println(`> ${event.properties.info.agent} · ${event.properties.info.modelID}`)
+            const agentEntry = (await Agent.list()).find((a) => a.name === event.properties.info.agent)
+            UI.println(`> ${agentEntry?.displayName ?? event.properties.info.agent} · ${event.properties.info.modelID}`)
             UI.empty()
             toggles.set("start", true)
           }

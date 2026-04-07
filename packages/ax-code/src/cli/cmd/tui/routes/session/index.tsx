@@ -381,6 +381,7 @@ export function Session() {
       showThinking,
       showTimestamps,
       sidebarVisible,
+      agents: sync.data.agent,
       suggested: route.type === "session",
       toast,
     }),
@@ -1008,7 +1009,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               >
                 ▣{" "}
               </span>{" "}
-              <span style={{ fg: theme.text }}>{Locale.titlecase(props.message.mode)}</span>
+              <span style={{ fg: theme.text }}>{sync.data.agent.find((a) => a.name === props.message.agent)?.displayName ?? Locale.titlecase(props.message.agent)}</span>
               <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>

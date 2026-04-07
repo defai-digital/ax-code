@@ -69,6 +69,7 @@ export function displayCommands(input: {
   showScrollbar: Accessor<boolean>
   showThinking: Accessor<boolean>
   showTimestamps: Accessor<boolean>
+  agents: Array<{ name: string; displayName?: string }>
   sidebarVisible: Accessor<boolean>
   suggested: boolean
   toast: Toast
@@ -414,6 +415,7 @@ export function displayCommands(input: {
             thinking: input.showThinking(),
             toolDetails: input.showDetails(),
             assistantMetadata: input.showAssistantMetadata(),
+            agents: input.agents,
           })
           await Clipboard.copy(transcript)
           input.toast.show({ message: "Session transcript copied to clipboard!", variant: "success" })
@@ -450,6 +452,7 @@ export function displayCommands(input: {
             thinking: options.thinking,
             toolDetails: options.toolDetails,
             assistantMetadata: options.assistantMetadata,
+            agents: input.agents,
           })
 
           if (options.openWithoutSaving) {

@@ -90,6 +90,18 @@ export type PartComponent = Component<MessagePartProps>
 
 export const PART_MAPPING: Record<string, PartComponent | undefined> = {}
 
+const agentDisplayNames: Record<string, string> = {
+  build: "Dev",
+  plan: "Planner",
+  react: "Reasoner",
+  security: "Security",
+  architect: "Architect",
+  debug: "Debugger",
+  perf: "Perf",
+  devops: "DevOps",
+  test: "Tester",
+}
+
 function getDirectory(path: string | undefined) {
   const data = useData()
   return relativizeProjectPath(_getDirectory(path), data.directory)
@@ -491,9 +503,10 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 
   const meta = createMemo(() => {
     if (props.message.role !== "assistant") return ""
-    const agent = (props.message as AssistantMessage).agent
+    const agentName = (props.message as AssistantMessage).agent
+    const agentLabel = agentName ? agentDisplayNames[agentName] ?? (agentName[0]?.toUpperCase() + agentName.slice(1)) : ""
     const items = [
-      agent ? agent[0]?.toUpperCase() + agent.slice(1) : "",
+      agentLabel,
       model(),
       duration(),
       interrupted() ? i18n.t("ui.message.interrupted") : "",

@@ -1168,10 +1168,12 @@ export namespace SessionPrompt {
           confidence: routeResult.confidence,
         })
         agentName = routeResult.agent
+        const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
+        const routedLabel = routedAgent?.displayName ?? routeResult.agent
         log.info("auto-routed to agent", { command: "session.prompt.route", status: "ok", sessionID: input.sessionID, agent: routeResult.agent, confidence: routeResult.confidence })
         Bus.publish(TuiEvent.ToastShow, {
           title: "Agent Auto-Switched",
-          message: `Switched to "${routeResult.agent}" agent for this task`,
+          message: `Switched to "${routedLabel}" agent for this task`,
           variant: "info",
           duration: 5000,
         }).catch(() => {})
