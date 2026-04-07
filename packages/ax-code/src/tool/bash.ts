@@ -96,6 +96,7 @@ export const BashTool = Tool.define("bash", async () => {
       const resolvedPaths = new Set<string>()
       const patterns = new Set<string>()
       const always = new Set<string>()
+      let foundCommands = false
 
       for (const node of tree.rootNode.descendantsOfType("command")) {
         if (!node) continue
@@ -137,11 +138,13 @@ export const BashTool = Tool.define("bash", async () => {
           }
         }
 
-        // cd covered by above check
+        // cd covered by above check; track that we found a command
+        // so the fallback below doesn't re-add skipped commands.
         if (command.length && command[0] !== "cd") {
           patterns.add(commandText)
           always.add(BashArity.prefix(command).join(" ") + " *")
         }
+        if (command.length) foundCommands = true
       }
 
       Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
@@ -160,10 +163,12 @@ export const BashTool = Tool.define("bash", async () => {
         })
       }
 
-      // If tree-sitter found no command nodes (e.g. parsing edge cases,
-      // subshells, or unusual syntax), fall back to prompting for the
-      // entire raw command so the permission check is never bypassed.
-      if (patterns.size === 0) {
+      // If tree-sitter found no command nodes at all (e.g. parsing edge
+      // cases, subshells, or unusual syntax), fall back to prompting for
+      // the entire raw command so the permission check is never bypassed.
+      // Don't fall back if we found commands but intentionally skipped
+      // them (e.g. cd-only commands are handled by the directory check).
+      if (patterns.size === 0 && !foundCommands) {
         patterns.add(params.command)
         always.add(params.command)
       }

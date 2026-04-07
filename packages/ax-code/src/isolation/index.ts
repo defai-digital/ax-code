@@ -25,7 +25,7 @@ export namespace Isolation {
   }
 
   export function resolve(config: IsolationConfig | undefined, directory: string): State {
-    const mode = Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? "workspace-write"
+    const mode = Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? "full-access"
     const network = Flag.AX_CODE_ISOLATION_NETWORK ?? config?.network
     const protectedPaths = DEFAULT_PROTECTED.map((p) => path.resolve(directory, p))
     if (config?.protected) {

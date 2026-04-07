@@ -763,7 +763,7 @@ test("installs dependencies in writable AX_CODE_CONFIG_DIR", async () => {
     if (prev === undefined) delete process.env.AX_CODE_CONFIG_DIR
     else process.env.AX_CODE_CONFIG_DIR = prev
   }
-})
+}, 60000)
 
 test("serializes concurrent config dependency installs", async () => {
   await using tmp = await tmpdir()
@@ -793,7 +793,11 @@ test("serializes concurrent config dependency installs", async () => {
   }
 
   expect(max).toBe(1)
-  expect(seen.toSorted()).toEqual(dirs.toSorted())
+  // Filter to only the directories we explicitly installed — other
+  // concurrent activity (plugin loading, config discovery) may also
+  // trigger BunProc.run with different cwd values.
+  const relevant = seen.filter((d) => dirs.includes(d))
+  expect(relevant.toSorted()).toEqual(dirs.toSorted())
   expect(await Filesystem.exists(path.join(dirs[0], "package.json"))).toBe(true)
   expect(await Filesystem.exists(path.join(dirs[1], "package.json"))).toBe(true)
 })

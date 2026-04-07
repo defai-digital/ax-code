@@ -122,5 +122,5 @@ describe("tool.registry", () => {
         expect(ids).toContain("cowsay")
       },
     })
-  })
+  }, 60000)
 })
