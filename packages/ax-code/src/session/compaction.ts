@@ -98,10 +98,14 @@ export namespace SessionCompaction {
     if (pruned > PRUNE_MINIMUM) {
       const timestamp = Date.now()
       await Promise.all(
-        toPrune.map((part) => {
+        toPrune.map(async (part) => {
           if (part.state.status !== "completed") return
           part.state.time.compacted = timestamp
-          return Session.updatePart(part)
+          try {
+            await Session.updatePart(part)
+          } catch (e) {
+            log.warn("failed to compact part", { partID: part.id, err: e })
+          }
         }),
       )
       log.info("pruned", { count: toPrune.length })

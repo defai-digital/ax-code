@@ -492,7 +492,6 @@ export namespace SessionPrompt {
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
-    const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
     const cachedSystemPrompt: import("./prompt-helpers").SystemCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -724,7 +723,7 @@ export namespace SessionPrompt {
         processor,
         bypassAgentCheck,
         messages: msgs,
-        isolation,
+        isolation: Isolation.resolve(cfg.isolation, Instance.directory),
       })
 
       // Inject StructuredOutput tool if JSON schema mode enabled
@@ -1407,7 +1406,7 @@ export namespace SessionPrompt {
                 const args = { filePath: filepath }
                 const listCtx: Tool.Context = {
                   sessionID: input.sessionID,
-                  abort: new AbortController().signal,
+                  abort: AbortSignal.timeout(30_000),
                   agent: input.agent!,
                   messageID: info.id,
                   extra: { bypassCwdCheck: true },
@@ -1501,6 +1500,16 @@ export namespace SessionPrompt {
                   },
                 ]
               }
+            default:
+              return [
+                {
+                  messageID: info.id,
+                  sessionID: input.sessionID,
+                  type: "text" as const,
+                  synthetic: true,
+                  text: `Unsupported file protocol: ${url.protocol}`,
+                },
+              ]
           }
         }
 
@@ -1603,7 +1612,15 @@ export namespace SessionPrompt {
     // inserts with independent bus publishes. For messages with many
     // file attachments (screenshots, paste images), sequential awaits
     // added ~10-50ms per part.
-    await Promise.all(parts.map((part) => Session.updatePart(part)))
+    await Promise.all(
+      parts.map(async (part) => {
+        try {
+          await Session.updatePart(part)
+        } catch (e) {
+          log.warn("failed to persist part", { partID: part.id, err: e })
+        }
+      }),
+    )
 
     return {
       info,

@@ -9,6 +9,7 @@ import { Log } from "../util/log"
 import { lazy } from "@ax-code/util/lazy"
 import { Shell } from "@/shell/shell"
 import { Plugin } from "@/plugin"
+import { Env } from "@/util/env"
 import { PtyID } from "./schema"
 import { Effect, Layer, ServiceMap } from "effect"
 
@@ -183,7 +184,7 @@ export namespace Pty {
           const cwd = input.cwd || state.dir
           const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
           const env = {
-            ...process.env,
+            ...Env.sanitize(process.env),
             ...input.env,
             ...shellEnv.env,
             TERM: "xterm-256color",

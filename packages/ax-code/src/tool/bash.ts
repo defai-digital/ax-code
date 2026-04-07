@@ -240,11 +240,6 @@ export const BashTool = Tool.define("bash", async () => {
 
       const kill = () => Shell.killTree(proc, { exited: () => exited })
 
-      if (ctx.abort.aborted) {
-        aborted = true
-        await kill()
-      }
-
       const abortHandler = () => {
         aborted = true
         void kill()
@@ -274,6 +269,11 @@ export const BashTool = Tool.define("bash", async () => {
           cleanup()
           reject(error)
         })
+
+        if (ctx.abort.aborted) {
+          aborted = true
+          void kill()
+        }
       })
 
       const resultMetadata: string[] = []

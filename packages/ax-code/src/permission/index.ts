@@ -201,6 +201,15 @@ export namespace Permission {
 
         if (!needsAsk) return
 
+        // Autonomous mode: auto-approve all non-interactive permissions
+        // without creating a Deferred or waiting for TUI reply.
+        // INTERACTIVE_ONLY permissions (isolation_escalation) are never
+        // auto-approved — they always require human confirmation.
+        if (process.env["AX_CODE_AUTONOMOUS"] === "true" && !INTERACTIVE_ONLY.has(request.permission)) {
+          log.info("autonomous auto-approve", { permission: request.permission, patterns: request.patterns })
+          return
+        }
+
         const id = request.id ?? PermissionID.ascending()
         const info: Request = {
           id,

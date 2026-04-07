@@ -1,6 +1,9 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
+import path from "path"
+import { Instance } from "../../project/instance"
+import { Filesystem } from "../../util/filesystem"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 
@@ -32,7 +35,17 @@ export const AutonomousRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const enabled = process.env["AX_CODE_AUTONOMOUS"] === "true"
+        // Check env var first (runtime override), then fall back to persisted config
+        if (process.env["AX_CODE_AUTONOMOUS"] !== undefined) {
+          return c.json({ enabled: process.env["AX_CODE_AUTONOMOUS"] === "true" })
+        }
+        const filepath = path.join(Instance.directory, "ax-code.json")
+        const config = await Filesystem.readText(filepath)
+          .then((t) => JSON.parse(t))
+          .catch(() => ({}))
+        const enabled = config?.autonomous !== false
+        // Cache in env var for subsequent reads and processor access
+        process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
         return c.json({ enabled })
       },
     )
@@ -40,7 +53,7 @@ export const AutonomousRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Set autonomous mode",
-        description: "Toggle autonomous mode on or off.",
+        description: "Toggle autonomous mode on or off. Persists to ax-code.json.",
         operationId: "autonomous.set",
         responses: {
           200: {
@@ -57,6 +70,18 @@ export const AutonomousRoutes = lazy(() =>
       async (c) => {
         const { enabled } = c.req.valid("json")
         process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
+        // Persist to ax-code.json so the setting survives restarts
+        const filepath = path.join(Instance.directory, "ax-code.json")
+        const existing = await Filesystem.readText(filepath)
+          .then((t) => {
+            const parsed = JSON.parse(t)
+            return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
+          })
+          .catch(() => ({}))
+        existing.autonomous = enabled
+        await Filesystem.writeJson(filepath, existing).catch((err) => {
+          log.warn("failed to persist autonomous config", { error: err instanceof Error ? err.message : String(err) })
+        })
         log.info("autonomous mode changed", { enabled })
         return c.json({ enabled })
       },

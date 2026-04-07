@@ -400,8 +400,10 @@ export namespace ACP {
                 }
 
                 if (part.tool === "todowrite") {
-                  const parsedTodos = z.array(Todo.Info).safeParse(JSON.parse(part.state.output))
-                  if (parsedTodos.success) {
+                  let parsed: unknown
+                  try { parsed = JSON.parse(part.state.output) } catch { /* skip malformed JSON */ }
+                  const parsedTodos = parsed !== undefined ? z.array(Todo.Info).safeParse(parsed) : undefined
+                  if (parsedTodos?.success) {
                     await this.connection
                       .sessionUpdate({
                         sessionId,
@@ -439,7 +441,7 @@ export namespace ACP {
                       .catch((error) => {
                         log.error("failed to send session update for todo", { error })
                       })
-                  } else {
+                  } else if (parsedTodos) {
                     log.error("failed to parse todo output", { error: parsedTodos.error })
                   }
                 }
@@ -937,8 +939,10 @@ export namespace ACP {
               }
 
               if (part.tool === "todowrite") {
-                const parsedTodos = z.array(Todo.Info).safeParse(JSON.parse(part.state.output))
-                if (parsedTodos.success) {
+                let parsed: unknown
+                try { parsed = JSON.parse(part.state.output) } catch { /* skip malformed JSON */ }
+                const parsedTodos = parsed !== undefined ? z.array(Todo.Info).safeParse(parsed) : undefined
+                if (parsedTodos?.success) {
                   await this.connection
                     .sessionUpdate({
                       sessionId,
@@ -958,7 +962,7 @@ export namespace ACP {
                     .catch((err) => {
                       log.error("failed to send session update for todo", { error: err })
                     })
-                } else {
+                } else if (parsedTodos) {
                   log.error("failed to parse todo output", { error: parsedTodos.error })
                 }
               }

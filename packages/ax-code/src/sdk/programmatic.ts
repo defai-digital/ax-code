@@ -346,7 +346,7 @@ function fromSdkTool(sdkTool: SdkTool): Tool.Info {
         if (typeof result === "string") {
           output = result
         } else if (result === undefined || result === null) {
-          output = String(result)
+          output = ""
         } else {
           try {
             output = JSON.stringify(result, null, 2)

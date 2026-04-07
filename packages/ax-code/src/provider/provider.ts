@@ -282,6 +282,7 @@ export namespace Provider {
       [providerID: string]: CustomDiscoverModels
     } = {}
     const sdk = new Map<string, SDK>()
+    const sdkPending = new Map<string, Promise<SDK>>()
 
     log.info("provider init started", { command: "provider.init", status: "started" })
 
@@ -538,6 +539,7 @@ export namespace Provider {
       models: languages,
       providers,
       sdk,
+      sdkPending,
       modelLoaders,
       varsLoaders,
     }
@@ -621,107 +623,123 @@ export namespace Provider {
       const existing = s.sdk.get(key)
       if (existing) return existing
 
-      const customFetch = options["fetch"]
-      const chunkTimeout = options["chunkTimeout"]
-      delete options["chunkTimeout"]
+      // Deduplicate concurrent SDK instantiation for the same key.
+      // Without this, parallel calls race through the cache-miss path
+      // and create duplicate SDK instances (and duplicate npm installs).
+      const pending = s.sdkPending.get(key)
+      if (pending) return pending
 
-      options["fetch"] = async (input: string | Request | URL, init?: BunFetchRequestInit) => {
-        // Preserve custom fetch if it exists, wrap it with timeout logic
-        const fetchFn = customFetch ?? fetch
-        const opts = init ?? {}
-        const chunkAbortCtl = typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
-        const signals: AbortSignal[] = []
+      const promise = (async (): Promise<SDK> => {
+        const customFetch = options["fetch"]
+        const chunkTimeout = options["chunkTimeout"]
+        delete options["chunkTimeout"]
 
-        if (opts.signal) signals.push(opts.signal)
-        if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
-        if (options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false)
-          signals.push(AbortSignal.timeout(options["timeout"]))
+        options["fetch"] = async (input: string | Request | URL, init?: BunFetchRequestInit) => {
+          // Preserve custom fetch if it exists, wrap it with timeout logic
+          const fetchFn = customFetch ?? fetch
+          const opts = init ?? {}
+          const chunkAbortCtl =
+            typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
+          const signals: AbortSignal[] = []
 
-        const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
-        if (combined) opts.signal = combined
+          if (opts.signal) signals.push(opts.signal)
+          if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
+          if (options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false)
+            signals.push(AbortSignal.timeout(options["timeout"]))
 
-        const res = await fetchFn(input, {
-          ...opts,
-          // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
-          timeout: false,
-        })
+          const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
+          if (combined) opts.signal = combined
 
-        if (!chunkAbortCtl) return res
-        return wrapSSE(res, chunkTimeout, chunkAbortCtl)
-      }
+          const res = await fetchFn(input, {
+            ...opts,
+            // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
+            timeout: false,
+          })
 
-      const bundledFn = BUNDLED_PROVIDERS[model.api.npm]
-      if (bundledFn) {
-        log.info("using bundled provider", { providerID: model.providerID, pkg: model.api.npm })
-        const loaded = bundledFn({
-          name: model.providerID,
-          ...options,
-        })
-        s.sdk.set(key, loaded)
-        return loaded
-      }
+          if (!chunkAbortCtl) return res
+          return wrapSSE(res, chunkTimeout, chunkAbortCtl)
+        }
 
-      // Security: only allow known-safe scoped packages for dynamic install.
-      // Prevents supply-chain attacks where compromised remote data (ModelsDev)
-      // or a malicious config could trigger installation of arbitrary packages.
-      const NPM_ALLOWLIST = /^@ai-sdk\//
-      if (!model.api.npm.startsWith("file://") && !NPM_ALLOWLIST.test(model.api.npm)) {
-        throw new InitError(
-          { providerID: model.providerID },
-          {
-            cause: new Error(
-              `Package '${model.api.npm}' is not an allowed provider SDK. Only @ai-sdk/* packages are permitted.`,
-            ),
-          },
-        )
-      }
+        const bundledFn = BUNDLED_PROVIDERS[model.api.npm]
+        if (bundledFn) {
+          log.info("using bundled provider", { providerID: model.providerID, pkg: model.api.npm })
+          const loaded = bundledFn({
+            name: model.providerID,
+            ...options,
+          })
+          s.sdk.set(key, loaded)
+          return loaded
+        }
 
-      let installedPath: string
-      if (!model.api.npm.startsWith("file://")) {
-        installedPath = await BunProc.install(model.api.npm, "latest")
-      } else {
-        // Restrict file:// imports to a small set of trusted directories.
-        // Previously the `if (!npm.startsWith("file://"))` allowlist check
-        // above completely bypassed the allowlist for file:// URLs,
-        // letting a compromised AX_CODE_MODELS_URL or a malicious config
-        // entry trigger `import()` against an arbitrary path on disk —
-        // i.e. RCE via file write + config injection.
-        const filePath = model.api.npm.replace(/^file:\/\//, "")
-        const resolved = path.resolve(filePath)
-        const allowedDirs = [Instance.worktree, Global.Path.data, Global.Path.cache, Global.Path.config]
-        const inAllowed = allowedDirs.some((dir) => {
-          const normalizedDir = path.resolve(dir) + path.sep
-          return (resolved + path.sep).startsWith(normalizedDir)
-        })
-        if (!inAllowed) {
+        // Security: only allow known-safe scoped packages for dynamic install.
+        // Prevents supply-chain attacks where compromised remote data (ModelsDev)
+        // or a malicious config could trigger installation of arbitrary packages.
+        const NPM_ALLOWLIST = /^@ai-sdk\//
+        if (!model.api.npm.startsWith("file://") && !NPM_ALLOWLIST.test(model.api.npm)) {
           throw new InitError(
             { providerID: model.providerID },
             {
               cause: new Error(
-                `file:// path outside allowed directories (worktree, data, cache, config): ${model.api.npm}`,
+                `Package '${model.api.npm}' is not an allowed provider SDK. Only @ai-sdk/* packages are permitted.`,
               ),
             },
           )
         }
-        log.info("loading local provider", { pkg: model.api.npm })
-        installedPath = model.api.npm
+
+        let installedPath: string
+        if (!model.api.npm.startsWith("file://")) {
+          installedPath = await BunProc.install(model.api.npm, "latest")
+        } else {
+          // Restrict file:// imports to a small set of trusted directories.
+          // Previously the `if (!npm.startsWith("file://"))` allowlist check
+          // above completely bypassed the allowlist for file:// URLs,
+          // letting a compromised AX_CODE_MODELS_URL or a malicious config
+          // entry trigger `import()` against an arbitrary path on disk —
+          // i.e. RCE via file write + config injection.
+          const filePath = model.api.npm.replace(/^file:\/\//, "")
+          const resolved = path.resolve(filePath)
+          const allowedDirs = [Instance.worktree, Global.Path.data, Global.Path.cache, Global.Path.config]
+          const inAllowed = allowedDirs.some((dir) => {
+            const normalizedDir = path.resolve(dir) + path.sep
+            return (resolved + path.sep).startsWith(normalizedDir)
+          })
+          if (!inAllowed) {
+            throw new InitError(
+              { providerID: model.providerID },
+              {
+                cause: new Error(
+                  `file:// path outside allowed directories (worktree, data, cache, config): ${model.api.npm}`,
+                ),
+              },
+            )
+          }
+          log.info("loading local provider", { pkg: model.api.npm })
+          installedPath = model.api.npm
+        }
+
+        const mod = await import(installedPath)
+
+        const createKey = Object.keys(mod).find((key) => key.startsWith("create"))
+        if (!createKey)
+          throw new InitError(
+            { providerID: model.providerID },
+            { cause: new Error(`No 'create*' export found in package ${model.api.npm}`) },
+          )
+        const fn = mod[createKey]
+        const loaded = fn({
+          name: model.providerID,
+          ...options,
+        })
+        s.sdk.set(key, loaded)
+        return loaded as SDK
+      })()
+
+      s.sdkPending.set(key, promise)
+      try {
+        return await promise
+      } finally {
+        s.sdkPending.delete(key)
       }
-
-      const mod = await import(installedPath)
-
-      const createKey = Object.keys(mod).find((key) => key.startsWith("create"))
-      if (!createKey)
-        throw new InitError(
-          { providerID: model.providerID },
-          { cause: new Error(`No 'create*' export found in package ${model.api.npm}`) },
-        )
-      const fn = mod[createKey]
-      const loaded = fn({
-        name: model.providerID,
-        ...options,
-      })
-      s.sdk.set(key, loaded)
-      return loaded as SDK
     } catch (e) {
       throw new InitError({ providerID: model.providerID }, { cause: e })
     }

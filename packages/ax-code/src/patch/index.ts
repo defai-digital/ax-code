@@ -470,7 +470,9 @@ export namespace Patch {
       try {
         const native = _require("@ax-code/diff")
         return native.seekSequence(lines, pattern, startIndex, eof)
-      } catch {}
+      } catch (e) {
+        log.warn("native diff seekSequence failed, using JS fallback", { error: e })
+      }
     }
 
     if (pattern.length === 0) return -1
@@ -503,7 +505,9 @@ export namespace Patch {
       try {
         const native = _require("@ax-code/diff")
         return native.unifiedDiff("file", oldContent, newContent)
-      } catch {}
+      } catch (e) {
+        log.warn("native diff unifiedDiff failed, using JS fallback", { error: e })
+      }
     }
 
     const oldLines = oldContent.split("\n")

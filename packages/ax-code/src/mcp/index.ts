@@ -755,10 +755,11 @@ export namespace MCP {
       }
       return result
     })()
+    const currentPromise = toolsPromise
     try {
-      return await toolsPromise
+      return await currentPromise
     } finally {
-      toolsPromise = undefined
+      if (toolsPromise === currentPromise) toolsPromise = undefined
     }
   }
 

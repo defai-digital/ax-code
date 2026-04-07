@@ -77,7 +77,11 @@ export namespace IndexLock {
   async function readLockBody(target: string): Promise<LockBody | undefined> {
     const text = await fs.readFile(target, "utf-8").catch(() => undefined)
     if (text === undefined) return undefined
-    return JSON.parse(text) as LockBody
+    try {
+      return JSON.parse(text) as LockBody
+    } catch {
+      return undefined
+    }
   }
 
   // Returns true if the lockfile was stolen (i.e. the previous holder

@@ -181,12 +181,17 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   const depth = options?.depth ?? DEFAULT_DEPTH
 
   // Scan all sections in parallel
-  const [structure, readme, config, patterns] = await Promise.all([
+  const results = await Promise.allSettled([
     scanStructure(root, depth),
     scanReadme(root),
     scanConfig(root),
     scanPatterns(root),
   ])
+  const empty: MemorySection = { content: "", tokens: 0 }
+  const structure = results[0].status === "fulfilled" ? results[0].value : empty
+  const readme = results[1].status === "fulfilled" ? results[1].value : empty
+  const config = results[2].status === "fulfilled" ? results[2].value : empty
+  const patterns = results[3].status === "fulfilled" ? results[3].value : empty
 
   // Calculate token budget per section
   let totalTokens = structure.tokens + readme.tokens + config.tokens + patterns.tokens

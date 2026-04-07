@@ -56,7 +56,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
             arguments: {
               query: params.query,
               type: params.type || "auto",
-              numResults: params.numResults || EXA_DEFAULT_NUM_RESULTS,
+              numResults: params.numResults ?? EXA_DEFAULT_NUM_RESULTS,
               livecrawl: params.livecrawl || "fallback",
               contextMaxCharacters: params.contextMaxCharacters,
             },

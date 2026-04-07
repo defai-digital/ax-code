@@ -11,7 +11,7 @@ export namespace Editor {
     const editor = process.env["VISUAL"] || process.env["EDITOR"]
     if (!editor) return
 
-    const filepath = join(tmpdir(), `${Date.now()}.md`)
+    const filepath = join(tmpdir(), `${Date.now()}-${crypto.randomUUID()}.md`)
     await using _ = defer(async () => rm(filepath, { force: true }))
 
     await Filesystem.write(filepath, opts.value)

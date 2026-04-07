@@ -59,10 +59,9 @@ export class CliLanguageModel implements LanguageModelV2 {
         reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
       }, CLI_TIMEOUT_MS),
     )
-    const [code, stdout, stderr] = await Promise.race([
-      Promise.all([proc.exited, buffer(proc.stdout!), buffer(proc.stderr!)]),
-      timeout,
-    ])
+    const result = Promise.all([proc.exited, buffer(proc.stdout!), buffer(proc.stderr!)])
+    result.catch(() => {})
+    const [code, stdout, stderr] = await Promise.race([result, timeout])
     if (code !== 0 && stdout.length === 0) {
       throw new Error(`CLI exited with code ${code}: ${stderr.toString().slice(0, 500)}`)
     }

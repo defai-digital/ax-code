@@ -133,6 +133,12 @@ export namespace Question {
         questions: Info[]
         tool?: { messageID: MessageID; callID: string }
       }) {
+        // Autonomous mode: auto-answer by picking the first option for each question
+        if (process.env["AX_CODE_AUTONOMOUS"] === "true") {
+          log.info("autonomous auto-answer", { questions: input.questions.length })
+          return input.questions.map((q) => (q.options.length > 0 ? [q.options[0].label] : []))
+        }
+
         const pending = (yield* InstanceState.get(state)).pending
         const id = QuestionID.ascending()
         log.info("asking", { id, questions: input.questions.length })

@@ -111,10 +111,10 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
  */
 export async function custom(cmd: string, cwd: string, timeout = 60_000): Promise<VerificationResult> {
   const start = Date.now()
-  const parts = cmd.split(" ")
+  const shell = process.platform === "win32" ? ["cmd", "/c", cmd] : ["sh", "-c", cmd]
 
   try {
-    const proc = Bun.spawn(parts, {
+    const proc = Bun.spawn(shell, {
       cwd,
       stdout: "pipe",
       stderr: "pipe",

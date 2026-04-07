@@ -278,7 +278,17 @@ export const GithubRunCommand = cmd({
     await bootstrap(process.cwd(), async () => {
       const isMock = !!(args.token && args.event)
 
-      const context = isMock ? (JSON.parse(args.event!) as Context) : github.context
+      let context: Context
+      if (isMock) {
+        try {
+          context = JSON.parse(args.event!) as Context
+        } catch {
+          core.setFailed(`Failed to parse --event as JSON: ${args.event}`)
+          process.exit(1)
+        }
+      } else {
+        context = github.context
+      }
       if (!SUPPORTED_EVENTS.includes(context.eventName as (typeof SUPPORTED_EVENTS)[number])) {
         core.setFailed(`Unsupported event type: ${context.eventName}`)
         process.exit(1)
