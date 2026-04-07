@@ -13,6 +13,9 @@
 
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from "crypto"
 import os from "os"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "auth/encryption" })
 
 const ALGORITHM = "aes-256-gcm"
 const KEY_LENGTH = 32 // 256 bits
@@ -22,6 +25,11 @@ const AUTH_TAG_LENGTH = 16 // 128 bits
 const PBKDF2_ITERATIONS = 600_000 // OWASP 2024 recommendation
 const PBKDF2_LEGACY_ITERATIONS = 100_000 // backward compat
 const ENCRYPTION_VERSION = 1
+
+// Sentinel value encrypted alongside real keys. On startup we try to
+// decrypt this first — if it fails, we know the crypto runtime changed
+// (e.g. compiled binary ↔ bun source) and all stored keys are stale.
+const CANARY_PLAINTEXT = "ax-code-canary-v1"
 
 export interface EncryptedValue {
   encrypted: string // base64 ciphertext
@@ -85,11 +93,10 @@ export function decrypt(value: EncryptedValue): string {
   // Try current iterations first
   try {
     return decryptWith(encrypted, iv, salt, tag, PBKDF2_ITERATIONS)
-  } catch (err) {
+  } catch {
     // Fall back to legacy iterations. If this also fails, the original
     // legacy error propagates to the caller (no swallow).
-    // eslint-disable-next-line no-console
-    console.debug("auth/encryption: decrypt with current iterations failed, retrying with legacy", { err })
+    log.debug("current iterations failed, retrying with legacy")
     return decryptWith(encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
   }
 }
@@ -154,8 +161,9 @@ export function decryptField<T extends Record<string, unknown>>(obj: T, field: s
     }
     return { ...obj, [field]: plaintext }
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(`auth/encryption: failed to decrypt field "${field}"`, err)
+    log.warn(`failed to decrypt field "${field}" — credential may need to be re-entered`, {
+      err: err instanceof Error ? err.message : String(err),
+    })
     return { ...obj, [field]: undefined }
   }
 }
@@ -168,6 +176,28 @@ export function test(): boolean {
     const plain = "test-api-key-12345"
     const enc = encrypt(plain)
     return decrypt(enc) === plain
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Create a canary ciphertext that can be stored alongside real keys.
+ * If the canary decrypts successfully on startup, the crypto runtime
+ * is compatible and all stored keys should be decryptable.
+ */
+export function createCanary(): EncryptedValue {
+  return encrypt(CANARY_PLAINTEXT)
+}
+
+/**
+ * Verify a stored canary. Returns true if the current crypto runtime
+ * can decrypt keys that were encrypted when the canary was created.
+ */
+export function verifyCanary(canary: unknown): boolean {
+  if (!isEncrypted(canary)) return false
+  try {
+    return decrypt(canary) === CANARY_PLAINTEXT
   } catch {
     return false
   }

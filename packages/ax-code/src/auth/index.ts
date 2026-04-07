@@ -4,7 +4,10 @@ import { makeRunPromise } from "@/effect/run-service"
 import { zod } from "@/util/effect-zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
-import { encryptField, decryptField } from "./encryption"
+import { encryptField, decryptField, createCanary, verifyCanary } from "./encryption"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "auth" })
 
 export const OAUTH_DUMMY_KEY = "ax-code-oauth-dummy-key"
 
@@ -87,24 +90,63 @@ export namespace Auth {
       const all = Effect.fn("Auth.all")(() =>
         readRaw().pipe(
           Effect.flatMap((data) => {
+            // Fast-path: if a canary exists and fails verification, the crypto
+            // runtime changed (e.g. compiled binary ↔ bun source upgrade).
+            // All encrypted keys are unrecoverable — skip per-key decryption
+            // attempts and tell the user which providers need re-entry.
+            if (data.__canary && !verifyCanary(data.__canary)) {
+              const stale = Object.keys(data).filter((k) => k !== "__canary")
+              if (stale.length) {
+                log.warn(
+                  `encryption runtime changed — ${stale.length} provider key(s) need re-entry: ${stale.join(", ")}. ` +
+                    `Run "ax-code providers" to reconnect.`,
+                )
+              }
+              return Effect.succeed({} as Record<string, Info>)
+            }
+
             let migrate = false
-            const entries = Record.filterMap(data, (value) => {
+            let canaryMissing = !data.__canary
+            const { __canary: _, ...providerData } = data
+            const entries = Record.filterMap(providerData, (value) => {
               const decrypted = decryptEntry(value)
               if (needsReEncrypt(decrypted)) migrate = true
               return Result.fromOption(decode(decrypted), () => undefined)
             })
-            if (migrate) {
-              // Re-encrypt legacy entries with proper 32-byte salt
-              const updated = { ...data }
+
+            // Identify providers whose keys failed decryption (field set to undefined)
+            const failed: string[] = []
+            for (const [key, value] of Object.entries(providerData)) {
+              const decrypted = decryptEntry(value)
+              if (decrypted && typeof decrypted === "object" && "type" in decrypted) {
+                const d = decrypted as Record<string, unknown>
+                const sensitive = d.type === "api" ? ["key"] : d.type === "wellknown" ? ["key", "token"] : d.type === "oauth" ? ["access", "refresh"] : []
+                if (sensitive.some((f) => d[f] === undefined) && !(key in entries)) {
+                  failed.push(key)
+                }
+              }
+            }
+            if (failed.length) {
+              log.warn(
+                `${failed.length} provider key(s) could not be decrypted: ${failed.join(", ")}. ` +
+                  `Run "ax-code providers" to re-enter credentials.`,
+              )
+            }
+
+            if (migrate || canaryMissing) {
+              // Re-encrypt legacy entries with proper 32-byte salt,
+              // and write a canary so future upgrades can detect
+              // crypto runtime changes without attempting decryption.
+              const updated: Record<string, unknown> = { __canary: createCanary() }
               for (const [key, info] of Object.entries(entries)) {
-                updated[key] = encryptEntry(info)
+                updated[key] = encryptEntry(info as Info)
               }
               return Effect.tryPromise({
                 try: () => Filesystem.writeJson(file, updated, 0o600),
-                catch: fail("Failed to migrate legacy auth entries"),
-              }).pipe(Effect.map(() => entries))
+                catch: fail("Failed to migrate auth entries"),
+              }).pipe(Effect.map(() => entries as Record<string, Info>))
             }
-            return Effect.succeed(entries)
+            return Effect.succeed(entries as Record<string, Info>)
           }),
         ),
       )
@@ -119,6 +161,10 @@ export namespace Auth {
         const data = yield* readRaw()
         if (norm !== key) delete data[key]
         delete data[norm + "/"]
+        // Refresh canary on every write so it stays in sync with the
+        // current crypto runtime — this is what makes upgrades seamless
+        // when the user re-enters even a single key.
+        if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
 
         yield* Effect.tryPromise({
           try: () => Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600),
