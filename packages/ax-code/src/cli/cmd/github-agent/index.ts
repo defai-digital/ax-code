@@ -48,7 +48,7 @@ import {
   SUPPORTED_EVENTS,
 } from "./types"
 
-import { parseGitHubRemote, extractResponseText, formatPromptTooLargeError } from "./types"
+import { parseGitHubRemote, extractResponseText, formatPromptTooLargeError, checkTruncation } from "./types"
 export { parseGitHubRemote, extractResponseText, formatPromptTooLargeError }
 
 export const GithubCommand = cmd({
@@ -1270,8 +1270,10 @@ export const GithubRunCommand = cmd({
 
       async function fetchIssue() {
         console.log("Fetching prompt data for issue...")
-        const issueResult = await octoGraph<IssueQueryResponse>(
-          `
+        let issueResult: IssueQueryResponse
+        try {
+          issueResult = await octoGraph<IssueQueryResponse>(
+            `
 query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
@@ -1283,6 +1285,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
       createdAt
       state
       comments(first: 100) {
+        pageInfo { hasNextPage }
         nodes {
           id
           databaseId
@@ -1296,15 +1299,23 @@ query($owner: String!, $repo: String!, $number: Int!) {
     }
   }
 }`,
-          {
-            owner,
-            repo,
-            number: issueId,
-          },
-        )
+            {
+              owner,
+              repo,
+              number: issueId,
+            },
+          )
+        } catch (err) {
+          throw new Error(`Failed to fetch issue #${issueId}: ${err instanceof Error ? err.message : String(err)}`, { cause: err })
+        }
 
         const issue = issueResult.repository.issue
         if (!issue) throw new Error(`Issue #${issueId} not found`)
+
+        const truncated = checkTruncation(issue)
+        if (truncated.length > 0) {
+          console.warn(`Warning: Issue #${issueId} data truncated for: ${truncated.join(", ")}`)
+        }
 
         return issue
       }
@@ -1341,8 +1352,10 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
       async function fetchPR() {
         console.log("Fetching prompt data for PR...")
-        const prResult = await octoGraph<PullRequestQueryResponse>(
-          `
+        let prResult: PullRequestQueryResponse
+        try {
+          prResult = await octoGraph<PullRequestQueryResponse>(
+            `
 query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
@@ -1366,6 +1379,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
       }
       commits(first: 100) {
         totalCount
+        pageInfo { hasNextPage }
         nodes {
           commit {
             oid
@@ -1378,6 +1392,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         }
       }
       files(first: 100) {
+        pageInfo { hasNextPage }
         nodes {
           path
           additions
@@ -1386,6 +1401,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         }
       }
       comments(first: 100) {
+        pageInfo { hasNextPage }
         nodes {
           id
           databaseId
@@ -1397,6 +1413,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         }
       }
       reviews(first: 100) {
+        pageInfo { hasNextPage }
         nodes {
           id
           databaseId
@@ -1407,6 +1424,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
           state
           submittedAt
           comments(first: 100) {
+            pageInfo { hasNextPage }
             nodes {
               id
               databaseId
@@ -1424,15 +1442,23 @@ query($owner: String!, $repo: String!, $number: Int!) {
     }
   }
 }`,
-          {
-            owner,
-            repo,
-            number: issueId,
-          },
-        )
+            {
+              owner,
+              repo,
+              number: issueId,
+            },
+          )
+        } catch (err) {
+          throw new Error(`Failed to fetch PR #${issueId}: ${err instanceof Error ? err.message : String(err)}`, { cause: err })
+        }
 
         const pr = prResult.repository.pullRequest
         if (!pr) throw new Error(`PR #${issueId} not found`)
+
+        const truncated = checkTruncation(pr)
+        if (truncated.length > 0) {
+          console.warn(`Warning: PR #${issueId} data truncated for: ${truncated.join(", ")}`)
+        }
 
         return pr
       }

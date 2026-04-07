@@ -7,6 +7,7 @@ catalog:
   "@effect/platform-node": "4.0.0-beta.35"
   "@hono/zod-validator": "0.4.2"
   "@kobalte/core": "0.13.11"
+  "@octokit/graphql": "9.0.2"
   "@octokit/rest": "22.0.0"
   "@openauthjs/openauth": "0.0.0-20250322224806"
   "@pierre/diffs": "1.1.0-beta.18"

@@ -1,3 +1,8 @@
+// DEPRECATED: This file is the legacy entry point for local development.
+// Production GitHub Actions use `ax-code github run` via action.yml.
+// The canonical implementation is in packages/ax-code/src/cli/cmd/github-agent/.
+// See action.yml for the production code path.
+
 import { $ } from "bun"
 import path from "node:path"
 import { Octokit } from "@octokit/rest"

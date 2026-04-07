@@ -34,6 +34,10 @@ export type GitHubFile = {
   changeType: string
 }
 
+export type PageInfo = {
+  hasNextPage: boolean
+}
+
 export type GitHubReview = {
   id: string
   databaseId: string
@@ -42,6 +46,7 @@ export type GitHubReview = {
   state: string
   submittedAt: string
   comments: {
+    pageInfo?: PageInfo
     nodes: GitHubReviewComment[]
   }
 }
@@ -65,17 +70,21 @@ export type GitHubPullRequest = {
   }
   commits: {
     totalCount: number
+    pageInfo?: PageInfo
     nodes: Array<{
       commit: GitHubCommit
     }>
   }
   files: {
+    pageInfo?: PageInfo
     nodes: GitHubFile[]
   }
   comments: {
+    pageInfo?: PageInfo
     nodes: GitHubComment[]
   }
   reviews: {
+    pageInfo?: PageInfo
     nodes: GitHubReview[]
   }
 }
@@ -87,8 +96,30 @@ export type GitHubIssue = {
   createdAt: string
   state: string
   comments: {
+    pageInfo?: PageInfo
     nodes: GitHubComment[]
   }
+}
+
+/** Check all connection fields for truncation and return warnings. */
+export function checkTruncation(data: GitHubPullRequest | GitHubIssue): string[] {
+  const warnings: string[] = []
+  if (data.comments?.pageInfo?.hasNextPage) {
+    warnings.push("comments (>100)")
+  }
+  if ("commits" in data) {
+    const pr = data as GitHubPullRequest
+    if (pr.commits?.pageInfo?.hasNextPage) warnings.push("commits (>100)")
+    if (pr.files?.pageInfo?.hasNextPage) warnings.push("files (>100)")
+    if (pr.reviews?.pageInfo?.hasNextPage) warnings.push("reviews (>100)")
+    for (const review of pr.reviews?.nodes ?? []) {
+      if (review.comments?.pageInfo?.hasNextPage) {
+        warnings.push(`review comments in review by ${review.author?.login ?? "unknown"} (>100)`)
+        break
+      }
+    }
+  }
+  return warnings
 }
 
 export type PullRequestQueryResponse = {
