@@ -136,21 +136,10 @@ export namespace FileWatcher {
                 })
               }).pipe(
                 Effect.timeout(SUBSCRIBE_TIMEOUT_MS),
-                Effect.catchCause((cause) => {
-                  log.error("native watcher failed, falling back to polling", {
-                    dir,
-                    cause: Cause.pretty(cause),
-                  })
-                  return Effect.void
-                }),
               )
             }
 
-            const subscribe = (dir: string, ignore: string[]) => {
-              // Try native watcher first (< 0.1% CPU vs ~2-5% for polling)
-              if (Flag.AX_CODE_NATIVE_FS) {
-                return subscribeNative(dir, ignore)
-              }
+            const subscribePoll = (dir: string, ignore: string[]) => {
               return Effect.tryPromise(async () => {
                 let prev = await snapshot(dir, ignore)
                 let busy = false
@@ -191,6 +180,16 @@ export namespace FileWatcher {
                   return Effect.void
                 }),
               )
+            }
+
+            // Try native watcher first, fall back to polling on failure
+            const subscribe = (dir: string, ignore: string[]) => {
+              if (Flag.AX_CODE_NATIVE_FS) {
+                return subscribeNative(dir, ignore).pipe(
+                  Effect.catchCause(() => subscribePoll(dir, ignore)),
+                )
+              }
+              return subscribePoll(dir, ignore)
             }
 
             const cfg = yield* Effect.promise(() => Config.get())
