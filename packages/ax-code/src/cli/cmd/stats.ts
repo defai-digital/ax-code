@@ -233,9 +233,11 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
       }
     })
 
-    const batchResults = await Promise.all(batchPromises)
+    const settled = await Promise.allSettled(batchPromises)
 
-    for (const result of batchResults) {
+    for (const entry of settled) {
+      if (entry.status !== "fulfilled") continue
+      const result = entry.value
       earliestTime = Math.min(earliestTime, result.earliestTime)
       latestTime = Math.max(latestTime, result.latestTime)
       sessionTotalTokens.push(result.sessionTotalTokens)

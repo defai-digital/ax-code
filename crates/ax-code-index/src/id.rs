@@ -70,9 +70,9 @@ pub fn ascending(prefix_name: &str) -> Result<String, String> {
     break (current, c);
   };
 
-  // BUG-275: Use bit-shift instead of wrapping_mul to avoid overflow;
-  // mask to 48 bits so it fits in 6 bytes of hex
-  let now = (((ts as u64) << 12) | (cnt as u64)) & 0xFFFF_FFFF_FFFF;
+  // BUG-028: Reduced shift from 12 to 8 bits to prevent 48-bit overflow.
+  // 40 bits for timestamp (~34,800 years of ms) + 8 bits for counter (256/ms).
+  let now = (((ts as u64) << 8) | ((cnt as u64) & 0xFF)) & 0xFFFF_FFFF_FFFF;
 
   let mut time_bytes = [0u8; 6];
   for i in 0..6 {
@@ -117,6 +117,16 @@ mod tests {
     let id1 = ascending("code_node").unwrap();
     let id2 = ascending("code_node").unwrap();
     assert!(id2 > id1, "IDs should be ascending: {} vs {}", id1, id2);
+  }
+
+  #[test]
+  fn test_ascending_cross_millisecond() {
+    let id1 = ascending("code_node").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    let id2 = ascending("code_node").unwrap();
+    let hex1 = &id1[4..16];
+    let hex2 = &id2[4..16];
+    assert!(hex2 > hex1, "Cross-ms IDs should sort ascending: {} vs {}", hex1, hex2);
   }
 
   #[test]

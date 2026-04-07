@@ -4,6 +4,7 @@ import { Instance } from "../project/instance"
 import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
+import { nativeReadFilesBatch, nativeDetectSecurity } from "./native-scan"
 
 // detect-security — AST-lite scanner for common security anti-patterns.
 //
@@ -237,8 +238,9 @@ async function scanFile(
   file: string,
   enabledPatterns: Set<DebugEngine.SecurityPattern>,
   maxPerFile: number,
+  preread?: string,
 ): Promise<DebugEngine.SecurityFinding[]> {
-  const content = await fs.readFile(file, "utf8").catch(() => "")
+  const content = preread ?? await fs.readFile(file, "utf8").catch(() => "")
   if (!content) return []
 
   const lines = content.split("\n")
@@ -279,10 +281,31 @@ export async function detectSecurityImpl(
   ]
   const enabledPatterns = new Set(patterns)
   const include = input.include ?? DEFAULT_INCLUDE
+  const cwd = Instance.directory
+
+  // Native fast-path: run entire detection in Rust (walk + read + regex in parallel)
+  if (!input.files) {
+    const native = nativeDetectSecurity({ cwd, include, patterns, maxFiles, maxPerFile, excludeTests })
+    if (native) {
+      return {
+        findings: native.findings.map((f) => ({
+          file: path.join(cwd, f.file),
+          line: f.line,
+          pattern: f.pattern as DebugEngine.SecurityPattern,
+          severity: f.severity as DebugEngine.SecurityFinding["severity"],
+          description: f.description,
+          userControlled: f.userControlled,
+        })),
+        filesScanned: native.filesScanned,
+        truncated: native.truncated,
+        explain: DebugEngine.buildExplain("detect-security", [], native.heuristics),
+      }
+    }
+  }
+
+  // JS fallback
   const heuristics: string[] = [`patterns=${patterns.join(",")}`]
   if (excludeTests) heuristics.push("exclude-tests")
-
-  const cwd = Instance.directory
 
   let allFiles: string[]
   if (input.files && input.files.length > 0) {
@@ -312,12 +335,24 @@ export async function detectSecurityImpl(
   const truncated = uniqueFiles.length > maxFiles
   if (truncated) heuristics.push("file-cap-hit")
 
+  // Native fast-path: batch-read all files in parallel via Rust addon
+  const preread = nativeReadFilesBatch(filesToScan)
+  if (preread) heuristics.push("native-batch-read")
+
   const CONCURRENCY = 8
   const findings: DebugEngine.SecurityFinding[] = []
-  for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
-    const batch = filesToScan.slice(i, i + CONCURRENCY)
-    const results = await Promise.all(batch.map((f) => scanFile(f, enabledPatterns, maxPerFile)))
-    for (const r of results) findings.push(...r)
+  if (preread) {
+    for (const f of filesToScan) {
+      const content = preread.get(f)
+      if (!content) continue
+      findings.push(...await scanFile(f, enabledPatterns, maxPerFile, content))
+    }
+  } else {
+    for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
+      const batch = filesToScan.slice(i, i + CONCURRENCY)
+      const results = await Promise.all(batch.map((f) => scanFile(f, enabledPatterns, maxPerFile)))
+      for (const r of results) findings.push(...r)
+    }
   }
 
   const severityRank: Record<DebugEngine.SecurityFinding["severity"], number> = {

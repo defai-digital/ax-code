@@ -1,6 +1,7 @@
 import { sep } from "node:path"
 import { Glob } from "../util/glob"
 import { Flag } from "../flag/flag"
+import { Log } from "../util/log"
 import { createRequire } from "node:module"
 const _require = createRequire(import.meta.url)
 
@@ -71,7 +72,9 @@ export namespace FileIgnore {
       try {
         const native = _require("@ax-code/fs")
         return native.isIgnored(filepath, JSON.stringify(opts?.extra ?? []))
-      } catch {}
+      } catch (e) {
+        Log.Default.warn("native FS addon failed, falling back to JS", { err: e })
+      }
     }
 
     for (const pattern of opts?.whitelist || []) {

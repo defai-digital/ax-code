@@ -18,6 +18,8 @@ globset = { workspace = true }
 grep-matcher = { workspace = true }
 grep-regex = { workspace = true }
 grep-searcher = { workspace = true }
+rayon = { workspace = true }
+regex = "1"
 notify = { workspace = true }
 
 [build-dependencies]

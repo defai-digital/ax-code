@@ -742,7 +742,11 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
       // otherwise the first prompt can race against a pending
       // registration and the LLM won't see the user's tools.
       if (opts.tools?.length) {
-        await Promise.allSettled(opts.tools.map((t) => ToolRegistry.register(fromSdkTool(t))))
+        const results = await Promise.allSettled(opts.tools.map((t) => ToolRegistry.register(fromSdkTool(t))))
+        for (const [i, r] of results.entries()) {
+          if (r.status === "rejected")
+            Log.Default.warn("failed to register SDK tool", { tool: opts.tools[i].name, err: r.reason })
+        }
       }
 
       sdk = createInProcessClient(opts.directory)

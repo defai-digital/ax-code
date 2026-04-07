@@ -57,6 +57,7 @@ export class CliLanguageModel implements LanguageModelV2 {
     const timeout = new Promise<never>((_, reject) =>
       timeoutTimer = setTimeout(() => {
         proc.kill("SIGTERM")
+        setTimeout(() => proc.kill("SIGKILL"), 5000).unref()
         reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
       }, CLI_TIMEOUT_MS),
     )

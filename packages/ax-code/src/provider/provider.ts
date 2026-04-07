@@ -823,8 +823,8 @@ export namespace Provider {
         throw e
       }
     })()
-
     s.modelPending.set(key, promise)
+
     try {
       return await promise
     } finally {

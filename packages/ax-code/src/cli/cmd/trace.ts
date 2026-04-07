@@ -115,7 +115,7 @@ export const TraceCommand: CommandModule = {
             else if (key === "command") entry.command = val
             else if (key === "toolName") entry.toolName = val
             else if (key === "status") entry.status = val
-            else if (key === "durationMs") entry.durationMs = parseInt(val)
+            else if (key === "durationMs") entry.durationMs = parseInt(val, 10)
             else if (key === "errorCode") entry.errorCode = val
             else if (key === "sessionId") entry.sessionId = val
             else entry[key] = val

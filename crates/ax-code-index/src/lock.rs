@@ -81,10 +81,10 @@ impl AdvisoryLock {
 
     #[cfg(not(any(unix, windows)))]
     {
-      // Fallback for other platforms: best-effort
-      self.file = Some(file);
-      self.acquired = true;
-      Ok(true)
+      // No locking support on this platform — return false so callers
+      // fall back to application-level locking instead of silently
+      // pretending exclusion holds.
+      Ok(false)
     }
   }
 
@@ -121,7 +121,10 @@ impl AdvisoryLock {
     #[cfg(unix)]
     if let Some(ref file) = self.file {
       let fd = file.as_raw_fd();
-      unsafe { libc::flock(fd, libc::LOCK_UN) };
+      let result = unsafe { libc::flock(fd, libc::LOCK_UN) };
+      if result != 0 {
+        eprintln!("WARNING: flock(LOCK_UN) failed: {}", std::io::Error::last_os_error());
+      }
     }
 
     #[cfg(windows)]
@@ -130,7 +133,10 @@ impl AdvisoryLock {
       use windows_sys::Win32::Foundation::HANDLE;
       let handle = file.as_raw_handle() as HANDLE;
       let mut overlapped = unsafe { std::mem::zeroed::<windows_sys::Win32::System::IO::OVERLAPPED>() };
-      unsafe { UnlockFileEx(handle, 0, 1, 0, &mut overlapped) };
+      let result = unsafe { UnlockFileEx(handle, 0, 1, 0, &mut overlapped) };
+      if result == 0 {
+        eprintln!("WARNING: UnlockFileEx failed: {}", std::io::Error::last_os_error());
+      }
     }
 
     self.file = None;

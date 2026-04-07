@@ -4,6 +4,7 @@ import { Instance } from "../project/instance"
 import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
+import { nativeReadFilesBatch, nativeDetectLifecycle } from "./native-scan"
 
 // detect-lifecycle — AST-lite scanner for resource lifecycle issues:
 // resources that are created but never cleaned up within the same
@@ -261,8 +262,9 @@ async function scanFile(
   file: string,
   enabledTypes: Set<DebugEngine.LifecycleResourceType>,
   maxPerFile: number,
+  preread?: string,
 ): Promise<DebugEngine.LifecycleFinding[]> {
-  const content = await fs.readFile(file, "utf8").catch(() => "")
+  const content = preread ?? await fs.readFile(file, "utf8").catch(() => "")
   if (!content) return []
 
   const findings: DebugEngine.LifecycleFinding[] = []
@@ -299,10 +301,32 @@ export async function detectLifecycleImpl(
   ]
   const enabledTypes = new Set(resourceTypes)
   const include = input.include ?? DEFAULT_INCLUDE
+  const cwd = Instance.directory
+
+  // Native fast-path: run entire detection in Rust
+  if (!input.files) {
+    const native = nativeDetectLifecycle({ cwd, include, patterns: resourceTypes, maxFiles, maxPerFile, excludeTests })
+    if (native) {
+      return {
+        findings: native.findings.map((f) => ({
+          file: path.join(cwd, f.file),
+          line: f.line,
+          resourceType: f.resourceType as DebugEngine.LifecycleResourceType,
+          pattern: f.pattern as DebugEngine.LifecyclePattern,
+          severity: f.severity as DebugEngine.LifecycleFinding["severity"],
+          description: f.description,
+          cleanupLocation: f.cleanupLocation,
+        })),
+        filesScanned: native.filesScanned,
+        truncated: native.truncated,
+        explain: DebugEngine.buildExplain("detect-lifecycle", [], native.heuristics),
+      }
+    }
+  }
+
+  // JS fallback
   const heuristics: string[] = [`resourceTypes=${resourceTypes.join(",")}`]
   if (excludeTests) heuristics.push("exclude-tests")
-
-  const cwd = Instance.directory
 
   let allFiles: string[]
   if (input.files && input.files.length > 0) {
@@ -332,12 +356,23 @@ export async function detectLifecycleImpl(
   const truncated = uniqueFiles.length > maxFiles
   if (truncated) heuristics.push("file-cap-hit")
 
+  const preread = nativeReadFilesBatch(filesToScan)
+  if (preread) heuristics.push("native-batch-read")
+
   const CONCURRENCY = 8
   const findings: DebugEngine.LifecycleFinding[] = []
-  for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
-    const batch = filesToScan.slice(i, i + CONCURRENCY)
-    const results = await Promise.all(batch.map((f) => scanFile(f, enabledTypes, maxPerFile)))
-    for (const r of results) findings.push(...r)
+  if (preread) {
+    for (const f of filesToScan) {
+      const content = preread.get(f)
+      if (!content) continue
+      findings.push(...await scanFile(f, enabledTypes, maxPerFile, content))
+    }
+  } else {
+    for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
+      const batch = filesToScan.slice(i, i + CONCURRENCY)
+      const results = await Promise.all(batch.map((f) => scanFile(f, enabledTypes, maxPerFile)))
+      for (const r of results) findings.push(...r)
+    }
   }
 
   // Sort: severity desc, then file, then line

@@ -4,6 +4,7 @@ import { Instance } from "../project/instance"
 import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
+import { nativeReadFilesBatch } from "./native-scan"
 
 // detect-races — AST-lite scanner for common race condition patterns
 // in async TypeScript code.
@@ -338,8 +339,9 @@ async function scanFile(
   file: string,
   enabledPatterns: Set<DebugEngine.RacePattern>,
   maxPerFile: number,
+  preread?: string,
 ): Promise<DebugEngine.RaceFinding[]> {
-  const content = await fs.readFile(file, "utf8").catch(() => "")
+  const content = preread ?? await fs.readFile(file, "utf8").catch(() => "")
   if (!content) return []
 
   // Quick check: skip files without async code
@@ -415,12 +417,23 @@ export async function detectRacesImpl(
   const truncated = uniqueFiles.length > maxFiles
   if (truncated) heuristics.push("file-cap-hit")
 
+  const preread = nativeReadFilesBatch(filesToScan)
+  if (preread) heuristics.push("native-batch-read")
+
   const CONCURRENCY = 8
   const findings: DebugEngine.RaceFinding[] = []
-  for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
-    const batch = filesToScan.slice(i, i + CONCURRENCY)
-    const results = await Promise.all(batch.map((f) => scanFile(f, enabledPatterns, maxPerFile)))
-    for (const r of results) findings.push(...r)
+  if (preread) {
+    for (const f of filesToScan) {
+      const content = preread.get(f)
+      if (!content) continue
+      findings.push(...await scanFile(f, enabledPatterns, maxPerFile, content))
+    }
+  } else {
+    for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
+      const batch = filesToScan.slice(i, i + CONCURRENCY)
+      const results = await Promise.all(batch.map((f) => scanFile(f, enabledPatterns, maxPerFile)))
+      for (const r of results) findings.push(...r)
+    }
   }
 
   // Sort: severity desc, then file, then line

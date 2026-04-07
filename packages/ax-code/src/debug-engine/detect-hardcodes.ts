@@ -4,6 +4,7 @@ import { Instance } from "../project/instance"
 import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
+import { nativeReadFilesBatch, nativeDetectHardcodes } from "./native-scan"
 
 // detectHardcodes — DRE-owned AST-lite scan for common anti-patterns
 // that belong in configuration instead of code.
@@ -256,8 +257,9 @@ async function scanFile(
   file: string,
   enabledKinds: Set<DebugEngine.HardcodeKind>,
   maxPerFile: number,
+  preread?: string,
 ): Promise<DebugEngine.HardcodeFinding[]> {
-  const content = await fs.readFile(file, "utf8").catch(() => "")
+  const content = preread ?? await fs.readFile(file, "utf8").catch(() => "")
   if (!content) return []
   const lines = content.split("\n")
   const findings: DebugEngine.HardcodeFinding[] = []
@@ -347,10 +349,32 @@ export async function detectHardcodesImpl(
   const patterns = input.patterns ?? ["magic_number", "inline_url", "inline_path", "inline_secret_shape"]
   const enabledKinds = new Set(patterns)
   const include = input.include ?? DEFAULT_INCLUDE
+  const cwd = Instance.directory
+
+  // Native fast-path: run entire detection in Rust
+  if (!input.files) {
+    const native = nativeDetectHardcodes({ cwd, include, patterns, maxFiles, maxPerFile, excludeTests })
+    if (native) {
+      return {
+        findings: native.findings.map((f) => ({
+          file: path.join(cwd, f.file),
+          line: f.line,
+          column: f.column,
+          kind: f.kind as DebugEngine.HardcodeKind,
+          value: f.value,
+          suggestion: f.suggestion,
+          severity: f.severity as DebugEngine.HardcodeFinding["severity"],
+        })),
+        filesScanned: native.filesScanned,
+        truncated: native.truncated,
+        explain: DebugEngine.buildExplain("detect-hardcodes", [], native.heuristics),
+      }
+    }
+  }
+
+  // JS fallback
   const heuristics: string[] = [`patterns=${patterns.join(",")}`]
   if (excludeTests) heuristics.push("exclude-tests")
-
-  const cwd = Instance.directory
 
   let allFiles: string[]
   if (input.files && input.files.length > 0) {
@@ -388,14 +412,25 @@ export async function detectHardcodesImpl(
   const truncated = uniqueFiles.length > maxFiles
   if (truncated) heuristics.push("file-cap-hit")
 
-  // Scan in parallel but with a modest cap so we don't open hundreds of
-  // file descriptors on a massive repo.
+  // Native fast-path: batch-read all files in parallel via Rust addon.
+  // Falls back to JS concurrent reads when native is unavailable.
+  const preread = nativeReadFilesBatch(filesToScan)
+  if (preread) heuristics.push("native-batch-read")
+
   const CONCURRENCY = 8
   const findings: DebugEngine.HardcodeFinding[] = []
-  for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
-    const batch = filesToScan.slice(i, i + CONCURRENCY)
-    const results = await Promise.all(batch.map((f) => scanFile(f, enabledKinds, maxPerFile)))
-    for (const r of results) findings.push(...r)
+  if (preread) {
+    for (const f of filesToScan) {
+      const content = preread.get(f)
+      if (!content) continue
+      findings.push(...await scanFile(f, enabledKinds, maxPerFile, content))
+    }
+  } else {
+    for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
+      const batch = filesToScan.slice(i, i + CONCURRENCY)
+      const results = await Promise.all(batch.map((f) => scanFile(f, enabledKinds, maxPerFile)))
+      for (const r of results) findings.push(...r)
+    }
   }
 
   // Sort: severity desc, then file path, then line — deterministic

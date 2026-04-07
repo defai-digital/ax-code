@@ -79,6 +79,7 @@ export function hooks() {
     Log.Default.error("rejection", {
       e: err instanceof Error ? err.message : err,
     })
+    process.exitCode = 1
   })
 
   process.on("uncaughtException", (err) => {

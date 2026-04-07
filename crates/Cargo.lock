@@ -67,6 +67,8 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "notify",
+ "rayon",
+ "regex",
  "serde",
  "serde_json",
  "thiserror",

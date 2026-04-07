@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate napi_derive;
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Language, Node, Parser};
 
@@ -375,10 +376,14 @@ fn detect_visibility(node: &Node, source: &[u8], lang: &str) -> Option<String> {
 // ─── Core extraction ───────────────────────────────────────────────
 
 fn extract_symbols_internal(source: &str, language_name: &str) -> Result<Vec<Symbol>, String> {
+  let mut parser = Parser::new();
+  extract_with_parser(&mut parser, source, language_name)
+}
+
+fn extract_with_parser(parser: &mut Parser, source: &str, language_name: &str) -> Result<Vec<Symbol>, String> {
   let lang = get_language(language_name)
     .ok_or_else(|| format!("unsupported language: {language_name}"))?;
 
-  let mut parser = Parser::new();
   parser.set_language(&lang)
     .map_err(|e| format!("failed to set language: {e}"))?;
 
@@ -404,12 +409,17 @@ pub fn parse_batch(files_json: String, _concurrency: u32) -> napi::Result<String
   let files: Vec<FileInput> = serde_json::from_str(&files_json)
     .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
 
-  let results: Vec<FileSymbols> = files.iter().map(|f| {
-    match extract_symbols_internal(&f.content, &f.language) {
-      Ok(symbols) => FileSymbols { path: f.path.clone(), symbols, error: None },
-      Err(e) => FileSymbols { path: f.path.clone(), symbols: Vec::new(), error: Some(e) },
-    }
-  }).collect();
+  // Use rayon for parallel parsing — each thread gets its own Parser
+  // instance via map_init to avoid mutex contention on tree-sitter state.
+  let results: Vec<FileSymbols> = files.par_iter().map_init(
+    || Parser::new(),
+    |parser, f| {
+      match extract_with_parser(parser, &f.content, &f.language) {
+        Ok(symbols) => FileSymbols { path: f.path.clone(), symbols, error: None },
+        Err(e) => FileSymbols { path: f.path.clone(), symbols: Vec::new(), error: Some(e) },
+      }
+    },
+  ).collect();
 
   serde_json::to_string(&results).map_err(|e| napi::Error::from_reason(e.to_string()))
 }

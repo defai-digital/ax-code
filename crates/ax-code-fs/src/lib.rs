@@ -1,8 +1,11 @@
 #[macro_use]
 extern crate napi_derive;
 
+mod detect;
+
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::UNIX_EPOCH;
 
 use globset::{Glob, GlobMatcher};
@@ -10,6 +13,7 @@ use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use grep_searcher::{SearcherBuilder, Sink, SinkContext, SinkContextKind, SinkMatch};
 use ignore::WalkBuilder;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -494,7 +498,255 @@ pub fn is_ignored(path: String, extra_patterns_json: String) -> napi::Result<boo
 }
 
 // ---------------------------------------------------------------------------
-// 5. FileTree — Persistent in-memory file tree with mtime-sorted index
+// 5. scan_files — Parallel multi-pattern batch scanner
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScanConfig {
+  include: Vec<String>,
+  patterns: Vec<ScanPattern>,
+  #[serde(default = "default_max_files")]
+  max_files: usize,
+  #[serde(default = "default_max_per_file")]
+  max_per_file: usize,
+  #[serde(default)]
+  context_lines: usize,
+}
+
+fn default_max_files() -> usize { 500 }
+fn default_max_per_file() -> usize { 20 }
+
+#[derive(Deserialize, Clone)]
+struct ScanPattern {
+  label: String,
+  regex: String,
+  id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScanFileMatch {
+  file: String,
+  line: u64,
+  column: u64,
+  text: String,
+  label: String,
+  id: String,
+  context_before: Vec<String>,
+  context_after: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScanResult {
+  matches: Vec<ScanFileMatch>,
+  files_scanned: usize,
+  elapsed_ms: u64,
+}
+
+/// Per-file scanner sink that collects matches for a single compiled pattern.
+struct ScanSink<'a> {
+  file: String,
+  label: String,
+  id: String,
+  matcher: &'a grep_regex::RegexMatcher,
+  results: Vec<ScanFileMatch>,
+  max_per_file: usize,
+  before_buf: VecDeque<String>,
+  context_lines: usize,
+  pending: Option<ScanFileMatch>,
+  after_remaining: usize,
+}
+
+impl<'a> Sink for ScanSink<'a> {
+  type Error = std::io::Error;
+
+  fn matched(&mut self, _searcher: &grep_searcher::Searcher, mat: &SinkMatch<'_>) -> Result<bool, Self::Error> {
+    if let Some(pending) = self.pending.take() {
+      self.results.push(pending);
+      if self.results.len() >= self.max_per_file { return Ok(false) }
+    }
+
+    let line_bytes = mat.bytes();
+    let line_str = String::from_utf8_lossy(line_bytes);
+    let line_trimmed = line_str.trim_end_matches('\n').trim_end_matches('\r');
+    let line_num = mat.line_number().unwrap_or(0);
+
+    let col = self.matcher.find(line_bytes).ok().flatten()
+      .map(|m| m.start() as u64 + 1)
+      .unwrap_or(1);
+
+    let entry = ScanFileMatch {
+      file: self.file.clone(),
+      line: line_num,
+      column: col,
+      text: line_trimmed.to_string(),
+      label: self.label.clone(),
+      id: self.id.clone(),
+      context_before: self.before_buf.drain(..).collect(),
+      context_after: Vec::new(),
+    };
+
+    if self.context_lines > 0 {
+      self.pending = Some(entry);
+      self.after_remaining = self.context_lines;
+    } else {
+      self.results.push(entry);
+      if self.results.len() >= self.max_per_file { return Ok(false) }
+    }
+    self.before_buf.clear();
+    Ok(true)
+  }
+
+  fn context(&mut self, _searcher: &grep_searcher::Searcher, ctx: &SinkContext<'_>) -> Result<bool, Self::Error> {
+    let line = String::from_utf8_lossy(ctx.bytes());
+    let trimmed = line.trim_end_matches('\n').trim_end_matches('\r').to_string();
+    match ctx.kind() {
+      SinkContextKind::Before => {
+        self.before_buf.push_back(trimmed);
+        while self.before_buf.len() > self.context_lines { self.before_buf.pop_front(); }
+      }
+      SinkContextKind::After => {
+        if let Some(ref mut pending) = self.pending {
+          pending.context_after.push(trimmed);
+          self.after_remaining = self.after_remaining.saturating_sub(1);
+          if self.after_remaining == 0 {
+            let done = self.pending.take().unwrap();
+            self.results.push(done);
+            if self.results.len() >= self.max_per_file { return Ok(false) }
+          }
+        }
+      }
+      SinkContextKind::Other => {}
+    }
+    Ok(true)
+  }
+
+  fn finish(&mut self, _searcher: &grep_searcher::Searcher, _: &grep_searcher::SinkFinish) -> Result<(), Self::Error> {
+    if let Some(pending) = self.pending.take() {
+      self.results.push(pending);
+    }
+    Ok(())
+  }
+}
+
+/// Batch file scanner: walks once, reads each file once, runs all regex
+/// patterns in parallel using rayon. Returns all matches grouped by file.
+#[napi]
+pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
+  let start = std::time::Instant::now();
+  let config: ScanConfig = serde_json::from_str(&config_json)
+    .map_err(|e| napi::Error::from_reason(format!("invalid scan config: {e}")))?;
+
+  // Pre-compile all regex patterns
+  let compiled: Vec<(String, String, grep_regex::RegexMatcher)> = config.patterns.iter()
+    .filter_map(|p| {
+      RegexMatcherBuilder::new()
+        .case_smart(true)
+        .build(&p.regex)
+        .ok()
+        .map(|m| (p.label.clone(), p.id.clone(), m))
+    })
+    .collect();
+
+  if compiled.is_empty() {
+    let result = ScanResult { matches: Vec::new(), files_scanned: 0, elapsed_ms: 0 };
+    return serde_json::to_string(&result).map_err(|e| napi::Error::from_reason(e.to_string()));
+  }
+
+  // Build include glob matchers
+  let include_matchers: Vec<GlobMatcher> = config.include.iter()
+    .filter_map(|p| Glob::new(p).ok().map(|g| g.compile_matcher()))
+    .collect();
+
+  // Walk and collect files
+  let root = PathBuf::from(&cwd);
+  let mut builder = WalkBuilder::new(&root);
+  builder.hidden(true);
+  builder.git_ignore(true);
+  builder.git_global(true);
+  builder.git_exclude(true);
+
+  let mut files: Vec<(String, PathBuf)> = Vec::new();
+  for entry in builder.build().flatten() {
+    if !entry.file_type().map_or(false, |ft| ft.is_file()) { continue }
+    let full = entry.path().to_path_buf();
+    let rel = match full.strip_prefix(&root) {
+      Ok(p) => p,
+      Err(_) => continue,
+    };
+    let rel_str = match rel.to_str() {
+      Some(s) => s,
+      None => continue,
+    };
+    if rel.components().any(|c| c.as_os_str() == ".git") { continue }
+    if !include_matchers.is_empty() && !include_matchers.iter().any(|g| g.is_match(rel_str)) { continue }
+    files.push((rel_str.to_string(), full));
+    if files.len() >= config.max_files { break }
+  }
+
+  let files_scanned = AtomicUsize::new(0);
+
+  // Process files in parallel with rayon
+  let all_matches: Vec<ScanFileMatch> = files.par_iter().flat_map(|(rel_str, full)| {
+    let mut file_matches: Vec<ScanFileMatch> = Vec::new();
+    files_scanned.fetch_add(1, Ordering::Relaxed);
+
+    for (label, id, matcher) in &compiled {
+      let mut searcher = SearcherBuilder::new()
+        .line_number(true)
+        .before_context(config.context_lines)
+        .after_context(config.context_lines)
+        .build();
+
+      let mut sink = ScanSink {
+        file: rel_str.clone(),
+        label: label.clone(),
+        id: id.clone(),
+        matcher,
+        results: Vec::new(),
+        max_per_file: config.max_per_file,
+        before_buf: VecDeque::new(),
+        context_lines: config.context_lines,
+        pending: None,
+        after_remaining: 0,
+      };
+
+      let _ = searcher.search_path(matcher, full, &mut sink);
+      file_matches.extend(sink.results);
+    }
+    file_matches
+  }).collect();
+
+  let elapsed = start.elapsed().as_millis() as u64;
+  let result = ScanResult {
+    matches: all_matches,
+    files_scanned: files_scanned.load(Ordering::Relaxed),
+    elapsed_ms: elapsed,
+  };
+
+  serde_json::to_string(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+}
+
+/// Batch file reader: reads multiple files in parallel using rayon.
+/// Returns a JSON object mapping file paths to their UTF-8 contents.
+/// Files that fail to read (binary, permissions, etc.) are silently skipped.
+#[napi]
+pub fn read_files_batch(files_json: String) -> napi::Result<String> {
+  let files: Vec<String> = serde_json::from_str(&files_json)
+    .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
+
+  let results: Vec<(String, String)> = files.par_iter().filter_map(|path| {
+    std::fs::read_to_string(path).ok().map(|content| (path.clone(), content))
+  }).collect();
+
+  // Serialize as array of [path, content] pairs for efficient JS parsing
+  serde_json::to_string(&results).map_err(|e| napi::Error::from_reason(e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// 7. FileTree — Persistent in-memory file tree with mtime-sorted index
 // ---------------------------------------------------------------------------
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -994,6 +1246,25 @@ impl NativeWatcher {
   pub fn is_active(&self) -> bool {
     self._watcher.lock().map(|g| g.is_some()).unwrap_or(false)
   }
+}
+
+// ---------------------------------------------------------------------------
+// 8. Native detector NAPI exports
+// ---------------------------------------------------------------------------
+
+#[napi]
+pub fn detect_security(input_json: String) -> napi::Result<String> {
+  detect::detect_security_native(&input_json).map_err(|e| napi::Error::from_reason(e))
+}
+
+#[napi]
+pub fn detect_lifecycle(input_json: String) -> napi::Result<String> {
+  detect::detect_lifecycle_native(&input_json).map_err(|e| napi::Error::from_reason(e))
+}
+
+#[napi]
+pub fn detect_hardcodes(input_json: String) -> napi::Result<String> {
+  detect::detect_hardcodes_native(&input_json).map_err(|e| napi::Error::from_reason(e))
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
