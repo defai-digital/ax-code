@@ -1,0 +1,1 @@
+CREATE INDEX `session_time_updated_idx` ON `session` (`time_updated`);

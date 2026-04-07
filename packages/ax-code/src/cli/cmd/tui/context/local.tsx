@@ -8,6 +8,7 @@ import { Global } from "@/global"
 import { iife } from "@/util/iife"
 import { createSimpleContext } from "./helper"
 import { useToast } from "../ui/toast"
+import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
@@ -35,8 +36,18 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     }
 
     const agent = iife(() => {
-      const agents = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent" && !x.hidden))
-      const visibleAgents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
+      const coreAgents = createMemo(() =>
+        sync.data.agent.filter((x) => Agent.resolveTier(x) === "core"),
+      )
+      const agents = createMemo(() =>
+        sync.data.agent.filter((x) => {
+          const t = Agent.resolveTier(x)
+          return t === "core" || t === "specialist"
+        }),
+      )
+      const visibleAgents = createMemo(() =>
+        sync.data.agent.filter((x) => Agent.resolveTier(x) !== "internal"),
+      )
       const [agentStore, setAgentStore] = createStore<{
         current: string
       }>({
@@ -70,10 +81,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         },
         move(direction: 1 | -1) {
           batch(() => {
-            let next = agents().findIndex((x) => x.name === agentStore.current) + direction
-            if (next < 0) next = agents().length - 1
-            if (next >= agents().length) next = 0
-            const value = agents()[next]
+            const list = coreAgents()
+            if (list.length === 0) return
+            const idx = list.findIndex((x) => x.name === agentStore.current)
+            let next = (idx === -1 ? 0 : idx + direction)
+            if (next < 0) next = list.length - 1
+            if (next >= list.length) next = 0
+            const value = list[next]
             setAgentStore("current", value.name)
           })
         },
@@ -89,6 +103,22 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             return theme[color as keyof typeof theme] as RGBA
           }
           return colors()[index % colors().length]
+        },
+        icon(name: string) {
+          const icons: Record<string, string> = {
+            build: "\uD83E\uDD16",
+            plan: "\uD83D\uDCCB",
+            general: "\uD83D\uDCAC",
+            explore: "\uD83D\uDD0D",
+            react: "\uD83E\uDDE0",
+            security: "\uD83D\uDEE1\uFE0F",
+            architect: "\uD83C\uDFD7\uFE0F",
+            debug: "\uD83D\uDC1B",
+            perf: "\u26A1",
+            devops: "\uD83D\uDE80",
+            test: "\uD83E\uDDEA",
+          }
+          return icons[name] ?? "\uD83D\uDCAC"
         },
       }
     })

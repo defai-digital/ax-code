@@ -48,6 +48,7 @@ export const SessionTable = sqliteTable(
     // Matches the `session_workspace_idx` index created by the same
     // migration that added the column above.
     index("session_workspace_idx").on(table.workspace_id),
+    index("session_time_updated_idx").on(table.time_updated),
   ],
 )
 

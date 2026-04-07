@@ -40,6 +40,7 @@ export namespace Agent {
       mode: z.enum(["subagent", "primary", "all"]),
       native: z.boolean().optional(),
       hidden: z.boolean().optional(),
+      tier: z.enum(["core", "specialist", "internal"]).optional(),
       topP: z.number().optional(),
       temperature: z.number().optional(),
       color: z.string().optional(),
@@ -60,6 +61,15 @@ export namespace Agent {
       ref: "Agent",
     })
   export type Info = z.infer<typeof Info>
+
+  export type Tier = "core" | "specialist" | "internal" | "subagent"
+
+  export function resolveTier(agent: { tier?: string; hidden?: boolean; mode?: string }): Tier {
+    if (agent.tier === "core" || agent.tier === "specialist" || agent.tier === "internal") return agent.tier
+    if (agent.hidden === true) return "internal"
+    if (agent.mode === "subagent") return "subagent"
+    return "specialist"
+  }
 
   export interface Interface {
     readonly get: (agent: string) => Effect.Effect<Agent.Info>
@@ -118,6 +128,7 @@ export namespace Agent {
               name: "build",
               displayName: "Dev",
               description: "The default agent. Executes tools based on configured permissions.",
+              tier: "core",
               options: {},
               permission: Permission.merge(
                 defaults,
@@ -135,6 +146,7 @@ export namespace Agent {
               name: "plan",
               displayName: "Planner",
               description: "Plan mode. Disallows all edit tools.",
+              tier: "core",
               options: {},
               permission: Permission.merge(
                 defaults,
@@ -193,6 +205,7 @@ export namespace Agent {
             react: {
               name: "react",
               displayName: "Reasoner",
+              tier: "core",
               description:
                 "ReAct mode agent. Uses structured Thought → Action → Observation loops for careful, step-by-step reasoning. Best for complex debugging, multi-step investigation, and tasks requiring deliberate analysis.",
               prompt: PROMPT_REACT,
@@ -213,6 +226,7 @@ export namespace Agent {
             security: {
               name: "security",
               displayName: "Security",
+              tier: "specialist",
               description:
                 "Security Auditor agent. Scans code for vulnerabilities, secrets, OWASP issues, and compliance problems. Read-only — reports findings without modifying code.",
               prompt: PROMPT_SECURITY,
@@ -230,6 +244,7 @@ export namespace Agent {
             architect: {
               name: "architect",
               displayName: "Architect",
+              tier: "specialist",
               description:
                 "Architecture Analyst agent. Analyzes system design, dependencies, coupling, patterns, and suggests structural improvements. Read-only — analyzes without modifying code.",
               prompt: PROMPT_ARCHITECT,
@@ -247,6 +262,7 @@ export namespace Agent {
             debug: {
               name: "debug",
               displayName: "Debugger",
+              tier: "specialist",
               description:
                 "Debugger agent. Systematically investigates bugs — reproduces, isolates, traces root cause, and fixes. Uses all tools to diagnose and resolve issues.",
               prompt: PROMPT_DEBUG,
@@ -267,6 +283,7 @@ export namespace Agent {
             perf: {
               name: "perf",
               displayName: "Perf",
+              tier: "specialist",
               description:
                 "Performance Analyst agent. Finds bottlenecks, inefficient algorithms, memory issues, and optimization opportunities. Read-only — benchmarks and reports without modifying code.",
               prompt: PROMPT_PERF,
@@ -284,6 +301,7 @@ export namespace Agent {
             devops: {
               name: "devops",
               displayName: "DevOps",
+              tier: "specialist",
               description:
                 "DevOps Engineer agent. Handles Docker, CI/CD, deployment, infrastructure config, and operational concerns. Can create and modify Dockerfiles, pipeline configs, K8s manifests, and deployment scripts.",
               prompt: PROMPT_DEVOPS,
@@ -304,6 +322,7 @@ export namespace Agent {
             test: {
               name: "test",
               displayName: "Tester",
+              tier: "specialist",
               description:
                 "Test Engineer agent. Writes tests, analyzes failures, improves coverage, and maintains test infrastructure. Uses all tools to create, run, and verify tests across any framework.",
               prompt: PROMPT_TEST,
@@ -326,6 +345,7 @@ export namespace Agent {
               mode: "primary",
               native: true,
               hidden: true,
+              tier: "internal",
               prompt: PROMPT_COMPACTION,
               permission: Permission.merge(defaults, denyAll, user),
               options: {},
@@ -336,6 +356,7 @@ export namespace Agent {
               options: {},
               native: true,
               hidden: true,
+              tier: "internal",
               temperature: 0.5,
               permission: Permission.merge(defaults, denyAll, user),
               prompt: PROMPT_TITLE,
@@ -346,6 +367,7 @@ export namespace Agent {
               options: {},
               native: true,
               hidden: true,
+              tier: "internal",
               permission: Permission.merge(defaults, denyAll, user),
               prompt: PROMPT_SUMMARY,
             },
@@ -374,6 +396,7 @@ export namespace Agent {
             item.mode = value.mode ?? item.mode
             item.color = value.color ?? item.color
             item.hidden = value.hidden ?? item.hidden
+            item.tier = value.tier ?? item.tier
             item.name = value.name ?? item.name
             item.steps = value.steps ?? item.steps
             item.options = mergeDeep(item.options, value.options ?? {})
@@ -402,11 +425,13 @@ export namespace Agent {
 
           const list = Effect.fnUntraced(function* () {
             const cfg = yield* config()
+            const tierOrder: Record<string, number> = { core: 0, specialist: 1, subagent: 2, internal: 3 }
             return pipe(
               agents,
               values(),
               sortBy(
                 [(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "build"), "desc"],
+                [(x) => tierOrder[resolveTier(x)] ?? 2, "asc"],
                 [(x) => x.name, "asc"],
               ),
             )
@@ -417,11 +442,15 @@ export namespace Agent {
             if (c.default_agent) {
               const agent = agents[c.default_agent]
               if (!agent) throw new Error(`default agent "${c.default_agent}" not found`)
-              if (agent.mode === "subagent") throw new Error(`default agent "${c.default_agent}" is a subagent`)
-              if (agent.hidden === true) throw new Error(`default agent "${c.default_agent}" is hidden`)
+              const tier = resolveTier(agent)
+              if (tier === "subagent") throw new Error(`default agent "${c.default_agent}" is a subagent`)
+              if (tier === "internal") throw new Error(`default agent "${c.default_agent}" is hidden`)
               return agent.name
             }
-            const visible = Object.values(agents).find((a) => a.mode !== "subagent" && a.hidden !== true)
+            const visible = Object.values(agents).find((a) => {
+              const t = resolveTier(a)
+              return t === "core" || t === "specialist"
+            })
             if (!visible) throw new Error("no primary visible agent found")
             return visible.name
           })

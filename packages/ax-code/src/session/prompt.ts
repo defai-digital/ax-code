@@ -1158,7 +1158,7 @@ export namespace SessionPrompt {
       .map((p) => p.text)
       .join(" ")
     if (messageText) {
-      const routeResult = routeAgent(messageText, agentName)
+      const routeResult = await routeAgent(messageText, agentName)
       if (routeResult) {
         Recorder.emit({
           type: "agent.route",

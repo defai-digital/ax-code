@@ -105,7 +105,7 @@ export function useFilteredList<T>(props: FilteredListProps<T>) {
   }
 
   createEffect(
-    on(grouped, () => {
+    on(() => store.filter, () => {
       reset()
     }),
   )

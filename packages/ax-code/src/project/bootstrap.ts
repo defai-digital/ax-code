@@ -16,10 +16,9 @@ import { Session } from "../session"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
-  await Plugin.init()
   ShareNext.init()
   Format.init()
-  await LSP.init()
+  await Promise.all([Plugin.init(), LSP.init()])
   File.init()
   FileWatcher.init()
   Vcs.init()

@@ -64,6 +64,7 @@ export namespace SessionProcessor {
     messages?: MessageV2.WithParts[]
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
+    const toolInputCache: Record<string, string> = {}
     const recentToolRing: { tool: string; input: string }[] = []
     const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
     const partBase = () => ({
@@ -211,6 +212,7 @@ export namespace SessionProcessor {
 
                     // Doom loop detection: check ring buffer of recently completed tools plus current call
                     const inputStr = JSON.stringify(value.input)
+                    toolInputCache[value.toolCallId] = inputStr
                     const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
                     if (
                       allRecent.length >= DOOM_LOOP_THRESHOLD &&
@@ -292,9 +294,10 @@ export namespace SessionProcessor {
                     // Self-correction: clear retry budget on success
                     SelfCorrection.recordSuccess(input.sessionID, match.tool)
 
-                    recentToolRing.push({ tool: match.tool, input: JSON.stringify(value.input ?? match.state.input) })
+                    recentToolRing.push({ tool: match.tool, input: toolInputCache[value.toolCallId] ?? JSON.stringify(value.input ?? match.state.input) })
                     if (recentToolRing.length > DOOM_LOOP_THRESHOLD) recentToolRing.shift()
                     delete toolcalls[value.toolCallId]
+                    delete toolInputCache[value.toolCallId]
                   }
                   break
                 }
@@ -360,9 +363,10 @@ export namespace SessionProcessor {
                     ) {
                       blocked = shouldBreak
                     }
-                    recentToolRing.push({ tool: match.tool, input: JSON.stringify(value.input ?? match.state.input) })
+                    recentToolRing.push({ tool: match.tool, input: toolInputCache[value.toolCallId] ?? JSON.stringify(value.input ?? match.state.input) })
                     if (recentToolRing.length > DOOM_LOOP_THRESHOLD) recentToolRing.shift()
                     delete toolcalls[value.toolCallId]
+                    delete toolInputCache[value.toolCallId]
                   }
                   break
                 }

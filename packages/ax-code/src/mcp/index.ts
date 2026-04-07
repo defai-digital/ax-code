@@ -741,15 +741,20 @@ export namespace MCP {
         }
       }
 
+      const conversions: Promise<void>[] = []
       for (const { clientName, client, toolsResult } of toolsResults) {
         if (!toolsResult || "_failed" in toolsResult) continue
         const mcpConfig = config[clientName]
         const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
         const timeout = entry?.timeout ?? defaultTimeout
         for (const mcpTool of toolsResult.tools) {
-          result[sanitize(clientName) + "_" + sanitize(mcpTool.name)] = await convertMcpTool(mcpTool, client, timeout)
+          const key = sanitize(clientName) + "_" + sanitize(mcpTool.name)
+          conversions.push(convertMcpTool(mcpTool, client, timeout).then((tool) => { result[key] = tool }).catch((e) => {
+            log.error("failed to convert MCP tool", { clientName, tool: mcpTool.name, error: NamedError.message(e) })
+          }))
         }
       }
+      await Promise.all(conversions)
       // Only cache if no invalidation occurred during computation
       if (toolsCacheGeneration === generation) {
         cachedTools = result

@@ -587,11 +587,12 @@ export const RunCommand = cmd({
             return undefined
           }
 
-          if (agent.mode === "subagent") {
+          const tier = Agent.resolveTier(agent)
+          if (tier === "subagent" || tier === "internal") {
             UI.println(
               UI.Style.TEXT_WARNING_BOLD + "!",
               UI.Style.TEXT_NORMAL,
-              `agent "${args.agent}" is a subagent, not a primary agent. Falling back to default agent`,
+              `agent "${args.agent}" is a ${tier} agent, not a primary agent. Falling back to default agent`,
             )
             return undefined
           }
@@ -608,11 +609,12 @@ export const RunCommand = cmd({
           )
           return undefined
         }
-        if (entry.mode === "subagent") {
+        const entryTier = Agent.resolveTier(entry)
+        if (entryTier === "subagent" || entryTier === "internal") {
           UI.println(
             UI.Style.TEXT_WARNING_BOLD + "!",
             UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" is a subagent, not a primary agent. Falling back to default agent`,
+            `agent "${args.agent}" is a ${entryTier} agent, not a primary agent. Falling back to default agent`,
           )
           return undefined
         }

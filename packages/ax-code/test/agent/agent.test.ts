@@ -389,7 +389,7 @@ test("multiple custom agents can be defined", async () => {
   })
 })
 
-test("Agent.list keeps the default agent first and sorts the rest by name", async () => {
+test("Agent.list keeps the default agent first and sorts by tier then name", async () => {
   await using tmp = await tmpdir({
     config: {
       default_agent: "plan",
@@ -408,9 +408,21 @@ test("Agent.list keeps the default agent first and sorts the rest by name", asyn
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const names = (await Agent.list()).map((a) => a.name)
+      const agents = await Agent.list()
+      const names = agents.map((a) => a.name)
       expect(names[0]).toBe("plan")
-      expect(names.slice(1)).toEqual(names.slice(1).toSorted((a, b) => a.localeCompare(b)))
+      // After default agent, list is sorted by tier (core, specialist, subagent, internal) then name
+      const rest = agents.slice(1)
+      const tierOrder: Record<string, number> = { core: 0, specialist: 1, subagent: 2, internal: 3 }
+      for (let i = 1; i < rest.length; i++) {
+        const prev = tierOrder[Agent.resolveTier(rest[i - 1])] ?? 2
+        const curr = tierOrder[Agent.resolveTier(rest[i])] ?? 2
+        if (prev === curr) {
+          expect(rest[i - 1].name.localeCompare(rest[i].name)).toBeLessThanOrEqual(0)
+        } else {
+          expect(prev).toBeLessThanOrEqual(curr)
+        }
+      }
     },
   })
 })
@@ -722,6 +734,88 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
     fn: async () => {
       // all primary visible agents are disabled
       await expect(Agent.defaultAgent()).rejects.toThrow("no primary visible agent found")
+    },
+  })
+})
+
+test("native agents have correct tier assignments", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const core = ["build", "plan", "react"]
+      for (const name of core) {
+        const agent = await Agent.get(name)
+        expect(Agent.resolveTier(agent!)).toBe("core")
+      }
+
+      const specialist = ["security", "architect", "debug", "perf", "devops", "test"]
+      for (const name of specialist) {
+        const agent = await Agent.get(name)
+        expect(Agent.resolveTier(agent!)).toBe("specialist")
+      }
+
+      const internal = ["compaction", "title", "summary"]
+      for (const name of internal) {
+        const agent = await Agent.get(name)
+        expect(Agent.resolveTier(agent!)).toBe("internal")
+      }
+
+      const subagent = ["general", "explore"]
+      for (const name of subagent) {
+        const agent = await Agent.get(name)
+        expect(Agent.resolveTier(agent!)).toBe("subagent")
+      }
+    },
+  })
+})
+
+test("resolveTier respects explicit tier over other fields", () => {
+  expect(Agent.resolveTier({ tier: "core", hidden: true, mode: "subagent" })).toBe("core")
+  expect(Agent.resolveTier({ tier: "specialist", hidden: false, mode: "primary" })).toBe("specialist")
+  expect(Agent.resolveTier({ tier: "internal", hidden: false, mode: "primary" })).toBe("internal")
+})
+
+test("resolveTier falls back correctly when tier is undefined", () => {
+  expect(Agent.resolveTier({ hidden: true, mode: "primary" })).toBe("internal")
+  expect(Agent.resolveTier({ hidden: false, mode: "subagent" })).toBe("subagent")
+  expect(Agent.resolveTier({ mode: "primary" })).toBe("specialist")
+  expect(Agent.resolveTier({ mode: "all" })).toBe("specialist")
+})
+
+test("tier can be overridden via config", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        debug: { tier: "core" },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const debug = await Agent.get("debug")
+      expect(debug?.tier).toBe("core")
+      expect(Agent.resolveTier(debug!)).toBe("core")
+    },
+  })
+})
+
+test("custom agents default to specialist tier", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        my_agent: {
+          description: "Custom agent",
+        },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const agent = await Agent.get("my_agent")
+      expect(Agent.resolveTier(agent!)).toBe("specialist")
     },
   })
 })

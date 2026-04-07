@@ -685,6 +685,26 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
+      title: sync.data.smartLlm ? "Turn smart LLM off" : "Turn smart LLM on",
+      value: "app.toggle.smart_llm",
+      category: "System",
+      slash: { name: "smart-llm", aliases: ["toggle-smart-llm"] },
+      onSelect: (dialog) => {
+        const next = !sync.data.smartLlm
+        sync.set("smartLlm", next)
+        sdk
+          .fetch(`${sdk.url}/smart-llm`, {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ enabled: next }),
+          })
+          .catch(() => {
+            sync.set("smartLlm", !next)
+          })
+        dialog.clear()
+      },
+    },
+    {
       title: sync.data.autonomous ? "Turn autonomous off" : "Turn autonomous on",
       value: "app.toggle.autonomous",
       category: "System",

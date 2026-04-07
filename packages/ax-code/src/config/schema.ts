@@ -197,6 +197,10 @@ export const Agent = z
       .boolean()
       .optional()
       .describe("Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)"),
+    tier: z
+      .enum(["core", "specialist", "internal"])
+      .optional()
+      .describe("Agent visibility tier: core (always shown in picker), specialist (expandable/auto-routed), internal (hidden)"),
     options: z.record(z.string(), z.any()).optional(),
     color: z
       .union([
@@ -226,6 +230,7 @@ export const Agent = z
       "top_p",
       "mode",
       "hidden",
+      "tier",
       "color",
       "steps",
       "maxSteps",
@@ -659,6 +664,7 @@ export const Info = z
     instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
     layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
     permission: Permission.optional(),
+    autonomous: z.boolean().optional().describe("Enable autonomous mode (default: true)"),
     isolation: Isolation.optional().describe("Execution isolation configuration"),
     tools: z.record(z.string(), z.boolean()).optional(),
     enterprise: z
@@ -693,6 +699,15 @@ export const Info = z
       })
       .optional()
       .describe("Session lifecycle management"),
+    routing: z
+      .object({
+        llm: z
+          .boolean()
+          .optional()
+          .describe("Enable LLM-based agent classification as fallback when keyword routing has low confidence (default: false)"),
+      })
+      .optional()
+      .describe("Agent routing configuration"),
     compaction: z
       .object({
         auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),

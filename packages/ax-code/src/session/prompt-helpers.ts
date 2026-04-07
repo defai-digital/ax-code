@@ -260,7 +260,7 @@ export async function agentInfo<T extends AgentLike = AgentInfo>(input: {
   if (agent) return agent
 
   const available = await (input.list ?? Agent.list)()
-    .then((items) => items.filter((item) => !item.hidden).map((item) => item.name))
+    .then((items) => items.filter((item) => Agent.resolveTier(item) !== "internal").map((item) => item.name))
   const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
   const error = new NamedError.Unknown({ message: `Agent not found: "${input.name}".${hint}` })
   if (input.report) input.report(input.sessionID, error.toObject())

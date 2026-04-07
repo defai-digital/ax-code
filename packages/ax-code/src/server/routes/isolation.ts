@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import path from "path"
+import fs from "fs/promises"
 import { Config } from "../../config/config"
 import { Isolation } from "../../isolation"
 import { Instance } from "../../project/instance"
@@ -75,9 +76,13 @@ export const IsolationRoutes = lazy(() =>
           return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
         }).catch(() => ({}))
         existing.isolation = { mode, network }
-        await Filesystem.writeJson(filepath, existing).catch((err) => {
-          log.warn("failed to persist isolation config", { error: err instanceof Error ? err.message : String(err) })
-        })
+        const tmp = filepath + ".tmp"
+        await Filesystem.writeJson(tmp, existing)
+          .then(() => fs.rename(tmp, filepath))
+          .catch((err) => {
+            log.warn("failed to persist isolation config", { error: err instanceof Error ? err.message : String(err) })
+            fs.unlink(tmp).catch(() => {})
+          })
         const state = Isolation.resolve({ mode, network }, Instance.directory)
         return c.json({ mode: state.mode, network: state.network })
       },

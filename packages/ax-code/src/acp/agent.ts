@@ -1211,7 +1211,10 @@ export namespace ACP {
       if (!agents) throw new Error(`ACP loadAvailableModes: empty agents response for ${directory}`)
 
       return agents
-        .filter((agent) => agent.mode !== "subagent" && !agent.hidden)
+        .filter((agent) => {
+          const tier = AgentModule.resolveTier(agent)
+          return tier === "core" || tier === "specialist"
+        })
         .map((agent) => ({
           id: agent.name,
           name: agent.name,

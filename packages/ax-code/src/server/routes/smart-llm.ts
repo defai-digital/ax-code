@@ -8,60 +8,55 @@ import { Filesystem } from "../../util/filesystem"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 
-const log = Log.create({ service: "autonomous" })
+const log = Log.create({ service: "smart-llm" })
 
-const AutonomousState = z
+const SmartLlmState = z
   .object({
     enabled: z.boolean(),
   })
-  .meta({ ref: "AutonomousState" })
+  .meta({ ref: "SmartLlmState" })
 
-export const AutonomousRoutes = lazy(() =>
+export const SmartLlmRoutes = lazy(() =>
   new Hono()
     .get(
       "/",
       describeRoute({
-        summary: "Get autonomous mode state",
-        description: "Returns whether autonomous mode is enabled.",
-        operationId: "autonomous.get",
+        summary: "Get smart LLM routing state",
+        description: "Returns whether LLM-based agent routing is enabled.",
+        operationId: "smartLlm.get",
         responses: {
           200: {
-            description: "Autonomous mode state",
+            description: "Smart LLM routing state",
             content: {
               "application/json": {
-                schema: resolver(AutonomousState),
+                schema: resolver(SmartLlmState),
               },
             },
           },
         },
       }),
       async (c) => {
-        // Check env var first (runtime override), then fall back to persisted config
-        if (process.env["AX_CODE_AUTONOMOUS"] !== undefined) {
-          return c.json({ enabled: process.env["AX_CODE_AUTONOMOUS"] === "true" })
-        }
         const filepath = path.join(Instance.directory, "ax-code.json")
         const config = await Filesystem.readText(filepath)
           .then((t) => JSON.parse(t))
           .catch(() => ({}))
-        const enabled = config?.autonomous !== false
-        // Cache in env var for subsequent reads and processor access
-        process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
+        const enabled = config?.routing?.llm === true || process.env["AX_CODE_SMART_LLM"] === "true"
+        process.env["AX_CODE_SMART_LLM"] = String(enabled)
         return c.json({ enabled })
       },
     )
     .put(
       "/",
       describeRoute({
-        summary: "Set autonomous mode",
-        description: "Toggle autonomous mode on or off. Persists to ax-code.json.",
-        operationId: "autonomous.set",
+        summary: "Set smart LLM routing",
+        description: "Toggle LLM-based agent routing on or off. Persists to ax-code.json.",
+        operationId: "smartLlm.set",
         responses: {
           200: {
-            description: "Updated autonomous state",
+            description: "Updated smart LLM routing state",
             content: {
               "application/json": {
-                schema: resolver(AutonomousState),
+                schema: resolver(SmartLlmState),
               },
             },
           },
@@ -70,8 +65,7 @@ export const AutonomousRoutes = lazy(() =>
       validator("json", z.object({ enabled: z.boolean() })),
       async (c) => {
         const { enabled } = c.req.valid("json")
-        process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
-        // Persist to ax-code.json so the setting survives restarts
+        process.env["AX_CODE_SMART_LLM"] = String(enabled)
         const filepath = path.join(Instance.directory, "ax-code.json")
         const existing = await Filesystem.readText(filepath)
           .then((t) => {
@@ -83,15 +77,16 @@ export const AutonomousRoutes = lazy(() =>
             return parsed
           })
           .catch(() => ({}))
-        existing.autonomous = enabled
+        if (!existing.routing) existing.routing = {}
+        existing.routing.llm = enabled
         const tmp = filepath + ".tmp"
         await Filesystem.writeJson(tmp, existing)
           .then(() => fs.rename(tmp, filepath))
           .catch((err) => {
-            log.warn("failed to persist autonomous config", { error: err instanceof Error ? err.message : String(err) })
+            log.warn("failed to persist smart-llm config", { error: err instanceof Error ? err.message : String(err) })
             fs.unlink(tmp).catch(() => {})
           })
-        log.info("autonomous mode changed", { enabled })
+        log.info("smart LLM routing changed", { enabled })
         return c.json({ enabled })
       },
     ),

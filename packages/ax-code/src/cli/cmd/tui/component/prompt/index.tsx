@@ -1053,7 +1053,7 @@ export function Prompt(props: PromptProps) {
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
               <text fg={highlight()}>
-                {store.mode === "shell" ? "Shell" : (local.agent.current().displayName ?? Locale.titlecase(local.agent.current().name))}{" "}
+                {store.mode === "shell" ? "Shell" : (local.agent.icon(local.agent.current().name) + " " + (local.agent.current().displayName ?? Locale.titlecase(local.agent.current().name)))}{" "}
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
@@ -1181,18 +1181,24 @@ export function Prompt(props: PromptProps) {
           </Show>
           <Show when={status().type !== "retry"}>
             <box gap={2} flexDirection="row">
+              <text
+                fg={sync.data.smartLlm ? "magenta" : theme.text}
+                onMouseUp={() => command.trigger("app.toggle.smart_llm")}
+              >
+                {sync.data.smartLlm ? "SmartLLM \u2714" : "SmartLLM \u24E7"}
+              </text>
               {sync.data.autonomous ? (
                 <box backgroundColor="yellow" paddingLeft={1} paddingRight={1} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
-                  <text fg="red"><b>autonomous on</b></text>
+                  <text fg="red"><b>Autonomous {"\u2714"}</b></text>
                 </box>
               ) : (
-                <text fg={theme.success} onMouseUp={() => command.trigger("app.toggle.autonomous")}>autonomous off</text>
+                <text fg={theme.success} onMouseUp={() => command.trigger("app.toggle.autonomous")}>Autonomous {"\u24E7"}</text>
               )}
               <text
                 fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}
                 onMouseUp={() => command.trigger("app.toggle.sandbox")}
               >
-                {sync.data.isolation.mode === "full-access" ? "sandbox off" : "sandbox on"}
+                {sync.data.isolation.mode === "full-access" ? "Sandbox \u24E7" : "Sandbox \u2714"}
               </text>
               <Switch>
                 <Match when={store.mode === "normal"}>

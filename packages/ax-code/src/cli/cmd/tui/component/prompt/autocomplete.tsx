@@ -10,6 +10,7 @@ import { useTheme, selectedForeground } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
+import { Agent } from "@/agent/agent"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
@@ -334,7 +335,10 @@ export function Autocomplete(props: {
   const agents = createMemo(() => {
     const agents = sync.data.agent
     return agents
-      .filter((agent) => !agent.hidden && agent.mode !== "primary")
+      .filter((agent) => {
+        const tier = Agent.resolveTier(agent)
+        return tier === "subagent" || tier === "specialist"
+      })
       .map(
         (agent): AutocompleteOption => ({
           display: "@" + (agent.displayName ?? agent.name),

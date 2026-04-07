@@ -14,6 +14,8 @@ import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { COMPACTION_BUFFER as _COMPACTION_BUFFER, PRUNE_MINIMUM as _PRUNE_MINIMUM, PRUNE_PROTECT as _PRUNE_PROTECT } from "@/constants/session"
+import { Database } from "@/storage/db"
+import { PartTable } from "./session.sql"
 import { ProviderTransform } from "@/provider/transform"
 import { ModelID, ProviderID } from "@/provider/schema"
 
@@ -70,7 +72,7 @@ export namespace SessionCompaction {
     const msgs = input.messages ?? await Session.messages({ sessionID: input.sessionID })
     let total = 0
     let pruned = 0
-    const toPrune = []
+    const toPrune: MessageV2.ToolPart[] = []
     let turns = 0
 
     loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {
@@ -97,20 +99,31 @@ export namespace SessionCompaction {
     log.info("found", { pruned, total })
     if (pruned > PRUNE_MINIMUM) {
       const timestamp = Date.now()
-      await Promise.all(
-        toPrune.map(async (part) => {
-          if (part.state.status !== "completed") return
-          const prev = part.state.time.compacted
-          part.state.time.compacted = timestamp
-          try {
-            await Session.updatePart(part)
-          } catch (e) {
-            // Roll back in-memory state so it stays consistent with DB
-            part.state.time.compacted = prev
-            log.warn("failed to compact part", { partID: part.id, err: e })
+      const prevTimes = new Map<string, number | undefined>()
+      for (const part of toPrune) {
+        if (part.state.status !== "completed") continue
+        prevTimes.set(part.id, part.state.time.compacted)
+        part.state.time.compacted = timestamp
+      }
+      try {
+        Database.transaction((db) => {
+          for (const part of toPrune) {
+            if (part.state.status !== "completed") continue
+            const { id, messageID, sessionID, ...data } = part
+            db.insert(PartTable)
+              .values({ id, message_id: messageID, session_id: sessionID, time_created: Date.now(), data })
+              .onConflictDoUpdate({ target: PartTable.id, set: { data } })
+              .run()
+            Database.effect(() => Bus.publish(MessageV2.Event.PartUpdated, { part: { ...part } }))
           }
-        }),
-      )
+        })
+      } catch (e) {
+        for (const part of toPrune) {
+          if (part.state.status !== "completed") continue
+          part.state.time.compacted = prevTimes.get(part.id)
+        }
+        log.warn("failed to compact parts", { count: toPrune.length, err: e })
+      }
       log.info("pruned", { count: toPrune.length })
     }
   }

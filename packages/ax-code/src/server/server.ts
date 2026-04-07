@@ -43,6 +43,7 @@ import { PermissionRoutes } from "./routes/permission"
 import { AuditRoutes } from "./routes/audit"
 import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
+import { SmartLlmRoutes } from "./routes/smart-llm"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
@@ -634,6 +635,7 @@ export namespace Server {
       .route("/config", ConfigRoutes())
       .route("/isolation", IsolationRoutes())
       .route("/autonomous", AutonomousRoutes())
+      .route("/smart-llm", SmartLlmRoutes())
       .route("/experimental", ExperimentalRoutes())
       .route("/session", SessionRoutes())
       .route("/permission", PermissionRoutes())

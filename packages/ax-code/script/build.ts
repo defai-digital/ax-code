@@ -16,14 +16,18 @@ import { Script } from "@ax-code/script"
 import pkg from "../package.json"
 
 const modelsUrl = process.env.AX_CODE_MODELS_URL || "https://models.dev"
-// Fetch and generate models.dev snapshot
+// Fetch and generate models.dev snapshot, preserving CLI provider entries
 const modelsData = process.env.MODELS_DEV_API_JSON
   ? await Bun.file(process.env.MODELS_DEV_API_JSON).text()
   : await fetch(`${modelsUrl}/api.json`).then((x) => x.text())
-await Bun.write(
-  path.join(dir, "src/provider/models-snapshot.json"),
-  modelsData,
-)
+const snapshotPath = path.join(dir, "src/provider/models-snapshot.json")
+const existingSnapshot = JSON.parse(await Bun.file(snapshotPath).text().catch(() => "{}"))
+const fetched = JSON.parse(modelsData)
+const cliProviderIDs = ["claude-code", "gemini-cli", "codex-cli"]
+for (const id of cliProviderIDs) {
+  if (existingSnapshot[id] && !fetched[id]) fetched[id] = existingSnapshot[id]
+}
+await Bun.write(snapshotPath, JSON.stringify(fetched, null, 2) + "\n")
 console.log("Generated models-snapshot.json")
 
 // Load migrations from migration directories

@@ -27,7 +27,12 @@ const parameters = z.object({
 })
 
 export const TaskTool = Tool.define("task", async (ctx) => {
-  const agents = await Agent.list().then((x) => x.filter((a) => a.mode !== "primary"))
+  const agents = await Agent.list().then((x) =>
+    x.filter((a) => {
+      const tier = Agent.resolveTier(a)
+      return tier === "subagent" || tier === "specialist"
+    }),
+  )
 
   // Filter agents by permissions if agent provided
   const caller = ctx?.agent

@@ -115,6 +115,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         network: boolean
       }
       autonomous: boolean
+      smartLlm: boolean
       mcp: {
         [key: string]: McpStatus
       }
@@ -163,6 +164,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       },
       isolation: { mode: "workspace-write", network: false },
       autonomous: true,
+      smartLlm: false,
       mcp: {},
       mcp_resource: {},
       formatter: [],
@@ -252,6 +254,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         if (!res.ok) return
         const body = (await res.json()) as { enabled: boolean }
         setStore("autonomous", body.enabled)
+      } catch {
+        // Silent fallback for older servers without the endpoint.
+      }
+    }
+
+    async function syncSmartLlm() {
+      try {
+        const res = await sdk.fetch(`${sdk.url}/smart-llm`)
+        if (!res.ok) return
+        const body = (await res.json()) as { enabled: boolean }
+        setStore("smartLlm", body.enabled)
       } catch {
         // Silent fallback for older servers without the endpoint.
       }
@@ -627,6 +640,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             syncDebugEngine(),
             syncIsolation(),
             syncAutonomous(),
+            syncSmartLlm(),
           ]).then((results) => {
             for (const r of results) {
               if (r.status === "rejected") Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
