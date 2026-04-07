@@ -119,6 +119,7 @@ export namespace FileWatcher {
                 const native = _require("@ax-code/fs")
                 const watcher = new native.NativeWatcher(dir, JSON.stringify(ignore))
 
+                let pollErrorLogged = false
                 const pollInterval = setInterval(Instance.bind(() => {
                   try {
                     const eventsJson = watcher.poll()
@@ -127,7 +128,12 @@ export namespace FileWatcher {
                       const file = path.resolve(dir, evt.path)
                       Bus.publish(Event.Updated, { file, event: evt.eventType as "add" | "change" | "unlink" })
                     }
-                  } catch {}
+                  } catch (e) {
+                    if (!pollErrorLogged) {
+                      pollErrorLogged = true
+                      log.warn("native watcher poll error", { error: e })
+                    }
+                  }
                 }), 50) // Poll native event queue every 50ms (lightweight — no filesystem scan)
 
                 subs.push(async () => {

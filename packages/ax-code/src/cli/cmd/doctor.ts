@@ -12,7 +12,10 @@ import { Global } from "../../global"
 import { Flag } from "../../flag/flag"
 import { Auth } from "../../auth"
 import { ModelsDev } from "../../provider/models"
+import { NativeStore } from "../../code-intelligence/native-store"
+import { Log } from "../../util/log"
 import path from "path"
+import fs from "fs/promises"
 
 export const DoctorCommand: CommandModule = {
   command: "doctor",
@@ -148,9 +151,86 @@ export const DoctorCommand: CommandModule = {
       detail: gitExists ? "Found" : "Not a git repository",
     })
 
-    // 9. Feature flags
+    // 9. Native Rust addons
+    const nativeStatus: string[] = []
+    const addons = [
+      { name: "index-core", flag: Flag.AX_CODE_NATIVE_INDEX, pkg: "@ax-code/index-core" },
+      { name: "fs", flag: Flag.AX_CODE_NATIVE_FS, pkg: "@ax-code/fs" },
+      { name: "diff", flag: Flag.AX_CODE_NATIVE_DIFF, pkg: "@ax-code/diff" },
+      { name: "parser", flag: Flag.AX_CODE_NATIVE_PARSER, pkg: "@ax-code/parser" },
+    ]
+    let nativeAvailable = 0
+    for (const addon of addons) {
+      try {
+        const { createRequire } = await import("node:module")
+        const _require = createRequire(import.meta.url)
+        _require(addon.pkg)
+        nativeAvailable++
+        nativeStatus.push(`${addon.name}: installed`)
+      } catch {
+        nativeStatus.push(`${addon.name}: not installed (TS fallback)`)
+      }
+    }
+    checks.push({
+      name: "Native addons",
+      status: nativeAvailable > 0 ? "ok" : "warn",
+      detail: nativeAvailable > 0
+        ? `${nativeAvailable}/4 installed (${nativeStatus.filter(s => s.includes("installed") && !s.includes("not")).map(s => s.split(":")[0]).join(", ")})`
+        : "None installed — using TypeScript fallbacks (this is fine)",
+    })
+
+    // 10. Recent logs analysis
+    try {
+      const logDir = Global.Path.log
+      const logFiles = await fs.readdir(logDir).catch(() => [] as string[])
+      const recentLog = logFiles.filter(f => f.endsWith(".log") && !f.endsWith(".json.log")).sort().pop()
+      if (recentLog) {
+        const content = await fs.readFile(path.join(logDir, recentLog), "utf8").catch(() => "")
+        const lines = content.split("\n").filter(Boolean)
+        const errors = lines.filter(l => l.startsWith("ERROR"))
+        const warns = lines.filter(l => l.startsWith("WARN"))
+        checks.push({
+          name: "Recent logs",
+          status: errors.length > 10 ? "warn" : "ok",
+          detail: `${recentLog}: ${lines.length} lines, ${errors.length} errors, ${warns.length} warnings`,
+        })
+
+        // Show last 3 errors if any
+        if (errors.length > 0) {
+          const recent = errors.slice(-3)
+          checks.push({
+            name: "Recent errors",
+            status: "warn",
+            detail: recent.map(e => e.slice(0, 120)).join(" | "),
+          })
+        }
+      }
+    } catch {
+      // Log analysis is best-effort
+    }
+
+    // 11. Code intelligence index status
+    try {
+      const indexDb = path.join(Global.Path.data, "ax-code-index.db")
+      const indexExists = await Bun.file(indexDb).exists()
+      if (indexExists) {
+        checks.push({
+          name: "Code index",
+          status: "ok",
+          detail: `Native index database exists at ${indexDb}`,
+        })
+      }
+    } catch {
+      // Best-effort
+    }
+
+    // 12. Feature flags
     const flags: string[] = []
     if (Flag.AX_CODE_DISABLE_MODELS_FETCH) flags.push("DISABLE_MODELS_FETCH")
+    if (Flag.AX_CODE_NATIVE_INDEX) flags.push("NATIVE_INDEX=on")
+    if (Flag.AX_CODE_NATIVE_FS) flags.push("NATIVE_FS=on")
+    if (Flag.AX_CODE_NATIVE_DIFF) flags.push("NATIVE_DIFF=on")
+    if (Flag.AX_CODE_NATIVE_PARSER) flags.push("NATIVE_PARSER=on")
     if (flags.length > 0) {
       checks.push({ name: "Feature flags", status: "ok", detail: flags.join(", ") })
     }

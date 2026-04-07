@@ -99,6 +99,7 @@ export namespace Log {
     // back to stderr so diagnostics keep flowing.
     stream.on("error", (err) => {
       process.stderr.write(`log stream error: ${err.message}\n`)
+      stream.destroy()
       write = (msg) => {
         process.stderr.write(msg)
         return msg.length

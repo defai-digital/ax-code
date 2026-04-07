@@ -12,6 +12,7 @@ import { DbCommand } from "./cmd/db"
 import { DebugCommand } from "./cmd/debug"
 import { DesignCheckCommand } from "./cmd/design-check"
 import { DoctorCommand } from "./cmd/doctor"
+import { TraceCommand } from "./cmd/trace"
 import { ExportCommand } from "./cmd/export"
 import { GenerateCommand } from "./cmd/generate"
 import { GithubCommand } from "./cmd/github"
@@ -50,6 +51,7 @@ const cmds = [
   GenerateCommand,
   DebugCommand,
   DoctorCommand,
+  TraceCommand,
   ConsoleCommand,
   ProvidersCommand,
   AgentCommand,
