@@ -278,8 +278,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (!this.serverUrl) {
           reject(new Error(`ax-code exited with code ${code}`))
         }
-        this.serverProcess = null
-        this.serverUrl = null
+        if (this.serverProcess === proc) {
+          this.serverProcess = null
+          this.serverUrl = null
+        }
       })
     })
   }
@@ -307,6 +309,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // Try 3: ax-code command globally
     return { useBun: false, command: "ax-code", cwd: "", entry: "" }
+  }
+
+  dispose() {
+    this.stopServer()
   }
 
   private stopServer() {
@@ -343,11 +349,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     const text = await response.text()
-    if (!text) return undefined as T
+    if (!text) throw new Error(`Empty response body from ${method} ${path}`)
     try {
       return JSON.parse(text) as T
     } catch {
-      return undefined as T
+      throw new Error(`Invalid JSON response from ${method} ${path}: ${text.slice(0, 200)}`)
     }
   }
 

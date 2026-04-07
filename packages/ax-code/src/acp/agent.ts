@@ -880,6 +880,29 @@ export namespace ACP {
               const output = this.bashOutput(part)
               const runningContent: ToolCallContent[] = []
               if (output) {
+                const hash = Hash.fast(output)
+                if (part.tool === "bash") {
+                  if (this.bashSnapshots.get(part.callID) === hash) {
+                    await this.connection
+                      .sessionUpdate({
+                        sessionId,
+                        update: {
+                          sessionUpdate: "tool_call_update",
+                          toolCallId: part.callID,
+                          status: "in_progress",
+                          kind: toToolKind(part.tool),
+                          title: part.tool,
+                          locations: toLocations(part.tool, part.state.input),
+                          rawInput: part.state.input,
+                        },
+                      })
+                      .catch((err) => {
+                        log.error("failed to send tool in_progress to ACP", { error: err })
+                      })
+                    break
+                  }
+                  this.bashSnapshots.set(part.callID, hash)
+                }
                 runningContent.push({
                   type: "content",
                   content: {
@@ -949,8 +972,17 @@ export namespace ACP {
                       update: {
                         sessionUpdate: "plan",
                         entries: parsedTodos.data.map((todo) => {
-                          const status: PlanEntry["status"] =
-                            todo.status === "cancelled" ? "completed" : (todo.status as PlanEntry["status"])
+                          const VALID_STATUSES: ReadonlyArray<PlanEntry["status"]> = [
+                            "pending",
+                            "in_progress",
+                            "completed",
+                          ]
+                          const raw = todo.status
+                          const status: PlanEntry["status"] = VALID_STATUSES.includes(raw as PlanEntry["status"])
+                            ? (raw as PlanEntry["status"])
+                            : raw === "cancelled"
+                              ? "completed"
+                              : "pending"
                           return {
                             priority: "medium",
                             status,

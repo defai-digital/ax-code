@@ -1,0 +1,37 @@
+Scan the project for resource lifecycle issues: resources created but never cleaned up within the same function scope. Deterministic regex + structural heuristics, no LLM, no cloud calls.
+
+Input:
+- resourceTypes: which resource types to check (default: all six)
+  - "event_listener": .on()/.addEventListener() without .off()/.removeEventListener()
+  - "timer": setInterval() without clearInterval()
+  - "subscription": Bus.subscribe() without unsubscribe()
+  - "abort_controller": new AbortController() never aborted or signal unused
+  - "child_process": spawn()/exec() without .kill() or exit handler
+  - "map_growth": Map.set() in hot path without .delete()/.clear() or size guard
+- excludeTests: skip test files by default (default true)
+- include: glob patterns to scan (default: TS/JS/JSX/MJS/CJS)
+- maxFiles: hard cap on files scanned (default 500)
+- maxFindingsPerFile: hard cap per file (default 20)
+
+Output:
+- findings: sorted by severity desc, then file, then line. Each finding has:
+  - file, line
+  - resourceType: which resource type was detected
+  - pattern: "no_cleanup" | "cleanup_missing_in_error_path" | "unbounded_growth"
+  - severity: "high" | "medium" | "low"
+  - description: human-readable explanation
+  - cleanupLocation: where cleanup should be (or null)
+- filesScanned: count of files inspected
+- truncated: true if maxFiles cap was hit
+- explain: heuristics applied
+
+When to use:
+- During code review to catch resource leaks
+- When investigating memory leaks or growing process counts
+- Before merging PRs that add event listeners, timers, or subprocess spawning
+- When the user asks about resource cleanup or memory leaks
+
+When NOT to use:
+- For detecting race conditions — use race_scan
+- For runtime memory profiling
+- For analyzing Rust code (TypeScript only in Phase 1)

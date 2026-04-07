@@ -49,7 +49,7 @@ export async function createAxCodeServer(options?: ServerOptions) {
       reject(new Error(`Timeout waiting for server to start after ${options.timeout}ms`))
     }, options.timeout)
     let output = ""
-    proc.stdout?.on("data", (chunk) => {
+    const onStdout = (chunk: any) => {
       output += chunk.toString()
       const lines = output.split("\n")
       for (const line of lines) {
@@ -60,16 +60,24 @@ export async function createAxCodeServer(options?: ServerOptions) {
             return
           }
           clearTimeout(id)
+          cleanup()
           resolve(match[1]!)
           return
         }
       }
-    })
-    proc.stderr?.on("data", (chunk) => {
+    }
+    const onStderr = (chunk: any) => {
       output += chunk.toString()
-    })
+    }
+    const cleanup = () => {
+      proc.stdout?.removeListener("data", onStdout)
+      proc.stderr?.removeListener("data", onStderr)
+    }
+    proc.stdout?.on("data", onStdout)
+    proc.stderr?.on("data", onStderr)
     proc.on("exit", (code) => {
       clearTimeout(id)
+      cleanup()
       let msg = `Server exited with code ${code}`
       if (output.trim()) {
         msg += `\nServer output: ${output}`
@@ -78,11 +86,13 @@ export async function createAxCodeServer(options?: ServerOptions) {
     })
     proc.on("error", (error) => {
       clearTimeout(id)
+      cleanup()
       reject(error)
     })
     if (options.signal) {
       options.signal.addEventListener("abort", () => {
         clearTimeout(id)
+        cleanup()
         reject(new Error("Aborted"))
       }, { once: true })
     }
@@ -91,7 +101,7 @@ export async function createAxCodeServer(options?: ServerOptions) {
   return {
     url,
     close() {
-      proc.kill()
+      try { proc.kill() } catch {}
     },
   }
 }

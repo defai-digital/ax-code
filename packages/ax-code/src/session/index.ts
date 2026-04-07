@@ -674,6 +674,28 @@ export namespace Session {
     await unshare(sessionID).catch((e) => log.warn("session unshare failed", { error: e }))
   })
 
+  /**
+   * Prune sessions older than `ttlDays`. Returns the count of pruned
+   * sessions. Uses `time_updated` (not `time_created`) so active
+   * sessions are never pruned regardless of age.
+   */
+  export async function pruneExpired(ttlDays: number): Promise<number> {
+    const cutoff = Date.now() - ttlDays * 24 * 60 * 60 * 1000
+    const project = Instance.project
+    const rows = Database.use((db) =>
+      db
+        .select({ id: SessionTable.id })
+        .from(SessionTable)
+        .where(and(eq(SessionTable.project_id, project.id), lt(SessionTable.time_updated, cutoff)))
+        .all(),
+    )
+    for (const row of rows) {
+      await remove(row.id as SessionID).catch((err) => log.warn("prune remove failed", { id: row.id, err }))
+    }
+    if (rows.length > 0) log.info("session prune completed", { pruned: rows.length, ttlDays })
+    return rows.length
+  }
+
   export const updateMessage = fn(MessageV2.Info, async (msg) => {
     const time_created = msg.time.created
     const { id, sessionID, ...data } = msg

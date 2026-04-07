@@ -49,32 +49,28 @@ export const SessionCommand = cmd({
 
 export const SessionPruneCommand = cmd({
   command: "prune",
-  describe: "delete sessions older than N days",
+  describe: "delete sessions older than N days (default: config session.ttl_days or 30)",
   builder: (yargs: Argv) => {
     return yargs.option("days", {
-      describe: "delete sessions older than this many days",
+      describe: "delete sessions older than this many days (default: config session.ttl_days or 30)",
       type: "number",
-      default: 30,
     })
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const cutoff = Date.now() - args.days * 24 * 60 * 60 * 1000
-      const sessions = [...Session.list()]
-      const old = sessions.filter((s) => s.time.updated < cutoff)
+      const { Config } = await import("../../../config/config")
+      const cfg = await Config.get()
+      const days = args.days ?? cfg.session?.ttl_days ?? 30
+      const pruned = await Session.pruneExpired(days)
 
-      if (old.length === 0) {
-        UI.println(`No sessions older than ${args.days} days`)
+      if (pruned === 0) {
+        UI.println(`No sessions older than ${days} days`)
         return
       }
 
-      UI.println(`Removing ${old.length} session${old.length === 1 ? "" : "s"} older than ${args.days} days...`)
-      for (const session of old) {
-        await Session.remove(session.id)
-      }
       UI.println(
         UI.Style.TEXT_SUCCESS_BOLD +
-          `Pruned ${old.length} session${old.length === 1 ? "" : "s"}` +
+          `Pruned ${pruned} session${pruned === 1 ? "" : "s"} older than ${days} days` +
           UI.Style.TEXT_NORMAL,
       )
     })

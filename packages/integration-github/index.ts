@@ -229,7 +229,7 @@ try {
 } finally {
   server.close()
   await restoreGitConfig()
-  await revokeAppToken()
+  await revokeAppToken().catch((err) => console.error("Failed to revoke app token:", err))
 }
 process.exit(exitCode)
 
@@ -722,35 +722,32 @@ function generateBranchName(type: "issue" | "pr") {
 async function pushToNewBranch(summary: string, branch: string) {
   console.log("Pushing to new branch...")
   const actor = useContext().actor
+  const msg = `${summary}\n\nCo-authored-by: ${actor} <${actor}@users.noreply.github.com>`
 
   await $`git add .`
-  await $`git commit -m "${summary}
-
-Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
+  await $`git commit -m ${msg}`
   await $`git push -u origin ${branch}`
 }
 
 async function pushToLocalBranch(summary: string) {
   console.log("Pushing to local branch...")
   const actor = useContext().actor
+  const msg = `${summary}\n\nCo-authored-by: ${actor} <${actor}@users.noreply.github.com>`
 
   await $`git add .`
-  await $`git commit -m "${summary}
-
-Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
+  await $`git commit -m ${msg}`
   await $`git push`
 }
 
 async function pushToForkBranch(summary: string, pr: GitHubPullRequest) {
   console.log("Pushing to fork branch...")
   const actor = useContext().actor
+  const msg = `${summary}\n\nCo-authored-by: ${actor} <${actor}@users.noreply.github.com>`
 
   const remoteBranch = pr.headRefName
 
   await $`git add .`
-  await $`git commit -m "${summary}
-
-Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
+  await $`git commit -m ${msg}`
   await $`git push fork HEAD:${remoteBranch}`
 }
 

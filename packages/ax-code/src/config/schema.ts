@@ -666,6 +666,21 @@ export const Info = z
         url: z.string().optional().describe("Enterprise URL"),
       })
       .optional(),
+    session: z
+      .object({
+        ttl_days: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Auto-prune sessions older than this many days (default: 30)"),
+        auto_prune: z
+          .boolean()
+          .optional()
+          .describe("Automatically prune expired sessions on startup (default: true)"),
+      })
+      .optional()
+      .describe("Session lifecycle management"),
     compaction: z
       .object({
         auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),

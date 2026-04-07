@@ -149,17 +149,9 @@ function bfsUpstream(
     if (distance >= depth) continue
 
     const callers = CodeIntelligence.findCallers(projectID, id, { scope })
-    const refs = CodeIntelligence.findReferences(projectID, id, { scope })
-    // findReferences returns Reference objects (source-side info only),
-    // not resolved symbols. We only want fresh *symbols* in the visited
-    // map, so the references edge contributes `calls`-equivalent entries
-    // by going through findCallers too — which it already does. Here we
-    // just use references as a signal of inbound interest but don't
-    // expand them as new nodes. (If a references-only edge exists in
-    // the graph without a matching callers entry, that's a v3 edge-kind
-    // decision we respect.)
-    // Currently, expand only via callers for stable graph walking.
-    void refs
+    // Note: findReferences returns Reference objects (source locations),
+    // not resolved symbols — they can't feed into the BFS visited set.
+    // When import edges land (Phase 2), use findDependents here instead.
 
     for (const caller of callers) {
       const nextSym = caller.symbol

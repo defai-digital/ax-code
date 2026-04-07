@@ -82,7 +82,7 @@ The important distinction is that `ax-code` is not just a chat UI. It is a runti
 - interfaces such as CLI, TUI, SDK, ACP, and headless server mode
 - agent routing, planning, and dependency-ordered execution
 - tool execution, MCP integrations, LSP, and a persistent code graph (Code Intelligence, v2.2)
-- the **Debugging & Refactoring Engine** (DRE, v2.3) — deterministic-first root-cause analysis, duplicate and hardcode detection, change-impact analysis, and shadow-worktree-validated refactors
+- the **Debugging & Refactoring Engine** (DRE, v2.3+) — deterministic-first root-cause analysis, proactive scanners (race conditions, resource leaks, security patterns, hardcoded values), change-impact analysis, and shadow-worktree-validated refactors
 - **incremental indexing** (v2.4) — content-hash skip on unchanged files, orphan purge on deleted files, per-file progress reporting
 - session, memory, and storage state with replay, audit, and snapshot trails
 - sandbox, permission, and policy boundaries
@@ -266,7 +266,7 @@ ax-code index --concurrency 8  # Parallel indexing for large projects
 
 The graph powers tools like `code-intelligence` (symbol lookup, callers, callees), `impact_analyze` (change impact estimation), and `refactor_plan` (dependency-aware refactoring).
 
-### 35+ Built-in Tools
+### 38+ Built-in Tools
 
 | Category              | Tools                                                               |
 | --------------------- | ------------------------------------------------------------------- |
@@ -276,6 +276,7 @@ The graph powers tools like `code-intelligence` (symbol lookup, callers, callees
 | **LSP queries**       | definition, references, hover, symbols, call hierarchy, diagnostics |
 | **Code intelligence** | code-intelligence (graph queries, symbol lookup, call graphs)       |
 | **DRE analysis**      | debug_analyze, dedup_scan, hardcode_scan, impact_analyze            |
+| **DRE scanners**      | race_scan, lifecycle_scan, security_scan (proactive, incremental)   |
 | **DRE refactoring**   | refactor_plan, refactor_apply (shadow-worktree-validated)           |
 | **Planning**          | task, todo, plan enter/exit, skill                                  |
 | **Web**               | webfetch (URL to markdown), websearch, exa-fetch                    |
@@ -500,7 +501,7 @@ Config is hierarchical: remote org defaults -> global -> custom path -> project 
 - **Always initialize context**: Run `ax-code init` (or `--depth full`) first in new projects to generate AX.md for better agent understanding.
 - **Use the right agent**: Let auto-routing work, or switch manually (Tab). Use `debug` for bugs, `perf` for optimization, `security` for audits.
 - **Enable sandbox early**: Toggle with `/sandbox` or `--sandbox workspace-write` for safety, especially with untrusted code or bash.
-- **Leverage DRE tools**: For refactors use `refactor_plan` → review → `refactor_apply`; `impact_analyze` before edits; `dedup_scan`/`hardcode_scan` for cleanup.
+- **Leverage DRE tools**: For refactors use `refactor_plan` -> review -> `refactor_apply`; `impact_analyze` before edits; `dedup_scan`/`hardcode_scan` for cleanup; `race_scan`/`lifecycle_scan`/`security_scan` for proactive bug detection.
 - **Index large codebases**: Run `ax-code index` for fast LSP/graph queries in big repos.
 - **Persist & audit**: Use sessions (`session list/export`), review permissions, enable MCP only for trusted servers.
 - **SDK usage**: Always `dispose()` agents; prefer typed hooks; handle `ToolError`/`PermissionError`.

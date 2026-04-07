@@ -232,6 +232,55 @@ export namespace ShadowWorktree {
   }
 
   /**
+   * Clean up orphan shadow worktrees and branches left behind by a
+   * process crash between `open()` and `dispose()`. Safe to call at
+   * any time — it only touches DRE-owned artifacts.
+   *
+   * Call this during startup or before a new shadow open to prevent
+   * resource accumulation after crashes.
+   */
+  export async function cleanupOrphans(): Promise<{ branches: number; directories: number }> {
+    if (Instance.project.vcs !== "git") return { branches: 0, directories: 0 }
+    const cwd = Instance.worktree
+    let branches = 0
+    let directories = 0
+
+    // Remove orphan DRE shadow branches
+    const branchList = await git(["branch", "--list", "ax-code/dre/shadow/*"], { cwd })
+    if (branchList.exitCode === 0) {
+      const names = branchList
+        .text()
+        .trim()
+        .split("\n")
+        .map((line) => line.trim().replace(/^\*\s*/, ""))
+        .filter(Boolean)
+      for (const name of names) {
+        // Force-remove the worktree first (if it still exists), then the branch
+        await git(["worktree", "remove", "--force", name], { cwd }).catch(() => undefined)
+        const del = await git(["branch", "-D", name], { cwd })
+        if (del.exitCode === 0) branches++
+      }
+    }
+
+    // Remove orphan shadow directories
+    const shadowBase = path.join(Instance.directory, "automatosx", "tmp", "dre-shadow")
+    const entries = await fs.readdir(shadowBase).catch(() => [] as string[])
+    for (const entry of entries) {
+      const full = path.join(shadowBase, entry)
+      const stat = await fs.stat(full).catch(() => null)
+      if (stat?.isDirectory()) {
+        await fs.rm(full, { recursive: true, force: true }).catch(() => undefined)
+        directories++
+      }
+    }
+
+    if (branches > 0 || directories > 0) {
+      log.info("cleaned up orphan shadows", { branches, directories })
+    }
+    return { branches, directories }
+  }
+
+  /**
    * Test helper: reset the concurrency gate state. Production code
    * never needs this — the gate is process-lifetime. Exposed so the
    * test suite can isolate concurrency tests from each other.

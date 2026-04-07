@@ -11,6 +11,8 @@ import { Command } from "../command"
 import { Instance } from "./instance"
 import { Log } from "@/util/log"
 import { ShareNext } from "@/share/share-next"
+import { Config } from "../config/config"
+import { Session } from "../session"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -28,4 +30,13 @@ export async function InstanceBootstrap() {
       Project.setInitialized(Instance.project.id)
     }
   })
+
+  // Session lifecycle: auto-prune expired sessions on startup.
+  // Runs in background — does not block bootstrap completion.
+  const cfg = await Config.get()
+  const autoPrune = cfg.session?.auto_prune ?? true
+  const ttlDays = cfg.session?.ttl_days ?? 30
+  if (autoPrune) {
+    Session.pruneExpired(ttlDays).catch((err) => Log.Default.warn("session auto-prune failed", { err }))
+  }
 }

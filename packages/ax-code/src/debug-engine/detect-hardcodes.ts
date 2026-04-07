@@ -29,6 +29,8 @@ export type DetectHardcodesInput = {
   excludeTests?: boolean
   // Glob(s) to include (defaults to TS/JS sources)
   include?: string[]
+  // Pre-resolved file list for incremental scanning.
+  files?: string[]
   // Hard cap on files inspected; when hit, output is marked truncated.
   maxFiles?: number
   // Cap per file; prevents one huge generated file from dominating the
@@ -46,11 +48,12 @@ const DEFAULT_MAX_PER_FILE = 20
 // but we keep them in the flag set and let severity sort them out.
 const TRIVIAL_NUMBERS = new Set(["0", "1", "-1", "2"])
 
-// Secret shape: a string of at least 20 chars composed of mixed-case
+// Secret shape: a string of at least 30 chars composed of mixed-case
 // letters, digits, and common base64/base64url characters, with high
-// Shannon entropy. Heuristic — intentionally loose so we catch new
-// formats rather than a fixed list of provider tokens.
-const SECRET_SHAPE_MIN_LEN = 20
+// Shannon entropy. Raised from 20 to 30 in the precision overhaul —
+// 20-char class names like OAuth2AuthorizationCodeGrant triggered
+// false positives at the old threshold.
+const SECRET_SHAPE_MIN_LEN = 30
 const SECRET_ENTROPY_THRESHOLD = 3.5
 
 function shannonEntropy(s: string): number {
@@ -137,22 +140,30 @@ const magicNumberDetector: Detector = (original, trimmed) => {
   return results
 }
 
-const urlDetector: Detector = (original) => {
+// Heuristic: line is a const/enum assignment. URLs and paths in named
+// constants are already extracted — flagging them is noise.
+function isConstAssignment(line: string): boolean {
+  return /^\s*(export\s+)?(const|let|var)\s+[A-Z_a-z]\w*\s*(:[^=]+)?=/.test(line)
+}
+
+const urlDetector: Detector = (original, trimmed) => {
   const line = stripComments(original)
+  // Skip URLs assigned to a named constant — the value is already
+  // extracted and flagging it adds no signal.
+  if (isConstAssignment(trimmed)) return []
   const results: Array<{ value: string; column: number }> = []
   const re = /https?:\/\/[^\s"')<>]+/g
   let m: RegExpExecArray | null
   while ((m = re.exec(line)) !== null) {
-    // Skip localhost URLs — those are usually dev defaults that
-    // belong in a .env.development, not a production hardcode.
-    // Still report them but at lower severity via the caller.
     results.push({ value: m[0], column: m.index })
   }
   return results
 }
 
-const pathDetector: Detector = (original) => {
+const pathDetector: Detector = (original, trimmed) => {
   const line = stripComments(original)
+  // Skip paths assigned to a named constant — already extracted.
+  if (isConstAssignment(trimmed)) return []
   const results: Array<{ value: string; column: number }> = []
   // Unix absolute path in a string literal: "/Users/...", "/home/..."
   const re = /"((?:\/Users\/|\/home\/|\/opt\/|\/var\/|\/etc\/|\/tmp\/|[A-Z]:\\)[^"]*)"/g
@@ -161,6 +172,40 @@ const pathDetector: Detector = (original) => {
     results.push({ value: m[1], column: m.index })
   }
   return results
+}
+
+// Heuristic: a string that looks like a class/type name rather than a
+// secret — PascalCase identifiers, optionally with digits. These show
+// up in base64-ish character classes and trigger false positives.
+function looksLikeClassName(s: string): boolean {
+  return /^[A-Z][a-zA-Z0-9]*([A-Z][a-zA-Z0-9]*){2,}$/.test(s)
+}
+
+// Known non-secret patterns: base64-encoded images, CSS data URIs,
+// SVG path data, common long identifiers, snake_case/kebab-case names.
+function isKnownNonSecret(s: string): boolean {
+  if (looksLikeClassName(s)) return true
+  // snake_case identifiers (DB column names, error codes, event names)
+  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(s)) return true
+  // kebab-case identifiers (CSS classes, npm package names, import paths)
+  if (/^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(s)) return true
+  // Base64-encoded data URI fragments (images, fonts)
+  if (/^[A-Za-z0-9+/]+=*$/.test(s) && s.endsWith("=")) return true
+  // SVG path data (`M0 0L10 10...`)
+  if (/^[MLHVCSQTAZmlhvcsqtaz0-9.,\s-]+$/.test(s)) return true
+  return false
+}
+
+// Require at least 3 distinct character classes for a string to look
+// like a secret. Real tokens mix uppercase, lowercase, digits, and
+// special chars. Identifiers typically use only 1-2 classes.
+function hasCharClassDiversity(s: string): boolean {
+  let classes = 0
+  if (/[A-Z]/.test(s)) classes++
+  if (/[a-z]/.test(s)) classes++
+  if (/[0-9]/.test(s)) classes++
+  if (/[^A-Za-z0-9]/.test(s)) classes++
+  return classes >= 3
 }
 
 const secretShapeDetector: Detector = (original) => {
@@ -174,6 +219,10 @@ const secretShapeDetector: Detector = (original) => {
     // Skip obvious non-secrets: UUIDs with dashes in fixed positions,
     // file hashes (all hex), base64 of a short word.
     if (/^[a-f0-9]+$/i.test(candidate) && candidate.length <= 40) continue // sha1/sha256 hex
+    // Skip class names and known non-secret patterns (precision overhaul)
+    if (isKnownNonSecret(candidate)) continue
+    // Require character class diversity — real secrets mix case + digits
+    if (!hasCharClassDiversity(candidate)) continue
     const entropy = shannonEntropy(candidate)
     if (entropy < SECRET_ENTROPY_THRESHOLD) continue
     results.push({ value: candidate, column: m.index })
@@ -230,10 +279,14 @@ async function scanFile(
     // the block doesn't close on this line, flip `inBlockComment`
     // and skip the rest.
     let remaining = lines[i]
+    // Track the column offset when a leading block comment is stripped
+    // so that detector-reported columns map back to the original line.
+    let columnOffset = 0
     if (inBlockComment) {
       const closeIdx = remaining.indexOf("*/")
       if (closeIdx === -1) continue // whole line is inside a block
-      remaining = remaining.slice(closeIdx + 2)
+      columnOffset = closeIdx + 2
+      remaining = remaining.slice(columnOffset)
       inBlockComment = false
     }
     // From here, search for a block-comment opener that isn't
@@ -264,7 +317,7 @@ async function scanFile(
         findings.push({
           file,
           line: i + 1,
-          column: hit.column + 1,
+          column: hit.column + 1 + columnOffset,
           kind,
           value: hit.value.length > 120 ? hit.value.slice(0, 117) + "..." : hit.value,
           suggestion: suggestionFor(kind),
@@ -299,21 +352,31 @@ export async function detectHardcodesImpl(
 
   const cwd = Instance.directory
 
-  // Enumerate candidate files. Glob.scan uses fast-glob under the hood
-  // and respects ignore patterns; we filter out test files and common
-  // noise directories explicitly because fast-glob doesn't honor
-  // .gitignore by default.
-  const allFiles: string[] = []
-  for (const pattern of include) {
-    const hits = await Glob.scan(pattern, { cwd, absolute: true, dot: false, symlink: false })
-    for (const f of hits) {
-      if (isExcludedDir(f, cwd)) continue
-      if (excludeTests && isTestFile(f)) continue
-      // scope=worktree enforcement: every reported file must live inside
-      // the current Instance worktree. Mirrors the CodeIntelligence
-      // worktree scope filter behavior.
-      if (!Instance.containsPath(f)) continue
-      allFiles.push(f)
+  let allFiles: string[]
+  if (input.files && input.files.length > 0) {
+    heuristics.push("incremental")
+    allFiles = input.files.filter((f) => {
+      if (excludeTests && isTestFile(f)) return false
+      if (!Instance.containsPath(f)) return false
+      return true
+    })
+  } else {
+    // Enumerate candidate files. Glob.scan uses fast-glob under the hood
+    // and respects ignore patterns; we filter out test files and common
+    // noise directories explicitly because fast-glob doesn't honor
+    // .gitignore by default.
+    allFiles = []
+    for (const pattern of include) {
+      const hits = await Glob.scan(pattern, { cwd, absolute: true, dot: false, symlink: false })
+      for (const f of hits) {
+        if (isExcludedDir(f, cwd)) continue
+        if (excludeTests && isTestFile(f)) continue
+        // scope=worktree enforcement: every reported file must live inside
+        // the current Instance worktree. Mirrors the CodeIntelligence
+        // worktree scope filter behavior.
+        if (!Instance.containsPath(f)) continue
+        allFiles.push(f)
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 # AX Code Documentation
 
-This folder holds repository documentation that should be stable, discoverable, and safe to reference from code reviews and contributor guidance.
+This folder holds **product-facing** documentation: user guides, architecture policies, specs, and reference material. Development-stage planning (PRDs, ADRs, research) lives in `automatosx/` at the repo root.
 
 ## Architecture
 
@@ -9,27 +9,34 @@ This folder holds repository documentation that should be stable, discoverable, 
 | [Repository Structure](architecture/repo-structure.md) | Canonical repo layout, dependency rules, hotspot folders, and placement guidance |
 | [Testing Policy](architecture/testing-policy.md)       | Default test layout by package type and when tests are required                  |
 
-## Planning
-
-| Folder             | Summary                                            |
-| ------------------ | -------------------------------------------------- |
-| [`adr/`](adr/)     | Architecture decision records                      |
-| [`prd/`](prd/)     | Product and engineering requirement documents      |
-| [`specs/`](specs/) | Stable product and technical specifications        |
-| [`todos/`](todos/) | Deferred work and follow-up plans                  |
-
 ## Guides
 
 | Document                   | Summary                                                                      |
 | -------------------------- | ---------------------------------------------------------------------------- |
 | [Sandbox Mode](sandbox.md) | Execution sandbox — toggle, configuration, isolation modes, enforcement details |
 
+## Specs
+
+| Document                           | Summary                                    |
+| ---------------------------------- | ------------------------------------------ |
+| [`specs/project.md`](specs/project.md) | API spec for project/session management |
+
 ## Reference
 
 | Document                                        | Summary                                                                |
 | ----------------------------------------------- | ---------------------------------------------------------------------- |
-| [Migration Review](ax-code-migration-review.md) | Feature comparison and migration strategy: OpenCode + ax-cli → AX Code |
+| [Migration Review](ax-code-migration-review.md) | Feature comparison and migration strategy: OpenCode + ax-cli -> AX Code |
 
 ## Policies
 
-Machine-readable policy examples live in [`docs/policies`](policies/).
+Machine-readable policy examples live in [`policies/`](policies/).
+
+## Development-Stage Documents
+
+PRDs, ADRs, and temporary reports are in `automatosx/` (gitignored, not shipped):
+
+- `automatosx/prd/` — Product requirement documents
+- `automatosx/adr/` — Architecture decision records
+- `automatosx/tmp/` — Temporary reports and research
+
+Use `/prd` and `/adr` slash commands to create new documents — they write to the correct location automatically.

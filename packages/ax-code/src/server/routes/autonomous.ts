@@ -75,7 +75,11 @@ export const AutonomousRoutes = lazy(() =>
         const existing = await Filesystem.readText(filepath)
           .then((t) => {
             const parsed = JSON.parse(t)
-            return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+              log.warn("ax-code.json contained non-object value, resetting to empty object")
+              return {}
+            }
+            return parsed
           })
           .catch(() => ({}))
         existing.autonomous = enabled

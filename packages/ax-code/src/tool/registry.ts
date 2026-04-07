@@ -32,6 +32,9 @@ import { DedupScanTool } from "./dedup_scan"
 import { ImpactAnalyzeTool } from "./impact_analyze"
 import { HardcodeScanTool } from "./hardcode_scan"
 import { RefactorApplyTool } from "./refactor_apply"
+import { RaceScanTool } from "./race_scan"
+import { LifecycleScanTool } from "./lifecycle_scan"
+import { SecurityScanTool } from "./security_scan"
 import { Truncate } from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
 import { Glob } from "../util/glob"
@@ -160,6 +163,9 @@ export namespace ToolRegistry {
                 ImpactAnalyzeTool,
                 HardcodeScanTool,
                 RefactorApplyTool,
+                RaceScanTool,
+                LifecycleScanTool,
+                SecurityScanTool,
               ]
             : []),
           ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),

@@ -486,8 +486,9 @@ describe("detectHardcodes", () => {
     await fs.writeFile(
       path.join(tmp.path, "api.ts"),
       [
-        'const prod = "https://api.example.com/v1"',
-        'const dev = "http://localhost:3000"',
+        // URLs in runtime expressions (not const assignments) are flagged
+        'fetch("https://api.example.com/v1")',
+        'fetch("http://localhost:3000")',
       ].join("\n"),
     )
 
@@ -513,8 +514,9 @@ describe("detectHardcodes", () => {
     await fs.writeFile(
       path.join(tmp.path, "paths.ts"),
       [
-        'const home = "/Users/alice/project"',
-        'const tmpDir = "/tmp/scratch"',
+        // Paths in runtime expressions (not const assignments) are flagged
+        'readFile("/Users/alice/project")',
+        'readFile("/tmp/scratch")',
       ].join("\n"),
     )
 
@@ -591,6 +593,690 @@ describe("detectHardcodes", () => {
       fn: async () => {
         const projectID = Instance.project.id
         const report = await DebugEngine.detectHardcodes(projectID, { patterns: ["inline_url"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+})
+
+// ─── hardcode_scan precision improvements ───────────────────────────
+
+describe("detectHardcodes — precision overhaul", () => {
+  test("skips URLs assigned to const declarations", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "config.ts"),
+      [
+        'const API_URL = "https://api.example.com/v1"',
+        'export const BASE = "https://cdn.example.com"',
+        'fetch("https://inline.example.com/data")',
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectHardcodes(projectID, { patterns: ["inline_url"] })
+        const values = report.findings.map((f) => f.value)
+        // Inline fetch URL should be flagged
+        expect(values.some((v) => v.includes("inline.example.com"))).toBe(true)
+        // URLs in const assignments should NOT be flagged
+        expect(values.some((v) => v.includes("api.example.com"))).toBe(false)
+        expect(values.some((v) => v.includes("cdn.example.com"))).toBe(false)
+      },
+    })
+  })
+
+  test("skips paths assigned to const declarations", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "paths.ts"),
+      [
+        'const DATA_DIR = "/Users/deploy/data"',
+        'readFile("/Users/hardcoded/secrets")',
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectHardcodes(projectID, { patterns: ["inline_path"] })
+        const values = report.findings.map((f) => f.value)
+        // Inline path should be flagged
+        expect(values.some((v) => v.includes("hardcoded"))).toBe(true)
+        // Const-assigned path should NOT
+        expect(values.some((v) => v.includes("deploy"))).toBe(false)
+      },
+    })
+  })
+
+  test("does not flag PascalCase class names as secrets", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "auth.ts"),
+      [
+        'const grant = "OAuth2AuthorizationCodeGrantTypeHandler"',
+        'const real = "aB9cD8eF7gH6iJ5kL4mN3oP2qR1sT0uVwXyZ"',
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectHardcodes(projectID, { patterns: ["inline_secret_shape"] })
+        const values = report.findings.map((f) => f.value)
+        // PascalCase class name should NOT be flagged
+        expect(values.some((v) => v.includes("OAuth2"))).toBe(false)
+        // Real secret-shaped string should be flagged
+        expect(values.some((v) => v.startsWith("aB9cD8"))).toBe(true)
+      },
+    })
+  })
+
+  test("does not flag snake_case identifiers as secrets", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "schema.ts"),
+      [
+        'const table = "debug_engine_refactor_plan_project_status_idx"',
+        'const event = "pull_request_review_comment_created"',
+        'const err = "BunInstallFailedErrorWithLongSuffix"',
+        'const real = "aB9cD8eF7gH6iJ5kL4mN3oP2qR1sT0uVwXyZ"',
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectHardcodes(projectID, { patterns: ["inline_secret_shape"] })
+        const values = report.findings.map((f) => f.value)
+        // snake_case identifiers should NOT be flagged
+        expect(values.some((v) => v.includes("debug_engine"))).toBe(false)
+        expect(values.some((v) => v.includes("pull_request"))).toBe(false)
+        // Real secret should still be flagged
+        expect(values.some((v) => v.startsWith("aB9cD8"))).toBe(true)
+      },
+    })
+  })
+})
+
+// ─── detectRaces ────────────────────────────────────────────────────
+
+describe("detectRaces", () => {
+  test("detects TOCTOU: Map.get → await → Map.set", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "cache.ts"),
+      [
+        "const cache = new Map<string, number>()",
+        "async function update(key: string) {",
+        "  const old = cache.get(key)",
+        "  const value = await fetchValue(key)",
+        "  cache.set(key, value)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, { patterns: ["toctou"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("toctou")
+        expect(report.findings[0].severity).toBe("high")
+        expect(report.findings[0].description).toContain("cache")
+      },
+    })
+  })
+
+  test("detects non-atomic counter after await", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "counter.ts"),
+      [
+        "let count = 0",
+        "async function process(items: string[]) {",
+        "  for (const item of items) {",
+        "    await handle(item)",
+        "    count++",
+        "  }",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, { patterns: ["non_atomic_counter"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("non_atomic_counter")
+        expect(report.findings[0].description).toContain("count")
+      },
+    })
+  })
+
+  test("detects conflicting mutations inside Promise.all", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "parallel.ts"),
+      [
+        "const results: string[] = []",
+        "async function run() {",
+        "  await Promise.all([",
+        "    fetchA().then(val => results.push(val)),",
+        "    fetchB().then(val => results.push(val)),",
+        "  ])",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, { patterns: ["conflicting_mutation"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("conflicting_mutation")
+        expect(report.findings[0].description).toContain("results")
+      },
+    })
+  })
+
+  test("detects event listener registered after await", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "events.ts"),
+      [
+        "async function setup(emitter: any) {",
+        "  await initialize()",
+        '  emitter.on("data", handler)',
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, { patterns: ["stale_listener"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("stale_listener")
+        expect(report.findings[0].description).toContain("emitter")
+      },
+    })
+  })
+
+  test("no findings in synchronous code", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "sync.ts"),
+      [
+        "function add(a: number, b: number) {",
+        "  return a + b",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, {})
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("respects @scan-suppress race_scan comment", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "suppressed.ts"),
+      [
+        "const cache = new Map<string, number>()",
+        "async function update(key: string) {",
+        "  // @scan-suppress race_scan — intentional stale read",
+        "  const old = cache.get(key)",
+        "  const value = await fetchValue(key)",
+        "  cache.set(key, value)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, { patterns: ["toctou"] })
+        // The suppressed read should not generate a finding
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+})
+
+// ─── detectLifecycle ────────────────────────────────────────────────
+
+describe("detectLifecycle", () => {
+  test("detects setInterval without clearInterval", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "timer.ts"),
+      [
+        "function startPolling() {",
+        "  setInterval(() => {",
+        '    console.log("tick")',
+        "  }, 1000)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["timer"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].resourceType).toBe("timer")
+        expect(report.findings[0].pattern).toBe("no_cleanup")
+        expect(report.findings[0].severity).toBe("high")
+      },
+    })
+  })
+
+  test("no finding when setInterval has matching clearInterval", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "timer-ok.ts"),
+      [
+        "function startPolling() {",
+        "  const id = setInterval(() => {",
+        '    console.log("tick")',
+        "  }, 1000)",
+        "  return () => clearInterval(id)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["timer"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("detects event listener without removal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "events.ts"),
+      [
+        "function setup(emitter: any) {",
+        '  emitter.on("data", handleData)',
+        '  emitter.on("error", handleError)',
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["event_listener"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].resourceType).toBe("event_listener")
+      },
+    })
+  })
+
+  test("no finding when event listener has removal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "events-ok.ts"),
+      [
+        "function setup(emitter: any) {",
+        '  emitter.on("data", handleData)',
+        "  return () => emitter.off()",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["event_listener"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("detects unbounded Map growth", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "cache.ts"),
+      [
+        "const cache = new Map<string, any>()",
+        "function store(key: string, value: any) {",
+        "  cache.set(key, value)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["map_growth"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].resourceType).toBe("map_growth")
+        expect(report.findings[0].pattern).toBe("unbounded_growth")
+      },
+    })
+  })
+
+  test("no Map growth finding when size guard exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "bounded-cache.ts"),
+      [
+        "const cache = new Map<string, any>()",
+        "function store(key: string, value: any) {",
+        "  if (cache.size > 1000) cache.clear()",
+        "  cache.set(key, value)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["map_growth"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("detects child process without kill or exit handler", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "proc.ts"),
+      [
+        "function run(cmd: string) {",
+        '  spawn("bash", ["-c", cmd])',
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["child_process"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].resourceType).toBe("child_process")
+      },
+    })
+  })
+
+  test("respects @scan-suppress lifecycle_scan comment", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "suppressed.ts"),
+      [
+        "function startPolling() {",
+        "  // @scan-suppress lifecycle_scan — cleaned up by parent scope",
+        "  setInterval(() => {",
+        '    console.log("tick")',
+        "  }, 1000)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["timer"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("excludes test files by default", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.mkdir(path.join(tmp.path, "test"), { recursive: true })
+    await fs.writeFile(
+      path.join(tmp.path, "test", "timer.test.ts"),
+      [
+        "function startPolling() {",
+        "  setInterval(() => {}, 1000)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["timer"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+})
+
+// ─── detectSecurity ─────────────────────────────────────────────────
+
+describe("detectSecurity", () => {
+  test("detects path traversal without containment check", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "files.ts"),
+      [
+        "import path from 'path'",
+        "function readUserFile(userPath: string) {",
+        "  const full = path.join('/data', userPath)",
+        "  return fs.readFile(full)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["path_traversal"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("path_traversal")
+        expect(report.findings[0].severity).toBe("high")
+        expect(report.findings[0].userControlled).toBe(true)
+      },
+    })
+  })
+
+  test("no path traversal finding when containment check exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "safe-files.ts"),
+      [
+        "import path from 'path'",
+        "function readUserFile(userPath: string) {",
+        "  const full = path.join('/data', userPath)",
+        "  if (!Filesystem.contains('/data', full)) throw new Error('nope')",
+        "  return fs.readFile(full)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["path_traversal"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("detects command injection via template literal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "run.ts"),
+      [
+        "function runCommand(input: string) {",
+        "  exec(`echo ${input}`)",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["command_injection"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("command_injection")
+        expect(report.findings[0].severity).toBe("high")
+      },
+    })
+  })
+
+  test("detects env leak via process.env spread", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "spawn.ts"),
+      [
+        "function run() {",
+        "  spawn('node', ['script.js'], { env: { ...process.env } })",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["env_leak"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("env_leak")
+        expect(report.findings[0].severity).toBe("medium")
+      },
+    })
+  })
+
+  test("no env leak finding when sanitization exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "safe-spawn.ts"),
+      [
+        "function run() {",
+        "  const env = Env.sanitize(process.env)",
+        "  spawn('node', ['script.js'], { env: { ...process.env } })",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["env_leak"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("detects missing validation on mutation routes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "routes.ts"),
+      [
+        'app.post("/api/users", async (c) => {',
+        "  const body = await c.req.json()",
+        "  return c.json({ ok: true })",
+        "})",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["missing_validation"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("missing_validation")
+        expect(report.findings[0].description).toContain("/api/users")
+      },
+    })
+  })
+
+  test("no missing validation when validator exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "safe-routes.ts"),
+      [
+        'app.post("/api/users", validator("json", schema), async (c) => {',
+        "  const body = c.req.valid('json')",
+        "  return c.json({ ok: true })",
+        "})",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["missing_validation"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("detects SSRF with variable URL", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "proxy.ts"),
+      [
+        "async function proxy(userUrl: string) {",
+        "  const resp = await fetch(userUrl)",
+        "  return resp.text()",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["ssrf"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("ssrf")
+        expect(report.findings[0].severity).toBe("high")
+        expect(report.findings[0].userControlled).toBe(true)
+      },
+    })
+  })
+
+  test("respects @scan-suppress security_scan", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "suppressed.ts"),
+      [
+        "function run() {",
+        "  // @scan-suppress security_scan — validated upstream",
+        "  spawn('node', ['script.js'], { env: { ...process.env } })",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["env_leak"] })
+        expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("excludes test files by default", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.mkdir(path.join(tmp.path, "test"), { recursive: true })
+    await fs.writeFile(
+      path.join(tmp.path, "test", "proxy.test.ts"),
+      [
+        "async function proxy(userUrl: string) {",
+        "  const resp = await fetch(userUrl)",
+        "  return resp.text()",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, { patterns: ["ssrf"] })
         expect(report.findings.length).toBe(0)
       },
     })

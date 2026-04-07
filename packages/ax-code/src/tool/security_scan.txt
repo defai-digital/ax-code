@@ -1,0 +1,35 @@
+Scan the project for common security anti-patterns: path traversal, command injection, SSRF, missing request validation, and environment variable leaks. Deterministic regex + structural heuristics, no LLM, no cloud calls.
+
+Input:
+- patterns: which detectors to run (default: all five)
+  - "path_traversal": path.join/resolve with variable input without containment check
+  - "command_injection": exec/spawn with string interpolation or concatenation
+  - "ssrf": fetch/axios with variable URL without URL validation
+  - "missing_validation": mutation HTTP routes without schema validation middleware
+  - "env_leak": process.env spread to child processes without sanitization
+- excludeTests: skip test files by default (default true)
+- include: glob patterns to scan (default: TS/JS/JSX/MJS/CJS)
+- maxFiles: hard cap on files scanned (default 500)
+- maxFindingsPerFile: hard cap per file (default 20)
+
+Output:
+- findings: sorted by severity desc, then file, then line. Each finding has:
+  - file, line
+  - pattern: the security anti-pattern detected
+  - severity: "high" | "medium" | "low"
+  - description: human-readable explanation
+  - userControlled: whether the input comes from user/external source
+- filesScanned: count of files inspected
+- truncated: true if maxFiles cap was hit
+- explain: heuristics applied
+
+When to use:
+- During security review or before production deploys
+- When reviewing PRs that handle user input, file paths, or subprocess execution
+- When the user asks about security vulnerabilities or hardening
+- As part of a compliance audit checklist
+
+When NOT to use:
+- As a replacement for a full security audit — this catches patterns, not all vulnerabilities
+- For runtime security monitoring
+- For analyzing third-party dependencies (use npm audit instead)

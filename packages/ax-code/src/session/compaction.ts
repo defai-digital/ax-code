@@ -100,10 +100,13 @@ export namespace SessionCompaction {
       await Promise.all(
         toPrune.map(async (part) => {
           if (part.state.status !== "completed") return
+          const prev = part.state.time.compacted
           part.state.time.compacted = timestamp
           try {
             await Session.updatePart(part)
           } catch (e) {
+            // Roll back in-memory state so it stays consistent with DB
+            part.state.time.compacted = prev
             log.warn("failed to compact part", { partID: part.id, err: e })
           }
         }),

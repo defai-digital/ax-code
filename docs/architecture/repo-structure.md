@@ -5,7 +5,9 @@ This repo is a pnpm workspace monorepo. The structure rules below are intended t
 ## Canonical Top-Level Layout
 
 - `packages/`: shipped packages and product surfaces
-- `docs/`: architecture notes, ADRs, PRDs, specs, bugs, todos, and reference docs
+- `crates/`: Rust native addons (napi-rs) for performance-critical operations
+- `docs/`: product-facing documentation (user guides, policies, specs, images)
+- `automatosx/`: development-stage documents (PRDs, ADRs, tmp reports) — gitignored, not shipped
 - `script/`: repository automation scripts run from the root
 
 ## Package Roles
@@ -58,9 +60,20 @@ These are soft limits:
 
 ## Canonical Docs Layout
 
+`docs/` is **product-facing** — content that users, contributors, and reviewers reference. Development-stage planning documents live in `automatosx/`.
+
+### docs/ (product-facing, committed to git)
+
 - `docs/architecture/`: repo and package-level policies
-- `docs/adr/`: decision records
-- `docs/prd/`: product and engineering requirement documents
-- `docs/specs/`: stable reference specs
-- `docs/bugs/`: bug inventories and bug-focused reviews
-- `docs/todos/`: tracked follow-up work and deferred tasks
+- `docs/policies/`: JSON policy files for sandbox and governance
+- `docs/specs/`: stable reference specs (API contracts, protocols)
+- `docs/images/`: diagrams and architecture images referenced by README
+- `docs/*.md`: user guides (sandbox.md, autonomous.md, etc.)
+
+### automatosx/ (development-stage, gitignored)
+
+- `automatosx/prd/`: product and engineering requirement documents
+- `automatosx/adr/`: architecture decision records
+- `automatosx/tmp/`: temporary reports, status reviews, research notes
+
+This separation ensures `docs/` stays clean for the final product. PRDs and ADRs are working documents that guide development but are not part of the shipped product. Use `/prd` and `/adr` commands — they write to `automatosx/` automatically.

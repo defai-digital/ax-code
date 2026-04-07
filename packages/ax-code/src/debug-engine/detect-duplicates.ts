@@ -226,12 +226,14 @@ export async function detectDuplicatesImpl(
     if (paired.has(i)) continue
     const group = [singletons[i].sym]
     const representativeNorm = singletons[i].norm
+    let minScore = 1
     for (let j = i + 1; j < singletons.length; j++) {
       if (paired.has(j)) continue
       const score = jaccard(singletons[i].tokens, singletons[j].tokens)
       if (score >= threshold) {
         group.push(singletons[j].sym)
         paired.add(j)
+        if (score < minScore) minScore = score
       }
     }
     if (group.length >= 2) {
@@ -239,7 +241,7 @@ export async function detectDuplicatesImpl(
       clusters.push({
         id: `cluster_${clusters.length}`,
         members: group,
-        similarityScore: threshold,
+        similarityScore: minScore,
         sharedLines: computeSharedLines(group),
         suggestedExtractionTarget: commonDirectory(group.map((m) => m.file)),
         pattern: representativeNorm.slice(0, 80),

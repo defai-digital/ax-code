@@ -682,7 +682,10 @@ export namespace Server {
           },
         }),
         async (c) => {
-          await Instance.dispose()
+          await Instance.reload({
+            directory: Instance.directory,
+            init: InstanceBootstrap,
+          })
           return c.json(true)
         },
       )

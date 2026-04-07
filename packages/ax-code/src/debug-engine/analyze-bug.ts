@@ -351,9 +351,9 @@ export async function analyzeBugImpl(
   // Confidence is derived purely from the fraction of parsed frames we
   // managed to resolve to real graph nodes. Capped at 0.95 per ADR-005
   // — we never claim certainty, even on a fully-resolved chain.
-  const parsedCount = kept.length
   const resolvedCount = chain.filter((f) => f.symbol !== null).length
-  const resolvedRatio = parsedCount > 0 ? resolvedCount / parsedCount : chain.length > 0 ? 1 : 0
+  const totalCount = chain.length
+  const resolvedRatio = totalCount > 0 ? resolvedCount / totalCount : 0
   const confidence = Math.min(0.95, resolvedRatio)
 
   // Phase 1: DRE does not invoke an LLM. Agents that want a narrative

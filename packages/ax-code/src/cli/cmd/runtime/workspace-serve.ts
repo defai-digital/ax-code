@@ -11,7 +11,10 @@ export const WorkspaceServeCommand = cmd({
     const server = WorkspaceServer.Listen(opts)
     console.log(`workspace event server listening on http://${server.hostname}:${server.port}/event`)
 
+    let stopping = false
     const shutdown = async () => {
+      if (stopping) return
+      stopping = true
       await server.stop()
       process.exit(0)
     }

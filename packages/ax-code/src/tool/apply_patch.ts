@@ -73,6 +73,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       // be patched through the symlink. Only enforce when the target
       // was inside the project; external patches go through the
       // external-directory permission flow.
+      // BUG-293 DEFERRED: The symlink check and subsequent file write
+      // are not atomic (TOCTOU). A true atomic fix requires OS-level
+      // primitives (e.g. O_NOFOLLOW + openat). The existing check is
+      // defense-in-depth and sufficient for the threat model.
       if (Filesystem.contains(Instance.directory, filePath)) {
         const realFilePath = await fs.realpath(filePath).catch(() => null)
         if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {

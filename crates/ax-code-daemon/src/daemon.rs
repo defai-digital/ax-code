@@ -118,7 +118,11 @@ fn handle_client(stream: &UnixStream, state: &Arc<Mutex<DaemonState>>) {
 }
 
 fn dispatch(cmd: Command, state: &Arc<Mutex<DaemonState>>) -> String {
-  let mut st = state.lock().unwrap();
+  // BUG-277: Avoid .unwrap() on mutex — a poisoned mutex panics across FFI
+  let mut st = match state.lock() {
+    Ok(guard) => guard,
+    Err(poisoned) => poisoned.into_inner(),
+  };
   match cmd.cmd.as_str() {
     "status" => serde_json::to_string(&st.status()).unwrap(),
     "scan" => serde_json::to_string(&st.scan()).unwrap(),
@@ -140,8 +144,11 @@ fn dispatch(cmd: Command, state: &Arc<Mutex<DaemonState>>) -> String {
 }
 
 fn run_daemon(listener: UnixListener, state: Arc<Mutex<DaemonState>>, running: Arc<AtomicBool>) {
-  // Initial scan
-  state.lock().unwrap().scan();
+  // BUG-277: Avoid .unwrap() on mutex — recover from poisoned state
+  match state.lock() {
+    Ok(mut st) => { st.scan(); }
+    Err(poisoned) => { poisoned.into_inner().scan(); }
+  }
 
   while running.load(Ordering::Relaxed) {
     match listener.accept() {
@@ -194,7 +201,12 @@ pub fn daemon_start(project_dir: String, db_path: String) -> napi::Result<String
   let running = Arc::new(AtomicBool::new(true));
   let state = Arc::new(Mutex::new(DaemonState::new(project_dir, db_path, Arc::clone(&running))));
   let r = Arc::clone(&running);
-  std::thread::spawn(move || run_daemon(listener, state, r));
+  // BUG-283: Name the daemon thread for debuggability; detach is intentional
+  // since daemon_stop sends "stop" over IPC which sets running=false
+  std::thread::Builder::new()
+    .name("ax-daemon".into())
+    .spawn(move || run_daemon(listener, state, r))
+    .map_err(|e| napi::Error::from_reason(format!("failed to spawn daemon thread: {}", e)))?;
 
   Ok(sock.to_string_lossy().into())
 }

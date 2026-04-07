@@ -52,15 +52,27 @@ fn now_ms() -> i64 {
 pub fn ascending(prefix_name: &str) -> Result<String, String> {
   let pfx = get_prefix(prefix_name).ok_or_else(|| format!("unknown prefix: {prefix_name}"))?;
 
-  let current = now_ms();
-  let prev = LAST_TIMESTAMP.load(Ordering::SeqCst);
-  if current != prev {
-    LAST_TIMESTAMP.store(current, Ordering::SeqCst);
-    COUNTER.store(0, Ordering::SeqCst);
-  }
-  let cnt = COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
+  // BUG-276: Use compare_exchange loop to atomically update timestamp+counter
+  let (ts, cnt) = loop {
+    let current = now_ms();
+    let prev = LAST_TIMESTAMP.load(Ordering::SeqCst);
+    if current != prev {
+      // Try to claim this new timestamp
+      if LAST_TIMESTAMP.compare_exchange(prev, current, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+        COUNTER.store(1, Ordering::SeqCst);
+        break (current, 1u32);
+      }
+      // Another thread beat us; retry
+      continue;
+    }
+    // Same timestamp: just bump the counter
+    let c = COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
+    break (current, c);
+  };
 
-  let now = (current as u64).wrapping_mul(0x1000) + (cnt as u64);
+  // BUG-275: Use bit-shift instead of wrapping_mul to avoid overflow;
+  // mask to 48 bits so it fits in 6 bytes of hex
+  let now = (((ts as u64) << 12) | (cnt as u64)) & 0xFFFF_FFFF_FFFF;
 
   let mut time_bytes = [0u8; 6];
   for i in 0..6 {

@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate napi_derive;
 
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -248,7 +249,7 @@ struct ContentSink<'a> {
   matcher: &'a grep_regex::RegexMatcher,
   results: &'a mut Vec<SearchMatch>,
   limit: usize,
-  before_buf: Vec<String>,
+  before_buf: VecDeque<String>,
   context_lines: usize,
   // Track pending match that needs after-context
   pending: Option<SearchMatch>,
@@ -325,10 +326,11 @@ impl<'a> Sink for ContentSink<'a> {
 
     match ctx.kind() {
       SinkContextKind::Before => {
-        self.before_buf.push(trimmed);
+        self.before_buf.push_back(trimmed);
         // Keep only the last N context lines
+        // BUG-284: Use pop_front instead of remove(0) to avoid O(n) shift
         while self.before_buf.len() > self.context_lines {
-          self.before_buf.remove(0);
+          self.before_buf.pop_front();
         }
       }
       SinkContextKind::After => {
@@ -434,7 +436,7 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
       matcher: &matcher,
       results: &mut results,
       limit,
-      before_buf: Vec::new(),
+      before_buf: VecDeque::new(),
       context_lines,
       pending: None,
       after_remaining: 0,
@@ -763,10 +765,16 @@ pub fn chunk_file(
 ) -> napi::Result<String> {
   let lines: Vec<&str> = content.lines().collect();
   let max = max_lines as usize;
-  let overlap = overlap_lines as usize;
+  // BUG-302: Clamp overlap to strictly less than max to guarantee forward progress
+  let overlap = if max == 0 { 0 } else { overlap_lines as usize % max };
   let mut chunks = Vec::new();
   let mut start = 0usize;
   let mut chunk_idx = 0u32;
+
+  // Guard: max_lines == 0 would loop forever
+  if max == 0 {
+    return serde_json::to_string(&chunks).map_err(|e| napi::Error::from_reason(e.to_string()));
+  }
 
   while start < lines.len() {
     let end = (start + max).min(lines.len());
@@ -888,7 +896,12 @@ impl NativeWatcher {
   #[napi(constructor)]
   pub fn new(root: String, ignore_patterns_json: String) -> napi::Result<Self> {
     let root_path = PathBuf::from(&root);
-    let _extra: Vec<String> = serde_json::from_str(&ignore_patterns_json).unwrap_or_default();
+    // BUG-285: Parse and compile custom ignore patterns so they are actually applied
+    let extra: Vec<String> = serde_json::from_str(&ignore_patterns_json).unwrap_or_default();
+    let extra_matchers: Vec<GlobMatcher> = extra
+      .iter()
+      .filter_map(|p| Glob::new(p).ok().map(|g| g.compile_matcher()))
+      .collect();
 
     let (tx, rx) = mpsc::channel();
     let root_clone = root_path.clone();
@@ -928,6 +941,11 @@ impl NativeWatcher {
           IGNORE_FOLDERS.contains(&name)
         });
         if should_skip { continue; }
+
+        // BUG-285: Check custom ignore patterns
+        if extra_matchers.iter().any(|m| m.is_match(rel_str)) {
+          continue;
+        }
 
         let _ = tx.send(WatchEvent {
           event_type: event_type.to_string(),

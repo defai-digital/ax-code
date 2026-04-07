@@ -10,9 +10,12 @@ import { ChatViewProvider } from "./chat-provider"
 
 const TERMINAL_NAME = "ax-code"
 
+let chatProviderInstance: ChatViewProvider | null = null
+
 export function activate(context: vscode.ExtensionContext) {
   // Register chat panel in sidebar
   const chatProvider = new ChatViewProvider(context)
+  chatProviderInstance = chatProvider
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("ax-code.chatView", chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -126,7 +129,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBar)
 }
 
-export function deactivate() {}
+export function deactivate() {
+  if (chatProviderInstance) {
+    chatProviderInstance.dispose()
+    chatProviderInstance = null
+  }
+}
 
 function getActiveFileContext(): { relativePath: string; selection?: string } | null {
   const editor = vscode.window.activeTextEditor

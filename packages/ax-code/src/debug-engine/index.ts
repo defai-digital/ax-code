@@ -11,6 +11,11 @@ import { planRefactorImpl, type PlanRefactorInput } from "./plan-refactor"
 import { analyzeImpactImpl, type AnalyzeImpactInput } from "./analyze-impact"
 import { detectHardcodesImpl, type DetectHardcodesInput } from "./detect-hardcodes"
 import { applySafeRefactorImpl, type ApplySafeRefactorInput } from "./apply-safe-refactor"
+import { detectRacesImpl, type DetectRacesInput } from "./detect-races"
+import { detectLifecycleImpl, type DetectLifecycleInput } from "./detect-lifecycle"
+import { detectSecurityImpl, type DetectSecurityInput } from "./detect-security"
+
+export { Incremental } from "./incremental"
 
 const log = Log.create({ service: "debug-engine" })
 
@@ -38,6 +43,9 @@ export namespace DebugEngine {
     | "detect-hardcodes"
     | "analyze-impact"
     | "apply-safe-refactor"
+    | "detect-races"
+    | "detect-lifecycle"
+    | "detect-security"
 
   // Minimum completeness across the graph queries DRE consulted. Uses the
   // v3 enum verbatim: "full" = LSP precise, "partial" = tree-sitter only,
@@ -239,6 +247,82 @@ export namespace DebugEngine {
     explain: Explain
   }
 
+  // ─── detectRaces output shape ────────────────────────────────────────
+
+  export type RacePattern = "toctou" | "non_atomic_counter" | "conflicting_mutation" | "stale_listener"
+
+  export type RaceFinding = {
+    file: string
+    line: number
+    endLine?: number
+    pattern: RacePattern
+    severity: "high" | "medium" | "low"
+    description: string
+    code: string
+    fix: string
+  }
+
+  export type RaceReport = {
+    findings: RaceFinding[]
+    filesScanned: number
+    truncated: boolean
+    explain: Explain
+  }
+
+  // ─── detectLifecycle output shape ──────────────────────────────────
+
+  export type LifecycleResourceType =
+    | "event_listener"
+    | "abort_controller"
+    | "child_process"
+    | "timer"
+    | "subscription"
+    | "map_growth"
+
+  export type LifecyclePattern = "no_cleanup" | "cleanup_missing_in_error_path" | "unbounded_growth"
+
+  export type LifecycleFinding = {
+    file: string
+    line: number
+    resourceType: LifecycleResourceType
+    pattern: LifecyclePattern
+    severity: "high" | "medium" | "low"
+    description: string
+    cleanupLocation: string | null
+  }
+
+  export type LifecycleReport = {
+    findings: LifecycleFinding[]
+    filesScanned: number
+    truncated: boolean
+    explain: Explain
+  }
+
+  // ─── detectSecurity output shape ────────────────────────────────────
+
+  export type SecurityPattern =
+    | "path_traversal"
+    | "command_injection"
+    | "ssrf"
+    | "missing_validation"
+    | "env_leak"
+
+  export type SecurityFinding = {
+    file: string
+    line: number
+    pattern: SecurityPattern
+    severity: "high" | "medium" | "low"
+    description: string
+    userControlled: boolean
+  }
+
+  export type SecurityReport = {
+    findings: SecurityFinding[]
+    filesScanned: number
+    truncated: boolean
+    explain: Explain
+  }
+
   // ─── Public feature functions ───────────────────────────────────────
   //
   // Phase 1: three features. All read-only against v3; planRefactor writes
@@ -288,6 +372,30 @@ export namespace DebugEngine {
   ): Promise<ApplyResult> {
     log.info("applySafeRefactor", { projectID, planId: input.planId, mode: input.mode })
     return applySafeRefactorImpl(projectID, input)
+  }
+
+  export async function detectRaces(
+    projectID: ProjectID,
+    input: DetectRacesInput,
+  ): Promise<RaceReport> {
+    log.info("detectRaces", { projectID })
+    return detectRacesImpl(projectID, input)
+  }
+
+  export async function detectLifecycle(
+    projectID: ProjectID,
+    input: DetectLifecycleInput,
+  ): Promise<LifecycleReport> {
+    log.info("detectLifecycle", { projectID })
+    return detectLifecycleImpl(projectID, input)
+  }
+
+  export async function detectSecurity(
+    projectID: ProjectID,
+    input: DetectSecurityInput,
+  ): Promise<SecurityReport> {
+    log.info("detectSecurity", { projectID })
+    return detectSecurityImpl(projectID, input)
   }
 
   // ─── Plan management (read-only helpers for callers) ────────────────

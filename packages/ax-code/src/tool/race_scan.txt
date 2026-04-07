@@ -1,0 +1,35 @@
+Scan the project for common race condition patterns in async TypeScript code. Deterministic regex + structural heuristics, no LLM, no cloud calls.
+
+Input:
+- patterns: which detectors to run (default: all four)
+  - "toctou": shared state read -> await -> write (TOCTOU)
+  - "non_atomic_counter": counter++/-- after await in async scope
+  - "conflicting_mutation": multiple mutations to same identifier inside Promise.all
+  - "stale_listener": event listener registered after await
+- excludeTests: skip test files by default (default true)
+- include: glob patterns to scan (default: TS/JS/JSX/MJS/CJS)
+- maxFiles: hard cap on files scanned (default 500)
+- maxFindingsPerFile: hard cap per file (default 20)
+
+Output:
+- findings: sorted by severity desc, then file, then line. Each finding has:
+  - file, line, endLine (optional)
+  - pattern: "toctou" | "non_atomic_counter" | "conflicting_mutation" | "stale_listener"
+  - severity: "high" | "medium" | "low"
+  - description: human-readable explanation of the race
+  - code: the problematic line
+  - fix: suggested remediation
+- filesScanned: count of files inspected
+- truncated: true if maxFiles cap was hit
+- explain: heuristics applied
+
+When to use:
+- During code review of async-heavy code
+- Before merging PRs that modify shared state or async flows
+- When investigating non-deterministic test failures
+- When the user asks about race conditions or TOCTOU bugs
+
+When NOT to use:
+- For synchronous-only code (no async/await)
+- As a replacement for runtime race detection tools
+- For Rust code analysis (TypeScript only in Phase 1)

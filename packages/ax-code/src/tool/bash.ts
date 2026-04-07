@@ -160,6 +160,14 @@ export const BashTool = Tool.define("bash", async () => {
         })
       }
 
+      // If tree-sitter found no command nodes (e.g. parsing edge cases,
+      // subshells, or unusual syntax), fall back to prompting for the
+      // entire raw command so the permission check is never bypassed.
+      if (patterns.size === 0) {
+        patterns.add(params.command)
+        always.add(params.command)
+      }
+
       if (patterns.size > 0) {
         await ctx.ask({
           permission: "bash",

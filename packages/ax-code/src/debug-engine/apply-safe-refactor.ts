@@ -8,6 +8,7 @@ import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
 import { DebugEngineQuery } from "./query"
 import { ShadowWorktree } from "./shadow-worktree"
+import { extractFilesFromDiff } from "./analyze-impact"
 import { RefactorPlanID } from "./id"
 
 // applySafeRefactor — orchestrates the Plan → Validate → Apply pipeline
@@ -291,6 +292,21 @@ export async function applySafeRefactorImpl(
   }
 
   try {
+    // Step 3.5: symlink node_modules from the real worktree into the
+    // shadow so typecheck/lint/test commands can resolve dependencies.
+    // .gitignore'd directories aren't present in git worktrees.
+    const realNodeModules = path.join(Instance.worktree, "node_modules")
+    const shadowNodeModules = path.join(shadowHandle.path, "node_modules")
+    const hasNodeModules = await fs.stat(realNodeModules).then(() => true).catch(() => false)
+    if (hasNodeModules) {
+      await fs.symlink(realNodeModules, shadowNodeModules, "junction").catch(async () => {
+        // Symlink failed (e.g., Windows without dev mode) — skip, checks
+        // will attempt to run without node_modules. This is best-effort.
+        log.warn("could not symlink node_modules into shadow", { shadow: shadowHandle.path })
+      })
+      heuristics.push("node_modules-linked")
+    }
+
     // Step 4: optional patch application. Phase 3 plans produced by
     // planRefactor don't carry a patch — a caller (typically an agent
     // at the tool layer) is expected to construct one from the edit
@@ -440,7 +456,7 @@ export async function applySafeRefactorImpl(
 
     // Compute files changed by inspecting the diff we just applied.
     // Simple grep of the patch — good enough for the audit trail.
-    const filesChanged = extractFilesFromPatch(input.patch)
+    const filesChanged = extractFilesFromDiff(input.patch)
 
     return {
       applied: true,
@@ -467,19 +483,3 @@ export async function applySafeRefactorImpl(
   }
 }
 
-// Extract the set of file paths from a unified-diff patch. Shared with
-// analyzeImpact's diff parser in spirit — but kept local here so we
-// don't create a cross-import between two Phase-2/3 modules that would
-// widen the blast radius of a future rename.
-function extractFilesFromPatch(patch: string): string[] {
-  const files = new Set<string>()
-  for (const line of patch.split("\n")) {
-    const m = line.match(/^\+\+\+\s+(.+)$/)
-    if (m) {
-      const file = m[1].trim()
-      if (file === "/dev/null") continue
-      files.add(file.startsWith("b/") ? file.slice(2) : file)
-    }
-  }
-  return [...files]
-}

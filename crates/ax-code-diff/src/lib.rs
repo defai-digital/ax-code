@@ -788,9 +788,10 @@ pub fn diff_stats(old_content: String, new_content: String) -> napi::Result<Stri
 }
 
 /// Levenshtein edit distance.
+/// BUG-301: Return f64 to avoid truncating usize on very long strings
 #[napi]
-pub fn levenshtein(a: String, b: String) -> u32 {
-  strsim::levenshtein(&a, &b) as u32
+pub fn levenshtein(a: String, b: String) -> f64 {
+  strsim::levenshtein(&a, &b) as f64
 }
 
 /// Normalized string similarity (0.0 - 1.0).
@@ -853,7 +854,11 @@ pub fn apply_chunks(
           ctx, file_path
         )));
       }
-      line_index = ctx_idx as usize + 1;
+      // BUG-286: Only advance line_index forward to prevent overlap with prior replacements
+      let candidate = ctx_idx as usize + 1;
+      if candidate > line_index {
+        line_index = candidate;
+      }
     }
 
     // Handle pure addition (no old lines)

@@ -305,9 +305,11 @@ export namespace ProviderTransform {
   }
 
   export function maxOutputTokens(model: Provider.Model): number {
-    // Use nullish coalescing so an explicit output: 0 (no output capability)
-    // is not coerced to OUTPUT_TOKEN_MAX by the falsy-zero short-circuit.
-    return Math.min(model.limit.output, OUTPUT_TOKEN_MAX) ?? OUTPUT_TOKEN_MAX
+    // If the model declares no output capability (0) or a missing limit,
+    // fall back to OUTPUT_TOKEN_MAX. Math.min never returns nullish, so
+    // the old `?? OUTPUT_TOKEN_MAX` was dead code.
+    const limit = model.limit.output
+    return limit > 0 ? Math.min(limit, OUTPUT_TOKEN_MAX) : OUTPUT_TOKEN_MAX
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
