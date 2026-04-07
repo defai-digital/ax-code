@@ -936,18 +936,11 @@ export namespace Provider {
         modelID: ModelID.make(model.modelID ?? model.id ?? ""),
       }
     }
+    // Auto-correct "provider:model" → "provider/model"
     if (!model.includes("/") && model.includes(":")) {
-      const [provider, ...rest] = model.split(":")
-      throw new Error(
-        `Invalid model format "${model}". Use "provider/model" format, e.g. "${provider}/${rest.join(":")}"`,
-      )
+      model = model.replace(":", "/")
     }
     const [providerID, ...rest] = model.split("/")
-    if (!rest.length || !rest.join("/")) {
-      throw new Error(
-        `Invalid model format "${model}". Use "provider/model" format, e.g. "google/gemini-3-flash-preview"`,
-      )
-    }
     return {
       providerID: ProviderID.make(providerID),
       modelID: ModelID.make(rest.join("/")),

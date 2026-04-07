@@ -14,7 +14,9 @@ export interface CliLanguageModelConfig {
   promptFlag?: string
 }
 
-const CLI_ENV = { TERM: "dumb", NO_COLOR: "1" }
+function cliEnv() {
+  return { ...process.env, TERM: "dumb", NO_COLOR: "1" }
+}
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
 const EMPTY_USAGE: LanguageModelV3Usage = {
@@ -49,7 +51,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      env: CLI_ENV,
+      env: cliEnv(),
       abort: options.abortSignal,
     })
 
@@ -90,7 +92,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      env: CLI_ENV,
+      env: cliEnv(),
       abort: options.abortSignal,
     })
 
