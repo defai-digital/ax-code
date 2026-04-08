@@ -59,8 +59,9 @@ export namespace Tool {
         const toolInfo = init instanceof Function ? await init(initCtx) : init
         const execute = toolInfo.execute
         toolInfo.execute = async (args, ctx) => {
+          let validated: typeof args
           try {
-            toolInfo.parameters.parse(args)
+            validated = toolInfo.parameters.parse(args)
           } catch (error) {
             if (error instanceof z.ZodError && toolInfo.formatValidationError) {
               throw new Error(toolInfo.formatValidationError(error), { cause: error })
@@ -73,7 +74,7 @@ export namespace Tool {
           const toolStart = Date.now()
           let result: Awaited<ReturnType<typeof execute>>
           try {
-            result = await execute(args, ctx)
+            result = await execute(validated, ctx)
           } catch (err) {
             const durationMs = Date.now() - toolStart
             log.error("tool failed", { toolName: id, sessionId: ctx.sessionID, durationMs, status: "error", errorCode: err instanceof Error ? err.name : "Unknown" })

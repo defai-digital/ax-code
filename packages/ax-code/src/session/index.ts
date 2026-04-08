@@ -665,6 +665,7 @@ export namespace Session {
     Database.transaction((db) => {
       for (const desc of allDescendants) {
         db.delete(SessionTable).where(eq(SessionTable.id, desc.id)).run()
+        Database.effect(() => Bus.publish(Event.Deleted, { info: desc }))
       }
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
       Database.effect(() => Bus.publish(Event.Deleted, { info: session }))

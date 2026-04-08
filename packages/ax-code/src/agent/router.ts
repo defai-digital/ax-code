@@ -26,6 +26,7 @@ interface RouteRule {
   patterns: RegExp[]
   negatives: RegExp[]
   confidence: number
+  readOnly: boolean
 }
 
 function rule(input: {
@@ -34,6 +35,7 @@ function rule(input: {
   patterns: RegExp[]
   confidence: number
   negatives?: string[]
+  readOnly?: boolean
 }): RouteRule {
   return {
     agent: input.agent,
@@ -41,8 +43,18 @@ function rule(input: {
     patterns: input.patterns,
     negatives: (input.negatives ?? []).map(boundedPattern),
     confidence: input.confidence,
+    readOnly: input.readOnly ?? false,
   }
 }
+
+/** Words that signal the user wants code changes, not analysis.
+ *  Applied as negatives to read-only agent rules (security, architect, perf). */
+const ACTION_INTENT = [
+  "restructure", "refactor", "fix", "update", "change", "modify",
+  "rewrite", "convert", "migrate", "replace", "rename", "move",
+  "improve", "clean up", "simplify", "extract", "inline",
+  "split", "merge", "implement", "apply",
+]
 
 const RULES: RouteRule[] = [
   rule({
@@ -59,16 +71,17 @@ const RULES: RouteRule[] = [
       /\b(scan|audit|check)\b.*\b(security|auth|secret)/i,
       /\b(secret|key|token|password)\b.*\b(expos|leak|hardcod)/i,
     ],
-    negatives: ["test coverage", "test suite", "write tests", "unit test", "add tests"],
+    negatives: [...ACTION_INTENT, "test coverage", "test suite", "write tests", "unit test", "add tests"],
     confidence: 0.8,
+    readOnly: true,
   }),
   rule({
     agent: "architect",
     keywords: [
       "architecture", "design pattern", "dependency", "dependencies",
-      "coupling", "cohesion", "restructure",
+      "coupling", "cohesion",
       "monorepo", "circular", "layering", "separation of concerns",
-      "system design", "code organization", "refactor architecture",
+      "system design", "code organization",
     ],
     patterns: [
       /\barchitect(ure)?\b/i,
@@ -79,8 +92,9 @@ const RULES: RouteRule[] = [
       /\bproject\s+structure\b/i,
       /\bpackages?\b.*\b(organiz|structur)/i,
     ],
-    negatives: ["build", "create", "implement", "write", "scaffold", "generate", "new project", "from scratch", "set up", "initialize"],
+    negatives: [...ACTION_INTENT, "build", "create", "scaffold", "generate", "new project", "from scratch", "set up", "initialize"],
     confidence: 0.8,
+    readOnly: true,
   }),
   rule({
     agent: "debug",
@@ -117,8 +131,9 @@ const RULES: RouteRule[] = [
       /\bO\([nN]/,
       /\bprofil(e|ing)\b/i,
     ],
-    negatives: ["build", "create", "implement", "write", "scaffold", "new project", "from scratch", "set up"],
+    negatives: [...ACTION_INTENT, "build", "create", "scaffold", "new project", "from scratch", "set up"],
     confidence: 0.7,
+    readOnly: true,
   }),
   rule({
     agent: "devops",
@@ -201,8 +216,10 @@ export function keywordRoute(message: string, currentAgent: string): RouteResult
 
     if (score === 0) continue
 
+    // Read-only agents penalize action-intent words more heavily
+    const negWeight = rule.readOnly ? 2 : 1
     for (const neg of rule.negatives) {
-      if (neg.test(message)) score -= 1
+      if (neg.test(message)) score -= negWeight
     }
 
     if (score <= 0) continue
@@ -232,13 +249,15 @@ const CLASSIFY_MAX_CHARS = 500
 const CLASSIFY_PROMPT = `You are an intent classifier for a coding assistant. Given a user message, classify which specialist agent should handle it and provide a confidence score.
 
 Agents:
-- security: Vulnerability scanning, secrets, OWASP, compliance, auth audits
-- architect: System design, dependencies, coupling, code organization, design patterns
+- security: Vulnerability scanning, secrets, OWASP, compliance, auth audits (ANALYSIS ONLY — cannot edit code)
+- architect: System design analysis, dependency mapping, coupling review (ANALYSIS ONLY — cannot edit code)
 - debug: Bug investigation, error tracing, crash analysis, root cause finding
-- perf: Performance optimization, bottlenecks, profiling, benchmarks, memory leaks
+- perf: Performance analysis, profiling, benchmarks, memory leak detection (ANALYSIS ONLY — cannot edit code)
 - devops: Docker, CI/CD, deployment, infrastructure, Kubernetes, monitoring
 - test: Writing tests, test coverage, TDD, test infrastructure, fixtures, mocking
-- none: General coding, not a specialist task
+- none: General coding, refactoring, or any task requiring code changes
+
+IMPORTANT: If the user wants to CHANGE, FIX, REFACTOR, or MODIFY code, classify as "none" even if the topic relates to security, architecture, or performance. Only use analysis agents when the user wants a review, audit, or report without code changes.
 
 Respond with the agent name and a confidence score (0.0 to 1.0) indicating how certain you are.`
 
@@ -294,8 +313,8 @@ export async function route(message: string, currentAgent: string): Promise<Rout
   // No keyword matches at all — message is generic, skip LLM
   if (!keyword) return null
 
-  // Tier 2 only applies for substantial messages with low keyword confidence
-  if (message.length < 30) return keyword
+  // Short messages: only route on high confidence, skip LLM
+  if (message.length < 30) return null
 
   // Check if LLM fallback is enabled (set by server via env var)
   if (process.env["AX_CODE_SMART_LLM"] !== "true") return keyword

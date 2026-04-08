@@ -66,6 +66,11 @@ export namespace SessionProcessor {
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const toolInputCache: Record<string, string> = {}
+    const canonicalize = (obj: unknown): string => {
+      if (typeof obj !== "object" || obj === null) return JSON.stringify(obj)
+      if (Array.isArray(obj)) return "[" + obj.map(canonicalize).join(",") + "]"
+      return "{" + Object.keys(obj as Record<string, unknown>).sort().map((k) => JSON.stringify(k) + ":" + canonicalize((obj as Record<string, unknown>)[k])).join(",") + "}"
+    }
     const recentToolRing: { tool: string; input: string }[] = []
     const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
     const partBase = () => ({
@@ -212,7 +217,7 @@ export namespace SessionProcessor {
                     toolcalls[value.toolCallId] = part as MessageV2.ToolPart
 
                     // Doom loop detection: check ring buffer of recently completed tools plus current call
-                    const inputStr = JSON.stringify(value.input)
+                    const inputStr = canonicalize(value.input)
                     toolInputCache[value.toolCallId] = inputStr
                     const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
                     if (

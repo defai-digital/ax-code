@@ -1,6 +1,7 @@
 import semver from "semver"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
+import { Env } from "../util/env"
 
 export namespace PackageRegistry {
   const log = Log.create({ service: "bun" })
@@ -13,7 +14,7 @@ export namespace PackageRegistry {
     const { code, stdout, stderr } = await Process.run([which(), "info", pkg, field], {
       cwd,
       env: {
-        ...process.env,
+        ...Env.sanitize(),
         BUN_BE_BUN: "1",
       },
       nothrow: true,

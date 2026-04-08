@@ -670,6 +670,9 @@ export const RunCommand = cmd({
     await bootstrap(directory || Filesystem.callerCwd(), async () => {
       const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
         const request = new Request(input, init)
+        const url = new URL(request.url)
+        if (!["opencode.internal", "localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+          throw new Error(`Internal fetch rejected: ${url.hostname}`)
         return Server.Default().fetch(request)
       }) as typeof globalThis.fetch
       const sdk = createOpencodeClient({ baseUrl: "http://opencode.internal", fetch: fetchFn })

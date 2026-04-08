@@ -37,7 +37,7 @@ export const BatchTool = Tool.define("batch", async () => {
       const { PartID } = await import("../session/schema")
 
       const toolCalls = params.tool_calls.slice(0, 25)
-      const discardedCalls = params.tool_calls.slice(25, 50)
+      const discardedCalls = params.tool_calls.slice(25)
 
       const { ToolRegistry } = await import("./registry")
       const availableTools = await ToolRegistry.tools({

@@ -1,6 +1,7 @@
 export class AsyncQueue<T> implements AsyncIterable<T> {
   private queue: T[] = []
-  private resolvers: ((value: T) => void)[] = []
+  private resolvers: ((value: T | undefined) => void)[] = []
+  private done = false
 
   get size() {
     return this.queue.length
@@ -12,13 +13,24 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
     else this.queue.push(item)
   }
 
-  async next(): Promise<T> {
+  close() {
+    this.done = true
+    for (const resolve of this.resolvers) resolve(undefined)
+    this.resolvers.length = 0
+  }
+
+  async next(): Promise<T | undefined> {
     if (this.queue.length > 0) return this.queue.shift()!
+    if (this.done) return undefined
     return new Promise((resolve) => this.resolvers.push(resolve))
   }
 
   async *[Symbol.asyncIterator]() {
-    while (true) yield await this.next()
+    while (true) {
+      const item = await this.next()
+      if (item === undefined) return
+      yield item
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Log } from "../util/log"
+import { Env } from "../util/env"
 import { LSPClient } from "./client"
 import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
@@ -180,7 +181,7 @@ export namespace LSP {
               process: lspspawn(item.command[0], item.command.slice(1), {
                 cwd: root,
                 env: {
-                  ...process.env,
+                  ...Env.sanitize(),
                   ...item.env,
                 },
               }),

@@ -1,6 +1,7 @@
 import z from "zod"
 import { Global } from "../global"
 import { Log } from "../util/log"
+import { Env } from "../util/env"
 import path from "path"
 import { Filesystem } from "../util/filesystem"
 import { NamedError } from "@ax-code/util/error"
@@ -25,7 +26,7 @@ export namespace BunProc {
       timeout: options?.timeout,
       nothrow: options?.nothrow,
       env: {
-        ...process.env,
+        ...Env.sanitize(),
         ...options?.env,
         BUN_BE_BUN: "1",
       },

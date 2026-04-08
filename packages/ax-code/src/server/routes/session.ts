@@ -733,6 +733,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const params = c.req.valid("param")
+        SessionPrompt.assertNotBusy(params.sessionID)
         await Session.removePart({
           sessionID: params.sessionID,
           messageID: params.messageID,
@@ -769,6 +770,7 @@ export const SessionRoutes = lazy(() =>
       validator("json", MessageV2.Part),
       async (c) => {
         const params = c.req.valid("param")
+        SessionPrompt.assertNotBusy(params.sessionID)
         const body = c.req.valid("json")
         if (body.id !== params.partID || body.messageID !== params.messageID || body.sessionID !== params.sessionID) {
           throw new Error(

@@ -98,9 +98,12 @@ export namespace Permission {
 
   export class DeniedError extends Schema.TaggedErrorClass<DeniedError>()("PermissionDeniedError", {
     ruleset: Schema.Any,
+    agent: Schema.optional(Schema.String),
   }) {
     override get message() {
-      return `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(this.ruleset)}`
+      const base = `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(this.ruleset)}`
+      if (!this.agent) return base
+      return `${base}\n\nThis is because you are running as the "${this.agent}" agent, which is read-only and cannot modify files. You should inform the user that this task requires code changes, and suggest they switch to the Dev agent (press Tab or use @build).`
     }
   }
 
@@ -108,6 +111,7 @@ export namespace Permission {
 
   export const AskInput = Request.partial({ id: true }).extend({
     ruleset: Ruleset,
+    agent: z.string().optional(),
   })
 
   export const ReplyInput = z.object({
@@ -192,6 +196,7 @@ export namespace Permission {
             if (rule.action === "deny") {
               return yield* new DeniedError({
                 ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
+                agent: input.agent,
               })
             }
             if (rule.action === "allow") continue

@@ -957,10 +957,10 @@ export namespace MessageV2 {
       if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish && !msg.info.error)
         completed.add(msg.info.parentID)
     }
-    // No successful compaction found. If a marker exists, truncate to it
-    // (bounded context, may lose detail); otherwise return the full stream
-    // (no compaction has ever been attempted for this session).
-    const truncated = latestMarkerEnd > -1 ? result.slice(0, latestMarkerEnd) : result
+    // No successful compaction found. Only truncate if a completed
+    // compaction exists (even if errored); orphaned markers with no
+    // assistant response should be ignored to avoid losing context.
+    const truncated = latestMarkerEnd > -1 && completed.size > 0 ? result.slice(0, latestMarkerEnd) : result
     truncated.reverse()
     return truncated
   }

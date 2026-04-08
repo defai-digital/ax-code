@@ -17,5 +17,9 @@ export function spawn(cmd: string, argsOrOpts?: string[] | Process.Options, opts
 
   if (!proc.stdin || !proc.stdout || !proc.stderr) throw new Error("Process output not available")
 
+  const kill = () => { try { proc.kill() } catch {} }
+  process.once("exit", kill)
+  proc.on("close", () => process.removeListener("exit", kill))
+
   return proc
 }

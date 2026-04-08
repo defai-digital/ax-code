@@ -218,3 +218,48 @@ describe("tiered routing — LLM fallback", () => {
     expect(result).toBeNull()
   })
 })
+
+describe("action-intent negatives for read-only agents", () => {
+  test("'restructure this function' does NOT route to architect", () => {
+    const result = route("restructure this function to use dependency injection", "build")
+    expect(result?.agent).not.toBe("architect")
+  })
+
+  test("'refactor the architecture' does NOT route to architect", () => {
+    const result = route("refactor the architecture of this module", "build")
+    expect(result?.agent).not.toBe("architect")
+  })
+
+  test("'fix and rewrite the auth code' does NOT route to security", () => {
+    const result = route("fix and rewrite the auth validation to prevent injection", "build")
+    expect(result?.agent).not.toBe("security")
+  })
+
+  test("'optimize and rewrite this function' does NOT route to perf", () => {
+    const result = route("rewrite and optimize this function to be faster", "build")
+    expect(result?.agent).not.toBe("perf")
+  })
+
+  test("'analyze the architecture' STILL routes to architect", () => {
+    const result = route("analyze the architecture and review the dependency graph", "build")
+    expect(result).not.toBeNull()
+    expect(result!.agent).toBe("architect")
+  })
+
+  test("'scan for vulnerabilities' STILL routes to security", () => {
+    const result = route("scan the codebase for security vulnerabilities and check for secrets", "build")
+    expect(result).not.toBeNull()
+    expect(result!.agent).toBe("security")
+  })
+
+  test("'profile memory usage' STILL routes to perf", () => {
+    const result = route("profile the memory usage and find the bottleneck", "build")
+    expect(result).not.toBeNull()
+    expect(result!.agent).toBe("perf")
+  })
+
+  test("'improve the code organization' does NOT route to architect", () => {
+    const result = route("improve the code organization in the utils folder", "build")
+    expect(result?.agent).not.toBe("architect")
+  })
+})

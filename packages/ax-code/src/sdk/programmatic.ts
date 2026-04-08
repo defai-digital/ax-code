@@ -604,27 +604,21 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
     async run(message: string, options?: RunOptions): Promise<RunResult> {
       const model = options?.model ?? (opts.model && opts.provider ? { providerID: opts.provider, modelID: opts.model } : undefined)
 
-      const exec = () => {
-        const resultPromise = collectResult(sdk, sessionID, opts.hooks)
-        // Fire-and-forget — the result comes through the SSE event
-        // stream, not from the prompt response. But if the prompt
-        // itself fails (validation error, session missing) the event
-        // stream hangs forever, so log the rejection.
-        sdk.session.prompt({
-          sessionID,
-          agent: options?.agent ?? opts.agent,
-          model,
-          variant: options?.variant ?? opts.variant,
-          parts: [{ type: "text", text: message }],
-        }).catch((err: unknown) => {
-          opts.hooks?.onError?.(err instanceof Error ? err : new Error(String(err)))
-        })
-        return resultPromise
-      }
+      // Send prompt exactly once — retries only re-collect the result
+      sdk.session.prompt({
+        sessionID,
+        agent: options?.agent ?? opts.agent,
+        model,
+        variant: options?.variant ?? opts.variant,
+        parts: [{ type: "text", text: message }],
+      }).catch((err: unknown) => {
+        opts.hooks?.onError?.(err instanceof Error ? err : new Error(String(err)))
+      })
 
+      const collect = () => collectResult(sdk, sessionID, opts.hooks)
       const resultPromise = opts.maxRetries
-        ? withRetry(exec, opts.maxRetries, opts.hooks?.onRetry)
-        : exec()
+        ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry)
+        : collect()
 
       if (options?.timeout) {
         const timeoutMs = options.timeout

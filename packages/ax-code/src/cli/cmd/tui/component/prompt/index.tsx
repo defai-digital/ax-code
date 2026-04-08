@@ -151,16 +151,27 @@ export function Prompt(props: PromptProps) {
     ),
   )
 
-  // Initialize agent/model/variant from last user message when session changes
+  // Initialize agent/model/variant from last user message when session changes.
+  // syncedAgentName tracks the agent from last message so we can detect
+  // user-initiated switches (Tab/dialog) vs auto-routed or default agent.
   let syncedSessionID: string | undefined
+  let syncedAgentName: string | undefined = local.agent.current().name
   createEffect(() => {
     const sessionID = props.sessionID
     const msg = lastUserMessage()
 
-    if (sessionID !== syncedSessionID) {
-      if (!sessionID || !msg) return
+    // Track the agent from the latest message for userSelectedAgent detection
+    if (msg?.agent) syncedAgentName = msg.agent
 
+    if (sessionID !== syncedSessionID) {
+      if (!sessionID) return
       syncedSessionID = sessionID
+      // Reset to current agent on session switch so first message
+      // of a new session doesn't falsely flag as user-selected
+      if (!msg) {
+        syncedAgentName = local.agent.current().name
+        return
+      }
 
       // Only set agent if it's a primary agent (not a subagent)
       const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
@@ -663,6 +674,7 @@ export function Prompt(props: PromptProps) {
             },
             ...nonTextParts.map(assign),
           ],
+          ...( local.agent.current().name !== syncedAgentName ? { userSelectedAgent: true } as any : {}),
         })
         // Surface submission failures via the toast. Previously the
         // empty `.catch(() => {})` left the user staring at a blank

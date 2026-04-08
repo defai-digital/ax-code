@@ -302,6 +302,7 @@ export namespace SessionPrompt {
       })
       .optional(),
     agent: z.string().optional(),
+    userSelectedAgent: z.boolean().optional(),
     noReply: z.boolean().optional(),
     tools: z
       .record(z.string(), z.boolean())
@@ -888,6 +889,7 @@ export namespace SessionPrompt {
       }
       return item
     }
+    if (abort.aborted) throw new DOMException("Aborted", "AbortError")
     throw new Error("Impossible")
   })
 
@@ -943,6 +945,7 @@ export namespace SessionPrompt {
           sessionID: input.session.id,
           tool: { messageID: input.processor.message.id, callID: options.toolCallId },
           ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+          agent: input.agent.name,
         })
       },
     })
@@ -1157,7 +1160,10 @@ export namespace SessionPrompt {
       .filter((p): p is typeof p & { type: "text" } => p.type === "text")
       .map((p) => p.text)
       .join(" ")
-    if (messageText) {
+    // Skip auto-routing when user explicitly selected an agent (Tab, dialog, @agent)
+    const hasAgentPart = input.parts.some((p) => p.type === "agent")
+    const skipRouting = input.userSelectedAgent || hasAgentPart
+    if (messageText && !skipRouting) {
       const routeResult = await routeAgent(messageText, agentName)
       if (routeResult) {
         Recorder.emit({
@@ -1692,7 +1698,7 @@ export namespace SessionPrompt {
 
     // Original logic when experimental plan mode is disabled
     if (!Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE) {
-      if (input.agent.name === "plan") {
+      if (input.agent.name === "plan" && !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === PROMPT_PLAN)) {
         userMessage.parts.push({
           id: PartID.ascending(),
           messageID: userMessage.info.id,
@@ -1703,7 +1709,7 @@ export namespace SessionPrompt {
         })
       }
       const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
-      if (wasPlan && input.agent.name === "build") {
+      if (wasPlan && input.agent.name === "build" && !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH)) {
         userMessage.parts.push({
           id: PartID.ascending(),
           messageID: userMessage.info.id,

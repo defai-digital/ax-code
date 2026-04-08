@@ -73,6 +73,9 @@ const PATTERNS: Pattern[] = [
   { match: /compile error|build failed|tsc.*error/i, strategy: "reread_and_retry", maxRetries: 2, suggestion: "Compilation failed — fix the errors shown in output" },
   { match: /test.*fail|assertion.*fail|expect.*received/i, strategy: "reread_and_retry", maxRetries: 2, suggestion: "Test failed — review the assertion and fix the code" },
 
+  // Permission errors
+  { match: /prevents you from using this specific tool call|read-only and cannot modify/i, strategy: "escalate", maxRetries: 0, suggestion: "This agent is read-only. Suggest the user switch to the Dev agent to make code changes." },
+
   // Git errors
   { match: /merge conflict/i, strategy: "escalate", maxRetries: 0, suggestion: "Merge conflict — needs manual resolution" },
   { match: /uncommitted changes/i, strategy: "escalate", maxRetries: 0, suggestion: "Uncommitted changes — commit or stash first" },

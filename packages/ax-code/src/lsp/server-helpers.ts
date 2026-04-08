@@ -6,6 +6,7 @@ import { Instance } from "../project/instance"
 import { Process } from "../util/process"
 import { Log } from "../util/log"
 import { BunProc } from "../bun"
+import { Env } from "../util/env"
 import { Global } from "../global"
 import { Flag } from "../flag/flag"
 import { which } from "../util/which"
@@ -24,7 +25,7 @@ export const run = (cmd: string[], opts: Process.RunOptions = {}) => Process.run
 export const output = (cmd: string[], opts: Process.RunOptions = {}) => Process.text(cmd, { ...opts, nothrow: true })
 
 const bunEnv = () => ({
-  ...process.env,
+  ...Env.sanitize(),
   BUN_BE_BUN: "1",
 })
 

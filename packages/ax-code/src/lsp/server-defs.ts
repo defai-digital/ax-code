@@ -2,6 +2,7 @@ import path from "path"
 import os from "os"
 import { Global } from "../global"
 import { BunProc } from "../bun"
+import { Env } from "../util/env"
 import { text } from "node:stream/consumers"
 import fs from "fs/promises"
 import { Filesystem } from "../util/filesystem"
@@ -75,7 +76,7 @@ export const Typescript: Info = {
     const proc = spawn(BunProc.which(), ["x", "typescript-language-server", "--stdio"], {
       cwd: root,
       env: {
-        ...process.env,
+        ...Env.sanitize(),
         BUN_BE_BUN: "1",
       },
     })
@@ -162,7 +163,7 @@ export const ESLint: Info = {
     const proc = spawn(BunProc.which(), [serverPath, "--stdio"], {
       cwd: root,
       env: {
-        ...process.env,
+        ...Env.sanitize(),
         BUN_BE_BUN: "1",
       },
     })
@@ -299,7 +300,7 @@ export const Biome: Info = {
     const proc = spawn(bin, args, {
       cwd: root,
       env: {
-        ...process.env,
+        ...Env.sanitize(),
         BUN_BE_BUN: "1",
       },
     })
@@ -322,7 +323,7 @@ export const Gopls: Info = {
     return toolServer(root, {
       name: "gopls",
       install: ["go", "install", "golang.org/x/tools/gopls@latest"],
-      env: { ...process.env, GOBIN: Global.Path.bin },
+      env: { ...Env.sanitize(), GOBIN: Global.Path.bin },
       require: ["go"],
     })
   },
@@ -1574,7 +1575,7 @@ export const Nixd: Info = {
       process: spawn(nixd, [], {
         cwd: root,
         env: {
-          ...process.env,
+          ...Env.sanitize(),
         },
       }),
     }

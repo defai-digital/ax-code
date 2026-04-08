@@ -484,7 +484,8 @@ export namespace File {
               untrackedFiles.map(async (file) => {
                 try {
                   const content = await Filesystem.readText(path.join(Instance.directory, file))
-                  return { path: file, added: content.split("\n").length, removed: 0, status: "added" } as File.Info
+                  const lines = content.split("\n")
+                  return { path: file, added: content.endsWith("\n") ? lines.length - 1 : lines.length, removed: 0, status: "added" } as File.Info
                 } catch {
                   return null
                 }
@@ -597,7 +598,7 @@ export namespace File {
             }
           }
 
-          const content = (await Filesystem.readText(full).catch(() => "")).trim()
+          const content = await Filesystem.readText(full).catch(() => "")
 
           if (Instance.project.vcs === "git") {
             let diff = (

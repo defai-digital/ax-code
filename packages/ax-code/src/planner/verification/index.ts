@@ -6,6 +6,7 @@
  */
 
 import { Log } from "../../util/log"
+import { Env } from "../../util/env"
 
 const log = Log.create({ service: "planner.verify" })
 
@@ -55,7 +56,7 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       cwd,
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env },
+      env: Env.sanitize(),
     })
 
     let timedOut = false

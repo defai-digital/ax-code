@@ -236,7 +236,10 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
     const settled = await Promise.allSettled(batchPromises)
 
     for (const entry of settled) {
-      if (entry.status !== "fulfilled") continue
+      if (entry.status === "rejected") {
+        console.warn("Warning: stats batch failed:", String(entry.reason))
+        continue
+      }
       const result = entry.value
       earliestTime = Math.min(earliestTime, result.earliestTime)
       latestTime = Math.max(latestTime, result.latestTime)

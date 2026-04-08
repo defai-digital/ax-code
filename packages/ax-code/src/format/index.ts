@@ -6,6 +6,7 @@ import { mergeDeep } from "remeda"
 import z from "zod"
 import { Bus } from "../bus"
 import { Config } from "../config/config"
+import { Env } from "../util/env"
 import { File } from "../file"
 import { Instance } from "../project/instance"
 import { Process } from "../util/process"
@@ -113,7 +114,7 @@ export namespace Format {
                         item.command.map((x) => x.replace("$FILE", file)),
                         {
                           cwd: Instance.directory,
-                          env: { ...process.env, ...item.environment },
+                          env: { ...Env.sanitize(), ...item.environment },
                           stdout: "ignore",
                           stderr: "ignore",
                         },

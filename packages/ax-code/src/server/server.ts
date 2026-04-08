@@ -1209,6 +1209,13 @@ export namespace Server {
     mdnsDomain?: string
     cors?: string[]
   }) {
+    const loopback = ["127.0.0.1", "localhost", "::1"].includes(opts.hostname)
+    if (!loopback && !Flag.AX_CODE_SERVER_PASSWORD) {
+      throw new Error(
+        "AX_CODE_SERVER_PASSWORD is required when binding to a non-loopback address. " +
+        "Set the environment variable to secure the server.",
+      )
+    }
     const app = createApp(opts)
     const args = {
       hostname: opts.hostname,
