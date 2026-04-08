@@ -27,7 +27,7 @@ catalog:
   "ai": "6.0.146"
   "diff": "8.0.3"
   "drizzle-kit": "1.0.0-beta.19-d95b7a4"
-  "drizzle-orm": "1.0.0-beta.19-d95b7a4"
+  "drizzle-orm": "1.0.0-beta.20"
   "effect": "4.0.0-beta.35"
   "fuzzysort": "3.1.0"
   "hono": "4.12.7"
