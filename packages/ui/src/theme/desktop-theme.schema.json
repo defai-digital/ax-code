@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://ax-code.ai/desktop-theme.json",
+  "$id": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ui/src/theme/desktop-theme.schema.json",
   "title": "AX Code Desktop Theme",
   "description": "A theme definition for the AX Code desktop application",
   "type": "object",

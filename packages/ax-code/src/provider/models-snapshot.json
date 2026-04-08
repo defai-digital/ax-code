@@ -436,15 +436,16 @@
         "id": "gemini-3-flash-preview",
         "name": "gemini-3-flash-preview",
         "family": "gemini-flash",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "tool_call": true,
         "knowledge": "2025-01",
         "release_date": "2025-12-17",
-        "last_updated": "2026-01-19",
+        "last_updated": "2026-04-08",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -647,6 +648,31 @@
         "limit": {
           "context": 262144,
           "output": 262144
+        }
+      },
+      "gemma4:31b": {
+        "id": "gemma4:31b",
+        "name": "gemma4:31b",
+        "family": "gemma",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-04-02",
+        "last_updated": "2026-04-08",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 8192
         }
       },
       "glm-5.1": {
@@ -81497,6 +81523,39 @@
           "output": 65536
         }
       },
+      "hf:zai-org/GLM-5": {
+        "id": "hf:zai-org/GLM-5",
+        "name": "GLM-5",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-02-12",
+        "last_updated": "2026-04-08",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 1,
+          "output": 3,
+          "cache_read": 1
+        },
+        "limit": {
+          "context": 196608,
+          "output": 65536
+        }
+      },
       "hf:zai-org/GLM-4.6": {
         "id": "hf:zai-org/GLM-4.6",
         "name": "GLM 4.6",
@@ -81755,6 +81814,40 @@
         "cost": {
           "input": 0.55,
           "output": 2.19
+        },
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
+      "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4": {
+        "id": "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
+        "name": "Nemotron 3 Super 120B",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2024-04",
+        "release_date": "2026-03-11",
+        "last_updated": "2026-04-03",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.3,
+          "output": 1,
+          "cache_read": 0.3
         },
         "limit": {
           "context": 262144,
@@ -125640,5 +125733,25 @@
         "status": "active"
       }
     }
+  },
+  "ollama": {
+    "id": "ollama",
+    "env": [
+      "OLLAMA_HOST"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "http://localhost:11434/v1",
+    "name": "Ollama",
+    "models": {}
+  },
+  "ax-studio": {
+    "id": "ax-studio",
+    "env": [
+      "AX_STUDIO_HOST"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "http://localhost:11434/v1",
+    "name": "AX Studio",
+    "models": {}
   }
 }

@@ -1195,7 +1195,7 @@ export type Config = {
     diff_style?: "auto" | "stacked"
   }
   /**
-   * Command configuration, see https://ax-code.ai/docs/commands
+   * Command configuration, see https://github.com/defai-digital/ax-code
    */
   command?: {
     [key: string]: {
@@ -1252,7 +1252,7 @@ export type Config = {
     [key: string]: AgentConfig | undefined
   }
   /**
-   * Agent configuration, see https://ax-code.ai/docs/agent
+   * Agent configuration, see https://github.com/defai-digital/ax-code
    */
   agent?: {
     plan?: AgentConfig

@@ -39,7 +39,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
     return {
       redirect_uris: [this.redirectUrl],
       client_name: "ax-code",
-      client_uri: "https://ax-code.ai",
+      client_uri: "https://github.com/defai-digital/ax-code",
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: this.config.clientSecret ? "client_secret_post" : "none",

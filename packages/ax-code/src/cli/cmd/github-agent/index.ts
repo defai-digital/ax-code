@@ -59,6 +59,12 @@ export const GithubCommand = cmd({
   async handler() {},
 })
 
+function requireOidcBaseUrl(): string {
+  const value = process.env["OIDC_BASE_URL"]
+  if (!value) throw new Error("OIDC_BASE_URL environment variable is required for GitHub App integration")
+  return value.replace(/\/+$/, "")
+}
+
 export const GithubInstallCommand = cmd({
   command: "install",
   describe: "install the GitHub agent",
@@ -97,7 +103,7 @@ export const GithubInstallCommand = cmd({
                 "",
                 "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
                 "",
-                "   Learn more about the GitHub agent - https://ax-code.ai/docs/github/#usage-examples",
+                "   Learn more about the GitHub agent - https://github.com/defai-digital/ax-code",
               ].join("\n"),
             )
           }
@@ -209,7 +215,7 @@ export const GithubInstallCommand = cmd({
 
             async function getInstallation() {
               return await fetch(
-                `https://api.ax-code.ai/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`,
+                `${requireOidcBaseUrl()}/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`,
               )
                 .then((res) => res.json())
                 .then((data) => data.installation)
@@ -309,7 +315,7 @@ export const GithubRunCommand = cmd({
       const variant = process.env["VARIANT"] || undefined
       const runId = normalizeRunId()
       const share = normalizeShare()
-      const oidcBaseUrl = normalizeOidcBaseUrl()
+      const oidcBaseUrl = () => requireOidcBaseUrl()
       const { owner, repo } = context.repo
       // For repo events (schedule, workflow_dispatch), payload has no issue/comment data
       const payload = context.payload as
@@ -329,7 +335,7 @@ export const GithubRunCommand = cmd({
           ? (payload as IssueCommentEvent | IssuesEvent).issue.number
           : (payload as PullRequestEvent | PullRequestReviewCommentEvent).pull_request.number
       const runUrl = `/${owner}/${repo}/actions/runs/${runId}`
-      const shareBaseUrl = isMock ? "https://dev.ax-code.ai" : "https://ax-code.ai"
+      const shareBaseUrl = process.env["AX_CODE_SHARE_URL"] || "https://github.com/defai-digital/ax-code"
 
       let appToken: string
       let octoRest: Octokit
@@ -585,12 +591,6 @@ export const GithubRunCommand = cmd({
         if (value === "true") return true
         if (value === "false") return false
         throw new Error(`Invalid use_github_token value: ${value}. Must be a boolean.`)
-      }
-
-      function normalizeOidcBaseUrl(): string {
-        const value = process.env["OIDC_BASE_URL"]
-        if (!value) return "https://api.ax-code.ai"
-        return value.replace(/\/+$/, "")
       }
 
       function isIssueCommentEvent(
@@ -902,15 +902,16 @@ export const GithubRunCommand = cmd({
       }
 
       async function exchangeForAppToken(token: string) {
+        const base = oidcBaseUrl()
         const response = token.startsWith("github_pat_")
-          ? await fetch(`${oidcBaseUrl}/exchange_github_app_token_with_pat`, {
+          ? await fetch(`${base}/exchange_github_app_token_with_pat`, {
               method: "POST",
               headers: {
                 Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({ owner, repo }),
             })
-          : await fetch(`${oidcBaseUrl}/exchange_github_app_token`, {
+          : await fetch(`${base}/exchange_github_app_token`, {
               method: "POST",
               headers: {
                 Authorization: `Bearer ${token}`,

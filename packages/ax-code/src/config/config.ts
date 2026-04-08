@@ -46,7 +46,7 @@ import * as ConfigSchema from "./schema"
 // Used to be copy-pasted in 4 places — a domain rename or versioning
 // change would have missed at least one site and persisted wrong
 // schema URLs into random users' configs. See issue #17.
-const CONFIG_SCHEMA_URL = "https://ax-code.ai/config.json"
+const CONFIG_SCHEMA_URL = "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json"
 
 export namespace Config {
 
@@ -90,7 +90,7 @@ export namespace Config {
   export const state = Instance.state(async () => {
     const auth = await Auth.all()
 
-    // Config loading order (low -> high precedence): https://ax-code.ai/docs/config#precedence-order
+    // Config loading order (low -> high precedence): https://github.com/defai-digital/ax-code#config-precedence-order
     // 1) Remote .well-known/ax-code (org defaults, with legacy .well-known/opencode fallback)
     // 2) Global config (~/.config/ax-code/ax-code.json{,c})
     // 3) Custom config (AX_CODE_CONFIG)

@@ -1333,7 +1333,7 @@ export type Config = {
   logLevel?: LogLevel
   server?: ServerConfig
   /**
-   * Command configuration, see https://ax-code.ai/docs/commands
+   * Command configuration, see https://github.com/defai-digital/ax-code
    */
   command?: {
     [key: string]: {
@@ -1408,7 +1408,7 @@ export type Config = {
     [key: string]: AgentConfig | undefined
   }
   /**
-   * Agent configuration, see https://ax-code.ai/docs/agents
+   * Agent configuration, see https://github.com/defai-digital/ax-code
    */
   agent?: {
     plan?: AgentConfig

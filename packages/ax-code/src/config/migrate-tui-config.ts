@@ -12,7 +12,7 @@ import { Global } from "@/global"
 
 const log = Log.create({ service: "tui.migrate" })
 
-const TUI_SCHEMA_URL = "https://ax-code.ai/tui.json"
+const TUI_SCHEMA_URL = "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/tui.schema.json"
 
 const LegacyTheme = TuiInfo.shape.theme.optional()
 const LegacyRecord = z.record(z.string(), z.unknown()).optional()

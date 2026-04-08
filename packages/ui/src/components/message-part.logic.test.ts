@@ -81,8 +81,8 @@ describe("message-part.logic", () => {
   })
 
   test("extracts unique URLs without trailing punctuation", () => {
-    expect(urls("See https://ax-code.ai/docs, then https://ax-code.ai/docs and https://example.com/test.")).toEqual([
-      "https://ax-code.ai/docs",
+    expect(urls("See https://github.com/defai-digital/ax-code, then https://github.com/defai-digital/ax-code and https://example.com/test.")).toEqual([
+      "https://github.com/defai-digital/ax-code",
       "https://example.com/test",
     ])
   })

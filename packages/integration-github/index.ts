@@ -368,7 +368,13 @@ function useIssueId() {
 }
 
 function useShareUrl() {
-  return isMock() ? "https://dev.ax-code.ai" : "https://ax-code.ai"
+  return process.env["AX_CODE_SHARE_URL"] || "https://github.com/defai-digital/ax-code"
+}
+
+function useOidcBaseUrl(): string {
+  const value = process.env["OIDC_BASE_URL"]
+  if (!value) throw new Error("OIDC_BASE_URL environment variable is required for GitHub App token exchange")
+  return value.replace(/\/+$/, "")
 }
 
 async function getAccessToken() {
@@ -377,9 +383,10 @@ async function getAccessToken() {
   const envToken = useEnvGithubToken()
   if (envToken) return envToken
 
+  const baseUrl = useOidcBaseUrl()
   let response
   if (isMock()) {
-    response = await fetch("https://api.ax-code.ai/exchange_github_app_token_with_pat", {
+    response = await fetch(`${baseUrl}/exchange_github_app_token_with_pat`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${useEnvMock().mockToken}`,
@@ -388,7 +395,7 @@ async function getAccessToken() {
     })
   } else {
     const oidcToken = await core.getIDToken("ax-code-github-action")
-    response = await fetch("https://api.ax-code.ai/exchange_github_app_token", {
+    response = await fetch(`${baseUrl}/exchange_github_app_token`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${oidcToken}`,

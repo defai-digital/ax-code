@@ -1,5 +1,5 @@
 {
-  "$schema": "https://ax-code.ai/theme.json",
+  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/tui-theme.schema.json",
   "defs": {
     "matrixInk0": "#0a0e0a",
     "matrixInk1": "#0e130d",

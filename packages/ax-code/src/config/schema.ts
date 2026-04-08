@@ -519,7 +519,7 @@ export const Info = z
     command: z
       .record(z.string(), Command)
       .optional()
-      .describe("Command configuration, see https://ax-code.ai/docs/commands"),
+      .describe("Command configuration, see https://github.com/defai-digital/ax-code"),
     skills: Skills.optional().describe("Additional skill folder paths"),
     watcher: z
       .object({
@@ -592,7 +592,7 @@ export const Info = z
       })
       .catchall(Agent)
       .optional()
-      .describe("Agent configuration, see https://ax-code.ai/docs/agents"),
+      .describe("Agent configuration, see https://github.com/defai-digital/ax-code"),
     provider: z
       .record(z.string(), Provider)
       .optional()

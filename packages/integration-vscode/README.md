@@ -1,10 +1,10 @@
 # AX Code VS Code Extension
 
-A Visual Studio Code extension that integrates [AX Code](https://ax-code.ai) directly into your development workflow.
+A Visual Studio Code extension that integrates [AX Code](https://github.com/defai-digital/ax-code) directly into your development workflow.
 
 ## Prerequisites
 
-This extension requires the [AX Code CLI](https://ax-code.ai) to be installed on your system. Visit [ax-code.ai](https://ax-code.ai) for installation instructions.
+This extension requires the [AX Code CLI](https://github.com/defai-digital/ax-code) to be installed on your system. Visit [github.com/defai-digital/ax-code](https://github.com/defai-digital/ax-code) for installation instructions.
 
 ## Features
 

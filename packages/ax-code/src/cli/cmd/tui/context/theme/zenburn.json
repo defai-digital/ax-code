@@ -1,5 +1,5 @@
 {
-  "$schema": "https://ax-code.ai/theme.json",
+  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/tui-theme.schema.json",
   "defs": {
     "bg": "#3f3f3f",
     "bgAlt": "#4f4f4f",

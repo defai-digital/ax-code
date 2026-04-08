@@ -1,5 +1,5 @@
 {
-  "$schema": "https://ax-code.ai/theme.json",
+  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/tui-theme.schema.json",
   "defs": {
     "darkStep1": "#1a1b26",
     "darkStep2": "#1e2030",

@@ -1,6 +1,6 @@
 # ax-code GitHub Action
 
-A GitHub Action that integrates [ax-code](https://ax-code.ai) directly into your GitHub workflow.
+A GitHub Action that integrates [ax-code](https://github.com/defai-digital/ax-code) directly into your GitHub workflow.
 
 Mention `/ax-code` in your comment, and ax-code will execute tasks within your GitHub Actions runner.
 

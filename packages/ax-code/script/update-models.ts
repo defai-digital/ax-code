@@ -34,7 +34,7 @@ const existing = await Bun.file(snapshotPath)
   .catch(() => ({}))
 
 // Preserve CLI provider entries that models.dev doesn't include
-const cliProviderIDs = ["claude-code", "gemini-cli", "codex-cli"]
+const cliProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-studio"]
 for (const id of cliProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = existing[id]
 }

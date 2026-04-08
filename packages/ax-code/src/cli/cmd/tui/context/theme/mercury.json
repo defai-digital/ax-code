@@ -1,5 +1,5 @@
 {
-  "$schema": "https://ax-code.ai/theme.json",
+  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/tui-theme.schema.json",
   "defs": {
     "purple-800": "#3442a6",
     "purple-700": "#465bd1",
