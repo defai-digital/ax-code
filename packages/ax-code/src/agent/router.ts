@@ -66,7 +66,7 @@ const RULES: RouteRule[] = [
     agent: "architect",
     keywords: [
       "architecture", "design pattern", "dependency", "dependencies",
-      "coupling", "cohesion", "module", "structure", "restructure",
+      "coupling", "cohesion", "restructure",
       "monorepo", "circular", "layering", "separation of concerns",
       "system design", "code organization", "refactor architecture",
     ],
@@ -79,6 +79,7 @@ const RULES: RouteRule[] = [
       /\bproject\s+structure\b/i,
       /\bpackages?\b.*\b(organiz|structur)/i,
     ],
+    negatives: ["build", "create", "implement", "write", "scaffold", "generate", "new project", "from scratch", "set up", "initialize"],
     confidence: 0.8,
   }),
   rule({
@@ -97,7 +98,7 @@ const RULES: RouteRule[] = [
       /\btroubleshoot/i,
       /\bstack\s+trace\b/i,
     ],
-    negatives: ["test coverage", "write tests", "test plan", "test strategy"],
+    negatives: ["test coverage", "write tests", "test plan", "test strategy", "build", "create", "scaffold", "new project", "from scratch"],
     confidence: 0.7,
   }),
   rule({
@@ -116,6 +117,7 @@ const RULES: RouteRule[] = [
       /\bO\([nN]/,
       /\bprofil(e|ing)\b/i,
     ],
+    negatives: ["build", "create", "implement", "write", "scaffold", "new project", "from scratch", "set up"],
     confidence: 0.7,
   }),
   rule({
@@ -214,7 +216,7 @@ export function keywordRoute(message: string, currentAgent: string): RouteResult
     }
   }
 
-  if (best && best.confidence >= 0.3) {
+  if (best && best.confidence >= 0.4) {
     log.info("keyword-route", { agent: best.agent, confidence: best.confidence, matched: best.matched })
     return best
   }
@@ -257,9 +259,8 @@ async function classifyWithLLM(message: string, currentAgent: string): Promise<R
 
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), LLM_TIMEOUT)
-  let result: z.infer<typeof classifySchema>
   try {
-    result = await generateObject({
+    const result = await generateObject({
       model: language,
       temperature: 0,
       schema: classifySchema,
@@ -269,15 +270,15 @@ async function classifyWithLLM(message: string, currentAgent: string): Promise<R
         { role: "user" as const, content: message.slice(0, CLASSIFY_MAX_CHARS) },
       ],
     }).then((r) => r.object)
+
+    if (result.agent === "none" || result.agent === currentAgent) return null
+    if (result.confidence < 0.3) return null
+
+    log.info("llm-route", { agent: result.agent, confidence: result.confidence })
+    return { agent: result.agent, confidence: result.confidence, matched: ["llm-classification"] }
   } finally {
     clearTimeout(timer)
   }
-
-  if (result.agent === "none" || result.agent === currentAgent) return null
-  if (result.confidence < 0.3) return null
-
-  log.info("llm-route", { agent: result.agent, confidence: result.confidence })
-  return { agent: result.agent, confidence: result.confidence, matched: ["llm-classification"] }
 }
 
 /**

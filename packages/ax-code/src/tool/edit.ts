@@ -149,7 +149,17 @@ export const EditTool = Tool.define("edit", {
     })
 
     const { diagnostics, output: diagOutput } = await collectDiagnostics([filePath])
-    let output = "Edit applied successfully." + diagOutput
+    // Show a context snippet around the edit so the LLM sees the new file state.
+    // This prevents stale-context bugs when making multiple edits to the same file.
+    const newLines = contentNew.split("\n")
+    const editIdx = newLines.findIndex((line) => params.newString.split("\n").some((s) => s.trim() && line.includes(s.trim())))
+    const snippetStart = Math.max(0, editIdx - 3)
+    const snippetEnd = Math.min(newLines.length, editIdx + params.newString.split("\n").length + 3)
+    const snippet = editIdx >= 0
+      ? "\n\nHint: the file now reads (lines " + (snippetStart + 1) + "-" + snippetEnd + "):\n" +
+        newLines.slice(snippetStart, snippetEnd).map((l, i) => `${snippetStart + i + 1}\t${l}`).join("\n")
+      : ""
+    let output = "Edit applied successfully." + snippet + diagOutput
 
     return {
       metadata: {

@@ -128,15 +128,21 @@ export class CliLanguageModel implements LanguageModelV3 {
         controller.enqueue({ type: "text-start", id: textId })
 
         let remainder = ""
+        let emitted = false
+        const raw: string[] = []
         proc.stdout!.on("data", (chunk: Buffer) => {
           if (closed()) return
           const text = remainder + chunk.toString()
+          raw.push(chunk.toString())
           const lines = text.split("\n")
           remainder = lines.pop() ?? ""
           for (const line of lines) {
             if (!line.trim()) continue
             const delta = parser.parseStreamLine(line)
-            if (delta) controller.enqueue({ type: "text-delta", id: textId, delta })
+            if (delta) {
+              emitted = true
+              controller.enqueue({ type: "text-delta", id: textId, delta })
+            }
           }
         })
 
@@ -145,7 +151,15 @@ export class CliLanguageModel implements LanguageModelV3 {
           if (closed()) return
           if (remainder.trim()) {
             const delta = parser.parseStreamLine(remainder)
-            if (delta) controller.enqueue({ type: "text-delta", id: textId, delta })
+            if (delta) {
+              emitted = true
+              controller.enqueue({ type: "text-delta", id: textId, delta })
+            }
+          }
+          // Plain-text fallback: if no JSON events were parsed, emit raw output
+          if (!emitted) {
+            const fallback = raw.join("").trim()
+            if (fallback) controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
           }
           controller.enqueue({ type: "text-end", id: textId })
           controller.enqueue({
