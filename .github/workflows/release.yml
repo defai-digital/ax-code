@@ -31,6 +31,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Security scan
+        uses: google/osv-scanner-action/scan@v2
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --format=table
+
       - name: Typecheck
         run: pnpm --dir packages/ax-code run typecheck
 

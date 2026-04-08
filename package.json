@@ -21,12 +21,12 @@
   "devDependencies": {
     "@actions/artifact": "5.0.1",
     "@tsconfig/bun": "catalog:",
-    "@types/mime-types": "3.0.1",
+    "@types/mime-types": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "fast-glob": "3.3.3",
+    "fast-glob": "catalog:",
     "husky": "9.1.7",
     "prettier": "3.6.2",
-    "semver": "^7.6.0",
+    "semver": "catalog:",
     "turbo": "2.8.13"
   },
   "dependencies": {
