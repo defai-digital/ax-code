@@ -374,7 +374,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     📊 {context()?.percentage ?? 0}% used
                   </text>
                   <text width={18} fg={etaBarColor()}>
-                    ⏳ {eta()!.label} (Est.)
+                    ⏳ {eta()!.label} to full
                   </text>
                 </box>
               </Show>

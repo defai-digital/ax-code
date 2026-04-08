@@ -81,7 +81,7 @@ import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
 import { RevertNotice } from "./revert-notice"
-import { revertState } from "./revert"
+import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 
 addDefaultParsers(parsers.parsers)
@@ -652,6 +652,7 @@ export function Session() {
   const revertMessageID = createMemo(() => revertInfo()?.messageID)
 
   const revert = createMemo(() => revertState(revertInfo(), messages()))
+  const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID()))
 
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
@@ -733,7 +734,7 @@ export function Session() {
                     <Match when={message.id === revert()?.messageID}>
                       <RevertNotice count={revert()!.reverted.length} files={revert()!.diffFiles} />
                     </Match>
-                    <Match when={revert()?.messageID && message.id >= revert()!.messageID}>
+                    <Match when={revert()?.messageID && hiddenIDs().has(message.id)}>
                       <></>
                     </Match>
                     <Match when={message.role === "user"}>

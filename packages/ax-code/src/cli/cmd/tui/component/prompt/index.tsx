@@ -99,7 +99,7 @@ export function Prompt(props: PromptProps) {
   const pasteStyleId = syntax().getStyleId("extmark.paste")!
   let promptPartTypeId = 0
 
-  sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
+  const unsubPromptAppend = sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
     if (!input || input.isDestroyed) return
     input.insertText(evt.properties.text)
     setTimeout(() => {
@@ -110,6 +110,7 @@ export function Prompt(props: PromptProps) {
       renderer.requestRender()
     }, 0)
   })
+  onCleanup(() => unsubPromptAppend())
 
   createEffect(() => {
     if (props.disabled) input.cursorColor = theme.backgroundElement
@@ -1053,7 +1054,11 @@ export function Prompt(props: PromptProps) {
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
               <text fg={highlight()}>
-                {store.mode === "shell" ? "Shell" : (local.agent.icon(local.agent.current().name) + " " + (local.agent.current().displayName ?? Locale.titlecase(local.agent.current().name)))}{" "}
+                {store.mode === "shell"
+                  ? "Shell"
+                  : local.agent.icon(local.agent.current().name) +
+                    " " +
+                    (local.agent.current().displayName ?? Locale.titlecase(local.agent.current().name))}{" "}
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
@@ -1188,11 +1193,20 @@ export function Prompt(props: PromptProps) {
                 {sync.data.smartLlm ? "SmartLLM \u2714" : "SmartLLM \u24E7"}
               </text>
               {sync.data.autonomous ? (
-                <box backgroundColor="yellow" paddingLeft={1} paddingRight={1} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
-                  <text fg="red"><b>Autonomous {"\u2714"}</b></text>
+                <box
+                  backgroundColor="yellow"
+                  paddingLeft={1}
+                  paddingRight={1}
+                  onMouseUp={() => command.trigger("app.toggle.autonomous")}
+                >
+                  <text fg="red">
+                    <b>Autonomous {"\u2714"}</b>
+                  </text>
                 </box>
               ) : (
-                <text fg={theme.success} onMouseUp={() => command.trigger("app.toggle.autonomous")}>Autonomous {"\u24E7"}</text>
+                <text fg={theme.success} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
+                  Autonomous {"\u24E7"}
+                </text>
               )}
               <text
                 fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}

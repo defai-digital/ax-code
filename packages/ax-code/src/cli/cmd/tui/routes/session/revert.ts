@@ -27,8 +27,14 @@ export function diffFiles(diff?: string): DiffFile[] {
         const filename = patch.newFileName || patch.oldFileName || "unknown"
         return {
           filename: filename.replace(/^[ab]\//, ""),
-          additions: patch.hunks.reduce((sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("+")).length, 0),
-          deletions: patch.hunks.reduce((sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("-")).length, 0),
+          additions: patch.hunks.reduce(
+            (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("+")).length,
+            0,
+          ),
+          deletions: patch.hunks.reduce(
+            (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("-")).length,
+            0,
+          ),
         }
       })
   } catch {
@@ -47,6 +53,17 @@ export function revertedMessages(messages: Message[], messageID?: string) {
   const idx = messages.findIndex((m) => m.id === messageID)
   if (idx === -1) return []
   return messages.slice(idx).filter((item) => item.role === "user")
+}
+
+export function hiddenMessageIDs(messages: Message[], messageID?: string): Set<string> {
+  if (!messageID) return new Set()
+  const idx = messages.findIndex((m) => m.id === messageID)
+  if (idx === -1) return new Set()
+  const ids = new Set<string>()
+  for (let i = idx; i < messages.length; i++) {
+    ids.add(messages[i].id)
+  }
+  return ids
 }
 
 export function revertState(info: Info | undefined, messages: Message[]) {
