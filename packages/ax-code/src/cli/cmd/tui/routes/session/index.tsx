@@ -172,7 +172,7 @@ export function Session() {
     return false
   })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() && wide() ? 42 : 0) - 4)
 
   const scrollAcceleration = createMemo(() => {
     const tui = tuiConfig
@@ -806,8 +806,14 @@ export function Session() {
                 bottom={0}
                 alignItems="flex-end"
                 backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
+                onMouseDown={() => {
+                  batch(() => {
+                    setSidebar(() => "hide")
+                    setSidebarOpen(false)
+                  })
+                }}
               >
-                <Sidebar sessionID={route.sessionID} />
+                <Sidebar sessionID={route.sessionID} overlay />
               </box>
             </Match>
           </Switch>

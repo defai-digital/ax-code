@@ -53,7 +53,7 @@ export function Header() {
     const total = Usage.total(last)
     const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
     let result = total.toLocaleString()
-    if (model?.limit.context) {
+    if (model?.limit?.context) {
       result += "  " + Math.round((total / model.limit.context) * 100) + "%"
     }
     if (last.time.completed && last.time.created && last.tokens.output > 0) {
@@ -81,7 +81,7 @@ export function Header() {
   const dimensions = useTerminalDimensions()
   const narrow = createMemo(() => {
     const sidebarWidth = dimensions().width > 120 ? 42 : 0
-    return (dimensions().width - sidebarWidth) < 100
+    return dimensions().width - sidebarWidth < 100
   })
 
   return (
@@ -126,7 +126,10 @@ export function Header() {
                   paddingRight={1}
                 >
                   <text fg={hover() === "parent" ? theme.text : theme.background}>
-                    Back to Parent <span style={{ fg: hover() === "parent" ? theme.textMuted : theme.background }}>{keybind.print("session_parent")}</span>
+                    Back to Parent{" "}
+                    <span style={{ fg: hover() === "parent" ? theme.textMuted : theme.background }}>
+                      {keybind.print("session_parent")}
+                    </span>
                   </text>
                 </box>
                 <box

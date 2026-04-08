@@ -89,15 +89,6 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           <text fg={theme.text}>Filename:</text>
         </box>
         <textarea
-          onSubmit={() => {
-            props.onConfirm?.({
-              filename: textarea.plainText,
-              thinking: store.thinking,
-              toolDetails: store.toolDetails,
-              assistantMetadata: store.assistantMetadata,
-              openWithoutSaving: store.openWithoutSaving,
-            })
-          }}
           height={3}
           keyBindings={[{ name: "return", action: "submit" }]}
           ref={(val: TextareaRenderable) => (textarea = val)}

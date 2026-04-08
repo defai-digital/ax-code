@@ -736,9 +736,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         sync.set("isolation", "network", next === "full-access")
         const headers: Record<string, string> = { "content-type": "application/json" }
         if (sdk.directory) {
-          const encoded = /[^\x00-\x7F]/.test(sdk.directory)
-            ? encodeURIComponent(sdk.directory)
-            : sdk.directory
+          const encoded = /[^\x00-\x7F]/.test(sdk.directory) ? encodeURIComponent(sdk.directory) : sdk.directory
           headers["x-ax-code-directory"] = encoded
           headers["x-opencode-directory"] = encoded
         }
@@ -750,7 +748,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           })
           .catch(() => {
             sync.set("isolation", "mode", on ? "workspace-write" : "full-access")
-            sync.set("isolation", "network", !on ? false : true)
+            sync.set("isolation", "network", on ? false : true)
           })
         dialog.clear()
       },
@@ -795,7 +793,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
       if (typeof error === "object") {
         const data = error.data
-        if ("message" in data && typeof data.message === "string") {
+        if (data && typeof data === "object" && "message" in data && typeof data.message === "string") {
           return data.message
         }
       }

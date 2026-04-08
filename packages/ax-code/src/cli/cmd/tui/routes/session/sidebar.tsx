@@ -95,6 +95,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     elapsedSec: number
   }>()
   let etaAnchorSessionID = ""
+  let prevSample: { time: number; tokens: number } | undefined
+  let smoothRate: number | undefined
 
   onMount(() => {
     const id = setInterval(() => {
@@ -105,7 +107,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     const etaId = setInterval(() => {
       if (status().type === "idle") return
       setEtaTick((x) => x + 1)
-    }, 2_000)
+    }, 5_000)
     const countdownId = setInterval(() => {
       if (status().type === "idle") return
       setCountdownTick((x) => x + 1)
@@ -187,31 +189,53 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
     return {
       tokens: total.toLocaleString(),
-      percentage: model?.limit.context ? Math.round((total / model.limit.context) * 100) : null,
+      percentage: model?.limit?.context ? Math.round((total / model.limit.context) * 100) : null,
       raw: total,
-      limit: model?.limit.context ?? 0,
+      limit: model?.limit?.context ?? 0,
     }
   })
-  // Recalculate ETA every 2s using session-lifetime average velocity
+  // Recalculate ETA every 2s using windowed velocity (recent token rate)
   const etaEstimate = createMemo(() => {
     etaTick()
+    const idle = status().type === "idle"
     const ctx = context()
-    if (!ctx || !ctx.limit || !ctx.raw) return
     if (etaAnchorSessionID !== props.sessionID) {
       etaAnchorSessionID = props.sessionID
       setEtaAnchor(undefined)
+      prevSample = undefined
+      smoothRate = undefined
     }
+    if (idle) {
+      setEtaAnchor(undefined)
+      prevSample = undefined
+      smoothRate = undefined
+      return
+    }
+    if (!ctx || !ctx.limit || !ctx.raw) return
     const now = Date.now()
     const s = session()
     if (!s?.time?.created) return
     const elapsedSec = Math.round((now - s.time.created) / 1000)
-    if (elapsedSec < 30) return
-    if (ctx.raw / ctx.limit < 0.05) return
-    const tokPerSec = ctx.raw / elapsedSec
+    if (elapsedSec < 10) return
+    if (ctx.raw / ctx.limit < 0.02) return
+    // EMA-smoothed velocity: blends instant rate into a running average
+    // so the estimate adjusts gradually without jumping.
+    const lifetimeRate = ctx.raw / elapsedSec
+    if (prevSample && now - prevSample.time >= 5_000) {
+      const dt = (now - prevSample.time) / 1000
+      const instantRate = (ctx.raw - prevSample.tokens) / dt
+      // EMA alpha 0.2 = slow adaptation, avoids jumps from burst/pause cycles
+      smoothRate = smoothRate !== undefined ? smoothRate * 0.8 + instantRate * 0.2 : lifetimeRate
+      prevSample = { time: now, tokens: ctx.raw }
+    } else if (!prevSample) {
+      smoothRate = lifetimeRate
+      prevSample = { time: now, tokens: ctx.raw }
+    }
+    const tokPerSec = smoothRate ?? lifetimeRate
     if (tokPerSec <= 0) return
     const remaining = ctx.limit - ctx.raw
     if (remaining <= 0) {
-      setEtaAnchor({ computedAt: now, remainSec: 0, elapsedSec: 0 })
+      setEtaAnchor({ computedAt: now, remainSec: 0, elapsedSec })
       return
     }
     const remainSec = Math.min(3600, Math.round(remaining / tokPerSec))
@@ -588,7 +612,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   </text>
                 </box>
                 <Show when={todo().length <= 2 || expanded.todo}>
-                  <For each={todo()}>{(todo) => <TodoItem status={todo.status} content={todo.content} />}</For>
+                  <For each={todo()}>{(item) => <TodoItem status={item.status} content={item.content} />}</For>
                 </Show>
               </box>
             </Show>
@@ -613,7 +637,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   </box>
                   <text
                     fg={theme.textMuted}
-                    onMouseUp={(e: any) => {
+                    onMouseDown={(e: any) => {
                       e.stopPropagation()
                       command.trigger("session.activity")
                     }}
@@ -736,8 +760,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             </box>
           </Show>
           <text>
-            <span style={{ fg: theme.textMuted }}>{directory().split("/").slice(0, -1).join("/")}/</span>
-            <span style={{ fg: theme.text }}>{directory().split("/").at(-1)}</span>
+            <Show
+              when={directory().split("/").length > 1}
+              fallback={<span style={{ fg: theme.text }}>{directory()}</span>}
+            >
+              <span style={{ fg: theme.textMuted }}>{directory().split("/").slice(0, -1).join("/")}/</span>
+              <span style={{ fg: theme.text }}>{directory().split("/").at(-1)}</span>
+            </Show>
           </text>
           <text fg={theme.textMuted}>
             <span style={{ fg: theme.success }}>•</span> <b>AX</b>

@@ -89,6 +89,7 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
             return true
           }
         }
+        return false
       },
       print(key: KeybindKey) {
         const first = keybinds()[key]?.at(0)
