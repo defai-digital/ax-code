@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+
+# Update models snapshot before each commit
+bun run packages/ax-code/script/update-models.ts
+
+# Stage the snapshot if it changed
+git diff --quiet packages/ax-code/src/provider/models-snapshot.json || git add packages/ax-code/src/provider/models-snapshot.json

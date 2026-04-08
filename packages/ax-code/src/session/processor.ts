@@ -551,6 +551,7 @@ export namespace SessionProcessor {
             }
           } catch (e: unknown) {
             deltaBatcher.flush()
+            for (const k of Object.keys(toolInputCache)) delete toolInputCache[k]
             if (currentText) {
               currentText.text = currentText.text.trimEnd()
               currentText.time = {

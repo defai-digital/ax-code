@@ -452,11 +452,15 @@ export namespace Provider {
         try {
           const providerID = ProviderID.make(id)
           if (disabled.has(providerID)) return
-          const data = database[providerID]
-          if (!data) {
-            log.error("Provider does not exist in model list " + providerID)
-            return
+          const data = database[providerID] ?? {
+            id: ProviderID.make(id),
+            name: id,
+            env: [],
+            options: {},
+            source: "custom" as const,
+            models: {},
           }
+          if (!database[providerID]) database[providerID] = data
           const result = await fn(data)
           if (result && (result.autoload || providers[providerID])) {
             if (result.getModel) modelLoaders[providerID] = result.getModel

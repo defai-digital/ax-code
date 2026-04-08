@@ -4,6 +4,7 @@ import { PreloadMultiFileDiffResult } from "@pierre/diffs/ssr"
 
 type Data = {
   provider?: ProviderListResponse
+  agent?: Array<{ name: string; displayName?: string }>
   session: Session[]
   session_status: {
     [sessionID: string]: SessionStatus
