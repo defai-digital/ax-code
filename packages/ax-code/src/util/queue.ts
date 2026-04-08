@@ -1,10 +1,11 @@
+const CLOSED = Symbol("closed")
+
 export class AsyncQueue<T> implements AsyncIterable<T> {
-  private queue: T[] = []
-  private resolvers: ((value: T | undefined) => void)[] = []
-  private done = false
+  private queue: (T | typeof CLOSED)[] = []
+  private resolvers: ((value: T | typeof CLOSED) => void)[] = []
 
   get size() {
-    return this.queue.length
+    return this.queue.filter((x) => x !== CLOSED).length
   }
 
   push(item: T) {
@@ -14,21 +15,32 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
   }
 
   close() {
-    this.done = true
-    for (const resolve of this.resolvers) resolve(undefined)
+    for (const resolve of this.resolvers) resolve(CLOSED)
     this.resolvers.length = 0
+    this.queue.push(CLOSED)
   }
 
-  async next(): Promise<T | undefined> {
-    if (this.queue.length > 0) return this.queue.shift()!
-    if (this.done) return undefined
-    return new Promise((resolve) => this.resolvers.push(resolve))
+  async next(): Promise<T> {
+    if (this.queue.length > 0) {
+      const item = this.queue.shift()!
+      if (item === CLOSED) return new Promise(() => {})
+      return item
+    }
+    return new Promise<T>((resolve) =>
+      this.resolvers.push((v) => { if (v !== CLOSED) resolve(v as T) }),
+    )
   }
 
   async *[Symbol.asyncIterator]() {
     while (true) {
-      const item = await this.next()
-      if (item === undefined) return
+      const item = await new Promise<T | typeof CLOSED>((resolve) => {
+        if (this.queue.length > 0) {
+          resolve(this.queue.shift()!)
+          return
+        }
+        this.resolvers.push(resolve)
+      })
+      if (item === CLOSED) return
       yield item
     }
   }

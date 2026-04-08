@@ -604,18 +604,25 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
     async run(message: string, options?: RunOptions): Promise<RunResult> {
       const model = options?.model ?? (opts.model && opts.provider ? { providerID: opts.provider, modelID: opts.model } : undefined)
 
-      // Send prompt exactly once — retries only re-collect the result
-      sdk.session.prompt({
-        sessionID,
-        agent: options?.agent ?? opts.agent,
-        model,
-        variant: options?.variant ?? opts.variant,
-        parts: [{ type: "text", text: message }],
-      }).catch((err: unknown) => {
-        opts.hooks?.onError?.(err instanceof Error ? err : new Error(String(err)))
-      })
-
-      const collect = () => collectResult(sdk, sessionID, opts.hooks)
+      // Subscribe to events FIRST, then send prompt exactly once.
+      // Retries only re-collect the result, never re-send the prompt.
+      let prompted = false
+      const collect = () => {
+        const result = collectResult(sdk, sessionID, opts.hooks)
+        if (!prompted) {
+          prompted = true
+          sdk.session.prompt({
+            sessionID,
+            agent: options?.agent ?? opts.agent,
+            model,
+            variant: options?.variant ?? opts.variant,
+            parts: [{ type: "text", text: message }],
+          }).catch((err: unknown) => {
+            opts.hooks?.onError?.(err instanceof Error ? err : new Error(String(err)))
+          })
+        }
+        return result
+      }
       const resultPromise = opts.maxRetries
         ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry)
         : collect()

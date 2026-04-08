@@ -130,8 +130,9 @@ export const TuiThreadCommand = cmd({
       }
       const cwd = Filesystem.resolve(process.cwd())
 
+      const sanitized = Env.sanitize()
       const worker = new Worker(file, {
-        env: Env.sanitize() as Record<string, string>,
+        env: Object.fromEntries(Object.entries(sanitized).filter((e): e is [string, string] => e[1] !== undefined)),
       })
       worker.onerror = (e) => {
         Log.Default.error(e)
