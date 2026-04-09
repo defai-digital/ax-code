@@ -4,6 +4,7 @@ import { EditTool } from "./edit"
 import DESCRIPTION from "./multiedit.txt"
 import path from "path"
 import { Instance } from "../project/instance"
+import { Lock } from "../util/lock"
 
 export const MultiEditTool = Tool.define("multiedit", {
   description: DESCRIPTION,
@@ -23,16 +24,14 @@ export const MultiEditTool = Tool.define("multiedit", {
   }),
   async execute(params, ctx) {
     const tool = await EditTool.init()
-    const results = []
+    const results: Awaited<ReturnType<typeof tool.execute>>[] = []
+    // Hold a write lock for the entire batch so external processes
+    // (formatters, concurrent tools) cannot modify the file between
+    // sequential edits.
+    using _ = await Lock.write(params.filePath)
     for (const [, edit] of params.edits.entries()) {
       const result = await tool.execute(
         {
-          // Use nullish coalescing, not `||`. With `||`, an LLM that
-          // generates `filePath: ""` for a sub-edit would silently
-          // fall through to the parent's filePath and apply the edit
-          // to the wrong file. `??` only falls through on null/undefined,
-          // preserving "" as an explicit (invalid) value that the edit
-          // tool will reject downstream.
           filePath: edit.filePath ?? params.filePath,
           oldString: edit.oldString,
           newString: edit.newString,

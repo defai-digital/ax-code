@@ -3,6 +3,7 @@ export function lazy<T>(fn: () => T) {
   let loaded = false
 
   const result = (): T => {
+    // Return cached value if already initialized and not reset
     if (loaded) return value as T
     try {
       value = fn()

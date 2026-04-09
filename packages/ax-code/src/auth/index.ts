@@ -5,6 +5,7 @@ import { zod } from "@/util/effect-zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { encryptField, decryptField, createCanary, verifyCanary } from "./encryption"
+import { Lock } from "../util/lock"
 import { Log } from "../util/log"
 
 const log = Log.create({ service: "auth" })
@@ -158,28 +159,30 @@ export namespace Auth {
       const set = Effect.fn("Auth.set")(function* (key: string, info: Info) {
         const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
         if (!norm || norm.includes("..")) return yield* new AuthError({ message: "Invalid provider ID" })
-        const data = yield* readRaw()
-        if (norm !== key) delete data[key]
-        delete data[norm + "/"]
-        // Refresh canary on every write so it stays in sync with the
-        // current crypto runtime — this is what makes upgrades seamless
-        // when the user re-enters even a single key.
-        if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
-
         yield* Effect.tryPromise({
-          try: () => Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600),
+          try: async () => {
+            using _ = await Lock.write("auth")
+            const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
+            if (norm !== key) delete data[key]
+            delete data[norm + "/"]
+            if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
+            await Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600)
+          },
           catch: fail("Failed to write auth data"),
         })
       })
 
       const remove = Effect.fn("Auth.remove")(function* (key: string) {
         const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
-        const data = yield* readRaw()
-        delete data[key]
-        delete data[norm]
-        delete data[norm + "/"]
         yield* Effect.tryPromise({
-          try: () => Filesystem.writeJson(file, data, 0o600),
+          try: async () => {
+            using _ = await Lock.write("auth")
+            const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
+            delete data[key]
+            delete data[norm]
+            delete data[norm + "/"]
+            await Filesystem.writeJson(file, data, 0o600)
+          },
           catch: fail("Failed to write auth data"),
         })
       })

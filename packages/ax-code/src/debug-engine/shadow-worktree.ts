@@ -55,7 +55,7 @@ async function acquireSlot(projectID: ProjectID): Promise<() => void> {
     return () => releaseSlot(projectID)
   }
   await new Promise<void>((resolve) => gate!.waiters.push(resolve))
-  gate.inFlight++
+  // Slot ownership transferred from releaser — don't increment
   return () => releaseSlot(projectID)
 }
 
@@ -63,14 +63,14 @@ function releaseSlot(projectID: ProjectID): void {
   const key = projectID as unknown as string
   const gate = concurrencyGates.get(key)
   if (!gate) return
-  gate.inFlight--
   const waiter = gate.waiters.shift()
   if (waiter) {
-    // The waiter's resolved microtask will increment inFlight.
-    // Do NOT delete the gate here — the waiter still needs it.
+    // Transfer slot ownership directly to waiter — no decrement/increment
+    // cycle that could allow a third caller to see a free slot.
     waiter()
     return
   }
+  gate.inFlight--
   if (gate.inFlight === 0) concurrencyGates.delete(key)
 }
 

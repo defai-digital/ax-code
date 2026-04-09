@@ -88,6 +88,11 @@ export async function parseSSE(
     buf += decoder.decode()
     if (buf.trim()) emit(buf)
   } finally {
+    // Drain any remaining buffered data before canceling — abort may
+    // have broken the loop while partial events were still in `buf`.
+    buf += decoder.decode()
+    if (buf.trim()) emit(buf)
+    buf = ""
     signal.removeEventListener("abort", cancel)
     await reader.cancel().catch(() => {})
   }

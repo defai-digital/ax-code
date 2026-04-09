@@ -21,6 +21,7 @@ import { ModelID, ProviderID } from "@/provider/schema"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
+  const inFlight = new Set<string>()
 
   export const Event = {
     Compacted: BusEvent.define(
@@ -136,6 +137,16 @@ export namespace SessionCompaction {
     auto: boolean
     overflow?: boolean
   }) {
+    if (inFlight.has(input.sessionID)) return "stop" as const
+    inFlight.add(input.sessionID)
+    try {
+      return await processInner(input)
+    } finally {
+      inFlight.delete(input.sessionID)
+    }
+  }
+
+  async function processInner(input: Parameters<typeof process>[0]) {
     const parent = input.messages.findLast((m) => m.info.id === input.parentID)
     if (!parent) throw new Error(`Compaction failed: parent message ${input.parentID} not found`)
     const userMessage = parent.info as MessageV2.User
