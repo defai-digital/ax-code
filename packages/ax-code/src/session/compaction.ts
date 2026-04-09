@@ -121,7 +121,9 @@ export namespace SessionCompaction {
       } catch (e) {
         for (const part of toPrune) {
           if (part.state.status !== "completed") continue
-          part.state.time.compacted = prevTimes.get(part.id)
+          const prev = prevTimes.get(part.id)
+          if (prev === undefined) delete part.state.time.compacted
+          else part.state.time.compacted = prev
         }
         log.warn("failed to compact parts", { count: toPrune.length, err: e })
       }
@@ -159,7 +161,7 @@ export namespace SessionCompaction {
         const msg = input.messages[i]
         if (msg.info.role === "user" && !msg.parts.some((p) => p.type === "compaction")) {
           replay = msg
-          messages = input.messages.slice(0, i)
+          messages = input.messages.slice(0, i + 1)
           break
         }
       }

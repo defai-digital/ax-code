@@ -683,6 +683,7 @@ export namespace SessionProcessor {
             }
             Session.updateMessage.force(input.assistantMessage)
           })
+          deltaBatcher.flush()
           if (needsCompaction) return "compact"
           if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"

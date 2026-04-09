@@ -375,6 +375,8 @@ export namespace Agent {
 
           for (const [key, value] of Object.entries(cfg.agent ?? {})) {
             if (value.disable) {
+              if (agents[key] && resolveTier(agents[key]) === "core")
+                console.warn(`[agent] disabling core agent "${key}" via config`)
               delete agents[key]
               continue
             }
@@ -516,7 +518,11 @@ export namespace Agent {
             }),
           } satisfies Parameters<typeof generateObject>[0]
 
-          return yield* Effect.promise(() => generateObject(params).then((r) => r.object))
+          const result = yield* Effect.promise(() => generateObject(params).then((r) => r.object))
+          result.identifier = result.identifier.toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 50)
+          if (existing.some((a) => a.name === result.identifier))
+            result.identifier = `${result.identifier}-${Date.now().toString(36).slice(-4)}`
+          return result
         }),
       })
     }),

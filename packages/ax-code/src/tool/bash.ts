@@ -254,7 +254,7 @@ export const BashTool = Tool.define("bash", async () => {
           },
         })
       }
-      void truncated // reserved for future surfacing; hard cap is enough for memory safety
+      void truncated
 
       proc.stdout?.on("data", append)
       proc.stderr?.on("data", append)

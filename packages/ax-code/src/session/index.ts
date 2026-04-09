@@ -285,7 +285,10 @@ export namespace Session {
       // partial session is left behind — the previous loop issued one
       // auto-commit write per message/part, so a crash after the first few
       // messages left an un-resumable half-fork.
-      const plan = filtered.map((msg) => {
+      const plan = filtered.filter((msg) => {
+        if (msg.info.role === "assistant" && msg.info.parentID && !idMap.has(msg.info.parentID)) return false
+        return true
+      }).map((msg) => {
         const newID = idMap.get(msg.info.id)!
         const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
         const info = {
@@ -389,9 +392,7 @@ export namespace Session {
       share(result.id).catch((e) => {
         log.warn("auto-share failed for session", { sessionID: result.id, error: e })
       })
-    Bus.publish(Event.Updated, {
-      info: result,
-    })
+    // Event.Created already fired in the transaction above — skip redundant Updated
     return result
   }
 

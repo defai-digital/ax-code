@@ -344,9 +344,9 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
     }
     if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
     if (!lastFinished && msg.info.role === "assistant" && msg.info.finish) lastFinished = msg.info as MessageV2.Assistant
-    if (lastUser && lastFinished) break
     const found = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
     if (found.length > 0 && !lastFinished) tasks.push(...found)
+    if (lastUser && lastFinished) break
   }
 
   return {

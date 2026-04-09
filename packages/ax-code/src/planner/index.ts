@@ -177,7 +177,7 @@ export namespace Planner {
       }
     }
 
-    plan.status = plan.phasesFailed === 0 ? "completed" : "failed"
+    plan.status = plan.phasesFailed > 0 ? "failed" : plan.phasesCompleted === 0 ? "failed" : "completed"
     plan.actualDuration = Date.now() - startTime
     plan.totalTokensUsed = results.reduce((sum, r) => sum + r.tokensUsed, 0)
 

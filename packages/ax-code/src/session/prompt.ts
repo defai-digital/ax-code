@@ -671,7 +671,7 @@ export namespace SessionPrompt {
           overflow: task.overflow,
         })
         if (result === "stop") {
-          reason = "completed"
+          reason = task.overflow ? "error" : "completed"
           break
         }
         cachedMsgs = undefined // invalidate cache after compaction
@@ -912,7 +912,7 @@ export namespace SessionPrompt {
     const isolation = input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory)
     // Cache transformed schemas across steps — key: "toolId:npm"
     if (!_schemaCache) _schemaCache = new Map()
-    const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}`
+    const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
 
     const context = (args: any, options: ToolCallOptions): Tool.Context => ({
       sessionID: input.session.id,
@@ -1867,6 +1867,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       }
     })
 
+    if (abort.aborted) return
     const session = await Session.get(input.sessionID)
     if (session.revert) {
       await SessionRevert.cleanup(session)

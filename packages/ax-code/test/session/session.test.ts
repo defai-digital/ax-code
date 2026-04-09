@@ -41,7 +41,7 @@ describe("session.started event", () => {
     })
   })
 
-  test("session.started event should be emitted before session.updated", async () => {
+  test("session.create emits Created event without redundant Updated", async () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
@@ -63,8 +63,7 @@ describe("session.started event", () => {
         unsubUpdated()
 
         expect(events).toContain("started")
-        expect(events).toContain("updated")
-        expect(events.indexOf("started")).toBeLessThan(events.indexOf("updated"))
+        expect(events).not.toContain("updated")
 
         await Session.remove(session.id)
       },
