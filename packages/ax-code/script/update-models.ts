@@ -2,8 +2,8 @@
 
 /**
  * Fetches the latest model data from models.dev and updates the local snapshot.
- * Preserves CLI provider entries (claude-code, gemini-cli, codex-cli) that
- * aren't in the upstream API.
+ * Preserves local-only provider entries (CLI wrappers and offline providers)
+ * that aren't in the upstream API.
  *
  * Usage:
  *   bun run script/update-models.ts
@@ -33,9 +33,9 @@ const existing = await Bun.file(snapshotPath)
   .json()
   .catch(() => ({}))
 
-// Preserve CLI provider entries that models.dev doesn't include
-const cliProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-studio"]
-for (const id of cliProviderIDs) {
+// Preserve local-only provider entries that models.dev doesn't include
+const localProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-studio"]
+for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = existing[id]
 }
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "2.15.0",
+  "version": "2.15.1",
   "name": "ax-code",
   "type": "module",
   "license": "MIT",
@@ -46,7 +46,6 @@
     "@parcel/watcher-linux-x64-musl": "2.5.1",
     "@parcel/watcher-win32-arm64": "2.5.1",
     "@parcel/watcher-win32-x64": "2.5.1",
-    "@standard-schema/spec": "catalog:",
     "@tsconfig/bun": "catalog:",
     "@types/babel__core": "7.20.5",
     "@types/bun": "catalog:",
@@ -61,8 +60,7 @@
     "drizzle-orm": "catalog:",
     "typescript": "catalog:",
     "vscode-languageserver-types": "3.17.5",
-    "why-is-node-running": "3.2.2",
-    "zod-to-json-schema": "catalog:"
+    "why-is-node-running": "3.2.2"
   },
   "dependencies": {
     "@actions/core": "catalog:",

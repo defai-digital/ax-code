@@ -26,6 +26,8 @@ const NATIVE_PROVIDERS = new Set([
   "alibaba",
   "alibaba-coding-plan",
   "zai-coding-plan",
+  "zhipuai",
+  "zhipuai-coding-plan",
   "github-copilot",
   "claude-code",
   "gemini-cli",
