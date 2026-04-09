@@ -14,6 +14,7 @@ import { MAX_LINES as _MAX_LINES, MAX_BYTES as _MAX_BYTES } from "@/constants/to
 export namespace Truncate {
   const log = Log.create({ service: "truncation" })
   const RETENTION = Duration.days(7)
+  const MAX_DIR_BYTES = 200 * 1024 * 1024 // 200 MB disk cap
 
   export const MAX_LINES = _MAX_LINES
   export const MAX_BYTES = _MAX_BYTES
@@ -52,12 +53,33 @@ export namespace Truncate {
       const cleanup = Effect.fn("Truncate.cleanup")(function* () {
         const cutoff = Identifier.timestamp(Identifier.create("tool", false, Date.now() - Duration.toMillis(RETENTION)))
         const entries = yield* fs.readDirectory(TRUNCATION_DIR).pipe(
-          Effect.map((all) => all.filter((name) => name.startsWith("tool_"))),
+          Effect.map((all) => all.filter((name) => name.startsWith("tool_")).sort()),
           Effect.catch(() => Effect.succeed([])),
         )
+        // Time-based cleanup
         for (const entry of entries) {
           if (Identifier.timestamp(entry) >= cutoff) continue
           yield* fs.remove(path.join(TRUNCATION_DIR, entry)).pipe(Effect.catch(() => Effect.void))
+        }
+        // Size-based cleanup — remove oldest files until under disk cap
+        const remaining = yield* fs.readDirectory(TRUNCATION_DIR).pipe(
+          Effect.map((all) => all.filter((name) => name.startsWith("tool_")).sort()),
+          Effect.catch(() => Effect.succeed([])),
+        )
+        let totalSize = 0
+        const sizes: { name: string; size: number }[] = []
+        for (const entry of remaining) {
+          const stat = yield* fs.stat(path.join(TRUNCATION_DIR, entry)).pipe(Effect.catch(() => Effect.succeed({ size: 0 as number })))
+          const size = Number(stat.size)
+          sizes.push({ name: entry, size })
+          totalSize += size
+        }
+        if (totalSize > MAX_DIR_BYTES) {
+          for (const item of sizes) {
+            if (totalSize <= MAX_DIR_BYTES) break
+            yield* fs.remove(path.join(TRUNCATION_DIR, item.name)).pipe(Effect.catch(() => Effect.void))
+            totalSize -= item.size
+          }
         }
       })
 

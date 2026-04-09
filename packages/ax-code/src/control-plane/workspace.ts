@@ -129,7 +129,10 @@ export namespace Workspace {
               type: item.type,
               err,
             })
-            await new Promise((r) => setTimeout(r, backoff))
+            await new Promise<void>((resolve) => {
+              const timer = setTimeout(resolve, backoff)
+              stop.signal.addEventListener("abort", () => { clearTimeout(timer); resolve() }, { once: true })
+            })
             backoff = Math.min(backoff * 2, 30000)
           }
         }

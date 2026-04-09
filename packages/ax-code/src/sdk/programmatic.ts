@@ -62,12 +62,13 @@ function last<T>(list: T[], test: (item: T) => boolean): T | undefined {
 // package's `withTimeout` already documents and avoids. Keeping this
 // one local so we can plug in a typed TimeoutError instead of the
 // util's generic Error.
-function withSdkTimeout<T>(promise: Promise<T>, ms: number, makeError: () => Error): Promise<T> {
+function withSdkTimeout<T>(promise: Promise<T>, ms: number, makeError: () => Error, onTimeout?: () => void): Promise<T> {
   let settled = false
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
+      onTimeout?.()
       try {
         reject(makeError())
       } catch (e) {
@@ -262,8 +263,11 @@ async function withRetry<T>(
       if (!isRetryable || attempt === maxRetries) throw lastError
 
       if (onRetry) onRetry(attempt + 1, lastError)
-      // Exponential backoff: 1s, 2s, 4s
-      await new Promise((r) => setTimeout(r, Math.min(1000 * Math.pow(2, attempt), 8000)))
+      // Exponential backoff: 1s, 2s, 4s — unref timer to avoid blocking process exit
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 8000))
+        if (typeof timer === "object" && "unref" in timer) timer.unref()
+      })
     }
   }
   throw lastError

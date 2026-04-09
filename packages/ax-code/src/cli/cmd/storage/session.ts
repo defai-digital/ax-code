@@ -148,9 +148,17 @@ export const SessionListCommand = cmd({
           return
         }
 
-        proc.stdin.write(output)
-        proc.stdin.end()
-        await proc.exited
+        const kill = () => { try { proc.kill() } catch {} }
+        process.on("SIGINT", kill)
+        process.on("SIGTERM", kill)
+        try {
+          proc.stdin.write(output)
+          proc.stdin.end()
+          await proc.exited
+        } finally {
+          process.off("SIGINT", kill)
+          process.off("SIGTERM", kill)
+        }
       } else {
         console.log(output)
       }

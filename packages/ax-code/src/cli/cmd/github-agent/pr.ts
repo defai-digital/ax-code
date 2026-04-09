@@ -124,7 +124,16 @@ export const PrCommand = cmd({
           stderr: "inherit",
           cwd: process.cwd(),
         })
-        const code = await axcodeProcess.exited
+        const kill = () => { try { axcodeProcess.kill("SIGTERM") } catch {} }
+        process.on("SIGINT", kill)
+        process.on("SIGTERM", kill)
+        let code: number
+        try {
+          code = await axcodeProcess.exited
+        } finally {
+          process.off("SIGINT", kill)
+          process.off("SIGTERM", kill)
+        }
         if (code !== 0) throw new Error(`ax-code exited with code ${code}`)
       },
     })

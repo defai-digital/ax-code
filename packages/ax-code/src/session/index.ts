@@ -670,8 +670,12 @@ export namespace Session {
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
       Database.effect(() => Bus.publish(Event.Deleted, { info: session }))
     })
-    for (const desc of allDescendants) SelfCorrection.reset(desc.id)
+    for (const desc of allDescendants) {
+      SelfCorrection.reset(desc.id)
+      await SessionPrompt.cancel(desc.id).catch(() => {})
+    }
     SelfCorrection.reset(sessionID)
+    await SessionPrompt.cancel(sessionID).catch(() => {})
     await unshare(sessionID).catch((e) => log.warn("session unshare failed", { error: e }))
   })
 
