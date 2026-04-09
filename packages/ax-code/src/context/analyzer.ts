@@ -348,16 +348,28 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
   if (sourceDir) {
     try {
       const glob = new Bun.Glob("**/*.{ts,tsx,js,jsx,py,go,rs}")
-      for await (const file of glob.scan({ cwd: path.join(root, sourceDir), onlyFiles: true })) {
-        fileCount++
-        try {
-          const content = await Bun.file(path.join(root, sourceDir, file)).text()
+      const batch: string[] = []
+      const cwd = path.join(root, sourceDir)
+      for await (const file of glob.scan({ cwd, onlyFiles: true })) {
+        batch.push(file)
+        if (batch.length >= 50 || fileCount + batch.length > 5000) {
+          const results = await Promise.all(batch.map((f) => Bun.file(path.join(cwd, f)).text().catch(() => "")))
+          for (const content of results) {
+            fileCount++
+            const lines = content.split("\n")
+            loc += content.endsWith("\n") ? lines.length - 1 : lines.length
+          }
+          batch.length = 0
+          if (fileCount > 5000) break
+        }
+      }
+      if (batch.length > 0) {
+        const results = await Promise.all(batch.map((f) => Bun.file(path.join(cwd, f)).text().catch(() => "")))
+        for (const content of results) {
+          fileCount++
           const lines = content.split("\n")
           loc += content.endsWith("\n") ? lines.length - 1 : lines.length
-        } catch {
-          // skip unreadable files
         }
-        if (fileCount > 5000) break
       }
     } catch {
       // fallback

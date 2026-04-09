@@ -255,6 +255,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
         case "update":
           await FileTime.withLock(change.filePath, async () => {
+            // Verify file hasn't changed since verification to prevent TOCTOU
+            const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+            if (current !== undefined && current !== change.oldContent)
+              throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
             await fs.writeFile(change.filePath, change.newContent, "utf-8")
           })
           await FileTime.read(ctx.sessionID, change.filePath)

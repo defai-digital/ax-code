@@ -552,7 +552,18 @@ export namespace SessionProcessor {
                   })
                   continue
               }
-              if (needsCompaction) break
+              if (needsCompaction) {
+                // Finalize in-flight parts before breaking for compaction
+                if (currentText) {
+                  currentText.text = currentText.text.trimEnd()
+                  if (!currentText.time?.end) currentText.time = { start: currentText.time?.start ?? Date.now(), end: Date.now() }
+                }
+                for (const part of Object.values(reasoningMap)) {
+                  part.text = part.text.trimEnd()
+                  if (!part.time?.end) part.time = { start: part.time?.start ?? Date.now(), end: Date.now() }
+                }
+                break
+              }
             }
           } catch (e: unknown) {
             deltaBatcher.flush()

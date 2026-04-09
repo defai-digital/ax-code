@@ -200,21 +200,13 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   const sections: ProjectMemory["sections"] = {}
   let remaining = maxTokens
 
-  if (patterns.tokens > 0 && remaining > 0) {
-    sections.patterns = { content: truncateToTokens(patterns.content, remaining), tokens: Math.min(patterns.tokens, remaining) }
-    remaining -= sections.patterns.tokens
-  }
-  if (config.tokens > 0 && remaining > 0) {
-    sections.config = { content: truncateToTokens(config.content, remaining), tokens: Math.min(config.tokens, remaining) }
-    remaining -= sections.config.tokens
-  }
-  if (structure.tokens > 0 && remaining > 0) {
-    sections.structure = { content: truncateToTokens(structure.content, remaining), tokens: Math.min(structure.tokens, remaining) }
-    remaining -= sections.structure.tokens
-  }
-  if (readme.tokens > 0 && remaining > 0) {
-    sections.readme = { content: truncateToTokens(readme.content, remaining), tokens: Math.min(readme.tokens, remaining) }
-    remaining -= sections.readme.tokens
+  for (const [key, section] of [["patterns", patterns], ["config", config], ["structure", structure], ["readme", readme]] as const) {
+    if (section.tokens > 0 && remaining > 0) {
+      const content = truncateToTokens(section.content, remaining)
+      const tokens = estimateTokens(content)
+      sections[key] = { content, tokens }
+      remaining -= tokens
+    }
   }
 
   totalTokens = Object.values(sections).reduce((sum, s) => sum + (s?.tokens ?? 0), 0)

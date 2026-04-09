@@ -152,7 +152,9 @@ export const EditTool = Tool.define("edit", {
     // Show a context snippet around the edit so the LLM sees the new file state.
     // This prevents stale-context bugs when making multiple edits to the same file.
     const newLines = contentNew.split("\n")
-    const editIdx = newLines.findIndex((line) => params.newString.split("\n").some((s) => s.trim() && line.includes(s.trim())))
+    const oldLines = contentOld.split("\n")
+    let editIdx = newLines.findIndex((line, i) => oldLines[i] !== line)
+    if (editIdx === -1) editIdx = 0
     const snippetStart = Math.max(0, editIdx - 3)
     const snippetEnd = Math.min(newLines.length, editIdx + params.newString.split("\n").length + 3)
     const snippet = editIdx >= 0
@@ -176,7 +178,7 @@ export const EditTool = Tool.define("edit", {
 export type Replacer = (content: string, find: string) => Generator<string, void, unknown>
 
 // Similarity thresholds for block anchor fallback matching
-const SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.0
+const SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.6
 const MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD = 0.3
 
 import { levenshtein } from "@/util/levenshtein"
@@ -292,10 +294,7 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
         const distance = levenshtein(originalLine, searchLine)
         similarity += (1 - distance / maxLen) / linesToCheck
 
-        // Exit early when threshold is reached
-        if (similarity >= SINGLE_CANDIDATE_SIMILARITY_THRESHOLD) {
-          break
-        }
+        // Continue checking all middle lines for full similarity score
       }
     } else {
       // No middle lines to compare, just accept based on anchors

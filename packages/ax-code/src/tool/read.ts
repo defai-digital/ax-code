@@ -130,6 +130,9 @@ export const ReadTool = Tool.define("read", {
     const isImage = mime.startsWith("image/") && mime !== "image/svg+xml" && mime !== "image/vnd.fastbidsheet"
     const isPdf = mime === "application/pdf"
     if (isImage || isPdf) {
+      const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+      if (Number(stat.size) > MAX_ATTACHMENT_BYTES)
+        throw new Error(`File too large to read as attachment: ${Number(stat.size)} bytes (max ${MAX_ATTACHMENT_BYTES})`)
       const msg = `${isImage ? "Image" : "PDF"} read successfully`
       return {
         title,

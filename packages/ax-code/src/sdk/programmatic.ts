@@ -402,6 +402,7 @@ async function collectResult(
   let messageID = ""
   let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 
+  try {
   for await (const event of events.stream) {
     if (event.type === "message.updated") {
       const info = (event as any).properties.info
@@ -472,6 +473,10 @@ async function collectResult(
         break
       }
     }
+  }
+  } finally {
+    // Ensure SSE stream is closed — prevents connection leak on timeout
+    if (typeof (events.stream as any).return === "function") (events.stream as any).return()
   }
 
   return { text, agent, model: modelInfo, usage, toolCalls, sessionID, messageID }
