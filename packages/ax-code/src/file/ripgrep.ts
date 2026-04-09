@@ -389,6 +389,10 @@ export namespace Ripgrep {
       cwd: input.cwd,
       nothrow: true,
     })
+    if (result.code === 2) {
+      log.warn("ripgrep error", { code: result.code, stderr: result.stderr })
+      return []
+    }
     if (result.code !== 0) {
       return []
     }

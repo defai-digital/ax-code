@@ -74,7 +74,7 @@ export const BashTool = Tool.define("bash", async () => {
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
     parameters: z.object({
       command: z.string().describe("The command to execute"),
-      timeout: z.number().describe("Optional timeout in milliseconds").optional(),
+      timeout: z.number().min(1).max(600_000).describe("Optional timeout in milliseconds (max 600000)").optional(),
       workdir: z
         .string()
         .describe(

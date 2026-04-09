@@ -516,7 +516,13 @@ export namespace File {
 
           if (deletedOutput.trim()) {
             for (const file of deletedOutput.trim().split("\n").map((f) => f.trim()).filter(Boolean)) {
-              changed.push({ path: file, added: 0, removed: 0, status: "deleted" })
+              const removed = parseInt(
+                (await git(["diff", "--numstat", "HEAD", "--", file], { cwd: Instance.directory }))
+                  .text()
+                  .split("\t")[1] ?? "0",
+                10,
+              ) || 0
+              changed.push({ path: file, added: 0, removed, status: "deleted" })
             }
           }
 

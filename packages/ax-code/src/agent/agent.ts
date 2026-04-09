@@ -40,7 +40,7 @@ export namespace Agent {
       mode: z.enum(["subagent", "primary", "all"]),
       native: z.boolean().optional(),
       hidden: z.boolean().optional(),
-      tier: z.enum(["core", "specialist", "internal"]).optional(),
+      tier: z.enum(["core", "specialist", "internal", "subagent"]).optional(),
       topP: z.number().optional(),
       temperature: z.number().optional(),
       color: z.string().optional(),

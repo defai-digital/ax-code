@@ -549,7 +549,6 @@ export async function ensureTitle(input: {
   modelID: ModelID
   abort?: AbortSignal
 }) {
-  if (input.session.parentID) return
   if (!Session.isDefaultTitle(input.session.title)) return
 
   const firstRealUserIdx = input.history.findIndex(

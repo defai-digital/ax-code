@@ -257,8 +257,8 @@ When constructing the summary, try to stick to this template:
     if (result === "compact") {
       processor.message.error = new MessageV2.ContextOverflowError({
         message: replay
-          ? "Conversation history too large to compact - exceeds model context limit"
-          : "Session too large to compact - context exceeds model limit even after stripping media",
+          ? "Session too large to compact - context exceeds model limit even after stripping media"
+          : "Conversation history too large to compact - exceeds model context limit",
       }).toObject()
       processor.message.finish = "error"
       await Session.updateMessage(processor.message)
