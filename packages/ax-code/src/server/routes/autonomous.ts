@@ -85,13 +85,16 @@ export const AutonomousRoutes = lazy(() =>
           .catch(() => ({}))
         existing.autonomous = enabled
         const tmp = filepath + ".tmp"
+        let persisted = true
         await Filesystem.writeJson(tmp, existing)
           .then(() => fs.rename(tmp, filepath))
           .catch((err) => {
+            persisted = false
             log.warn("failed to persist autonomous config", { error: err instanceof Error ? err.message : String(err) })
             fs.unlink(tmp).catch(() => {})
           })
-        log.info("autonomous mode changed", { enabled })
+        log.info("autonomous mode changed", { enabled, persisted })
+        if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
         return c.json({ enabled })
       },
     ),

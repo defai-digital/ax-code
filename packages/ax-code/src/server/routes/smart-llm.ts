@@ -80,13 +80,16 @@ export const SmartLlmRoutes = lazy(() =>
         if (!existing.routing) existing.routing = {}
         existing.routing.llm = enabled
         const tmp = filepath + ".tmp"
+        let persisted = true
         await Filesystem.writeJson(tmp, existing)
           .then(() => fs.rename(tmp, filepath))
           .catch((err) => {
+            persisted = false
             log.warn("failed to persist smart-llm config", { error: err instanceof Error ? err.message : String(err) })
             fs.unlink(tmp).catch(() => {})
           })
-        log.info("smart LLM routing changed", { enabled })
+        log.info("smart LLM routing changed", { enabled, persisted })
+        if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
         return c.json({ enabled })
       },
     ),

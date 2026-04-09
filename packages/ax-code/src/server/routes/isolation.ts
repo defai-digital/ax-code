@@ -77,12 +77,15 @@ export const IsolationRoutes = lazy(() =>
         }).catch(() => ({}))
         existing.isolation = { mode, network }
         const tmp = filepath + ".tmp"
+        let persisted = true
         await Filesystem.writeJson(tmp, existing)
           .then(() => fs.rename(tmp, filepath))
           .catch((err) => {
+            persisted = false
             log.warn("failed to persist isolation config", { error: err instanceof Error ? err.message : String(err) })
             fs.unlink(tmp).catch(() => {})
           })
+        if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
         const state = Isolation.resolve({ mode, network }, Instance.directory)
         return c.json({ mode: state.mode, network: state.network })
       },

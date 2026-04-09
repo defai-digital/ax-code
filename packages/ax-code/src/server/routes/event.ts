@@ -9,6 +9,7 @@ import { AsyncQueue } from "../../util/queue"
 import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "server" })
+const HEARTBEAT_INTERVAL_MS = 10_000
 
 export const EventRoutes = lazy(() =>
   new Hono().get(
@@ -51,7 +52,7 @@ export const EventRoutes = lazy(() =>
               properties: {},
             }),
           )
-        }, 10_000)
+        }, HEARTBEAT_INTERVAL_MS)
 
         const MAX_QUEUE = 1024
         const unsub = Bus.subscribeAll((event) => {
