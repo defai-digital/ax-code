@@ -1,0 +1,18 @@
+{
+  "bench": {
+    "limit": 25,
+    "repeat": 3,
+    "warmup": 1,
+    "concurrency": 4,
+    "probe": false,
+    "nativeProfile": true,
+  },
+  "gate": {
+    "phases": {},
+  },
+  "baseline": {
+    "phases": {},
+  },
+  "summary": ".tmp/perf-index-summary.json",
+  "out": ".tmp/perf-index.json",
+}

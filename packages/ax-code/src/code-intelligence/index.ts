@@ -134,7 +134,14 @@ export namespace CodeIntelligence {
     const scope = opts?.scope ?? "none"
     const rows = CodeGraphQuery.findNodesByName(projectID, name, opts)
     const filtered = rows.filter((row) => inScope(row.file, scope))
-    log.info("findSymbol", { projectID, name, count: filtered.length, dropped: rows.length - filtered.length, scope, queryId })
+    log.info("findSymbol", {
+      projectID,
+      name,
+      count: filtered.length,
+      dropped: rows.length - filtered.length,
+      scope,
+      queryId,
+    })
     return filtered.map((row) => nodeRowToSymbol(row, projectID, queryId))
   }
 
@@ -147,15 +154,18 @@ export namespace CodeIntelligence {
     const scope = opts?.scope ?? "none"
     const rows = CodeGraphQuery.findNodesByNamePrefix(projectID, prefix, opts)
     const filtered = rows.filter((row) => inScope(row.file, scope))
-    log.info("findSymbolByPrefix", { projectID, prefix, count: filtered.length, dropped: rows.length - filtered.length, scope, queryId })
+    log.info("findSymbolByPrefix", {
+      projectID,
+      prefix,
+      count: filtered.length,
+      dropped: rows.length - filtered.length,
+      scope,
+      queryId,
+    })
     return filtered.map((row) => nodeRowToSymbol(row, projectID, queryId))
   }
 
-  export function getSymbol(
-    projectID: ProjectID,
-    id: CodeNodeID,
-    opts?: { scope?: Scope },
-  ): Symbol | null {
+  export function getSymbol(projectID: ProjectID, id: CodeNodeID, opts?: { scope?: Scope }): Symbol | null {
     const queryId = nextQueryId()
     const scope = opts?.scope ?? "none"
     // getNode filters by project_id at the SQL layer — no separate
@@ -168,11 +178,7 @@ export namespace CodeIntelligence {
 
   // ─── File-level queries ─────────────────────────────────────────────
 
-  export function symbolsInFile(
-    projectID: ProjectID,
-    file: string,
-    opts?: { scope?: Scope },
-  ): Symbol[] {
+  export function symbolsInFile(projectID: ProjectID, file: string, opts?: { scope?: Scope }): Symbol[] {
     const queryId = nextQueryId()
     const scope = opts?.scope ?? "none"
     // If the file itself is out of scope, short-circuit with no rows.
@@ -192,11 +198,7 @@ export namespace CodeIntelligence {
   // findCallers / findCallees / findReferences all go through the indexed
   // storage — no LSP fallback happens at query time.
 
-  export function findReferences(
-    projectID: ProjectID,
-    symbolId: CodeNodeID,
-    opts?: { scope?: Scope },
-  ): Reference[] {
+  export function findReferences(projectID: ProjectID, symbolId: CodeNodeID, opts?: { scope?: Scope }): Reference[] {
     const queryId = nextQueryId()
     const scope = opts?.scope ?? "none"
     const edges = CodeGraphQuery.edgesTo(projectID, symbolId, "references")
@@ -213,11 +215,7 @@ export namespace CodeIntelligence {
       }))
   }
 
-  export function findCallers(
-    projectID: ProjectID,
-    symbolId: CodeNodeID,
-    opts?: { scope?: Scope },
-  ): CallChainNode[] {
+  export function findCallers(projectID: ProjectID, symbolId: CodeNodeID, opts?: { scope?: Scope }): CallChainNode[] {
     const queryId = nextQueryId()
     const scope = opts?.scope ?? "none"
     const edges = CodeGraphQuery.edgesTo(projectID, symbolId, "calls")
@@ -234,11 +232,7 @@ export namespace CodeIntelligence {
     return callers
   }
 
-  export function findCallees(
-    projectID: ProjectID,
-    symbolId: CodeNodeID,
-    opts?: { scope?: Scope },
-  ): CallChainNode[] {
+  export function findCallees(projectID: ProjectID, symbolId: CodeNodeID, opts?: { scope?: Scope }): CallChainNode[] {
     const queryId = nextQueryId()
     const scope = opts?.scope ?? "none"
     const edges = CodeGraphQuery.edgesFrom(projectID, symbolId, "calls")
@@ -257,11 +251,7 @@ export namespace CodeIntelligence {
 
   // ─── File-level dependencies ────────────────────────────────────────
 
-  export function findImports(
-    projectID: ProjectID,
-    file: string,
-    opts?: { scope?: Scope },
-  ): string[] {
+  export function findImports(projectID: ProjectID, file: string, opts?: { scope?: Scope }): string[] {
     // Return list of imported module paths. Phase 1 does not have
     // import edges yet (requires Phase 2's edge ingestion), so this
     // returns an empty list. The signature is stable so Phase 2 can
@@ -279,11 +269,7 @@ export namespace CodeIntelligence {
     return [...targets]
   }
 
-  export function findDependents(
-    projectID: ProjectID,
-    file: string,
-    opts?: { scope?: Scope },
-  ): string[] {
+  export function findDependents(projectID: ProjectID, file: string, opts?: { scope?: Scope }): string[] {
     // Reverse of findImports: which files import from this one.
     // Phase 1 returns empty. Phase 2 populates via import edges.
     const scope = opts?.scope ?? "none"
@@ -302,8 +288,8 @@ export namespace CodeIntelligence {
 
   // ─── Indexing triggers ──────────────────────────────────────────────
 
-  export async function indexFile(projectID: ProjectID, absPath: string) {
-    return CodeGraphBuilder.indexFile(projectID, absPath)
+  export async function indexFile(projectID: ProjectID, absPath: string, opts?: CodeGraphBuilder.IndexFileOptions) {
+    return CodeGraphBuilder.indexFile(projectID, absPath, opts)
   }
 
   export async function indexFiles(

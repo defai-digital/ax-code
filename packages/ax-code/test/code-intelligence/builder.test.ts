@@ -473,6 +473,25 @@ describe("builder.indexFile hash-skip fast path", () => {
       },
     })
   })
+
+  test("does NOT skip when force is enabled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const filePath = path.join(tmp.path, "force.ts")
+        await writeAndSeedFile(projectID, filePath, "export const force = 1\n", "full")
+
+        const result = await CodeGraphBuilder.indexFile(projectID, filePath, { force: true })
+        expect(result.completeness).not.toBe("unchanged")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
 })
 
 describe("builder.indexFiles batch behavior", () => {
@@ -516,11 +535,7 @@ describe("builder.indexFiles batch behavior", () => {
         // so the test stays LSP-independent. Concurrency 2 so at
         // least one batch boundary is crossed — ensures the callback
         // works both inside and across batches.
-        const files = [
-          path.join(tmp.path, "p1.ts"),
-          path.join(tmp.path, "p2.ts"),
-          path.join(tmp.path, "p3.ts"),
-        ]
+        const files = [path.join(tmp.path, "p1.ts"), path.join(tmp.path, "p2.ts"), path.join(tmp.path, "p3.ts")]
         for (const f of files) await writeAndSeedFile(projectID, f, `export const _${path.basename(f)} = 1\n`, "full")
 
         const events: Array<{ completed: number; total: number; file?: string }> = []

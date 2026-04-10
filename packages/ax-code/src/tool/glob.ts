@@ -8,6 +8,7 @@ import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
 import { Flag } from "../flag/flag"
+import { NativePerf } from "../perf/native"
 import { createRequire } from "node:module"
 const _require = createRequire(import.meta.url)
 
@@ -51,9 +52,13 @@ export const GlobTool = Tool.define("glob", {
     if (Flag.AX_CODE_NATIVE_FS) {
       try {
         const native = _require("@ax-code/fs")
-        const json = native.globFiles(search, params.pattern, 100)
-        const entries = (JSON.parse(json) as Array<{path: string, mtime: number, size: number}>)
-          .filter((item) => !Filesystem.contains(Instance.directory, search) || Filesystem.contains(Instance.directory, item.path))
+        const json = NativePerf.run("fs.globFiles", { search, pattern: params.pattern, limit: 100 }, () =>
+          native.globFiles(search, params.pattern, 100),
+        )
+        const entries = (JSON.parse(json) as Array<{ path: string; mtime: number; size: number }>).filter(
+          (item) =>
+            !Filesystem.contains(Instance.directory, search) || Filesystem.contains(Instance.directory, item.path),
+        )
         entries.sort((a, b) => b.mtime - a.mtime)
 
         const output = []

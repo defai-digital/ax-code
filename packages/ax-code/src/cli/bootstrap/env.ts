@@ -1,4 +1,5 @@
 import { Installation } from "../../installation"
+import { NativePerf } from "../../perf/native"
 import { Log } from "../../util/log"
 
 export type Opts = {
@@ -47,10 +48,7 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
         reject(new Error("timeout"))
       }, 3000)
     })
-    const stdout = await Promise.race([
-      new Response(proc.stdout).text(),
-      timeout,
-    ]).catch(() => "")
+    const stdout = await Promise.race([new Response(proc.stdout).text(), timeout]).catch(() => "")
     clearTimeout(timeoutId!)
     if (!stdout) return
     for (const entry of stdout.split("\0")) {
@@ -81,6 +79,7 @@ export async function init(opts: Opts, dep: InitDep = {}) {
     dev: local,
     level: level(opts.logLevel, local),
   })
+  NativePerf.install()
 
   apply(opts, env, pid)
 

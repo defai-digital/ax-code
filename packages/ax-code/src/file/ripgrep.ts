@@ -14,6 +14,7 @@ import { text } from "node:stream/consumers"
 import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
 import { Log } from "@/util/log"
 import { Flag } from "../flag/flag"
+import { NativePerf } from "../perf/native"
 import { createRequire } from "node:module"
 const _require = createRequire(import.meta.url)
 
@@ -239,11 +240,24 @@ export namespace Ripgrep {
     if (Flag.AX_CODE_NATIVE_FS) {
       try {
         const native = _require("@ax-code/fs")
-        const results = native.walkFiles(input.cwd, JSON.stringify({
-          glob: input.glob,
-          hidden: input.hidden,
-          maxDepth: input.maxDepth,
-        }))
+        const results = NativePerf.run(
+          "fs.walkFiles",
+          {
+            cwd: input.cwd,
+            glob: input.glob?.length ?? 0,
+            hidden: input.hidden ?? true,
+            maxDepth: input.maxDepth,
+          },
+          () =>
+            native.walkFiles(
+              input.cwd,
+              JSON.stringify({
+                glob: input.glob,
+                hidden: input.hidden,
+                maxDepth: input.maxDepth,
+              }),
+            ),
+        )
         for (const file of results) {
           yield file
         }

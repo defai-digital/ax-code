@@ -1,5 +1,6 @@
 import { Log } from "../util/log"
 import { Global } from "../global"
+import { NativePerf } from "../perf/native"
 import type { ProjectID } from "../project/schema"
 import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
@@ -36,6 +37,12 @@ function store(): any {
   return storeInstance
 }
 
+function op<T>(name: string, input: unknown, fn: (store: any) => T): T | undefined {
+  const value = store()
+  if (!value) return
+  return NativePerf.run(`index.${name}`, input, () => fn(value))
+}
+
 export namespace NativeStore {
   export const available = !!native
 
@@ -52,112 +59,141 @@ export namespace NativeStore {
   // ─── Node operations ──────────────────────────────────────────────
 
   export function insertNodes(rows: any[]): void {
-    store()?.insertNodes(JSON.stringify(rows))
+    op("insertNodes", { rows: rows.length }, (store) => store.insertNodes(JSON.stringify(rows)))
   }
 
   export function getNode(projectID: ProjectID, id: CodeNodeID): any | undefined {
-    const result = store()?.getNode(projectID, id)
+    const result = op("getNode", { projectID, id }, (store) => store.getNode(projectID, id))
     return result ? safeParse(result, undefined) : undefined
   }
 
-  export function findNodesByName(projectID: ProjectID, name: string, opts?: { kind?: CodeNodeKind; file?: string; limit?: number }): any[] {
-    const result = store()?.findNodesByName(projectID, name, JSON.stringify(opts ?? {}))
+  export function findNodesByName(
+    projectID: ProjectID,
+    name: string,
+    opts?: { kind?: CodeNodeKind; file?: string; limit?: number },
+  ): any[] {
+    const result = op("findNodesByName", { projectID, name, opts }, (store) =>
+      store.findNodesByName(projectID, name, JSON.stringify(opts ?? {})),
+    )
     return result ? safeParse(result, []) : []
   }
 
-  export function findNodesByNamePrefix(projectID: ProjectID, prefix: string, opts?: { kind?: CodeNodeKind; limit?: number }): any[] {
-    const result = store()?.findNodesByPrefix(projectID, prefix, JSON.stringify(opts ?? {}))
+  export function findNodesByNamePrefix(
+    projectID: ProjectID,
+    prefix: string,
+    opts?: { kind?: CodeNodeKind; limit?: number },
+  ): any[] {
+    const result = op("findNodesByPrefix", { projectID, prefix, opts }, (store) =>
+      store.findNodesByPrefix(projectID, prefix, JSON.stringify(opts ?? {})),
+    )
     return result ? safeParse(result, []) : []
   }
 
   export function nodesInFile(projectID: ProjectID, file: string): any[] {
-    const result = store()?.nodesInFile(projectID, file)
+    const result = op("nodesInFile", { projectID, file }, (store) => store.nodesInFile(projectID, file))
     return result ? safeParse(result, []) : []
   }
 
   export function countNodes(projectID: ProjectID): number {
-    return store()?.countNodes(projectID) ?? 0
+    return op("countNodes", { projectID }, (store) => store.countNodes(projectID)) ?? 0
   }
 
   export function deleteNodesInFile(projectID: ProjectID, file: string): void {
-    store()?.deleteNodesInFile(projectID, file)
+    op("deleteNodesInFile", { projectID, file }, (store) => store.deleteNodesInFile(projectID, file))
   }
 
   // ─── Edge operations ──────────────────────────────────────────────
 
   export function insertEdges(rows: any[]): void {
-    store()?.insertEdges(JSON.stringify(rows))
+    op("insertEdges", { rows: rows.length }, (store) => store.insertEdges(JSON.stringify(rows)))
   }
 
   export function edgesFrom(projectID: ProjectID, fromNode: CodeNodeID, kind?: CodeEdgeKind): any[] {
-    const result = store()?.edgesFrom(projectID, fromNode, kind ?? null)
+    const result = op("edgesFrom", { projectID, fromNode, kind }, (store) =>
+      store.edgesFrom(projectID, fromNode, kind ?? null),
+    )
     return result ? safeParse(result, []) : []
   }
 
   export function edgesTo(projectID: ProjectID, toNode: CodeNodeID, kind?: CodeEdgeKind): any[] {
-    const result = store()?.edgesTo(projectID, toNode, kind ?? null)
+    const result = op("edgesTo", { projectID, toNode, kind }, (store) => store.edgesTo(projectID, toNode, kind ?? null))
     return result ? safeParse(result, []) : []
   }
 
   export function edgesInFile(projectID: ProjectID, file: string): any[] {
-    const result = store()?.edgesInFile(projectID, file)
+    const result = op("edgesInFile", { projectID, file }, (store) => store.edgesInFile(projectID, file))
     return result ? safeParse(result, []) : []
   }
 
   export function deleteEdgesTouchingFile(projectID: ProjectID, file: string): void {
-    store()?.deleteEdgesTouchingFile(projectID, file)
+    op("deleteEdgesTouchingFile", { projectID, file }, (store) => store.deleteEdgesTouchingFile(projectID, file))
   }
 
   export function countEdges(projectID: ProjectID): number {
-    return store()?.countEdges(projectID) ?? 0
+    return op("countEdges", { projectID }, (store) => store.countEdges(projectID)) ?? 0
   }
 
   // ─── File operations ─────────��────────────────────────────────────
 
   export function upsertFile(row: any): void {
-    store()?.upsertFile(JSON.stringify(row))
+    op("upsertFile", { projectID: row.project_id, path: row.path }, (store) => store.upsertFile(JSON.stringify(row)))
   }
 
   export function getFile(projectID: ProjectID, path: string): any | undefined {
-    const result = store()?.getFile(projectID, path)
+    const result = op("getFile", { projectID, path }, (store) => store.getFile(projectID, path))
     return result ? safeParse(result, undefined) : undefined
   }
 
   export function listFiles(projectID: ProjectID): any[] {
-    const result = store()?.listFiles(projectID)
+    const result = op("listFiles", { projectID }, (store) => store.listFiles(projectID))
     return result ? safeParse(result, []) : []
   }
 
-  export function pruneOrphanFiles(projectID: ProjectID, livePaths: string[], scopePrefix: string): { files: number; nodes: number; edges: number } {
-    const result = store()?.pruneOrphanFiles(projectID, JSON.stringify(livePaths), scopePrefix)
+  export function pruneOrphanFiles(
+    projectID: ProjectID,
+    livePaths: string[],
+    scopePrefix: string,
+  ): { files: number; nodes: number; edges: number } {
+    const result = op("pruneOrphanFiles", { projectID, livePaths: livePaths.length, scopePrefix }, (store) =>
+      store.pruneOrphanFiles(projectID, JSON.stringify(livePaths), scopePrefix),
+    )
     return result ? safeParse(result, { files: 0, nodes: 0, edges: 0 }) : { files: 0, nodes: 0, edges: 0 }
   }
 
   // ─── Cursor operations ──────���─────────────────────────────────────
 
   export function getCursor(projectID: ProjectID): any | undefined {
-    const result = store()?.getCursor(projectID)
+    const result = op("getCursor", { projectID }, (store) => store.getCursor(projectID))
     return result ? safeParse(result, undefined) : undefined
   }
 
-  export function upsertCursor(projectID: ProjectID, commitSha: string | null, nodeCount: number, edgeCount: number): void {
-    store()?.upsertCursor(projectID, commitSha, nodeCount, edgeCount)
+  export function upsertCursor(
+    projectID: ProjectID,
+    commitSha: string | null,
+    nodeCount: number,
+    edgeCount: number,
+  ): void {
+    op("upsertCursor", { projectID, commitSha, nodeCount, edgeCount }, (store) =>
+      store.upsertCursor(projectID, commitSha, nodeCount, edgeCount),
+    )
   }
 
   // ─── Project operations ──────────────���────────────────────────────
 
   export function clearProject(projectID: ProjectID): void {
-    store()?.clearProject(projectID)
+    op("clearProject", { projectID }, (store) => store.clearProject(projectID))
   }
 
   export function analyze(): void {
-    store()?.analyze()
+    op("analyze", undefined, (store) => store.analyze())
   }
 
   // ─── Atomic ingest ────���─────────────────────────────────��─────────
 
   export function ingestFile(projectID: ProjectID, filePath: string, nodes: any[], edges: any[], fileMeta: any): void {
-    store()?.ingestFile(projectID, filePath, JSON.stringify(nodes), JSON.stringify(edges), JSON.stringify(fileMeta))
+    op("ingestFile", { projectID, filePath, nodes: nodes.length, edges: edges.length }, (store) =>
+      store.ingestFile(projectID, filePath, JSON.stringify(nodes), JSON.stringify(edges), JSON.stringify(fileMeta)),
+    )
   }
 
   // ─── IntervalTree ─���───────────────────────────────────────────────
@@ -178,13 +214,13 @@ export namespace NativeStore {
 
   export function hashSha256(data: Buffer): string | undefined {
     if (!native) return undefined
-    return native.hashSha256(data)
+    return NativePerf.run("index.hashSha256", data.byteLength, () => native.hashSha256(data))
   }
 
   // ─── ID Generation ────────────��───────────────────────────────────
 
   export function generateId(prefix: string): string | undefined {
     if (!native) return undefined
-    return native.generateId(prefix)
+    return NativePerf.run("index.generateId", prefix, () => native.generateId(prefix))
   }
 }

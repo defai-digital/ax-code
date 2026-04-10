@@ -12,6 +12,7 @@ import path from "path"
 import { assertExternalDirectory } from "./external-directory"
 import { MAX_LINE_LENGTH } from "@/constants/tool"
 import { Flag } from "../flag/flag"
+import { NativePerf } from "../perf/native"
 import { createRequire } from "node:module"
 const _require = createRequire(import.meta.url)
 
@@ -57,13 +58,31 @@ export const GrepTool = Tool.define("grep", {
     if (Flag.AX_CODE_NATIVE_FS) {
       try {
         const native = _require("@ax-code/fs")
-        const json = native.searchContent(searchPath, params.pattern, JSON.stringify({
-          glob: params.include,
-          limit: 100,
-          contextLines: 0,
-        }))
-        const matches = (JSON.parse(json) as Array<{path: string, lineNum: number, lineText: string, modTime: number}>)
-          .filter((match) => !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path))
+        const json = NativePerf.run(
+          "fs.searchContent",
+          {
+            searchPath,
+            pattern: params.pattern,
+            glob: params.include ? 1 : 0,
+            limit: 100,
+          },
+          () =>
+            native.searchContent(
+              searchPath,
+              params.pattern,
+              JSON.stringify({
+                glob: params.include,
+                limit: 100,
+                contextLines: 0,
+              }),
+            ),
+        )
+        const matches = (
+          JSON.parse(json) as Array<{ path: string; lineNum: number; lineText: string; modTime: number }>
+        ).filter(
+          (match) =>
+            !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path),
+        )
         matches.sort((a, b) => b.modTime - a.modTime)
 
         if (matches.length === 0) {
@@ -84,7 +103,9 @@ export const GrepTool = Tool.define("grep", {
             outputLines.push(`${match.path}:`)
           }
           const truncatedLineText =
-            match.lineText.length > MAX_LINE_LENGTH ? match.lineText.substring(0, MAX_LINE_LENGTH) + "..." : match.lineText
+            match.lineText.length > MAX_LINE_LENGTH
+              ? match.lineText.substring(0, MAX_LINE_LENGTH) + "..."
+              : match.lineText
           outputLines.push(`  Line ${match.lineNum}: ${truncatedLineText}`)
         }
 
@@ -97,8 +118,9 @@ export const GrepTool = Tool.define("grep", {
           output: outputLines.join("\n"),
         }
       } catch (e: any) {
-        if (e?.code === "MODULE_NOT_FOUND" || e?.code === "ERR_MODULE_NOT_FOUND") { /* fall through to ripgrep */ }
-        else throw e
+        if (e?.code === "MODULE_NOT_FOUND" || e?.code === "ERR_MODULE_NOT_FOUND") {
+          /* fall through to ripgrep */
+        } else throw e
       }
     }
 

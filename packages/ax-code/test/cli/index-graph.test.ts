@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { groupFilesByLanguage } from "../../src/cli/cmd/index-graph"
+import { buildIndexReport, groupFilesByLanguage, phaseRows } from "../../src/cli/cmd/index-graph"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
@@ -10,14 +10,7 @@ Log.init({ print: false })
 
 describe("groupFilesByLanguage", () => {
   test("groups files by detected language id", () => {
-    const groups = groupFilesByLanguage([
-      "/p/a.ts",
-      "/p/b.ts",
-      "/p/c.tsx",
-      "/p/main.go",
-      "/p/lib.rs",
-      "/p/README.md",
-    ])
+    const groups = groupFilesByLanguage(["/p/a.ts", "/p/b.ts", "/p/c.tsx", "/p/main.go", "/p/lib.rs", "/p/README.md"])
 
     expect(groups.get("typescript")).toEqual(["/p/a.ts", "/p/b.ts"])
     expect(groups.get("typescriptreact")).toEqual(["/p/c.tsx"])
@@ -33,5 +26,117 @@ describe("groupFilesByLanguage", () => {
 
   test("empty input returns empty map", () => {
     expect(groupFilesByLanguage([])).toEqual(new Map())
+  })
+
+  test("builds ordered phase rows with percentages", () => {
+    const rows = phaseRows({
+      readFile: 10,
+      lspTouch: 20,
+      lspDocumentSymbol: 30,
+      symbolWalk: 40,
+      lspReferences: 50,
+      edgeResolve: 60,
+      dbTransaction: 40,
+      total: 250,
+    })
+
+    expect(rows.map((item) => item.name)).toEqual([
+      "lsp.references",
+      "lsp.documentSymbol",
+      "lsp.touch",
+      "edge.resolve",
+      "db.transaction",
+      "symbol.walk",
+      "file.read",
+    ])
+    expect(rows.find((item) => item.name === "lsp.references")).toMatchObject({
+      ms: 50,
+      pct: 20,
+    })
+  })
+
+  test("builds machine-readable index report", () => {
+    const report = buildIndexReport({
+      projectID: "p1",
+      directory: "/repo",
+      worktree: "/repo",
+      concurrency: 4,
+      limit: 25,
+      probe: true,
+      nativeProfile: true,
+      files: 25,
+      status: {
+        nodeCount: 120,
+        edgeCount: 80,
+      },
+      result: {
+        nodes: 100,
+        edges: 70,
+        files: 20,
+        unchanged: 3,
+        skipped: 1,
+        failed: 1,
+        pruned: { files: 2, nodes: 10, edges: 6 },
+        timings: {
+          readFile: 10,
+          lspTouch: 20,
+          lspDocumentSymbol: 30,
+          symbolWalk: 40,
+          lspReferences: 50,
+          edgeResolve: 60,
+          dbTransaction: 70,
+          total: 280,
+        },
+      },
+      elapsedMs: 900,
+      probeResult: {
+        ready: ["typescript"],
+        missing: { rust: 4 },
+      },
+      native: {
+        total: {
+          calls: 3,
+          fails: 1,
+          totalMs: 12,
+          inBytes: 100,
+          outBytes: 50,
+        },
+        rows: [
+          {
+            name: "fs.walkFiles",
+            calls: 2,
+            fails: 0,
+            totalMs: 7,
+            avgMs: 3.5,
+            maxMs: 5,
+            inBytes: 90,
+            outBytes: 45,
+          },
+        ],
+      },
+    })
+
+    expect(report.requested).toEqual({
+      concurrency: 4,
+      limit: 25,
+      probe: true,
+      nativeProfile: true,
+    })
+    expect(report.graph).toEqual({
+      nodes: 120,
+      edges: 80,
+    })
+    expect(report.run).toMatchObject({
+      indexed: 20,
+      unchanged: 3,
+      skipped: 1,
+      failed: 1,
+      elapsedMs: 900,
+    })
+    expect(report.timings.phases[0]).toMatchObject({
+      name: "lsp.references",
+      ms: 50,
+    })
+    expect(report.native?.total.calls).toBe(3)
   })
 })

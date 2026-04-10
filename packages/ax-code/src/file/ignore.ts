@@ -1,6 +1,7 @@
 import { sep } from "node:path"
 import { Glob } from "../util/glob"
 import { Flag } from "../flag/flag"
+import { NativePerf } from "../perf/native"
 import { Log } from "../util/log"
 import { createRequire } from "node:module"
 const _require = createRequire(import.meta.url)
@@ -71,7 +72,9 @@ export namespace FileIgnore {
     if (Flag.AX_CODE_NATIVE_FS) {
       try {
         const native = _require("@ax-code/fs")
-        return native.isIgnored(filepath, JSON.stringify(opts?.extra ?? []))
+        return NativePerf.run("fs.isIgnored", { filepath, extra: opts?.extra?.length ?? 0 }, () =>
+          native.isIgnored(filepath, JSON.stringify(opts?.extra ?? [])),
+        )
       } catch (e) {
         Log.Default.warn("native FS addon failed, falling back to JS", { err: e })
       }

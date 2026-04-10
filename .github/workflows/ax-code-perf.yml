@@ -1,0 +1,230 @@
+name: ax-code-perf
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Files to sample
+        required: false
+        type: string
+        default: "25"
+      repeat:
+        description: Benchmark samples
+        required: false
+        type: string
+        default: "3"
+      warmup:
+        description: Warmup runs
+        required: false
+        type: string
+        default: "1"
+      concurrency:
+        description: Index concurrency
+        required: false
+        type: string
+        default: "4"
+      probe:
+        description: Probe LSP availability before running
+        required: false
+        type: boolean
+        default: false
+      native_profile:
+        description: Capture native bridge profile
+        required: false
+        type: boolean
+        default: true
+      max_elapsed_median_ms:
+        description: Optional elapsed median limit
+        required: false
+        type: string
+        default: ""
+      max_total_median_ms:
+        description: Optional builder total median limit
+        required: false
+        type: string
+        default: ""
+      max_phase_median_ms:
+        description: Optional comma-separated phase=ms limits
+        required: false
+        type: string
+        default: ""
+      baseline:
+        description: Optional baseline artifact path relative to packages/ax-code
+        required: false
+        type: string
+        default: ""
+      baseline_summary:
+        description: Optional baseline summary path relative to packages/ax-code
+        required: false
+        type: string
+        default: ""
+      promote_baseline:
+        description: Write the current run as the next baseline artifact
+        required: false
+        type: boolean
+        default: false
+      baseline_out:
+        description: Baseline output path relative to packages/ax-code when promotion is enabled
+        required: false
+        type: string
+        default: ".tmp/perf-index-baseline.json"
+      baseline_summary_out:
+        description: Baseline summary path relative to packages/ax-code when promotion is enabled
+        required: false
+        type: string
+        default: ".tmp/perf-index-baseline-summary.json"
+      summary_out:
+        description: Machine-readable verdict path relative to packages/ax-code
+        required: false
+        type: string
+        default: ".tmp/perf-index-summary.json"
+      max_elapsed_regression_pct:
+        description: Optional elapsed regression limit
+        required: false
+        type: string
+        default: ""
+      max_total_regression_pct:
+        description: Optional builder total regression limit
+        required: false
+        type: string
+        default: ""
+      max_phase_regression_pct:
+        description: Optional comma-separated phase=pct regression limits
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  perf:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run perf benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmd=(
+            pnpm
+            --dir
+            packages/ax-code
+            run
+            perf:index
+            --config
+            perf-index.jsonc
+            --limit
+            "${{ inputs.limit }}"
+            --repeat
+            "${{ inputs.repeat }}"
+            --warmup
+            "${{ inputs.warmup }}"
+            --concurrency
+            "${{ inputs.concurrency }}"
+            --summary-out
+            "${{ inputs.summary_out }}"
+            "--probe=${{ inputs.probe }}"
+            "--native-profile=${{ inputs.native_profile }}"
+          )
+
+          if [ -n "${{ inputs.max_elapsed_median_ms }}" ]; then
+            cmd+=(--max-elapsed-median-ms "${{ inputs.max_elapsed_median_ms }}")
+          fi
+          if [ -n "${{ inputs.max_total_median_ms }}" ]; then
+            cmd+=(--max-total-median-ms "${{ inputs.max_total_median_ms }}")
+          fi
+          if [ -n "${{ inputs.max_phase_median_ms }}" ]; then
+            while IFS= read -r item; do
+              [ -z "$item" ] && continue
+              cmd+=(--max-phase-median-ms "$item")
+            done < <(printf '%s' "${{ inputs.max_phase_median_ms }}" | tr ',' '\n')
+          fi
+          if [ -n "${{ inputs.baseline }}" ]; then
+            cmd+=(--baseline "${{ inputs.baseline }}")
+          fi
+          if [ -n "${{ inputs.baseline_summary }}" ]; then
+            cmd+=(--baseline-summary "${{ inputs.baseline_summary }}")
+          fi
+          if [ "${{ inputs.promote_baseline }}" = "true" ]; then
+            cmd+=(--write-baseline "${{ inputs.baseline_out }}")
+            cmd+=(--write-baseline-summary "${{ inputs.baseline_summary_out }}")
+          fi
+          if [ -n "${{ inputs.max_elapsed_regression_pct }}" ]; then
+            cmd+=(--max-elapsed-regression-pct "${{ inputs.max_elapsed_regression_pct }}")
+          fi
+          if [ -n "${{ inputs.max_total_regression_pct }}" ]; then
+            cmd+=(--max-total-regression-pct "${{ inputs.max_total_regression_pct }}")
+          fi
+          if [ -n "${{ inputs.max_phase_regression_pct }}" ]; then
+            while IFS= read -r item; do
+              [ -z "$item" ] && continue
+              cmd+=(--max-phase-regression-pct "$item")
+            done < <(printf '%s' "${{ inputs.max_phase_regression_pct }}" | tr ',' '\n')
+          fi
+
+          "${cmd[@]}"
+
+      - name: Render perf markdown report
+        run: |
+          pnpm --dir packages/ax-code run perf:report \
+            --summary "${{ inputs.summary_out }}" \
+            --out ".tmp/perf-index-report.md"
+
+      - name: Upload perf artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-perf-report
+          path: packages/ax-code/.tmp/perf-index.json
+          if-no-files-found: ignore
+
+      - name: Upload perf summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-perf-summary
+          path: packages/ax-code/${{ inputs.summary_out }}
+          if-no-files-found: ignore
+
+      - name: Upload perf markdown report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-perf-markdown
+          path: packages/ax-code/.tmp/perf-index-report.md
+          if-no-files-found: ignore
+
+      - name: Upload promoted baseline
+        if: always() && inputs.promote_baseline
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-perf-baseline
+          path: packages/ax-code/${{ inputs.baseline_out }}
+          if-no-files-found: ignore
+
+      - name: Upload promoted baseline summary
+        if: always() && inputs.promote_baseline
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-perf-baseline-summary
+          path: packages/ax-code/${{ inputs.baseline_summary_out }}
+          if-no-files-found: ignore

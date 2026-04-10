@@ -4,6 +4,7 @@ import * as fs from "fs/promises"
 import { readFileSync } from "fs"
 import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
+import { NativePerf } from "../perf/native"
 import { createRequire } from "node:module"
 const _require = createRequire(import.meta.url)
 
@@ -469,7 +470,11 @@ export namespace Patch {
     if (Flag.AX_CODE_NATIVE_DIFF) {
       try {
         const native = _require("@ax-code/diff")
-        return native.seekSequence(lines, pattern, startIndex, eof)
+        return NativePerf.run(
+          "diff.seekSequence",
+          { lines: lines.length, pattern: pattern.length, startIndex, eof },
+          () => native.seekSequence(lines, pattern, startIndex, eof),
+        )
       } catch (e) {
         log.warn("native diff seekSequence failed, using JS fallback", { error: e })
       }
@@ -504,7 +509,9 @@ export namespace Patch {
     if (Flag.AX_CODE_NATIVE_DIFF) {
       try {
         const native = _require("@ax-code/diff")
-        return native.unifiedDiff("file", oldContent, newContent)
+        return NativePerf.run("diff.unifiedDiff", { oldBytes: oldContent.length, newBytes: newContent.length }, () =>
+          native.unifiedDiff("file", oldContent, newContent),
+        )
       } catch (e) {
         log.warn("native diff unifiedDiff failed, using JS fallback", { error: e })
       }

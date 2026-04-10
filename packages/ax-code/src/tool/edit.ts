@@ -17,6 +17,7 @@ import { assertExternalDirectory } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
 import { Flag } from "../flag/flag"
+import { NativePerf } from "../perf/native"
 import { createRequire } from "node:module"
 const _require = createRequire(import.meta.url)
 
@@ -157,10 +158,18 @@ export const EditTool = Tool.define("edit", {
     if (editIdx === -1) editIdx = 0
     const snippetStart = Math.max(0, editIdx - 3)
     const snippetEnd = Math.min(newLines.length, editIdx + params.newString.split("\n").length + 3)
-    const snippet = editIdx >= 0
-      ? "\n\nHint: the file now reads (lines " + (snippetStart + 1) + "-" + snippetEnd + "):\n" +
-        newLines.slice(snippetStart, snippetEnd).map((l, i) => `${snippetStart + i + 1}\t${l}`).join("\n")
-      : ""
+    const snippet =
+      editIdx >= 0
+        ? "\n\nHint: the file now reads (lines " +
+          (snippetStart + 1) +
+          "-" +
+          snippetEnd +
+          "):\n" +
+          newLines
+            .slice(snippetStart, snippetEnd)
+            .map((l, i) => `${snippetStart + i + 1}\t${l}`)
+            .join("\n")
+        : ""
     let output = "Edit applied successfully." + snippet + diagOutput
 
     return {
@@ -651,7 +660,16 @@ export function replace(content: string, oldString: string, newString: string, r
   if (Flag.AX_CODE_NATIVE_DIFF) {
     try {
       const native = _require("@ax-code/diff")
-      const json = native.editReplace(content, oldString, newString, replaceAll ?? false)
+      const json = NativePerf.run(
+        "diff.editReplace",
+        {
+          contentBytes: content.length,
+          oldBytes: oldString.length,
+          newBytes: newString.length,
+          replaceAll,
+        },
+        () => native.editReplace(content, oldString, newString, replaceAll ?? false),
+      )
       const result = JSON.parse(json)
       if (typeof result.new_content !== "string")
         throw new Error("Native diff returned invalid result: new_content is not a string")
@@ -667,9 +685,7 @@ export function replace(content: string, oldString: string, newString: string, r
 
   if (replaceAll) {
     if (!content.includes(oldString)) {
-      throw new Error(
-        "Could not find oldString in the file. It must match exactly when replaceAll is enabled.",
-      )
+      throw new Error("Could not find oldString in the file. It must match exactly when replaceAll is enabled.")
     }
     return content.replaceAll(oldString, newString)
   }

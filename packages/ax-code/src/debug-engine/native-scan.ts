@@ -1,5 +1,6 @@
 import { createRequire } from "node:module"
 import { Flag } from "../flag/flag"
+import { NativePerf } from "../perf/native"
 import { Log } from "../util/log"
 
 const log = Log.create({ service: "debug-engine.native-scan" })
@@ -42,13 +43,28 @@ export function nativeScanFiles(input: {
   if (!Flag.AX_CODE_NATIVE_FS) return undefined
   try {
     const native = _require("@ax-code/fs")
-    const json = native.scanFiles(input.cwd, JSON.stringify({
-      include: input.include,
-      patterns: input.patterns,
-      maxFiles: input.maxFiles ?? 500,
-      maxPerFile: input.maxPerFile ?? 20,
-      contextLines: input.contextLines ?? 0,
-    }))
+    const json = NativePerf.run(
+      "fs.scanFiles",
+      {
+        cwd: input.cwd,
+        include: input.include.length,
+        patterns: input.patterns.length,
+        maxFiles: input.maxFiles ?? 500,
+        maxPerFile: input.maxPerFile ?? 20,
+        contextLines: input.contextLines ?? 0,
+      },
+      () =>
+        native.scanFiles(
+          input.cwd,
+          JSON.stringify({
+            include: input.include,
+            patterns: input.patterns,
+            maxFiles: input.maxFiles ?? 500,
+            maxPerFile: input.maxPerFile ?? 20,
+            contextLines: input.contextLines ?? 0,
+          }),
+        ),
+    )
     return JSON.parse(json) as ScanResult
   } catch (e: any) {
     if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) {
@@ -66,7 +82,9 @@ export function nativeReadFilesBatch(files: string[]): Map<string, string> | und
   if (files.length === 0) return new Map()
   try {
     const native = _require("@ax-code/fs")
-    const json = native.readFilesBatch(JSON.stringify(files))
+    const json = NativePerf.run("fs.readFilesBatch", { files: files.length }, () =>
+      native.readFilesBatch(JSON.stringify(files)),
+    )
     const pairs: [string, string][] = JSON.parse(json)
     return new Map(pairs)
   } catch (e: any) {
@@ -101,14 +119,28 @@ function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult
   try {
     const native = _require("@ax-code/fs")
     if (typeof native[fnName] !== "function") return undefined
-    const json = native[fnName](JSON.stringify({
-      cwd: input.cwd,
-      include: input.include,
-      patterns: input.patterns,
-      maxFiles: input.maxFiles ?? 500,
-      maxPerFile: input.maxPerFile ?? 20,
-      excludeTests: input.excludeTests ?? true,
-    }))
+    const json = NativePerf.run(
+      `fs.${fnName}`,
+      {
+        cwd: input.cwd,
+        include: input.include.length,
+        patterns: input.patterns.length,
+        maxFiles: input.maxFiles ?? 500,
+        maxPerFile: input.maxPerFile ?? 20,
+        excludeTests: input.excludeTests ?? true,
+      },
+      () =>
+        native[fnName](
+          JSON.stringify({
+            cwd: input.cwd,
+            include: input.include,
+            patterns: input.patterns,
+            maxFiles: input.maxFiles ?? 500,
+            maxPerFile: input.maxPerFile ?? 20,
+            excludeTests: input.excludeTests ?? true,
+          }),
+        ),
+    )
     return JSON.parse(json) as DetectResult<F>
   } catch (e: any) {
     if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) {

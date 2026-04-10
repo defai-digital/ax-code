@@ -5,6 +5,7 @@ import { ConfigCommand } from "./config"
 import { ExplainCommand } from "./explain"
 import { FileCommand } from "./file"
 import { LSPCommand } from "./lsp"
+import { PerfCommand } from "./perf"
 import { RipgrepCommand } from "./ripgrep"
 import { ScrapCommand } from "./scrap"
 import { SkillCommand } from "./skill"
@@ -19,6 +20,7 @@ export const DebugCommand = cmd({
       .command(ConfigCommand)
       .command(ExplainCommand)
       .command(LSPCommand)
+      .command(PerfCommand)
       .command(RipgrepCommand)
       .command(FileCommand)
       .command(ScrapCommand)

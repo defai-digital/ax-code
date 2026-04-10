@@ -298,15 +298,19 @@ export namespace CodeGraphBuilder {
     timings: IndexTimings
   }
 
-  export function indexFile(projectID: ProjectID, absPath: string): Promise<IndexResult> {
+  export type IndexFileOptions = {
+    force?: boolean
+  }
+
+  export function indexFile(projectID: ProjectID, absPath: string, opts: IndexFileOptions = {}): Promise<IndexResult> {
     // Serialize per-project to prevent cross-file caller resolution
     // from reading stale nodes that a sibling transaction has already
     // deleted. See the projectMutexes comment at the top of the
     // namespace.
-    return withProjectLock(projectID, () => indexFileLocked(projectID, absPath))
+    return withProjectLock(projectID, () => indexFileLocked(projectID, absPath, opts))
   }
 
-  async function indexFileLocked(projectID: ProjectID, absPath: string): Promise<IndexResult> {
+  async function indexFileLocked(projectID: ProjectID, absPath: string, opts: IndexFileOptions): Promise<IndexResult> {
     const timings: IndexTimings = {
       readFile: 0,
       lspTouch: 0,
@@ -367,7 +371,7 @@ export namespace CodeGraphBuilder {
     //   - "unchanged" is a transient return value; it is never
     //     written to `code_file.completeness`.
     const existing = CodeGraphQuery.getFile(projectID, absPath)
-    if (existing && existing.sha === sha && existing.size === size && existing.completeness === "full") {
+    if (!opts.force && existing && existing.sha === sha && existing.size === size && existing.completeness === "full") {
       timings.total = performance.now() - tStart
       log.info("file unchanged, skipping reindex", { file: absPath, sha, size })
       return { nodes: 0, edges: 0, completeness: "unchanged", timings }
@@ -517,9 +521,13 @@ export namespace CodeGraphBuilder {
     if (nativeTree) {
       for (const node of nodeInserts) {
         nativeTree.insert(
-          node.range_start_line, node.range_start_char,
-          node.range_end_line, node.range_end_char,
-          node.id, node.kind, node.name,
+          node.range_start_line,
+          node.range_start_char,
+          node.range_end_line,
+          node.range_end_char,
+          node.id,
+          node.kind,
+          node.name,
         )
       }
     }
@@ -531,7 +539,7 @@ export namespace CodeGraphBuilder {
     // MAX_REFERENCE_QUERIES_PER_FILE to keep reference traffic bounded.
     const eligibleBookmarks = refBookmarks
       .filter((b) => CONTAINER_KINDS.has(b.kind))
-      .sort((a, b) => (b.rangeEndLine - b.rangeStartLine) - (a.rangeEndLine - a.rangeStartLine))
+      .sort((a, b) => b.rangeEndLine - b.rangeStartLine - (a.rangeEndLine - a.rangeStartLine))
       .slice(0, MAX_REFERENCE_QUERIES_PER_FILE)
 
     // Determine completeness: "full" if every eligible symbol had its
@@ -600,7 +608,13 @@ export namespace CodeGraphBuilder {
           // falls back to CodeGraphQuery for other files.
           const sameFile = refFile === absPath
           const callerNodeId = sameFile
-            ? resolveContainingNodeInMemory(nodeInserts, refBookmarks, loc.range.start.line, loc.range.start.character, nativeTree)
+            ? resolveContainingNodeInMemory(
+                nodeInserts,
+                refBookmarks,
+                loc.range.start.line,
+                loc.range.start.character,
+                nativeTree,
+              )
             : resolveContainingNodeFromDb(projectID, refFile, loc.range.start.line, loc.range.start.character)
           if (!callerNodeId) continue
 
@@ -732,6 +746,7 @@ export namespace CodeGraphBuilder {
     onLockWait?: () => void
     pruneOrphans?: boolean
     pruneScopePrefix?: string
+    force?: boolean
   }
 
   // Raised when `lock: "try"` is requested and another process holds
@@ -859,7 +874,7 @@ export namespace CodeGraphBuilder {
           // returned `partial` for both and counted the failure as
           // "skipped", hiding genuine indexing errors behind benign
           // ones in the reported totals.
-          indexFile(projectID, file)
+          indexFile(projectID, file, { force: opts.force })
             .catch((err): IndexResult => {
               log.error("indexFile failed", { file, err })
               return { nodes: 0, edges: 0, completeness: "failed", timings: emptyTimings }

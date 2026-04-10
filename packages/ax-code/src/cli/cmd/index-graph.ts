@@ -8,6 +8,8 @@ import { AutoIndex } from "../../code-intelligence/auto-index"
 import { Ripgrep } from "../../file/ripgrep"
 import { LANGUAGE_EXTENSIONS } from "../../lsp/language"
 import { LSP } from "../../lsp"
+import { NativePerf } from "../../perf/native"
+import type { NativePerfSnapshot } from "../../perf/native"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 
@@ -20,7 +22,7 @@ import { cmd } from "./cmd"
 // hydrate the graph in one pass. After this, the file watcher keeps
 // it up to date on its own.
 
-function isIndexableFile(file: string): boolean {
+export function isIndexableFile(file: string): boolean {
   const ext = path.extname(file)
   const lang = LANGUAGE_EXTENSIONS[ext]
   return lang !== undefined && lang !== "plaintext"
@@ -41,6 +43,140 @@ export function groupFilesByLanguage(files: string[]): Map<string, string[]> {
   return groups
 }
 
+type Phase = {
+  name: string
+  ms: number
+  pct: number
+}
+
+type Probe = {
+  ready: string[]
+  missing: Record<string, number>
+}
+
+type Report = {
+  projectID: string
+  directory: string
+  worktree: string
+  requested: {
+    concurrency: number
+    limit?: number
+    probe: boolean
+    nativeProfile: boolean
+  }
+  files: {
+    discovered: number
+  }
+  graph: {
+    nodes: number
+    edges: number
+  }
+  run: {
+    nodes: number
+    edges: number
+    indexed: number
+    unchanged: number
+    skipped: number
+    failed: number
+    pruned: { files: number; nodes: number; edges: number }
+    elapsedMs: number
+  }
+  timings: {
+    totalMs: number
+    phases: Phase[]
+  }
+  probe?: Probe
+  native?: NativePerfSnapshot
+}
+
+function zero(): CodeGraphBuilder.IndexFilesResult {
+  return {
+    nodes: 0,
+    edges: 0,
+    files: 0,
+    unchanged: 0,
+    skipped: 0,
+    failed: 0,
+    pruned: { files: 0, nodes: 0, edges: 0 },
+    timings: {
+      readFile: 0,
+      lspTouch: 0,
+      lspDocumentSymbol: 0,
+      symbolWalk: 0,
+      lspReferences: 0,
+      edgeResolve: 0,
+      dbTransaction: 0,
+      total: 0,
+    },
+  }
+}
+
+export function phaseRows(input: CodeGraphBuilder.IndexTimings): Phase[] {
+  const total = input.total
+  const pct = (ms: number) => (total > 0 ? Number(((ms / total) * 100).toFixed(1)) : 0)
+
+  return [
+    { name: "lsp.references", ms: input.lspReferences, pct: pct(input.lspReferences) },
+    { name: "lsp.documentSymbol", ms: input.lspDocumentSymbol, pct: pct(input.lspDocumentSymbol) },
+    { name: "lsp.touch", ms: input.lspTouch, pct: pct(input.lspTouch) },
+    { name: "edge.resolve", ms: input.edgeResolve, pct: pct(input.edgeResolve) },
+    { name: "db.transaction", ms: input.dbTransaction, pct: pct(input.dbTransaction) },
+    { name: "symbol.walk", ms: input.symbolWalk, pct: pct(input.symbolWalk) },
+    { name: "file.read", ms: input.readFile, pct: pct(input.readFile) },
+  ]
+}
+
+export function buildIndexReport(input: {
+  projectID: string
+  directory: string
+  worktree: string
+  concurrency: number
+  limit?: number
+  probe: boolean
+  nativeProfile: boolean
+  files: number
+  status: { nodeCount: number; edgeCount: number }
+  result: CodeGraphBuilder.IndexFilesResult
+  elapsedMs: number
+  probeResult?: Probe
+  native?: NativePerfSnapshot
+}): Report {
+  return {
+    projectID: input.projectID,
+    directory: input.directory,
+    worktree: input.worktree,
+    requested: {
+      concurrency: input.concurrency,
+      limit: input.limit,
+      probe: input.probe,
+      nativeProfile: input.nativeProfile,
+    },
+    files: {
+      discovered: input.files,
+    },
+    graph: {
+      nodes: input.status.nodeCount,
+      edges: input.status.edgeCount,
+    },
+    run: {
+      nodes: input.result.nodes,
+      edges: input.result.edges,
+      indexed: input.result.files,
+      unchanged: input.result.unchanged,
+      skipped: input.result.skipped,
+      failed: input.result.failed,
+      pruned: input.result.pruned,
+      elapsedMs: input.elapsedMs,
+    },
+    timings: {
+      totalMs: input.result.timings.total,
+      phases: phaseRows(input.result.timings),
+    },
+    probe: input.probeResult,
+    native: input.native,
+  }
+}
+
 // Probe LSP availability for each language present in the project.
 // For each language with at least one file, we pick a representative
 // file and call LSP.touchFile to force the server to spawn. Then we
@@ -54,7 +190,7 @@ export function groupFilesByLanguage(files: string[]): Map<string, string[]> {
 // Returns the set of languages that have at least one connected
 // server. The CLI uses this to decide whether to warn the user that
 // a subset of their project won't be indexed.
-async function probeLspServers(
+export async function probeLspServers(
   groups: Map<string, string[]>,
 ): Promise<{ ready: Set<string>; missing: Map<string, number> }> {
   const ready = new Set<string>()
@@ -147,17 +283,35 @@ export const IndexCommand = cmd({
         type: "boolean",
         default: true,
       })
+      .option("json", {
+        describe: "output machine-readable JSON",
+        type: "boolean",
+        default: false,
+      })
+      .option("native-profile", {
+        describe: "collect native bridge timings for this run",
+        type: "boolean",
+        default: false,
+      })
   },
   handler: async (args) => {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
         const projectID = Instance.project.id
+        const json = args.json === true
+        const out = (line = "") => {
+          if (!json) UI.println(line)
+        }
+        if (args.nativeProfile) {
+          process.env.AX_CODE_PROFILE_NATIVE = "1"
+          NativePerf.install()
+        }
 
-        UI.println(`${UI.Style.TEXT_INFO_BOLD}Indexing code intelligence graph${UI.Style.TEXT_NORMAL}`)
-        UI.println(`  project:   ${projectID}`)
-        UI.println(`  directory: ${Instance.directory}`)
-        UI.println(`  worktree:  ${Instance.worktree}`)
+        out(`${UI.Style.TEXT_INFO_BOLD}Indexing code intelligence graph${UI.Style.TEXT_NORMAL}`)
+        out(`  project:   ${projectID}`)
+        out(`  directory: ${Instance.directory}`)
+        out(`  worktree:  ${Instance.worktree}`)
 
         // Collect eligible files first so we can report progress and
         // honor --limit. The walker is cheap relative to the indexer,
@@ -171,7 +325,7 @@ export const IndexCommand = cmd({
           if (args.limit !== undefined && files.length >= args.limit) break
         }
 
-        UI.println(`  files:     ${files.length} indexable`)
+        out(`  files:     ${files.length} indexable`)
         // Do NOT short-circuit when `files.length === 0`. An empty
         // walk is the exact case where orphan purge matters most: a
         // user who deleted every indexable file from a previously
@@ -179,13 +333,40 @@ export const IndexCommand = cmd({
         // leaving stale rows. We still print the "no files" warning
         // but continue into the indexer so the prune runs.
         if (files.length === 0) {
-          UI.println("")
-          UI.println(`${UI.Style.TEXT_WARNING}No indexable source files found.${UI.Style.TEXT_NORMAL}`)
+          out("")
+          out(`${UI.Style.TEXT_WARNING}No indexable source files found.${UI.Style.TEXT_NORMAL}`)
           // If there are also no stored rows to clean up, there's
           // genuinely nothing to do — bail here to match the old
           // behavior for pristine projects.
-          if (CodeGraphQuery.listFiles(projectID).length === 0) return
-          UI.println(`${UI.Style.TEXT_DIM}Reconciling graph with working tree...${UI.Style.TEXT_NORMAL}`)
+          if (CodeGraphQuery.listFiles(projectID).length === 0) {
+            const status = CodeIntelligence.status(projectID)
+            const native = args.nativeProfile ? NativePerf.snapshot() : undefined
+            if (args.nativeProfile) NativePerf.reset()
+            if (json) {
+              process.stdout.write(
+                JSON.stringify(
+                  buildIndexReport({
+                    projectID,
+                    directory: Instance.directory,
+                    worktree: Instance.worktree,
+                    concurrency: args.concurrency,
+                    limit: args.limit,
+                    probe: args.probe,
+                    nativeProfile: args.nativeProfile,
+                    files: files.length,
+                    status,
+                    result: zero(),
+                    elapsedMs: 0,
+                    native,
+                  }),
+                  null,
+                  2,
+                ) + "\n",
+              )
+            }
+            return
+          }
+          out(`${UI.Style.TEXT_DIM}Reconciling graph with working tree...${UI.Style.TEXT_NORMAL}`)
         }
 
         // LSP pre-flight probe. Groups the candidate files by language
@@ -199,37 +380,48 @@ export const IndexCommand = cmd({
         // running in a constrained env and just wants the indexer to
         // try everything.
         const groups = groupFilesByLanguage(files)
+        let probeResult: Probe | undefined
         // Skip the LSP probe when there are no files — nothing to
         // probe, and the "no LSP servers available" warning would be
         // misleading in a graph-reconcile-only run.
         if (args.probe && files.length > 0) {
-          UI.println("")
-          UI.println(`${UI.Style.TEXT_DIM}Probing LSP servers...${UI.Style.TEXT_NORMAL}`)
-          const { ready, missing } = await probeLspServers(groups)
-          for (const [lang, langFiles] of groups) {
-            if (lang === "unknown" || lang === "plaintext") continue
-            const count = langFiles.length
-            if (ready.has(lang)) {
-              UI.println(`  ${UI.Style.TEXT_SUCCESS}✓${UI.Style.TEXT_NORMAL} ${lang} (${count} file${count === 1 ? "" : "s"})`)
-            } else {
-              const hint = INSTALL_HINTS[lang] ?? "check ~/.local/share/ax-code/log/ for spawn errors"
-              UI.println(`  ${UI.Style.TEXT_WARNING}✗${UI.Style.TEXT_NORMAL} ${lang} (${count} file${count === 1 ? "" : "s"}) — ${hint}`)
+          const probe = await probeLspServers(groups)
+          probeResult = {
+            ready: [...probe.ready].sort(),
+            missing: Object.fromEntries([...probe.missing.entries()].sort(([a], [b]) => a.localeCompare(b))),
+          }
+          if (!json) {
+            out("")
+            out(`${UI.Style.TEXT_DIM}Probing LSP servers...${UI.Style.TEXT_NORMAL}`)
+            for (const [lang, langFiles] of groups) {
+              if (lang === "unknown" || lang === "plaintext") continue
+              const count = langFiles.length
+              if (probe.ready.has(lang)) {
+                out(
+                  `  ${UI.Style.TEXT_SUCCESS}✓${UI.Style.TEXT_NORMAL} ${lang} (${count} file${count === 1 ? "" : "s"})`,
+                )
+              } else {
+                const hint = INSTALL_HINTS[lang] ?? "check ~/.local/share/ax-code/log/ for spawn errors"
+                out(
+                  `  ${UI.Style.TEXT_WARNING}✗${UI.Style.TEXT_NORMAL} ${lang} (${count} file${count === 1 ? "" : "s"}) — ${hint}`,
+                )
+              }
             }
-          }
-          if (ready.size === 0) {
-            UI.println("")
-            UI.println(
-              `${UI.Style.TEXT_WARNING}No LSP servers are available for any language in this project.${UI.Style.TEXT_NORMAL}`,
-            )
-            UI.println(`Indexing will run but is very likely to produce zero symbols. Install at least one of`)
-            UI.println(`the language servers listed above, or run with --no-probe to bypass this warning.`)
-          }
-          if (missing.size > 0 && ready.size > 0) {
-            const missingFiles = [...missing.values()].reduce((a, b) => a + b, 0)
-            UI.println("")
-            UI.println(
-              `${UI.Style.TEXT_DIM}${missingFiles.toLocaleString()} file(s) across ${missing.size} language(s) will be skipped due to missing LSP servers.${UI.Style.TEXT_NORMAL}`,
-            )
+            if (probe.ready.size === 0) {
+              out("")
+              out(
+                `${UI.Style.TEXT_WARNING}No LSP servers are available for any language in this project.${UI.Style.TEXT_NORMAL}`,
+              )
+              out(`Indexing will run but is very likely to produce zero symbols. Install at least one of`)
+              out(`the language servers listed above, or run with --no-probe to bypass this warning.`)
+            }
+            if (probe.missing.size > 0 && probe.ready.size > 0) {
+              const missingFiles = [...probe.missing.values()].reduce((a, b) => a + b, 0)
+              out("")
+              out(
+                `${UI.Style.TEXT_DIM}${missingFiles.toLocaleString()} file(s) across ${probe.missing.size} language(s) will be skipped due to missing LSP servers.${UI.Style.TEXT_NORMAL}`,
+              )
+            }
           }
         }
 
@@ -253,9 +445,11 @@ export const IndexCommand = cmd({
         // heartbeat was supposed to fix. `countNodes` runs a real
         // `SELECT COUNT(*)` against `code_node` so it reflects rows
         // inserted by the in-progress batch in real time.
-        UI.println("")
-        UI.println(`${UI.Style.TEXT_DIM}Indexing in progress. This takes several minutes for larger projects.${UI.Style.TEXT_NORMAL}`)
-        UI.println("")
+        out("")
+        out(
+          `${UI.Style.TEXT_DIM}Indexing in progress. This takes several minutes for larger projects.${UI.Style.TEXT_NORMAL}`,
+        )
+        out("")
 
         // Transition AutoIndex state so the TUI sidebar (which polls
         // /debug-engine/pending-plans every 10s) reflects this manual
@@ -287,15 +481,17 @@ export const IndexCommand = cmd({
         const heartbeatStart = Date.now()
         let lastNodeCount = CodeGraphQuery.countNodes(projectID)
         let latestCompleted = 0
-        const heartbeat = setInterval(() => {
-          const current = CodeGraphQuery.countNodes(projectID)
-          const delta = current - lastNodeCount
-          const elapsedSec = Math.round((Date.now() - heartbeatStart) / 1000)
-          UI.println(
-            `  ${UI.Style.TEXT_DIM}[${elapsedSec}s] ${latestCompleted.toLocaleString()}/${files.length.toLocaleString()} files · ${current.toLocaleString()} symbols (+${delta.toLocaleString()} interval)${UI.Style.TEXT_NORMAL}`,
-          )
-          lastNodeCount = current
-        }, 5_000)
+        const heartbeat = json
+          ? undefined
+          : setInterval(() => {
+              const current = CodeGraphQuery.countNodes(projectID)
+              const delta = current - lastNodeCount
+              const elapsedSec = Math.round((Date.now() - heartbeatStart) / 1000)
+              out(
+                `  ${UI.Style.TEXT_DIM}[${elapsedSec}s] ${latestCompleted.toLocaleString()}/${files.length.toLocaleString()} files · ${current.toLocaleString()} symbols (+${delta.toLocaleString()} interval)${UI.Style.TEXT_NORMAL}`,
+              )
+              lastNodeCount = current
+            }, 5_000)
 
         const start = Date.now()
         let result: Awaited<ReturnType<typeof CodeIntelligence.indexFiles>>
@@ -311,7 +507,7 @@ export const IndexCommand = cmd({
             lock: "acquire",
             lockTimeoutMs: 30 * 60 * 1000,
             onLockWait: () => {
-              UI.println(
+              out(
                 `${UI.Style.TEXT_WARNING}Another ax-code process is currently indexing this project. Waiting...${UI.Style.TEXT_NORMAL}`,
               )
             },
@@ -331,7 +527,7 @@ export const IndexCommand = cmd({
             pruneScopePrefix: Instance.directory,
           })
         } catch (err) {
-          clearInterval(heartbeat)
+          if (heartbeat) clearInterval(heartbeat)
           AutoIndex.setState(projectID, {
             state: "failed",
             startedAt: start,
@@ -339,19 +535,23 @@ export const IndexCommand = cmd({
             error: err instanceof Error ? err.message : String(err),
           })
           if (err instanceof CodeGraphBuilder.LockHeldError) {
-            UI.println("")
-            UI.println(
+            out("")
+            out(
               `${UI.Style.TEXT_WARNING}Timed out waiting for another ax-code process to finish indexing.${UI.Style.TEXT_NORMAL}`,
             )
-            UI.println(`Retry after the other process completes, or investigate a stale lockfile under ~/.local/share/ax-code/locks/.`)
+            out(
+              `Retry after the other process completes, or investigate a stale lockfile under ~/.local/share/ax-code/locks/.`,
+            )
             return
           }
           throw err
         }
-        clearInterval(heartbeat)
+        if (heartbeat) clearInterval(heartbeat)
         const elapsed = Date.now() - start
 
         const status = CodeIntelligence.status(projectID)
+        const native = args.nativeProfile ? NativePerf.snapshot() : undefined
+        if (args.nativeProfile) NativePerf.reset()
         // Transition to idle now that the run is over. This is the
         // signal the TUI sidebar uses to flip out of its "indexing"
         // state back to the normal "N symbols indexed" display.
@@ -363,32 +563,56 @@ export const IndexCommand = cmd({
           finishedAt: Date.now(),
           error: null,
         })
-        UI.println("")
+        if (json) {
+          process.stdout.write(
+            JSON.stringify(
+              buildIndexReport({
+                projectID,
+                directory: Instance.directory,
+                worktree: Instance.worktree,
+                concurrency: args.concurrency,
+                limit: args.limit,
+                probe: args.probe,
+                nativeProfile: args.nativeProfile,
+                files: files.length,
+                status,
+                result,
+                elapsedMs: elapsed,
+                probeResult,
+                native,
+              }),
+              null,
+              2,
+            ) + "\n",
+          )
+          return
+        }
+        out("")
         // Pick the headline wording based on whether we actually wrote
         // any nodes. "Indexing complete" with nodes=0 is confusing:
         // users can't tell whether their project has no indexable
         // symbols or LSP failed silently on every file. Distinguish
         // the empty outcome explicitly.
         if (status.nodeCount === 0) {
-          UI.println(`${UI.Style.TEXT_WARNING}Indexing finished but produced no symbols${UI.Style.TEXT_NORMAL}`)
+          out(`${UI.Style.TEXT_WARNING}Indexing finished but produced no symbols${UI.Style.TEXT_NORMAL}`)
         } else {
-          UI.println(`${UI.Style.TEXT_SUCCESS_BOLD}Indexing complete${UI.Style.TEXT_NORMAL}`)
+          out(`${UI.Style.TEXT_SUCCESS_BOLD}Indexing complete${UI.Style.TEXT_NORMAL}`)
         }
-        UI.println(`  nodes:     ${status.nodeCount.toLocaleString()}`)
-        UI.println(`  edges:     ${status.edgeCount.toLocaleString()}`)
-        UI.println(
+        out(`  nodes:     ${status.nodeCount.toLocaleString()}`)
+        out(`  edges:     ${status.edgeCount.toLocaleString()}`)
+        out(
           `  files:     ${result.files.toLocaleString()} indexed, ${result.unchanged.toLocaleString()} unchanged, ${result.skipped.toLocaleString()} skipped, ${result.failed.toLocaleString()} failed`,
         )
         if (result.pruned.files > 0) {
-          UI.println(
+          out(
             `  pruned:    ${result.pruned.files.toLocaleString()} file(s) removed (${result.pruned.nodes.toLocaleString()} nodes, ${result.pruned.edges.toLocaleString()} edges)`,
           )
         }
-        UI.println(`  elapsed:   ${elapsed.toLocaleString()}ms`)
+        out(`  elapsed:   ${elapsed.toLocaleString()}ms`)
 
         if (result.failed > 0) {
-          UI.println("")
-          UI.println(
+          out("")
+          out(
             `${UI.Style.TEXT_WARNING}${result.failed} file(s) failed to index.${UI.Style.TEXT_NORMAL} Check the log file for details.`,
           )
         }
@@ -397,14 +621,12 @@ export const IndexCommand = cmd({
           // common cause is LSP servers failing to spawn (missing
           // language runtime, unsupported language version) or
           // returning no document symbols. Point users at the log.
-          UI.println("")
-          UI.println(
-            `${UI.Style.TEXT_WARNING}No symbols were extracted.${UI.Style.TEXT_NORMAL} Common causes:`,
-          )
-          UI.println(`  • LSP server for the project's language failed to spawn (check the log)`)
-          UI.println(`  • Project contains only unsupported file types`)
-          UI.println(`  • Files are empty or contain no top-level symbols`)
-          UI.println(`  • Re-run with --probe (default on) to see which languages lacked a server`)
+          out("")
+          out(`${UI.Style.TEXT_WARNING}No symbols were extracted.${UI.Style.TEXT_NORMAL} Common causes:`)
+          out(`  • LSP server for the project's language failed to spawn (check the log)`)
+          out(`  • Project contains only unsupported file types`)
+          out(`  • Files are empty or contain no top-level symbols`)
+          out(`  • Re-run with --probe (default on) to see which languages lacked a server`)
         }
 
         // Per-phase breakdown — aggregated wall-clock across all files.
@@ -414,15 +636,20 @@ export const IndexCommand = cmd({
         const t = result.timings
         const fmt = (ms: number) => `${(ms / 1000).toFixed(2)}s`
         const pct = (ms: number) => (t.total > 0 ? ` (${((ms / t.total) * 100).toFixed(1)}%)` : "")
-        UI.println("")
-        UI.println(`  phase breakdown (parallel, ratios matter more than absolutes):`)
-        UI.println(`    lsp.references:     ${fmt(t.lspReferences).padStart(8)}${pct(t.lspReferences)}`)
-        UI.println(`    lsp.documentSymbol: ${fmt(t.lspDocumentSymbol).padStart(8)}${pct(t.lspDocumentSymbol)}`)
-        UI.println(`    lsp.touch:          ${fmt(t.lspTouch).padStart(8)}${pct(t.lspTouch)}`)
-        UI.println(`    edge.resolve:       ${fmt(t.edgeResolve).padStart(8)}${pct(t.edgeResolve)}`)
-        UI.println(`    db.transaction:     ${fmt(t.dbTransaction).padStart(8)}${pct(t.dbTransaction)}`)
-        UI.println(`    symbol.walk:        ${fmt(t.symbolWalk).padStart(8)}${pct(t.symbolWalk)}`)
-        UI.println(`    file.read:          ${fmt(t.readFile).padStart(8)}${pct(t.readFile)}`)
+        out("")
+        out(`  phase breakdown (parallel, ratios matter more than absolutes):`)
+        out(`    lsp.references:     ${fmt(t.lspReferences).padStart(8)}${pct(t.lspReferences)}`)
+        out(`    lsp.documentSymbol: ${fmt(t.lspDocumentSymbol).padStart(8)}${pct(t.lspDocumentSymbol)}`)
+        out(`    lsp.touch:          ${fmt(t.lspTouch).padStart(8)}${pct(t.lspTouch)}`)
+        out(`    edge.resolve:       ${fmt(t.edgeResolve).padStart(8)}${pct(t.edgeResolve)}`)
+        out(`    db.transaction:     ${fmt(t.dbTransaction).padStart(8)}${pct(t.dbTransaction)}`)
+        out(`    symbol.walk:        ${fmt(t.symbolWalk).padStart(8)}${pct(t.symbolWalk)}`)
+        out(`    file.read:          ${fmt(t.readFile).padStart(8)}${pct(t.readFile)}`)
+        const profile = native ? NativePerf.render(native) : ""
+        if (profile) {
+          out("")
+          process.stdout.write(profile + "\n")
+        }
 
         // Prior releases showed a "restart your TUI" hint here because
         // the sidebar's `/debug-engine/pending-plans` endpoint read

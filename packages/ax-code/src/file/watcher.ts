@@ -9,6 +9,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
 import { Flag } from "@/flag/flag"
+import { NativePerf } from "@/perf/native"
 import { Instance } from "@/project/instance"
 import { git } from "@/util/git"
 import { lazy } from "@/util/lazy"
@@ -109,9 +110,7 @@ export namespace FileWatcher {
             log.info("init", { directory: Instance.directory })
 
             const subs: Array<() => Promise<unknown>> = []
-            yield* Effect.addFinalizer(() =>
-              Effect.promise(() => Promise.allSettled(subs.map((close) => close()))),
-            )
+            yield* Effect.addFinalizer(() => Effect.promise(() => Promise.allSettled(subs.map((close) => close()))))
 
             // Native watcher: OS-level events via Rust addon (fsevents/inotify)
             const subscribeNative = (dir: string, ignore: string[]) => {
@@ -120,30 +119,31 @@ export namespace FileWatcher {
                 const watcher = new native.NativeWatcher(dir, JSON.stringify(ignore))
 
                 let pollErrorCount = 0
-                const pollInterval = setInterval(Instance.bind(() => {
-                  try {
-                    const eventsJson = watcher.poll()
-                    const events = JSON.parse(eventsJson) as Array<{ eventType: string; path: string }>
-                    pollErrorCount = 0 // reset on success
-                    for (const evt of events) {
-                      const file = path.resolve(dir, evt.path)
-                      Bus.publish(Event.Updated, { file, event: evt.eventType as "add" | "change" | "unlink" })
+                const pollInterval = setInterval(
+                  Instance.bind(() => {
+                    try {
+                      const eventsJson = NativePerf.run("fs.NativeWatcher.poll", dir, () => watcher.poll())
+                      const events = JSON.parse(eventsJson) as Array<{ eventType: string; path: string }>
+                      pollErrorCount = 0 // reset on success
+                      for (const evt of events) {
+                        const file = path.resolve(dir, evt.path)
+                        Bus.publish(Event.Updated, { file, event: evt.eventType as "add" | "change" | "unlink" })
+                      }
+                    } catch (e) {
+                      pollErrorCount++
+                      if (pollErrorCount === 1 || pollErrorCount % 100 === 0) {
+                        log.warn("native watcher poll error", { error: e, count: pollErrorCount })
+                      }
                     }
-                  } catch (e) {
-                    pollErrorCount++
-                    if (pollErrorCount === 1 || pollErrorCount % 100 === 0) {
-                      log.warn("native watcher poll error", { error: e, count: pollErrorCount })
-                    }
-                  }
-                }), 50) // Poll native event queue every 50ms (lightweight — no filesystem scan)
+                  }),
+                  50,
+                ) // Poll native event queue every 50ms (lightweight — no filesystem scan)
 
                 subs.push(async () => {
                   clearInterval(pollInterval)
                   watcher.stop()
                 })
-              }).pipe(
-                Effect.timeout(SUBSCRIBE_TIMEOUT_MS),
-              )
+              }).pipe(Effect.timeout(SUBSCRIBE_TIMEOUT_MS))
             }
 
             const subscribePoll = (dir: string, ignore: string[]) => {
@@ -192,9 +192,7 @@ export namespace FileWatcher {
             // Try native watcher first, fall back to polling on failure
             const subscribe = (dir: string, ignore: string[]) => {
               if (Flag.AX_CODE_NATIVE_FS) {
-                return subscribeNative(dir, ignore).pipe(
-                  Effect.catchCause(() => subscribePoll(dir, ignore)),
-                )
+                return subscribeNative(dir, ignore).pipe(Effect.catchCause(() => subscribePoll(dir, ignore)))
               }
               return subscribePoll(dir, ignore)
             }
