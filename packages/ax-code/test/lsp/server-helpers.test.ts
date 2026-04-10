@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { Global } from "../../src/global"
+import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import {
+  NearestRoot,
   bunServerArgs,
   clangdAsset,
   globalBin,
@@ -214,5 +216,21 @@ describe("lsp server helpers", () => {
 
     expect(bin).toBe("/tmp/tinymist")
     expect(calls).toEqual([["tar", "-xzf", "--strip-components=1", path.join(Global.Path.bin, "tinymist.tar.gz")]])
+  })
+
+  test("matches nearest root for glob patterns", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const root = path.join(tmp.path, "ios")
+    const file = path.join(root, "src", "main.swift")
+    await fs.mkdir(path.join(root, "App.xcodeproj"), { recursive: true })
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await fs.writeFile(file, "")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await NearestRoot(["*.xcodeproj"])(file)).toBe(root)
+      },
+    })
   })
 })

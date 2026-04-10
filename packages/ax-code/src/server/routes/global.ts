@@ -73,10 +73,12 @@ export const GlobalRoutes = lazy(() =>
         return streamSSE(c, async (stream) => {
           const q = new AsyncQueue<string | null>()
           const MAX_QUEUE = 1024
+          const HARD_MAX = 4096
           let done = false
 
           const push = (event: any) => {
             if (done) return
+            if (q.size > HARD_MAX) { stop(); return }
             if (q.size > MAX_QUEUE && event.payload?.type === "message.part.delta") return
             q.push(JSON.stringify(event))
           }

@@ -217,6 +217,18 @@ describe("filesystem", () => {
 
       expect(await fs.readFile(filepath, "utf-8")).toBe(content)
     })
+
+    test("replaces files without leaving temp files behind", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "test.txt")
+
+      await Filesystem.write(filepath, "first")
+      await Filesystem.write(filepath, "second")
+
+      expect(await fs.readFile(filepath, "utf-8")).toBe("second")
+      const extra = await fs.readdir(tmp.path)
+      expect(extra.filter((name) => name.endsWith(".tmp"))).toEqual([])
+    })
   })
 
   describe("writeJson()", () => {

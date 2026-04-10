@@ -275,7 +275,7 @@ export namespace LLM {
       }
     }
 
-    const isolation = Isolation.resolve(cfg.isolation, Instance.directory)
+    const isolation = Isolation.resolve(cfg.isolation, Instance.directory, Instance.worktree)
     if (isolation.mode === "read-only") {
       for (const t of ["edit", "write", "apply_patch", "multiedit", "bash"]) delete tools[t]
     }

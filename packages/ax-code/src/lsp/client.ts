@@ -279,6 +279,9 @@ export namespace LSPClient {
         return await fn()
       } finally {
         resolveNext()
+        if (pathLocks.get(filepath) === nextTail) {
+          pathLocks.delete(filepath)
+        }
       }
     }
 

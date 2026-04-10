@@ -13,6 +13,8 @@ import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { Permission } from "@/permission"
 
+const MAX_DEPTH = 5
+
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
   prompt: z.string().describe("The task for the agent to perform"),
@@ -52,6 +54,17 @@ export const TaskTool = Tool.define("task", async (ctx) => {
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
       const config = await Config.get()
+      let depth = 0
+      let parent: SessionID | undefined = ctx.sessionID
+      while (parent) {
+        const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch(() => undefined)
+        if (!current?.parentID) break
+        depth++
+        if (depth >= MAX_DEPTH) {
+          throw new Error(`Maximum subagent nesting depth (${MAX_DEPTH}) exceeded`)
+        }
+        parent = current.parentID
+      }
 
       // Skip permission check when user explicitly invoked via @ or command subtask
       if (!ctx.extra?.bypassAgentCheck) {

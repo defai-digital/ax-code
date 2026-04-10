@@ -17,6 +17,7 @@ export namespace Telemetry {
   let provider: any
   let exporter: any
   let initialized = false
+  let initPromise: Promise<void> | undefined
 
   export function endpoint(): string | undefined {
     return process.env.AX_CODE_OTLP_ENDPOINT
@@ -28,7 +29,9 @@ export namespace Telemetry {
 
   export async function init() {
     if (initialized || !enabled()) return
-    try {
+    if (initPromise) return initPromise
+    initPromise = (async () => {
+      try {
       const { NodeTracerProvider, SimpleSpanProcessor } = await import("@opentelemetry/sdk-trace-node")
       const { OTLPTraceExporter } = await import("@opentelemetry/exporter-trace-otlp-http")
       const { resourceFromAttributes } = await import("@opentelemetry/resources")
@@ -45,9 +48,13 @@ export namespace Telemetry {
       provider.register()
       initialized = true
       log.info("OTLP telemetry initialized", { endpoint: endpoint() })
-    } catch (e) {
-      log.warn("failed to initialize OTLP telemetry", { error: e })
-    }
+      } catch (e) {
+        log.warn("failed to initialize OTLP telemetry", { error: e })
+      } finally {
+        initPromise = undefined
+      }
+    })()
+    return initPromise
   }
 
   /** Export a session's events as OTLP trace spans */
@@ -122,10 +129,14 @@ export namespace Telemetry {
   }
 
   export async function shutdown() {
+    if (initPromise) await initPromise
     if (!initialized) return
     try {
       await exporter?.shutdown?.()
       await provider?.shutdown?.()
+      provider = undefined
+      exporter = undefined
+      initialized = false
       log.info("OTLP telemetry shutdown")
     } catch (e) {
       log.warn("OTLP shutdown error", { error: e })

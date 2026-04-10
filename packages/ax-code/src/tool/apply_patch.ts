@@ -58,6 +58,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       newContent: string
       type: "add" | "update" | "delete" | "move"
       movePath?: string
+      moveOldContent?: string
+      existed: boolean
+      moveExisted?: boolean
       diff: string
       additions: number
       deletions: number
@@ -87,7 +90,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
       switch (hunk.type) {
         case "add": {
-          const oldContent = ""
+          const existed = await fs.stat(filePath).then((stats) => !stats.isDirectory()).catch(() => false)
+          const oldContent = existed ? await fs.readFile(filePath, "utf-8").catch(() => "") : ""
           const newContent =
             hunk.contents.length === 0 || hunk.contents.endsWith("\n") ? hunk.contents : `${hunk.contents}\n`
           const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))
@@ -104,6 +108,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             oldContent,
             newContent,
             type: "add",
+            existed,
             diff,
             additions,
             deletions,
@@ -144,6 +149,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           }
 
           const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
+          const moveExisted = movePath ? await fs.stat(movePath).then((stats) => !stats.isDirectory()).catch(() => false) : undefined
+          const moveOldContent = moveExisted ? await fs.readFile(movePath!, "utf-8").catch(() => "") : undefined
           await assertExternalDirectory(ctx, movePath)
           if (movePath && Filesystem.contains(Instance.directory, movePath)) {
             const parentDir = path.dirname(movePath)
@@ -160,6 +167,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             newContent,
             type: hunk.move_path ? "move" : "update",
             movePath,
+            moveOldContent,
+            existed: true,
+            moveExisted,
             diff,
             additions,
             deletions,
@@ -201,6 +211,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             oldContent: contentToDelete,
             newContent: "",
             type: "delete",
+            existed: true,
             diff: deleteDiff,
             additions: 0,
             deletions,
@@ -240,69 +251,101 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
     // Apply the changes
     const updates: Array<{ file: string; event: "add" | "change" | "unlink" }> = []
-
-    for (const change of fileChanges) {
-      const edited = change.type === "delete" ? undefined : (change.movePath ?? change.filePath)
-      switch (change.type) {
-        case "add":
-          await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-          await FileTime.withLock(change.filePath, async () => {
-            await fs.writeFile(change.filePath, change.newContent, "utf-8")
+    const rollback = async () => {
+      for (const change of [...fileChanges].reverse()) {
+        if (change.type === "move" && change.movePath) {
+          const dest = change.movePath
+          const [first, second] = [change.filePath, dest].sort()
+          await FileTime.withLock(first, async () => {
+            await FileTime.withLock(second, async () => {
+              await fs.mkdir(path.dirname(change.filePath), { recursive: true })
+              await fs.writeFile(change.filePath, change.oldContent, "utf-8")
+              if (change.moveExisted) {
+                await fs.mkdir(path.dirname(dest), { recursive: true })
+                await fs.writeFile(dest, change.moveOldContent ?? "", "utf-8")
+                return
+              }
+              await fs.unlink(dest).catch(() => undefined)
+            })
           })
-          await FileTime.read(ctx.sessionID, change.filePath)
-          updates.push({ file: change.filePath, event: "add" })
-          break
-
-        case "update":
-          await FileTime.withLock(change.filePath, async () => {
-            // Verify file hasn't changed since verification to prevent TOCTOU
-            const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
-            if (current !== undefined && current !== change.oldContent)
-              throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
-            await fs.writeFile(change.filePath, change.newContent, "utf-8")
-          })
-          await FileTime.read(ctx.sessionID, change.filePath)
-          updates.push({ file: change.filePath, event: "change" })
-          break
-
-        case "move":
-          if (change.movePath) {
-            const dest = change.movePath
-            await fs.mkdir(path.dirname(dest), { recursive: true })
-            // Acquire locks in sorted order to prevent ABBA deadlock (BUG-007)
-            const [first, second] = [change.filePath, dest].sort()
-            if (first === second) {
-              await FileTime.withLock(first, async () => {
-                await fs.writeFile(dest, change.newContent, "utf-8")
-                await fs.unlink(change.filePath)
-              })
-            } else {
-              await FileTime.withLock(first, async () => {
-                await FileTime.withLock(second, async () => {
-                  await fs.writeFile(dest, change.newContent, "utf-8")
-                  if (dest !== change.filePath) await fs.unlink(change.filePath)
-                })
-              })
-            }
-            await FileTime.read(ctx.sessionID, dest)
-            updates.push({ file: change.filePath, event: "unlink" })
-            updates.push({ file: dest, event: "add" })
+          continue
+        }
+        await FileTime.withLock(change.filePath, async () => {
+          if (!change.existed && change.type === "add") {
+            await fs.unlink(change.filePath).catch(() => undefined)
+            return
           }
-          break
+          await fs.mkdir(path.dirname(change.filePath), { recursive: true })
+          await fs.writeFile(change.filePath, change.oldContent, "utf-8")
+        }).catch(() => undefined)
+      }
+    }
 
-        case "delete":
-          await FileTime.withLock(change.filePath, async () => {
-            await fs.unlink(change.filePath)
+    try {
+      for (const change of fileChanges) {
+        const edited = change.type === "delete" ? undefined : (change.movePath ?? change.filePath)
+        switch (change.type) {
+          case "add":
+            await fs.mkdir(path.dirname(change.filePath), { recursive: true })
+            await FileTime.withLock(change.filePath, async () => {
+              await fs.writeFile(change.filePath, change.newContent, "utf-8")
+            })
+            await FileTime.read(ctx.sessionID, change.filePath)
+            updates.push({ file: change.filePath, event: change.existed ? "change" : "add" })
+            break
+
+          case "update":
+            await FileTime.withLock(change.filePath, async () => {
+              const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+              if (current !== undefined && current !== change.oldContent)
+                throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
+              await fs.writeFile(change.filePath, change.newContent, "utf-8")
+            })
+            await FileTime.read(ctx.sessionID, change.filePath)
+            updates.push({ file: change.filePath, event: "change" })
+            break
+
+          case "move":
+            if (change.movePath) {
+              const dest = change.movePath
+              await fs.mkdir(path.dirname(dest), { recursive: true })
+              const [first, second] = [change.filePath, dest].sort()
+              if (first === second) {
+                await FileTime.withLock(first, async () => {
+                  await fs.writeFile(dest, change.newContent, "utf-8")
+                  await fs.unlink(change.filePath)
+                })
+              } else {
+                await FileTime.withLock(first, async () => {
+                  await FileTime.withLock(second, async () => {
+                    await fs.writeFile(dest, change.newContent, "utf-8")
+                    if (dest !== change.filePath) await fs.unlink(change.filePath)
+                  })
+                })
+              }
+              await FileTime.read(ctx.sessionID, dest)
+              updates.push({ file: change.filePath, event: "unlink" })
+              updates.push({ file: dest, event: "add" })
+            }
+            break
+
+          case "delete":
+            await FileTime.withLock(change.filePath, async () => {
+              await fs.unlink(change.filePath)
+            })
+            updates.push({ file: change.filePath, event: "unlink" })
+            break
+        }
+
+        if (edited) {
+          await Bus.publish(File.Event.Edited, {
+            file: edited,
           })
-          updates.push({ file: change.filePath, event: "unlink" })
-          break
+        }
       }
-
-      if (edited) {
-        await Bus.publish(File.Event.Edited, {
-          file: edited,
-        })
-      }
+    } catch (error) {
+      await rollback()
+      throw error
     }
 
     // Publish file change events

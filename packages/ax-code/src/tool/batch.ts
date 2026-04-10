@@ -7,6 +7,7 @@ import { Log } from "@/util/log"
 const DISALLOWED = new Set(["batch", "task"])
 const FILTERED_FROM_SUGGESTIONS = new Set(["invalid", "patch", ...DISALLOWED])
 const log = Log.create({ service: "tool.batch" })
+const TOOL_TIMEOUT = 60_000
 
 export const BatchTool = Tool.define("batch", async () => {
   return {
@@ -90,7 +91,22 @@ export const BatchTool = Tool.define("batch", async () => {
             },
           })
 
-          const result = await tool.execute(validatedParams, { ...ctx, callID: partID })
+          const result = await new Promise<Awaited<ReturnType<typeof tool.execute>>>((resolve, reject) => {
+            const timer = setTimeout(() => {
+              reject(new Error(`Tool '${call.tool}' timed out after ${TOOL_TIMEOUT}ms`))
+            }, TOOL_TIMEOUT)
+            if (typeof timer === "object" && "unref" in timer) timer.unref()
+            tool.execute(validatedParams, { ...ctx, callID: partID }).then(
+              (value) => {
+                clearTimeout(timer)
+                resolve(value)
+              },
+              (error) => {
+                clearTimeout(timer)
+                reject(error)
+              },
+            )
+          })
           const attachments = result.attachments?.map((attachment) => ({
             ...attachment,
             id: PartID.ascending(),

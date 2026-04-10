@@ -15,7 +15,7 @@ import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { COMPACTION_BUFFER as _COMPACTION_BUFFER, PRUNE_MINIMUM as _PRUNE_MINIMUM, PRUNE_PROTECT as _PRUNE_PROTECT } from "@/constants/session"
 import { Database } from "@/storage/db"
-import { PartTable } from "./session.sql"
+import { MessageTable, PartTable } from "./session.sql"
 import { ProviderTransform } from "@/provider/transform"
 import { ModelID, ProviderID } from "@/provider/schema"
 
@@ -282,7 +282,7 @@ When constructing the summary, try to stick to this template:
     if (result === "continue" && input.auto) {
       if (replay) {
         const original = replay.info as MessageV2.User
-        const replayMsg = await Session.updateMessage({
+        const replayMsg: MessageV2.User = {
           id: MessageID.ascending(),
           role: "user",
           sessionID: input.sessionID,
@@ -293,35 +293,58 @@ When constructing the summary, try to stick to this template:
           tools: original.tools,
           system: original.system,
           variant: original.variant,
-        })
-        for (const part of replay.parts) {
-          if (part.type === "compaction") continue
-          const replayPart =
-            part.type === "file" && MessageV2.isMedia(part.mime)
-              ? { type: "text" as const, text: `[Attached ${part.mime}: ${part.filename ?? "file"}]` }
-              : part
-          await Session.updatePart({
-            ...replayPart,
-            id: PartID.ascending(),
-            messageID: replayMsg.id,
-            sessionID: input.sessionID,
-          })
         }
+        Database.transaction((db) => {
+          const { id, sessionID, ...data } = replayMsg
+          db.insert(MessageTable)
+            .values({
+              id,
+              session_id: sessionID,
+              time_created: replayMsg.time.created,
+              data,
+            })
+            .run()
+          Database.effect(() => Bus.publish(MessageV2.Event.Updated, { info: replayMsg }))
+          for (const item of replay.parts) {
+            if (item.type === "compaction") continue
+            const replayPart =
+              item.type === "file" && MessageV2.isMedia(item.mime)
+                ? { type: "text" as const, text: `[Attached ${item.mime}: ${item.filename ?? "file"}]` }
+                : item
+            const part = {
+              ...replayPart,
+              id: PartID.ascending(),
+              messageID: replayMsg.id,
+              sessionID: input.sessionID,
+            }
+            const { id, messageID, sessionID, ...data } = part
+            db.insert(PartTable)
+              .values({
+                id,
+                message_id: messageID,
+                session_id: sessionID,
+                time_created: Date.now(),
+                data,
+              })
+              .run()
+            Database.effect(() => Bus.publish(MessageV2.Event.PartUpdated, { part: { ...part } }))
+          }
+        })
       } else {
-        const continueMsg = await Session.updateMessage({
+        const continueMsg: MessageV2.User = {
           id: MessageID.ascending(),
           role: "user",
           sessionID: input.sessionID,
           time: { created: Date.now() },
           agent: userMessage.agent,
           model: userMessage.model,
-        })
+        }
         const text =
           (input.overflow
             ? "The previous request exceeded the provider's size limit due to large media attachments. The conversation was compacted and media files were removed from context. If the user was asking about attached images or files, explain that the attachments were too large to process and suggest they try again with smaller or fewer files.\n\n"
             : "") +
           "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
-        await Session.updatePart({
+        const part: MessageV2.TextPart = {
           id: PartID.ascending(),
           messageID: continueMsg.id,
           sessionID: input.sessionID,
@@ -332,6 +355,29 @@ When constructing the summary, try to stick to this template:
             start: Date.now(),
             end: Date.now(),
           },
+        }
+        Database.transaction((db) => {
+          const { id, sessionID, ...data } = continueMsg
+          db.insert(MessageTable)
+            .values({
+              id,
+              session_id: sessionID,
+              time_created: continueMsg.time.created,
+              data,
+            })
+            .run()
+          Database.effect(() => Bus.publish(MessageV2.Event.Updated, { info: continueMsg }))
+          const { id: partID, messageID, sessionID: partSessionID, ...partData } = part
+          db.insert(PartTable)
+            .values({
+              id: partID,
+              message_id: messageID,
+              session_id: partSessionID,
+              time_created: Date.now(),
+              data: partData,
+            })
+            .run()
+          Database.effect(() => Bus.publish(MessageV2.Event.PartUpdated, { part: { ...part } }))
         })
       }
     }

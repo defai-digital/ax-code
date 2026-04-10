@@ -62,7 +62,8 @@ export const GrepTool = Tool.define("grep", {
           limit: 100,
           contextLines: 0,
         }))
-        const matches = JSON.parse(json) as Array<{path: string, lineNum: number, lineText: string, modTime: number}>
+        const matches = (JSON.parse(json) as Array<{path: string, lineNum: number, lineText: string, modTime: number}>)
+          .filter((match) => !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path))
         matches.sort((a, b) => b.modTime - a.modTime)
 
         if (matches.length === 0) {

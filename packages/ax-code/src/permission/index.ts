@@ -187,21 +187,17 @@ export namespace Permission {
         const { ruleset, ...request } = input
         let needsAsk = false
 
-        if (INTERACTIVE_ONLY.has(request.permission)) {
-          needsAsk = true
-        } else {
-          for (const pattern of request.patterns) {
-            const rule = evaluate(request.permission, pattern, ruleset, approved)
-            log.info("evaluated", { permission: request.permission, pattern, action: rule })
-            if (rule.action === "deny") {
-              return yield* new DeniedError({
-                ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
-                agent: input.agent,
-              })
-            }
-            if (rule.action === "allow") continue
-            needsAsk = true
+        for (const pattern of request.patterns) {
+          const rule = evaluate(request.permission, pattern, ruleset, approved)
+          log.info("evaluated", { permission: request.permission, pattern, action: rule })
+          if (rule.action === "deny") {
+            return yield* new DeniedError({
+              ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
+              agent: input.agent,
+            })
           }
+          if (rule.action === "allow" && !INTERACTIVE_ONLY.has(request.permission)) continue
+          needsAsk = true
         }
 
         if (!needsAsk) return
@@ -400,9 +396,10 @@ export namespace Permission {
   export type PolicyFile = z.infer<typeof PolicyFile>
 
   /** Convert a policy.json file into a Permission.Ruleset */
-  export function fromPolicy(policy: PolicyFile): Ruleset {
+  export function fromPolicy(policy: PolicyFile, currentAgent?: string): Ruleset {
     const ruleset: Ruleset = []
     for (const rule of policy.rules) {
+      if (rule.agent !== "*" && rule.agent !== currentAgent) continue
       for (const tool of rule.tools) {
         const permission = EDIT_TOOLS.includes(tool) ? "edit" : tool
         for (const file of rule.files) {
@@ -414,7 +411,7 @@ export namespace Permission {
   }
 
   /** Load policy from .ax-code/policy.json if it exists */
-  export async function loadPolicy(directory: string): Promise<Ruleset> {
+  export async function loadPolicy(directory: string, currentAgent?: string): Promise<Ruleset> {
     const filepath = path.join(directory, ".ax-code", "policy.json")
     try {
       const file = Bun.file(filepath)
@@ -422,10 +419,10 @@ export namespace Permission {
       const raw = await file.json()
       const policy = PolicyFile.parse(raw)
       log.info("loaded policy", { name: policy.name, rules: policy.rules.length, path: filepath })
-      return fromPolicy(policy)
+      return fromPolicy(policy, currentAgent)
     } catch (e) {
-      log.warn("failed to load policy", { path: filepath, error: e })
-      return []
+      log.error("failed to load policy", { path: filepath, error: e })
+      return [{ permission: "*", pattern: "*", action: "deny" }]
     }
   }
 

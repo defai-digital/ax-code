@@ -333,6 +333,26 @@ export namespace Worktree {
     return true
   }
 
+  function cancelTimers(directory: string) {
+    const timers = startScriptTimers.get(directory)
+    if (!timers) return
+    for (const timer of timers) clearTimeout(timer)
+    startScriptTimers.delete(directory)
+  }
+
+  function trackTimer(directory: string, timer: ReturnType<typeof setTimeout>) {
+    const timers = startScriptTimers.get(directory) ?? new Set<ReturnType<typeof setTimeout>>()
+    timers.add(timer)
+    startScriptTimers.set(directory, timers)
+  }
+
+  function releaseTimer(directory: string, timer: ReturnType<typeof setTimeout>) {
+    const timers = startScriptTimers.get(directory)
+    if (!timers) return
+    timers.delete(timer)
+    if (timers.size === 0) startScriptTimers.delete(directory)
+  }
+
   function queueStartScripts(directory: string, input: { projectID: ProjectID; extra?: string }) {
     // Defer start-scripts to the next tick so the caller sees the
     // worktree info synchronously before hooks run. The callback is
@@ -342,7 +362,7 @@ export namespace Worktree {
     // from being held open by a pending timer after all other work
     // is done.
     const timer = setTimeout(() => {
-      startScriptTimers.delete(timer)
+      releaseTimer(directory, timer)
       const start = async () => {
         await runStartScripts(directory, input)
       }
@@ -352,22 +372,25 @@ export namespace Worktree {
       })
     }, 0)
     timer.unref?.()
-    startScriptTimers.add(timer)
+    trackTimer(directory, timer)
   }
 
   // Pending start-script timers, tracked so cleanup paths can cancel
   // them before they fire against a worktree that has already been
   // torn down.
-  const startScriptTimers = new Set<ReturnType<typeof setTimeout>>()
+  const startScriptTimers = new Map<string, Set<ReturnType<typeof setTimeout>>>()
 
   /**
    * Cancel all pending worktree start-script timers. Called from
    * `remove()` so a rapid create/remove cycle does not execute the
    * start script against a now-deleted directory.
    */
-  export function cancelPendingStartScripts() {
-    for (const timer of startScriptTimers) clearTimeout(timer)
-    startScriptTimers.clear()
+  export function cancelPendingStartScripts(directory?: string) {
+    if (directory) {
+      cancelTimers(directory)
+      return
+    }
+    for (const [key] of startScriptTimers) cancelTimers(key)
   }
 
   export async function makeWorktreeInfo(name?: string): Promise<Info> {
@@ -476,11 +499,11 @@ export namespace Worktree {
     // can cancel it if the worktree is removed before the tick.
     // `.unref()` lets the event loop exit if nothing else is alive.
     const timer = setTimeout(() => {
-      startScriptTimers.delete(timer)
+      releaseTimer(info.directory, timer)
       bootstrap()
     }, 0)
     timer.unref?.()
-    startScriptTimers.add(timer)
+    trackTimer(info.directory, timer)
     return info
   })
 
@@ -493,7 +516,7 @@ export namespace Worktree {
     // recent create() so they don't fire against the directory we're
     // about to remove. A rapid create→remove cycle would otherwise
     // run the user's start script in a now-deleted directory.
-    cancelPendingStartScripts()
+    cancelPendingStartScripts(input.directory)
 
     const directory = await canonical(input.directory)
     const locate = async (stdout: Uint8Array | undefined) => {

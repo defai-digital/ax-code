@@ -146,8 +146,8 @@ export interface AuthConfig {
 }
 
 export interface AgentHooks {
-  /** Called before a tool is executed. Return false to block. */
-  onToolCall?: (tool: string, input: unknown) => boolean | Promise<boolean>
+  /** Called when a tool starts executing. */
+  onToolCall?: (tool: string, input: unknown) => void | Promise<void>
   /** Called after a tool completes */
   onToolResult?: (tool: string, output: string) => void | Promise<void>
   /** Called when a permission is requested. Return "allow" or "deny". */

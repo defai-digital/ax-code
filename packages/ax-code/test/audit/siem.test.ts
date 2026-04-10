@@ -188,4 +188,29 @@ describe("R21: SIEM-compatible audit schema", () => {
       },
     })
   })
+
+  test("streamAll paginates through the full event log", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        for (let i = 0; i < EventQuery.ALL_SINCE_LIMIT + 25; i++) {
+          Recorder.emit({
+            type: "step.start",
+            sessionID: session.id,
+            stepIndex: i,
+          })
+        }
+        Recorder.end(session.id)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const lines = [...AuditExport.streamAll({ since: 0 })]
+        expect(lines).toHaveLength(EventQuery.ALL_SINCE_LIMIT + 25)
+
+        EventQuery.deleteBySession(session.id)
+      },
+    })
+  })
 })

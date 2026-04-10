@@ -100,9 +100,27 @@ export namespace AuditExport {
 
   export function* streamAll(options: { since?: number }, ctx?: ExportContext): Generator<string> {
     const since = options.since ?? 0
-    const rows = EventQuery.allSince(since)
-    for (const row of rows) {
-      yield JSON.stringify(toAuditRecord(row.session_id, row.event_data, row.time_created, ctx))
+    let cursor:
+      | {
+          time_created: number
+          session_id: SessionID
+          sequence: number
+        }
+      | undefined
+
+    while (true) {
+      const rows = EventQuery.allSince({ since, cursor })
+      if (rows.length === 0) return
+      for (const row of rows) {
+        yield JSON.stringify(toAuditRecord(row.session_id, row.event_data, row.time_created, ctx))
+      }
+      const last = rows[rows.length - 1]
+      if (!last) return
+      cursor = {
+        time_created: last.time_created,
+        session_id: last.session_id,
+        sequence: last.sequence,
+      }
     }
   }
 

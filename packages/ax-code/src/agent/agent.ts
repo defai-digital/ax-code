@@ -121,7 +121,32 @@ export namespace Agent {
           })
 
           const user = Permission.fromConfig(cfg.permission ?? {})
-          const policy = yield* Effect.promise(() => Permission.loadPolicy(ctx.directory))
+          const policyMap = new Map<string, Permission.Ruleset>()
+          const names = [
+            "build",
+            "plan",
+            "general",
+            "explore",
+            "react",
+            "security",
+            "architect",
+            "debug",
+            "perf",
+            "devops",
+            "test",
+            "compaction",
+            "title",
+            "summary",
+            ...Object.keys(cfg.agent ?? {}),
+          ]
+          yield* Effect.promise(() =>
+            Promise.all(
+              Array.from(new Set(names)).map(async (name) => {
+                policyMap.set(name, await Permission.loadPolicy(ctx.directory, name))
+              }),
+            ),
+          )
+          const policy = (name: string) => policyMap.get(name) ?? []
 
           const agents: Record<string, Info> = {
             build: {
@@ -132,7 +157,7 @@ export namespace Agent {
               options: {},
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("build"),
                 Permission.fromConfig({
                   question: "allow",
                   plan_enter: "allow",
@@ -150,7 +175,7 @@ export namespace Agent {
               options: {},
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("plan"),
                 Permission.fromConfig({
                   question: "allow",
                   plan_exit: "allow",
@@ -176,7 +201,7 @@ export namespace Agent {
               prompt: PROMPT_GENERAL,
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("general"),
                 Permission.fromConfig({
                   todoread: "deny",
                   todowrite: "deny",
@@ -192,7 +217,7 @@ export namespace Agent {
               displayName: "Researcher",
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("explore"),
                 readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
@@ -211,7 +236,7 @@ export namespace Agent {
               prompt: PROMPT_REACT,
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("react"),
                 Permission.fromConfig({
                   question: "allow",
                   plan_enter: "allow",
@@ -232,7 +257,7 @@ export namespace Agent {
               prompt: PROMPT_SECURITY,
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("security"),
                 readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
@@ -250,7 +275,7 @@ export namespace Agent {
               prompt: PROMPT_ARCHITECT,
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("architect"),
                 readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
@@ -268,7 +293,7 @@ export namespace Agent {
               prompt: PROMPT_DEBUG,
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("debug"),
                 Permission.fromConfig({
                   question: "allow",
                   plan_enter: "allow",
@@ -289,7 +314,7 @@ export namespace Agent {
               prompt: PROMPT_PERF,
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("perf"),
                 readOnlyWithWeb(whitelistedDirs),
                 user,
               ),
@@ -307,7 +332,7 @@ export namespace Agent {
               prompt: PROMPT_DEVOPS,
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("devops"),
                 Permission.fromConfig({
                   question: "allow",
                   plan_enter: "allow",
@@ -328,7 +353,7 @@ export namespace Agent {
               prompt: PROMPT_TEST,
               permission: Permission.merge(
                 defaults,
-                policy,
+                policy("test"),
                 Permission.fromConfig({
                   question: "allow",
                   plan_enter: "allow",
@@ -347,7 +372,7 @@ export namespace Agent {
               hidden: true,
               tier: "internal",
               prompt: PROMPT_COMPACTION,
-              permission: Permission.merge(defaults, denyAll, user),
+              permission: Permission.merge(defaults, policy("compaction"), denyAll, user),
               options: {},
             },
             title: {
@@ -358,7 +383,7 @@ export namespace Agent {
               hidden: true,
               tier: "internal",
               temperature: 0.5,
-              permission: Permission.merge(defaults, denyAll, user),
+              permission: Permission.merge(defaults, policy("title"), denyAll, user),
               prompt: PROMPT_TITLE,
             },
             summary: {
@@ -368,7 +393,7 @@ export namespace Agent {
               native: true,
               hidden: true,
               tier: "internal",
-              permission: Permission.merge(defaults, denyAll, user),
+              permission: Permission.merge(defaults, policy("summary"), denyAll, user),
               prompt: PROMPT_SUMMARY,
             },
           }
@@ -385,7 +410,7 @@ export namespace Agent {
               item = agents[key] = {
                 name: key,
                 mode: "all",
-                permission: Permission.merge(defaults, user),
+                permission: Permission.merge(defaults, policy(key), user),
                 options: {},
                 native: false,
               }

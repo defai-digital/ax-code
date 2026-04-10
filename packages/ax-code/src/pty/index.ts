@@ -34,6 +34,7 @@ export namespace Pty {
     bufferCursor: number
     cursor: number
     subscribers: Map<unknown, Socket>
+    dispose: Array<{ dispose: () => void }>
   }
 
   type State = {
@@ -120,6 +121,12 @@ export namespace Pty {
     Service,
     Effect.gen(function* () {
       function teardown(session: Active) {
+        for (const item of session.dispose) {
+          try {
+            item.dispose()
+          } catch {}
+        }
+        session.dispose = []
         try {
           session.process.kill()
         } catch {}
@@ -157,6 +164,10 @@ export namespace Pty {
         if (!session) return
         state.sessions.delete(id)
         log.info("removing session", { id })
+        if (session.info.status !== "exited") {
+          session.info.status = "exited"
+          void Bus.publish(Event.Exited, { id, exitCode: 0 })
+        }
         teardown(session)
         void Bus.publish(Event.Deleted, { id: session.info.id })
       })
@@ -176,17 +187,21 @@ export namespace Pty {
         return yield* Effect.promise(async () => {
           const id = PtyID.ascending()
           const command = input.command || Shell.preferred()
-          const args = input.args || []
-          if (command.endsWith("sh")) {
+          const args = [...(input.args ?? [])]
+          const shell = command.split(/[\\/]/).at(-1)?.replace(/\.exe$/i, "") ?? command
+          if (["sh", "bash", "zsh", "dash", "ash", "ksh", "csh", "tcsh"].includes(shell)) {
             args.push("-l")
           }
 
           const cwd = input.cwd || state.dir
           const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
-          const env = {
+          const baseEnv = Env.sanitize({
             ...Env.sanitize(process.env),
-            ...input.env,
             ...shellEnv.env,
+          })
+          const env = {
+            ...baseEnv,
+            ...input.env,
             TERM: "xterm-256color",
             AX_CODE_TERMINAL: "1",
           } as Record<string, string>
@@ -221,9 +236,10 @@ export namespace Pty {
             bufferCursor: 0,
             cursor: 0,
             subscribers: new Map(),
+            dispose: [],
           }
           state.sessions.set(id, session)
-          proc.onData(
+          const onData = proc.onData(
             Instance.bind((chunk) => {
               session.cursor += chunk.length
 
@@ -250,7 +266,7 @@ export namespace Pty {
               session.bufferCursor += excess
             }),
           )
-          proc.onExit(
+          const onExit = proc.onExit(
             Instance.bind(({ exitCode }) => {
               if (session.info.status === "exited") return
               log.info("session exited", { id, exitCode })
@@ -259,6 +275,7 @@ export namespace Pty {
               Effect.runFork(remove(id))
             }),
           )
+          session.dispose.push(onData, onExit)
           await Bus.publish(Event.Created, { info })
           return info
         })
@@ -271,7 +288,7 @@ export namespace Pty {
         if (input.title) {
           session.info.title = input.title
         }
-        if (input.size) {
+        if (input.size && session.info.status === "running") {
           session.process.resize(input.size.cols, input.size.rows)
         }
         yield* Effect.promise(() => Bus.publish(Event.Updated, { info: session.info }))
@@ -349,6 +366,7 @@ export namespace Pty {
 
         return {
           onMessage: (message: string | ArrayBuffer) => {
+            if (session.info.status !== "running") return
             session.process.write(String(message))
           },
           onClose: () => {

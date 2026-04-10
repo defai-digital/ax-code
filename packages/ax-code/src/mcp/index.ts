@@ -265,6 +265,11 @@ export namespace MCP {
           }),
         ),
       )
+      toolsCacheUnsub?.()
+      toolsCacheUnsub = undefined
+      toolsCacheSubscribed = false
+      cachedTools = undefined
+      toolsPromise = undefined
       pendingOAuthTransports.clear()
     },
   )
@@ -512,6 +517,9 @@ export namespace MCP {
         if (line) log.info("mcp stderr", { key, line })
       }
       transport.stderr?.on("data", onStderr)
+      const cleanupStderr = () => {
+        transport.stderr?.off("data", onStderr)
+      }
 
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       try {
@@ -521,6 +529,11 @@ export namespace MCP {
         })
         await withTimeout(client.connect(transport), connectTimeout)
         registerNotificationHandlers(client, key)
+        const close = client.close.bind(client)
+        client.close = async () => {
+          cleanupStderr()
+          return close()
+        }
         mcpClient = client
         status = {
           status: "connected",
@@ -537,6 +550,7 @@ export namespace MCP {
         // leaves the MCP server process running orphaned — holding
         // its PID, pipes, and any ports it opened — until the parent
         // ax-code process exits.
+        cleanupStderr()
         await transport.close().catch((closeErr) => {
           log.debug("failed to close mcp transport after connect failure", { key, err: closeErr })
         })
@@ -687,6 +701,7 @@ export namespace MCP {
   let cachedTools: Record<string, Tool> | undefined
   let toolsPromise: Promise<Record<string, Tool>> | undefined
   let toolsCacheSubscribed = false
+  let toolsCacheUnsub: (() => void) | undefined
   let toolsCacheGeneration = 0
   let toolsCacheTime = 0
   const TOOLS_CACHE_TTL_MS = 10_000 // Minimum time between tool re-fetches
@@ -694,7 +709,7 @@ export namespace MCP {
   export async function tools() {
     if (!toolsCacheSubscribed) {
       toolsCacheSubscribed = true
-      Bus.subscribe(ToolsChanged, () => {
+      toolsCacheUnsub = Bus.subscribe(ToolsChanged, () => {
         // Respect TTL: if cache was just populated, defer invalidation
         if (cachedTools && Date.now() - toolsCacheTime < TOOLS_CACHE_TTL_MS) return
         cachedTools = undefined
@@ -897,11 +912,11 @@ export namespace MCP {
     // Start the callback server
     await McpOAuthCallback.ensureRunning()
 
-    // Generate and store a cryptographically secure state parameter BEFORE creating the provider
-    // The SDK will call provider.state() to read this value
-    const oauthState = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
+    const oauthState =
+      (await McpAuth.getOAuthState(mcpName)) ??
+      Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
     await McpAuth.updateOAuthState(mcpName, oauthState)
 
     // Create a new auth provider for this flow

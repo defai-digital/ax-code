@@ -220,7 +220,15 @@ export namespace ShareNext {
     }
   }
 
-  const queue = new Map<string, { timeout: NodeJS.Timeout; data: Map<string, Data> }>()
+  const RETRY_MAX = 10
+  const RETRY_BASE = 5_000
+  const RETRY_CAP = 60_000
+
+  function retryDelay(attempt: number) {
+    return Math.min(RETRY_BASE * 2 ** Math.max(0, attempt - 1), RETRY_CAP)
+  }
+
+  const queue = new Map<string, { timeout: NodeJS.Timeout; data: Map<string, Data>; attempt: number }>()
   // Per-session in-flight guard. Between `queue.delete(sessionID)`
   // and the `await fetch()` inside the flush closure, a new sync()
   // for the same sessionID would create a second queue entry — its
@@ -293,14 +301,19 @@ export namespace ShareNext {
             if (current === queued && current.data.size === queued.data.size) {
               queue.delete(sessionID)
             } else if (current) {
+              current.attempt = 0
               // Concurrent additions merged in during the fetch.
               // The delta hasn't been flushed — schedule a retry.
               current.timeout = setTimeout(flush, 1000)
             }
           } else if (current) {
-            // Failed flush: keep the entry and schedule a retry.
-            // 5s backoff so we don't hammer a broken share server.
-            current.timeout = setTimeout(flush, 5000)
+            current.attempt++
+            if (current.attempt > RETRY_MAX) {
+              queue.delete(sessionID)
+              log.warn("share sync abandoned after retry limit", { sessionID, attempts: current.attempt - 1 })
+              return
+            }
+            current.timeout = setTimeout(flush, retryDelay(current.attempt))
           }
         }
       })().catch((error) => {
@@ -309,7 +322,7 @@ export namespace ShareNext {
       })
     }
     const timeout = setTimeout(flush, 1000)
-    queue.set(sessionID, { timeout, data: dataMap })
+    queue.set(sessionID, { timeout, data: dataMap, attempt: 0 })
   }
 
   export async function remove(sessionID: SessionID) {

@@ -432,29 +432,32 @@ export namespace Provider {
       }
     }
 
-    await Promise.all(
-      (await Plugin.list())
-        .filter((plugin) => {
-          if (!plugin.auth) return false
-          const providerID = ProviderID.make(plugin.auth.provider)
-          return !disabled.has(providerID)
-        })
-        .map(async (plugin) => {
-          try {
-            const providerID = ProviderID.make(plugin.auth!.provider)
-            const auth = await Auth.get(providerID)
-            if (!auth) return
-            if (!plugin.auth!.loader) return
-            const options = await plugin.auth!.loader(() => Auth.get(providerID) as any, database[plugin.auth!.provider])
-            const opts = options ?? {}
-            const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
-            mergeProvider(providerID, patch)
-          } catch (err) {
-            log.warn("plugin auth loader failed", { provider: plugin.auth!.provider, error: err })
-            delete providers[ProviderID.make(plugin.auth!.provider)]
-          }
-        }),
-    )
+    const plugins = await Plugin.list()
+    const authGroups = new Map<string, typeof plugins>()
+    for (const plugin of plugins) {
+      if (!plugin.auth) continue
+      const providerID = ProviderID.make(plugin.auth.provider)
+      if (disabled.has(providerID)) continue
+        const group = authGroups.get(plugin.auth.provider) ?? []
+        group.push(plugin)
+        authGroups.set(plugin.auth.provider, group)
+    }
+    for (const plugins of authGroups.values()) {
+      for (const plugin of plugins) {
+        try {
+          const providerID = ProviderID.make(plugin.auth!.provider)
+          const auth = await Auth.get(providerID)
+          if (!auth) continue
+          if (!plugin.auth!.loader) continue
+          const options = await plugin.auth!.loader(() => Auth.get(providerID) as any, database[plugin.auth!.provider])
+          const opts = options ?? {}
+          const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
+          mergeProvider(providerID, patch)
+        } catch (err) {
+          log.warn("plugin auth loader failed", { provider: plugin.auth!.provider, error: err })
+        }
+      }
+    }
 
     await Promise.all(
       Object.entries(CUSTOM_LOADERS).map(async ([id, fn]) => {

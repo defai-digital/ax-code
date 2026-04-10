@@ -130,6 +130,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         let remainder = ""
         let emitted = false
         const raw: string[] = []
+        proc.stderr!.resume()
         proc.stdout!.on("data", (chunk: Buffer) => {
           if (closed()) return
           const text = remainder + chunk.toString()

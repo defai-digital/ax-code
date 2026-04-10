@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { MessageID, SessionID } from "../../src/session/schema"
 import { TaskTool } from "../../src/tool/task"
 import { tmpdir } from "../fixture/fixture"
 
@@ -43,6 +45,43 @@ describe("tool.task", () => {
         expect(explore).toBeGreaterThan(alpha)
         expect(general).toBeGreaterThan(explore)
         expect(zebra).toBeGreaterThan(general)
+      },
+    })
+  })
+
+  test("rejects task calls beyond the max nesting depth", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let parent: SessionID | undefined
+        for (let i = 0; i < 6; i++) {
+          const next = await Session.create({ parentID: parent })
+          parent = next.id
+        }
+
+        const tool = await TaskTool.init()
+        await expect(
+          tool.execute(
+            {
+              description: "deep task",
+              prompt: "do work",
+              subagent_type: "general",
+            },
+            {
+              sessionID: parent!,
+              messageID: MessageID.make(""),
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          ),
+        ).rejects.toThrow("Maximum subagent nesting depth")
       },
     })
   })

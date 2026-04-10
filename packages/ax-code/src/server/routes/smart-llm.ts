@@ -1,12 +1,9 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
-import path from "path"
-import fs from "fs/promises"
-import { Instance } from "../../project/instance"
-import { Filesystem } from "../../util/filesystem"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
+import { readProjectConfig, updateProjectConfig } from "./project-config"
 
 const log = Log.create({ service: "smart-llm" })
 
@@ -36,10 +33,7 @@ export const SmartLlmRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const filepath = path.join(Instance.directory, "ax-code.json")
-        const config = await Filesystem.readText(filepath)
-          .then((t) => JSON.parse(t))
-          .catch(() => ({}))
+        const config = await readProjectConfig()
         const enabled = config?.routing?.llm === true || process.env["AX_CODE_SMART_LLM"] === "true"
         process.env["AX_CODE_SMART_LLM"] = String(enabled)
         return c.json({ enabled })
@@ -66,28 +60,14 @@ export const SmartLlmRoutes = lazy(() =>
       async (c) => {
         const { enabled } = c.req.valid("json")
         process.env["AX_CODE_SMART_LLM"] = String(enabled)
-        const filepath = path.join(Instance.directory, "ax-code.json")
-        const existing = await Filesystem.readText(filepath)
-          .then((t) => {
-            const parsed = JSON.parse(t)
-            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-              log.warn("ax-code.json contained non-object value, resetting to empty object")
-              return {}
-            }
-            return parsed
-          })
-          .catch(() => ({}))
-        if (!existing.routing) existing.routing = {}
-        existing.routing.llm = enabled
-        const tmp = filepath + ".tmp"
         let persisted = true
-        await Filesystem.writeJson(tmp, existing)
-          .then(() => fs.rename(tmp, filepath))
-          .catch((err) => {
-            persisted = false
-            log.warn("failed to persist smart-llm config", { error: err instanceof Error ? err.message : String(err) })
-            fs.unlink(tmp).catch(() => {})
-          })
+        await updateProjectConfig((config) => {
+          config.routing ??= {}
+          config.routing.llm = enabled
+        }).catch((err) => {
+          persisted = false
+          log.warn("failed to persist smart-llm config", { error: err instanceof Error ? err.message : String(err) })
+        })
         log.info("smart LLM routing changed", { enabled, persisted })
         if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
         return c.json({ enabled })

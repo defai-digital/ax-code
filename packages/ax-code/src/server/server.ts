@@ -220,6 +220,19 @@ function quote(value: string) {
   return /\s/.test(value) ? JSON.stringify(value) : value
 }
 
+function clean(value: string) {
+  return value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim()
+}
+
+function cleanExtra(value: unknown): unknown {
+  if (typeof value === "string") return clean(value)
+  if (Array.isArray(value)) return value.map(cleanExtra)
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [clean(key), cleanExtra(item)]))
+  }
+  return value
+}
+
 async function packageManager(cwd: string, root: string) {
   for await (const file of Filesystem.up({
     targets: ["pnpm-lock.yaml", "bun.lockb", "bun.lock", "yarn.lock", "package-lock.json"],
@@ -416,6 +429,7 @@ async function contextChecks(input: { root: string; dir: string }) {
 
 export namespace Server {
   const log = Log.create({ service: "server" })
+  const rate = new Map<string, { count: number; reset: number }>()
 
   export const Default = lazy(() => createApp({}))
 
@@ -456,6 +470,31 @@ export namespace Server {
         if (!password) return next()
         const username = Flag.AX_CODE_SERVER_USERNAME ?? "ax-code"
         return basicAuth({ username, password })(c, next)
+      })
+      .use(async (c, next) => {
+        if (c.req.method === "OPTIONS") return next()
+        const origin = c.req.header("origin")
+        if (origin && ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) {
+          const request = new URL(c.req.url).origin
+          if (origin !== request && !opts?.cors?.includes(origin)) {
+            return c.json({ error: "origin mismatch" }, 403)
+          }
+        }
+        const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "local"
+        const key = `${ip}:${c.req.method}:${c.req.path.startsWith("/session/") ? "/session" : c.req.path}`
+        const now = Date.now()
+        const current = rate.get(key)
+        const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)
+        const limit = c.req.path.includes("/prompt_async") || c.req.path.endsWith("/shell") ? 30 : mutating ? 120 : 600
+        if (!current || current.reset <= now) {
+          rate.set(key, { count: 1, reset: now + 60_000 })
+          return next()
+        }
+        if (current.count >= limit) {
+          return c.json({ error: "too many requests" }, 429)
+        }
+        current.count++
+        return next()
       })
       .use(async (c, next) => {
         const skipLogging = c.req.path === "/log"
@@ -808,27 +847,32 @@ export namespace Server {
               .meta({ description: "Additional metadata for the log entry" }),
           }),
         ),
-        async (c) => {
-          const { service, level, message, extra } = c.req.valid("json")
-          const logger = Log.create({ service })
+      async (c) => {
+        const { service, level, message, extra } = c.req.valid("json")
+        const logger = Log.create({ service })
+        const text = clean(message)
+        const metadata = {
+          source: "client",
+          ...(extra ? { extra: cleanExtra(extra) } : {}),
+        }
 
-          switch (level) {
-            case "debug":
-              logger.debug(message, extra)
-              break
-            case "info":
-              logger.info(message, extra)
-              break
-            case "error":
-              logger.error(message, extra)
-              break
-            case "warn":
-              logger.warn(message, extra)
-              break
-          }
+        switch (level) {
+          case "debug":
+            logger.debug(text, metadata)
+            break
+          case "info":
+            logger.info(text, metadata)
+            break
+          case "error":
+            logger.error(text, metadata)
+            break
+          case "warn":
+            logger.warn(text, metadata)
+            break
+        }
 
-          return c.json(true)
-        },
+        return c.json(true)
+      },
       )
       .get(
         "/context",

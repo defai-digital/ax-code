@@ -136,4 +136,33 @@ describe("tool.webfetch", () => {
       },
     )
   })
+
+  test("re-validates redirect targets before the next hop", async () => {
+    let calls = 0
+
+    await withFetch(
+      async () => {
+        calls++
+        if (calls === 1) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: "http://127.0.0.1/private" },
+          })
+        }
+        return new Response("should not happen", { status: 200 })
+      },
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            await expect(
+              webfetch.execute({ url: "https://example.com/file.txt", format: "text" }, ctx),
+            ).rejects.toThrow()
+            expect(calls).toBe(1)
+          },
+        })
+      },
+    )
+  })
 })

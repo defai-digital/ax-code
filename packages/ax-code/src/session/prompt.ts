@@ -763,7 +763,7 @@ export namespace SessionPrompt {
         processor,
         bypassAgentCheck,
         messages: msgs,
-        isolation: Isolation.resolve(cfg.isolation, Instance.directory),
+        isolation: Isolation.resolve(cfg.isolation, Instance.directory, Instance.worktree),
       })
 
       // Inject StructuredOutput tool if JSON schema mode enabled
@@ -919,7 +919,7 @@ export namespace SessionPrompt {
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
-    const isolation = input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory)
+    const isolation = input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory, Instance.worktree)
     // Cache transformed schemas across steps — key: "toolId:npm"
     if (!_schemaCache) _schemaCache = new Map()
     const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
@@ -2008,8 +2008,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       windowsHide: process.platform === "win32",
       stdio: ["ignore", "pipe", "pipe"],
       env: {
-        ...Env.sanitize(process.env),
-        ...shellEnv.env,
+        ...Env.sanitize({
+          ...Env.sanitize(process.env),
+          ...shellEnv.env,
+        }),
         TERM: "dumb",
       },
     })
@@ -2062,21 +2064,38 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         void kill()
       }
     }, SHELL_TIMEOUT)
+    let abortTimer: ReturnType<typeof setTimeout> | undefined
 
     await new Promise<void>((resolve, reject) => {
+      if (abort.aborted) {
+        abortTimer = setTimeout(() => {
+          if (!exited) reject(new Error("Shell abort timed out while waiting for process to exit"))
+        }, 5_000)
+      }
       proc.once("close", (code) => {
         exited = true
         exitCode = code ?? 0
         clearTimeout(shellTimer)
+        if (abortTimer) clearTimeout(abortTimer)
         abort.removeEventListener("abort", abortHandler)
         resolve()
       })
       proc.once("error", (err) => {
         exited = true
         clearTimeout(shellTimer)
+        if (abortTimer) clearTimeout(abortTimer)
         abort.removeEventListener("abort", abortHandler)
         reject(err)
       })
+      abort.addEventListener(
+        "abort",
+        () => {
+          abortTimer = setTimeout(() => {
+            if (!exited) reject(new Error("Shell abort timed out while waiting for process to exit"))
+          }, 5_000)
+        },
+        { once: true },
+      )
     })
 
     if (aborted) {

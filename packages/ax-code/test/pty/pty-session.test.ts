@@ -89,4 +89,53 @@ describe("pty", () => {
       },
     })
   })
+
+  test("does not append login args to non-shell commands", async () => {
+    await using dir = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: dir.path,
+      fn: async () => {
+        const info = await Pty.create({ command: "ssh", args: ["-V"], title: "ssh" })
+        try {
+          expect(info.args).toEqual(["-V"])
+        } finally {
+          await Pty.remove(info.id)
+        }
+      },
+    })
+  })
+
+  test("ignores websocket writes after the process exits", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: dir.path,
+      fn: async () => {
+        const info = await Pty.create({
+          command: "/usr/bin/env",
+          args: ["sh", "-c", "sleep 0.1"],
+          title: "sleep",
+        })
+
+        try {
+          const conn = await Pty.connect(
+            info.id,
+            {
+              readyState: 1,
+              send() {},
+              close() {},
+            } as any,
+          )
+
+          await wait(() => pick([{ type: "exited", id: info.id }], info.id).includes("exited")).catch(() => sleep(150))
+          expect(() => conn?.onMessage("hello")).not.toThrow()
+        } finally {
+          await Pty.remove(info.id)
+        }
+      },
+    })
+  })
 })

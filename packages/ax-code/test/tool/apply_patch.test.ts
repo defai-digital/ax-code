@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test, spyOn } from "bun:test"
 import path from "path"
 import * as fs from "fs/promises"
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
@@ -386,6 +386,38 @@ describe("tool.apply_patch freeform", () => {
 
         const createdPath = path.join(fixture.path, "created.txt")
         await expect(fs.readFile(createdPath, "utf-8")).rejects.toThrow()
+      },
+    })
+  })
+
+  test("rolls back earlier writes when a later apply fails", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const first = path.join(fixture.path, "first.txt")
+        const second = path.join(fixture.path, "second.txt")
+        await writeAndTrack(first, "one\n")
+        await writeAndTrack(second, "two\n")
+
+        const originalWriteFile = fs.writeFile.bind(fs)
+        const writeSpy = spyOn(fs, "writeFile").mockImplementation(async (filePath: any, data: any, options?: any) => {
+          if (String(filePath) === second) throw new Error("disk full")
+          await originalWriteFile(filePath, data, options)
+        })
+
+        try {
+          const patchText =
+            "*** Begin Patch\n*** Update File: first.txt\n@@\n-one\n+ONE\n*** Update File: second.txt\n@@\n-two\n+TWO\n*** End Patch"
+
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("disk full")
+          expect(await fs.readFile(first, "utf-8")).toBe("one\n")
+          expect(await fs.readFile(second, "utf-8")).toBe("two\n")
+        } finally {
+          writeSpy.mockRestore()
+        }
       },
     })
   })

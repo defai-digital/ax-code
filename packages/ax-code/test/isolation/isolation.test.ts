@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import path from "path"
+import fs from "fs/promises"
 import { Isolation } from "../../src/isolation"
+import { tmpdir } from "../fixture/fixture"
 
 const root = "/tmp/project"
 const worktree = "/tmp/worktree"
@@ -56,6 +58,13 @@ describe("isolation.assertWrite", () => {
   test("denies writes to protected paths", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
     expect(() => Isolation.assertWrite(state, path.join(root, ".git/config"), root, worktree)).toThrow(
+      "Path is protected by isolation policy",
+    )
+  })
+
+  test("denies writes to protected paths in the worktree root", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root, worktree)
+    expect(() => Isolation.assertWrite(state, path.join(worktree, ".git/config"), root, worktree)).toThrow(
       "Path is protected by isolation policy",
     )
   })
@@ -120,5 +129,20 @@ describe("isolation.assertBash", () => {
     expect(() => Isolation.assertBash(state, root, root, worktree, ["/tmp/outside.txt"])).toThrow(
       "Bash command targets path outside workspace boundary",
     )
+  })
+
+  test("denies bash when a workspace symlink escapes the boundary", async () => {
+    await using tmp = await tmpdir()
+    const dir = path.join(tmp.path, "project")
+    const tree = path.join(tmp.path, "worktree")
+    const outside = path.join(tmp.path, "outside")
+    await fs.mkdir(path.join(dir, "pkg"), { recursive: true })
+    await fs.mkdir(path.join(tree, ".git"), { recursive: true })
+    await fs.mkdir(outside, { recursive: true })
+    await fs.symlink(outside, path.join(dir, "pkg", "link"))
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, dir, tree)
+    expect(() =>
+      Isolation.assertBash(state, path.join(dir, "pkg"), dir, tree, [path.join(dir, "pkg", "link")])
+    ).toThrow("Bash command targets path outside workspace boundary")
   })
 })

@@ -197,3 +197,36 @@ test("state() returns existing state when one is saved", async () => {
     },
   })
 })
+
+test("startAuth reuses an existing saved oauth state", async () => {
+  const { McpAuth } = await import("../../src/mcp/auth")
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          mcp: {
+            "test-oauth": {
+              type: "remote",
+              url: "https://example.com/mcp",
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const state = "existing-oauth-state"
+      await McpAuth.updateOAuthState("test-oauth", state)
+
+      await MCP.startAuth("test-oauth")
+
+      expect(await McpAuth.getOAuthState("test-oauth")).toBe(state)
+    },
+  })
+})

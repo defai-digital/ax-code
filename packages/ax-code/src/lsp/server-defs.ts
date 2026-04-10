@@ -570,7 +570,7 @@ export const FSharp: Info = {
 
 export const SourceKit: Info = {
   id: "sourcekit-lsp",
-  extensions: [".swift", ".objc", "objcpp"],
+  extensions: [".swift", ".m", ".mm"],
   root: NearestRoot(["Package.swift", "*.xcodeproj", "*.xcworkspace"]),
   async spawn(root) {
     // Check if sourcekit-lsp is available in the PATH
@@ -1345,7 +1345,7 @@ export const BashLS: Info = {
 export const TerraformLS: Info = {
   id: "terraform",
   extensions: [".tf", ".tfvars"],
-  root: NearestRoot([".terraform.lock.hcl", "terraform.tfstate", "*.tf"]),
+  root: NearestRoot([".terraform.lock.hcl", "terraform.tfstate", "main.tf"]),
   async spawn(root) {
     let bin = which("terraform-ls", {
       PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
@@ -1652,7 +1652,7 @@ export const Tinymist: Info = {
 export const HLS: Info = {
   id: "haskell-language-server",
   extensions: [".hs", ".lhs"],
-  root: NearestRoot(["stack.yaml", "cabal.project", "hie.yaml", "*.cabal"]),
+  root: NearestRoot(["stack.yaml", "cabal.project", "hie.yaml", "package.cabal"]),
   async spawn(root) {
     const bin = which("haskell-language-server-wrapper")
     if (!bin) {
@@ -1670,7 +1670,7 @@ export const HLS: Info = {
 export const JuliaLS: Info = {
   id: "julials",
   extensions: [".jl"],
-  root: NearestRoot(["Project.toml", "Manifest.toml", "*.jl"]),
+  root: NearestRoot(["Project.toml", "Manifest.toml"]),
   async spawn(root) {
     const julia = which("julia")
     if (!julia) {

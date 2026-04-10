@@ -1,5 +1,6 @@
 import { abortAfterAny } from "../util/abort"
 import { EXA_BASE_URL, EXA_ENDPOINT } from "@/constants/network"
+import { Ssrf } from "@/util/ssrf"
 
 interface McpResponse {
   jsonrpc: string
@@ -10,6 +11,8 @@ interface McpResponse {
     }>
   }
 }
+
+const MAX_RESPONSE_BYTES = 1024 * 1024
 
 /**
  * Shared fetch logic for Exa MCP tools (websearch and codesearch).
@@ -33,16 +36,28 @@ export async function fetchExaTool(config: {
       },
       body: JSON.stringify(config.request),
       signal,
+      redirect: "manual",
     })
 
     clearTimeout()
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location")
+      if (!location) throw new Error(`${config.errorPrefix}: redirect with no location`)
+      await Ssrf.assertPublicUrl(new URL(location, `${EXA_BASE_URL}${EXA_ENDPOINT}`).toString(), "exa-fetch")
+      throw new Error(`${config.errorPrefix}: redirect refused`)
+    }
 
     if (!response.ok) {
       const errorText = await response.text()
       throw new Error(`${config.errorPrefix} (${response.status}): ${errorText}`)
     }
 
-    const responseText = await response.text()
+    const body = await response.bytes()
+    if (body.length > MAX_RESPONSE_BYTES) {
+      throw new Error(`${config.errorPrefix}: response too large`)
+    }
+    const responseText = new TextDecoder().decode(body)
 
     // Parse SSE response. Collect every content-bearing event and
     // return the LAST one. Previously this returned on the first

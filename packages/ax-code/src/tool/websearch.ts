@@ -12,7 +12,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
     },
     parameters: z.object({
       query: z.string().describe("Websearch query"),
-      numResults: z.number().optional().describe("Number of search results to return (default: 8)"),
+      numResults: z.number().int().min(1).max(25).optional().describe("Number of search results to return (default: 8)"),
       livecrawl: z
         .enum(["fallback", "preferred"])
         .optional()
@@ -27,6 +27,9 @@ export const WebSearchTool = Tool.define("websearch", async () => {
         ),
       contextMaxCharacters: z
         .number()
+        .int()
+        .min(1_000)
+        .max(200_000)
         .optional()
         .describe("Maximum characters for context string optimized for LLMs (default: 10000)"),
     }),
@@ -58,7 +61,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
               type: params.type || "auto",
               numResults: params.numResults ?? EXA_DEFAULT_NUM_RESULTS,
               livecrawl: params.livecrawl || "fallback",
-              contextMaxCharacters: params.contextMaxCharacters,
+              contextMaxCharacters: params.contextMaxCharacters ?? 10_000,
             },
           },
         },

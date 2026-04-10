@@ -273,6 +273,31 @@ async function withRetry<T>(
   throw lastError
 }
 
+function withAbort<T>(promise: Promise<T>, signal: AbortSignal, onAbort?: () => void): Promise<T> {
+  if (signal.aborted) {
+    onAbort?.()
+    return Promise.reject(new Error("Operation aborted"))
+  }
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort)
+      onAbort?.()
+      reject(new Error("Operation aborted"))
+    }
+    signal.addEventListener("abort", abort, { once: true })
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", abort)
+        resolve(value)
+      },
+      (err) => {
+        signal.removeEventListener("abort", abort)
+        reject(err)
+      },
+    )
+  })
+}
+
 // ============================================================
 // ERROR CLASSIFICATION (Enhancement #1)
 // ============================================================
@@ -389,12 +414,20 @@ function createInProcessClient(directory: string): OpencodeClient {
 // EVENT COLLECTION
 // ============================================================
 
+type EventStream = Awaited<ReturnType<OpencodeClient["event"]["subscribe"]>>
+
+async function closeEvents(events: EventStream) {
+  if (typeof (events.stream as any).return === "function") {
+    await (events.stream as any).return()
+  }
+}
+
 async function collectResult(
   sdk: OpencodeClient,
+  events: EventStream,
   sessionID: string,
   hooks?: AgentOptions["hooks"],
 ): Promise<RunResult> {
-  const events = await sdk.event.subscribe()
   const toolCalls: ToolCallInfo[] = []
   let text = ""
   let agent = ""
@@ -475,8 +508,7 @@ async function collectResult(
     }
   }
   } finally {
-    // Ensure SSE stream is closed — prevents connection leak on timeout
-    if (typeof (events.stream as any).return === "function") (events.stream as any).return()
+    await closeEvents(events)
   }
 
   return { text, agent, model: modelInfo, usage, toolCalls, sessionID, messageID }
@@ -484,10 +516,10 @@ async function collectResult(
 
 async function* streamEvents(
   sdk: OpencodeClient,
+  events: EventStream,
   sessionID: string,
   hooks?: AgentOptions["hooks"],
 ): AsyncGenerator<StreamEvent> {
-  const events = await sdk.event.subscribe()
   const toolCalls: ToolCallInfo[] = []
   let text = ""
   let agent = ""
@@ -613,48 +645,67 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
     async run(message: string, options?: RunOptions): Promise<RunResult> {
       const model = options?.model ?? (opts.model && opts.provider ? { providerID: opts.provider, modelID: opts.model } : undefined)
 
-      // Subscribe to events FIRST, then send prompt exactly once.
-      // Retries only re-collect the result, never re-send the prompt.
-      let prompted = false
-      const collect = () => {
-        const result = collectResult(sdk, sessionID, opts.hooks)
-        if (!prompted) {
-          prompted = true
-          sdk.session.prompt({
+      const collect = async () => {
+        const events = await sdk.event.subscribe()
+        const result = collectResult(sdk, events, sessionID, opts.hooks)
+        try {
+          await sdk.session.prompt({
             sessionID,
             agent: options?.agent ?? opts.agent,
             model,
             variant: options?.variant ?? opts.variant,
             parts: [{ type: "text", text: message }],
-          }).catch((err: unknown) => {
-            opts.hooks?.onError?.(err instanceof Error ? err : new Error(String(err)))
           })
+        } catch (err) {
+          await closeEvents(events)
+          throw err instanceof Error ? err : new Error(String(err))
         }
         return result
       }
       const resultPromise = opts.maxRetries
         ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry)
         : collect()
+      const abortable = options?.signal
+        ? withAbort(resultPromise, options.signal, () => {
+            void sdk.session.abort({ sessionID }).catch(() => {})
+          })
+        : resultPromise
 
       if (options?.timeout) {
         const timeoutMs = options.timeout
-        return withSdkTimeout(resultPromise, timeoutMs, () => new TimeoutError(timeoutMs, "agent.run"))
+        return withSdkTimeout(abortable, timeoutMs, () => new TimeoutError(timeoutMs, "agent.run"))
       }
-      return resultPromise
+      return abortable
     },
 
     stream(message: string, options?: RunOptions): StreamHandle {
       const model = options?.model ?? (opts.model && opts.provider ? { providerID: opts.provider, modelID: opts.model } : undefined)
-      const rawStream = streamEvents(sdk, sessionID, opts.hooks)
-      sdk.session.prompt({
-        sessionID,
-        agent: options?.agent ?? opts.agent,
-        model,
-        variant: options?.variant ?? opts.variant,
-        parts: [{ type: "text", text: message }],
-      }).catch((err: unknown) => {
-        opts.hooks?.onError?.(err instanceof Error ? err : new Error(String(err)))
-      })
+      const rawStream = (async function* () {
+        const events = await sdk.event.subscribe()
+        const abort = () => {
+          void sdk.session.abort({ sessionID }).catch(() => {})
+        }
+        options?.signal?.addEventListener("abort", abort, { once: true })
+        try {
+          await sdk.session.prompt({
+            sessionID,
+            agent: options?.agent ?? opts.agent,
+            model,
+            variant: options?.variant ?? opts.variant,
+            parts: [{ type: "text", text: message }],
+          })
+        } catch (err) {
+          await closeEvents(events)
+          yield { type: "error", error: err instanceof Error ? err : new Error(String(err)) } satisfies StreamEvent
+          return
+        }
+        try {
+          yield* streamEvents(sdk, events, sessionID, opts.hooks)
+        } finally {
+          options?.signal?.removeEventListener("abort", abort)
+          await closeEvents(events)
+        }
+      })()
       return createStreamHandle(rawStream)
     },
 
@@ -835,7 +886,8 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
       const session = await sdk.session.create()
       const sessionID = (session.data as any)?.id
       if (!sessionID) throw new Error("Failed to create session")
-      const resultPromise = collectResult(sdk, sessionID, opts.hooks)
+      const events = await sdk.event.subscribe()
+      const resultPromise = collectResult(sdk, events, sessionID, opts.hooks)
       await sdk.session.prompt({
         sessionID,
         agent: "build",

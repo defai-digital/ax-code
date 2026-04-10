@@ -47,7 +47,7 @@ export namespace JsonMigration {
 
     // Optimize SQLite for bulk inserts
     sqlite.exec("PRAGMA journal_mode = WAL")
-    sqlite.exec("PRAGMA synchronous = OFF")
+    sqlite.exec("PRAGMA synchronous = NORMAL")
     sqlite.exec("PRAGMA cache_size = 10000")
     sqlite.exec("PRAGMA temp_store = MEMORY")
     const stats = {
@@ -149,6 +149,7 @@ export namespace JsonMigration {
     progress?.({ current, total, label: "starting" })
 
     sqlite.exec("BEGIN TRANSACTION")
+    try {
 
     // Migrate projects first (no FK deps)
     // Derive all IDs from file paths, not JSON content
@@ -402,7 +403,11 @@ export namespace JsonMigration {
       log.warn("skipped orphaned session shares", { count: orphans.shares })
     }
 
-    sqlite.exec("COMMIT")
+      sqlite.exec("COMMIT")
+    } catch (error) {
+      sqlite.exec("ROLLBACK")
+      throw error
+    }
 
     log.info("json migration complete", {
       projects: stats.projects,

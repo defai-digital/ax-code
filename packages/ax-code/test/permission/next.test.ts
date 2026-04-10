@@ -258,6 +258,49 @@ test("evaluate - no matching pattern returns ask", () => {
   expect(result.action).toBe("ask")
 })
 
+test("ask - interactive-only permissions still honor explicit deny rules", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(
+        Permission.ask({
+          sessionID: SessionID.make("ses_test"),
+          permission: "isolation_escalation",
+          patterns: ["*"],
+          metadata: {},
+          always: ["*"],
+          ruleset: [{ permission: "isolation_escalation", pattern: "*", action: "deny" }],
+        }),
+      ).rejects.toThrow("prevents you from using this specific tool call")
+    },
+  })
+})
+
+test("loadPolicy - malformed policy fails closed", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Bun.write(`${tmp.path}/.ax-code/policy.json`, "{")
+
+  const ruleset = await Permission.loadPolicy(tmp.path)
+
+  expect(ruleset).toEqual([{ permission: "*", pattern: "*", action: "deny" }])
+})
+
+test("fromPolicy - filters rules by agent name", () => {
+  const rules = Permission.fromPolicy(
+    {
+      version: "1",
+      rules: [
+        { agent: "build", tools: ["bash"], files: ["*"], action: "allow" },
+        { agent: "debug", tools: ["edit"], files: ["src/*"], action: "deny" },
+      ],
+    },
+    "build",
+  )
+
+  expect(rules).toEqual([{ permission: "bash", pattern: "*", action: "allow" }])
+})
+
 test("evaluate - empty rules array returns ask", () => {
   const result = Permission.evaluate("bash", "rm", [])
   expect(result.action).toBe("ask")

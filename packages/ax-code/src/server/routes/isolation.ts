@@ -1,14 +1,12 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
-import path from "path"
-import fs from "fs/promises"
 import { Config } from "../../config/config"
 import { Isolation } from "../../isolation"
 import { Instance } from "../../project/instance"
-import { Filesystem } from "../../util/filesystem"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
+import { updateProjectConfig } from "./project-config"
 
 const log = Log.create({ service: "isolation" })
 
@@ -43,7 +41,7 @@ export const IsolationRoutes = lazy(() =>
       }),
       async (c) => {
         const cfg = await Config.get()
-        const state = Isolation.resolve(cfg.isolation, Instance.directory)
+        const state = Isolation.resolve(cfg.isolation, Instance.directory, Instance.worktree)
         return c.json({ mode: state.mode, network: state.network })
       },
     )
@@ -69,24 +67,15 @@ export const IsolationRoutes = lazy(() =>
         const { mode } = c.req.valid("json")
         process.env["AX_CODE_ISOLATION_MODE"] = mode
         const network = mode === "full-access"
-        // Write to config file directly (no Instance.dispose) for persistence across restarts
-        const filepath = path.join(Instance.directory, "ax-code.json")
-        const existing = await Filesystem.readText(filepath).then((t) => {
-          const parsed = JSON.parse(t)
-          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
-        }).catch(() => ({}))
-        existing.isolation = { mode, network }
-        const tmp = filepath + ".tmp"
         let persisted = true
-        await Filesystem.writeJson(tmp, existing)
-          .then(() => fs.rename(tmp, filepath))
-          .catch((err) => {
-            persisted = false
-            log.warn("failed to persist isolation config", { error: err instanceof Error ? err.message : String(err) })
-            fs.unlink(tmp).catch(() => {})
-          })
+        await updateProjectConfig((config) => {
+          config.isolation = { mode, network }
+        }).catch((err) => {
+          persisted = false
+          log.warn("failed to persist isolation config", { error: err instanceof Error ? err.message : String(err) })
+        })
         if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
-        const state = Isolation.resolve({ mode, network }, Instance.directory)
+        const state = Isolation.resolve({ mode, network }, Instance.directory, Instance.worktree)
         return c.json({ mode: state.mode, network: state.network })
       },
     ),

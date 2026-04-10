@@ -12,6 +12,7 @@ import { Flag } from "../flag/flag"
 import { which } from "../util/which"
 import { spawn } from "./launch"
 import { Archive } from "../util/archive"
+import { Glob } from "../util/glob"
 
 export const log = Log.create({ service: "lsp.server" })
 
@@ -309,24 +310,42 @@ export interface ServerInfo {
 
 export const NearestRoot = (includePatterns: string[], excludePatterns?: string[]): RootFunction => {
   return async (file) => {
-    if (excludePatterns) {
-      const excludedFiles = Filesystem.up({
-        targets: excludePatterns,
-        start: path.dirname(file),
-        stop: Instance.directory,
-      })
-      const excluded = await excludedFiles.next()
-      await excludedFiles.return()
-      if (excluded.value) return undefined
+    const hasGlob = (pattern: string) => /[*?[\]{}]/.test(pattern)
+    let current = path.dirname(file)
+    while (true) {
+      if (excludePatterns) {
+        for (const pattern of excludePatterns) {
+          if (hasGlob(pattern)) {
+            const matches = await Glob.scan(pattern, {
+              cwd: current,
+              absolute: true,
+              include: "all",
+              dot: true,
+            }).catch(() => [])
+            if (matches.length > 0) return undefined
+            continue
+          }
+          if (await Filesystem.exists(path.join(current, pattern))) return undefined
+        }
+      }
+      for (const pattern of includePatterns) {
+        if (hasGlob(pattern)) {
+          const matches = await Glob.scan(pattern, {
+            cwd: current,
+            absolute: true,
+            include: "all",
+            dot: true,
+          }).catch(() => [])
+          if (matches.length > 0) return current
+          continue
+        }
+        if (await Filesystem.exists(path.join(current, pattern))) return current
+      }
+      if (current === Instance.directory) break
+      const parent = path.dirname(current)
+      if (parent === current) break
+      current = parent
     }
-    const files = Filesystem.up({
-      targets: includePatterns,
-      start: path.dirname(file),
-      stop: Instance.directory,
-    })
-    const first = await files.next()
-    await files.return()
-    if (!first.value) return Instance.directory
-    return path.dirname(first.value)
+    return Instance.directory
   }
 }

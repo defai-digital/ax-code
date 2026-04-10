@@ -631,6 +631,79 @@ describe("acp.agent event subscription", () => {
     })
   })
 
+  test("drops queued replay duplicates with identical bash output", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, controller, sessionUpdates, stop, sdk } = createFakeAgent()
+        const cwd = "/tmp/opencode-acp-test"
+        const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+        const input = { command: "echo hi", description: "run command" }
+
+        let resolveMessages!: (value: { data: any[] }) => void
+        let calls = 0
+        sdk.session.messages = () => {
+          calls++
+          if (calls > 1) return Promise.resolve({ data: [] })
+          return new Promise((resolve) => {
+            resolveMessages = resolve as typeof resolveMessages
+          })
+        }
+
+        const load = agent.loadSession({ sessionId, cwd, mcpServers: [] } as any)
+        while (!resolveMessages) {
+          await new Promise((r) => setTimeout(r, 1))
+        }
+        controller.push(
+          toolEvent(sessionId, cwd, {
+            callID: "call_1",
+            tool: "bash",
+            status: "running",
+            input,
+            metadata: { output: "hi\n" },
+          }),
+        )
+        resolveMessages({
+          data: [
+            {
+              info: {
+                role: "assistant",
+                sessionID: sessionId,
+              },
+              parts: [
+                {
+                  type: "tool",
+                  callID: "call_1",
+                  tool: "bash",
+                  state: {
+                    status: "running",
+                    input,
+                    metadata: { output: "hi\n" },
+                    time: { start: Date.now() },
+                  },
+                },
+              ],
+            },
+          ],
+        })
+
+        await load
+        await new Promise((r) => setTimeout(r, 20))
+
+        const types = sessionUpdates
+          .filter((u) => u.sessionId === sessionId)
+          .map((u) => u.update)
+          .filter((u) => "toolCallId" in u && u.toolCallId === "call_1")
+          .map((u) => u.sessionUpdate)
+          .filter((u) => u === "tool_call" || u === "tool_call_update")
+
+        expect(types).toEqual(["tool_call", "tool_call_update"])
+        stop()
+      },
+    })
+  })
+
   test("clears bash snapshot marker on pending state", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

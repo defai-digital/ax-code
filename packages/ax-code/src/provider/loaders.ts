@@ -6,6 +6,7 @@ import { Env } from "../util/env"
 import { CliLanguageModel } from "./cli/cli-language-model"
 import { claudeCodeParser, geminiCliParser, codexCliParser, type CliOutputParser } from "./cli/parser"
 import { resolveCliModel } from "./cli/resolve"
+import { URL } from "url"
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
 export type CustomVarsLoader = (options: Record<string, any>) => Record<string, string>
@@ -21,7 +22,10 @@ export type CustomLoader = (provider: Provider.Info) => Promise<{
 function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
   return async () => {
     const host = process.env[envKey] || defaultHost
-    const reachable = await Ssrf.pinnedFetch(`${host}/api/tags`, { signal: AbortSignal.timeout(2000) })
+    const url = new URL(host)
+    const local = ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
+    const fetcher = local ? fetch : Ssrf.pinnedFetch
+    const reachable = await fetcher(`${host}/api/tags`, { signal: AbortSignal.timeout(2000) })
       .then((r) => r.ok)
       .catch(() => false)
 
@@ -29,7 +33,7 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
       autoload: reachable,
       options: reachable ? { baseURL: `${host}/v1` } : {},
       async discoverModels() {
-        const res = await Ssrf.pinnedFetch(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(() => null)
+        const res = await fetcher(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(() => null)
         if (!res?.ok) return {}
         const data = (await res.json()) as { models?: { name: string }[] }
         const models: Record<string, Provider.Model> = {}

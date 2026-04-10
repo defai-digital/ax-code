@@ -653,16 +653,27 @@ export namespace Session {
 
   export const remove = fn(SessionID.zod, async (sessionID) => {
     const session = await get(sessionID)
-    // Collect all descendants recursively, not just immediate children
     const allDescendants: Info[] = []
-    const queue = [sessionID]
-    while (queue.length > 0) {
-      const parentID = queue.pop()!
-      const kids = await children(parentID)
-      for (const child of kids) {
-        allDescendants.push(child)
-        queue.push(child.id)
+    Database.use((db) => {
+      const ids = [sessionID]
+      while (ids.length > 0) {
+        const parentID = ids.pop()!
+        const rows = db
+          .select()
+          .from(SessionTable)
+          .where(and(eq(SessionTable.project_id, Instance.project.id), eq(SessionTable.parent_id, parentID)))
+          .all()
+        for (const row of rows) {
+          const next = parseRow(row)
+          if (!next) continue
+          allDescendants.push(next)
+          ids.push(next.id)
+        }
       }
+    })
+    const items = [...allDescendants, session]
+    for (const item of items) {
+      await unshare(item.id).catch((e) => log.warn("session unshare failed", { sessionID: item.id, error: e }))
     }
     Database.transaction((db) => {
       for (const desc of allDescendants) {
@@ -678,7 +689,6 @@ export namespace Session {
     }
     SelfCorrection.reset(sessionID)
     await SessionPrompt.cancel(sessionID).catch(() => {})
-    await unshare(sessionID).catch((e) => log.warn("session unshare failed", { error: e }))
   })
 
   /**
@@ -801,9 +811,16 @@ export namespace Session {
       messageID: MessageID.zod,
       partID: PartID.zod,
       field: z.string(),
-      delta: z.string(),
+      delta: z.string().max(100_000),
     }),
     async (input) => {
+      const part = Database.use((db) =>
+        db.select({ id: PartTable.id })
+          .from(PartTable)
+          .where(and(eq(PartTable.id, input.partID), eq(PartTable.session_id, input.sessionID), eq(PartTable.message_id, input.messageID)))
+          .get()
+      )
+      if (!part) throw new NotFoundError({ message: `Part not found: ${input.partID}` })
       Bus.publish(MessageV2.Event.PartDelta, input)
     },
   )

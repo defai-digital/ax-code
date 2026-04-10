@@ -202,13 +202,15 @@ export const BashTool = Tool.define("bash", async () => {
       // See Env.sanitize for the rationale — LLM-invoked shell commands
       // must not see provider tokens, passwords, or other credentials
       // held by the parent process.
-      const sanitizedEnv = Env.sanitize(process.env)
+      const sanitizedEnv = Env.sanitize({
+        ...Env.sanitize(process.env),
+        ...shellEnv.env,
+      })
       const proc = spawn(params.command, {
         shell,
         cwd,
         env: {
           ...sanitizedEnv,
-          ...shellEnv.env,
         },
         stdio: ["ignore", "pipe", "pipe"],
         detached: process.platform !== "win32",

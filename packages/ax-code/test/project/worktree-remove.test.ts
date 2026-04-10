@@ -93,4 +93,27 @@ describe("Worktree.remove", () => {
     const ref = await $`git show-ref --verify --quiet refs/heads/${branch}`.cwd(root).quiet().nothrow()
     expect(ref.exitCode).not.toBe(0)
   })
+
+  test("removing one worktree does not cancel another pending bootstrap", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const root = tmp.path
+    await Bun.write(path.join(root, "tracked.txt"), "ready\n")
+    await $`git add tracked.txt`.cwd(root).quiet()
+    await $`git commit -m test`.cwd(root).quiet()
+
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const first = await Worktree.create({ name: "first" })
+        const second = await Worktree.create({ name: "second" })
+
+        await Worktree.remove({ directory: first.directory })
+        await new Promise((resolve) => setTimeout(resolve, 100))
+
+        expect(await Filesystem.exists(path.join(second.directory, "tracked.txt"))).toBe(true)
+
+        await Worktree.remove({ directory: second.directory })
+      },
+    })
+  })
 })

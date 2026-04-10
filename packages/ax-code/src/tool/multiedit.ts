@@ -1,10 +1,16 @@
-import z from "zod"
-import { Tool } from "./tool"
-import { EditTool } from "./edit"
-import DESCRIPTION from "./multiedit.txt"
+import { createTwoFilesPatch, diffLines } from "diff"
 import path from "path"
+import z from "zod"
+import { FileTime } from "../file/time"
 import { Instance } from "../project/instance"
-import { Lock } from "../util/lock"
+import { Snapshot } from "@/snapshot"
+import { Filesystem } from "../util/filesystem"
+import { Tool } from "./tool"
+import { assertExternalDirectory } from "./external-directory"
+import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
+import { replace, trimDiff } from "./edit"
+import { Isolation } from "@/isolation"
+import DESCRIPTION from "./multiedit.txt"
 
 export const MultiEditTool = Tool.define("multiedit", {
   description: DESCRIPTION,
@@ -23,27 +29,114 @@ export const MultiEditTool = Tool.define("multiedit", {
       .describe("Array of edit operations to perform sequentially on the file"),
   }),
   async execute(params, ctx) {
-    const tool = await EditTool.init()
-    const results: Awaited<ReturnType<typeof tool.execute>>[] = []
-    // Hold a write lock for the entire batch so external processes
-    // (formatters, concurrent tools) cannot modify the file between
-    // sequential edits.
-    using _ = await Lock.write(params.filePath)
-    for (const [, edit] of params.edits.entries()) {
-      const result = await tool.execute(
-        {
-          filePath: edit.filePath ?? params.filePath,
-          oldString: edit.oldString,
-          newString: edit.newString,
-          replaceAll: edit.replaceAll,
-        },
-        ctx,
-      )
-      results.push(result)
+    const files = Array.from(new Set(params.edits.map((edit) => path.resolve(edit.filePath ?? params.filePath)))).sort()
+    const original = new Map<string, string>()
+    const current = new Map<string, string>()
+    const results: Array<{
+      output: string
+      metadata: {
+        diff: string
+        filediff: Snapshot.FileDiff
+      }
+    }> = []
+
+    for (const file of files) {
+      await assertExternalDirectory(ctx, file)
+      Isolation.assertWrite(ctx.extra?.isolation, file, Instance.directory, Instance.worktree)
     }
+
+    const lock = async <T>(idx: number, fn: () => Promise<T>): Promise<T> => {
+      const file = files[idx]
+      if (!file) return fn()
+      return FileTime.withLock(file, async () => lock(idx + 1, fn))
+    }
+
+    await lock(0, async () => {
+      for (const file of files) {
+        await FileTime.assert(ctx.sessionID, file)
+        const text = await Filesystem.readText(file)
+        original.set(file, text)
+        current.set(file, text)
+      }
+
+      try {
+        for (const edit of params.edits) {
+          const file = path.resolve(edit.filePath ?? params.filePath)
+          if (edit.oldString === edit.newString) {
+            throw new Error("No changes to apply: oldString and newString are identical.")
+          }
+          const before = current.get(file)
+          if (before === undefined) {
+            throw new Error(`File ${file} not found`)
+          }
+          const after = replace(before, edit.oldString, edit.newString, edit.replaceAll)
+          const diff = trimDiff(
+            createTwoFilesPatch(
+              file,
+              file,
+              before.replaceAll("\r\n", "\n"),
+              after.replaceAll("\r\n", "\n"),
+            ),
+          )
+          await ctx.ask({
+            permission: "edit",
+            patterns: [path.relative(Instance.worktree, file)],
+            always: ["*"],
+            metadata: {
+              filepath: file,
+              diff,
+            },
+          })
+          current.set(file, after)
+
+          const filediff: Snapshot.FileDiff = {
+            file,
+            before,
+            after,
+            additions: 0,
+            deletions: 0,
+          }
+          for (const change of diffLines(before, after)) {
+            if (change.added) filediff.additions += change.count || 0
+            if (change.removed) filediff.deletions += change.count || 0
+          }
+
+          results.push({
+            output: "Edit applied successfully.",
+            metadata: {
+              diff,
+              filediff,
+            },
+          })
+        }
+
+        for (const file of files) {
+          const next = current.get(file)
+          const prev = original.get(file)
+          if (next === undefined || prev === undefined || next === prev) continue
+          await Filesystem.write(file, next)
+          await notifyFileEdited(file, "change")
+          await FileTime.read(ctx.sessionID, file)
+        }
+      } catch (error) {
+        await Promise.all(
+          files.map((file) => {
+            const text = original.get(file)
+            if (text === undefined) return Promise.resolve()
+            return Filesystem.write(file, text).catch(() => {})
+          }),
+        )
+        throw error
+      }
+    })
+
+    const changed = files.filter((file) => current.get(file) !== original.get(file))
+    const { diagnostics } = await collectDiagnostics(changed)
+
     return {
       title: path.relative(Instance.worktree, params.filePath),
       metadata: {
+        diagnostics,
         results: results.map((r) => r.metadata),
       },
       output: results.at(-1)?.output ?? "",

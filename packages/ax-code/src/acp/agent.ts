@@ -140,6 +140,8 @@ export namespace ACP {
     private bashSnapshots = new Map<string, string>()
     private toolStarts = new Set<string>()
     private permissionQueues = new Map<string, Promise<void>>()
+    private replaying = new Set<string>()
+    private replayQueue = new Map<string, Event[]>()
     // Deferred sessionUpdate timers scheduled during session creation.
     // Tracked so dispose() can cancel them before they fire against a
     // connection that has been closed. Keyed by session id to allow
@@ -195,6 +197,11 @@ export namespace ACP {
     dispose() {
       if (this.eventAbort.signal.aborted) return
       this.eventAbort.abort()
+      this.bashSnapshots.clear()
+      this.toolStarts.clear()
+      this.permissionQueues.clear()
+      this.replaying.clear()
+      this.replayQueue.clear()
       // Cancel any fire-and-forget session-update timers that were
       // scheduled during session creation but haven't fired yet —
       // without this, the timer callback would call sessionUpdate()
@@ -204,6 +211,13 @@ export namespace ACP {
     }
 
     private async handleEvent(event: Event) {
+      const sessionId = this.eventSession(event)
+      if (sessionId && this.replaying.has(sessionId)) {
+        const queued = this.replayQueue.get(sessionId) ?? []
+        queued.push(event)
+        this.replayQueue.set(sessionId, queued)
+        return
+      }
       switch (event.type) {
         case "permission.asked": {
           const permission = event.properties
@@ -673,6 +687,7 @@ export namespace ACP {
         })
 
         // Replay session history
+        this.beginReplay(sessionId)
         const messages = await this.sdk.session
           .messages(
             {
@@ -704,9 +719,13 @@ export namespace ACP {
           }
         }
 
-        for (const msg of messages ?? []) {
-          log.debug("replay message", msg)
-          await this.processMessage(msg)
+        try {
+          for (const msg of messages ?? []) {
+            log.debug("replay message", msg)
+            await this.processMessage(msg)
+          }
+        } finally {
+          await this.endReplay(sessionId)
         }
 
         await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
@@ -800,6 +819,7 @@ export namespace ACP {
           sessionId,
         })
 
+        this.beginReplay(sessionId)
         const messages = await this.sdk.session
           .messages(
             {
@@ -814,9 +834,13 @@ export namespace ACP {
             return undefined
           })
 
-        for (const msg of messages ?? []) {
-          log.debug("replay message", msg)
-          await this.processMessage(msg)
+        try {
+          for (const msg of messages ?? []) {
+            log.debug("replay message", msg)
+            await this.processMessage(msg)
+          }
+        } finally {
+          await this.endReplay(sessionId)
         }
 
         await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
@@ -1198,6 +1222,43 @@ export namespace ACP {
         .catch((error) => {
           log.error("failed to send tool pending to ACP", { error })
         })
+    }
+
+    private eventSession(event: Event) {
+      switch (event.type) {
+        case "permission.asked":
+          return event.properties.sessionID
+        case "message.part.updated":
+          return event.properties.part.sessionID
+        case "message.part.delta":
+          return event.properties.sessionID
+      }
+    }
+
+    private beginReplay(sessionId: string) {
+      this.replaying.add(sessionId)
+      this.replayQueue.delete(sessionId)
+    }
+
+    private async endReplay(sessionId: string) {
+      this.replaying.delete(sessionId)
+      const queued = this.replayQueue.get(sessionId) ?? []
+      this.replayQueue.delete(sessionId)
+      for (const event of queued) {
+        if (this.skipQueuedReplayEvent(event)) continue
+        await this.handleEvent(event)
+      }
+    }
+
+    private skipQueuedReplayEvent(event: Event) {
+      if (event.type !== "message.part.updated") return false
+      const part = event.properties.part
+      if (part.type !== "tool") return false
+      if (part.state.status !== "running") return false
+      if (part.tool !== "bash") return false
+      const output = this.bashOutput(part)
+      if (!output) return false
+      return this.bashSnapshots.get(part.callID) === Hash.fast(output)
     }
 
     private async loadAvailableModes(directory: string): Promise<ModeOption[]> {

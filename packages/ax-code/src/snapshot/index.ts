@@ -34,6 +34,7 @@ export namespace Snapshot {
 
   const log = Log.create({ service: "snapshot" })
   const prune = "7.days"
+  const maxFileSize = 1024 * 1024
   const core = ["-c", "core.longpaths=true", "-c", "core.symlinks=true"]
   const cfg = ["-c", "core.autocrlf=false", ...core]
   const quote = [...cfg, "-c", "core.quotepath=false"]
@@ -107,6 +108,41 @@ export namespace Snapshot {
             const exists = (file: string) => fs.exists(file).pipe(Effect.orDie)
             const read = (file: string) => fs.readFileString(file).pipe(Effect.catch(() => Effect.succeed("")))
             const remove = (file: string) => fs.remove(file).pipe(Effect.catch(() => Effect.void))
+            const valid = (hash: string) => /^[0-9a-f]{40}$/.test(hash)
+            const snapshotRef = (hash: string) => `refs/snapshots/${hash}`
+            const decode = (file: string) => {
+              if (!file.startsWith('"')) return file
+              return JSON.parse(file) as string
+            }
+            const parsePair = (line: string) => {
+              const idx = line.indexOf("\t")
+              if (idx < 0) return
+              return [line.slice(0, idx), decode(line.slice(idx + 1))] as const
+            }
+            const parseNumstat = (line: string) => {
+              const first = line.indexOf("\t")
+              if (first < 0) return
+              const second = line.indexOf("\t", first + 1)
+              if (second < 0) return
+              return [line.slice(0, first), line.slice(first + 1, second), decode(line.slice(second + 1))] as const
+            }
+            const size = Effect.fnUntraced(function* (hash: string, file: string) {
+              const tree = yield* git([...core, ...args(["ls-tree", "-l", hash, "--", file])], { cwd: state.worktree })
+              const line = tree.text.trim()
+              if (!line) return
+              const meta = parsePair(line)?.[0]
+              if (!meta) return
+              const parts = meta.trim().split(/\s+/)
+              const raw = parts[3]
+              if (!raw || raw === "-") return
+              const parsed = Number.parseInt(raw, 10)
+              return Number.isFinite(parsed) ? parsed : undefined
+            })
+            const show = Effect.fnUntraced(function* (hash: string, file: string) {
+              const next = yield* size(hash, file)
+              if (next !== undefined && next > maxFileSize) return ""
+              return yield* git([...cfg, ...args(["show", `${hash}:${file}`])]).pipe(Effect.map((item) => item.text))
+            })
 
             const enabled = Effect.fnUntraced(function* () {
               if (state.vcs !== "git") return false
@@ -188,12 +224,21 @@ export namespace Snapshot {
                 return prevHash
               }
               const hash = result.text.trim()
+              if (!valid(hash)) {
+                log.error("failed to validate snapshot tree hash", { hash })
+                return prevHash
+              }
+              yield* git([...core, ...args(["update-ref", snapshotRef(hash), hash])], { cwd: state.directory })
               prevHash = hash
               log.info("tracking", { hash, cwd: state.directory, git: state.gitdir })
               return hash
             })
 
             const patch = Effect.fnUntraced(function* (hash: string) {
+              if (!valid(hash)) {
+                log.warn("failed to get diff", { hash, error: "invalid snapshot hash" })
+                return { hash, files: [] }
+              }
               yield* add()
               const result = yield* git(
                 [...quote, ...args(["diff", "--no-ext-diff", "--name-only", hash, "--", "."])],
@@ -217,6 +262,13 @@ export namespace Snapshot {
             })
 
             const restore = Effect.fnUntraced(function* (snapshot: string) {
+              if (!valid(snapshot)) {
+                log.error("failed to restore snapshot", {
+                  snapshot,
+                  stderr: "invalid snapshot hash",
+                })
+                return
+              }
               log.info("restore", { commit: snapshot })
               const result = yield* git([...core, ...args(["read-tree", snapshot])], { cwd: state.worktree })
               if (result.code === 0) {
@@ -239,6 +291,7 @@ export namespace Snapshot {
             const revert = Effect.fnUntraced(function* (patches: Snapshot.Patch[]) {
               const seen = new Set<string>()
               for (const item of patches) {
+                if (!valid(item.hash)) continue
                 for (const file of item.files) {
                   if (seen.has(file)) continue
                   seen.add(file)
@@ -263,6 +316,13 @@ export namespace Snapshot {
             })
 
             const diff = Effect.fnUntraced(function* (hash: string) {
+              if (!valid(hash)) {
+                log.warn("failed to get diff", {
+                  hash,
+                  stderr: "invalid snapshot hash",
+                })
+                return ""
+              }
               yield* add()
               const result = yield* git([...quote, ...args(["diff", "--no-ext-diff", hash, "--", "."])], {
                 cwd: state.worktree,
@@ -279,6 +339,7 @@ export namespace Snapshot {
             })
 
             const diffFull = Effect.fnUntraced(function* (from: string, to: string) {
+              if (!valid(from) || !valid(to)) return []
               const result: Snapshot.FileDiff[] = []
               const status = new Map<string, "added" | "deleted" | "modified">()
 
@@ -289,7 +350,9 @@ export namespace Snapshot {
 
               for (const line of statuses.text.trim().split("\n")) {
                 if (!line) continue
-                const [code, file] = line.split("\t")
+                const parsed = parsePair(line)
+                const code = parsed?.[0]
+                const file = parsed?.[1]
                 if (!code || !file) continue
                 status.set(file, code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified")
               }
@@ -303,15 +366,18 @@ export namespace Snapshot {
 
               for (const line of numstat.text.trim().split("\n")) {
                 if (!line) continue
-                const [adds, dels, file] = line.split("\t")
-                if (!file) continue
+                const parsed = parseNumstat(line)
+                const adds = parsed?.[0]
+                const dels = parsed?.[1]
+                const file = parsed?.[2]
+                if (!file || adds === undefined || dels === undefined) continue
                 const binary = adds === "-" && dels === "-"
                 const [before, after] = binary
                   ? ["", ""]
                   : yield* Effect.all(
                       [
-                        git([...cfg, ...args(["show", `${from}:${file}`])]).pipe(Effect.map((item) => item.text)),
-                        git([...cfg, ...args(["show", `${to}:${file}`])]).pipe(Effect.map((item) => item.text)),
+                        show(from, file),
+                        show(to, file),
                       ],
                       { concurrency: 2 },
                     )

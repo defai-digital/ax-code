@@ -147,6 +147,7 @@ export namespace Planner {
               warnings.push(`Phase "${phase.name}" failed with abort strategy — stopping plan`)
               aborted = true
             } else if (phase.fallbackStrategy === "skip") {
+              plan.phasesSkipped++
               warnings.push(`Phase "${phase.name}" failed — skipped`)
             }
           }
@@ -170,6 +171,7 @@ export namespace Planner {
               break
             }
             if (phase.fallbackStrategy === "skip") {
+              plan.phasesSkipped++
               warnings.push(`Phase "${phase.name}" failed — skipped`)
             }
           }
@@ -212,6 +214,7 @@ export namespace Planner {
     options: ExecutionOptions,
   ): Promise<PhaseResult> {
     const start = Date.now()
+    const timeout = options.phaseTimeoutMs
 
     log.info("phase started", { phaseId: phase.id, name: phase.name })
     options.onPhaseStart?.(phase)
@@ -221,10 +224,17 @@ export namespace Planner {
 
     let lastResult: PhaseResult | undefined
     const maxAttempts = phase.maxRetries + 1
+    const run = async () =>
+      Promise.race([
+        executor(phase, plan),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Phase timed out after ${timeout}ms`)), timeout),
+        ),
+      ])
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const result = await executor(phase, plan)
+        const result = await run()
         lastResult = { ...result, wasRetry: attempt > 1, retryAttempt: attempt }
 
         if (result.success) {

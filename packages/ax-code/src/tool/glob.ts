@@ -52,7 +52,8 @@ export const GlobTool = Tool.define("glob", {
       try {
         const native = _require("@ax-code/fs")
         const json = native.globFiles(search, params.pattern, 100)
-        const entries = JSON.parse(json) as Array<{path: string, mtime: number, size: number}>
+        const entries = (JSON.parse(json) as Array<{path: string, mtime: number, size: number}>)
+          .filter((item) => !Filesystem.contains(Instance.directory, search) || Filesystem.contains(Instance.directory, item.path))
         entries.sort((a, b) => b.mtime - a.mtime)
 
         const output = []

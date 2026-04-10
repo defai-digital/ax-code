@@ -82,6 +82,7 @@ export namespace McpOAuthCallback {
         return
       }
       server = Bun.serve({
+        hostname: "127.0.0.1",
         port: OAUTH_CALLBACK_PORT,
         fetch(req) {
           const url = new URL(req.url)
@@ -133,7 +134,7 @@ export namespace McpOAuthCallback {
           // Validate state parameter
           if (!pendingAuths.has(state)) {
             const errorMsg = "Invalid or expired state parameter - potential CSRF attack"
-            log.error("oauth callback with invalid state", { state, pendingStates: Array.from(pendingAuths.keys()) })
+            log.error("oauth callback with invalid state", { state, pending: pendingAuths.size })
             return new Response(HTML_ERROR(errorMsg), {
               status: 400,
               headers: { "Content-Type": "text/html" },

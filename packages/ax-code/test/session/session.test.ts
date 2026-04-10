@@ -6,6 +6,9 @@ import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID } from "../../src/session/schema"
+import { Database, eq } from "../../src/storage/db"
+import { SessionTable } from "../../src/session/session.sql"
+import { SessionShareTable } from "../../src/share/share.sql"
 
 const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -136,4 +139,60 @@ describe("step-finish token propagation via Bus event", () => {
     },
     { timeout: 30000 },
   )
+})
+
+describe("session.updatePartDelta", () => {
+  test("rejects missing parts", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({})
+        await expect(
+          Session.updatePartDelta({
+            sessionID: session.id,
+            messageID: MessageID.ascending(),
+            partID: PartID.ascending(),
+            field: "text",
+            delta: "hello",
+          }),
+        ).rejects.toThrow("NotFoundError")
+        await Session.remove(session.id)
+      },
+    })
+  })
+})
+
+describe("session.remove", () => {
+  test("removes descendant shares", async () => {
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async () => new Response("", { status: 200 })) as unknown as typeof fetch
+
+    try {
+      await Instance.provide({
+        directory: projectRoot,
+        fn: async () => {
+          const parent = await Session.create({})
+          const child = await Session.create({ parentID: parent.id })
+
+          Database.use((db) => {
+            db.insert(SessionShareTable)
+              .values([
+                { session_id: parent.id, id: "shr_parent", secret: "sec_parent", url: "https://example.com/parent" },
+                { session_id: child.id, id: "shr_child", secret: "sec_child", url: "https://example.com/child" },
+              ])
+              .run()
+            db.update(SessionTable).set({ share_url: "https://example.com/parent" }).where(eq(SessionTable.id, parent.id)).run()
+            db.update(SessionTable).set({ share_url: "https://example.com/child" }).where(eq(SessionTable.id, child.id)).run()
+          })
+
+          await Session.remove(parent.id)
+
+          const shares = Database.use((db) => db.select().from(SessionShareTable).all())
+          expect(shares).toHaveLength(0)
+        },
+      })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
 })

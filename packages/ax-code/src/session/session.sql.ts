@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, index, primaryKey, foreignKey } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import type { MessageV2 } from "./message-v2"
 import type { Snapshot } from "../snapshot"
@@ -43,6 +43,11 @@ export const SessionTable = sqliteTable(
     time_archived: integer(),
   },
   (table) => [
+    foreignKey({
+      columns: [table.parent_id],
+      foreignColumns: [table.id],
+      name: "fk_session_parent_id_session_id_fk",
+    }).onDelete("set null"),
     index("session_project_idx").on(table.project_id),
     index("session_parent_idx").on(table.parent_id),
     // Matches the `session_workspace_idx` index created by the same

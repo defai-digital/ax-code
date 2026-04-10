@@ -109,6 +109,7 @@ export const WebFetchTool = Tool.define("webfetch", {
             throw new Error(`Redirect response missing Location header (status ${res.status})`)
           }
           const next = new URL(location, currentUrl).toString()
+          await assertPublicUrl(next)
           currentUrl = next
           continue
         }
@@ -168,6 +169,9 @@ export const WebFetchTool = Tool.define("webfetch", {
 
       if (isImage) {
         const base64Content = Buffer.from(arrayBuffer).toString("base64")
+        if (base64Content.length > MAX_RESPONSE_SIZE) {
+          throw new Error("Response too large after image encoding")
+        }
         return {
           title,
           output: "Image fetched successfully",

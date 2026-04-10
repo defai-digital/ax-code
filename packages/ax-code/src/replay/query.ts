@@ -1,10 +1,12 @@
-import { Database, eq, and, gte, lte, desc, sql } from "../storage/db"
+import { Database, eq, and, or, gt, gte, lte, desc, sql } from "../storage/db"
 import { EventLogTable } from "./event-log.sql"
 import { EventLogID } from "./index"
 import type { ReplayEvent } from "./event"
 import type { SessionID } from "../session/schema"
 
 export namespace EventQuery {
+  export const ALL_SINCE_LIMIT = 500
+
   export function bySession(sessionID: SessionID): ReplayEvent[] {
     return Database.use((db) =>
       db
@@ -77,17 +79,42 @@ export namespace EventQuery {
     return row?.count ?? 0
   }
 
-  export function allSince(since: number): { session_id: SessionID; event_data: ReplayEvent; time_created: number }[] {
+  export function allSince(input: {
+    since: number
+    limit?: number
+    cursor?: {
+      time_created: number
+      session_id: SessionID
+      sequence: number
+    }
+  }): { session_id: SessionID; event_data: ReplayEvent; time_created: number; sequence: number }[] {
+    const where = input.cursor
+      ? and(
+          gte(EventLogTable.time_created, input.since),
+          or(
+            gt(EventLogTable.time_created, input.cursor.time_created),
+            and(
+              eq(EventLogTable.time_created, input.cursor.time_created),
+              or(
+                gt(EventLogTable.session_id, input.cursor.session_id),
+                and(eq(EventLogTable.session_id, input.cursor.session_id), gt(EventLogTable.sequence, input.cursor.sequence)),
+              ),
+            ),
+          ),
+        )
+      : gte(EventLogTable.time_created, input.since)
     return Database.use((db) =>
       db
         .select({
           session_id: EventLogTable.session_id,
           event_data: EventLogTable.event_data,
           time_created: EventLogTable.time_created,
+          sequence: EventLogTable.sequence,
         })
         .from(EventLogTable)
-        .where(gte(EventLogTable.time_created, since))
-        .orderBy(EventLogTable.session_id, EventLogTable.sequence)
+        .where(where)
+        .orderBy(EventLogTable.time_created, EventLogTable.session_id, EventLogTable.sequence)
+        .limit(input.limit ?? ALL_SINCE_LIMIT)
         .all(),
     )
   }

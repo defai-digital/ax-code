@@ -928,23 +928,18 @@ export namespace Config {
 
     global.reset()
 
-    void Instance.disposeAll()
-      .catch((err) => {
-        // Log disposal failures so leaked resources during reload
-        // (stuck DB connections, file watchers, processes) leave a
-        // trail instead of a silent broken state that would compound
-        // on subsequent reloads.
-        log.error("failed to dispose instances during config reload", { err })
-      })
-      .finally(() => {
-        GlobalBus.emit("event", {
-          directory: "global",
-          payload: {
-            type: Event.Disposed.type,
-            properties: {},
-          },
-        })
-      })
+    await Instance.disposeAll().catch((err) => {
+      log.error("failed to dispose instances during config reload", { err })
+      throw err
+    })
+
+    GlobalBus.emit("event", {
+      directory: "global",
+      payload: {
+        type: Event.Disposed.type,
+        properties: {},
+      },
+    })
 
     return next
   }

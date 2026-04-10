@@ -219,6 +219,7 @@ export namespace ProviderAuth {
         const result = yield* Effect.promise(() =>
           match.method === "code" ? match.callback(input.code!) : match.callback(),
         )
+        pending.delete(input.providerID)
         if (!result || result.type !== "success") return yield* Effect.fail(new OauthCallbackFailed({}))
 
         if ("key" in result) {

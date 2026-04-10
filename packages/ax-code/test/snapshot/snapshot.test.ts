@@ -6,6 +6,7 @@ import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
+import { Global } from "../../src/global"
 
 // Git always outputs /-separated paths internally. Snapshot.patch() joins them
 // with path.join (which produces \ on Windows) then normalizes back to /.
@@ -268,6 +269,21 @@ test("patch with invalid hash", async () => {
       const patch = await Snapshot.patch("invalid-hash-12345")
       expect(patch.files).toEqual([])
       expect(patch.hash).toBe("invalid-hash-12345")
+    },
+  })
+})
+
+test("track keeps snapshot trees reachable through refs", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const hash = await Snapshot.track()
+      expect(hash).toBeTruthy()
+
+      const gitdir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      const ref = await $`git --git-dir=${gitdir} show-ref --verify refs/snapshots/${hash!}`.quiet().nothrow()
+      expect(ref.exitCode).toBe(0)
     },
   })
 })
@@ -1179,6 +1195,49 @@ test("diffFull with whitespace changes", async () => {
       const whitespaceDiff = diffs[0]
       expect(whitespaceDiff.file).toBe("whitespace.txt")
       expect(whitespaceDiff.additions).toBeGreaterThan(0)
+    },
+  })
+})
+
+test("diffFull skips oversized file contents", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Filesystem.write(`${tmp.path}/huge.txt`, "x".repeat(1024 * 1024 + 32))
+
+      const after = await Snapshot.track()
+      expect(after).toBeTruthy()
+
+      const diffs = await Snapshot.diffFull(before!, after!)
+      const huge = diffs.find((d) => d.file === "huge.txt")
+      expect(huge).toBeDefined()
+      expect(huge!.before).toBe("")
+      expect(huge!.after).toBe("")
+      expect(huge!.additions).toBeGreaterThan(0)
+    },
+  })
+})
+
+test("diffFull preserves tabs in filenames", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      const file = `${tmp.path}/tab\tname.txt`
+      await Filesystem.write(file, "tabbed")
+
+      const after = await Snapshot.track()
+      expect(after).toBeTruthy()
+
+      const diffs = await Snapshot.diffFull(before!, after!)
+      expect(diffs.find((d) => d.file === "tab\tname.txt")).toBeDefined()
     },
   })
 })

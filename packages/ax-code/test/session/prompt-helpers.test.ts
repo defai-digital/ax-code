@@ -203,6 +203,25 @@ describe("session.prompt helpers", () => {
     expect((msgs[2].parts[0] as MessageV2.TextPart).text).toBe("ignored")
   })
 
+  test("does not mutate the original text part object when wrapping reminders", () => {
+    const part = { type: "text", text: "Ship it" } as any
+    const msgs = [
+      {
+        info: { id: "001", role: "assistant", finish: "stop" },
+        parts: [],
+      },
+      {
+        info: { id: "002", role: "user" },
+        parts: [part],
+      },
+    ] as any as MessageV2.WithParts[]
+
+    remindQueuedMessages(msgs, msgs[0].info as MessageV2.Assistant)
+
+    expect(part.text).toBe("Ship it")
+    expect((msgs[1].parts[0] as MessageV2.TextPart).text).toContain("The user sent the following message:")
+  })
+
   test("loads compacted history on first loop pass and appends newer messages", async () => {
     const first = [{ info: { id: "001", role: "user" }, parts: [] }] as any as MessageV2.WithParts[]
     const second = [{ info: { id: "002", role: "assistant" }, parts: [] }] as any as MessageV2.WithParts[]

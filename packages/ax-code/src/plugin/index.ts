@@ -11,6 +11,7 @@ import { NamedError } from "@ax-code/util/error"
 import { Effect, Layer, ServiceMap } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
+import { Env } from "@/util/env"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -73,7 +74,7 @@ export namespace Plugin {
               get serverUrl(): URL {
                 return Server.url ?? new URL("http://localhost:4096")
               },
-              $: Bun.$,
+              $: Bun.$.env(Env.sanitize(process.env)),
             }
 
             for (const plugin of INTERNAL_PLUGINS) {

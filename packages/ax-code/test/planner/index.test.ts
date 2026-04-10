@@ -111,4 +111,44 @@ describe("planner.execute", () => {
     expect(result.phaseResults).toHaveLength(3)
     expect(result.success).toBe(true)
   })
+
+  test("times out a phase when it exceeds phaseTimeoutMs", async () => {
+    const plan = Planner.create("test", [{ name: "slow", maxRetries: 0 }])
+
+    const result = await Planner.execute(
+      plan,
+      async () =>
+        new Promise(() => {
+          return
+        }),
+      { phaseTimeoutMs: 10 },
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.phaseResults).toHaveLength(1)
+    expect(result.phaseResults[0]?.error).toContain("Phase timed out after 10ms")
+  })
+
+  test("increments skipped phases for skip fallbacks", async () => {
+    const plan = Planner.create("test", [
+      { name: "first", fallbackStrategy: "skip", maxRetries: 0 },
+      { name: "second", fallbackStrategy: "skip", maxRetries: 0, canRunInParallel: true },
+      { name: "third", fallbackStrategy: "skip", maxRetries: 0, canRunInParallel: true },
+    ])
+
+    const result = await Planner.execute(plan, async (phase) => ({
+      phaseId: phase.id,
+      success: false,
+      error: "failed",
+      duration: 0,
+      tokensUsed: 0,
+      filesModified: [],
+      wasRetry: false,
+      retryAttempt: 1,
+    }))
+
+    expect(result.success).toBe(false)
+    expect(plan.phasesSkipped).toBe(3)
+    expect(result.warnings.filter((item) => item.includes("skipped"))).toHaveLength(3)
+  })
 })
