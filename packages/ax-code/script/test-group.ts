@@ -9,6 +9,7 @@ const e2e = new Set([
   "test/control-plane/session-proxy-middleware.test.ts",
   "test/control-plane/workspace-sync.test.ts",
   "test/control-plane/workspace-server-sse.test.ts",
+  "test/mcp/oauth-browser.test.ts",
   "test/script/update-models.test.ts",
   "test/server/global-session-list.test.ts",
   "test/server/project-init-git.test.ts",

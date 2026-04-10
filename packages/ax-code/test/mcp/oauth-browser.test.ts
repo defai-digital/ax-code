@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach, spyOn } from "bun:test"
+import { test, expect, mock, beforeEach, afterAll, spyOn } from "bun:test"
 import { EventEmitter } from "events"
 
 // Track open() calls and control failure behavior
@@ -104,6 +104,8 @@ const { Bus } = await import("../../src/bus")
 const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
+
+afterAll(() => McpOAuthCallback.stop())
 
 const ensureSpy = spyOn(McpOAuthCallback, "ensureRunning")
 const waitSpy = spyOn(McpOAuthCallback, "waitForCallback")
