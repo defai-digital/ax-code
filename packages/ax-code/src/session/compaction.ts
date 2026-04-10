@@ -112,7 +112,7 @@ export namespace SessionCompaction {
             if (part.state.status !== "completed") continue
             const { id, messageID, sessionID, ...data } = part
             db.insert(PartTable)
-              .values({ id, message_id: messageID, session_id: sessionID, time_created: Date.now(), data })
+              .values({ id, message_id: messageID, session_id: sessionID, time_created: part.state.time?.start ?? Date.now(), data })
               .onConflictDoUpdate({ target: PartTable.id, set: { data } })
               .run()
             Database.effect(() => Bus.publish(MessageV2.Event.PartUpdated, { part: { ...part } }))
