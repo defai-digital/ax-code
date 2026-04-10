@@ -575,6 +575,16 @@ export namespace SessionPrompt {
         reason = "completed"
         break
       }
+      // Stop on "unknown" finish with no tool calls to prevent infinite empty-response loop
+      if (
+        lastAssistant?.finish === "unknown" &&
+        !tasks.some((t) => t.type === "subtask") &&
+        lastUser.id < lastAssistant.id
+      ) {
+        log.warn("model returned unknown finish with no actionable output", { command: "session.prompt.loop", sessionID })
+        reason = "completed"
+        break
+      }
 
       step++
       totalSteps++
@@ -1002,6 +1012,8 @@ export namespace SessionPrompt {
             result = await item.execute(args, ctx)
           } catch (e) {
             if (e instanceof Isolation.DeniedError) {
+              if (ctx.extra?.isolation?.mode === "read-only")
+                throw new Error(`Tool denied in read-only mode: ${e.reason}`)
               await ctx.ask({
                 permission: "isolation_escalation",
                 patterns: [e.message],
@@ -1543,7 +1555,11 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "file",
-                    url: `data:${part.mime};base64,` + (await Filesystem.readBytes(filepath)).toString("base64"),
+                    url: await (async () => {
+                      const buffer = await Filesystem.readBytes(filepath)
+                      if (buffer.length > 50 * 1024 * 1024) throw new Error(`Attachment too large: ${buffer.length} bytes`)
+                      return `data:${part.mime};base64,` + buffer.toString("base64")
+                    })(),
                     mime: part.mime,
                     filename: part.filename!,
                     source: part.source,
@@ -1697,8 +1713,11 @@ export namespace SessionPrompt {
   }
 
   async function insertReminders(input: { messages: MessageV2.WithParts[]; agent: Agent.Info; session: Session.Info }) {
-    const userMessage = input.messages.findLast((msg) => msg.info.role === "user")
-    if (!userMessage) return input.messages
+    const userMsg = input.messages.findLast((msg) => msg.info.role === "user")
+    if (!userMsg) return input.messages
+    // Shallow-copy to avoid mutating cached message parts
+    const userMessage = { ...userMsg, parts: [...userMsg.parts] }
+    const messages = input.messages.map((m) => (m === userMsg ? userMessage : m))
 
     // Original logic when experimental plan mode is disabled
     if (!Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE) {
@@ -1723,7 +1742,7 @@ export namespace SessionPrompt {
           synthetic: true,
         })
       }
-      return input.messages
+      return messages
     }
 
     // New plan mode logic when flag is enabled
@@ -1745,7 +1764,7 @@ export namespace SessionPrompt {
         })
         userMessage.parts.push(part)
       }
-      return input.messages
+      return messages
     }
 
     // Entering plan mode
@@ -1831,7 +1850,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         synthetic: true,
       })
       userMessage.parts.push(part)
-      return input.messages
+      return messages
     }
     return input.messages
   }

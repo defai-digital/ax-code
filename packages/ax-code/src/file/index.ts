@@ -550,7 +550,9 @@ export namespace File {
           // to read arbitrary files. If the file doesn't exist yet,
           // realpath throws ENOENT and we skip the check — the
           // subsequent read will return empty content anyway.
-          const realFull = await fs.promises.realpath(full).catch(() => null)
+          const realFull = await fs.promises.realpath(full).catch((e: NodeJS.ErrnoException) =>
+            e.code === "ENOENT" ? null : Promise.reject(e),
+          )
           if (realFull && !Filesystem.contains(Instance.directory, realFull)) {
             throw new Error("Access denied: symlink target escapes project directory")
           }

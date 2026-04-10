@@ -12,7 +12,7 @@ import { Global } from "@/global"
 export namespace ConfigPaths {
   export async function projectFiles(name: string, directory: string, worktree: string) {
     const files: string[] = []
-    for (const file of [`${name}.jsonc`, `${name}.json`]) {
+    for (const file of [`${name}.json`, `${name}.jsonc`]) {
       const found = await Filesystem.findUp(file, directory, worktree)
       for (const resolved of found.toReversed()) {
         files.push(resolved)

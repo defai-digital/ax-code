@@ -173,7 +173,8 @@ test("merges multiple config files with correct precedence", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.model).toBe("override")
+      // .jsonc has higher precedence than .json
+      expect(config.model).toBe("base")
       expect(config.username).toBe("base")
     },
   })
@@ -1441,9 +1442,9 @@ test("permission config preserves key order", async () => {
 test("project config can override MCP server enabled status", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      // Simulates a base config (like from remote .well-known) with disabled MCP
+      // Base config (.json, lower precedence) with disabled MCP
       await Filesystem.write(
-        path.join(dir, "ax-code.jsonc"),
+        path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1460,9 +1461,9 @@ test("project config can override MCP server enabled status", async () => {
           },
         }),
       )
-      // Project config enables just jira
+      // Project config (.jsonc, higher precedence) enables just jira
       await Filesystem.write(
-        path.join(dir, "ax-code.json"),
+        path.join(dir, "ax-code.jsonc"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1499,9 +1500,9 @@ test("project config can override MCP server enabled status", async () => {
 test("MCP config deep merges preserving base config properties", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      // Base config with full MCP definition
+      // Base config (.json, lower precedence) with full MCP definition
       await Filesystem.write(
-        path.join(dir, "ax-code.jsonc"),
+        path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1516,9 +1517,9 @@ test("MCP config deep merges preserving base config properties", async () => {
           },
         }),
       )
-      // Override just enables it, should preserve other properties
+      // Override (.jsonc, higher precedence) just enables it, should preserve other properties
       await Filesystem.write(
-        path.join(dir, "ax-code.json"),
+        path.join(dir, "ax-code.jsonc"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {

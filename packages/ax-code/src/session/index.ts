@@ -269,6 +269,7 @@ export namespace Session {
       const session = await createNext({
         directory: Instance.directory,
         title,
+        permission: original.permission,
       })
       const msgs = await messages({ sessionID: input.sessionID })
       const idMap = new Map<string, MessageID>()

@@ -52,9 +52,9 @@ export const AuditRoutes = lazy(() =>
           200: { description: "JSON Lines audit export" },
         },
       }),
-      validator("query", z.object({ since: z.string().optional() })),
+      validator("query", z.object({ since: z.coerce.number().int().min(0).optional() })),
       async (c) => {
-        const since = c.req.valid("query").since ? new Date(c.req.valid("query").since!).getTime() : undefined
+        const since = c.req.valid("query").since
         const lines = [...AuditExport.streamAll({ since })]
         return c.json({ data: lines.map(parseLine).filter((x) => x !== null) })
       },

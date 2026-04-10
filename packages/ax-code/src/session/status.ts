@@ -72,13 +72,15 @@ export namespace SessionStatus {
 
       const set = Effect.fn("SessionStatus.set")(function* (sessionID: SessionID, status: Info) {
         const data = yield* InstanceState.get(state)
-        yield* Effect.promise(() => Bus.publish(Event.Status, { sessionID, status }))
+        // Update state before publishing events so subscribers see current state
         if (status.type === "idle") {
-          yield* Effect.promise(() => Bus.publish(Event.Idle, { sessionID }))
           data.delete(sessionID)
+          yield* Effect.promise(() => Bus.publish(Event.Status, { sessionID, status }))
+          yield* Effect.promise(() => Bus.publish(Event.Idle, { sessionID }))
           return
         }
         data.set(sessionID, status)
+        yield* Effect.promise(() => Bus.publish(Event.Status, { sessionID, status }))
       })
 
       return Service.of({ get, list, set })

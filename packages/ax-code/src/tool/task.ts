@@ -77,7 +77,8 @@ export const TaskTool = Tool.define("task", async (ctx) => {
             if (NotFoundError.isInstance(e)) return undefined
             throw e
           })
-          if (found) return found
+          if (found && found.parentID === ctx.sessionID) return found
+          if (found) throw new Error("Cannot resume a session that is not a child of the current session")
         }
 
         return await Session.create({

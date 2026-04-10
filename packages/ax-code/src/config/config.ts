@@ -833,7 +833,7 @@ export namespace Config {
     const filepath = path.join(Instance.directory, "ax-code.json")
     using _ = await Lock.write(filepath)
     const existing = await loadFile(filepath)
-    await Filesystem.writeJson(filepath, mergeDeep(existing, config))
+    await Filesystem.writeJson(filepath, mergeConfigConcatArrays(existing, config))
     await Instance.reload({
       directory: Instance.directory,
     })
