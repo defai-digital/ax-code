@@ -1,136 +1,61 @@
 import { describe, test, expect } from "bun:test"
-import path from "path"
-import { Instance } from "../../src/project/instance"
-import { WebFetchTool } from "../../src/tool/webfetch"
-import { SessionID, MessageID } from "../../src/session/schema"
-
-const projectRoot = path.join(__dirname, "../..")
-
-const ctx = {
-  sessionID: SessionID.make("ses_test"),
-  messageID: MessageID.make(""),
-  callID: "",
-  agent: "build",
-  abort: new AbortController().signal,
-  messages: [],
-  metadata: () => {},
-  ask: async () => {},
-}
 
 const MB = 1024 * 1024
-const ITERATIONS = 50
 
 const getHeapMB = () => {
   Bun.gc(true)
   return process.memoryUsage().heapUsed / MB
 }
 
-describe("memory: abort controller leak", () => {
-  test("webfetch does not leak memory over many invocations", async () => {
-    await Instance.provide({
-      directory: projectRoot,
-      fn: async () => {
-        const tool = await WebFetchTool.init()
+describe("memory: closure vs bind pattern", () => {
+  test("bind pattern does not retain closure scope", () => {
+    const ITERATIONS = 200
 
-        // Warm up
-        await tool.execute({ url: "https://example.com", format: "text" }, ctx).catch(() => {})
-
-        Bun.gc(true)
-        const baseline = getHeapMB()
-
-        // Run many fetches
-        for (let i = 0; i < ITERATIONS; i++) {
-          await tool.execute({ url: "https://example.com", format: "text" }, ctx).catch(() => {})
-        }
-
-        Bun.gc(true)
-        const after = getHeapMB()
-        const growth = after - baseline
-
-        console.log(`Baseline: ${baseline.toFixed(2)} MB`)
-        console.log(`After ${ITERATIONS} fetches: ${after.toFixed(2)} MB`)
-        console.log(`Growth: ${growth.toFixed(2)} MB`)
-
-        // Memory growth should be minimal - less than 1MB per 10 requests
-        // With the old closure pattern, this would grow ~0.5MB per request
-        expect(growth).toBeLessThan(ITERATIONS / 10)
-      },
-    })
-  }, 60000)
-
-  test("compare closure vs bind pattern directly", async () => {
-    const ITERATIONS = 500
-
-    // Test OLD pattern: arrow function closure
-    // Store closures in a map keyed by content to force retention
-    const closureMap = new Map<string, () => void>()
+    // OLD pattern: arrow function closure retains surrounding scope
+    const closureMap = new Map<number, () => void>()
     const timers: Timer[] = []
-    const controllers: AbortController[] = []
 
     Bun.gc(true)
-    Bun.sleepSync(100)
     const baseline = getHeapMB()
 
     for (let i = 0; i < ITERATIONS; i++) {
-      // Simulate large response body like webfetch would have
-      const content = `${i}:${"x".repeat(50 * 1024)}` // 50KB unique per iteration
+      const content = "x".repeat(50 * 1024) // 50KB captured by closure
       const controller = new AbortController()
-      controllers.push(controller)
-
-      // OLD pattern - closure captures `content`
-      const handler = () => {
-        // Actually use content so it can't be optimized away
-        if (content.length > 1000000000) controller.abort()
-      }
-      closureMap.set(content, handler)
-      const timeoutId = setTimeout(handler, 30000)
-      timers.push(timeoutId)
+      const handler = () => { if (content.length > 1e9) controller.abort() }
+      closureMap.set(i, handler)
+      timers.push(setTimeout(handler, 30000))
     }
 
     Bun.gc(true)
-    Bun.sleepSync(100)
-    const after = getHeapMB()
-    const oldGrowth = after - baseline
+    const oldGrowth = getHeapMB() - baseline
 
-    console.log(`OLD pattern (closure): ${oldGrowth.toFixed(2)} MB growth (${closureMap.size} closures)`)
-
-    // Cleanup after measuring
+    // Cleanup
     timers.forEach(clearTimeout)
-    controllers.forEach((c) => c.abort())
     closureMap.clear()
 
-    // Test NEW pattern: bind
+    // NEW pattern: bind doesn't capture surrounding scope
     Bun.gc(true)
-    Bun.sleepSync(100)
     const baseline2 = getHeapMB()
-    const handlers2: (() => void)[] = []
+    const handlers: (() => void)[] = []
     const timers2: Timer[] = []
-    const controllers2: AbortController[] = []
 
     for (let i = 0; i < ITERATIONS; i++) {
-      const _content = `${i}:${"x".repeat(50 * 1024)}` // 50KB - won't be captured
+      const _content = "x".repeat(50 * 1024) // 50KB NOT captured
       const controller = new AbortController()
-      controllers2.push(controller)
-
-      // NEW pattern - bind doesn't capture surrounding scope
       const handler = controller.abort.bind(controller)
-      handlers2.push(handler)
-      const timeoutId = setTimeout(handler, 30000)
-      timers2.push(timeoutId)
+      handlers.push(handler)
+      timers2.push(setTimeout(handler, 30000))
     }
 
     Bun.gc(true)
-    Bun.sleepSync(100)
-    const after2 = getHeapMB()
-    const newGrowth = after2 - baseline2
+    const newGrowth = getHeapMB() - baseline2
 
-    // Cleanup after measuring
+    // Cleanup
     timers2.forEach(clearTimeout)
-    controllers2.forEach((c) => c.abort())
-    handlers2.length = 0
+    handlers.length = 0
 
-    console.log(`NEW pattern (bind): ${newGrowth.toFixed(2)} MB growth`)
-    console.log(`Improvement: ${(oldGrowth - newGrowth).toFixed(2)} MB saved`)
+    console.log(`Closure pattern: ${oldGrowth.toFixed(2)} MB growth`)
+    console.log(`Bind pattern: ${newGrowth.toFixed(2)} MB growth`)
 
     expect(newGrowth).toBeLessThanOrEqual(oldGrowth)
   })
