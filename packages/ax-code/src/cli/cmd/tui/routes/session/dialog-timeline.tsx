@@ -6,6 +6,7 @@ import { Locale } from "@/util/locale"
 import { DialogMessage } from "./dialog-message"
 import { useDialog } from "../../ui/dialog"
 import type { PromptInfo } from "../../component/prompt/history"
+import { routeNote } from "./route"
 
 export function DialogTimeline(props: {
   sessionID: string
@@ -31,6 +32,7 @@ export function DialogTimeline(props: {
       result.push({
         title: part.text.replace(/\n/g, " "),
         value: message.id,
+        description: routeNote(message, sync.data.part[message.id] ?? [], sync.data.agent) || undefined,
         footer: Locale.time(message.time.created),
         onSelect: (dialog) => {
           dialog.replace(() => (

@@ -24,26 +24,32 @@ interface RouteRule {
   agent: string
   keywords: RegExp[]
   patterns: RegExp[]
+  intents: RegExp[]
   negatives: RegExp[]
   confidence: number
   readOnly: boolean
+  requireIntent: boolean
 }
 
 function rule(input: {
   agent: string
   keywords: string[]
   patterns: RegExp[]
+  intents?: string[]
   confidence: number
   negatives?: string[]
   readOnly?: boolean
+  requireIntent?: boolean
 }): RouteRule {
   return {
     agent: input.agent,
     keywords: input.keywords.map(boundedPattern),
     patterns: input.patterns,
+    intents: (input.intents ?? []).map(boundedPattern),
     negatives: (input.negatives ?? []).map(boundedPattern),
     confidence: input.confidence,
     readOnly: input.readOnly ?? false,
+    requireIntent: input.requireIntent ?? false,
   }
 }
 
@@ -54,6 +60,21 @@ const ACTION_INTENT = [
   "rewrite", "convert", "migrate", "replace", "rename", "move",
   "improve", "clean up", "simplify", "extract", "inline",
   "split", "merge", "implement", "apply",
+]
+
+const REVIEW_INTENT = [
+  "analyze", "analysis", "review", "audit", "assess",
+  "investigate", "inspect", "check", "scan", "report",
+]
+
+const DEBUG_INTENT = [
+  "debug", "diagnose", "diagnostics", "investigate", "trace",
+  "troubleshoot", "root cause", "stack trace", "exception",
+]
+
+const PERF_INTENT = [
+  "profile", "benchmark", "measure", "investigate",
+  "analyze", "review", "inspect", "diagnose",
 ]
 
 const RULES: RouteRule[] = [
@@ -71,9 +92,11 @@ const RULES: RouteRule[] = [
       /\b(scan|audit|check)\b.*\b(security|auth|secret)/i,
       /\b(secret|key|token|password)\b.*\b(expos|leak|hardcod)/i,
     ],
+    intents: REVIEW_INTENT,
     negatives: [...ACTION_INTENT, "test coverage", "test suite", "write tests", "unit test", "add tests"],
     confidence: 0.8,
     readOnly: true,
+    requireIntent: true,
   }),
   rule({
     agent: "architect",
@@ -92,9 +115,11 @@ const RULES: RouteRule[] = [
       /\bproject\s+structure\b/i,
       /\bpackages?\b.*\b(organiz|structur)/i,
     ],
+    intents: REVIEW_INTENT,
     negatives: [...ACTION_INTENT, "build", "create", "scaffold", "generate", "new project", "from scratch", "set up", "initialize"],
     confidence: 0.8,
     readOnly: true,
+    requireIntent: true,
   }),
   rule({
     agent: "debug",
@@ -112,8 +137,10 @@ const RULES: RouteRule[] = [
       /\btroubleshoot/i,
       /\bstack\s+trace\b/i,
     ],
+    intents: DEBUG_INTENT,
     negatives: ["test coverage", "write tests", "test plan", "test strategy", "build", "create", "scaffold", "new project", "from scratch"],
     confidence: 0.7,
+    requireIntent: true,
   }),
   rule({
     agent: "perf",
@@ -131,9 +158,11 @@ const RULES: RouteRule[] = [
       /\bO\([nN]/,
       /\bprofil(e|ing)\b/i,
     ],
+    intents: PERF_INTENT,
     negatives: [...ACTION_INTENT, "build", "create", "scaffold", "new project", "from scratch", "set up"],
     confidence: 0.7,
     readOnly: true,
+    requireIntent: true,
   }),
   rule({
     agent: "devops",
@@ -199,6 +228,7 @@ export function keywordRoute(message: string, currentAgent: string): RouteResult
   for (const rule of RULES) {
     const matched: string[] = []
     let score = 0
+    let intent = !rule.requireIntent
 
     for (const kw of rule.keywords) {
       if (kw.test(message)) {
@@ -214,9 +244,18 @@ export function keywordRoute(message: string, currentAgent: string): RouteResult
       }
     }
 
+    for (const item of rule.intents) {
+      if (item.test(message)) {
+        matched.push(item.source)
+        intent = true
+      }
+    }
+
     if (score === 0) continue
+    if (!intent) continue
 
     // Read-only agents penalize action-intent words more heavily
+    if (rule.readOnly && rule.negatives.some((neg) => neg.test(message))) continue
     const negWeight = rule.readOnly ? 2 : 1
     for (const neg of rule.negatives) {
       if (neg.test(message)) score -= negWeight

@@ -26,6 +26,8 @@ export const AgentRouteEvent = Base.extend({
   fromAgent: z.string(),
   toAgent: z.string(),
   confidence: z.number(),
+  routeMode: z.enum(["delegate", "switch"]).optional(),
+  matched: z.string().array().optional(),
 })
 
 export const LLMRequestEvent = Base.extend({

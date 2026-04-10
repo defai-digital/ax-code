@@ -701,6 +701,14 @@ export const Info = z
       .describe("Session lifecycle management"),
     routing: z
       .object({
+        mode: z
+          .enum(["off", "delegate", "switch"])
+          .optional()
+          .describe("How specialist routing behaves: off disables auto-routing, delegate creates a specialist subtask, switch changes the primary agent (default: delegate)"),
+        auto_switch: z
+          .boolean()
+          .optional()
+          .describe("@deprecated Legacy alias for routing.mode='switch' when true"),
         llm: z
           .boolean()
           .optional()

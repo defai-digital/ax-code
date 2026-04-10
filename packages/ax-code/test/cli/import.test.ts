@@ -38,6 +38,24 @@ test("transforms share data to storage format", () => {
     { type: "message", data: { id: "msg-1", sessionID: "sess-1" } as any },
     { type: "part", data: { id: "part-1", messageID: "msg-1" } as any },
     { type: "part", data: { id: "part-2", messageID: "msg-1" } as any },
+    {
+      type: "event",
+      data: {
+        id: "event_1",
+        sequence: 3,
+        timeCreated: 123,
+        event: {
+          type: "agent.route",
+          sessionID: "sess-1",
+          messageID: "msg-1",
+          fromAgent: "build",
+          toAgent: "perf",
+          confidence: 0.9,
+          routeMode: "delegate",
+          matched: ["performance"],
+        },
+      },
+    },
   ]
 
   const result = transformShareData(data)!
@@ -45,6 +63,23 @@ test("transforms share data to storage format", () => {
   expect(result.info.id).toBe("sess-1")
   expect(result.messages).toHaveLength(1)
   expect(result.messages[0].parts).toHaveLength(2)
+  expect(result.events).toEqual([
+    {
+      id: "event_1",
+      sequence: 3,
+      timeCreated: 123,
+      event: {
+        type: "agent.route",
+        sessionID: "sess-1",
+        messageID: "msg-1",
+        fromAgent: "build",
+        toAgent: "perf",
+        confidence: 0.9,
+        routeMode: "delegate",
+        matched: ["performance"],
+      },
+    },
+  ])
 })
 
 test("returns null for invalid share data", () => {

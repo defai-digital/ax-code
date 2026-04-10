@@ -30,6 +30,29 @@ export namespace EventQuery {
     )
   }
 
+  export function bySessionLog(sessionID: SessionID): {
+    id: EventLogID
+    step_id: string | null
+    event_data: ReplayEvent
+    sequence: number
+    time_created: number
+  }[] {
+    return Database.use((db) =>
+      db
+        .select({
+          id: EventLogTable.id,
+          step_id: EventLogTable.step_id,
+          event_data: EventLogTable.event_data,
+          sequence: EventLogTable.sequence,
+          time_created: EventLogTable.time_created,
+        })
+        .from(EventLogTable)
+        .where(eq(EventLogTable.session_id, sessionID))
+        .orderBy(EventLogTable.sequence)
+        .all(),
+    )
+  }
+
   export function bySessionAndType(sessionID: SessionID, type: string): ReplayEvent[] {
     return Database.use((db) =>
       db

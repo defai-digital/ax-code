@@ -1,11 +1,13 @@
 import type { Argv } from "yargs"
 import { Session } from "../../../session"
 import { SessionID } from "../../../session/schema"
+import { EventQuery } from "../../../replay/query"
 import { cmd } from "../cmd"
 import { bootstrap } from "../../bootstrap"
 import { UI } from "../../ui"
 import * as prompts from "@clack/prompts"
 import { EOL } from "os"
+import { buildTransfer } from "./transfer"
 
 export const ExportCommand = cmd({
   command: "export [sessionID]",
@@ -69,14 +71,15 @@ export const ExportCommand = cmd({
       try {
         const sessionInfo = await Session.get(sessionID!)
         const messages = await Session.messages({ sessionID: sessionInfo.id })
-
-        const exportData = {
+        const events = EventQuery.bySessionLog(sessionInfo.id)
+        const exportData = buildTransfer({
           info: sessionInfo,
           messages: messages.map((msg) => ({
             info: msg.info,
             parts: msg.parts,
           })),
-        }
+          events,
+        })
 
         process.stdout.write(JSON.stringify(exportData, null, 2))
         process.stdout.write(EOL)

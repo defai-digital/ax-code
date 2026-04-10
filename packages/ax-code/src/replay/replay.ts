@@ -326,7 +326,9 @@ export namespace Replay {
           lines.push(`[session] end reason=${event.reason} steps=${event.totalSteps}`)
           break
         case "agent.route":
-          lines.push(`[route]   ${event.fromAgent} -> ${event.toAgent} (${event.confidence.toFixed(2)})`)
+          lines.push(
+            `[route]   ${event.fromAgent} -> ${event.toAgent} (${event.confidence.toFixed(2)}, ${event.routeMode ?? "switch"})`,
+          )
           break
         case "llm.request":
           lines.push(`[llm]     request model=${event.model} messages=${event.messageCount}`)

@@ -71,6 +71,15 @@ describe("replay with code intelligence queries", () => {
           model: "test/model",
           directory: tmp.path,
         })
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: sid,
+          fromAgent: "build",
+          toAgent: "perf",
+          confidence: 0.92,
+          routeMode: "delegate",
+          matched: ["performance", "profile"],
+        })
 
         // 2. code.graph.snapshot — the piece wired in by cfcadbe.
         const s = CodeIntelligence.status(projectID)
@@ -147,6 +156,7 @@ describe("replay with code intelligence queries", () => {
         const events = EventQuery.bySession(sid)
         const types = events.map((e) => e.type)
         expect(types).toContain("session.start")
+        expect(types).toContain("agent.route")
         expect(types).toContain("code.graph.snapshot")
         expect(types).toContain("step.start")
         expect(types).toContain("llm.output")
@@ -162,6 +172,12 @@ describe("replay with code intelligence queries", () => {
         expect(snap.nodeCount).toBe(5)
         expect(snap.edgeCount).toBe(0)
         expect(snap.commitSha).toBe("cafed00d")
+        const route = events.find((e) => e.type === "agent.route")
+        expect(route).toBeDefined()
+        if (route?.type !== "agent.route") throw new Error("narrowing")
+        expect(route.toAgent).toBe("perf")
+        expect(route.routeMode).toBe("delegate")
+        expect(route.matched).toEqual(["performance", "profile"])
 
         // ── Assertion 2: reconstructStream handles the tool call ──
         const { steps } = Replay.reconstructStream(sid)
@@ -188,10 +204,15 @@ describe("replay with code intelligence queries", () => {
         expect(graphLine).toContain("nodes=5")
         expect(graphLine).toContain("edges=0")
         expect(graphLine).toContain("sha=cafed00d")
+        const routeLine = lines.find((l) => l.includes("[route]"))
+        expect(routeLine).toBeDefined()
+        expect(routeLine).toContain("build -> perf")
+        expect(routeLine).toContain("delegate")
 
         // ── Assertion 4: audit export covers both families ────────
         const auditRecords = [...AuditExport.stream(sid)].map((line) => JSON.parse(line))
         const snapshotRecord = auditRecords.find((r) => r.event_type === "code.graph.snapshot")
+        const routeRecord = auditRecords.find((r) => r.event_type === "agent.route")
         const toolCallRecord = auditRecords.find(
           (r) => r.event_type === "tool.call" && r.tool === "code_intelligence",
         )
@@ -200,6 +221,8 @@ describe("replay with code intelligence queries", () => {
         )
         expect(snapshotRecord).toBeDefined()
         expect(snapshotRecord.action).toBe("snapshot")
+        expect(routeRecord).toBeDefined()
+        expect(routeRecord.result).toContain("delegate from build")
         expect(toolCallRecord).toBeDefined()
         expect(toolCallRecord.action).toBe("call")
         expect(toolResultRecord).toBeDefined()

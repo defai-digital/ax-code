@@ -83,6 +83,7 @@ import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
 import { RevertNotice } from "./revert-notice"
 import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
+import { userRoute } from "../../util/transcript"
 
 addDefaultParsers(parsers.parsers)
 
@@ -851,7 +852,9 @@ function UserMessage(props: {
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
   const color = createMemo(() => local.agent.color(props.message.agent))
   const queuedFg = createMemo(() => selectedForeground(theme, color()))
-  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps())
+  const route = createMemo(() => userRoute(props.message, props.parts, sync.data.agent))
+  const showPrimary = createMemo(() => props.message.agent !== "build" || route().delegated.length > 0)
+  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps() || showPrimary() || route().delegated.length > 0)
 
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
 
@@ -899,21 +902,41 @@ function UserMessage(props: {
                 </For>
               </box>
             </Show>
-            <Show
-              when={queued()}
-              fallback={
-                <Show when={ctx.showTimestamps()}>
+            <Show when={metadataVisible()}>
+              <box flexDirection="row" gap={1} flexWrap="wrap">
+                <Show when={showPrimary()}>
                   <text fg={theme.textMuted}>
-                    <span style={{ fg: theme.textMuted }}>
-                      {Locale.todayTimeOrDateTime(props.message.time.created)}
-                    </span>
+                    <span style={{ bg: color(), fg: queuedFg(), bold: true }}> {route().primary.label} </span>
                   </text>
                 </Show>
-              }
-            >
-              <text fg={theme.textMuted}>
-                <span style={{ bg: color(), fg: queuedFg(), bold: true }}> QUEUED </span>
-              </text>
+                <For each={route().delegated}>
+                  {(item) => {
+                    const bg = createMemo(() => local.agent.color(item.name))
+                    const fg = createMemo(() => selectedForeground(theme, bg()))
+                    return (
+                      <text fg={theme.textMuted}>
+                        <span style={{ bg: bg(), fg: fg(), bold: true }}> DELEGATED {item.label} </span>
+                      </text>
+                    )
+                  }}
+                </For>
+                <Show
+                  when={queued()}
+                  fallback={
+                    <Show when={ctx.showTimestamps()}>
+                      <text fg={theme.textMuted}>
+                        <span style={{ fg: theme.textMuted }}>
+                          {Locale.todayTimeOrDateTime(props.message.time.created)}
+                        </span>
+                      </text>
+                    </Show>
+                  }
+                >
+                  <text fg={theme.textMuted}>
+                    <span style={{ bg: color(), fg: queuedFg(), bold: true }}> QUEUED </span>
+                  </text>
+                </Show>
+              </box>
             </Show>
           </box>
         </box>

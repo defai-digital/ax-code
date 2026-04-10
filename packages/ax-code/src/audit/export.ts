@@ -31,7 +31,12 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
     case "session.end":
       return { ...base, action: "end", result: event.reason }
     case "agent.route":
-      return { ...base, agent: event.toAgent, action: "route", result: `from ${event.fromAgent} (${event.confidence.toFixed(2)})` }
+      return {
+        ...base,
+        agent: event.toAgent,
+        action: "route",
+        result: `${event.routeMode ?? "switch"} from ${event.fromAgent} (${event.confidence.toFixed(2)})`,
+      }
     case "llm.request":
       return { ...base, action: "request", target: event.model }
     case "llm.response":

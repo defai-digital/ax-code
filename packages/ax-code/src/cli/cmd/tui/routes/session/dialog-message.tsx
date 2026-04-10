@@ -6,6 +6,8 @@ import { useRoute } from "@tui/context/route"
 import { Clipboard } from "@tui/util/clipboard"
 import type { PromptInfo } from "@tui/component/prompt/history"
 import { strip } from "@tui/component/prompt/part"
+import { EventQuery } from "@/replay/query"
+import { messageRoute } from "./route"
 
 export function DialogMessage(props: {
   messageID: string
@@ -15,12 +17,28 @@ export function DialogMessage(props: {
   const sync = useSync()
   const sdk = useSDK()
   const message = createMemo(() => sync.data.message[props.sessionID]?.find((x) => x.id === props.messageID))
+  const routeInfo = createMemo(() => {
+    const msg = message()
+    if (!msg || msg.role !== "user") return
+    const sid = props.sessionID as Parameters<typeof EventQuery.bySessionWithTimestamp>[0]
+    return messageRoute(msg, sync.data.part[msg.id] ?? [], EventQuery.bySessionWithTimestamp(sid), sync.data.agent)
+  })
   const route = useRoute()
 
   return (
     <DialogSelect
       title="Message Actions"
       options={[
+        ...(routeInfo()
+          ? [{
+              title: routeInfo()!.title,
+              value: "message.route",
+              description: routeInfo()!.description,
+              footer: routeInfo()!.footer,
+              category: "Routing",
+              onSelect: () => {},
+            }]
+          : []),
         {
           title: "Revert",
           value: "session.revert",
@@ -56,6 +74,7 @@ export function DialogMessage(props: {
           title: "Copy",
           value: "message.copy",
           description: "message text to clipboard",
+          category: "Actions",
           onSelect: async (dialog) => {
             const msg = message()
             if (!msg) return
@@ -76,6 +95,7 @@ export function DialogMessage(props: {
           title: "Fork",
           value: "session.fork",
           description: "create a new session",
+          category: "Actions",
           onSelect: async (dialog) => {
             const result = await sdk.client.session.fork({
               sessionID: props.sessionID,

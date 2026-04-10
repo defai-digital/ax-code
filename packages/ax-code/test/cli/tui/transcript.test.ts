@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import {
+  formatUserHeader,
   formatAssistantHeader,
   formatMessage,
   formatPart,
   formatTranscript,
+  userRoute,
 } from "../../../src/cli/cmd/tui/util/transcript"
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
 
@@ -43,6 +45,76 @@ describe("transcript", () => {
       const msg = { ...baseMsg, agent: "plan" }
       const result = formatAssistantHeader(msg, true)
       expect(result).toContain("Plan")
+    })
+  })
+
+  describe("formatUserHeader", () => {
+    const baseMsg: UserMessage = {
+      id: "msg_123",
+      sessionID: "ses_123",
+      role: "user",
+      agent: "build",
+      model: { providerID: "anthropic", modelID: "claude-sonnet-4-20250514" },
+      time: { created: 1000000 },
+    }
+
+    test("keeps the default header for plain build messages", () => {
+      const result = formatUserHeader(baseMsg, [])
+      expect(result).toBe("## User\n\n")
+    })
+
+    test("shows the delegated specialist in the header", () => {
+      const result = formatUserHeader(baseMsg, [
+        {
+          id: "part_1",
+          sessionID: "ses_123",
+          messageID: "msg_123",
+          type: "subtask",
+          prompt: "profile this",
+          description: "Perf specialist review",
+          agent: "perf",
+        },
+      ])
+      expect(result).toBe("## User (Build · delegated to Perf)\n\n")
+    })
+
+    test("shows the switched primary agent in the header", () => {
+      const result = formatUserHeader({ ...baseMsg, agent: "security" }, [])
+      expect(result).toBe("## User (Security)\n\n")
+    })
+  })
+
+  describe("userRoute", () => {
+    test("deduplicates delegated specialists", () => {
+      const msg: UserMessage = {
+        id: "msg_123",
+        sessionID: "ses_123",
+        role: "user",
+        agent: "build",
+        model: { providerID: "anthropic", modelID: "claude-sonnet-4-20250514" },
+        time: { created: 1000000 },
+      }
+      const route = userRoute(msg, [
+        {
+          id: "part_1",
+          sessionID: "ses_123",
+          messageID: "msg_123",
+          type: "subtask",
+          prompt: "profile this",
+          description: "Perf specialist review",
+          agent: "perf",
+        },
+        {
+          id: "part_2",
+          sessionID: "ses_123",
+          messageID: "msg_123",
+          type: "subtask",
+          prompt: "profile this too",
+          description: "Perf specialist review",
+          agent: "perf",
+        },
+      ])
+      expect(route.delegated).toEqual([{ id: "part_1", name: "perf", label: "Perf" }])
     })
   })
 
@@ -212,6 +284,31 @@ describe("transcript", () => {
       expect(result).toContain("Hello")
     })
 
+    test("formats delegated user routing metadata", () => {
+      const msg: UserMessage = {
+        id: "msg_123",
+        sessionID: "ses_123",
+        role: "user",
+        agent: "build",
+        model: { providerID: "anthropic", modelID: "claude-sonnet-4-20250514" },
+        time: { created: 1000000 },
+      }
+      const parts: Part[] = [
+        { id: "p1", sessionID: "ses_123", messageID: "msg_123", type: "text", text: "Hello" },
+        {
+          id: "p2",
+          sessionID: "ses_123",
+          messageID: "msg_123",
+          type: "subtask",
+          prompt: "profile this",
+          description: "Perf specialist review",
+          agent: "perf",
+        },
+      ]
+      const result = formatMessage(msg, parts, options)
+      expect(result).toContain("## User (Build · delegated to Perf)")
+    })
+
     test("formats assistant message with metadata", () => {
       const msg: AssistantMessage = {
         id: "msg_123",
@@ -313,6 +410,42 @@ describe("transcript", () => {
       expect(result).toContain("## Assistant\n\n")
       expect(result).not.toContain("Build")
       expect(result).not.toContain("claude-sonnet-4-20250514")
+    })
+
+    test("formats delegated routing metadata in transcript output", () => {
+      const session = {
+        id: "ses_abc123",
+        title: "Test Session",
+        time: { created: 1000000000000, updated: 1000000001000 },
+      }
+      const messages = [
+        {
+          info: {
+            id: "msg_1",
+            sessionID: "ses_abc123",
+            role: "user" as const,
+            agent: "build",
+            model: { providerID: "anthropic", modelID: "claude-sonnet-4-20250514" },
+            time: { created: 1000000000000 },
+          },
+          parts: [
+            { id: "p1", sessionID: "ses_abc123", messageID: "msg_1", type: "text" as const, text: "Hello" },
+            {
+              id: "p2",
+              sessionID: "ses_abc123",
+              messageID: "msg_1",
+              type: "subtask" as const,
+              prompt: "profile this",
+              description: "Perf specialist review",
+              agent: "perf",
+            },
+          ],
+        },
+      ]
+      const options = { thinking: false, toolDetails: false, assistantMetadata: true }
+
+      const result = formatTranscript(session, messages, options)
+      expect(result).toContain("## User (Build · delegated to Perf)")
     })
   })
 })

@@ -1,5 +1,5 @@
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
-import { Locale } from "@/util/locale"
+import { agentLabel, userRoute, type AgentInfo } from "../routes/session/route"
 
 export type TranscriptOptions = {
   thinking: boolean
@@ -21,10 +21,20 @@ export type MessageWithParts = {
   parts: Part[]
 }
 
+export { agentLabel, userRoute, type AgentInfo } from "../routes/session/route"
+
+export function formatUserHeader(msg: UserMessage, parts: Part[], agents?: AgentInfo[]) {
+  const route = userRoute(msg, parts, agents)
+  if (msg.agent === "build" && route.delegated.length === 0) return `## User\n\n`
+  const delegated =
+    route.delegated.length > 0 ? ` · delegated to ${route.delegated.map((item) => item.label).join(", ")}` : ""
+  return `## User (${route.primary.label}${delegated})\n\n`
+}
+
 export function formatTranscript(
   session: SessionInfo,
   messages: MessageWithParts[],
-  options: TranscriptOptions & { agents?: Array<{ name: string; displayName?: string }> },
+  options: TranscriptOptions & { agents?: AgentInfo[] },
 ): string {
   let transcript = `# ${session.title}\n\n`
   transcript += `**Session ID:** ${session.id}\n`
@@ -40,11 +50,11 @@ export function formatTranscript(
   return transcript
 }
 
-export function formatMessage(msg: UserMessage | AssistantMessage, parts: Part[], options: TranscriptOptions & { agents?: Array<{ name: string; displayName?: string }> }): string {
+export function formatMessage(msg: UserMessage | AssistantMessage, parts: Part[], options: TranscriptOptions & { agents?: AgentInfo[] }): string {
   let result = ""
 
   if (msg.role === "user") {
-    result += `## User\n\n`
+    result += formatUserHeader(msg, parts, options.agents)
   } else {
     result += formatAssistantHeader(msg, options.assistantMetadata, options.agents)
   }
@@ -56,14 +66,14 @@ export function formatMessage(msg: UserMessage | AssistantMessage, parts: Part[]
   return result
 }
 
-export function formatAssistantHeader(msg: AssistantMessage, includeMetadata: boolean, agents?: Array<{ name: string; displayName?: string }>): string {
+export function formatAssistantHeader(msg: AssistantMessage, includeMetadata: boolean, agents?: AgentInfo[]): string {
   if (!includeMetadata) {
     return `## Assistant\n\n`
   }
 
   const duration =
     msg.time.completed && msg.time.created ? ((msg.time.completed - msg.time.created) / 1000).toFixed(1) + "s" : ""
-  const label = agents?.find((a) => a.name === msg.agent)?.displayName ?? Locale.titlecase(msg.agent)
+  const label = agentLabel(msg.agent, agents)
 
   return `## Assistant (${label} · ${msg.modelID}${duration ? ` · ${duration}` : ""})\n\n`
 }

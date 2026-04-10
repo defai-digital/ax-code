@@ -2,39 +2,39 @@ import { afterEach, beforeEach, describe, test, expect, spyOn } from "bun:test"
 import { keywordRoute as route, route as tieredRoute } from "../../src/agent/router"
 import { Provider } from "../../src/provider/provider"
 
-describe("basic routing", () => {
-  test("routes security keywords to security agent", () => {
+describe("explicit specialist intent routing", () => {
+  test("routes explicit security review requests to security agent", () => {
     const result = route("scan for vulnerabilities in the auth module", "build")
     expect(result).not.toBeNull()
     expect(result!.agent).toBe("security")
   })
 
-  test("routes debug keywords to debug agent", () => {
-    const result = route("debug this crash in the login flow", "build")
+  test("routes explicit debugging investigations to debug agent", () => {
+    const result = route("debug this crash in the login flow and trace the stack trace", "build")
     expect(result).not.toBeNull()
     expect(result!.agent).toBe("debug")
   })
 
-  test("routes test keywords to test agent", () => {
+  test("routes explicit test-writing requests to test agent", () => {
     const result = route("write unit tests for the auth module", "build")
     expect(result).not.toBeNull()
     expect(result!.agent).toBe("test")
   })
 
-  test("routes perf keywords to perf agent", () => {
-    const result = route("this function is slow, find the bottleneck", "build")
+  test("routes explicit performance investigations to perf agent", () => {
+    const result = route("profile this function and investigate the bottleneck", "build")
     expect(result).not.toBeNull()
     expect(result!.agent).toBe("perf")
   })
 
-  test("routes devops keywords to devops agent", () => {
+  test("routes concrete devops work to devops agent", () => {
     const result = route("set up the Dockerfile and CI/CD pipeline", "build")
     expect(result).not.toBeNull()
     expect(result!.agent).toBe("devops")
   })
 
-  test("routes architect keywords to architect agent", () => {
-    const result = route("review the architecture and fix circular dependencies", "build")
+  test("routes explicit architecture reviews to architect agent", () => {
+    const result = route("review the architecture and dependency graph", "build")
     expect(result).not.toBeNull()
     expect(result!.agent).toBe("architect")
   })
@@ -56,15 +56,19 @@ describe("word boundary matching", () => {
     expect(result).toBeNull()
   })
 
-  test("matches 'slow' as a standalone word", () => {
+  test("does not route bare slowdown reports without analysis intent", () => {
     const result = route("this endpoint is really slow under load", "build")
-    expect(result).not.toBeNull()
-    expect(result!.agent).toBe("perf")
+    expect(result).toBeNull()
   })
 
-  test("matches 'fast' as standalone but not inside 'breakfast'", () => {
-    expect(route("make this function fast and efficient", "build")?.agent).toBe("perf")
+  test("does not route bare performance adjectives without analysis intent", () => {
+    expect(route("make this function fast and efficient", "build")).toBeNull()
     expect(route("I had breakfast this morning", "build")).toBeNull()
+  })
+
+  test("does not route bare bug topics without debugging intent", () => {
+    expect(route("bugs are a concern for this new project", "build")).toBeNull()
+    expect(route("performance and bugs matter for this release", "build")).toBeNull()
   })
 
   test("matches multi-word keywords with boundaries", () => {
@@ -116,7 +120,7 @@ describe("confidence scaling", () => {
 
   test("confidence does not exceed rule base confidence", () => {
     const result = route(
-      "security vulnerability vulnerabilities cve owasp injection xss csrf secret leak pentest compliance",
+      "scan security vulnerability vulnerabilities cve owasp injection xss csrf secret leak pentest compliance",
       "build",
     )
     expect(result).not.toBeNull()
@@ -151,6 +155,11 @@ describe("edge cases", () => {
     const result = route("troubleshoot the auth flow", "build")
     expect(result).not.toBeNull()
     expect(result!.agent).toBe("debug")
+  })
+
+  test("bare performance topic does not route", () => {
+    const result = route("performance is important for this new project", "build")
+    expect(result).toBeNull()
   })
 })
 

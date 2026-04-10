@@ -174,6 +174,14 @@ export namespace AuditReport {
     let totalOutput = 0
     let totalReasoning = 0
     const validations: Array<{ command: string; passed: boolean }> = []
+    const routes: Array<{
+      time: number
+      from: string
+      to: string
+      mode: string
+      conf: number
+      matched: string[]
+    }> = []
     let seq = 0
 
     for (const row of rows) {
@@ -187,6 +195,16 @@ export namespace AuditReport {
         case "session.end":
           endTime = ts
           endReason = event.reason
+          break
+        case "agent.route":
+          routes.push({
+            time: ts,
+            from: event.fromAgent,
+            to: event.toAgent,
+            mode: event.routeMode ?? "switch",
+            conf: event.confidence,
+            matched: event.matched ?? [],
+          })
           break
         case "tool.call": {
           const target = extractTarget(event.tool, event.input as Record<string, unknown>)
@@ -269,6 +287,17 @@ export namespace AuditReport {
       lines.push(`- **Reason:** ${endReason}`)
     }
     lines.push("")
+
+    if (routes.length > 0) {
+      lines.push("## Routing")
+      lines.push("")
+      for (const route of routes) {
+        const time = formatTimestamp(route.time).split(" ")[1] ?? ""
+        const matched = route.matched.length > 0 ? ` [${route.matched.join(", ")}]` : ""
+        lines.push(`- ${time} ${route.mode} \`${route.from}\` -> \`${route.to}\` (${route.conf.toFixed(2)})${matched}`)
+      }
+      lines.push("")
+    }
 
     // Action Log
     lines.push("## Action Log")

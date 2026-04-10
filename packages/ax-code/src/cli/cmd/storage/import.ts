@@ -1,21 +1,20 @@
 import type { Argv } from "yargs"
 import type { Session as SDKSession, Message, Part } from "@ax-code/sdk/v2"
-import { Session } from "../../../session"
-import { MessageV2 } from "../../../session/message-v2"
 import { cmd } from "../cmd"
 import { bootstrap } from "../../bootstrap"
-import { Database } from "../../../storage/db"
-import { SessionTable, MessageTable, PartTable } from "../../../session/session.sql"
-import { Instance } from "../../../project/instance"
 import { ShareNext } from "../../../share/share-next"
 import { EOL } from "os"
 import { Filesystem } from "../../../util/filesystem"
+import type { ReplayEvent } from "../../../replay/event"
+import type { SessionTransfer } from "./transfer"
+import { writeTransfer } from "./transfer"
 
 /** Discriminated union returned by the ShareNext API (GET /api/shares/:id/data) */
 export type ShareData =
   | { type: "session"; data: SDKSession }
   | { type: "message"; data: Message }
   | { type: "part"; data: Part }
+  | { type: "event"; data: { event: ReplayEvent; timeCreated?: number; sequence?: number; stepID?: string; id?: string } }
   | { type: "session_diff"; data: unknown }
   | { type: "model"; data: unknown }
 
@@ -44,12 +43,14 @@ export function shouldAttachShareAuthHeaders(shareUrl: string, accountBaseUrl: s
 export function transformShareData(shareData: ShareData[]): {
   info: SDKSession
   messages: Array<{ info: Message; parts: Part[] }>
+  events?: SessionTransfer["events"]
 } | null {
   const sessionItem = shareData.find((d) => d.type === "session")
   if (!sessionItem) return null
 
   const messageMap = new Map<string, Message>()
   const partMap = new Map<string, Part[]>()
+  const events = [] as NonNullable<SessionTransfer["events"]>
 
   for (const item of shareData) {
     if (item.type === "message") {
@@ -59,6 +60,14 @@ export function transformShareData(shareData: ShareData[]): {
         partMap.set(item.data.messageID, [])
       }
       partMap.get(item.data.messageID)!.push(item.data)
+    } else if (item.type === "event") {
+      events.push({
+        id: item.data.id,
+        stepID: item.data.stepID,
+        sequence: item.data.sequence ?? events.length,
+        timeCreated: item.data.timeCreated ?? Date.now(),
+        event: item.data.event,
+      })
     }
   }
 
@@ -70,6 +79,7 @@ export function transformShareData(shareData: ShareData[]): {
       info: msg,
       parts: partMap.get(msg.id) ?? [],
     })),
+    events: events.length > 0 ? events : undefined,
   }
 }
 
@@ -85,15 +95,7 @@ export const ImportCommand = cmd({
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      let exportData:
-        | {
-            info: SDKSession
-            messages: Array<{
-              info: Message
-              parts: Part[]
-            }>
-          }
-        | undefined
+      let exportData: SessionTransfer | undefined
 
       const isUrl = args.file.startsWith("http://") || args.file.startsWith("https://")
 
@@ -143,7 +145,7 @@ export const ImportCommand = cmd({
 
         exportData = transformed
       } else {
-        exportData = await Filesystem.readJson<NonNullable<typeof exportData>>(args.file).catch(() => undefined)
+        exportData = await Filesystem.readJson<SessionTransfer>(args.file).catch(() => undefined)
         if (!exportData) {
           process.stdout.write(`File not found: ${args.file}`)
           process.stdout.write(EOL)
@@ -157,52 +159,7 @@ export const ImportCommand = cmd({
         return
       }
 
-      const info = Session.Info.parse({
-        ...exportData.info,
-        projectID: Instance.project.id,
-      })
-      const row = Session.toRow(info)
-      Database.use((db) =>
-        db
-          .insert(SessionTable)
-          .values(row)
-          .onConflictDoUpdate({ target: SessionTable.id, set: { project_id: row.project_id } })
-          .run(),
-      )
-
-      for (const msg of exportData.messages) {
-        const msgInfo = MessageV2.Info.parse(msg.info)
-        const { id, sessionID: _, ...msgData } = msgInfo
-        Database.use((db) =>
-          db
-            .insert(MessageTable)
-            .values({
-              id,
-              session_id: row.id,
-              time_created: msgInfo.time?.created ?? Date.now(),
-              data: msgData,
-            })
-            .onConflictDoNothing()
-            .run(),
-        )
-
-        for (const part of msg.parts) {
-          const partInfo = MessageV2.Part.parse(part)
-          const { id: partId, sessionID: _s, messageID, ...partData } = partInfo
-          Database.use((db) =>
-            db
-              .insert(PartTable)
-              .values({
-                id: partId,
-                message_id: messageID,
-                session_id: row.id,
-                data: partData,
-              })
-              .onConflictDoNothing()
-              .run(),
-          )
-        }
-      }
+      writeTransfer(exportData)
 
       process.stdout.write(`Imported session: ${exportData.info.id}`)
       process.stdout.write(EOL)

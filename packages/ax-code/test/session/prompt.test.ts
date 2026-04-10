@@ -7,6 +7,8 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
+import { EventQuery } from "../../src/replay/query"
+import { Recorder } from "../../src/replay/recorder"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -285,4 +287,257 @@ describe("session.agent-resolution", () => {
       },
     })
   }, 30000)
+})
+
+describe("session.prompt auto routing", () => {
+  test("delegates by default instead of switching the primary agent", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        const first = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "build a dashboard app" }],
+        })
+        if (first.info.role !== "user") throw new Error("expected user message")
+        expect(first.info.agent).toBe("build")
+
+        const second = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
+        })
+        if (second.info.role !== "user") throw new Error("expected user message")
+        expect(second.info.agent).toBe("build")
+        expect(second.parts.some((part) => part.type === "subtask" && part.agent === "perf")).toBe(true)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("does not auto-switch the first user turn even when enabled", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        routing: {
+          auto_switch: true,
+        },
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const msg = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "performance is important for this new project" }],
+        })
+
+        if (msg.info.role !== "user") throw new Error("expected user message")
+        expect(msg.info.agent).toBe("build")
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("routing mode off disables delegation and switching", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        routing: {
+          mode: "off",
+        },
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "build a dashboard app" }],
+        })
+
+        const second = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
+        })
+        if (second.info.role !== "user") throw new Error("expected user message")
+        expect(second.info.agent).toBe("build")
+        expect(second.parts.some((part) => part.type === "subtask")).toBe(false)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("auto-switches later turns only for explicit specialist intent", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        routing: {
+          mode: "switch",
+          auto_switch: true,
+        },
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        const first = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "build a dashboard app" }],
+        })
+        if (first.info.role !== "user") throw new Error("expected user message")
+        expect(first.info.agent).toBe("build")
+
+        const second = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
+        })
+        if (second.info.role !== "user") throw new Error("expected user message")
+        expect(second.info.agent).toBe("perf")
+        expect(second.parts.some((part) => part.type === "subtask")).toBe(false)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("does not auto-route later turns for bare performance or bug topics", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        routing: {
+          mode: "switch",
+          auto_switch: true,
+        },
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "build a dashboard app" }],
+        })
+
+        const second = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "performance and bugs are important for this new project" }],
+        })
+        if (second.info.role !== "user") throw new Error("expected user message")
+        expect(second.info.agent).toBe("build")
+        expect(second.parts.some((part) => part.type === "subtask")).toBe(false)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("records the routed event against the created user message", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "build a dashboard app" }],
+        })
+
+        Recorder.begin(session.id)
+        const msg = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
+        })
+        Recorder.end(session.id)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const route = EventQuery.bySessionAndType(session.id, "agent.route").at(-1)
+        if (!route || route.type !== "agent.route") throw new Error("expected agent.route event")
+        expect(route.messageID).toBe(msg.info.id)
+        expect(route.toAgent).toBe("perf")
+        expect(route.routeMode).toBe("delegate")
+
+        EventQuery.deleteBySession(session.id)
+        await Session.remove(session.id)
+      },
+    })
+  })
 })

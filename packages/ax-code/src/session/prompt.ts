@@ -1167,37 +1167,67 @@ export namespace SessionPrompt {
 
   async function createUserMessage(input: PromptInput) {
     // Auto-route: select the best agent for each message based on content
+    const messageID = input.messageID ?? MessageID.ascending()
     let agentName = input.agent || (await Agent.defaultAgent())
+    const cfg = await Config.get()
+    const routingMode =
+      cfg.routing?.mode ??
+      (cfg.routing?.auto_switch === true ? "switch" : "delegate")
+    const msgs = await Session.messages({ sessionID: input.sessionID })
+    const hasUser = msgs.some((msg) => msg.info.role === "user")
     const messageText = input.parts
       .filter((p): p is typeof p & { type: "text" } => p.type === "text")
       .map((p) => p.text)
       .join(" ")
     // Skip auto-routing when user explicitly selected an agent (Tab, dialog, @agent)
     const hasAgentPart = input.parts.some((p) => p.type === "agent")
-    const skipRouting = input.userSelectedAgent || hasAgentPart
+    const hasNonTextPart = input.parts.some((p) => p.type !== "text")
+    const canDelegate = routingMode === "delegate" && !hasNonTextPart
+    const canSwitch = routingMode === "switch"
+    const skipRouting = input.userSelectedAgent || hasAgentPart || routingMode === "off" || !hasUser || (!canSwitch && !canDelegate)
+    const routedParts: PromptInput["parts"] = [...input.parts]
     if (messageText && !skipRouting) {
       const routeResult = await routeAgent(messageText, agentName)
       if (routeResult) {
         Recorder.emit({
           type: "agent.route",
           sessionID: input.sessionID,
+          messageID,
           fromAgent: agentName,
           toAgent: routeResult.agent,
           confidence: routeResult.confidence,
+          routeMode: canSwitch ? "switch" : "delegate",
+          matched: routeResult.matched,
         })
         const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
         if (!routedAgent) {
           log.warn("auto-route target not found", { agent: routeResult.agent })
         } else {
-          agentName = routeResult.agent
           const routedLabel = routedAgent.displayName ?? routeResult.agent
-          log.info("auto-routed to agent", { command: "session.prompt.route", status: "ok", sessionID: input.sessionID, agent: routeResult.agent, confidence: routeResult.confidence })
-          Bus.publish(TuiEvent.ToastShow, {
-            title: "Agent Auto-Switched",
-            message: `Switched to "${routedLabel}" agent for this task`,
-            variant: "info",
-            duration: 5000,
-          }).catch(() => {})
+          if (canSwitch) {
+            agentName = routeResult.agent
+            log.info("auto-routed to agent", { command: "session.prompt.route", status: "ok", sessionID: input.sessionID, agent: routeResult.agent, confidence: routeResult.confidence, mode: "switch" })
+            Bus.publish(TuiEvent.ToastShow, {
+              title: "Primary Agent Auto-Switched",
+              message: `Switched the primary agent to "${routedLabel}" for this task`,
+              variant: "info",
+              duration: 5000,
+            }).catch(() => {})
+          } else if (canDelegate) {
+            routedParts.push({
+              type: "subtask",
+              agent: routeResult.agent,
+              description: `${routedLabel} specialist review`,
+              prompt: `Use your ${routedLabel} specialty for this request:\n\n${messageText}\n\nReturn concise findings and actionable guidance for the parent agent.`,
+            })
+            log.info("auto-delegated to agent", { command: "session.prompt.route", status: "ok", sessionID: input.sessionID, agent: routeResult.agent, confidence: routeResult.confidence, mode: "delegate" })
+            Bus.publish(TuiEvent.ToastShow, {
+              title: "Specialist Auto-Delegated",
+              message: `Kept the primary agent active and delegated "${routedLabel}" as a specialist`,
+              variant: "info",
+              duration: 5000,
+            }).catch(() => {})
+          }
         }
       }
     }
@@ -1207,7 +1237,7 @@ export namespace SessionPrompt {
     const variant = input.variant ?? (!input.model && agent.variant ? agent.variant : undefined)
 
     const info: MessageV2.Info = {
-      id: input.messageID ?? MessageID.ascending(),
+      id: messageID,
       role: "user",
       sessionID: input.sessionID,
       time: {
@@ -1229,7 +1259,7 @@ export namespace SessionPrompt {
     })
 
     const parts = await Promise.all(
-      input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
+      routedParts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
         if (part.type === "file") {
           // before checking the protocol we check if this is an mcp resource because it needs special handling
           if (part.source?.type === "resource") {
