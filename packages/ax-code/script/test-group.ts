@@ -45,7 +45,7 @@ export function pick(all: string[], name: string) {
   if (name === "live") return all.filter((file) => live.has(file))
   if (name === "e2e") return all.filter((file) => e2e.has(file))
   if (name === "recovery") return all.filter((file) => recovery.has(file))
-  if (name === "deterministic") return all.filter((file) => !live.has(file))
+  if (name === "deterministic") return all.filter((file) => !live.has(file) && !e2e.has(file))
   if (name === "unit") return all.filter((file) => !live.has(file) && !e2e.has(file) && !recovery.has(file))
   throw new Error(`Unknown test group: ${name}`)
 }
