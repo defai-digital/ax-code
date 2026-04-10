@@ -7,6 +7,12 @@ interface ExportContext {
   policy?: { name: string, version: string }
 }
 
+function summarizeText(text: string | undefined, max: number): string {
+  if (!text) return ""
+  if (text.length <= max) return text
+  return text.slice(0, max - 3) + "..."
+}
+
 function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number, ctx?: ExportContext): AuditRecord {
   const toolId = "callID" in event ? (event as { callID: string }).callID : undefined
   const base: AuditRecord = {
@@ -43,7 +49,11 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
         ...base,
         tool: event.tool,
         action: "result",
-        result: event.status,
+        result: event.error
+          ? `error: ${summarizeText(event.error, 500)}`
+          : event.output
+          ? summarizeText(event.output, 500)
+          : event.status,
         duration_ms: event.durationMs,
       }
     case "step.start":

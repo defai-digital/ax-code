@@ -1,7 +1,9 @@
 import { CodeIntelligence } from "../code-intelligence"
 import { CodeNodeID } from "../code-intelligence/id"
+import { Instance } from "../project/instance"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
+import path from "path"
 
 // analyzeImpact — BFS over the v3 call/reference edges to compute the
 // transitive blast radius of a proposed change.
@@ -42,21 +44,42 @@ export function extractFilesFromDiff(patch: string): string[] {
   const files = new Set<string>()
   const lines = patch.split("\n")
   for (const raw of lines) {
-    // `+++ b/path/to/file.ts` — the "after" side, which is what exists
-    // post-change. Skip /dev/null (pure deletions) and the leading `b/`.
     const plusMatch = raw.match(/^\+\+\+\s+(.+)$/)
     if (plusMatch) {
-      const file = plusMatch[1].trim()
-      if (file === "/dev/null") continue
-      files.add(file.startsWith("b/") ? file.slice(2) : file)
+      const file = normalizePatchFile(plusMatch[1])
+      if (file) files.add(file)
+      continue
+    }
+    const minusMatch = raw.match(/^---\s+(.+)$/)
+    if (minusMatch) {
+      const file = normalizePatchFile(minusMatch[1])
+      if (file) files.add(file)
       continue
     }
     // Fallback for `diff --git a/x b/x` when the file is identical
     // in both sides of the hunk (rename, mode change).
-    const gitMatch = raw.match(/^diff --git a\/(\S+) b\/(\S+)/)
-    if (gitMatch) files.add(gitMatch[2])
+    const gitMatch = raw.match(/^diff --git\s+(\S+)\s+(\S+)/)
+    if (gitMatch) {
+      const file = normalizePatchFile(gitMatch[2])
+      if (file) files.add(file)
+    }
   }
   return [...files]
+}
+
+function normalizePatchFile(raw: string): string {
+  const file = raw.trim().replace(/^"|"$/g, "").replace(/^'|'$/g, "")
+  if (!file || file === "/dev/null") return ""
+  if (file.startsWith("a/") || file.startsWith("b/")) return file.slice(2)
+  return file
+}
+
+function fileCandidates(file: string): string[] {
+  const candidates = new Set<string>([file])
+  if (!path.isAbsolute(file)) {
+    candidates.add(path.join(Instance.worktree, file))
+  }
+  return [...candidates]
 }
 
 // Resolve a list of changes into a seed set of symbol IDs. Non-resolvable
@@ -93,11 +116,16 @@ function resolveSeeds(
     if (change.kind === "diff") {
       const files = extractFilesFromDiff(change.patch)
       for (const file of files) {
-        const symbols = CodeIntelligence.symbolsInFile(projectID, file, { scope })
-        for (const sym of symbols) {
-          seeds.push(sym.id)
-          seedSymbols.set(sym.id, sym)
-          ciExplains.push(sym.explain)
+        const candidates = fileCandidates(file)
+        for (const candidate of candidates) {
+          const symbols = CodeIntelligence.symbolsInFile(projectID, candidate, { scope })
+          if (symbols.length === 0) continue
+          for (const sym of symbols) {
+            seeds.push(sym.id)
+            seedSymbols.set(sym.id, sym)
+            ciExplains.push(sym.explain)
+          }
+          break
         }
       }
       continue

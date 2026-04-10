@@ -5,6 +5,7 @@ import DESCRIPTION from "./refactor_apply.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
 import { RefactorPlanID } from "../debug-engine/id"
+import { extractFilesFromDiff } from "../debug-engine/analyze-impact"
 
 // Tool wrapper around DebugEngine.applySafeRefactor. This is the ONLY
 // DRE tool that writes files. It goes through the permission system
@@ -15,19 +16,6 @@ import { RefactorPlanID } from "../debug-engine/id"
 // tools. NOT added to read-only permission presets (ADR-010).
 
 const MODES = ["safe", "aggressive"] as const
-
-function extractFilesFromPatch(patch: string): string[] {
-  const files = new Set<string>()
-  for (const line of patch.split("\n")) {
-    const m = line.match(/^\+\+\+\s+(.+)$/)
-    if (m) {
-      const file = m[1].trim()
-      if (file === "/dev/null") continue
-      files.add(file.startsWith("b/") ? file.slice(2) : file)
-    }
-  }
-  return [...files]
-}
 
 export const RefactorApplyTool = Tool.define("refactor_apply", {
   description: DESCRIPTION,
@@ -46,7 +34,7 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
     // still go through `ask` because the shadow worktree + test run
     // can execute arbitrary project commands — permission is about
     // intent, not just file writes.
-    const patternFiles = args.patch ? extractFilesFromPatch(args.patch) : []
+    const patternFiles = args.patch ? extractFilesFromDiff(args.patch) : []
     const relativePatterns = patternFiles.length > 0
       ? patternFiles.map((f) => path.isAbsolute(f) ? path.relative(Instance.worktree, f).replaceAll("\\", "/") : f)
       : ["*"]

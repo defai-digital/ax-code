@@ -204,7 +204,7 @@ describe("replay with code intelligence queries", () => {
         expect(toolCallRecord.action).toBe("call")
         expect(toolResultRecord).toBeDefined()
         expect(toolResultRecord.action).toBe("result")
-        expect(toolResultRecord.result).toBe("completed")
+        expect(toolResultRecord.result).toContain("handleRequest")
 
         CodeIntelligence.__clearProject(projectID)
       },

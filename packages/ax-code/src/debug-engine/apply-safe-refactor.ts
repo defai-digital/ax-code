@@ -222,8 +222,9 @@ function isPlanStale(params: {
   // not-yet-committed branch. Treat as fresh.
   if (params.planCursor === null) return false
   // No current cursor → graph was never indexed after the plan was
-  // created. Ambiguous; be conservative and mark stale.
-  if (params.currentCursor === null) return true
+  // created. Ambiguous; treat as fresh but note uncertainty in
+  // heuristics.
+  if (params.currentCursor === null) return false
   return params.planCursor !== params.currentCursor
 }
 
@@ -261,6 +262,9 @@ export async function applySafeRefactorImpl(
 
   // Step 2: freshness check.
   const status = CodeIntelligence.status(projectID)
+  if (row.graph_cursor_at_creation !== null && status.lastCommitSha === null) {
+    heuristics.push("cursor-missing-current")
+  }
   if (isPlanStale({ planCursor: row.graph_cursor_at_creation, currentCursor: status.lastCommitSha })) {
     DebugEngineQuery.updatePlanStatus(projectID, input.planId, "stale")
     heuristics.push("stale-plan")
@@ -482,4 +486,3 @@ export async function applySafeRefactorImpl(
     await shadowCleanup()
   }
 }
-

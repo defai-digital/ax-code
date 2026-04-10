@@ -211,9 +211,9 @@ describe("extractFilesFromDiff", () => {
     expect(files.sort()).toEqual(["src/a.ts", "src/b.ts"])
   })
 
-  test("skips /dev/null (pure deletion)", () => {
+  test("keeps deleted files from pure deletions", () => {
     const patch = ["--- a/gone.ts", "+++ /dev/null"].join("\n")
-    expect(extractFilesFromDiff(patch)).toEqual([])
+    expect(extractFilesFromDiff(patch)).toEqual(["gone.ts"])
   })
 })
 

@@ -25,7 +25,72 @@ function formatDuration(ms: number): string {
   return `${s}.${Math.floor((ms % 1000) / 100)}s`
 }
 
+function summarize(s: string | undefined, max: number): string {
+  if (!s) return ""
+  const flat = s.replace(/\s+/g, " ").trim()
+  if (flat.length <= max) return flat
+  return flat.slice(0, max - 3) + "..."
+}
+
+function firstText(v: unknown): string {
+  if (typeof v === "string") return v
+  if (typeof v === "number" || typeof v === "boolean") return String(v)
+  if (Array.isArray(v)) return summarize(v.map(firstText).filter(Boolean).join(", "), 50)
+  if (!v || typeof v !== "object") return ""
+  for (const next of Object.values(v)) {
+    const text = firstText(next)
+    if (text) return text
+  }
+  return ""
+}
+
 function extractTarget(tool: string, input: Record<string, unknown>): string {
+  if (tool === "impact_analyze") {
+    if (Array.isArray(input.changes) && input.changes.length > 0) {
+      const first = input.changes[0]
+      if (first && typeof first === "object") {
+        const firstObj = first as { kind?: string; path?: string; id?: string; patch?: string }
+        if (firstObj.kind === "file") return truncate(firstObj.path ?? "", 40)
+        if (firstObj.kind === "symbol") return truncate(firstObj.id ?? "", 40)
+        if (firstObj.kind === "diff") return "diff"
+      }
+    }
+    return "impact"
+  }
+
+  if (tool === "debug_analyze") {
+    return truncate(String(input.error ?? input.entrySymbol ?? ""), 50)
+  }
+
+  if (tool === "refactor_plan") {
+    if (typeof input.intent === "string") return truncate(input.intent, 50)
+    return truncate(String(input.targets ?? ""), 50)
+  }
+
+  if (tool === "refactor_apply") {
+    return truncate(String(input.planId ?? input.mode ?? ""), 40)
+  }
+
+  if (tool === "dedup_scan") {
+    return truncate(firstText(input.kinds) || "dedup", 40)
+  }
+
+  if (tool === "hardcode_scan") {
+    return truncate(firstText(input.patterns) || firstText(input.include) || "hardcode", 40)
+  }
+
+  if (tool === "race_scan") {
+    return truncate(firstText(input.patterns) || firstText(input.include) || "race", 40)
+  }
+
+  if (tool === "lifecycle_scan") {
+    return truncate(firstText(input.resourceTypes) || firstText(input.include) || "lifecycle", 40)
+  }
+
+  if (tool === "security_scan") {
+    return truncate(firstText(input.patterns) || firstText(input.include) || "security", 40)
+  }
+
   switch (tool) {
     case "bash":
       return truncate(String(input.command ?? input.description ?? ""), 50)
@@ -54,6 +119,15 @@ function extractTarget(tool: string, input: Record<string, unknown>): string {
 
 function escapeCell(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ")
+}
+
+function formatResult(event: Extract<ReplayEvent, { type: "tool.result" }>): string {
+  if (event.status === "completed") {
+    const text = summarize(event.output, 60)
+    return text ? `ok: ${text}` : "ok"
+  }
+  const text = summarize(event.error, 60)
+  return text ? `ERR: ${text}` : "ERR"
 }
 
 export namespace AuditReport {
@@ -128,7 +202,7 @@ export namespace AuditReport {
               time: call.time,
               tool: call.tool,
               target: call.target,
-              result: event.status,
+              result: formatResult(event),
               duration: formatDuration(event.durationMs),
             })
             // Check for validation commands
@@ -206,9 +280,8 @@ export namespace AuditReport {
       lines.push("|---|------|------|--------|--------|----------|")
       for (const a of actions) {
         const time = formatTimestamp(a.time).split(" ")[1] ?? ""
-        const result = a.result === "completed" ? "ok" : a.result === "error" ? "ERR" : a.result
         lines.push(
-          `| ${a.seq} | ${time} | ${escapeCell(a.tool)} | ${escapeCell(a.target)} | ${result} | ${a.duration} |`,
+          `| ${a.seq} | ${time} | ${escapeCell(a.tool)} | ${escapeCell(a.target)} | ${escapeCell(a.result)} | ${a.duration} |`,
         )
       }
     }
