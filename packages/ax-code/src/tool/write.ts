@@ -28,9 +28,12 @@ export const WriteTool = Tool.define("write", {
     // `assertExternalDirectory` permission flow above and remain
     // allowed after the grant.
     if (Filesystem.contains(Instance.directory, filepath)) {
-      const realFilepath = await fs.promises.realpath(filepath).catch(() => null)
-      if (realFilepath && !Filesystem.contains(Instance.directory, realFilepath)) {
-        throw new Error("Access denied: symlink target escapes project directory")
+      const lstat = await fs.promises.lstat(filepath).catch(() => null)
+      if (lstat?.isSymbolicLink()) {
+        const realFilepath = await fs.promises.realpath(filepath).catch(() => null)
+        if (!realFilepath) throw new Error("Access denied: symlink target is dangling or inaccessible")
+        if (!Filesystem.contains(Instance.directory, realFilepath))
+          throw new Error("Access denied: symlink target escapes project directory")
       }
     }
     Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)

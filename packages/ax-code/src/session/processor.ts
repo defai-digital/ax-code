@@ -424,8 +424,12 @@ export namespace SessionProcessor {
                   const stepSnapshot = snapshot
                   let patchData: { hash: string; files: string[] } | undefined
                   if (snapshot) {
-                    const patch = await Snapshot.patch(snapshot)
-                    if (patch.files.length) patchData = patch
+                    try {
+                      const patch = await Snapshot.patch(snapshot)
+                      if (patch.files.length) patchData = patch
+                    } catch (err) {
+                      log.warn("snapshot patch failed", { error: err })
+                    }
                     snapshot = undefined
                   }
                   // Batch step-finish + message update + patch in one transaction
@@ -656,8 +660,12 @@ export namespace SessionProcessor {
           // Resolve async snapshot before batching final DB writes
           let finalPatch: { hash: string; files: string[] } | undefined
           if (snapshot) {
-            const patch = await Snapshot.patch(snapshot)
-            if (patch.files.length) finalPatch = patch
+            try {
+              const patch = await Snapshot.patch(snapshot)
+              if (patch.files.length) finalPatch = patch
+            } catch (err) {
+              log.warn("snapshot patch failed", { error: err })
+            }
             snapshot = undefined
           }
           // Batch final cleanup writes in one transaction

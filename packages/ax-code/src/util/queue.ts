@@ -3,15 +3,19 @@ const CLOSED = Symbol("closed")
 export class AsyncQueue<T> implements AsyncIterable<T> {
   private queue: (T | typeof CLOSED)[] = []
   private resolvers: ((value: T | typeof CLOSED) => void)[] = []
+  private count = 0
 
   get size() {
-    return this.queue.filter((x) => x !== CLOSED).length
+    return this.count
   }
 
   push(item: T) {
     const resolve = this.resolvers.shift()
     if (resolve) resolve(item)
-    else this.queue.push(item)
+    else {
+      this.queue.push(item)
+      this.count++
+    }
   }
 
   close() {
@@ -24,6 +28,7 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
     if (this.queue.length > 0) {
       const item = this.queue.shift()!
       if (item === CLOSED) return new Promise(() => {})
+      this.count--
       return item
     }
     return new Promise<T>((resolve) =>
@@ -35,7 +40,9 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
     while (true) {
       const item = await new Promise<T | typeof CLOSED>((resolve) => {
         if (this.queue.length > 0) {
-          resolve(this.queue.shift()!)
+          const v = this.queue.shift()!
+          if (v !== CLOSED) this.count--
+          resolve(v)
           return
         }
         this.resolvers.push(resolve)

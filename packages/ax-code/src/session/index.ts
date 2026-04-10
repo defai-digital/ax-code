@@ -455,7 +455,7 @@ export namespace Session {
   }
 
   export const setTitle = fn(
-    z.object({ sessionID: SessionID.zod, title: z.string() }),
+    z.object({ sessionID: SessionID.zod, title: z.string().min(1) }),
     async (input) => updateAndPublish(input.sessionID, { title: input.title }),
   )
 
