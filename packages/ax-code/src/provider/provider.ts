@@ -49,6 +49,15 @@ export namespace Provider {
       if (lower.includes("gpt-oss")) return true
       return lower.includes("gpt-4") || lower.includes("gpt-5")
     }
+    if (providerID === "xai") {
+      if (!lower.includes("grok")) return true
+      return lower.includes("grok-4") || lower.includes("grok-code")
+    }
+    if (providerID === "zhipuai" || providerID === "zhipuai-coding-plan" || providerID === "zai" || providerID === "zai-coding-plan") {
+      if (!lower.includes("glm")) return true
+      // glm-4.6+ and glm-5+
+      return !lower.includes("glm-4.5") && !lower.startsWith("glm-4-")
+    }
     return true
   }
   type Lang = Exclude<LanguageModel, string>

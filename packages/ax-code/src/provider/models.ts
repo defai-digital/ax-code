@@ -27,12 +27,29 @@ export namespace ModelsDev {
     return lower.includes("gpt-4") || lower.includes("gpt-5")
   }
 
+  function grok4(id: string) {
+    const lower = id.toLowerCase()
+    return lower.includes("grok-4") || lower.includes("grok-code")
+  }
+
+  function glm46(id: string) {
+    const lower = id.toLowerCase()
+    if (!lower.includes("glm")) return true
+    return !lower.includes("glm-4.5") && !lower.startsWith("glm-4-")
+  }
+
   function supported(providerID: string, modelID: string) {
     if (providerID === "google" || providerID === "google-vertex") {
       if (!modelID.toLowerCase().includes("gemini")) return true
       return gemini3(modelID)
     }
     if (providerID === "openai") return openai4(modelID)
+    if (providerID === "xai") {
+      if (!modelID.toLowerCase().includes("grok")) return true
+      return grok4(modelID)
+    }
+    if (providerID === "zhipuai" || providerID === "zhipuai-coding-plan" || providerID === "zai" || providerID === "zai-coding-plan")
+      return glm46(modelID)
     return true
   }
 
