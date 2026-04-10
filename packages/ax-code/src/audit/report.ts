@@ -2,6 +2,7 @@ import { EventQuery } from "../replay/query"
 import type { ReplayEvent } from "../replay/event"
 import { Session } from "../session"
 import type { SessionID } from "../session/schema"
+import { Risk } from "../risk/score"
 import path from "path"
 
 function truncate(s: string, max: number): string {
@@ -339,6 +340,20 @@ export namespace AuditReport {
       }
       lines.push("")
     }
+
+    // Risk Assessment
+    const risk = Risk.fromSession(sessionID)
+    lines.push("## Risk Assessment")
+    lines.push("")
+    lines.push(`- **Level:** ${risk.level} (${risk.score}/100)`)
+    lines.push(`- **Summary:** ${risk.summary}`)
+    const s = risk.signals
+    if (s.filesChanged > 0) lines.push(`- **Files changed:** ${s.filesChanged}`)
+    if (s.securityRelated) lines.push(`- **Security-related:** yes`)
+    if (s.crossModule) lines.push(`- **Cross-module:** yes`)
+    if (s.validationPassed !== undefined) lines.push(`- **Validation:** ${s.validationPassed ? "passed" : "failed"}`)
+    if (s.toolFailures > 0) lines.push(`- **Tool failures:** ${s.toolFailures}/${s.totalTools}`)
+    lines.push("")
 
     // Token Usage
     lines.push("## Token Usage")
