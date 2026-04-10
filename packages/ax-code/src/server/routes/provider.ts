@@ -62,9 +62,12 @@ export const ProviderRoutes = lazy(() =>
 
         const allProviders = await ModelsDev.get()
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
+        // Offline providers are always shown — they're local services that
+        // should be discoverable regardless of enabled_providers config.
+        const ALWAYS_SHOW = new Set(["ollama", "lmstudio", "ax-studio"])
         for (const [key, value] of Object.entries(allProviders)) {
           if (disabled.has(key)) continue
-          if (enabled ? enabled.has(key) : NATIVE_PROVIDERS.has(key)) {
+          if (ALWAYS_SHOW.has(key) || (enabled ? enabled.has(key) : NATIVE_PROVIDERS.has(key))) {
             filteredProviders[key] = value
           }
         }
