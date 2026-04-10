@@ -17,7 +17,7 @@ export namespace Env {
     "PYTHON_KEYRING_BACKEND",
     "XAUTHORITY",
     "DOTNET_CLI_TELEMETRY_SESSION_TOKEN",
-    "COMPOSER_AUTH",
+    // COMPOSER_AUTH removed — contains credentials that match SECRET_PATTERN
     "GPG_AGENT_INFO",
     "DBUS_SESSION_BUS_ADDRESS",
   ])

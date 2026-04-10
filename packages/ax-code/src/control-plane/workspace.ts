@@ -46,7 +46,7 @@ export namespace Workspace {
   const CreateInput = z.object({
     projectID: ProjectID.zod,
     branch: z.string().optional(),
-    type: z.string().default("worktree"),
+    type: z.string().min(1).refine((t) => getAdaptor(t) !== undefined, { message: "Unknown workspace type" }).default("worktree"),
     name: z.string().optional(),
     directory: z.string().optional(),
     extra: z.record(z.string(), z.any()).optional(),

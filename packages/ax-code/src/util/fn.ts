@@ -6,10 +6,7 @@ export function fn<T extends z.ZodType, Result>(schema: T, cb: (input: z.infer<T
     try {
       parsed = schema.parse(input)
     } catch (e) {
-      console.trace("schema validation failure stack trace:")
-      if (e instanceof z.ZodError) {
-        console.error("schema validation issues:", JSON.stringify(e.issues, null, 2))
-      }
+      // Errors propagate via throw — callers handle logging
       throw e
     }
 
