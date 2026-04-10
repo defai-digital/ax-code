@@ -755,7 +755,7 @@ export namespace Session {
     async (input) => {
       Database.use((db) => {
         db.delete(PartTable)
-          .where(and(eq(PartTable.id, input.partID), eq(PartTable.session_id, input.sessionID)))
+          .where(and(eq(PartTable.id, input.partID), eq(PartTable.session_id, input.sessionID), eq(PartTable.message_id, input.messageID)))
           .run()
         Database.effect(() =>
           Bus.publish(MessageV2.Event.PartRemoved, {

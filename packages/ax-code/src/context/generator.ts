@@ -101,7 +101,7 @@ function buildCommands(info: ProjectInfo): string {
   const { scripts, packageManager } = info
   const lines = ["## Build & Development"]
   const run = packageManager === "npm" ? "npm run" : (packageManager || "npm run")
-  const install = packageManager === "npm" ? "npm install" : `${packageManager} install`
+  const install = packageManager ? (packageManager === "npm" ? "npm install" : `${packageManager} install`) : "npm install"
   const cmds: string[] = []
 
   cmds.push(`${install}    # Install dependencies`)

@@ -119,7 +119,7 @@ export async function custom(cmd: string, cwd: string, timeout = 60_000): Promis
       cwd,
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, CI: "true" },
+      env: { ...Env.sanitize(process.env), CI: "true" },
     })
 
     let timedOut = false

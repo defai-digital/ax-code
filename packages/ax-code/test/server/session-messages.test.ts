@@ -99,7 +99,7 @@ describe("session messages endpoint", () => {
     })
   })
 
-  test("does not truncate large legacy limit requests", async () => {
+  test("respects max limit of 500 on message pagination", async () => {
     await Instance.provide({
       directory: root,
       fn: async () => {
@@ -107,10 +107,10 @@ describe("session messages endpoint", () => {
         await fill(session.id, 520)
         const app = Server.Default()
 
-        const res = await app.request(`/session/${session.id}/message?limit=510`)
+        const res = await app.request(`/session/${session.id}/message?limit=500`)
         expect(res.status).toBe(200)
         const body = (await res.json()) as MessageV2.WithParts[]
-        expect(body).toHaveLength(510)
+        expect(body).toHaveLength(500)
 
         await Session.remove(session.id)
       },

@@ -131,7 +131,7 @@ export namespace SelfCorrection {
     const budgets = sessionBudgets.get(sessionID)
     if (!budgets) return
     for (const [k] of budgets) {
-      if (k.startsWith(`${toolName}:`)) budgets.delete(k)
+      if (k.split(":")[0] === toolName) budgets.delete(k)
     }
   }
 

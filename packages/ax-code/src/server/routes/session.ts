@@ -577,8 +577,9 @@ export const SessionRoutes = lazy(() =>
               .number()
               .int()
               .min(0)
+              .max(500)
               .optional()
-              .meta({ description: "Maximum number of messages to return" }),
+              .meta({ description: "Maximum number of messages to return (0-500)" }),
             before: z
               .string()
               .optional()

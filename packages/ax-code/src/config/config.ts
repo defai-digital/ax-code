@@ -230,6 +230,7 @@ export namespace Config {
         await load(process.env.AX_CODE_CONFIG_CONTENT, {
           dir: Instance.directory,
           source: "AX_CODE_CONFIG_CONTENT",
+          trusted: false,
         }),
       )
       log.debug("loaded custom config from AX_CODE_CONFIG_CONTENT", { command: "config.load", status: "ok" })

@@ -15,7 +15,6 @@ export const readOnlyWithWeb = (whitelistedDirs: string[]) =>
     grep: "allow",
     glob: "allow",
     list: "allow",
-    bash: "allow",
     read: "allow",
     codesearch: "allow",
     webfetch: "allow",
@@ -43,7 +42,6 @@ export const readOnlyNoWeb = (whitelistedDirs: string[]) =>
     grep: "allow",
     glob: "allow",
     list: "allow",
-    bash: "allow",
     read: "allow",
     codesearch: "allow",
     // Debugging & Refactoring Engine read-only tools — see note above.

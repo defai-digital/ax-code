@@ -4,7 +4,7 @@ import { ProviderID, ModelID } from "../provider/schema"
 import DESCRIPTION from "./batch.txt"
 import { Log } from "@/util/log"
 
-const DISALLOWED = new Set(["batch"])
+const DISALLOWED = new Set(["batch", "task"])
 const FILTERED_FROM_SUGGESTIONS = new Set(["invalid", "patch", ...DISALLOWED])
 const log = Log.create({ service: "tool.batch" })
 
