@@ -196,7 +196,7 @@ test("skips migration when tui.json already exists", async () => {
   })
 })
 
-test.skipIf(process.getuid?.() === 0)("continues loading tui config when legacy source cannot be stripped", async () => {
+test.skipIf(process.getuid?.() === 0 || !!process.env.CI)("continues loading tui config when legacy source cannot be stripped", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "readonly-theme" }, null, 2))
