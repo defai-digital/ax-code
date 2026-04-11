@@ -55,7 +55,7 @@ export const DreGraphCommand = cmd({
       return
     }
 
-    const server = DreGraphServer.listen(args.port as number)
+    const server = await DreGraphServer.listen(args.port as number)
     const url = new URL(
       args.index ? "/dre-graph" : `/dre-graph/session/${hit!.sid}`,
       `http://${server.hostname}:${server.port}`,

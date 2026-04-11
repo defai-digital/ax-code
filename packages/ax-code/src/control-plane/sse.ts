@@ -3,7 +3,7 @@ export async function parseSSE(
   signal: AbortSignal,
   onEvent: (event: unknown) => void,
 ) {
-  const LIMIT = 1024 * 1024
+  const LIMIT = 64 * 1024 * 1024
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let tail = ""
@@ -96,6 +96,8 @@ export async function parseSSE(
 
   const finish = () => {
     if (overflow) {
+      // Emit whatever complete events were buffered before overflow.
+      if (block.length > 0) emit(block.join("\n"))
       tail = ""
       block = []
       size = 0

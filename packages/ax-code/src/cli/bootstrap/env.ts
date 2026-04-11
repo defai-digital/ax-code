@@ -1,7 +1,6 @@
 import { Installation } from "../../installation"
 import { NativePerf } from "../../perf/native"
 import { Log } from "../../util/log"
-import { Process } from "../../util/process"
 
 export type Opts = {
   logLevel?: string
@@ -42,9 +41,19 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
       stderr: "ignore",
       env: { ...env, TERM: "dumb", NO_COLOR: "1" },
     })
-    const stdout = await Process.capture(proc, { timeout: 3000 })
-      .then((result) => result.stdout)
+    let timer: ReturnType<typeof setTimeout>
+    const timeout = new Promise<string>((_, reject) => {
+      timer = setTimeout(() => {
+        proc.kill()
+        reject(new Error("timeout"))
+      }, 3000)
+    })
+    const stdout = await Promise.race([
+      new Response(proc.stdout).text(),
+      timeout,
+    ])
       .catch(() => "")
+      .finally(() => clearTimeout(timer!))
     if (!stdout) return
     for (const entry of stdout.split("\0")) {
       const eq = entry.indexOf("=")

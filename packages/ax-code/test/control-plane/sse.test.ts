@@ -57,7 +57,8 @@ describe("control-plane/sse", () => {
   test("rejects oversized malformed buffers without emitting partial events", async () => {
     const events: unknown[] = []
     const stop = new AbortController()
-    const chunk = "x".repeat(700_000)
+    // 64MB limit — each chunk must be large enough that two exceed it
+    const chunk = "x".repeat(40 * 1024 * 1024)
 
     await expect(parseSSE(stream([chunk, chunk]), stop.signal, (event) => events.push(event))).rejects.toThrow(
       "SSE buffer limit exceeded",
