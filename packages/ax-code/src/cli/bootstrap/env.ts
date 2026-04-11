@@ -123,7 +123,7 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   })
 
   if (!dbg) return
-  const file = Log.file() || "stderr (--print-logs)"
+  const file = (typeof Log.file === "function" ? Log.file() : "") || "stderr (--print-logs)"
   write(banner({ cwd, log: file, pid, version }))
   info("debugger", {
     cwd,
