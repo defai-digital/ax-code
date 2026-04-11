@@ -1,6 +1,7 @@
-import { NamedError } from "@ax-code/util/error"
+import { Effect } from "effect"
 import matter from "gray-matter"
 import { z } from "zod"
+import { NamedError } from "@ax-code/util/error"
 import { Filesystem } from "../util/filesystem"
 
 export namespace ConfigMarkdown {
@@ -68,25 +69,39 @@ export namespace ConfigMarkdown {
     return content.replace(frontmatter, () => processed)
   }
 
-  export async function parse(filePath: string) {
-    const template = await Filesystem.readText(filePath)
+  const wrap = (file: string) => (err: unknown) =>
+    new FrontmatterError(
+      {
+        path: file,
+        message: `${file}: Failed to parse YAML frontmatter: ${NamedError.message(err)}`,
+      },
+      { cause: err },
+    )
 
-    try {
-      const md = matter(template)
-      return md
-    } catch {
-      try {
-        return matter(fallbackSanitization(template))
-      } catch (err) {
-        throw new FrontmatterError(
-          {
-            path: filePath,
-            message: `${filePath}: Failed to parse YAML frontmatter: ${NamedError.message(err)}`,
-          },
-          { cause: err },
-        )
-      }
-    }
+  const load = Effect.fn("ConfigMarkdown.load")((file: string, text: string) =>
+    Effect.try({
+      try: () => matter(text),
+      catch: wrap(file),
+    }).pipe(
+      Effect.catch(() =>
+        Effect.try({
+          try: () => matter(fallbackSanitization(text)),
+          catch: wrap(file),
+        }),
+      ),
+    ),
+  )
+
+  export const parseEffect = Effect.fn("ConfigMarkdown.parse")(function* (file: string) {
+    const text = yield* Effect.tryPromise({
+      try: () => Filesystem.readText(file),
+      catch: (err) => err,
+    })
+    return yield* load(file, text)
+  })
+
+  export function parse(file: string) {
+    return Effect.runPromise(parseEffect(file))
   }
 
   export const FrontmatterError = NamedError.create(

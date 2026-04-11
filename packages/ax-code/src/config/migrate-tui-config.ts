@@ -1,3 +1,5 @@
+import { constants } from "fs"
+import { access } from "fs/promises"
 import path from "path"
 import { type ParseError as JsoncParseError, applyEdits, modify, parse as parseJsonc } from "jsonc-parser"
 import { unique } from "remeda"
@@ -101,6 +103,14 @@ function normalizeTui(data: Record<string, unknown>) {
 
 async function backupAndStripLegacy(file: string, source: string) {
   const backup = file + ".tui-migration.bak"
+  const writable = await access(file, constants.W_OK)
+    .then(() => true)
+    .catch((error) => {
+      log.warn("source config is not writable for tui migration", { path: file, error })
+      return false
+    })
+  if (!writable) return false
+
   const hasBackup = await Filesystem.exists(backup)
   const backed = hasBackup
     ? true
