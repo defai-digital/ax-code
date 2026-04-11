@@ -1,4 +1,4 @@
-import { Effect, Exit, ScopedCache, Scope } from "effect"
+import { Cause, Effect, Exit, ScopedCache, Scope } from "effect"
 import { Instance, type Shape } from "@/project/instance"
 import { registerDisposer } from "./instance-registry"
 
@@ -25,7 +25,7 @@ export namespace InstanceState {
       // the generic Effect error carries no useful diagnostic context.
       const off = registerDisposer((directory) =>
         Effect.runPromiseExit(ScopedCache.invalidate(cache, directory)).then((exit) => {
-          if (Exit.isFailure(exit) && !Exit.isInterrupted(exit)) {
+          if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) {
             // eslint-disable-next-line no-console
             console.error("InstanceState disposer: cache invalidate failed", { directory, err: exit.cause })
           }

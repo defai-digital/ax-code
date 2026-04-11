@@ -14,6 +14,7 @@ import { Auth } from "../../auth"
 import { ModelsDev } from "../../provider/models"
 import { NativeStore } from "../../code-intelligence/native-store"
 import { Log } from "../../util/log"
+import { Server } from "../../server/server"
 import path from "path"
 import fs from "fs/promises"
 
@@ -233,6 +234,123 @@ export const DoctorCommand: CommandModule = {
     if (Flag.AX_CODE_NATIVE_PARSER) flags.push("NATIVE_PARSER=on")
     if (flags.length > 0) {
       checks.push({ name: "Feature flags", status: "ok", detail: flags.join(", ") })
+    }
+
+    // 13. Shell environment probe — loadShellEnv can block startup if the
+    // login shell is slow. Time it and warn above 2s.
+    try {
+      const shell = process.env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash")
+      if (process.platform !== "win32") {
+        const start = performance.now()
+        const proc = Bun.spawn([shell, "-l", "-c", "echo ok"], {
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "ignore",
+          env: { ...process.env, TERM: "dumb", NO_COLOR: "1" },
+        })
+        let timer: ReturnType<typeof setTimeout>
+        const timeout = new Promise<string>((_, reject) => {
+          timer = setTimeout(() => {
+            proc.kill()
+            reject(new Error("timeout"))
+          }, 5000)
+        })
+        const out = await Promise.race([new Response(proc.stdout).text(), timeout])
+          .catch(() => "")
+          .finally(() => clearTimeout(timer!))
+        const elapsed = Math.round(performance.now() - start)
+        const ok = out.trim() === "ok"
+        checks.push({
+          name: "Shell environment",
+          status: elapsed > 2000 ? "warn" : ok ? "ok" : "warn",
+          detail: ok
+            ? `${shell} responds in ${elapsed}ms${elapsed > 2000 ? " (slow — may delay startup)" : ""}`
+            : `${shell} did not respond within 5s — startup will be delayed`,
+        })
+      }
+    } catch {
+      // Best-effort
+    }
+
+    // 14. Internal server SSE round-trip — verifies the event pipeline
+    // that streams LLM responses to the TUI is functional.
+    try {
+      const app = Server.Default()
+      const start = performance.now()
+      const res = await app.fetch(new Request("http://localhost/event"))
+      const elapsed = Math.round(performance.now() - start)
+      if (res.ok && res.body) {
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let gotConnected = false
+        const deadline = Date.now() + 3000
+        while (Date.now() < deadline) {
+          const { done, value } = await Promise.race([
+            reader.read(),
+            new Promise<{ done: true; value: undefined }>((resolve) =>
+              setTimeout(() => resolve({ done: true, value: undefined }), 3000),
+            ),
+          ])
+          if (done) break
+          const text = decoder.decode(value, { stream: true })
+          if (text.includes("server.connected")) {
+            gotConnected = true
+            break
+          }
+        }
+        void reader.cancel().catch(() => {})
+        checks.push({
+          name: "Event stream (SSE)",
+          status: gotConnected ? "ok" : "warn",
+          detail: gotConnected
+            ? `Connected in ${elapsed}ms — event pipeline operational`
+            : "Connected but did not receive server.connected event",
+        })
+      } else {
+        checks.push({
+          name: "Event stream (SSE)",
+          status: "warn",
+          detail: `Server returned ${res.status} — event stream may not work`,
+        })
+      }
+    } catch (err) {
+      checks.push({
+        name: "Event stream (SSE)",
+        status: "warn",
+        detail: `Event stream probe failed: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    }
+
+    // 15. Provider warmup timing — slow provider loading delays the first
+    // prompt. Time it and warn if any provider takes too long.
+    try {
+      const { Provider } = await import("../../provider/provider")
+      const start = performance.now()
+      const providers = await Promise.race([
+        Provider.list(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
+      ])
+      const elapsed = Math.round(performance.now() - start)
+      if (providers === null) {
+        checks.push({
+          name: "Provider loading",
+          status: "warn",
+          detail: "Provider loading timed out after 10s — first prompt will be slow",
+        })
+      } else {
+        const names = Object.keys(providers)
+        checks.push({
+          name: "Provider loading",
+          status: elapsed > 5000 ? "warn" : "ok",
+          detail: `${names.length} provider${names.length !== 1 ? "s" : ""} loaded in ${elapsed}ms${elapsed > 5000 ? " (slow)" : ""}${names.length > 0 ? ` (${names.slice(0, 5).join(", ")}${names.length > 5 ? ", ..." : ""})` : ""}`,
+        })
+      }
+    } catch (err) {
+      checks.push({
+        name: "Provider loading",
+        status: "warn",
+        detail: `Provider probe failed: ${err instanceof Error ? err.message : String(err)}`,
+      })
     }
 
     // Print results
