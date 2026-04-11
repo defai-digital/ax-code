@@ -264,7 +264,7 @@ ax-code index --concurrency 8  # Parallel indexing for large projects
 
 **Incremental by default (v2.4).** Second runs skip unchanged files via content-hash matching — only modified files re-index. Deleted files are automatically purged from the graph. Progress shows per-file completion in real time.
 
-The graph powers tools like `code-intelligence` (symbol lookup, callers, callees), `impact_analyze` (change impact estimation), and `refactor_plan` (dependency-aware refactoring).
+The graph powers tools like `code-intelligence` (symbol lookup, callers, callees), `impact_analyze` (change impact estimation), and `refactor_plan` (dependency-aware refactoring). See the [full Code Intelligence guide](docs/code-intelligence.md) for details.
 
 ### 38+ Built-in Tools
 

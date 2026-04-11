@@ -11,9 +11,10 @@ This folder holds **product-facing** documentation: user guides, architecture po
 
 ## Guides
 
-| Document                   | Summary                                                                      |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| [Sandbox Mode](sandbox.md) | Execution sandbox — toggle, configuration, isolation modes, enforcement details |
+| Document                                         | Summary                                                                         |
+| ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| [Code Intelligence Graph](code-intelligence.md)  | Indexing, querying, DRE tools, workflows, and troubleshooting the code graph    |
+| [Sandbox Mode](sandbox.md)                       | Execution sandbox — toggle, configuration, isolation modes, enforcement details |
 
 ## Specs
 
