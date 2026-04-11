@@ -52,11 +52,30 @@ export const AuditRoutes = lazy(() =>
           200: { description: "JSON Lines audit export" },
         },
       }),
-      validator("query", z.object({ since: z.coerce.number().int().min(0).optional() })),
+      validator("query", z.object({
+        since: z.coerce.number().int().min(0).optional(),
+        risk: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional().meta({ description: "Filter sessions by minimum risk level" }),
+        type: z.string().optional().meta({ description: "Filter by event type (e.g. tool.call, agent.route)" }),
+      })),
       async (c) => {
-        const since = c.req.valid("query").since
-        const lines = [...AuditExport.streamAll({ since })]
-        return c.json({ data: lines.map(parseLine).filter((x) => x !== null) })
+        const { since, risk, type } = c.req.valid("query")
+        type AuditRecord = { session_id: string; event_type: string; [key: string]: unknown }
+        let records = [...AuditExport.streamAll({ since })].map(parseLine).filter((x): x is AuditRecord => x !== null && typeof x === "object" && "session_id" in (x as object))
+        if (type) records = records.filter((r) => r.event_type === type)
+        if (risk) {
+          const { Risk: RiskEngine } = await import("../../risk/score")
+          const riskOrder = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 } as const
+          const minLevel = riskOrder[risk]
+          const sessionRisks = new Map<string, number>()
+          for (const r of records) {
+            if (!sessionRisks.has(r.session_id)) {
+              const assessment = RiskEngine.fromSession(r.session_id as any)
+              sessionRisks.set(r.session_id, riskOrder[assessment.level])
+            }
+          }
+          records = records.filter((r) => (sessionRisks.get(r.session_id) ?? 0) >= minLevel)
+        }
+        return c.json({ data: records })
       },
     )
     .get(

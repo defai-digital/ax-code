@@ -13,6 +13,8 @@ import { DebugCommand } from "./cmd/debug"
 import { DesignCheckCommand } from "./cmd/design-check"
 import { DoctorCommand } from "./cmd/doctor"
 import { TraceCommand } from "./cmd/trace"
+import { CompareCommand } from "./cmd/compare"
+import { RollbackCommand } from "./cmd/rollback"
 import { ExportCommand } from "./cmd/export"
 import { GenerateCommand } from "./cmd/generate"
 import { GithubCommand } from "./cmd/github"
@@ -52,6 +54,8 @@ const cmds = [
   DebugCommand,
   DoctorCommand,
   TraceCommand,
+  CompareCommand,
+  RollbackCommand,
   ConsoleCommand,
   ProvidersCommand,
   AgentCommand,
