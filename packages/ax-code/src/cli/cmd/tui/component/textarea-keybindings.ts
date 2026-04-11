@@ -63,11 +63,17 @@ export function useTextareaKeybindings() {
 
   return createMemo(() => {
     const keybinds = keybind.all
+    const submit = mapTextareaKeybindings(keybinds, "submit")
+    const newline = mapTextareaKeybindings(keybinds, "newline")
+    const submitFallback: KeyBinding[] = [{ name: "return", action: "submit" }]
+    const newlineFallback: KeyBinding[] = [{ name: "return", meta: true, action: "newline" }]
 
     return [
-      { name: "return", action: "submit" },
-      { name: "return", meta: true, action: "newline" },
-      ...TEXTAREA_ACTIONS.flatMap((action) => mapTextareaKeybindings(keybinds, action)),
+      ...(submit.length ? submit : submitFallback),
+      ...(newline.length ? newline : newlineFallback),
+      ...TEXTAREA_ACTIONS.filter((action) => action !== "submit" && action !== "newline").flatMap((action) =>
+        mapTextareaKeybindings(keybinds, action),
+      ),
     ] satisfies KeyBinding[]
   })
 }

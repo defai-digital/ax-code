@@ -74,6 +74,7 @@ export function Home() {
 
   let prompt: PromptRef
   let once = false
+  let auto = false
   const args = useArgs()
   const local = useLocal()
   onMount(() => {
@@ -94,7 +95,9 @@ export function Home() {
       (ready) => {
         if (!ready) return
         if (!args.prompt) return
+        if (auto) return
         if (prompt.current?.input !== args.prompt) return
+        auto = true
         prompt.submit()
       },
     ),

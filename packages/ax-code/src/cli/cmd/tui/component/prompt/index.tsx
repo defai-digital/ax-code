@@ -36,6 +36,7 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 import { Usage } from "../../routes/session/usage"
+import { Gate } from "./gate"
 
 export type PromptProps = {
   sessionID?: string
@@ -199,7 +200,6 @@ export function Prompt(props: PromptProps) {
       {
         title: "Submit prompt",
         value: "prompt.submit",
-        keybind: "input_submit",
         category: "Prompt",
         hidden: true,
         onSelect: (dialog) => {
@@ -549,7 +549,7 @@ export function Prompt(props: PromptProps) {
     },
   ])
 
-  async function submit() {
+  const submit = Gate.create(async () => {
     if (props.disabled) return
     if (autocomplete?.visible) return
     if (!store.prompt.input) return
@@ -710,7 +710,7 @@ export function Prompt(props: PromptProps) {
         })
       }, 50)
     input.clear()
-  }
+  })
   const exit = useExit()
 
   function pasteText(text: string, virtualText: string) {
