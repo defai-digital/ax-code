@@ -33,8 +33,11 @@ export const SmartLlmRoutes = lazy(() =>
         },
       }),
       async (c) => {
+        if (process.env["AX_CODE_SMART_LLM"] !== undefined) {
+          return c.json({ enabled: process.env["AX_CODE_SMART_LLM"] === "true" })
+        }
         const config = await readProjectConfig()
-        const enabled = config?.routing?.llm === true || process.env["AX_CODE_SMART_LLM"] === "true"
+        const enabled = config?.routing?.llm === true
         process.env["AX_CODE_SMART_LLM"] = String(enabled)
         return c.json({ enabled })
       },

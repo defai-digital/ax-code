@@ -7,18 +7,7 @@ import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 
 const log = Log.create({ service: "code-intelligence.native-store" })
 
-// Dynamic import of the native addon — fails gracefully if not available.
-// Use createRequire to prevent Bun's static analysis from failing the build
-// when the native addon isn't installed.
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
-let native: any
-
-try {
-  native = _require("@ax-code/index-core")
-} catch {
-  // Native addon not available — will fall back to Drizzle
-}
+import { NativeAddon } from "@/native/addon"
 
 let storeInstance: any | undefined
 
@@ -27,6 +16,7 @@ function getDbPath(): string {
 }
 
 function store(): any {
+  const native = NativeAddon.index()
   if (!storeInstance && native) {
     try {
       storeInstance = new native.IndexStore(getDbPath())
@@ -44,7 +34,7 @@ function op<T>(name: string, input: unknown, fn: (store: any) => T): T | undefin
 }
 
 export namespace NativeStore {
-  export const available = !!native
+  export const available = !!NativeAddon.index()
 
   // Safe JSON.parse wrapper — returns fallback on corrupted native output (BUG-005)
   function safeParse<T>(json: string, fallback: T): T {
@@ -199,6 +189,7 @@ export namespace NativeStore {
   // ─── IntervalTree ─���───────────────────────────────────────────────
 
   export function createIntervalTree(): any | undefined {
+    const native = NativeAddon.index()
     if (!native) return undefined
     return new native.IntervalTree()
   }
@@ -206,6 +197,7 @@ export namespace NativeStore {
   // ─── Advisory Lock ─────────────────────────────────────���──────────
 
   export function createAdvisoryLock(lockPath: string): any | undefined {
+    const native = NativeAddon.index()
     if (!native) return undefined
     return new native.AdvisoryLock(lockPath)
   }
@@ -213,6 +205,7 @@ export namespace NativeStore {
   // ─── Hashing ──────────────────────────────────────────────────────
 
   export function hashSha256(data: Buffer): string | undefined {
+    const native = NativeAddon.index()
     if (!native) return undefined
     return NativePerf.run("index.hashSha256", data.byteLength, () => native.hashSha256(data))
   }
@@ -220,6 +213,7 @@ export namespace NativeStore {
   // ─── ID Generation ────────────��───────────────────────────────────
 
   export function generateId(prefix: string): string | undefined {
+    const native = NativeAddon.index()
     if (!native) return undefined
     return NativePerf.run("index.generateId", prefix, () => native.generateId(prefix))
   }

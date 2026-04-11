@@ -1,4 +1,6 @@
 # AX-CODE MIGRATION REVIEW SHEET
+> Historical planning document. Current AX Code licensing is defined by [`../LICENSING.md`](../LICENSING.md), [`../NOTICE`](../NOTICE), and [`../TRADEMARKS.md`](../TRADEMARKS.md).
+
 ## OpenCode (Base) + ax-cli (Feature Source) → ax-code
 
 **Prepared:** 2026-03-24

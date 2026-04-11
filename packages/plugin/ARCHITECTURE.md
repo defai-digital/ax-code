@@ -17,3 +17,9 @@
 ## Testing
 
 - colocate tests or add focused package-level tests as the surface grows
+
+## License
+
+`packages/plugin` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

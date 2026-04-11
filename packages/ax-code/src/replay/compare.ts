@@ -91,6 +91,13 @@ export namespace ReplayCompare {
     return 0
   }
 
+  function validationText(input: Risk.Assessment["signals"]) {
+    if (input.validationState === "passed") return "validation passed"
+    if (input.validationState === "failed") return "validation failed"
+    if (input.validationState === "partial") return "partial validation"
+    return "validation not recorded"
+  }
+
   function semanticCost(input?: Semantic | null) {
     if (!input) return 0
     if (input.primary === "rewrite") return 3
@@ -157,9 +164,8 @@ export namespace ReplayCompare {
     const plan = `${head}${tail}${body}`.trim()
 
     const note = [] as string[]
-    if (risk.signals.validationPassed === true) note.push("validation passed")
-    if (risk.signals.validationPassed === false) note.push("validation failed")
-    if (risk.signals.validationPassed === undefined) note.push("validation not recorded")
+    note.push(validationText(risk.signals))
+    if (risk.confidence < 0.5) note.push("low evidence confidence")
     if (risk.signals.toolFailures > 0) note.push(`${risk.signals.toolFailures} tool failures`)
     if (deep && deep.divergences.length > 0) note.push(`${deep.divergences.length} replay divergences`)
 
@@ -180,10 +186,11 @@ export namespace ReplayCompare {
   }): Scorecard {
     const fail = input.risk.signals.toolFailures
     const div = input.deep?.divergences.length ?? 0
-    const state = input.risk.signals.validationPassed
-    const test = state === true ? 1 : state === false ? 0 : 0.45
-    const base = state === true ? 0.95 : state === false ? 0.35 : 0.55
-    const correctness = round(clamp(base - Math.min(0.3, fail * 0.1) - Math.min(0.24, div * 0.08)))
+    const state = input.risk.signals.validationState
+    const conf = input.risk.confidence
+    const test = state === "passed" ? 1 : state === "failed" ? 0 : state === "partial" ? 0.75 : 0.6
+    const base = state === "passed" ? 0.95 : state === "failed" ? 0.35 : state === "partial" ? 0.78 : 0.62
+    const correctness = round(clamp(base - (1 - conf) * 0.12 - Math.min(0.3, fail * 0.1) - Math.min(0.24, div * 0.08)))
     const safety = round(clamp(1 - input.risk.score / 100 - semanticRisk(input.semantic) * 0.04))
     const tools = Math.max(input.view.tools.length, input.risk.signals.totalTools)
     const routes = input.view.routes.length
@@ -199,8 +206,7 @@ export namespace ReplayCompare {
     )
     const validation = round(test)
     const total = round(correctness * 0.4 + safety * 0.3 + simplicity * 0.15 + validation * 0.15)
-    const status =
-      state === true ? "validation passed" : state === false ? "validation failed" : "validation not recorded"
+    const status = validationText(input.risk.signals)
     const change = input.semantic ? ` · ${input.semantic.headline}` : ""
 
     return {
@@ -210,7 +216,7 @@ export namespace ReplayCompare {
           key: "correctness",
           label: "Correctness",
           value: correctness,
-          detail: `${status}, ${div} divergences, ${fail} tool failures`,
+          detail: `${status}, confidence ${conf.toFixed(2)}, ${div} divergences, ${fail} tool failures`,
         },
         {
           key: "safety",
@@ -228,7 +234,7 @@ export namespace ReplayCompare {
           key: "validation",
           label: "Validation",
           value: validation,
-          detail: status,
+          detail: `${status} · ${input.risk.readiness.replaceAll("_", " ")}`,
         },
       ],
     }
@@ -257,9 +263,24 @@ export namespace ReplayCompare {
         if (a.risk.score !== b.risk.score) return a.risk.score - b.risk.score
         if (semanticRisk(a.semantic) !== semanticRisk(b.semantic)) return semanticRisk(a.semantic) - semanticRisk(b.semantic)
         if (semanticCost(a.semantic) !== semanticCost(b.semantic)) return semanticCost(a.semantic) - semanticCost(b.semantic)
-        const av = a.risk.signals.validationPassed === true ? 1 : a.risk.signals.validationPassed === false ? -1 : 0
-        const bv = b.risk.signals.validationPassed === true ? 1 : b.risk.signals.validationPassed === false ? -1 : 0
+        const av =
+          a.risk.signals.validationState === "passed"
+            ? 2
+            : a.risk.signals.validationState === "partial"
+              ? 1
+              : a.risk.signals.validationState === "failed"
+                ? -1
+                : 0
+        const bv =
+          b.risk.signals.validationState === "passed"
+            ? 2
+            : b.risk.signals.validationState === "partial"
+              ? 1
+              : b.risk.signals.validationState === "failed"
+                ? -1
+                : 0
         if (bv !== av) return bv - av
+        if (b.risk.confidence !== a.risk.confidence) return b.risk.confidence - a.risk.confidence
         return a.id.localeCompare(b.id)
       })
 
@@ -321,13 +342,15 @@ export namespace ReplayCompare {
       rb.push({ pts, msg })
     }
 
-    const testA = input.riskA.signals.validationPassed
-    const testB = input.riskB.signals.validationPassed
+    const testA = input.riskA.signals.validationState
+    const testB = input.riskB.signals.validationState
     if (testA !== testB) {
-      if (testA === true) vote("A", 4, "validation passed")
-      if (testB === true) vote("B", 4, "validation passed")
-      if (testA === false) vote("B", 2, "avoids a failed validation run")
-      if (testB === false) vote("A", 2, "avoids a failed validation run")
+      if (testA === "passed") vote("A", 4, "validation passed")
+      if (testB === "passed") vote("B", 4, "validation passed")
+      if (testA === "partial") vote("A", 2, "broader validation coverage")
+      if (testB === "partial") vote("B", 2, "broader validation coverage")
+      if (testA === "failed") vote("B", 2, "avoids a failed validation run")
+      if (testB === "failed") vote("A", 2, "avoids a failed validation run")
     }
 
     const risk = Math.abs(input.riskA.score - input.riskB.score)
@@ -337,6 +360,9 @@ export namespace ReplayCompare {
     const fail = Math.abs(input.riskA.signals.toolFailures - input.riskB.signals.toolFailures)
     if (fail > 0)
       vote(input.riskA.signals.toolFailures < input.riskB.signals.toolFailures ? "A" : "B", 2, "fewer tool failures")
+
+    const conf = Math.abs(input.riskA.confidence - input.riskB.confidence)
+    if (conf >= 0.15) vote(input.riskA.confidence > input.riskB.confidence ? "A" : "B", 1, "stronger evidence quality")
 
     if (input.viewA && input.viewB) {
       const sa = score({ risk: input.riskA, view: input.viewA, deep: input.deepA, semantic: input.semanticA })

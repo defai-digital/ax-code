@@ -224,13 +224,17 @@ export namespace Planner {
 
     let lastResult: PhaseResult | undefined
     const maxAttempts = phase.maxRetries + 1
-    const run = async () =>
-      Promise.race([
-        executor(phase, plan),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Phase timed out after ${timeout}ms`)), timeout),
-        ),
+    const run = async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      return Promise.race([
+        executor(phase, plan).finally(() => {
+          if (timer) clearTimeout(timer)
+        }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`Phase timed out after ${timeout}ms`)), timeout)
+        }),
       ])
+    }
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {

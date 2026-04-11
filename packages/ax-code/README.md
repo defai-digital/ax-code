@@ -90,3 +90,9 @@ GitHub Actions runs the `ax-code` workflow on `packages/ax-code/**` changes.
 - `ax-code-perf` is a separate manual workflow for perf sampling, optional regression gating, machine-readable summary upload, markdown report upload, and optional baseline promotion. It uploads the raw report, the verdict JSON, the markdown report, and optionally a promoted baseline artifact plus baseline summary artifact.
 
 Reports are written under `packages/ax-code/.tmp/test-report`.
+
+## License
+
+`packages/ax-code` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

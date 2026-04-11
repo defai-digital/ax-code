@@ -1,6 +1,7 @@
 import { NamedError } from "@ax-code/util/error"
 import { describe, expect, test } from "bun:test"
 import z from "zod"
+import { createEnd } from "../../src/cli/boot"
 import { apply, init, level } from "../../src/cli/bootstrap/env"
 import { data, fatal } from "../../src/cli/bootstrap/fatal"
 import { migrate } from "../../src/cli/bootstrap/migrate"
@@ -162,5 +163,77 @@ describe("cli.boot.fatal", () => {
     expect(err).toHaveLength(1)
     expect(ui[0]).toContain("/tmp/ax-code.log")
     expect(out).toEqual(["ERR:boom\n"])
+  })
+})
+
+describe("cli.boot.end", () => {
+  test("awaits cleanup and arms a longer forced-exit guard", async () => {
+    const seen: string[] = []
+    let fn: (() => void) | undefined
+    let ms = 0
+    let idle = false
+    let exit: number | undefined
+    const end = createEnd({
+      timeout: 4321,
+      later: ((next: (...args: any[]) => void, wait?: number) => {
+        fn = next
+        ms = wait ?? 0
+        return {
+          unref() {
+            idle = true
+            return this
+          },
+        } as ReturnType<typeof setTimeout>
+      }) as typeof setTimeout,
+      exit: ((code?: number) => {
+        exit = code
+        throw new Error("exit")
+      }) as never,
+      warn: (msg) => void seen.push(msg),
+      stop: [
+        async () => void seen.push("instance"),
+        async () => void seen.push("telemetry"),
+      ],
+    })
+
+    await end(7, "test")
+
+    expect(seen).toEqual(["instance", "telemetry"])
+    expect(ms).toBe(4321)
+    expect(idle).toBe(true)
+    expect(exit).toBeUndefined()
+
+    expect(fn).toBeDefined()
+    expect(() => fn?.()).toThrow("exit")
+    expect(exit).toBe(7)
+  })
+
+  test("reuses the first shutdown task", async () => {
+    let calls = 0
+    let done!: () => void
+    const wait = new Promise<void>((resolve) => {
+      done = resolve
+    })
+    const end = createEnd({
+      later: ((fn: (...args: any[]) => void) =>
+        ({
+          unref() {
+            return this
+          },
+        }) as ReturnType<typeof setTimeout>) as typeof setTimeout,
+      stop: [
+        async () => {
+          calls++
+          await wait
+        },
+      ],
+    })
+
+    const a = end(1, "first")
+    const b = end(2, "second")
+    done()
+    await Promise.all([a, b])
+
+    expect(calls).toBe(1)
   })
 })

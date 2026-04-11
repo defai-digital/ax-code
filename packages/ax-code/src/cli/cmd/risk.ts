@@ -4,6 +4,13 @@ import { SessionRisk } from "../../session/risk"
 import { SessionID } from "../../session/schema"
 
 export namespace RiskView {
+  function validation(input: SessionRisk.Detail["assessment"]["signals"]) {
+    if (input.validationState === "passed") return "validation passed"
+    if (input.validationState === "failed") return "validation failed"
+    if (input.validationState === "partial") return "partial validation"
+    return "validation unrecorded"
+  }
+
   export function lines(input: SessionRisk.Detail, explain = false) {
     const out = [
       "",
@@ -13,6 +20,8 @@ export namespace RiskView {
       `  Session: ${input.id}`,
       `  Title:   ${input.title}`,
       `  Risk:    ${input.assessment.level} (${input.assessment.score}/100)`,
+      `  Ready:   ${input.assessment.readiness.replaceAll("_", " ")}`,
+      `  Trust:   ${Math.round(input.assessment.confidence * 100)}%`,
       `  Summary: ${input.assessment.summary}`,
     ]
     if (input.semantic) out.push(`  Change:   ${input.semantic.headline} (${input.semantic.risk})`)
@@ -25,7 +34,8 @@ export namespace RiskView {
       sig.apiEndpointsAffected > 0 ? `${sig.apiEndpointsAffected} routes` : "",
       sig.crossModule ? "cross-module" : "",
       sig.securityRelated ? "security-sensitive" : "",
-      sig.validationPassed === true ? "validation passed" : sig.validationPassed === false ? "validation failed" : "validation unrecorded",
+      validation(sig),
+      sig.diffState,
     ]
       .filter(Boolean)
       .join(" · ")
@@ -45,6 +55,27 @@ export namespace RiskView {
       if (input.assessment.breakdown.length === 0) out.push("  - No elevated risk drivers recorded.")
       for (const item of input.assessment.breakdown) {
         out.push(`  - ${item.label}: ${item.detail} (+${item.points})`)
+      }
+
+      if (input.assessment.evidence.length > 0) {
+        out.push("")
+        out.push("  Evidence")
+        out.push("  " + "-".repeat(40))
+        for (const item of input.assessment.evidence) out.push(`  - ${item}`)
+      }
+
+      if (input.assessment.unknowns.length > 0) {
+        out.push("")
+        out.push("  Unknowns")
+        out.push("  " + "-".repeat(40))
+        for (const item of input.assessment.unknowns) out.push(`  - ${item}`)
+      }
+
+      if (input.assessment.mitigations.length > 0) {
+        out.push("")
+        out.push("  Mitigations")
+        out.push("  " + "-".repeat(40))
+        for (const item of input.assessment.mitigations) out.push(`  - ${item}`)
       }
     }
 

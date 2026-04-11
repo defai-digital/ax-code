@@ -1132,6 +1132,34 @@ test("ask - allows all patterns when all match allow rules", async () => {
   })
 })
 
+test("ask - autonomous denies interactive-only permissions", async () => {
+  const key = "AX_CODE_AUTONOMOUS"
+  const orig = process.env[key]
+  process.env[key] = "true"
+  await using tmp = await tmpdir({ git: true })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          Permission.ask({
+            sessionID: SessionID.make("session_test"),
+            permission: "isolation_escalation",
+            patterns: ["outside"],
+            metadata: {},
+            always: [],
+            ruleset: [{ permission: "isolation_escalation", pattern: "*", action: "allow" }],
+          }),
+        ).rejects.toBeInstanceOf(Permission.DeniedError)
+        expect(await Permission.list()).toHaveLength(0)
+      },
+    })
+  } finally {
+    if (orig === undefined) delete process.env[key]
+    else process.env[key] = orig
+  }
+})
+
 test("ask - should deny even when an earlier pattern is ask", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

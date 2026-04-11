@@ -9,6 +9,34 @@ function node(script: string) {
 }
 
 describe("util.process", () => {
+  test("captures Bun subprocess output with timeout-aware reader", async () => {
+    const proc = Bun.spawn(node('process.stdout.write("out");process.stderr.write("err")'), {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const out = await Process.capture(proc, { timeout: 1000 })
+
+    expect(out.code).toBe(0)
+    expect(out.stdout).toBe("out")
+    expect(out.stderr).toBe("err")
+    expect(out.timedOut).toBe(false)
+  })
+
+  test("times out Bun subprocesses that ignore terminate signal", async () => {
+    if (process.platform === "win32") return
+
+    const started = Date.now()
+    const proc = Bun.spawn(node('process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'), {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const out = await Process.capture(proc, { timeout: 25 })
+
+    expect(out.code).toBe(1)
+    expect(out.timedOut).toBe(true)
+    expect(Date.now() - started).toBeLessThan(1000)
+  }, 3000)
+
   test("captures stdout and stderr", async () => {
     const out = await Process.run(node('process.stdout.write("out");process.stderr.write("err")'))
     expect(out.code).toBe(0)

@@ -18,3 +18,9 @@
 
 - keep editor-specific behavior close to the extension entrypoints
 - prefer colocated tests for pure helpers and command wiring
+
+## License
+
+`packages/integration-vscode` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

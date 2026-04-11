@@ -151,23 +151,23 @@ export namespace ExecutionGraph {
         }
 
         case "step.start": {
-          const idx = e.stepIndex as number
           stepCount++
           node = {
-            id: `step-${idx}`,
+            id: `step-${stepCount}`,
             type: "step",
-            label: `Step #${idx}`,
+            label: `Step #${stepCount}`,
             timestamp: ts,
-            stepIndex: idx,
+            stepIndex: stepCount,
           }
-          stepNodes.set(idx, node)
+          stepNodes.set(stepCount, node)
           currentStepID = node.id
           break
         }
 
         case "step.finish": {
-          const idx = e.stepIndex as number
-          const existing = stepNodes.get(idx)
+          // Match by currentStepID (the most recently started step) rather
+          // than e.stepIndex, since we remap indexes to be unique
+          const existing = currentStepID ? nodes.find((n) => n.id === currentStepID) : undefined
           if (existing) {
             existing.duration = ts - existing.timestamp
             const tokens = e.tokens as { input: number; output: number }

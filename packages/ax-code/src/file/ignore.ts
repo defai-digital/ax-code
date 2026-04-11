@@ -1,10 +1,8 @@
 import { sep } from "node:path"
 import { Glob } from "../util/glob"
-import { Flag } from "../flag/flag"
 import { NativePerf } from "../perf/native"
 import { Log } from "../util/log"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "@/native/addon"
 
 export namespace FileIgnore {
   const FOLDERS = new Set([
@@ -69,9 +67,9 @@ export namespace FileIgnore {
     },
   ) {
     // Native fast-path: in-process ignore check via Rust addon
-    if (Flag.AX_CODE_NATIVE_FS) {
+    const native = NativeAddon.fs()
+    if (native) {
       try {
-        const native = _require("@ax-code/fs")
         return NativePerf.run("fs.isIgnored", { filepath, extra: opts?.extra?.length ?? 0 }, () =>
           native.isIgnored(filepath, JSON.stringify(opts?.extra ?? [])),
         )

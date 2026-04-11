@@ -229,6 +229,17 @@ describe("filesystem", () => {
       const extra = await fs.readdir(tmp.path)
       expect(extra.filter((name) => name.endsWith(".tmp"))).toEqual([])
     })
+
+    test("cleans temp files when rename fails", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "target")
+
+      await fs.mkdir(filepath)
+      await expect(Filesystem.write(filepath, "bad")).rejects.toThrow()
+
+      const extra = await fs.readdir(tmp.path)
+      expect(extra.filter((name) => name.endsWith(".tmp"))).toEqual([])
+    })
   })
 
   describe("writeJson()", () => {
@@ -450,6 +461,26 @@ describe("filesystem", () => {
         expect(stats.mode & 0o777).toBe(0o755)
       }
       expect(await fs.readFile(filepath, "utf-8")).toBe(content)
+    })
+
+    test("keeps the original file when the stream fails mid-write", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "streamed.txt")
+      const { Readable } = await import("stream")
+
+      await fs.writeFile(filepath, "original", "utf-8")
+      const stream = Readable.from(
+        (async function* () {
+          yield "partial"
+          throw new Error("boom")
+        })(),
+      )
+
+      await expect(Filesystem.writeStream(filepath, stream)).rejects.toThrow("boom")
+      expect(await fs.readFile(filepath, "utf-8")).toBe("original")
+
+      const extra = await fs.readdir(tmp.path)
+      expect(extra.filter((name) => name.endsWith(".tmp"))).toEqual([])
     })
   })
 

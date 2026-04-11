@@ -273,6 +273,7 @@ export namespace ShareNext {
         // flush on failure so data survives transient errors.
         inflight.add(sessionID)
         let success = false
+        const size = queued.data.size
         try {
           const req = await request()
           const response = await fetch(`${req.baseUrl}${req.api.sync(share.id)}`, {
@@ -293,17 +294,10 @@ export namespace ShareNext {
           inflight.delete(sessionID)
           const current = queue.get(sessionID)
           if (success) {
-            // Only delete if the queue still points at the same
-            // entry we just flushed — a concurrent sync() may have
-            // merged new items into it, in which case the entry
-            // still holds unsent data that needs a fresh flush
-            // timer.
-            if (current === queued && current.data.size === queued.data.size) {
+            if (current === queued && current.data.size === size) {
               queue.delete(sessionID)
             } else if (current) {
               current.attempt = 0
-              // Concurrent additions merged in during the fetch.
-              // The delta hasn't been flushed — schedule a retry.
               current.timeout = setTimeout(flush, 1000)
             }
           } else if (current) {

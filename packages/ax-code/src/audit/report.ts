@@ -349,6 +349,8 @@ export namespace AuditReport {
     lines.push("## Risk Assessment")
     lines.push("")
     lines.push(`- **Level:** ${risk.level} (${risk.score}/100)`)
+    lines.push(`- **Readiness:** ${risk.readiness.replaceAll("_", " ")}`)
+    lines.push(`- **Confidence:** ${(risk.confidence * 100).toFixed(0)}%`)
     lines.push(`- **Summary:** ${risk.summary}`)
     const s = risk.signals
     if (s.filesChanged > 0) lines.push(`- **Files changed:** ${s.filesChanged}`)
@@ -356,11 +358,14 @@ export namespace AuditReport {
     if (s.apiEndpointsAffected > 0) lines.push(`- **Route files affected:** ${s.apiEndpointsAffected}`)
     if (s.securityRelated) lines.push(`- **Security-related:** yes`)
     if (s.crossModule) lines.push(`- **Cross-module:** yes`)
-    if (s.validationPassed !== undefined) lines.push(`- **Validation:** ${s.validationPassed ? "passed" : "failed"}`)
+    lines.push(`- **Validation:** ${s.validationState.replaceAll("_", " ")}`)
+    lines.push(`- **Diff evidence:** ${s.diffState}`)
     if (s.toolFailures > 0) lines.push(`- **Tool failures:** ${s.toolFailures}/${s.totalTools}`)
     for (const item of Risk.top(risk, 4)) {
       lines.push(`- **${item.label}:** ${item.detail} (+${item.points})`)
     }
+    for (const item of risk.unknowns.slice(0, 3)) lines.push(`- **Unknown:** ${item}`)
+    for (const item of risk.mitigations.slice(0, 3)) lines.push(`- **Mitigation:** ${item}`)
     lines.push("")
 
     // Token Usage

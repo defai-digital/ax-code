@@ -109,11 +109,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     mcp: true,
     diff: true,
     todo: true,
-    lsp: true,
     // DRE section defaults to expanded so users see the pending-plan
     // list (or the "DRE is active" placeholder) immediately after
     // enabling the experimental flag. Collapses if the plan list
-    // grows beyond 2 entries, same rule as LSP / Todo.
+    // grows beyond 2 entries, same rule as Todo.
     dre: true,
     activity: true,
   })
@@ -437,56 +436,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </Show>
               </box>
             </Show>
-            <box>
-              <box
-                flexDirection="row"
-                gap={1}
-                onMouseDown={() => sync.data.lsp.length > 2 && setExpanded("lsp", !expanded.lsp)}
-              >
-                <Show when={sync.data.lsp.length > 2}>
-                  <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
-                </Show>
-                <text fg={theme.text}>
-                  <b>LSP</b>
-                </text>
-              </box>
-              <Show when={sync.data.lsp.length <= 2 || expanded.lsp}>
-                <Show when={sync.data.lsp.length === 0}>
-                  <text fg={theme.textMuted}>
-                    {sync.data.config.lsp === false
-                      ? "LSPs have been disabled in settings"
-                      : "LSPs will activate as files are read"}
-                  </text>
-                </Show>
-                <For each={sync.data.lsp}>
-                  {(item) => (
-                    <box flexDirection="row" gap={1}>
-                      <text
-                        flexShrink={0}
-                        style={{
-                          fg: {
-                            connected: theme.success,
-                            error: theme.error,
-                          }[item.status],
-                        }}
-                      >
-                        •
-                      </text>
-                      <text fg={theme.textMuted}>
-                        {item.id} {item.root}
-                      </text>
-                    </box>
-                  )}
-                </For>
-              </Show>
-            </box>
-            {/* Debugging & Refactoring Engine section. Mirrors the LSP
-                section's pattern (always visible heading, fallback text
-                when empty, expand/collapse at >2 items) so users can
-                tell at a glance whether DRE is ready to use. Gated on
-                the experimental flag — when the flag is off, no
-                section appears. The empty-state layout shows tool count
-                and graph readiness. */}
             <Show when={Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE}>
               <box>
                 <box
@@ -524,10 +473,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     fg={theme.primary}
                     onMouseUp={(e: any) => {
                       e.stopPropagation()
-                      command.trigger("session.dre")
+                      command.trigger("session.dre.web")
                     }}
                   >
-                    details
+                    dashboard
                   </text>
                 </box>
                 <Show when={sync.data.debugEngine.plans.length <= 2 || expanded.dre}>
@@ -636,40 +585,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       )}
                     </For>
                   </Show>
-                  {/* Quick actions */}
-                  <box flexDirection="row" gap={1}>
-                    <Show when={branch()}>
-                      <text
-                        fg={theme.primary}
-                        onMouseUp={() => command.trigger("session.branch")}
-                      >
-                        branches
-                      </text>
-                      <text fg={theme.textMuted}>·</text>
-                    </Show>
-                    <text
-                      fg={theme.primary}
-                      onMouseUp={() => command.trigger("session.dre.graph")}
-                    >
-                      graph
-                    </text>
-                    <text fg={theme.textMuted}>·</text>
-                    <text
-                      fg={theme.primary}
-                      onMouseUp={() => command.trigger("session.dre.web")}
-                    >
-                      dre-web
-                    </text>
-                    <Show when={rollback().length > 0}>
-                      <text fg={theme.textMuted}>·</text>
-                      <text
-                        fg={theme.primary}
-                        onMouseUp={() => command.trigger("session.rollback")}
-                      >
-                        rollback
-                      </text>
-                    </Show>
-                  </box>
                 </Show>
               </box>
             </Show>
@@ -713,7 +628,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   </box>
                   <text
                     fg={theme.textMuted}
-                    onMouseDown={(e: any) => {
+                    onMouseUp={(e: any) => {
                       e.stopPropagation()
                       command.trigger("session.activity")
                     }}

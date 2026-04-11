@@ -17,3 +17,9 @@
 ## Testing
 
 - keep logic small and integration-oriented
+
+## License
+
+`packages/integration-github` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

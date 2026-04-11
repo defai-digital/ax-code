@@ -129,6 +129,45 @@ describe("planner.execute", () => {
     expect(result.phaseResults[0]?.error).toContain("Phase timed out after 10ms")
   })
 
+  test("clears phase timeout when a phase completes", async () => {
+    const plan = Planner.create("test", [{ name: "fast", maxRetries: 0 }])
+    const originalSetTimeout = globalThis.setTimeout
+    const originalClearTimeout = globalThis.clearTimeout
+    const seen = new Set<ReturnType<typeof setTimeout>>()
+    const cleared = new Set<ReturnType<typeof setTimeout>>()
+
+    globalThis.setTimeout = ((fn: (...args: any[]) => void, ms?: number, ...args: any[]) => {
+      const id = originalSetTimeout(fn, ms, ...args)
+      seen.add(id)
+      return id
+    }) as typeof setTimeout
+    globalThis.clearTimeout = ((id?: ReturnType<typeof setTimeout>) => {
+      if (id) cleared.add(id)
+      return originalClearTimeout(id)
+    }) as typeof clearTimeout
+
+    try {
+      const result = await Planner.execute(plan, async (phase) => ({
+        phaseId: phase.id,
+        success: true,
+        duration: 0,
+        tokensUsed: 0,
+        filesModified: [],
+        wasRetry: false,
+        retryAttempt: 1,
+      }))
+
+      expect(result.success).toBe(true)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.clearTimeout = originalClearTimeout
+    }
+
+    expect(seen.size).toBeGreaterThan(0)
+    expect(cleared.size).toBeGreaterThan(0)
+    expect([...cleared].some((id) => seen.has(id))).toBe(true)
+  })
+
   test("increments skipped phases for skip fallbacks", async () => {
     const plan = Planner.create("test", [
       { name: "first", fallbackStrategy: "skip", maxRetries: 0 },

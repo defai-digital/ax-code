@@ -1,15 +1,18 @@
 const CLOSED = Symbol("closed")
+const closed = () => new Error("queue closed")
 
 export class AsyncQueue<T> implements AsyncIterable<T> {
   private queue: (T | typeof CLOSED)[] = []
   private resolvers: ((value: T | typeof CLOSED) => void)[] = []
   private count = 0
+  private dead = false
 
   get size() {
     return this.count
   }
 
   push(item: T) {
+    if (this.dead) return
     const resolve = this.resolvers.shift()
     if (resolve) resolve(item)
     else {
@@ -19,6 +22,8 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
   }
 
   close() {
+    if (this.dead) return
+    this.dead = true
     for (const resolve of this.resolvers) resolve(CLOSED)
     this.resolvers.length = 0
     this.queue.push(CLOSED)
@@ -27,12 +32,19 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
   async next(): Promise<T> {
     if (this.queue.length > 0) {
       const item = this.queue.shift()!
-      if (item === CLOSED) return new Promise(() => {})
+      if (item === CLOSED) throw closed()
       this.count--
       return item
     }
-    return new Promise<T>((resolve) =>
-      this.resolvers.push((v) => { if (v !== CLOSED) resolve(v as T) }),
+    if (this.dead) throw closed()
+    return new Promise<T>((resolve, reject) =>
+      this.resolvers.push((v) => {
+        if (v === CLOSED) {
+          reject(closed())
+          return
+        }
+        resolve(v as T)
+      }),
     )
   }
 

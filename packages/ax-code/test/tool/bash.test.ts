@@ -187,6 +187,73 @@ describe("tool.bash permissions", () => {
     })
   })
 
+  test("asks for external_directory permission when env-expanded file arg is outside project", async () => {
+    await using outerTmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "outside.txt"), "x")
+      },
+    })
+    await using tmp = await tmpdir({ git: true })
+    const prev = process.env.AX_CODE_BASH_OUT
+    process.env.AX_CODE_BASH_OUT = outerTmp.path
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
+          const testCtx = {
+            ...ctx,
+            ask: async (req: Omit<Permission.Request, "id" | "sessionID" | "tool">) => {
+              requests.push(req)
+            },
+          }
+          await bash.execute(
+            {
+              command: 'cat "$AX_CODE_BASH_OUT/outside.txt"',
+              description: "Read env-expanded external file",
+            },
+            testCtx,
+          )
+          const extDirReq = requests.find((r) => r.permission === "external_directory")
+          expect(extDirReq).toBeDefined()
+          expect(extDirReq!.patterns).toContain(path.join(outerTmp.path, "*"))
+        },
+      })
+    } finally {
+      if (prev === undefined) delete process.env.AX_CODE_BASH_OUT
+      else process.env.AX_CODE_BASH_OUT = prev
+    }
+  })
+
+  test("asks for external_directory permission when dynamic shell vars hide path", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
+        const testCtx = {
+          ...ctx,
+          ask: async (req: Omit<Permission.Request, "id" | "sessionID" | "tool">) => {
+            requests.push(req)
+          },
+        }
+        await bash.execute(
+          {
+            command: 'f=/tmp/outside.txt; cat "$f"',
+            description: "Read dynamic external file",
+          },
+          testCtx,
+        )
+        const extDirReq = requests.find((r) => r.permission === "external_directory")
+        expect(extDirReq).toBeDefined()
+        expect(extDirReq!.patterns).toContain("*")
+        expect(extDirReq!.always).toEqual([])
+      },
+    })
+  })
+
   test("does not ask for external_directory permission when rm inside project", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

@@ -1,5 +1,6 @@
 import z from "zod"
 import { spawn } from "child_process"
+import os from "os"
 import { Tool } from "./tool"
 import path from "path"
 import DESCRIPTION from "./bash.txt"
@@ -24,6 +25,32 @@ import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/net
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
 
 const log = Log.create({ service: "bash-tool" })
+const PATH_COMMANDS = new Set([
+  "awk",
+  "cat",
+  "cd",
+  "chmod",
+  "chown",
+  "cp",
+  "cut",
+  "find",
+  "grep",
+  "head",
+  "less",
+  "mkdir",
+  "more",
+  "mv",
+  "rm",
+  "sed",
+  "sort",
+  "tail",
+  "tee",
+  "touch",
+  "uniq",
+  "wc",
+])
+const SCRIPT_COMMANDS = new Set(["awk", "grep", "sed"])
+const REDIRECT = /(?:^|\s)\d*(?:>>?|<<?)\s*([^\s]+)/g
 
 // Track detached process groups so we can clean them up if the parent
 // process exits unexpectedly (crash, SIGKILL, etc.). Without this,
@@ -40,6 +67,25 @@ const resolveWasm = (asset: string) => {
   if (asset.startsWith("/") || /^[a-z]:/i.test(asset)) return asset
   const url = new URL(asset, import.meta.url)
   return fileURLToPath(url)
+}
+
+function strip(text: string) {
+  if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+    return text.slice(1, -1)
+  }
+  return text
+}
+
+function expand(text: string) {
+  let next = strip(text)
+  if (next === "~") next = os.homedir()
+  if (next.startsWith("~/")) next = path.join(os.homedir(), next.slice(2))
+  next = next.replace(/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (item, a, b) => process.env[a ?? b] ?? item)
+  if (next.includes("$(") || next.includes("<(") || next.includes(">(") || next.includes("`") || next.includes("$")) {
+    return
+  }
+  if (next.startsWith("~")) return
+  return next
 }
 
 const parser = lazy(async () => {
@@ -107,6 +153,7 @@ export const BashTool = Tool.define("bash", async () => {
       const resolvedPaths = new Set<string>()
       const patterns = new Set<string>()
       const always = new Set<string>()
+      let unknown = false
       let foundCommands = false
 
       for (const node of tree.rootNode.descendantsOfType("command")) {
@@ -131,11 +178,25 @@ export const BashTool = Tool.define("bash", async () => {
           command.push(child.text)
         }
 
-        // not an exhaustive list, but covers most common cases
-        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
-          for (const arg of command.slice(1)) {
+        const cmd = String(command[0] ?? "")
+        if (PATH_COMMANDS.has(cmd)) {
+          let skip = SCRIPT_COMMANDS.has(cmd)
+          const args = [...command.slice(1), ...Array.from(commandText.matchAll(REDIRECT), (item) => item[1])]
+          for (const raw of args) {
+            const arg = String(raw ?? "")
+            if (!arg) continue
+            if (skip) {
+              skip = false
+              continue
+            }
             if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
-            const resolved = await fs.realpath(path.resolve(cwd, arg)).catch(() => path.resolve(cwd, arg))
+            if (arg === "-") continue
+            const target = expand(arg)
+            if (!target) {
+              unknown = true
+              continue
+            }
+            const resolved = await fs.realpath(path.resolve(cwd, target)).catch(() => path.resolve(cwd, target))
             log.info("resolved path", { arg, resolved })
             if (resolved) {
               const normalized =
@@ -166,11 +227,19 @@ export const BashTool = Tool.define("bash", async () => {
           if (dir.startsWith("/")) return `${dir.replace(/[\\/]+$/, "")}/*`
           return path.join(dir, "*")
         })
+        if (unknown) globs.push("*")
         await ctx.ask({
           permission: "external_directory",
-          patterns: globs,
-          always: globs,
-          metadata: {},
+          patterns: Array.from(new Set(globs)),
+          always: unknown ? globs.filter((item) => item !== "*") : globs,
+          metadata: unknown ? { dynamic: true } : {},
+        })
+      } else if (unknown) {
+        await ctx.ask({
+          permission: "external_directory",
+          patterns: ["*"],
+          always: [],
+          metadata: { dynamic: true },
         })
       }
 

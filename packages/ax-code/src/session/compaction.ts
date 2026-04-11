@@ -303,6 +303,10 @@ When constructing the summary, try to stick to this template:
               time_created: replayMsg.time.created,
               data,
             })
+            .onConflictDoUpdate({
+              target: MessageTable.id,
+              set: { data },
+            })
             .run()
           Database.effect(() => Bus.publish(MessageV2.Event.Updated, { info: replayMsg }))
           for (const item of replay.parts) {

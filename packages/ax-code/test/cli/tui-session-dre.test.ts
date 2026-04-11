@@ -42,14 +42,16 @@ describe("tui session dre helpers", () => {
     })
 
     expect(result).toEqual({
-      level: "CRITICAL",
+      level: "MEDIUM",
       score: risk.score,
+      confidence: 0.42,
+      readiness: "needs_validation",
       summary: risk.summary,
       stats: "3 steps · 1 route · 2 tool calls · 1 error",
-      decision: "decision 0.44 · correctness 0.55 · safety 0.30",
+      decision: "decision 0.56 · correctness 0.55 · safety 0.60",
       plan: "delegated inspect-first multi-file edit",
       notes: ["validation not recorded", "1 replay divergence"],
-      drivers: ["Validation coverage · no validation run recorded", "API surface · 1 route files affected"],
+      drivers: ["Code churn · 180 lines changed", "API surface · 1 route files affected"],
     })
   })
 
@@ -95,56 +97,61 @@ describe("tui session dre helpers", () => {
   })
 
   test("builds searchable detail entries", () => {
-    const entries = SessionDre.entries(
-      SessionDre.merge(
-        {
-      level: "MEDIUM",
-      score: 35,
-      summary: "4 files changed, no test coverage",
-      stats: "2 steps · 1 route · 3 tool calls",
-      decision: "decision 0.66 · correctness 0.75 · safety 0.65",
-      plan: "delegated inspect-first incremental edit",
-      notes: ["validation not recorded"],
-      drivers: ["Validation coverage · no validation run recorded", "File churn · 4 files changed"],
-      breakdown: [
-        {
-          kind: "tests",
-          label: "Validation coverage",
-          points: 25,
-          detail: "no validation run recorded",
-        },
-        {
-          kind: "files",
-          label: "File churn",
-          points: 10,
-          detail: "4 files changed",
-        },
-      ],
-      scorecard: {
-        total: 0.66,
-        breakdown: [
-          {
-            key: "correctness",
-            label: "Correctness",
-            value: 0.75,
-            detail: "validation not recorded, 0 divergences, 0 tool failures",
-          },
-          { key: "safety", label: "Safety", value: 0.65, detail: "risk 35/100" },
-          { key: "simplicity", label: "Simplicity", value: 0.71, detail: "4 files, 80 lines, 3 tool calls, 1 route" },
-          { key: "validation", label: "Validation", value: 0.45, detail: "validation not recorded" },
-        ],
-      },
-      duration: 12_000,
-      tokens: { input: 120, output: 45 },
-      routes: [{ from: "build", to: "debug", confidence: 0.92 }],
-      tools: ["read", "grep", "edit"],
-      semantic: null,
-      counts: [
-        { type: "tool.call", count: 3 },
-        { type: "agent.route", count: 1 },
-      ],
-        },
-        {
+	    const entries = SessionDre.entries(
+	      SessionDre.merge(
+	        {
+	          level: "MEDIUM",
+	          score: 35,
+	          confidence: 0.58,
+	          readiness: "needs_validation",
+	          summary: "4 files changed, 1 API endpoints",
+	          stats: "2 steps · 1 route · 3 tool calls",
+	          decision: "decision 0.66 · correctness 0.75 · safety 0.65",
+	          plan: "delegated inspect-first incremental edit",
+	          notes: ["validation not recorded"],
+	          drivers: ["Code churn · 80 lines changed", "API surface · 1 route files affected"],
+	          breakdown: [
+	            {
+	              kind: "lines",
+	              label: "Code churn",
+	              points: 12,
+	              detail: "80 lines changed",
+	            },
+	            {
+	              kind: "api",
+	              label: "API surface",
+	              points: 12,
+	              detail: "1 route files affected",
+	            },
+	          ],
+	          evidence: ["change scope derived from tool events"],
+	          unknowns: ["no validation command recorded for code changes"],
+	          mitigations: ["run validation before accepting this session"],
+	          scorecard: {
+	            total: 0.66,
+	            breakdown: [
+	              {
+	                key: "correctness",
+	                label: "Correctness",
+	                value: 0.75,
+	                detail: "validation not recorded, confidence 0.58, 0 divergences, 0 tool failures",
+	              },
+	              { key: "safety", label: "Safety", value: 0.65, detail: "risk 35/100" },
+	              { key: "simplicity", label: "Simplicity", value: 0.71, detail: "4 files, 80 lines, 3 tool calls, 1 route" },
+	              { key: "validation", label: "Validation", value: 0.6, detail: "validation not recorded · needs validation" },
+	            ],
+	          },
+	          duration: 12_000,
+	          tokens: { input: 120, output: 45 },
+	          routes: [{ from: "build", to: "debug", confidence: 0.92 }],
+	          tools: ["read", "grep", "edit"],
+	          semantic: null,
+	          counts: [
+	            { type: "tool.call", count: 3 },
+	            { type: "agent.route", count: 1 },
+	          ],
+	        },
+	        {
           headline: "bug fix · demo.ts",
           risk: "medium",
           primary: "bug_fix",
@@ -169,16 +176,17 @@ describe("tui session dre helpers", () => {
       ),
     )
 
-    expect(entries[0]).toEqual({
-      id: "risk",
-      title: "Risk medium (35/100)",
-      description: "4 files changed, no test coverage",
-      footer: "2 steps · 1 route · 3 tool calls · 12s · 120/45 tokens",
-      category: "Overview",
-    })
-    expect(entries.some((item) => item.category === "Changes" && item.title === "bug fix · demo.ts")).toBe(true)
-    expect(entries.some((item) => item.category === "Risk" && item.title === "Validation coverage (+25)")).toBe(true)
-    expect(entries.some((item) => item.category === "Routing" && item.title === "build → debug")).toBe(true)
+	    expect(entries[0]).toEqual({
+	      id: "risk",
+	      title: "Risk medium (35/100)",
+	      description: "4 files changed, 1 API endpoints",
+	      footer: "2 steps · 1 route · 3 tool calls · needs validation · 58% confidence · 12s · 120/45 tokens",
+	      category: "Overview",
+	    })
+	    expect(entries.some((item) => item.category === "Changes" && item.title === "bug fix · demo.ts")).toBe(true)
+	    expect(entries.some((item) => item.category === "Risk" && item.title === "Code churn (+12)")).toBe(true)
+	    expect(entries.some((item) => item.category === "Unknowns" && item.title === "no validation command recorded for code changes")).toBe(true)
+	    expect(entries.some((item) => item.category === "Routing" && item.title === "build → debug")).toBe(true)
     expect(entries.some((item) => item.category === "Score" && item.title === "Decision 0.66")).toBe(true)
     expect(entries.some((item) => item.category === "Tools" && item.title === "3. edit")).toBe(true)
     expect(entries.some((item) => item.category === "Events" && item.title === "tool.call")).toBe(true)

@@ -1,10 +1,8 @@
-import { createRequire } from "node:module"
-import { Flag } from "../flag/flag"
 import { NativePerf } from "../perf/native"
 import { Log } from "../util/log"
+import { NativeAddon } from "@/native/addon"
 
 const log = Log.create({ service: "debug-engine.native-scan" })
-const _require = createRequire(import.meta.url)
 
 export interface ScanPattern {
   label: string
@@ -40,9 +38,9 @@ export function nativeScanFiles(input: {
   maxPerFile?: number
   contextLines?: number
 }): ScanResult | undefined {
-  if (!Flag.AX_CODE_NATIVE_FS) return undefined
+  const native = NativeAddon.fs()
+  if (!native) return undefined
   try {
-    const native = _require("@ax-code/fs")
     const json = NativePerf.run(
       "fs.scanFiles",
       {
@@ -67,7 +65,7 @@ export function nativeScanFiles(input: {
     )
     return JSON.parse(json) as ScanResult
   } catch (e: any) {
-    if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) {
+    if (!(e instanceof SyntaxError)) {
       log.warn("native scan_files failed, falling back to JS", { error: e })
     }
     return undefined
@@ -78,17 +76,17 @@ export function nativeScanFiles(input: {
  * Reads multiple files in parallel using the native @ax-code/fs addon.
  */
 export function nativeReadFilesBatch(files: string[]): Map<string, string> | undefined {
-  if (!Flag.AX_CODE_NATIVE_FS) return undefined
+  const native = NativeAddon.fs()
+  if (!native) return undefined
   if (files.length === 0) return new Map()
   try {
-    const native = _require("@ax-code/fs")
     const json = NativePerf.run("fs.readFilesBatch", { files: files.length }, () =>
       native.readFilesBatch(JSON.stringify(files)),
     )
     const pairs: [string, string][] = JSON.parse(json)
     return new Map(pairs)
   } catch (e: any) {
-    if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) {
+    if (!(e instanceof SyntaxError)) {
       log.warn("native read_files_batch failed, falling back to JS", { error: e })
     }
     return undefined
@@ -115,9 +113,9 @@ interface DetectResult<F> {
 }
 
 function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult<F> | undefined {
-  if (!Flag.AX_CODE_NATIVE_FS) return undefined
+  const native = NativeAddon.fs()
+  if (!native) return undefined
   try {
-    const native = _require("@ax-code/fs")
     if (typeof native[fnName] !== "function") return undefined
     const json = NativePerf.run(
       `fs.${fnName}`,
@@ -143,7 +141,7 @@ function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult
     )
     return JSON.parse(json) as DetectResult<F>
   } catch (e: any) {
-    if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) {
+    if (!(e instanceof SyntaxError)) {
       log.warn(`native ${fnName} failed, falling back to JS`, { error: e })
     }
     return undefined

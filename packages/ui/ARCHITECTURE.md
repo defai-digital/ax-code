@@ -20,3 +20,9 @@
 - colocate tests with exported components
 - add automated coverage for stateful, focus-sensitive, or rendering-heavy components
 - use stories to support development, not as a replacement for tests
+
+## License
+
+`packages/ui` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

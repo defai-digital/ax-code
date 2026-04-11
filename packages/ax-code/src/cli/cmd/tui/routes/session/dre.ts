@@ -44,7 +44,7 @@ export namespace SessionDre {
       id: "risk",
       title: `Risk ${input.level.toLowerCase()} (${input.score}/100)`,
       description: input.summary || "minimal change",
-      footer: `${input.stats} · ${format(input.duration)} · ${input.tokens.input}/${input.tokens.output} tokens`,
+      footer: `${input.stats} · ${input.readiness.replaceAll("_", " ")} · ${Math.round(input.confidence * 100)}% confidence · ${format(input.duration)} · ${input.tokens.input}/${input.tokens.output} tokens`,
       category: "Overview",
     })
 
@@ -95,6 +95,30 @@ export namespace SessionDre {
         id: `driver:${idx}`,
         title: line,
         category: "Drivers",
+      })
+    }
+
+    for (const [idx, line] of input.evidence.entries()) {
+      result.push({
+        id: `evidence:${idx}`,
+        title: line,
+        category: "Evidence",
+      })
+    }
+
+    for (const [idx, line] of input.unknowns.entries()) {
+      result.push({
+        id: `unknown:${idx}`,
+        title: line,
+        category: "Unknowns",
+      })
+    }
+
+    for (const [idx, line] of input.mitigations.entries()) {
+      result.push({
+        id: `mitigation:${idx}`,
+        title: line,
+        category: "Mitigations",
       })
     }
 

@@ -97,6 +97,22 @@ export namespace Clipboard {
     }
   }
 
+  async function pipe(cmd: string[], text: string) {
+    const abort = AbortSignal.timeout(5_000)
+    const proc = Process.spawn(cmd, {
+      stdin: "pipe",
+      stdout: "ignore",
+      stderr: "ignore",
+      abort,
+      timeout: 250,
+    })
+    if (!proc.stdin) return
+    proc.stdin.on("error", () => {})
+    proc.stdin.write(text)
+    proc.stdin.end()
+    await proc.exited.catch(() => 1)
+  }
+
   const getCopyMethod = lazy(() => {
     const os = platform()
 
@@ -109,49 +125,20 @@ export namespace Clipboard {
 
     if (os === "linux") {
       if (process.env["WAYLAND_DISPLAY"] && which("wl-copy")) {
-        return async (text: string) => {
-          const proc = Process.spawn(["wl-copy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
-          if (result === "timeout") proc.kill()
-        }
+        return async (text: string) => pipe(["wl-copy"], text)
       }
       if (which("xclip")) {
-        return async (text: string) => {
-          const proc = Process.spawn(["xclip", "-selection", "clipboard"], {
-            stdin: "pipe",
-            stdout: "ignore",
-            stderr: "ignore",
-          })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
-          if (result === "timeout") proc.kill()
-        }
+        return async (text: string) => pipe(["xclip", "-selection", "clipboard"], text)
       }
       if (which("xsel")) {
-        return async (text: string) => {
-          const proc = Process.spawn(["xsel", "--clipboard", "--input"], {
-            stdin: "pipe",
-            stdout: "ignore",
-            stderr: "ignore",
-          })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
-          if (result === "timeout") proc.kill()
-        }
+        return async (text: string) => pipe(["xsel", "--clipboard", "--input"], text)
       }
     }
 
     if (os === "win32") {
       return async (text: string) => {
         // Pipe via stdin to avoid PowerShell string interpolation ($env:FOO, $(), etc.)
-        const proc = Process.spawn(
+        await pipe(
           [
             "powershell.exe",
             "-NonInteractive",
@@ -159,18 +146,8 @@ export namespace Clipboard {
             "-Command",
             "[Console]::InputEncoding = [System.Text.Encoding]::UTF8; Set-Clipboard -Value ([Console]::In.ReadToEnd())",
           ],
-          {
-            stdin: "pipe",
-            stdout: "ignore",
-            stderr: "ignore",
-          },
+          text,
         )
-
-        if (!proc.stdin) return
-        proc.stdin.write(text)
-        proc.stdin.end()
-        const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
-        if (result === "timeout") proc.kill()
       }
     }
 

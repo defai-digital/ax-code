@@ -165,4 +165,22 @@ describe("tool.webfetch", () => {
       },
     )
   })
+
+  test("rejects zero or negative timeout values", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const webfetch = await WebFetchTool.init()
+        await expect(
+          webfetch.execute({ url: "https://example.com/file.txt", format: "text", timeout: 0 }, ctx),
+        ).rejects.toThrow("invalid arguments")
+        await expect(
+          webfetch.execute({ url: "https://example.com/file.txt", format: "text", timeout: -1 }, ctx),
+        ).rejects.toThrow("invalid arguments")
+        await expect(
+          webfetch.execute({ url: "https://example.com/file.txt", format: "text", timeout: Number.NaN }, ctx),
+        ).rejects.toThrow("invalid arguments")
+      },
+    })
+  })
 })

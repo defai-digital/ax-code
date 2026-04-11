@@ -7,6 +7,7 @@
 
 import { Log } from "../../util/log"
 import { Env } from "../../util/env"
+import { Process } from "../../util/process"
 
 const log = Log.create({ service: "planner.verify" })
 
@@ -58,19 +59,7 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       stderr: "pipe",
       env: Env.sanitize(),
     })
-
-    let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      proc.kill()
-    }, timeout)
-    const [code, stdout, stderr] = await Promise.all([
-      proc.exited.finally(() => {
-        clearTimeout(timer)
-      }),
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ])
+    const { code, stdout, stderr, timedOut } = await Process.capture(proc, { timeout })
     const output = (stdout + stderr).trim()
     const issues = parseTypeScriptErrors(output)
 
@@ -121,19 +110,7 @@ export async function custom(cmd: string, cwd: string, timeout = 60_000): Promis
       stderr: "pipe",
       env: { ...Env.sanitize(process.env), CI: "true" },
     })
-
-    let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      proc.kill()
-    }, timeout)
-    const [code, stdout, stderr] = await Promise.all([
-      proc.exited.finally(() => {
-        clearTimeout(timer)
-      }),
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ])
+    const { code, stdout, stderr, timedOut } = await Process.capture(proc, { timeout })
     const passed = code === 0
 
     return {

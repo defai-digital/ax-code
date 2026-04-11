@@ -1,7 +1,14 @@
 ax-code
-Copyright 2025 DEFAI Private Limited
+Copyright 2025-2026 DEFAI Private Limited
 
-This product includes software developed by third parties under the following licenses:
+This repository is distributed under the MIT License. Preserve the copyright
+and permission notice in redistributions.
+
+This notice applies to the ax-code repository and published packages. It does
+not grant rights to separately operated services outside this repository,
+including AX Trust.
+
+This notice preserves upstream attribution and lists key third-party license families used in the repository.
 
 ========================================================================
 Apache License 2.0
@@ -53,11 +60,13 @@ ISC License
 - minimatch - Copyright npm, Inc.
 
 ========================================================================
-Base Project
+Upstream Attribution
 ========================================================================
 
-AX Code is based on OpenCode (https://github.com/anomalyco/opencode),
-licensed under the MIT License. Copyright opencode.
+AX Code includes material derived from OpenCode (https://github.com/anomalyco/opencode),
+made available under the MIT License. Preserve the related copyright and
+permission notices for applicable portions of the codebase.
 
-Selected features ported from ax-cli (https://github.com/defai-digital/ax-cli),
-licensed under the MIT License. Copyright DEFAI Private Limited.
+Selected features were also ported from ax-cli
+(https://github.com/defai-digital/ax-cli), made available under the MIT
+License. Copyright DEFAI Private Limited.

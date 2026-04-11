@@ -62,7 +62,7 @@ export namespace Telemetry {
     if (!initialized) await init()
     if (!initialized) return
 
-    const { trace } = await import("@opentelemetry/api")
+    const { context, trace } = await import("@opentelemetry/api")
     const tracer = trace.getTracer("ax-code")
     const events = EventQuery.bySession(sessionID)
     if (events.length === 0) return
@@ -70,6 +70,7 @@ export namespace Telemetry {
     const sessionSpan = tracer.startSpan("session", {
       attributes: { "session.id": sessionID },
     })
+    const parent = trace.setSpan(context.active(), sessionSpan)
 
     for (const event of events) {
       switch (event.type) {
@@ -81,7 +82,7 @@ export namespace Telemetry {
         case "step.start": {
           const stepSpan = tracer.startSpan(`step.${event.stepIndex}`, {
             attributes: { "step.index": event.stepIndex },
-          })
+          }, parent)
           // Find matching finish
           const finish = events.find(
             (e) => e.type === "step.finish" && e.stepIndex === event.stepIndex,
@@ -100,7 +101,7 @@ export namespace Telemetry {
               "tool.name": event.tool,
               "tool.call_id": event.callID,
             },
-          })
+          }, parent)
           const result = events.find(
             (e) => e.type === "tool.result" && e.callID === event.callID,
           )

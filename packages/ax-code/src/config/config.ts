@@ -51,6 +51,7 @@ const CONFIG_SCHEMA_URL = "https://raw.githubusercontent.com/defai-digital/ax-co
 export namespace Config {
 
   const log = Log.create({ service: "config" })
+  const REMOTE_FETCH_TIMEOUT_MS = 5_000
 
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
   // These settings override all user and project settings
@@ -125,12 +126,12 @@ export namespace Config {
             log.warn("wellknown config URL rejected by SSRF guard", { command: "config.load", status: "error", errorCode: "SSRF_REJECTED", url, err })
             return undefined
           }
-          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(10_000) })
+          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(REMOTE_FETCH_TIMEOUT_MS) })
             .then((res) => {
               if (res.ok || res.status !== 404) return res
-              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) })
+              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(REMOTE_FETCH_TIMEOUT_MS) })
             })
-            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) }))
+            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(REMOTE_FETCH_TIMEOUT_MS) }))
           if (!response.ok) {
             log.warn("failed to fetch remote config", { command: "config.load", status: "error", errorCode: "REMOTE_FETCH", url, httpStatus: response.status })
             return undefined
@@ -241,7 +242,7 @@ export namespace Config {
       try {
         let accountTimer: ReturnType<typeof setTimeout>
         const accountTimeout = new Promise<never>((_, reject) => {
-          accountTimer = setTimeout(() => reject(new Error("account config fetch timed out")), 10_000)
+          accountTimer = setTimeout(() => reject(new Error("account config fetch timed out")), REMOTE_FETCH_TIMEOUT_MS)
         })
         const [config, token] = await Promise.race([
           Promise.all([
@@ -928,9 +929,9 @@ export namespace Config {
 
     global.reset()
 
-    await Instance.disposeAll().catch((err) => {
+    const err = await Instance.disposeAll().then(() => undefined).catch((err) => {
       log.error("failed to dispose instances during config reload", { err })
-      throw err
+      return err
     })
 
     GlobalBus.emit("event", {
@@ -940,6 +941,8 @@ export namespace Config {
         properties: {},
       },
     })
+
+    if (err) throw err
 
     return next
   }

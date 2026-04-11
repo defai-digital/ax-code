@@ -12,6 +12,24 @@ import { SkillCommand } from "./skill"
 import { SnapshotCommand } from "./snapshot"
 import { AgentCommand } from "./agent"
 
+type Signal = "SIGINT" | "SIGTERM"
+type Hooks = {
+  on: (signal: Signal, fn: () => void) => void
+  off: (signal: Signal, fn: () => void) => void
+}
+
+export function waitForSignal(input: Hooks = process) {
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      input.off("SIGINT", done)
+      input.off("SIGTERM", done)
+      resolve()
+    }
+    input.on("SIGINT", done)
+    input.on("SIGTERM", done)
+  })
+}
+
 export const DebugCommand = cmd({
   command: "debug",
   describe: "debugging and troubleshooting tools",
@@ -33,7 +51,7 @@ export const DebugCommand = cmd({
         describe: "wait indefinitely (for debugging)",
         async handler() {
           await bootstrap(process.cwd(), async () => {
-            await new Promise((resolve) => setTimeout(resolve, 1_000 * 60 * 60 * 24).unref())
+            await waitForSignal()
           })
         },
       })

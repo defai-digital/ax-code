@@ -132,3 +132,58 @@ test("ShareNext stops retrying after the max retry count", async () => {
     globalThis.clearTimeout = originalClearTimeout
   }
 })
+
+test("ShareNext retries merged data that arrived during an inflight flush", async () => {
+  const originalFetch = globalThis.fetch
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+  const calls: string[][] = []
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  globalThis.fetch = ((async (_url: string | URL | Request, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as { data: Array<{ type: string }> }
+    calls.push(body.data.map((item) => item.type).sort())
+    if (calls.length === 1) await gate
+    return new Response("ok", { status: 200 })
+  }) as unknown) as typeof fetch
+  globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) =>
+    originalSetTimeout(() => fn(...args), 0)) as typeof setTimeout
+  globalThis.clearTimeout = ((id: Timer) => originalClearTimeout(id)) as typeof clearTimeout
+
+  try {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        ShareNext.dispose()
+        await ShareNext.init()
+
+        const session = await Session.create({})
+        Database.use((db) =>
+          db
+            .insert(SessionShareTable)
+            .values({ session_id: session.id, id: "shr_merge", secret: "sec_merge", url: "https://example.com/merge" })
+            .run(),
+        )
+
+        await Bus.publish(Session.Event.Updated, { info: { ...session, share: { url: "https://example.com/merge" } } })
+        await new Promise((resolve) => originalSetTimeout(resolve, 10))
+        await Bus.publish(Session.Event.Diff, { sessionID: session.id, diff: [] })
+        release()
+        await new Promise((resolve) => originalSetTimeout(resolve, 30))
+
+        expect(calls).toHaveLength(2)
+        expect(calls[0]).toContain("session")
+        expect(calls[1]).toContain("session_diff")
+
+        await Session.remove(session.id).catch(() => {})
+      },
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.setTimeout = originalSetTimeout
+    globalThis.clearTimeout = originalClearTimeout
+  }
+})

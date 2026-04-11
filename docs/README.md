@@ -32,3 +32,11 @@ This folder holds **product-facing** documentation: user guides, architecture po
 
 Machine-readable policy examples live in [`policies/`](policies/).
 
+| Document | Summary |
+| -------- | ------- |
+| [`../LICENSING.md`](../LICENSING.md) | Canonical MIT licensing policy for the AX Code repository and release artifacts |
+| [`../TRADEMARKS.md`](../TRADEMARKS.md) | Branding and naming rules for forks, redistributions, and compatibility claims |
+
+## Notes
+
+- Current licensing for AX Code is defined by [`../LICENSING.md`](../LICENSING.md), not by historical planning documents in this folder.

@@ -110,29 +110,22 @@ export namespace Format {
                   for (const item of await getFormatter(ext)) {
                     log.info("running", { command: item.command })
                     try {
-                      const proc = Process.spawn(
+                      const FORMATTER_TIMEOUT = 30_000
+                      const abort = AbortSignal.timeout(FORMATTER_TIMEOUT)
+                      const out = await Process.run(
                         item.command.map((x) => x.replace("$FILE", file)),
                         {
                           cwd: Instance.directory,
                           env: { ...Env.sanitize(), ...item.environment },
-                          stdout: "ignore",
-                          stderr: "ignore",
+                          abort,
+                          timeout: 250,
+                          nothrow: true,
                         },
                       )
-                      const FORMATTER_TIMEOUT = 30_000
-                      let timer: ReturnType<typeof setTimeout>
-                      const exit = await Promise.race([
-                        proc.exited,
-                        new Promise<number>((resolve) => {
-                          timer = setTimeout(() => {
-                            proc.kill()
-                            log.warn("formatter timed out", { command: item.command, file })
-                            resolve(-1)
-                          }, FORMATTER_TIMEOUT)
-                        }),
-                      ])
-                      clearTimeout(timer!)
-                      if (exit !== 0) {
+                      if (abort.aborted && out.code !== 0) {
+                        log.warn("formatter timed out", { command: item.command, file })
+                      }
+                      if (out.code !== 0) {
                         log.error("failed", {
                           command: item.command,
                         })

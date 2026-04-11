@@ -3,6 +3,7 @@ import path from "path"
 import { git } from "../util/git"
 import { Instance } from "../project/instance"
 import { Log } from "../util/log"
+import { Process } from "../util/process"
 import { CodeIntelligence } from "../code-intelligence"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
@@ -126,21 +127,11 @@ async function runCommand(
     stdout: "pipe",
     stderr: "pipe",
   })
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    proc.kill("SIGKILL")
-  }, timeoutMs)
-  try {
-    const [stdout, stderr] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ])
-    const code = await proc.exited
-    return { ok: code === 0 && !timedOut, stdout, stderr, code, timedOut }
-  } finally {
-    clearTimeout(timer)
-  }
+  const { code, stdout, stderr, timedOut } = await Process.capture(proc, {
+    timeout: timeoutMs,
+    kill: "SIGKILL",
+  })
+  return { ok: code === 0 && !timedOut, stdout, stderr, code, timedOut }
 }
 
 async function runCheck(

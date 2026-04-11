@@ -32,3 +32,9 @@ To test your changes:
 1. In the debug VS Code window, press `Cmd+Shift+P`
 2. Search for `Developer: Reload Window`
 3. Reload to see your changes without restarting the debug session
+
+## License
+
+`packages/integration-vscode` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

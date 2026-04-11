@@ -1,6 +1,6 @@
 import open from "open"
+import { DreGraphServer } from "@/cli/cmd/dre-graph-server"
 import { Instance } from "../../project/instance"
-import { Server } from "../../server/server"
 import { Session } from "../../session"
 import { SessionID } from "../../session/schema"
 import { cmd } from "./cmd"
@@ -55,12 +55,7 @@ export const DreGraphCommand = cmd({
       return
     }
 
-    const server = Server.listen({
-      hostname: "127.0.0.1",
-      port: args.port as number,
-      mdns: false,
-      cors: [],
-    })
+    const server = DreGraphServer.listen(args.port as number)
     const url = new URL(
       args.index ? "/dre-graph" : `/dre-graph/session/${hit!.sid}`,
       `http://${server.hostname}:${server.port}`,

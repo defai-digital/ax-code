@@ -17,15 +17,14 @@ import { Config } from "../config/config"
 import { FileIgnore } from "./ignore"
 import { Protected } from "./protected"
 import { Log } from "../util/log"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "@/native/addon"
 
 declare const AX_CODE_LIBC: string | undefined
 
 export namespace FileWatcher {
   const log = Log.create({ service: "file.watcher" })
   const SUBSCRIBE_TIMEOUT_MS = 10_000
-  const POLL_MS = 100
+  const POLL_MS = 500
 
   export const Event = {
     Updated: BusEvent.define(
@@ -115,7 +114,8 @@ export namespace FileWatcher {
             // Native watcher: OS-level events via Rust addon (fsevents/inotify)
             const subscribeNative = (dir: string, ignore: string[]) => {
               return Effect.tryPromise(async () => {
-                const native = _require("@ax-code/fs")
+                const native = NativeAddon.fs()
+                if (!native) throw new Error("native FS addon not available")
                 const watcher = new native.NativeWatcher(dir, JSON.stringify(ignore))
 
                 let pollErrorCount = 0
@@ -191,10 +191,16 @@ export namespace FileWatcher {
 
             // Try native watcher first, fall back to polling on failure
             const subscribe = (dir: string, ignore: string[]) => {
-              if (Flag.AX_CODE_NATIVE_FS) {
-                return subscribeNative(dir, ignore).pipe(Effect.catchCause(() => subscribePoll(dir, ignore)))
-              }
-              return subscribePoll(dir, ignore)
+              return subscribeNative(dir, ignore).pipe(
+                Effect.catchCause((cause) => {
+                  log.warn("native watcher unavailable, falling back to polling (reduced performance)", {
+                    dir,
+                    pollMs: POLL_MS,
+                    cause: Cause.pretty(cause),
+                  })
+                  return subscribePoll(dir, ignore)
+                }),
+              )
             }
 
             const cfg = yield* Effect.promise(() => Config.get())

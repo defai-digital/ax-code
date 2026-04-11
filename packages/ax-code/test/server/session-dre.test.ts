@@ -110,12 +110,13 @@ describe("session dre endpoint", () => {
         const body = (await res.json()) as SessionDre.Snapshot
         expect(body.detail?.plan).toBe("delegated inspect-first incremental edit")
         expect(body.detail?.routes).toEqual([{ from: "build", to: "debug", confidence: 0.92 }])
-        expect(body.detail?.breakdown.map((item) => item.label)).toContain("Validation coverage")
-        expect(body.detail?.breakdown[0]?.detail).toBe("no validation run recorded")
+        expect(body.detail?.readiness).toBe("needs_validation")
+        expect(body.detail?.confidence).toBeGreaterThan(0.6)
+        expect(body.detail?.unknowns).toContain("no validation command recorded for code changes")
         expect(body.detail?.semantic?.headline).toBe("refactor · demo.ts")
         expect(body.detail?.semantic?.risk).toBe("low")
         expect(body.timeline.map((item) => item.text)).toEqual([
-          "Duration 0s · Risk medium (25/100) · Tokens 12/8",
+          "Duration 0s · Risk low (0/100) · Tokens 12/8",
           "Start (build)",
           "build → debug (confidence 0.92)",
           "Step 1 · 0s · tokens 12/8",

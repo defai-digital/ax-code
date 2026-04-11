@@ -7,7 +7,7 @@ This repo is a pnpm workspace monorepo. The structure rules below are intended t
 - `packages/`: shipped packages and product surfaces
 - `crates/`: Rust native addons (napi-rs) for performance-critical operations
 - `docs/`: product-facing documentation (user guides, policies, specs, images)
-- `automatosx/`: development-stage documents (PRDs, ADRs, tmp reports) — gitignored, not shipped
+- private internal planning workspace: development-stage materials, not part of public docs or shipped artifacts
 - `script/`: repository automation scripts run from the root
 
 ## Package Roles
@@ -60,7 +60,7 @@ These are soft limits:
 
 ## Canonical Docs Layout
 
-`docs/` is **product-facing** — content that users, contributors, and reviewers reference. Development-stage planning documents live in `automatosx/`.
+`docs/` is **product-facing** — content that users, contributors, and reviewers reference. Internal planning materials are kept separate from this public documentation surface.
 
 ### docs/ (product-facing, committed to git)
 
@@ -70,10 +70,4 @@ These are soft limits:
 - `docs/images/`: diagrams and architecture images referenced by README
 - `docs/*.md`: user guides (sandbox.md, autonomous.md, etc.)
 
-### automatosx/ (development-stage, gitignored)
-
-- `automatosx/prd/`: product and engineering requirement documents
-- `automatosx/adr/`: architecture decision records
-- `automatosx/tmp/`: temporary reports, status reviews, research notes
-
-This separation ensures `docs/` stays clean for the final product. PRDs and ADRs are working documents that guide development but are not part of the shipped product. Use `/prd` and `/adr` commands — they write to `automatosx/` automatically.
+This separation keeps `docs/` focused on stable, public-facing material. Internal planning artifacts and working notes are maintained outside the public docs surface and are not part of the shipped product.

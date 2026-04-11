@@ -14,7 +14,6 @@ export function Footer() {
   const route = useRoute()
   const mcp = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
   const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
-  const lsp = createMemo(() => Object.keys(sync.data.lsp))
   const isolationMode = createMemo(() => sync.data.isolation.mode)
   // DRE footer chip state (v2.3.8). The chip has three visible states:
   //   1. Pending plans exist    → "◆ N Plans"    (warning-colored)
@@ -84,9 +83,6 @@ export function Footer() {
                 {permissions().length > 1 ? "s" : ""}
               </text>
             </Show>
-            <text fg={theme.text}>
-              <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
-            </text>
             <Show when={dreChipVisible()}>
               <text fg={theme.text}>
                 <Switch>

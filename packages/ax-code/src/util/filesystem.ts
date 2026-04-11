@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rename, writeFile } from "fs/promises"
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from "fs/promises"
 import { createWriteStream, existsSync, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
@@ -51,21 +51,34 @@ export namespace Filesystem {
     return typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "ENOENT"
   }
 
+  function temp(dir: string) {
+    return join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
+  }
+
+  async function drop(p: string) {
+    await unlink(p).catch(() => undefined)
+  }
+
   export async function write(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {
     const dir = dirname(p)
-    const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
+    const tmp = temp(dir)
+    const opts = mode ? { mode } : undefined
     try {
       await mkdir(dir, { recursive: true })
-      await writeFile(tmp, content, mode ? { mode } : undefined)
+      await writeFile(tmp, content, opts)
       await rename(tmp, p)
     } catch (e) {
-      if (isEnoent(e)) {
-        await mkdir(dir, { recursive: true })
-        await writeFile(tmp, content, mode ? { mode } : undefined)
-        await rename(tmp, p)
-        return
+      if (!isEnoent(e)) {
+        await drop(tmp)
+        throw e
       }
-      throw e
+      try {
+        await mkdir(dir, { recursive: true })
+        await writeFile(tmp, content, opts)
+        await rename(tmp, p)
+      } finally {
+        await drop(tmp)
+      }
     }
   }
 
@@ -79,11 +92,17 @@ export namespace Filesystem {
     mode?: number,
   ): Promise<void> {
     const dir = dirname(p)
+    const tmp = temp(dir)
     await mkdir(dir, { recursive: true })
 
     const nodeStream = stream instanceof ReadableStream ? Readable.fromWeb(stream as any) : stream
-    const writeStream = createWriteStream(p)
-    await pipeline(nodeStream, writeStream)
+    const sink = createWriteStream(tmp)
+    try {
+      await pipeline(nodeStream, sink)
+      await rename(tmp, p)
+    } finally {
+      await drop(tmp)
+    }
 
     if (mode) {
       await chmod(p, mode)

@@ -1779,9 +1779,21 @@ export type McpResource = {
   client: string
 }
 
+export type SessionSemanticDiffKind =
+  | "bug_fix"
+  | "refactor"
+  | "optimization"
+  | "test"
+  | "documentation"
+  | "configuration"
+  | "dependency"
+  | "rewrite"
+
 export type SessionBranchRisk = {
   level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
   score: number
+  confidence: number
+  readiness: "ready" | "needs_validation" | "needs_review" | "blocked"
   signals: {
     filesChanged: number
     linesChanged: number
@@ -1790,16 +1802,26 @@ export type SessionBranchRisk = {
     crossModule: boolean
     securityRelated: boolean
     validationPassed?: boolean
+    validationState: "not_run" | "passed" | "failed" | "partial"
+    validationCount: number
+    validationFailures: number
+    validationCommands: Array<string>
     toolFailures: number
     totalTools: number
+    diffState: "recorded" | "derived" | "missing"
+    semanticRisk: "low" | "medium" | "high" | null
+    primaryChange: SessionSemanticDiffKind | null
   }
   summary: string
   breakdown: Array<{
-    kind: "files" | "lines" | "tests" | "api" | "module" | "security" | "validation" | "tools"
+    kind: "files" | "lines" | "tests" | "api" | "module" | "security" | "validation" | "tools" | "semantic"
     label: string
     points: number
     detail: string
   }>
+  evidence: Array<string>
+  unknowns: Array<string>
+  mitigations: Array<string>
 }
 
 export type SessionBranchView = {
@@ -1827,16 +1849,6 @@ export type SessionBranchScorecard = {
 }
 
 export type SessionSemanticDiffRisk = "low" | "medium" | "high"
-
-export type SessionSemanticDiffKind =
-  | "bug_fix"
-  | "refactor"
-  | "optimization"
-  | "test"
-  | "documentation"
-  | "configuration"
-  | "dependency"
-  | "rewrite"
 
 export type SessionSemanticDiffCount = {
   kind: SessionSemanticDiffKind
@@ -1892,6 +1904,8 @@ export type SessionBranchFamily = {
 export type SessionDreDetail = {
   level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
   score: number
+  confidence: number
+  readiness: "ready" | "needs_validation" | "needs_review" | "blocked"
   summary: string
   stats: string
   decision: string
@@ -1900,11 +1914,14 @@ export type SessionDreDetail = {
   drivers: Array<string>
   scorecard: SessionBranchScorecard
   breakdown: Array<{
-    kind: "files" | "lines" | "tests" | "api" | "module" | "security" | "validation" | "tools"
+    kind: "files" | "lines" | "tests" | "api" | "module" | "security" | "validation" | "tools" | "semantic"
     label: string
     points: number
     detail: string
   }>
+  evidence: Array<string>
+  unknowns: Array<string>
+  mitigations: Array<string>
   duration: number
   tokens: {
     input: number
@@ -4602,6 +4619,36 @@ export type GraphGetResponses = {
 }
 
 export type GraphGetResponse = GraphGetResponses[keyof GraphGetResponses]
+
+export type GetDreGraphSessionSessionIdData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/dre-graph/session/{sessionID}"
+}
+
+export type GetDreGraphSessionSessionIdResponses = {
+  200: unknown
+}
+
+export type GetDreGraphSessionSessionIdFingerprintData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/dre-graph/session/{sessionID}/fingerprint"
+}
+
+export type GetDreGraphSessionSessionIdFingerprintResponses = {
+  200: unknown
+}
 
 export type QuestionListData = {
   body?: never

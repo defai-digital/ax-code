@@ -106,6 +106,28 @@ describe("CliLanguageModel", () => {
     ).rejects.toThrow(/CLI exited with code/)
   })
 
+  test("doGenerate times out and rejects promptly", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"],
+      promptMode: "stdin",
+      parser: {
+        parseComplete: () => ({ text: "" }),
+        parseStreamLine: () => null,
+      },
+      timeoutMs: 10,
+      killTimeoutMs: 10,
+    })
+
+    const start = Date.now()
+    await expect(
+      model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      }),
+    ).rejects.toThrow(/CLI process timed out/)
+    expect(Date.now() - start).toBeLessThan(1000)
+  })
+
   test("doStream handles abort signal", async () => {
     const controller = new AbortController()
     const model = makeModel({

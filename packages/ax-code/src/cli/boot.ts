@@ -46,7 +46,40 @@ import { migrate } from "./bootstrap/migrate"
 import { FormatError } from "./error"
 import { UI } from "./ui"
 import { Installation } from "../installation"
+import { Instance } from "../project/instance"
+import { Telemetry } from "../telemetry"
 import { Log } from "../util/log"
+
+type EndInput = {
+  timeout: number
+  later: typeof setTimeout
+  exit: (code?: number) => never
+  warn: (msg: string, extra?: Record<string, unknown>) => void
+  stop: Array<() => Promise<unknown>>
+}
+
+export function createEnd(input: Partial<EndInput> = {}) {
+  let task: Promise<void> | undefined
+  return (code = process.exitCode ?? 0, reason = "shutdown") => {
+    if (task) return task
+
+    const later = input.later ?? setTimeout
+    const exit = input.exit ?? process.exit
+    const warn = input.warn ?? ((msg: string, extra?: Record<string, unknown>) => Log.Default.warn(msg, extra))
+    const stop = input.stop ?? [() => Instance.disposeAll(), () => Telemetry.shutdown()]
+    const timer = later(() => {
+      warn("forcing process exit after cleanup timeout", { code, reason })
+      exit(code)
+    }, input.timeout ?? 5_000)
+
+    if (typeof timer === "object" && "unref" in timer) timer.unref()
+
+    task = Promise.allSettled(stop.map((fn) => fn())).then(() => undefined)
+    return task
+  }
+}
+
+const end = createEnd()
 
 const cmds = [
   AcpCommand,
@@ -102,8 +135,8 @@ export function hooks() {
     Log.Default.error("exception", {
       e: err instanceof Error ? err.message : err,
     })
-    // Process state is unreliable after uncaught exception — exit after flushing
-    setTimeout(() => process.exit(1), 100).unref()
+    process.exitCode = 1
+    void end(1, "uncaughtException")
   })
 }
 
@@ -186,11 +219,6 @@ export async function run() {
     })
     process.exitCode = 1
   } finally {
-    // Some subprocesses don't react properly to SIGTERM and similar signals.
-    // Most notably, some docker-container-based MCP servers don't handle such signals unless
-    // run using `docker run --init`.
-    // Allow a brief window for async cleanup (DB WAL flush, MCP disconnect)
-    // before forcing exit to avoid hanging subprocesses.
-    setTimeout(() => process.exit(), 500).unref()
+    await end(process.exitCode ?? 0, "run")
   }
 }

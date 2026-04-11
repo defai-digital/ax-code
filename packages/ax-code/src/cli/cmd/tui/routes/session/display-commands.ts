@@ -10,6 +10,7 @@ import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript, type MessageWithParts, type SessionInfo } from "../../util/transcript"
 import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./display"
 import { shareTitle, transcriptFilename } from "./display-command-helpers"
+import { DreGraphServer } from "@/cli/cmd/dre-graph-server"
 import { Filesystem } from "@/util/filesystem"
 
 type Session = SessionInfo & {
@@ -29,17 +30,6 @@ type Model = {
 
 type Toast = {
   show: (input: { message: string; variant: "success" | "error" | "warning"; duration?: number }) => void
-}
-
-function dreURL(base: string, sessionID: string, dir?: string) {
-  if (base === "http://opencode.internal") return
-
-  const url = new URL(base)
-  if (url.hostname !== "127.0.0.1") return
-  url.pathname = `/dre-graph/session/${sessionID}`
-  url.search = ""
-  if (dir) url.searchParams.set("directory", dir)
-  return url
 }
 
 export function displayCommands(input: {
@@ -171,25 +161,19 @@ export function displayCommands(input: {
       onSelect: (dialog: DialogContext) => input.dialogReplaceCompare(dialog),
     },
     {
-      title: "Open DRE graph in browser",
+      title: "Open DRE dashboard in browser",
       value: "session.dre.web",
       category: "Session",
       slash: {
-        name: "dre-web",
+        name: "dre-dashboard",
       },
       onSelect: async (dialog: DialogContext) => {
-        const url = dreURL(input.sdk.url, input.routeSessionID, input.session()?.directory)
-        if (!url) {
-          input.toast.show({
-            message: "DRE graph is loopback-only on 127.0.0.1. Start it from your shell with `ax-code dre-graph`.",
-            variant: "warning",
-            duration: 4000,
-          })
-          dialog.clear()
-          return
-        }
-
-        await open(url.toString())
+        await DreGraphServer.page({
+          base: input.sdk.url,
+          sessionID: input.routeSessionID,
+          directory: input.session()?.directory,
+        })
+          .then((url) => open(url.toString()))
           .catch(() =>
             input.toast.show({
               message: "Failed to open DRE graph in the browser",

@@ -13,6 +13,8 @@ export namespace SessionDre {
     .object({
       level: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
       score: z.number(),
+      confidence: z.number(),
+      readiness: z.enum(["ready", "needs_validation", "needs_review", "blocked"]),
       summary: z.string(),
       stats: z.string(),
       decision: z.string(),
@@ -34,6 +36,9 @@ export namespace SessionDre {
   export const Detail = Summary.extend({
     scorecard: SessionBranchRank.Scorecard,
     breakdown: SessionBranchRank.RiskFactor.array(),
+    evidence: z.string().array(),
+    unknowns: z.string().array(),
+    mitigations: z.string().array(),
     duration: z.number(),
     tokens: z.object({
       input: z.number(),
@@ -88,6 +93,8 @@ export namespace SessionDre {
     return {
       level: input.risk.level,
       score: input.risk.score,
+      confidence: input.risk.confidence,
+      readiness: input.risk.readiness,
       summary: input.risk.summary,
       stats,
       decision: ReplayCompare.headline(scorecard),
@@ -111,6 +118,9 @@ export namespace SessionDre {
       ...summary,
       scorecard,
       breakdown: input.risk.breakdown,
+      evidence: input.risk.evidence,
+      unknowns: input.risk.unknowns,
+      mitigations: input.risk.mitigations,
       duration: input.graph.metadata.duration,
       tokens: input.graph.metadata.tokens,
       routes: input.view.routes,

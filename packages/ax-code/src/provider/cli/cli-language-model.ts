@@ -13,6 +13,8 @@ export interface CliLanguageModelConfig {
   parser: CliOutputParser
   promptMode: "stdin" | "arg"
   promptFlag?: string
+  timeoutMs?: number
+  killTimeoutMs?: number
 }
 
 function cliEnv() {
@@ -62,17 +64,28 @@ export class CliLanguageModel implements LanguageModelV3 {
     }
 
     let timeoutTimer: ReturnType<typeof setTimeout>
+    let killTimer: ReturnType<typeof setTimeout> | undefined
+    const timeoutMs = this.config.timeoutMs ?? CLI_TIMEOUT_MS
+    const killMs = this.config.killTimeoutMs ?? 5_000
     const timeout = new Promise<never>((_, reject) =>
       timeoutTimer = setTimeout(() => {
+        proc.stdout?.destroy()
+        proc.stderr?.destroy()
         proc.kill("SIGTERM")
-        setTimeout(() => proc.kill("SIGKILL"), 5000).unref()
-        reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
-      }, CLI_TIMEOUT_MS),
+        killTimer = setTimeout(() => {
+          if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL")
+        }, killMs)
+        killTimer.unref()
+        reject(new Error(`CLI process timed out after ${timeoutMs / 1000}s`))
+      }, timeoutMs),
     )
     const result = Promise.all([proc.exited, buffer(proc.stdout!), buffer(proc.stderr!)])
     result.catch(() => {})
+    void result.finally(() => {
+      clearTimeout(timeoutTimer!)
+      if (killTimer) clearTimeout(killTimer)
+    }).catch(() => {})
     const [code, stdout, stderr] = await Promise.race([result, timeout])
-    clearTimeout(timeoutTimer!)
     if (code !== 0 && stdout.length === 0) {
       throw new Error(`CLI exited with code ${code}: ${stderr.toString().slice(0, 500)}`)
     }

@@ -14,6 +14,9 @@ import { Config } from "../../config/config"
 import { errors } from "../error"
 
 const log = Log.create({ service: "server" })
+const UpgradeTarget = z
+  .string()
+  .regex(/^(latest|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/)
 
 export const GlobalDisposedEvent = BusEvent.define("global.disposed", z.object({}))
 
@@ -234,7 +237,7 @@ export const GlobalRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          target: z.string().optional(),
+          target: UpgradeTarget.optional(),
         }),
       ),
       async (c) => {

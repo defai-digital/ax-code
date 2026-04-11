@@ -105,4 +105,4 @@ AX Code is designed for enterprise use with the following hardening features:
 
 For full enterprise governance (RBAC, policy-as-code, SIEM export, cryptographic audit), integrate with **AX Trust** (roadmap item).
 
-See [docs/sandbox.md](docs/sandbox.md) for configuration and [ADR-003](docs/adr/ADR-003-hardening-program-review.md) for hardening assessment.
+See [docs/sandbox.md](docs/sandbox.md) for sandbox configuration details.

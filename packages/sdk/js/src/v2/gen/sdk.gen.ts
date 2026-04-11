@@ -45,6 +45,8 @@ import type {
   FindSymbolsResponses,
   FindTextResponses,
   FormatterStatusResponses,
+  GetDreGraphSessionSessionIdFingerprintResponses,
+  GetDreGraphSessionSessionIdResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
@@ -4048,6 +4050,58 @@ export class OpencodeClient extends HeyApiClient {
   constructor(args?: { client?: Client; key?: string }) {
     super(args)
     OpencodeClient.__registry.set(this, args?.key)
+  }
+
+  public getDreGraphSessionSessionId<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GetDreGraphSessionSessionIdResponses, unknown, ThrowOnError>({
+      url: "/dre-graph/session/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  public getDreGraphSessionSessionIdFingerprint<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GetDreGraphSessionSessionIdFingerprintResponses, unknown, ThrowOnError>(
+      {
+        url: "/dre-graph/session/{sessionID}/fingerprint",
+        ...options,
+        ...params,
+      },
+    )
   }
 
   private _global?: Global

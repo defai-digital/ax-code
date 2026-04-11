@@ -166,4 +166,6 @@ See [`example/programmatic.ts`](./example/programmatic.ts) for a full set of wor
 
 ## License
 
-MIT
+`@ax-code/sdk` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

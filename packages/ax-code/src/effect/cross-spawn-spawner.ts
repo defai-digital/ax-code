@@ -104,8 +104,20 @@ export const make = Effect.gen(function* () {
     return path.resolve(opts.cwd)
   })
 
+  const baseEnv = () =>
+    Env.sanitize({
+      PATH: globalThis.process.env["PATH"],
+      Path: globalThis.process.env["Path"],
+      PATHEXT: globalThis.process.env["PATHEXT"],
+      PathExt: globalThis.process.env["PathExt"],
+      SYSTEMROOT: globalThis.process.env["SYSTEMROOT"],
+      SystemRoot: globalThis.process.env["SystemRoot"],
+      COMSPEC: globalThis.process.env["COMSPEC"],
+      ComSpec: globalThis.process.env["ComSpec"],
+    })
+
   const env = (opts: ChildProcess.CommandOptions) =>
-    opts.extendEnv ? { ...Env.sanitize(globalThis.process.env), ...opts.env } : opts.env
+    opts.extendEnv ? { ...Env.sanitize(globalThis.process.env), ...opts.env } : { ...baseEnv(), ...Env.sanitize(opts.env ?? {}) }
 
   const input = (x: ChildProcess.CommandInput | undefined): NodeChildProcess.IOType | undefined =>
     Stream.isStream(x) ? "pipe" : x

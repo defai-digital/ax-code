@@ -3,9 +3,13 @@ export async function parseSSE(
   signal: AbortSignal,
   onEvent: (event: unknown) => void,
 ) {
+  const LIMIT = 1024 * 1024
   const reader = body.getReader()
   const decoder = new TextDecoder()
-  let buf = ""
+  let tail = ""
+  let block: string[] = []
+  let size = 0
+  let overflow = false
   const cancel = () => {
     void reader.cancel().catch(() => {})
   }
@@ -65,34 +69,56 @@ export async function parseSSE(
     onEvent(parsed as Parameters<typeof onEvent>[0])
   }
 
+  const push = (text: string) => {
+    if (!text) return
+    tail += text
+    size += text.length
+    if (size > LIMIT) {
+      overflow = true
+      throw new Error("SSE buffer limit exceeded")
+    }
+
+    while (true) {
+      const idx = tail.indexOf("\n")
+      if (idx === -1) return
+      const raw = tail.slice(0, idx)
+      tail = tail.slice(idx + 1)
+      const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw
+      if (line) {
+        block.push(line)
+        continue
+      }
+      emit(block.join("\n"))
+      block = []
+      size = tail.length
+    }
+  }
+
+  const finish = () => {
+    if (overflow) {
+      tail = ""
+      block = []
+      size = 0
+      return
+    }
+    push(decoder.decode())
+    const line = tail.endsWith("\r") ? tail.slice(0, -1) : tail
+    if (line) block.push(line)
+    tail = ""
+    size = 0
+    if (block.length === 0) return
+    emit(block.join("\n"))
+    block = []
+  }
+
   try {
     while (!signal.aborted) {
       const next = await reader.read()
       if (next.done) break
-      buf += decoder.decode(next.value, { stream: true })
-
-      while (true) {
-        let idx = buf.indexOf("\n\n")
-        let gap = 2
-        if (idx === -1) {
-          idx = buf.indexOf("\r\n\r\n")
-          gap = 4
-          if (idx === -1) break
-        }
-        const block = buf.slice(0, idx)
-        buf = buf.slice(idx + gap)
-        emit(block)
-      }
+      push(decoder.decode(next.value, { stream: true }))
     }
-
-    buf += decoder.decode()
-    if (buf.trim()) emit(buf)
   } finally {
-    // Drain any remaining buffered data before canceling — abort may
-    // have broken the loop while partial events were still in `buf`.
-    buf += decoder.decode()
-    if (buf.trim()) emit(buf)
-    buf = ""
+    finish()
     signal.removeEventListener("abort", cancel)
     await reader.cancel().catch(() => {})
   }

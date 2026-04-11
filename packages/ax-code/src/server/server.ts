@@ -432,6 +432,7 @@ async function contextChecks(input: { root: string; dir: string }) {
 export namespace Server {
   const log = Log.create({ service: "server" })
   const rate = new Map<string, { count: number; reset: number }>()
+  let pruneAt = 0
 
   export const Default = lazy(() => createApp({}))
 
@@ -485,6 +486,12 @@ export namespace Server {
         const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "local"
         const key = `${ip}:${c.req.method}:${c.req.path.startsWith("/session/") ? "/session" : c.req.path}`
         const now = Date.now()
+        if (now >= pruneAt) {
+          pruneAt = now + 300_000
+          for (const [item, value] of rate) {
+            if (value.reset <= now) rate.delete(item)
+          }
+        }
         const current = rate.get(key)
         const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)
         const limit = c.req.path.includes("/prompt_async") || c.req.path.endsWith("/shell") ? 30 : mutating ? 120 : 600

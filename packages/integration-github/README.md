@@ -164,3 +164,9 @@ MOCK_EVENT='{"eventName":"issue_comment","repo":{"owner":"sst","repo":"hello-wor
 ```
 MOCK_EVENT='{"eventName":"pull_request_review_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"pull_request":{"number":7},"comment":{"id":1,"body":"hey ax-code, add error handling","path":"src/components/Button.tsx","diff_hunk":"@@ -45,8 +45,11 @@\n- const handleClick = () => {\n-   console.log('"'"'clicked'"'"')\n+ const handleClick = useCallback(() => {\n+   console.log('"'"'clicked'"'"')\n+   doSomething()\n+ }, [doSomething])","line":47,"original_line":45,"position":10,"commit_id":"abc123","original_commit_id":"def456"}}}'
 ```
+
+## License
+
+`packages/integration-github` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

@@ -85,7 +85,7 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
     }
   })
 
-  test("prefers AX_CODE_CONFIG_DIR AGENTS.md over global when both exist", async () => {
+  test("includes AX_CODE_CONFIG_DIR and global AGENTS when both exist", async () => {
     await using profileTmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(path.join(dir, "AGENTS.md"), "# Profile Instructions")
@@ -108,7 +108,7 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
         fn: async () => {
           const paths = await InstructionPrompt.systemPaths()
           expect(paths.has(path.join(profileTmp.path, "AGENTS.md"))).toBe(true)
-          expect(paths.has(path.join(globalTmp.path, "AGENTS.md"))).toBe(false)
+          expect(paths.has(path.join(globalTmp.path, "AGENTS.md"))).toBe(true)
         },
       })
     } finally {

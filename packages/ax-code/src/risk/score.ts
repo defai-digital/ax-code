@@ -4,12 +4,17 @@ import { Global } from "../global"
 import { Log } from "../util/log"
 import { EventQuery } from "../replay/query"
 import { Snapshot } from "../snapshot"
+import { SessionSemanticCore } from "../session/semantic-core"
 import type { SessionID } from "../session/schema"
 
 const log = Log.create({ service: "risk" })
 
 export namespace Risk {
   export type Level = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  export type ValidationState = "not_run" | "passed" | "failed" | "partial"
+  export type DiffState = "recorded" | "derived" | "missing"
+  export type SemanticRisk = SessionSemanticCore.Risk
+  export type Readiness = "ready" | "needs_validation" | "needs_review" | "blocked"
 
   export type Signals = {
     filesChanged: number
@@ -19,20 +24,42 @@ export namespace Risk {
     crossModule: boolean
     securityRelated: boolean
     validationPassed: boolean | undefined
+    validationState?: ValidationState
+    validationCount?: number
+    validationFailures?: number
+    validationCommands?: string[]
     toolFailures: number
     totalTools: number
+    diffState?: DiffState
+    semanticRisk?: SemanticRisk | null
+    primaryChange?: SessionSemanticCore.Kind | null
+  }
+
+  export type NormalizedSignals = Omit<Signals, "validationState" | "validationCount" | "validationFailures" | "validationCommands" | "diffState"> & {
+    validationState: ValidationState
+    validationCount: number
+    validationFailures: number
+    validationCommands: string[]
+    diffState: DiffState
+    semanticRisk: SemanticRisk | null
+    primaryChange: SessionSemanticCore.Kind | null
   }
 
   export type Assessment = {
     level: Level
     score: number
-    signals: Signals
+    confidence: number
+    readiness: Readiness
+    signals: NormalizedSignals
     summary: string
     breakdown: Factor[]
+    evidence: string[]
+    unknowns: string[]
+    mitigations: string[]
   }
 
   export type Factor = {
-    kind: "files" | "lines" | "tests" | "api" | "module" | "security" | "validation" | "tools"
+    kind: "files" | "lines" | "tests" | "api" | "module" | "security" | "validation" | "tools" | "semantic"
     label: string
     points: number
     detail: string
@@ -61,7 +88,7 @@ export namespace Risk {
 
   function isCrossModule(files: string[]): boolean {
     const dirs = new Set(files.map((f) => f.split("/").slice(0, 2).join("/")))
-    return dirs.size > 2
+    return dirs.size > 1
   }
 
   function api(files: string[]) {
@@ -87,6 +114,58 @@ export namespace Risk {
     return { add, del }
   }
 
+  function validationState(input: Signals): ValidationState {
+    if (input.validationState) return input.validationState
+    if (input.validationPassed === true) return "passed"
+    if (input.validationPassed === false) return "failed"
+    return input.testCoverage > 0 ? "partial" : "not_run"
+  }
+
+  function normalize(input: Signals): NormalizedSignals {
+    const state = validationState(input)
+    const count = input.validationCount ?? (state === "not_run" ? 0 : 1)
+    const failures = input.validationFailures ?? (state === "failed" ? Math.max(1, count) : 0)
+    const diffState = input.diffState ?? (input.filesChanged > 0 || input.linesChanged > 0 ? "derived" : "missing")
+    return {
+      ...input,
+      testCoverage: state === "passed" ? 1 : state === "partial" ? Math.max(input.testCoverage, 0.5) : 0,
+      validationState: state,
+      validationCount: count,
+      validationFailures: failures,
+      validationCommands: [...new Set(input.validationCommands ?? [])],
+      diffState,
+      semanticRisk: input.semanticRisk ?? null,
+      primaryChange: input.primaryChange ?? null,
+    }
+  }
+
+  function confidence(signals: NormalizedSignals) {
+    const base =
+      0.35 +
+      (signals.diffState === "recorded" ? 0.25 : signals.diffState === "derived" ? 0.12 : 0) +
+      (signals.validationState === "passed" || signals.validationState === "failed"
+        ? 0.22
+        : signals.validationState === "partial"
+          ? 0.1
+          : signals.filesChanged === 0
+            ? 0.1
+            : -0.05) +
+      (signals.primaryChange && signals.diffState !== "missing" ? 0.08 : 0) -
+      Math.min(0.15, signals.toolFailures * 0.05)
+    return Math.max(0.1, Math.min(0.99, Number(base.toFixed(2))))
+  }
+
+  function readiness(signals: NormalizedSignals, confidence: number): Readiness {
+    if (signals.validationState === "failed") return "blocked"
+    if (signals.filesChanged > 0 && signals.validationState === "not_run") return "needs_validation"
+    if (confidence < 0.45) return "needs_review"
+    return "ready"
+  }
+
+  function text(input: Readiness) {
+    return input.replaceAll("_", " ")
+  }
+
   function file(sessionID: SessionID) {
     return path.join(Global.Path.data, "storage", "session_diff", `${sessionID}.json`)
   }
@@ -107,6 +186,7 @@ export namespace Risk {
   }
 
   export function assess(signals: Signals): Assessment {
+    const next = normalize(signals)
     let score = 0
     const breakdown = [] as Factor[]
     const push = (kind: Factor["kind"], label: string, points: number, detail: string) => {
@@ -118,68 +198,112 @@ export namespace Risk {
     push(
       "files",
       "File churn",
-      signals.filesChanged > 10 ? 30 : signals.filesChanged > 5 ? 20 : signals.filesChanged > 1 ? 10 : 0,
-      `${signals.filesChanged} files changed`,
+      next.filesChanged > 10 ? 25 : next.filesChanged > 5 ? 15 : next.filesChanged > 1 ? 8 : 0,
+      `${next.filesChanged} files changed`,
     )
 
     push(
       "lines",
       "Code churn",
-      signals.linesChanged > 500 ? 20 : signals.linesChanged > 100 ? 10 : 0,
-      `${signals.linesChanged} lines changed`,
+      next.linesChanged > 500 ? 20 : next.linesChanged > 100 ? 12 : next.linesChanged > 30 ? 5 : 0,
+      `${next.linesChanged} lines changed`,
     )
 
     push(
       "tests",
-      "Validation coverage",
-      signals.testCoverage === 0 && signals.filesChanged > 0 ? 25 : signals.testCoverage < 0.5 ? 15 : 0,
-      signals.testCoverage === 0 ? "no validation run recorded" : `validation confidence ${signals.testCoverage}`,
+      "Validation scope",
+      next.validationState === "partial" ? 6 : 0,
+      next.validationCommands.length > 0 ? `${next.validationCommands.length} validation commands recorded` : "partial validation coverage",
     )
 
     push(
       "api",
       "API surface",
-      signals.apiEndpointsAffected > 0 ? 15 : 0,
-      `${signals.apiEndpointsAffected} route files affected`,
+      next.apiEndpointsAffected > 0 ? 12 : 0,
+      `${next.apiEndpointsAffected} route files affected`,
     )
 
-    push("module", "Cross-module scope", signals.crossModule ? 10 : 0, "changes span multiple top-level areas")
+    push("module", "Cross-module scope", next.crossModule ? 8 : 0, "changes span multiple top-level areas")
 
-    push("security", "Security-sensitive area", signals.securityRelated ? 15 : 0, "security-related files touched")
+    push("security", "Security-sensitive area", next.securityRelated ? 15 : 0, "security-related files touched")
+
+    push(
+      "semantic",
+      "Semantic change",
+      next.semanticRisk === "high" ? 10 : next.semanticRisk === "medium" ? 4 : 0,
+      next.primaryChange ? `${SessionSemanticCore.format(next.primaryChange)} classified as ${next.semanticRisk} risk` : "semantic change unavailable",
+    )
 
     push(
       "validation",
       "Validation result",
-      signals.validationPassed === false ? 20 : 0,
+      next.validationState === "failed" ? 20 : 0,
       "validation output reported failure",
     )
 
     push(
       "tools",
       "Tool stability",
-      signals.toolFailures > 0 ? 10 : 0,
-      `${signals.toolFailures}/${signals.totalTools} tool calls failed`,
+      next.toolFailures > 0 ? Math.min(15, 6 + next.toolFailures * 2) : 0,
+      `${next.toolFailures}/${next.totalTools} tool calls failed`,
     )
 
     score = Math.min(score, 100)
 
-    const level: Level = score >= 70 ? "CRITICAL" : score >= 50 ? "HIGH" : score >= 25 ? "MEDIUM" : "LOW"
+    const level: Level = score >= 70 ? "CRITICAL" : score >= 45 ? "HIGH" : score >= 20 ? "MEDIUM" : "LOW"
+    const conf = confidence(next)
+    const ready = readiness(next, conf)
 
     const parts: string[] = []
-    if (signals.filesChanged > 0) parts.push(`${signals.filesChanged} files changed`)
-    if (signals.testCoverage === 0) parts.push("no test coverage")
-    if (signals.securityRelated) parts.push("security-related files")
-    if (signals.crossModule) parts.push("cross-module change")
-    if (signals.apiEndpointsAffected > 0) parts.push(`${signals.apiEndpointsAffected} API endpoints`)
-    if (signals.validationPassed === false) parts.push("validation failed")
-    if (signals.toolFailures > 0) parts.push(`${signals.toolFailures} tool failures`)
+    if (next.filesChanged > 0) parts.push(`${next.filesChanged} files changed`)
+    if (next.primaryChange) parts.push(SessionSemanticCore.format(next.primaryChange))
+    if (next.securityRelated) parts.push("security-related files")
+    if (next.crossModule) parts.push("cross-module change")
+    if (next.apiEndpointsAffected > 0) parts.push(`${next.apiEndpointsAffected} API endpoints`)
+    if (next.validationState === "failed") parts.push("validation failed")
+    if (next.toolFailures > 0) parts.push(`${next.toolFailures} tool failures`)
+
+    const evidence = [
+      next.diffState === "recorded"
+        ? `diff snapshot recorded for ${next.filesChanged} file${next.filesChanged === 1 ? "" : "s"}`
+        : next.diffState === "derived"
+          ? "change scope derived from tool events"
+          : "",
+      next.validationCount > 0
+        ? next.validationCommands.length > 0
+          ? `validation recorded: ${next.validationCommands.slice(0, 2).join(" · ")}`
+          : `${next.validationCount} validation run${next.validationCount === 1 ? "" : "s"} recorded`
+        : "",
+      next.primaryChange ? `semantic change classified as ${SessionSemanticCore.format(next.primaryChange)}` : "",
+      next.toolFailures > 0 ? `${next.toolFailures} tool failure${next.toolFailures === 1 ? "" : "s"} recorded` : "",
+    ].filter(Boolean)
+
+    const unknowns = [
+      next.diffState === "missing" && next.filesChanged > 0 ? "no diff snapshot recorded for changed files" : "",
+      next.diffState === "derived" ? "line churn is estimated from tool events, not a persisted diff" : "",
+      next.filesChanged > 0 && next.validationState === "not_run" ? "no validation command recorded for code changes" : "",
+      next.validationState === "partial" ? "validation covered only part of the change" : "",
+    ].filter(Boolean)
+
+    const mitigations = [
+      next.filesChanged > 0 && next.validationState === "not_run" ? "run validation before accepting this session" : "",
+      next.validationState === "partial" ? "expand validation to the touched files or routes" : "",
+      next.diffState !== "recorded" && next.filesChanged > 0 ? "persist a session diff snapshot before trusting churn estimates" : "",
+      next.apiEndpointsAffected > 0 ? "exercise the touched routes with endpoint or contract checks" : "",
+      next.securityRelated ? "review auth, session, or credential paths with an owner" : "",
+    ].filter(Boolean)
 
     return {
       level,
       score,
-      signals,
-      summary: parts.length > 0 ? parts.join(", ") : "minimal change",
+      confidence: conf,
+      readiness: ready,
+      signals: next,
+      summary: parts.length > 0 ? parts.join(", ") : next.filesChanged > 0 ? "code change recorded" : "minimal change",
       breakdown,
+      evidence,
+      unknowns,
+      mitigations,
     }
   }
 
@@ -192,7 +316,8 @@ export namespace Risk {
     let deletions = 0
     let toolFailures = 0
     let totalTools = 0
-    let validationPassed: boolean | undefined
+    const validation = new Map<string, string>()
+    const runs = [] as Array<{ command: string; failed: boolean }>
     for (const event of events) {
       const e = event as Record<string, unknown>
 
@@ -200,22 +325,30 @@ export namespace Risk {
         totalTools++
         if (e.status === "error") toolFailures++
 
-        // Check validation results
         const tool = e.tool as string
-        if (tool === "bash") {
+        const call = validation.get((e.callID as string) ?? "")
+        if (tool === "bash" && call) {
           const output = (e.output as string) ?? ""
-          const isTest = /\b(test|jest|vitest|mocha|bun test)\b/i.test(output)
-          if (isTest) {
-            const failed = /\b(fail|error|FAIL)\b/.test(output)
-            if (validationPassed === undefined) validationPassed = !failed
-            else if (failed) validationPassed = false
-          }
+          runs.push({
+            command: call,
+            failed: validationFailed({
+              command: call,
+              status: e.status as "completed" | "error",
+              output,
+            }),
+          })
+          validation.delete((e.callID as string) ?? "")
         }
       }
 
       if (e.type === "tool.call") {
         const tool = e.tool as string
         const input = (e.input as Record<string, unknown>) ?? {}
+
+        if (tool === "bash") {
+          const cmd = String(input.command ?? input.cmd ?? "")
+          if (isValidation(cmd)) validation.set((e.callID as string) ?? "", cmd)
+        }
 
         if (tool === "edit" || tool === "multiedit" || tool === "write") {
           const fp = (input.filePath ?? input.file_path ?? "") as string
@@ -237,11 +370,6 @@ export namespace Risk {
           deletions += stat.del
         }
       }
-
-      if (e.type !== "step.finish") continue
-      if (diff) continue
-      const tokens = e.tokens as Record<string, number> | undefined
-      if (tokens) additions += tokens.output ?? 0
     }
 
     if (diff) {
@@ -254,18 +382,59 @@ export namespace Risk {
 
     const fileList = [...files]
     const linesChanged = additions + deletions
+    const semantic = diff ? SessionSemanticCore.summarize(diff) ?? null : null
+    const failed = runs.filter((item) => item.failed).length
+    const passed = runs.length > 0 && failed === 0
+    const partial = runs.length > 0 && failed > 0 && failed < runs.length
+    const validationState = passed ? "passed" : failed > 0 ? (partial ? "partial" : "failed") : "not_run"
 
     return assess({
       filesChanged: fileList.length,
       linesChanged,
-      testCoverage: validationPassed === undefined ? 0 : validationPassed ? 1 : 0,
+      testCoverage: validationState === "passed" ? 1 : validationState === "partial" ? 0.5 : 0,
       apiEndpointsAffected: api(fileList),
       crossModule: isCrossModule(fileList),
       securityRelated: isSecurityRelated(fileList),
-      validationPassed,
+      validationPassed: validationState === "passed" ? true : validationState === "failed" ? false : undefined,
+      validationState,
+      validationCount: runs.length,
+      validationFailures: failed,
+      validationCommands: runs.map((item) => item.command),
       toolFailures,
       totalTools,
+      diffState: diff ? "recorded" : fileList.length > 0 || linesChanged > 0 ? "derived" : "missing",
+      semanticRisk: semantic?.risk ?? null,
+      primaryChange: semantic?.primary ?? null,
     })
+  }
+
+  function isValidation(input: string) {
+    return [
+      /\b(?:bun|pnpm|npm|yarn)\s+(?:run\s+)?test\b/i,
+      /\b(?:bun|pnpm|npm|yarn)\s+(?:run\s+)?(?:typecheck|lint|build|check)\b/i,
+      /\b(?:vitest|jest|mocha|ava|pytest|rspec|phpunit)\b/i,
+      /\b(?:go test|cargo (?:test|check)|deno test|swift test|dotnet test)\b/i,
+      /\btsc\b.*(?:--noEmit|-noEmit)\b/i,
+      /\beslint\b/i,
+    ].some((pat) => pat.test(input))
+  }
+
+  function testCommand(input: string) {
+    return [/\b(?:bun|pnpm|npm|yarn)\s+(?:run\s+)?test\b/i, /\b(?:vitest|jest|mocha|ava|pytest|rspec|phpunit)\b/i].some((pat) =>
+      pat.test(input),
+    )
+  }
+
+  function validationFailed(input: { command: string; status: "completed" | "error"; output: string }) {
+    if (input.status === "error") return true
+    if (!testCommand(input.command)) return false
+    const text = input.output.toLowerCase()
+    if (/\b0\s+fail(?:ed|ures?)?\b/.test(text) || /\b0\s+errors?\b/.test(text)) return false
+    return (
+      /\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(text) ||
+      /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output) ||
+      /\bFAIL\b/.test(input.output)
+    )
   }
 
   export function top(assessment: Assessment, limit = 3) {
@@ -285,6 +454,6 @@ export namespace Risk {
           : assessment.level === "HIGH"
             ? "!!"
             : "!!!"
-    return `Risk: ${assessment.level} (${assessment.score}/100) ${icon}\n  ${assessment.summary}`
+    return `Risk: ${assessment.level} (${assessment.score}/100) ${icon}\n  ${assessment.summary}\n  readiness ${text(assessment.readiness)} · confidence ${assessment.confidence.toFixed(2)}`
   }
 }

@@ -11,10 +11,8 @@ import { Instance } from "../project/instance"
 import path from "path"
 import { assertExternalDirectory } from "./external-directory"
 import { MAX_LINE_LENGTH } from "@/constants/tool"
-import { Flag } from "../flag/flag"
 import { NativePerf } from "../perf/native"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "@/native/addon"
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
@@ -55,9 +53,9 @@ export const GrepTool = Tool.define("grep", {
     }
 
     // Native fast-path: in-process search via Rust addon
-    if (Flag.AX_CODE_NATIVE_FS) {
+    const native = NativeAddon.fs()
+    if (native) {
       try {
-        const native = _require("@ax-code/fs")
         const json = NativePerf.run(
           "fs.searchContent",
           {
@@ -118,7 +116,7 @@ export const GrepTool = Tool.define("grep", {
           output: outputLines.join("\n"),
         }
       } catch (e: any) {
-        if (e?.code === "MODULE_NOT_FOUND" || e?.code === "ERR_MODULE_NOT_FOUND") {
+        if (e?.code === "MODULE_NOT_FOUND" || e?.code === "ERR_MODULE_NOT_FOUND" || e instanceof SyntaxError) {
           /* fall through to ripgrep */
         } else throw e
       }

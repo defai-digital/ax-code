@@ -28,19 +28,19 @@ describe("replay compare", () => {
 
     expect(view.plan).toBe("delegated inspect-first incremental edit")
     expect(view.notes).toContain("validation passed")
-    expect(card.total).toBe(0.97)
+    expect(card.total).toBe(0.95)
     expect(card.breakdown).toEqual([
       {
         key: "correctness",
         label: "Correctness",
-        value: 0.95,
-        detail: "validation passed, 0 divergences, 0 tool failures",
+        value: 0.91,
+        detail: "validation passed, confidence 0.69, 0 divergences, 0 tool failures",
       },
       { key: "safety", label: "Safety", value: 1, detail: "risk 0/100" },
       { key: "simplicity", label: "Simplicity", value: 0.93, detail: "1 file, 12 lines, 2 tool calls, 1 route" },
-      { key: "validation", label: "Validation", value: 1, detail: "validation passed" },
+      { key: "validation", label: "Validation", value: 1, detail: "validation passed · ready" },
     ])
-    expect(ReplayCompare.headline(card)).toBe("decision 0.97 · correctness 0.95 · safety 1.00")
+    expect(ReplayCompare.headline(card)).toBe("decision 0.95 · correctness 0.91 · safety 1.00")
   })
 
   test("advises the lower-risk validated session", () => {

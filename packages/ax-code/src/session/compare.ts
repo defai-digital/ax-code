@@ -118,9 +118,10 @@ export namespace SessionCompare {
   export type Result = z.output<typeof Result>
 
   function validation(input: Summary["risk"]) {
-    const state = input.signals.validationPassed
-    if (state === true) return "validation passed"
-    if (state === false) return "validation failed"
+    const state = input.signals.validationState
+    if (state === "passed") return "validation passed"
+    if (state === "failed") return "validation failed"
+    if (state === "partial") return "partial validation"
     return "validation not recorded"
   }
 

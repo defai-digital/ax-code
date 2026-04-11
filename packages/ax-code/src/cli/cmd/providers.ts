@@ -12,7 +12,6 @@ import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
 import type { Hooks } from "@ax-code/plugin"
 import { Process } from "../../util/process"
-import { text } from "node:stream/consumers"
 import { Ssrf } from "../../util/ssrf"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
@@ -338,31 +337,23 @@ export const ProvidersLoginCommand = cmd({
             return
           }
           prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
-          const proc = Process.spawn(wellknown.auth.command, {
-            stdout: "pipe",
-            stderr: "pipe",
+          const abort = AbortSignal.timeout(30_000)
+          const out = await Process.run(wellknown.auth.command, {
+            abort,
+            timeout: 250,
+            nothrow: true,
           })
-          if (!proc.stdout) {
-            prompts.log.error("Auth command failed to start")
-            prompts.outro("Done")
-            return
-          }
-          const timeout = setTimeout(() => proc.kill(), 30_000)
-          const [exit, token, stderr] = await Promise.all([
-            proc.exited,
-            text(proc.stdout),
-            proc.stderr ? text(proc.stderr) : Promise.resolve(""),
-          ])
-          clearTimeout(timeout)
-          if (exit !== 0) {
-            prompts.log.error(`Auth command failed (exit ${exit})${stderr ? ": " + stderr.trim() : ""}`)
+          if (out.code !== 0) {
+            const err = out.stderr.toString().trim()
+            const msg = abort.aborted ? "Auth command timed out" : `Auth command failed (exit ${out.code})`
+            prompts.log.error(err ? `${msg}: ${err}` : msg)
             prompts.outro("Done")
             return
           }
           await Auth.set(url, {
             type: "wellknown",
             key: wellknown.auth.env,
-            token: token.trim(),
+            token: out.stdout.toString().trim(),
           })
           prompts.log.success("Logged into " + url)
           prompts.outro("Done")

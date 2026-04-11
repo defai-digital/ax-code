@@ -7,8 +7,13 @@
  */
 
 import { Log } from "../util/log"
+import { Process } from "../util/process"
 
 const log = Log.create({ service: "mcp.discovery" })
+
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+let cached: { results: DiscoveredServer[]; at: number } | undefined
 
 export interface DiscoveredServer {
   name: string
@@ -39,7 +44,7 @@ const CANDIDATES: Candidate[] = [
     check: async () => {
       try {
         const proc = Bun.spawn(["npx", "--help"], { stdout: "ignore", stderr: "ignore" })
-        return (await proc.exited) === 0
+        return (await Process.capture(proc, { timeout: 5000 })).code === 0
       } catch {
         return false
       }
@@ -72,9 +77,8 @@ const CANDIDATES: Candidate[] = [
         const proc = Bun.spawn(["npx", "-y", "@modelcontextprotocol/server-puppeteer", "--help"], {
           stdout: "ignore",
           stderr: "ignore",
-          timeout: 5000,
         })
-        return (await proc.exited) === 0
+        return (await Process.capture(proc, { timeout: 5000 })).code === 0
       } catch {
         return false
       }
@@ -105,6 +109,11 @@ const CANDIDATES: Candidate[] = [
  * Only returns servers that pass their detection check
  */
 export async function discover(): Promise<DiscoveredServer[]> {
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    log.debug("returning cached MCP discovery results", { age: Date.now() - cached.at })
+    return cached.results
+  }
+
   log.info("starting MCP auto-discovery")
   const results: DiscoveredServer[] = []
 
@@ -139,6 +148,7 @@ export async function discover(): Promise<DiscoveredServer[]> {
     detected: results.filter((r) => r.detected).length,
   })
 
+  cached = { results, at: Date.now() }
   return results
 }
 

@@ -12,6 +12,8 @@ import { ProjectID } from "../../src/project/schema"
 import { Filesystem } from "../../src/util/filesystem"
 import { BunProc } from "../../src/bun"
 import { Ssrf } from "../../src/util/ssrf"
+import { GlobalBus } from "../../src/bus/global"
+import { Event } from "../../src/server/event"
 
 // Get managed config directory from environment (set in preload.ts)
 const managedConfigDir = process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR!
@@ -801,6 +803,33 @@ test("serializes concurrent config dependency installs", async () => {
   expect(relevant.toSorted()).toEqual(dirs.toSorted())
   expect(await Filesystem.exists(path.join(dirs[0], "package.json"))).toBe(true)
   expect(await Filesystem.exists(path.join(dirs[1], "package.json"))).toBe(true)
+})
+
+test("emits global disposed event when updateGlobal dispose fails", async () => {
+  await using tmp = await tmpdir()
+  const prev = Global.Path.config
+  ;(Global.Path as { config: string }).config = tmp.path
+  Config.global.reset()
+
+  const dispose = spyOn(Instance, "disposeAll").mockRejectedValue(new Error("dispose failed"))
+  const seen: Array<{ directory?: string; payload: { type: string } }> = []
+  const on = (event: { directory?: string; payload: { type: string } }) => {
+    seen.push(event)
+  }
+  GlobalBus.on("event", on)
+
+  try {
+    await expect(Config.updateGlobal({ username: "test-user" })).rejects.toThrow("dispose failed")
+  } finally {
+    GlobalBus.off("event", on)
+    dispose.mockRestore()
+    ;(Global.Path as { config: string }).config = prev
+    Config.global.reset()
+  }
+
+  expect(
+    seen.some((event) => event.directory === "global" && event.payload.type === Event.Disposed.type),
+  ).toBe(true)
 })
 
 test("resolves scoped npm plugins in config", async () => {

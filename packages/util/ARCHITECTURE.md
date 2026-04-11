@@ -17,3 +17,9 @@
 ## Testing
 
 - colocate tests when this package grows enough to need them
+
+## License
+
+`packages/util` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

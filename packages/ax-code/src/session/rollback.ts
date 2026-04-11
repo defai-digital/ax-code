@@ -41,10 +41,15 @@ export namespace SessionRollback {
 
   export function resolve(msgs: Message, evts: ReplayEvent[]) {
     const bymsg = new Map<string, number[]>()
+    // Use a sequential counter to match the remapped stepIndex
+    // in ExecutionGraph.build() which assigns 1, 2, 3, ... instead
+    // of using the raw event stepIndex
+    let stepCount = 0
     for (const evt of evts) {
       if (evt.type !== "step.start" || !evt.messageID) continue
+      stepCount++
       const list = bymsg.get(evt.messageID) ?? []
-      list.push(evt.stepIndex)
+      list.push(stepCount)
       bymsg.set(evt.messageID, list)
     }
 

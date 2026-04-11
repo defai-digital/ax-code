@@ -93,8 +93,9 @@ describe("audit report routing", () => {
 
         const report = await AuditReport.generate(sid)
         expect(report).toContain("- **Lines changed:** 131")
-        expect(report).toContain("- **Validation coverage:** no validation run recorded (+25)")
-        expect(report).toContain("- **API surface:** 1 route files affected (+15)")
+        expect(report).toContain("- **Readiness:** needs validation")
+        expect(report).toContain("- **API surface:** 1 route files affected (+12)")
+        expect(report).toContain("- **Unknown:** no validation command recorded for code changes")
 
         EventQuery.deleteBySession(sid)
       },

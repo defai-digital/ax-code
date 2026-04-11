@@ -32,12 +32,14 @@ describe("session risk", () => {
 
         expect(detail.id).toBe(session.id)
         expect(detail.title).toBe("risk demo")
-        expect(detail.assessment.level).toBe("HIGH")
-        expect(detail.assessment.score).toBe(50)
+        expect(detail.assessment.level).toBe("MEDIUM")
+        expect(detail.assessment.score).toBe(34)
+        expect(detail.assessment.readiness).toBe("needs_validation")
+        expect(detail.assessment.unknowns).toContain("no validation command recorded for code changes")
         expect(detail.drivers).toEqual([
-          "Validation coverage: no validation run recorded (+25)",
-          "API surface: 1 route files affected (+15)",
-          "Code churn: 121 lines changed (+10)",
+          "Code churn: 121 lines changed (+12)",
+          "API surface: 1 route files affected (+12)",
+          "Semantic change: rewrite classified as high risk (+10)",
         ])
         expect(detail.semantic?.headline).toBe("rewrite · demo.ts")
         expect(detail.semantic?.risk).toBe("high")

@@ -6,6 +6,7 @@ import { Env } from "../util/env"
 import { CliLanguageModel } from "./cli/cli-language-model"
 import { claudeCodeParser, geminiCliParser, codexCliParser, type CliOutputParser } from "./cli/parser"
 import { resolveCliModel } from "./cli/resolve"
+import { Process } from "../util/process"
 import { URL } from "url"
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
@@ -125,9 +126,9 @@ async function checkClaudeAuth(binary: string): Promise<boolean> {
       stderr: "pipe",
       env: { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" },
     })
-    const timer = setTimeout(() => proc.kill(), 5000)
-    const stdout = await new Response(proc.stdout).text().catch(() => "")
-    clearTimeout(timer)
+    const stdout = await Process.capture(proc, { timeout: 5000 })
+      .then((result) => result.stdout)
+      .catch(() => "")
     for (const line of stdout.split("\n")) {
       const trimmed = line.trim()
       if (!trimmed || trimmed[0] !== "{") continue

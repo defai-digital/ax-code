@@ -35,8 +35,9 @@ describe("session risk endpoint", () => {
         expect(res.status).toBe(200)
         const body = (await res.json()) as SessionRisk.Detail
         expect(body.id).toBe(session.id)
-        expect(body.assessment.level).toBe("HIGH")
-        expect(body.drivers[0]).toBe("Validation coverage: no validation run recorded (+25)")
+        expect(body.assessment.level).toBe("MEDIUM")
+        expect(body.assessment.readiness).toBe("needs_validation")
+        expect(body.drivers[0]).toBe("Code churn: 121 lines changed (+12)")
         expect(body.semantic?.headline).toBe("rewrite · demo.ts")
       },
     })

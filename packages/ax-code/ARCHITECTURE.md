@@ -113,3 +113,9 @@ CPU-bound hot paths dispatch to Rust when flags enabled:
 - `AX_CODE_NATIVE_PARSER=1` — Tree-sitter symbol extraction
 
 All native paths use `createRequire(import.meta.url)` with try/catch fallback.
+
+## License
+
+`packages/ax-code` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

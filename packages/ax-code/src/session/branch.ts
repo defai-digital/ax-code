@@ -20,12 +20,15 @@ export namespace SessionBranchRank {
   export type SessionInfo = z.output<typeof SessionInfo>
 
   export const RiskFactor = z.object({
-    kind: z.enum(["files", "lines", "tests", "api", "module", "security", "validation", "tools"]),
+    kind: z.enum(["files", "lines", "tests", "api", "module", "security", "validation", "tools", "semantic"]),
     label: z.string(),
     points: z.number(),
     detail: z.string(),
   })
   export type RiskFactor = z.output<typeof RiskFactor>
+
+  const ValidationState = z.enum(["not_run", "passed", "failed", "partial"])
+  const DiffState = z.enum(["recorded", "derived", "missing"])
 
   export const RiskSignals = z.object({
     filesChanged: z.number(),
@@ -35,8 +38,15 @@ export namespace SessionBranchRank {
     crossModule: z.boolean(),
     securityRelated: z.boolean(),
     validationPassed: z.boolean().optional(),
+    validationState: ValidationState,
+    validationCount: z.number(),
+    validationFailures: z.number(),
+    validationCommands: z.string().array(),
     toolFailures: z.number(),
     totalTools: z.number(),
+    diffState: DiffState,
+    semanticRisk: z.enum(["low", "medium", "high"]).nullable(),
+    primaryChange: SessionSemanticDiff.Kind.nullable(),
   })
   export type RiskSignals = z.output<typeof RiskSignals>
 
@@ -44,9 +54,14 @@ export namespace SessionBranchRank {
     .object({
       level: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
       score: z.number(),
+      confidence: z.number(),
+      readiness: z.enum(["ready", "needs_validation", "needs_review", "blocked"]),
       signals: RiskSignals,
       summary: z.string(),
       breakdown: RiskFactor.array(),
+      evidence: z.string().array(),
+      unknowns: z.string().array(),
+      mitigations: z.string().array(),
     })
     .meta({
       ref: "SessionBranchRisk",

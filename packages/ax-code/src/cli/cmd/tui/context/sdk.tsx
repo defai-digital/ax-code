@@ -40,6 +40,11 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     let queue: Event[] = []
     let timer: Timer | undefined
     let last = 0
+    const reset = () => {
+      if (timer) clearTimeout(timer)
+      timer = undefined
+      queue = []
+    }
 
     const flush = () => {
       if (queue.length === 0) return
@@ -105,7 +110,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     onCleanup(() => {
       abort.abort()
       sse?.abort()
-      if (timer) clearTimeout(timer)
+      reset()
     })
 
     return {
@@ -117,6 +122,8 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       fetch: props.fetch ?? fetch,
       setWorkspace(next?: string) {
         if (workspaceID === next) return
+        sse?.abort()
+        reset()
         workspaceID = next
         sdk = createSDK()
         props.events?.setWorkspace?.(next)

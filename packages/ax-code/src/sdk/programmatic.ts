@@ -145,6 +145,9 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>): StreamHandle {
   let iteratorStarted = false
   let resolveCompletion: (() => void) | undefined
   const completionPromise = new Promise<void>((r) => { resolveCompletion = r })
+  const clear = () => {
+    for (const key of Object.keys(listeners)) delete listeners[key]
+  }
 
   async function* wrappedIterator(): AsyncGenerator<StreamEvent> {
     for await (const event of source) {
@@ -169,12 +172,14 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>): StreamHandle {
         if (listeners["done"]) {
           for (const cb of listeners["done"]) cb(event.result)
         }
+        clear()
         resolveCompletion?.()
         yield event
         return
       }
       yield event
     }
+    clear()
     resolveCompletion?.()
   }
 

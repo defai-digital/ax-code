@@ -20,7 +20,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 [![ax-code](https://github.com/defai-digital/ax-code/actions/workflows/ax-code-ci.yml/badge.svg)](https://github.com/defai-digital/ax-code/actions/workflows/ax-code-ci.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Why AI Coding Breaks Down
 
@@ -342,7 +342,7 @@ Catches hardcoded colors, raw spacing values, inline styles, missing alt text, a
 
 ## Security & Governance
 
-**Enterprise-ready by design.** AX Code emphasizes controlled execution, auditability, and least-privilege through sandboxing, fine-grained permissions, encrypted credentials, session snapshots, and replayable audit trails. See [SECURITY.md](SECURITY.md) (threat model + scope), [docs/sandbox.md](docs/sandbox.md) (full config), and [ADR-003 hardening review](docs/adr/ADR-003-hardening-program-review.md).
+**Enterprise-ready by design.** AX Code emphasizes controlled execution, auditability, and least-privilege through sandboxing, fine-grained permissions, encrypted credentials, session snapshots, and replayable audit trails. See [SECURITY.md](SECURITY.md) for the threat model and scope, and [docs/sandbox.md](docs/sandbox.md) for sandbox configuration details.
 
 ### Execution Sandbox
 
@@ -599,7 +599,9 @@ See [GitHub Releases](https://github.com/defai-digital/ax-code/releases).
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). Portions derived from [OpenCode](https://github.com/anomalyco/opencode), Copyright (c) 2025 opencode.
+AX Code is open source under the [MIT License](LICENSE). You can use, modify, fork, and redistribute it, including for commercial use, as long as redistributions preserve the copyright and permission notice.
+
+Hosted services or commercial offerings that are not shipped in this repository, including AX Trust, are separate and are not covered by this repository license. See [LICENSING.md](LICENSING.md) for the repository licensing policy and [TRADEMARKS.md](TRADEMARKS.md) for branding rules.
 
 ## Credits
 

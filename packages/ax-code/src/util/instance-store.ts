@@ -39,6 +39,8 @@ export namespace InstanceStore {
     has(): boolean
     /** Invalidate (remove) state for the current directory. */
     invalidate(): void
+    /** Dispose the store and unregister instance cleanup hooks. */
+    dispose(): void
   }
 
   /**
@@ -50,15 +52,17 @@ export namespace InstanceStore {
   export function create<A>(init: (ctx: StoreShape) => A | Promise<A>): Store<A> {
     const entries = new Map<string, A>()
     const pending = new Map<string, Promise<A>>()
+    let dead = false
 
     // Register cleanup so directory disposal removes stale entries
-    registerDisposer(async (directory) => {
+    const off = registerDisposer(async (directory) => {
       entries.delete(directory)
       pending.delete(directory)
     })
 
     return {
       async get(): Promise<A> {
+        if (dead) throw new Error("instance store disposed")
         const dir = Instance.directory
         const cached = entries.get(dir)
         if (cached !== undefined) return cached
@@ -90,13 +94,23 @@ export namespace InstanceStore {
       },
 
       has(): boolean {
+        if (dead) return false
         return entries.has(Instance.directory)
       },
 
       invalidate(): void {
+        if (dead) return
         const dir = Instance.directory
         entries.delete(dir)
         pending.delete(dir)
+      },
+
+      dispose(): void {
+        if (dead) return
+        dead = true
+        off()
+        entries.clear()
+        pending.clear()
       },
     }
   }

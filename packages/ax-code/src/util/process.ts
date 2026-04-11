@@ -5,6 +5,7 @@ import { buffer } from "node:stream/consumers"
 export namespace Process {
   export type Stdio = "inherit" | "pipe" | "ignore"
   export type Shell = boolean | string
+  export type WebStream = ReadableStream<Uint8Array> | null | undefined
 
   export interface Options {
     cwd?: string
@@ -32,6 +33,25 @@ export namespace Process {
     text: string
   }
 
+  export interface CaptureOptions {
+    timeout?: number
+    kill?: NodeJS.Signals | number
+  }
+
+  export interface CaptureResult {
+    code: number
+    stdout: string
+    stderr: string
+    timedOut: boolean
+  }
+
+  export interface CaptureProc {
+    stdout: WebStream
+    stderr: WebStream
+    exited: Promise<number>
+    kill(signal?: NodeJS.Signals | number): void
+  }
+
   export class RunFailedError extends Error {
     readonly cmd: string[]
     readonly code: number
@@ -54,6 +74,102 @@ export namespace Process {
   }
 
   export type Child = ChildProcess & { exited: Promise<number> }
+
+  export async function readText(
+    stream: WebStream,
+    opts: {
+      timeout?: number
+      onTimeout?: () => void
+    } = {},
+  ) {
+    if (!stream) return ""
+
+    const reader = stream.getReader()
+    const decoder = new TextDecoder()
+    let timedOut = false
+    const id =
+      typeof opts.timeout === "number" && opts.timeout > 0
+        ? setTimeout(() => {
+            timedOut = true
+            opts.onTimeout?.()
+            void reader.cancel().catch(() => undefined)
+          }, opts.timeout)
+        : undefined
+
+    try {
+      let text = ""
+      while (true) {
+        const part = await reader.read().catch((err) => {
+          if (timedOut) return { done: true as const, value: undefined }
+          throw err
+        })
+        if (part.done) break
+        text += decoder.decode(part.value, { stream: true })
+      }
+      return text + decoder.decode()
+    } finally {
+      if (id) clearTimeout(id)
+    }
+  }
+
+  export async function capture(proc: CaptureProc, opts: CaptureOptions = {}): Promise<CaptureResult> {
+    let done = false
+    let timedOut = false
+    let killId: ReturnType<typeof setTimeout> | undefined
+    let exitId: ReturnType<typeof setTimeout> | undefined
+
+    const stop = () => {
+      if (done) return
+      timedOut = true
+      try {
+        proc.kill(opts.kill ?? "SIGTERM")
+      } catch {}
+      if (killId) return
+      killId = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL")
+        } catch {}
+      }, 250)
+    }
+
+    const exit = new Promise<number>((resolve, reject) => {
+      proc.exited.then(
+        (code) => {
+          done = true
+          resolve(code)
+        },
+        (err) => {
+          done = true
+          reject(err)
+        },
+      )
+
+      if (typeof opts.timeout === "number" && opts.timeout > 0) {
+        exitId = setTimeout(() => {
+          stop()
+          done = true
+          resolve(1)
+        }, opts.timeout)
+      }
+    })
+
+    try {
+      const [code, stdout, stderr] = await Promise.all([
+        exit,
+        readText(proc.stdout, { timeout: opts.timeout, onTimeout: stop }),
+        readText(proc.stderr, { timeout: opts.timeout, onTimeout: stop }),
+      ])
+      return {
+        code,
+        stdout,
+        stderr,
+        timedOut,
+      }
+    } finally {
+      if (exitId) clearTimeout(exitId)
+      if (killId) clearTimeout(killId)
+    }
+  }
 
   export function spawn(cmd: string[], opts: Options = {}): Child {
     if (cmd.length === 0) throw new Error("Command is required")

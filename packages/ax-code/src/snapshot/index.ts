@@ -196,9 +196,17 @@ export namespace Snapshot {
               const existed = yield* exists(state.gitdir)
               yield* fs.ensureDir(state.gitdir).pipe(Effect.orDie)
               if (!existed) {
-                yield* git(["init"], {
+                const init = yield* git(["init"], {
                   env: { GIT_DIR: state.gitdir, GIT_WORK_TREE: state.worktree },
                 })
+                if (init.code !== 0) {
+                  log.error("failed to initialize snapshot repository", {
+                    gitdir: state.gitdir,
+                    exitCode: init.code,
+                    stderr: init.stderr,
+                  })
+                  return prevHash
+                }
                 yield* git(["--git-dir", state.gitdir, "config", "core.autocrlf", "false"])
                 yield* git(["--git-dir", state.gitdir, "config", "core.longpaths", "true"])
                 yield* git(["--git-dir", state.gitdir, "config", "core.symlinks", "true"])

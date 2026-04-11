@@ -17,3 +17,9 @@
 ## Testing
 
 - keep tests close to SDK behavior or in a dedicated harness when generation requires it
+
+## License
+
+`packages/sdk/js` is licensed under MIT.
+
+See [LICENSE](./LICENSE) for the full license text. If you redistribute this package, keep the LICENSE file and preserve the copyright and permission notice.

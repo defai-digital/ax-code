@@ -144,6 +144,21 @@ describe("cross-spawn spawner", () => {
         expect(out).toBe("one-two-three")
       }),
     )
+
+    fx.effect(
+      "sanitizes explicit environment when extendEnv is false",
+      Effect.gen(function* () {
+        const handle = yield* js(
+          'process.stdout.write(JSON.stringify({ safe: process.env.VISIBLE ?? "", secret: process.env.API_KEY ?? "" }))',
+          {
+            env: { VISIBLE: "ok", API_KEY: "secret" },
+            extendEnv: false,
+          },
+        )
+        const out = yield* decodeByteStream(handle.stdout)
+        expect(out).toBe('{"safe":"ok","secret":""}')
+      }),
+    )
   })
 
   describe("stderr", () => {
