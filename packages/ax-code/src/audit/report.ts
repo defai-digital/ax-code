@@ -5,7 +5,7 @@ import type { SessionID } from "../session/schema"
 import { Risk } from "../risk/score"
 import path from "path"
 
-function truncate(s: string, max: number): string {
+export function truncate(s: string, max: number): string {
   if (s.length <= max) return s
   return s.slice(0, max - 3) + "..."
 }
@@ -45,7 +45,7 @@ function firstText(v: unknown): string {
   return ""
 }
 
-function extractTarget(tool: string, input: Record<string, unknown>): string {
+export function extractTarget(tool: string, input: Record<string, unknown>): string {
   if (tool === "impact_analyze") {
     if (Array.isArray(input.changes) && input.changes.length > 0) {
       const first = input.changes[0]

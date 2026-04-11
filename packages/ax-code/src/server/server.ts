@@ -41,6 +41,7 @@ import { errors } from "./error"
 import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { AuditRoutes } from "./routes/audit"
+import { GraphRoutes } from "./routes/graph"
 import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
@@ -679,6 +680,7 @@ export namespace Server {
       .route("/session", SessionRoutes())
       .route("/permission", PermissionRoutes())
       .route("/audit", AuditRoutes())
+      .route("/graph", GraphRoutes())
       .route("/question", QuestionRoutes())
       .route("/provider", ProviderRoutes())
       .route("/", FileRoutes())

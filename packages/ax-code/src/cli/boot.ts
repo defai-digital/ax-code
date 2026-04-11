@@ -19,6 +19,7 @@ import { BranchCommand } from "./cmd/branch"
 import { ExportCommand } from "./cmd/export"
 import { GenerateCommand } from "./cmd/generate"
 import { GithubCommand } from "./cmd/github"
+import { GraphCommand } from "./cmd/graph"
 import { ImportCommand } from "./cmd/import"
 import { IndexCommand } from "./cmd/index-graph"
 import { InitCommand } from "./cmd/init"
@@ -71,6 +72,7 @@ const cmds = [
   ImportCommand,
   IndexCommand,
   GithubCommand,
+  GraphCommand,
   PrCommand,
   InitCommand,
   SessionCommand,

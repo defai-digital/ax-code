@@ -1,6 +1,7 @@
 import { cmd } from "./cmd"
 import { Instance } from "../../project/instance"
 import { EventQuery } from "../../replay/query"
+import { Replay } from "../../replay/replay"
 import { Risk } from "../../risk/score"
 import { Session } from "../../session"
 import { SessionID } from "../../session/schema"
@@ -13,7 +14,8 @@ export const CompareCommand = cmd({
     yargs
       .positional("session1", { describe: "First session ID", type: "string", demandOption: true })
       .positional("session2", { describe: "Second session ID", type: "string", demandOption: true })
-      .option("json", { describe: "Output as JSON", type: "boolean", default: false }),
+      .option("json", { describe: "Output as JSON", type: "boolean", default: false })
+      .option("deep", { describe: "Step-level divergence analysis via replay comparison", type: "boolean", default: false }),
   async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
@@ -25,11 +27,20 @@ export const CompareCommand = cmd({
         const [e1, e2] = [EventQuery.bySession(sid1), EventQuery.bySession(sid2)]
         const [r1, r2] = [Risk.fromSession(sid1), Risk.fromSession(sid2)]
 
+        const deep1 = args.deep ? Replay.compare(sid1) : undefined
+        const deep2 = args.deep ? Replay.compare(sid2) : undefined
+
         if (args.json) {
           console.log(JSON.stringify({
             session1: { id: sid1, title: s1.title, risk: r1, events: e1.length },
             session2: { id: sid2, title: s2.title, risk: r2, events: e2.length },
             differences: diff(e1, e2),
+            ...(args.deep ? {
+              replay: {
+                session1: { stepsCompared: deep1!.stepsCompared, divergences: deep1!.divergences.length },
+                session2: { stepsCompared: deep2!.stepsCompared, divergences: deep2!.divergences.length },
+              },
+            } : {}),
           }, null, 2))
           return
         }
@@ -95,6 +106,27 @@ export const CompareCommand = cmd({
         }
         console.log(`  Total: ${e1.length} \u2192 ${e2.length}`)
         console.log("")
+
+        // Deep comparison via replay
+        if (args.deep && deep1 && deep2) {
+          console.log("  Replay Analysis")
+          console.log("  " + "-".repeat(40))
+          console.log(`  Steps compared A: ${deep1.stepsCompared} | Divergences: ${deep1.divergences.length}`)
+          console.log(`  Steps compared B: ${deep2.stepsCompared} | Divergences: ${deep2.divergences.length}`)
+
+          const allDivergences = [
+            ...deep1.divergences.map((d) => ({ session: "A", ...d })),
+            ...deep2.divergences.map((d) => ({ session: "B", ...d })),
+          ]
+          if (allDivergences.length > 0) {
+            console.log("")
+            console.log("  Divergences:")
+            for (const d of allDivergences) {
+              console.log(`    [${d.session}] seq=${d.sequence}: ${d.reason}`)
+            }
+          }
+          console.log("")
+        }
       },
     })
   },
