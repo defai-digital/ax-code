@@ -1,6 +1,6 @@
 # AX Code Documentation
 
-This folder holds **product-facing** documentation: user guides, architecture policies, specs, and reference material. Development-stage planning (PRDs, ADRs, research) lives in `automatosx/` at the repo root.
+This folder holds **product-facing** documentation: user guides, architecture policies, specs, and reference material.
 
 ## Architecture
 
@@ -32,12 +32,3 @@ This folder holds **product-facing** documentation: user guides, architecture po
 
 Machine-readable policy examples live in [`policies/`](policies/).
 
-## Development-Stage Documents
-
-PRDs, ADRs, and temporary reports are in `automatosx/` (gitignored, not shipped):
-
-- `automatosx/prd/` — Product requirement documents
-- `automatosx/adr/` — Architecture decision records
-- `automatosx/tmp/` — Temporary reports and research
-
-Use `/prd` and `/adr` slash commands to create new documents — they write to the correct location automatically.
