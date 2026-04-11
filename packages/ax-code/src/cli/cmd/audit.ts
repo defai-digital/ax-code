@@ -46,6 +46,11 @@ const AuditExportCommand = cmd({
         type: "string",
         describe: "ISO date cutoff (e.g. 2026-04-01)",
       })
+      .option("risk", {
+        type: "string",
+        describe: "filter sessions by minimum risk level (LOW, MEDIUM, HIGH, CRITICAL)",
+        choices: ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+      })
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
@@ -59,9 +64,33 @@ const AuditExportCommand = cmd({
         }
       } else if (args.all) {
         const since = args.since ? new Date(args.since).getTime() : undefined
-        process.stderr.write(`Exporting all events${since ? ` since ${args.since}` : ""}${EOL}`)
-        for (const line of AuditExport.streamAll({ since }, ctx)) {
-          process.stdout.write(line + EOL)
+        const riskFilter = args.risk as string | undefined
+        process.stderr.write(`Exporting all events${since ? ` since ${args.since}` : ""}${riskFilter ? ` (risk >= ${riskFilter})` : ""}${EOL}`)
+
+        if (riskFilter) {
+          const { Risk } = await import("../../risk/score")
+          const riskOrder = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 } as Record<string, number>
+          const minLevel = riskOrder[riskFilter] ?? 0
+          const sessionRisks = new Map<string, number>()
+          for (const line of AuditExport.streamAll({ since }, ctx)) {
+            try {
+              const record = JSON.parse(line) as { session_id?: string }
+              if (record.session_id) {
+                if (!sessionRisks.has(record.session_id)) {
+                  const assessment = Risk.fromSession(record.session_id as any)
+                  sessionRisks.set(record.session_id, riskOrder[assessment.level] ?? 0)
+                }
+                if ((sessionRisks.get(record.session_id) ?? 0) >= minLevel)
+                  process.stdout.write(line + EOL)
+              }
+            } catch {
+              process.stdout.write(line + EOL)
+            }
+          }
+        } else {
+          for (const line of AuditExport.streamAll({ since }, ctx)) {
+            process.stdout.write(line + EOL)
+          }
         }
       } else {
         process.stderr.write(`Usage: ax-code audit export <sessionID> or ax-code audit export --all${EOL}`)
