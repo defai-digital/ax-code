@@ -298,7 +298,7 @@ describe("tool.write", () => {
   })
 
   describe("error handling", () => {
-    test("throws error when OS denies write access", async () => {
+    test.skipIf(process.getuid?.() === 0)("throws error when OS denies write access", async () => {
       await using tmp = await tmpdir()
       const readonlyPath = path.join(tmp.path, "readonly.txt")
 

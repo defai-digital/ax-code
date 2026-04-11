@@ -16,6 +16,7 @@ const e2e = new Set([
   "test/server/session-list.test.ts",
   "test/server/session-messages.test.ts",
   "test/server/session-select.test.ts",
+  "test/share/share-next.test.ts",
 ])
 
 const recovery = new Set([
