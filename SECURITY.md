@@ -2,14 +2,14 @@
 
 ## Supported Versions
 
-Only the latest minor line receives security patches. The `1.x` series
-predates the project's rename to `ax-code` and is end of life — upgrade
+Only the latest minor line receives security patches. Earlier release
+lines, including the pre-rename `1.x` series, are end of life — upgrade
 to the current minor before reporting a vulnerability.
 
 | Version | Supported |
 | ------- | --------- |
-| 2.3.x   | Yes       |
-| < 2.3   | No        |
+| 3.0.x   | Yes       |
+| < 3.0   | No        |
 
 ## Reporting a Vulnerability
 
@@ -28,21 +28,22 @@ We will acknowledge your report within **6 business days** and keep you informed
 
 ### Overview
 
-ax-code is an AI-powered coding assistant that runs locally on your machine. It provides an agent system with access to powerful tools including shell execution, file operations, and web access.
+ax-code is an AI coding runtime that runs locally on your machine. It exposes agent workflows through the CLI, TUI, SDK, and server surfaces, with access to powerful tools including shell execution, file operations, and web access.
 
 ### Execution Isolation Sandbox
 
 ax-code includes a built-in execution isolation sandbox that restricts what the AI agent can access at the tool level. Three modes are available:
 
-| Mode                          | Behavior                                                                            |
-| ----------------------------- | ----------------------------------------------------------------------------------- |
-| **Read-only**                 | Blocks all file mutations and shell commands                                        |
-| **Workspace write** (default) | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
-| **Full access**               | Disables isolation entirely (explicit opt-in)                                       |
+| Mode                    | Behavior                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| **Full access**         | Disables isolation entirely                                                         |
+| **Workspace write**     | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
+| **Read-only**           | Blocks all file mutations and shell commands                                        |
 
 Key properties:
 
-- **Default safe** — workspace-write mode with network disabled is the default
+- **Default behavior** — full-access unless sandboxing is enabled via CLI, environment, or config
+- **Safer preset** — workspace-write confines writes to the workspace and disables network by default
 - **Tool-level enforcement** — all mutation tools (bash, edit, write, apply_patch) and network tools (webfetch, websearch, codesearch) check isolation policy before executing
 - **Protected paths** — `.git` and `.ax-code` directories are always protected from writes, even in workspace-write mode
 - **Escalation prompts** — isolation violations present an approval dialog instead of silently failing; users can allow a blocked operation once without changing their config
@@ -93,7 +94,7 @@ MCP OAuth tokens, client secrets, and account access/refresh tokens are also enc
 
 ## Enterprise Security Capabilities
 
-AX Code is designed for enterprise use with the following hardening features:
+AX Code includes the following hardening and governance features:
 
 - **Fine-grained Permissions**: Agent-specific and pattern-based rulesets (`allow`/`deny`/`ask`). Security agent defaults to read-only. Rules evaluated across project, agent, and approved lists.
 - **Session Audit Trails**: Every tool call, permission decision, and file change is recorded in SQLite with snapshots. Supports replay, fork, and export for compliance reviews.
@@ -101,7 +102,7 @@ AX Code is designed for enterprise use with the following hardening features:
 - **Credential Management**: AES-256-GCM encryption for all keys/tokens. Per-directory isolation via `InstanceState`.
 - **Sandbox Enforcement**: Application-level isolation with bash command parsing (tree-sitter). Protected paths (`.git`, `.ax-code`). Persists in config.
 - **Server Hardening**: Localhost-only by default; password-protected remote access with Basic Auth.
-- **Code Intelligence & Scanning**: Built-in secret/hardcode detection, dependency impact analysis.
+- **Code Intelligence & Scanning**: Graph-backed impact analysis, plus built-in secret/hardcode detection.
 
 For full enterprise governance (RBAC, policy-as-code, SIEM export, cryptographic audit), integrate with **AX Trust** (roadmap item).
 

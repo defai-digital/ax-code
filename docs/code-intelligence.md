@@ -2,20 +2,17 @@
 
 AX Code builds a persistent code graph from LSP data — symbols, call edges, and cross-file references stored in SQLite for instant queries. Once indexed, agents can look up functions by name, trace callers and callees, estimate blast radius before a change, and plan multi-file refactors — all without re-reading files or making live LSP round-trips.
 
-> **Experimental feature.** Set `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=1` to enable the graph, the `code-intelligence` tool, auto-indexing, and the file watcher.
+> **Enabled by default in v3.** Set `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=0` to disable the graph, the `code-intelligence` tool, auto-indexing, and the file watcher.
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Enable the feature
-export AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=1
-
-# 2. Index your project (respects .gitignore)
+# 1. Index your project (respects .gitignore)
 ax-code index
 
-# 3. Launch the TUI — agents can now use the graph
+# 2. Launch the TUI — agents and DRE tools can now use the graph
 ax-code
 ```
 
@@ -332,7 +329,7 @@ All scanners are deterministic (regex + structural heuristics), run locally, and
 
 | Variable | Purpose |
 |----------|---------|
-| `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE` | Enable the graph system (required) |
+| `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE` | Set to `0` or `false` to disable the graph system |
 | `AX_CODE_DISABLE_AUTO_INDEX` | Disable background auto-indexing on session start |
 | `AX_CODE_NATIVE_INDEX` | Enable Rust-accelerated queries (automatic fallback to Drizzle) |
 | `AX_CODE_PROFILE_NATIVE` | Collect native bridge timings (also via `--native-profile` flag) |
@@ -362,7 +359,7 @@ Install the missing server and re-run.
 
 The file watcher should keep the graph current. If results seem stale:
 - Re-run `ax-code index` — unchanged files skip instantly, only modified files re-index
-- Check that `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=1` is set (the watcher only runs when enabled)
+- Check that `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE` is not set to `0` or `false` (the watcher only runs when the graph is enabled)
 
 ### "Another ax-code process is currently indexing"
 
@@ -371,4 +368,4 @@ Only one index run can happen per project at a time. Wait for the other process 
 ### Queries return empty results
 
 - Run `ax-code index` first — queries return nothing until the graph is populated
-- Check that the feature flag is set: `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=1`
+- Check that the graph has not been disabled with `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=0`

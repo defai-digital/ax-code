@@ -14,13 +14,22 @@ AX Code is an AI execution system for software development. It combines agent ro
 - **Provider-agnostic runtime** across cloud, local, and air-gapped model backends
 - **Session-backed workflows** with persistence, replayable state, and memory
 - **Extensible surface** through SDK, MCP, plugins, and headless server mode
-- **Enterprise-ready posture** with localhost defaults, encryption at rest, and audit-friendly runtime structure
+- **Enterprise-oriented runtime posture** with localhost defaults, encryption at rest, and audit-friendly runtime structure
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
 [![ax-code](https://github.com/defai-digital/ax-code/actions/workflows/ax-code-ci.yml/badge.svg)](https://github.com/defai-digital/ax-code/actions/workflows/ax-code-ci.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+## Why v3.0
+
+AX Code v3 marks the point where the project is better understood as a coding runtime platform, not just a coding CLI.
+
+- **MIT open source** with clearer licensing, attribution, and trademark boundaries
+- **Runtime-core expansion** through DRE, semantic diff, native runtime layers, and broader server/SDK surfaces
+- **More operational execution** with session-backed state, replay, auditability, and governed tool use
+- **Stronger platform fit** for internal developer tools, CI, headless automation, and controlled enterprise workflows
 
 ## Why AI Coding Breaks Down
 
@@ -34,7 +43,7 @@ AX Code addresses that with explicit tools, session-backed workflows, sandboxed 
 
 ## What AX Code Is
 
-Most AI coding products stop at chat plus tool calls. AX Code is designed as a runtime layer for coding workflows. It is more than a coding assistant: it is a controlled execution runtime for software development.
+Most AI coding products stop at chat plus tool calls. AX Code is designed as a runtime layer for coding workflows. In v3, the center of gravity is the runtime itself: governed execution, reusable surfaces, persistent session state, and deterministic tooling for software work.
 
 - **More controllable than chat-first coding tools.** Tool use is explicit, permissioned, and sandbox-aware.
 - **More composable than a single CLI.** The same runtime can back the TUI, the SDK, headless automation, MCP-connected workflows, and internal developer platforms.
@@ -81,7 +90,7 @@ The important distinction is that `ax-code` is not just a chat UI. It is a runti
 
 - interfaces such as CLI, TUI, SDK, ACP, and headless server mode
 - agent routing, planning, and dependency-ordered execution
-- tool execution, MCP integrations, LSP, and a persistent code graph (Code Intelligence, v2.2)
+- tool execution, MCP integrations, LSP, and a persistent code graph (Code Intelligence Graph)
 - the **Debugging & Refactoring Engine** (DRE, v2.3+) — deterministic-first root-cause analysis, proactive scanners (race conditions, resource leaks, security patterns, hardcoded values), change-impact analysis, and shadow-worktree-validated refactors
 - **incremental indexing** (v2.4) — content-hash skip on unchanged files, orphan purge on deleted files, per-file progress reporting
 - session, memory, and storage state with replay, audit, and snapshot trails
@@ -222,7 +231,9 @@ Local providers auto-discover running models — no API key needed. Your code ne
 
 ## Core Features
 
-### Specialized AI Agents
+v3 is organized around runtime primitives first: sessions, governed execution, DRE, MCP, SDK/server surfaces, and provider abstraction. Specialized agents sit on top of that runtime rather than defining the whole product.
+
+### Specialized Agents on Top of the Runtime
 
 AX Code uses **10 purpose-built agents** with enterprise-focused roles (structured workflows, TDD/PRD/ADR enforcement, DRE tools for safe deterministic changes, prioritization, and high-value patterns). This differentiates us from general AI coders by supporting real business environments — governed processes, infra/DevOps, auditable refactoring, and quality gates instead of unstructured chat.
 
@@ -256,6 +267,8 @@ Supports TypeScript, Python (Pyright), Go (gopls), Rust (rust-analyzer), Ruby (S
 ### Code Intelligence Graph
 
 AX Code builds a persistent code graph from LSP data — symbols, call edges, and cross-file references stored in SQLite for instant queries.
+
+> **Enabled by default in v3.** Set `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=0` to disable graph-backed queries and auto-indexing.
 
 ```bash
 ax-code index                # Populate the code intelligence graph
@@ -342,7 +355,7 @@ Catches hardcoded colors, raw spacing values, inline styles, missing alt text, a
 
 ## Security & Governance
 
-**Enterprise-ready by design.** AX Code emphasizes controlled execution, auditability, and least-privilege through sandboxing, fine-grained permissions, encrypted credentials, session snapshots, and replayable audit trails. See [SECURITY.md](SECURITY.md) for the threat model and scope, and [docs/sandbox.md](docs/sandbox.md) for sandbox configuration details.
+**Enterprise-oriented by design.** AX Code emphasizes controlled execution, auditability, and least-privilege through sandboxing, fine-grained permissions, encrypted credentials, session snapshots, and replayable audit trails. See [SECURITY.md](SECURITY.md) for the threat model and scope, and [docs/sandbox.md](docs/sandbox.md) for sandbox configuration details.
 
 ### Execution Sandbox
 
@@ -577,7 +590,7 @@ AX Code was built by combining two open source projects:
 1. **[ax-cli](https://github.com/defai-digital/ax-cli)** — DEFAI Digital's original AI coding CLI with specialized agents, auto-routing, design checking, memory warmup, and the programmatic SDK.
 2. **[OpenCode](https://github.com/anomalyco/opencode)** — A provider-agnostic, LSP-first AI coding assistant with a rich terminal UI, session persistence, and MCP support.
 
-AX Code is now the developer-facing entrypoint to the [AutomatosX](https://github.com/defai-digital) sovereign AI ecosystem.
+AX Code builds on those upstream foundations and now serves as the developer-facing runtime layer of the [AutomatosX](https://github.com/defai-digital) coding stack.
 
 ---
 

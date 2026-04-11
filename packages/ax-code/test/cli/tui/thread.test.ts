@@ -7,11 +7,14 @@ const stop = new Error("stop")
 const seen = {
   tui: [] as string[],
   inst: [] as string[],
+  calls: [] as string[],
+  wait: 0,
 }
 
 mock.module("../../../src/cli/cmd/tui/app", () => ({
   tui: async (input: { directory: string }) => {
     seen.tui.push(input.directory)
+    if (seen.wait) await Bun.sleep(seen.wait)
     throw stop
   },
 }))
@@ -19,7 +22,10 @@ mock.module("../../../src/cli/cmd/tui/app", () => ({
 mock.module("@/util/rpc", () => ({
   Rpc: {
     client: () => ({
-      call: async () => ({ url: "http://127.0.0.1" }),
+      call: async (name: string) => {
+        seen.calls.push(name)
+        return { url: "http://127.0.0.1" }
+      },
       on: () => {},
     }),
   },
@@ -117,6 +123,8 @@ describe("tui thread", () => {
     const type = process.platform === "win32" ? "junction" : "dir"
     seen.tui.length = 0
     seen.inst.length = 0
+    seen.calls.length = 0
+    seen.wait = 0
     await fs.symlink(tmp.path, link, type)
 
     Object.defineProperty(process.stdin, "isTTY", {
@@ -146,6 +154,7 @@ describe("tui thread", () => {
       else process.env.AX_CODE_ORIGINAL_CWD = origCwd
       if (tty) Object.defineProperty(process.stdin, "isTTY", tty)
       else delete (process.stdin as { isTTY?: boolean }).isTTY
+      seen.wait = 0
       globalThis.Worker = worker
       await fs.rm(link, { recursive: true, force: true }).catch(() => undefined)
     }
@@ -157,5 +166,11 @@ describe("tui thread", () => {
 
   test("uses the real cwd after resolving a relative project from PWD", async () => {
     await check(".")
+  })
+
+  test("does not check upgrades while tui is running", async () => {
+    seen.wait = 1100
+    await check()
+    expect(seen.calls).not.toContain("checkUpgrade")
   })
 })

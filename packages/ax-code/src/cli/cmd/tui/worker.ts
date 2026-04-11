@@ -2,9 +2,7 @@ import { Installation } from "@/installation"
 import { Server } from "@/server/server"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
-import { InstanceBootstrap } from "@/project/bootstrap"
 import { Rpc } from "@/util/rpc"
-import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
 import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
@@ -127,15 +125,6 @@ export const rpc = {
     if (server) await server.stop(true)
     server = await Server.listen(input)
     return { url: server.url.toString() }
-  },
-  async checkUpgrade(input: { directory: string }) {
-    await Instance.provide({
-      directory: input.directory,
-      init: InstanceBootstrap,
-      fn: async () => {
-        await upgrade().catch(() => {})
-      },
-    })
   },
   async reload() {
     Config.global.reset()

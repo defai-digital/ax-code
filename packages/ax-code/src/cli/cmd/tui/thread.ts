@@ -195,11 +195,6 @@ export const TuiThreadCommand = cmd({
             events: createEventSource(client),
           }
 
-      const upgradeTimer = setTimeout(() => {
-        client.call("checkUpgrade", { directory: cwd }).catch(() => {})
-      }, 1000)
-      upgradeTimer.unref?.()
-
       try {
         const { tui } = await import("./app")
         await tui({
@@ -223,7 +218,6 @@ export const TuiThreadCommand = cmd({
           },
         })
       } finally {
-        clearTimeout(upgradeTimer)
         await stop()
       }
     } finally {

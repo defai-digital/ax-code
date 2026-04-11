@@ -1,6 +1,6 @@
 # Contributing to AX Code
 
-AX Code is open source and we welcome community involvement. Development is currently led by DEFAI Digital, but there are several ways to participate.
+AX Code is MIT-licensed and open source. The main repository is currently maintained by DEFAI Digital, and community participation currently happens through issues, forks, integrations, documentation, and public discussion.
 
 ## Sharing Your Modifications
 
@@ -43,4 +43,4 @@ Stuck or confused? [Open a question](https://github.com/defai-digital/ax-code/is
 
 ## Pull Requests
 
-We are not accepting external pull requests at this time. If you've found a bug and know the fix, please describe it in a bug report — include the fix approach and we'll handle the implementation. This may change in the future as the project matures.
+We are not accepting direct external pull requests to this repository at this time. If you've found a bug and know the fix, open a bug report and include the fix approach, patch, or branch link; we'll review it and port the change into the maintained branch. This may change in the future as the project matures.
