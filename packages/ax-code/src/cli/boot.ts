@@ -158,6 +158,10 @@ export function cli(argv = hideBin(process.argv)) {
       type: "string",
       choices: ["DEBUG", "INFO", "WARN", "ERROR"],
     })
+    .option("debugger", {
+      describe: "enable diagnostic mode (DEBUG logs, disable autoupdate, print trace hints)",
+      type: "boolean",
+    })
     .option("sandbox", {
       describe: "isolation sandbox mode",
       type: "string",

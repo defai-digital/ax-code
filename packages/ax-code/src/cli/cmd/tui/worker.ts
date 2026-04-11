@@ -14,10 +14,19 @@ await Log.init({
   print: process.argv.includes("--print-logs"),
   dev: Installation.isLocal(),
   level: (() => {
+    if (Flag.AX_CODE_DEBUGGER) return "DEBUG"
     if (Installation.isLocal()) return "DEBUG"
     return "INFO"
   })(),
 })
+
+if (Flag.AX_CODE_DEBUGGER) {
+  Log.Default.info("debugger", {
+    cwd: process.cwd(),
+    log: Log.file() || "stderr (--print-logs)",
+    pid: process.pid,
+  })
+}
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {

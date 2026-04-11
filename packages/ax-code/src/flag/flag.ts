@@ -17,6 +17,7 @@ export namespace Flag {
   export declare const AX_CODE_TUI_CONFIG: string | undefined
   export declare const AX_CODE_CONFIG_DIR: string | undefined
   export const AX_CODE_CONFIG_CONTENT = process.env["AX_CODE_CONFIG_CONTENT"]
+  export const AX_CODE_DEBUGGER = truthy("AX_CODE_DEBUGGER")
   export const AX_CODE_DISABLE_AUTOUPDATE = truthy("AX_CODE_DISABLE_AUTOUPDATE")
   export const AX_CODE_ALWAYS_NOTIFY_UPDATE = truthy("AX_CODE_ALWAYS_NOTIFY_UPDATE")
   export const AX_CODE_DISABLE_PRUNE = truthy("AX_CODE_DISABLE_PRUNE")
