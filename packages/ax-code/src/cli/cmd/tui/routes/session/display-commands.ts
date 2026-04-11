@@ -2,6 +2,7 @@ import { batch, type Accessor, type Setter } from "solid-js"
 import path from "path"
 import type { CliRenderer, ScrollBoxRenderable } from "@opentui/core"
 import type { Part } from "@ax-code/sdk/v2"
+import open from "open"
 import type { DialogContext } from "@tui/ui/dialog"
 import { Clipboard } from "../../util/clipboard"
 import { Editor } from "../../util/editor"
@@ -12,6 +13,7 @@ import { shareTitle, transcriptFilename } from "./display-command-helpers"
 import { Filesystem } from "@/util/filesystem"
 
 type Session = SessionInfo & {
+  directory?: string
   share?: {
     url?: string
   }
@@ -29,10 +31,26 @@ type Toast = {
   show: (input: { message: string; variant: "success" | "error" | "warning"; duration?: number }) => void
 }
 
+function dreURL(base: string, sessionID: string, dir?: string) {
+  if (base === "http://opencode.internal") return
+
+  const url = new URL(base)
+  if (url.hostname !== "127.0.0.1") return
+  url.pathname = `/dre-graph/session/${sessionID}`
+  url.search = ""
+  if (dir) url.searchParams.set("directory", dir)
+  return url
+}
+
 export function displayCommands(input: {
   conceal: Accessor<boolean>
   currentModel: () => Model | undefined
   dialogReplaceActivity: (dialog: DialogContext) => void
+  dialogReplaceBranch: (dialog: DialogContext) => void
+  dialogReplaceCompare: (dialog: DialogContext) => void
+  dialogReplaceDre: (dialog: DialogContext) => void
+  dialogReplaceDreGraph: (dialog: DialogContext) => void
+  dialogReplaceRollback: (dialog: DialogContext) => void
   dialogReplaceTimeline: (dialog: DialogContext) => void
   dialogReplaceFork: (dialog: DialogContext) => void
   dialogReplaceRename: (dialog: DialogContext) => void
@@ -44,6 +62,7 @@ export function displayCommands(input: {
   scroll: ScrollBoxRenderable
   scrollToMessage: (direction: "next" | "prev", dialog: DialogContext) => void
   sdk: {
+    url: string
     client: {
       session: {
         share: (input: { sessionID: string }) => Promise<{ data?: { share?: { url: string } } }>
@@ -132,6 +151,80 @@ export function displayCommands(input: {
         name: "activity",
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceActivity(dialog),
+    },
+    {
+      title: "View branch ranking",
+      value: "session.branch",
+      category: "Session",
+      slash: {
+        name: "branches",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceBranch(dialog),
+    },
+    {
+      title: "Compare branch executions",
+      value: "session.compare",
+      category: "Session",
+      slash: {
+        name: "compare",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceCompare(dialog),
+    },
+    {
+      title: "Open DRE graph in browser",
+      value: "session.dre.web",
+      category: "Session",
+      slash: {
+        name: "dre-web",
+      },
+      onSelect: async (dialog: DialogContext) => {
+        const url = dreURL(input.sdk.url, input.routeSessionID, input.session()?.directory)
+        if (!url) {
+          input.toast.show({
+            message: "DRE graph is loopback-only on 127.0.0.1. Start it from your shell with `ax-code dre-graph`.",
+            variant: "warning",
+            duration: 4000,
+          })
+          dialog.clear()
+          return
+        }
+
+        await open(url.toString())
+          .catch(() =>
+            input.toast.show({
+              message: "Failed to open DRE graph in the browser",
+              variant: "error",
+            }),
+          )
+          .finally(() => dialog.clear())
+      },
+    },
+    {
+      title: "View DRE details",
+      value: "session.dre",
+      category: "Session",
+      slash: {
+        name: "dre",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceDre(dialog),
+    },
+    {
+      title: "View DRE graph",
+      value: "session.dre.graph",
+      category: "Session",
+      slash: {
+        name: "dre-graph",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceDreGraph(dialog),
+    },
+    {
+      title: "View rollback points",
+      value: "session.rollback",
+      category: "Session",
+      slash: {
+        name: "rollback",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceRollback(dialog),
     },
     {
       title: "Jump to message",

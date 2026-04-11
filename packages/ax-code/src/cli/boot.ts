@@ -3,6 +3,7 @@ import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { AcpCommand } from "./cmd/acp"
 import { AuditCommand } from "./cmd/audit"
+import { AutoSelectCommand } from "./cmd/auto-select"
 import { ReplayCommand } from "./cmd/replay"
 import { AgentCommand } from "./cmd/agent"
 import { ConsoleCommand } from "./cmd/account"
@@ -14,7 +15,9 @@ import { DesignCheckCommand } from "./cmd/design-check"
 import { DoctorCommand } from "./cmd/doctor"
 import { TraceCommand } from "./cmd/trace"
 import { CompareCommand } from "./cmd/compare"
+import { DiffCommand } from "./cmd/diff"
 import { RollbackCommand } from "./cmd/rollback"
+import { RiskCommand } from "./cmd/risk"
 import { BranchCommand } from "./cmd/branch"
 import { ExportCommand } from "./cmd/export"
 import { GenerateCommand } from "./cmd/generate"
@@ -33,6 +36,7 @@ import { RunCommand } from "./cmd/run"
 import { ServeCommand } from "./cmd/serve"
 import { SessionCommand } from "./cmd/session"
 import { StatsCommand } from "./cmd/stats"
+import { DreGraphCommand } from "./cmd/dre-graph"
 import { TuiThreadCommand } from "./cmd/tui/thread"
 import { UninstallCommand } from "./cmd/uninstall"
 import { UpgradeCommand } from "./cmd/upgrade"
@@ -47,6 +51,7 @@ import { Log } from "../util/log"
 const cmds = [
   AcpCommand,
   AuditCommand,
+  AutoSelectCommand,
   ReplayCommand,
   McpCommand,
   TuiThreadCommand,
@@ -57,7 +62,9 @@ const cmds = [
   DoctorCommand,
   TraceCommand,
   CompareCommand,
+  DiffCommand,
   RollbackCommand,
+  RiskCommand,
   BranchCommand,
   ConsoleCommand,
   ProvidersCommand,
@@ -68,6 +75,7 @@ const cmds = [
   RestartCommand,
   ModelsCommand,
   StatsCommand,
+  DreGraphCommand,
   ExportCommand,
   ImportCommand,
   IndexCommand,

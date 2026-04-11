@@ -17,7 +17,7 @@ export const GraphCommand = cmd({
       })
       .option("format", {
         describe: "output format",
-        choices: ["json", "mermaid", "markdown"] as const,
+        choices: ["ascii", "json", "mermaid", "markdown", "timeline", "topology"] as const,
         default: "markdown" as const,
       })
       .option("json", {
@@ -54,11 +54,24 @@ export const GraphCommand = cmd({
         const format = args.json ? "json" : (args.format as string)
 
         switch (format) {
+          case "ascii":
+            console.log(GraphFormat.ascii(graph).join("\n"))
+            return
           case "json":
             console.log(GraphFormat.json(graph))
             return
           case "mermaid":
             console.log(GraphFormat.mermaid(graph))
+            return
+          case "timeline":
+            console.log(
+              GraphFormat.timeline(graph)
+                .map((line) => line.text)
+                .join("\n"),
+            )
+            return
+          case "topology":
+            console.log(GraphFormat.topology(graph).join("\n"))
             return
           case "markdown":
           default:

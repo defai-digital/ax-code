@@ -1,3 +1,4 @@
+import z from "zod"
 import { EventQuery } from "../replay/query"
 import type { ReplayEvent } from "../replay/event"
 import { Risk } from "../risk/score"
@@ -5,49 +6,88 @@ import { extractTarget, truncate } from "../audit/report"
 import type { SessionID } from "../session/schema"
 
 export namespace ExecutionGraph {
-  export type NodeType = "session" | "step" | "tool_call" | "tool_result" | "agent_route" | "llm" | "error"
+  export const NodeType = z.enum(["session", "step", "tool_call", "tool_result", "agent_route", "llm", "error"])
+  export type NodeType = z.output<typeof NodeType>
 
-  export type NodeStatus = "ok" | "error" | "pending"
+  export const NodeStatus = z.enum(["ok", "error", "pending"])
+  export type NodeStatus = z.output<typeof NodeStatus>
 
-  export type Node = {
-    id: string
-    type: NodeType
-    label: string
-    timestamp: number
-    duration?: number
-    status?: NodeStatus
-    stepIndex?: number
-    callID?: string
-    tool?: string
-    agent?: string
-    confidence?: number
-    tokens?: { input: number; output: number }
-  }
+  export const Tokens = z
+    .object({
+      input: z.number(),
+      output: z.number(),
+    })
+    .meta({ ref: "ExecutionGraphTokens" })
+  export type Tokens = z.output<typeof Tokens>
 
-  export type EdgeType = "sequence" | "call_result" | "step_contains"
+  export const Node = z
+    .object({
+      id: z.string(),
+      type: NodeType,
+      label: z.string(),
+      timestamp: z.number(),
+      duration: z.number().optional(),
+      status: NodeStatus.optional(),
+      stepIndex: z.number().optional(),
+      callID: z.string().optional(),
+      tool: z.string().optional(),
+      agent: z.string().optional(),
+      confidence: z.number().optional(),
+      tokens: Tokens.optional(),
+    })
+    .meta({ ref: "ExecutionGraphNode" })
+  export type Node = z.output<typeof Node>
 
-  export type Edge = {
-    from: string
-    to: string
-    type: EdgeType
-  }
+  export const EdgeType = z.enum(["sequence", "call_result", "step_contains"])
+  export type EdgeType = z.output<typeof EdgeType>
 
-  export type Metadata = {
-    duration: number
-    tokens: { input: number; output: number }
-    risk: { level: string; score: number; summary: string }
-    agents: string[]
-    tools: string[]
-    steps: number
-    errors: number
-  }
+  export const Edge = z
+    .object({
+      from: z.string(),
+      to: z.string(),
+      type: EdgeType,
+    })
+    .meta({ ref: "ExecutionGraphEdge" })
+  export type Edge = z.output<typeof Edge>
 
-  export type Graph = {
-    sessionID: string
-    nodes: Node[]
-    edges: Edge[]
-    metadata: Metadata
-  }
+  export const RiskInfo = z
+    .object({
+      level: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+      score: z.number(),
+      summary: z.string(),
+    })
+    .meta({ ref: "ExecutionGraphRisk" })
+  export type RiskInfo = z.output<typeof RiskInfo>
+
+  export const Metadata = z
+    .object({
+      duration: z.number(),
+      tokens: Tokens,
+      risk: RiskInfo,
+      agents: z.string().array(),
+      tools: z.string().array(),
+      steps: z.number(),
+      errors: z.number(),
+    })
+    .meta({ ref: "ExecutionGraphMetadata" })
+  export type Metadata = z.output<typeof Metadata>
+
+  export const Graph = z
+    .object({
+      sessionID: z.string(),
+      nodes: Node.array(),
+      edges: Edge.array(),
+      metadata: Metadata,
+    })
+    .meta({ ref: "ExecutionGraph" })
+  export type Graph = z.output<typeof Graph>
+
+  export const Response = z
+    .object({
+      data: Graph,
+    })
+    .meta({ ref: "ExecutionGraphResponse" })
+  export type Response = z.output<typeof Response>
 
   export function build(sessionID: SessionID): Graph {
     const rows = EventQuery.bySessionWithTimestamp(sessionID)

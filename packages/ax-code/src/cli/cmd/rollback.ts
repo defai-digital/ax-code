@@ -1,10 +1,9 @@
 import { cmd } from "./cmd"
 import { Instance } from "../../project/instance"
 import { Session } from "../../session"
+import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
-import { SessionRevert } from "../../session/revert"
 import { Risk } from "../../risk/score"
-import { ExecutionGraph } from "../../graph"
 
 export const RollbackCommand = cmd({
   command: "rollback <sessionID>",
@@ -15,7 +14,12 @@ export const RollbackCommand = cmd({
       .option("dry-run", { describe: "Show what would be rolled back without applying", type: "boolean", default: false })
       .option("force", { describe: "Skip confirmation", type: "boolean", default: false })
       .option("list", { describe: "Show available rollback points from the execution graph", type: "boolean", default: false })
-      .option("step", { describe: "Rollback to a specific step index instead of the full session", type: "number" }),
+      .option("step", { describe: "Rollback to a specific step index instead of the full session", type: "number" })
+      .option("tool", {
+        describe: "Rollback to the latest step that used this tool",
+        type: "string",
+      })
+      .conflicts("step", "tool"),
   async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
@@ -30,32 +34,31 @@ export const RollbackCommand = cmd({
 
         // --list: show rollback points from execution graph
         if (args.list) {
-          const graph = ExecutionGraph.build(sessionID)
-          const stepNodes = graph.nodes
-            .filter((n) => n.type === "step")
-            .sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0))
+          const points = SessionRollback.filter(await SessionRollback.points(sessionID), args.tool as string | undefined)
 
-          if (stepNodes.length === 0) {
+          if (points.length === 0) {
+            if (args.tool) {
+              console.log(`\nNo steps found for tool ${args.tool}.`)
+              return
+            }
             console.log("\nNo steps found in session.")
             return
           }
 
-          console.log(`\nRollback points (${stepNodes.length} steps):`)
-          for (const node of stepNodes) {
-            const dur = node.duration != null ? ` (${node.duration}ms)` : ""
-            const tok = node.tokens ? ` tokens: ${node.tokens.input}/${node.tokens.output}` : ""
-            // Find tools used in this step
-            const childIDs = graph.edges
-              .filter((e) => e.from === node.id && e.type === "step_contains")
-              .map((e) => e.to)
-            const toolCalls = childIDs
-              .map((id) => graph.nodes.find((n) => n.id === id))
-              .filter((n) => n?.type === "tool_call")
-              .map((n) => n!.label)
-            const toolSummary = toolCalls.length > 0 ? ` [${toolCalls.join(", ")}]` : ""
-            console.log(`  Step #${node.stepIndex}${dur}${tok}${toolSummary}`)
+          console.log(
+            args.tool
+              ? `\nRollback points for ${args.tool} (${points.length} step${points.length === 1 ? "" : "s"}):`
+              : `\nRollback points (${points.length} steps):`,
+          )
+          for (const point of points) {
+            const dur = point.duration != null ? ` (${point.duration}ms)` : ""
+            const tok = point.tokens ? ` tokens: ${point.tokens.input}/${point.tokens.output}` : ""
+            const tool = point.tools.length > 0 ? ` [${point.tools.join(", ")}]` : ""
+            console.log(`  Step #${point.step}${dur}${tok}${tool}`)
           }
-          console.log(`\nUsage: ax-code rollback ${sessionID} --step <N>`)
+          console.log(
+            args.tool ? `\nUsage: ax-code rollback ${sessionID} --tool ${args.tool}` : `\nUsage: ax-code rollback ${sessionID} --step <N>`,
+          )
           return
         }
 
@@ -98,29 +101,31 @@ export const RollbackCommand = cmd({
           return
         }
 
-        // --step: find the message/part boundary for the target step
-        if (args.step != null) {
-          const target = args.step as number
-          // Walk assistant messages to find the part corresponding to step boundary
-          for (const msg of msgs) {
-            if (msg.info.role !== "assistant") continue
-            for (const part of msg.parts) {
-              if (part.type === "step-start" && "stepIndex" in part) {
-                const partAny = part as unknown as { stepIndex?: number }
-                if (partAny.stepIndex === target) {
-                  await SessionRevert.revert({
-                    sessionID,
-                    messageID: msg.info.id,
-                    partID: part.id,
-                  })
-                  await SessionRevert.cleanup(session)
-                  console.log(`\n\x1b[32mRolled back to step #${target}.\x1b[0m`)
-                  return
-                }
-              }
+        // --step/--tool: find the message/part boundary for the selected rollback target
+        if (args.step != null || args.tool) {
+          const point = SessionRollback.pick({
+            points: await SessionRollback.points(sessionID),
+            step: args.step as number | undefined,
+            tool: args.tool as string | undefined,
+          })
+          if (point) {
+            await SessionRollback.apply({
+              sessionID,
+              messageID: point.messageID,
+              partID: point.partID,
+            })
+            if (args.tool) {
+              console.log(`\n\x1b[32mRolled back to latest ${args.tool} step (#${point.step}).\x1b[0m`)
+              return
             }
+            console.log(`\n\x1b[32mRolled back to step #${point.step}.\x1b[0m`)
+            return
           }
-          console.log(`\nStep #${target} not found. Use --list to see available steps.`)
+          if (args.tool) {
+            console.log(`\nTool ${args.tool} not found. Use --list --tool ${args.tool} to inspect matches.`)
+            return
+          }
+          console.log(`\nStep #${args.step} not found. Use --list to see available steps.`)
           return
         }
 
@@ -131,11 +136,10 @@ export const RollbackCommand = cmd({
           return
         }
 
-        await SessionRevert.revert({
+        await SessionRollback.apply({
           sessionID,
           messageID: firstAssistant.info.id,
         })
-        await SessionRevert.cleanup(session)
 
         console.log(`\n\x1b[32mRolled back ${diff.length} files.\x1b[0m`)
       },

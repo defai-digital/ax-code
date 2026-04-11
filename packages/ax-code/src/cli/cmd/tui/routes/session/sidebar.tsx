@@ -12,6 +12,10 @@ import { Usage } from "./usage"
 import { Flag } from "@/flag/flag"
 import { EventQuery } from "@/replay/query"
 import { activityItems as items } from "./activity"
+import { SessionBranch } from "./branch"
+import { SessionDre } from "./dre"
+import { SessionRollback } from "./rollback"
+import { SessionSemanticDiff } from "@/session/semantic-diff"
 
 export function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
@@ -121,6 +125,41 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     const rows = EventQuery.bySessionWithTimestamp(sid)
     return items(parts, rows, sync.data.agent).slice(0, 10)
   })
+  const dre = createMemo(() => {
+    messages()
+    diff()
+    status()
+    const sid = props.sessionID as Parameters<typeof SessionDre.load>[0]
+    return SessionDre.load(sid)
+  })
+  const branch = createMemo(() => {
+    messages()
+    const list = sync.data.session
+      .filter(
+        (item) =>
+          item.id === props.sessionID ||
+          item.parentID === props.sessionID ||
+          item.id === session()?.parentID ||
+          item.parentID === session()?.parentID,
+      )
+      .map((item) => ({ id: item.id, title: item.title }))
+    if (list.length <= 1) return
+    const semantic = Object.fromEntries(
+      list.map((item) => [item.id, SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null]),
+    )
+    return SessionBranch.detail({ currentID: props.sessionID, sessions: list, semantic })
+  })
+  const rollback = createMemo(() => {
+    messages()
+    return SessionRollback.load(
+      props.sessionID as Parameters<typeof SessionRollback.load>[0],
+      messages().map((item) => ({
+        info: item,
+        parts: sync.data.part[item.id] ?? [],
+      })),
+    )
+  })
+  const semantic = createMemo(() => SessionSemanticDiff.summarize(diff()))
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
@@ -452,101 +491,185 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
               <box>
                 <box
                   flexDirection="row"
+                  justifyContent="space-between"
                   gap={1}
                   onMouseDown={() => sync.data.debugEngine.plans.length > 2 && setExpanded("dre", !expanded.dre)}
                 >
-                  <Show when={sync.data.debugEngine.plans.length > 2}>
-                    <text fg={theme.text}>{expanded.dre ? "▼" : "▶"}</text>
-                  </Show>
-                  <text fg={theme.text}>
-                    <b>DRE</b>
+                  <box flexDirection="row" gap={1}>
+                    <Show when={sync.data.debugEngine.plans.length > 2}>
+                      <text fg={theme.text}>{expanded.dre ? "▼" : "▶"}</text>
+                    </Show>
+                    <text fg={theme.text}>
+                      <b>DRE</b>
+                      <Show when={dre()}>
+                        <span
+                          style={{
+                            fg:
+                              dre()!.level === "CRITICAL"
+                                ? theme.error
+                                : dre()!.level === "HIGH"
+                                  ? theme.warning
+                                  : dre()!.level === "MEDIUM"
+                                    ? theme.warning
+                                    : theme.success,
+                          }}
+                        >
+                          {" "}
+                          {dre()!.level.toLowerCase()} ({dre()!.score}/100)
+                        </span>
+                      </Show>
+                    </text>
+                  </box>
+                  <text
+                    fg={theme.primary}
+                    onMouseUp={(e: any) => {
+                      e.stopPropagation()
+                      command.trigger("session.dre")
+                    }}
+                  >
+                    details
                   </text>
                 </box>
                 <Show when={sync.data.debugEngine.plans.length <= 2 || expanded.dre}>
-                  {/* Empty state: no pending refactor plans. Show
-                      readiness facts instead of just "DRE is active",
-                      so users can tell whether the tools will produce
-                      real results (graph indexed) or empty ones
-                      (graph not indexed — run `ax-code index`). */}
-                  <Show when={sync.data.debugEngine.plans.length === 0}>
-                    {/* Row 1: tool count. Dot is green when tools
-                        registered, muted otherwise. Zero toolCount
-                        means the server is an older peer that
-                        doesn't report this field; fall back to
-                        hiding the row rather than lying. */}
-                    <Show when={sync.data.debugEngine.toolCount > 0}>
-                      <box flexDirection="row" gap={1}>
-                        <text flexShrink={0} style={{ fg: theme.success }}>
-                          •
-                        </text>
-                        <text fg={theme.textMuted}>{sync.data.debugEngine.toolCount} tools ready</text>
-                      </box>
-                    </Show>
-                    {/* Row 2: graph readiness. Four cases:
-                        - indexing: blue dot + "indexing... (N/M)"
-                          so users see live progress from auto-index
-                          or a sibling `ax-code index` run in
-                          another terminal.
-                        - failed: error dot + short error message.
-                          Previously failures were silently logged
-                          and the sidebar stayed stuck on "not
-                          indexed", which is what the v2.3.12 user
-                          report flagged.
-                        - nodeCount > 0: success dot + count. DRE
-                          tools will produce real results.
-                        - otherwise: warning dot + "not indexed ·
-                          run ax-code index". */}
-                    <box flexDirection="row" gap={1}>
-                      <text
-                        flexShrink={0}
-                        style={{
-                          fg:
-                            sync.data.debugEngine.graph.state === "failed"
-                              ? theme.error
-                              : sync.data.debugEngine.graph.state === "indexing"
-                                ? theme.info
-                                : sync.data.debugEngine.graph.nodeCount > 0
-                                  ? theme.success
-                                  : theme.warning,
-                        }}
-                      >
-                        •
-                      </text>
-                      <text fg={theme.textMuted}>
-                        {sync.data.debugEngine.graph.state === "failed"
-                          ? `index failed: ${sync.data.debugEngine.graph.error ?? "unknown error"}`
-                          : sync.data.debugEngine.graph.state === "indexing"
-                            ? `indexing... (${sync.data.debugEngine.graph.completed.toLocaleString()}/${sync.data.debugEngine.graph.total.toLocaleString()})`
-                            : sync.data.debugEngine.graph.nodeCount > 0
-                              ? `${sync.data.debugEngine.graph.nodeCount.toLocaleString()} symbols indexed`
-                              : "graph not indexed · run `ax-code index`"}
-                      </text>
-                    </box>
-                  </Show>
-                  {/* Non-empty state: per-plan rows unchanged from v2.3.3. */}
-                  <For each={sync.data.debugEngine.plans}>
-                    {(plan) => (
-                      <box flexDirection="row" gap={1}>
-                        <text
-                          flexShrink={0}
-                          style={{
-                            fg:
-                              plan.risk === "high"
-                                ? theme.error
-                                : plan.risk === "medium"
-                                  ? theme.warning
-                                  : theme.success,
-                          }}
-                        >
-                          •
-                        </text>
+                  {/* Graph status — always visible as a one-line indicator */}
+                  <box flexDirection="row" gap={1}>
+                    <text
+                      flexShrink={0}
+                      style={{
+                        fg:
+                          sync.data.debugEngine.graph.state === "failed"
+                            ? theme.error
+                            : sync.data.debugEngine.graph.state === "indexing"
+                              ? theme.info
+                              : sync.data.debugEngine.graph.nodeCount > 0
+                                ? theme.success
+                                : theme.warning,
+                      }}
+                    >
+                      •
+                    </text>
+                    <text fg={theme.textMuted}>
+                      {sync.data.debugEngine.graph.state === "failed"
+                        ? `index failed: ${sync.data.debugEngine.graph.error ?? "unknown error"}`
+                        : sync.data.debugEngine.graph.state === "indexing"
+                          ? `indexing... (${sync.data.debugEngine.graph.completed.toLocaleString()}/${sync.data.debugEngine.graph.total.toLocaleString()})`
+                          : sync.data.debugEngine.graph.nodeCount > 0
+                            ? `${sync.data.debugEngine.graph.nodeCount.toLocaleString()} symbols indexed`
+                            : "not indexed · run ax-code index"}
+                    </text>
+                  </box>
+                  {/* Session analysis — risk, decision, changes */}
+                  <Show when={dre()}>
+                    {(item) => (
+                      <box flexDirection="column" gap={0}>
                         <text fg={theme.textMuted}>
-                          {plan.kind} · {plan.affectedFileCount} file
-                          {plan.affectedFileCount === 1 ? "" : "s"}
+                          {item().stats}
                         </text>
+                        <text fg={theme.text} wrapMode="word">
+                          {item().decision}
+                        </text>
+                        <Show when={item().plan !== item().decision}>
+                          <text fg={theme.textMuted} wrapMode="word">
+                            {item().plan}
+                          </text>
+                        </Show>
+                        <Show when={semantic()}>
+                          <box flexDirection="row" gap={1} marginTop={0}>
+                            <text
+                              flexShrink={0}
+                              style={{
+                                fg:
+                                  semantic()!.risk === "high"
+                                    ? theme.error
+                                    : semantic()!.risk === "medium"
+                                      ? theme.warning
+                                      : theme.success,
+                              }}
+                            >
+                              △
+                            </text>
+                            <text fg={theme.textMuted} wrapMode="word">
+                              {semantic()!.headline} · {semantic()!.risk} risk
+                            </text>
+                          </box>
+                        </Show>
+                        <Show when={item().drivers.length > 0}>
+                          <For each={item().drivers}>
+                            {(line) => (
+                              <box flexDirection="row" gap={1}>
+                                <text flexShrink={0} style={{ fg: theme.primary }}>
+                                  ▸
+                                </text>
+                                <text fg={theme.textMuted} wrapMode="word">
+                                  {line}
+                                </text>
+                              </box>
+                            )}
+                          </For>
+                        </Show>
                       </box>
                     )}
-                  </For>
+                  </Show>
+                  {/* Pending refactor plans */}
+                  <Show when={sync.data.debugEngine.plans.length > 0}>
+                    <For each={sync.data.debugEngine.plans}>
+                      {(plan) => (
+                        <box flexDirection="row" gap={1}>
+                          <text
+                            flexShrink={0}
+                            style={{
+                              fg:
+                                plan.risk === "high"
+                                  ? theme.error
+                                  : plan.risk === "medium"
+                                    ? theme.warning
+                                    : theme.success,
+                            }}
+                          >
+                            ◆
+                          </text>
+                          <text fg={theme.textMuted}>
+                            {plan.kind} · {plan.affectedFileCount} file
+                            {plan.affectedFileCount === 1 ? "" : "s"}
+                          </text>
+                        </box>
+                      )}
+                    </For>
+                  </Show>
+                  {/* Quick actions */}
+                  <box flexDirection="row" gap={1}>
+                    <Show when={branch()}>
+                      <text
+                        fg={theme.primary}
+                        onMouseUp={() => command.trigger("session.branch")}
+                      >
+                        branches
+                      </text>
+                      <text fg={theme.textMuted}>·</text>
+                    </Show>
+                    <text
+                      fg={theme.primary}
+                      onMouseUp={() => command.trigger("session.dre.graph")}
+                    >
+                      graph
+                    </text>
+                    <text fg={theme.textMuted}>·</text>
+                    <text
+                      fg={theme.primary}
+                      onMouseUp={() => command.trigger("session.dre.web")}
+                    >
+                      dre-web
+                    </text>
+                    <Show when={rollback().length > 0}>
+                      <text fg={theme.textMuted}>·</text>
+                      <text
+                        fg={theme.primary}
+                        onMouseUp={() => command.trigger("session.rollback")}
+                      >
+                        rollback
+                      </text>
+                    </Show>
+                  </box>
                 </Show>
               </box>
             </Show>
@@ -630,17 +753,47 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       <b>Modified Files</b>
                     </text>
                   </box>
-                  <text
-                    fg={theme.textMuted}
-                    onMouseDown={(e: any) => {
-                      e.stopPropagation()
-                      command.trigger("session.undo")
-                    }}
-                  >
-                    revert
-                  </text>
+                  <box flexDirection="row" gap={1}>
+                    <Show when={rollback().length > 0}>
+                      <text
+                        fg={theme.textMuted}
+                        onMouseUp={(e: any) => {
+                          e.stopPropagation()
+                          command.trigger("session.rollback")
+                        }}
+                      >
+                        steps
+                      </text>
+                    </Show>
+                    <text
+                      fg={theme.textMuted}
+                      onMouseUp={(e: any) => {
+                        e.stopPropagation()
+                        command.trigger("session.undo")
+                      }}
+                    >
+                      revert
+                    </text>
+                  </box>
                 </box>
                 <Show when={diff().length <= 2 || expanded.diff}>
+                  <Show when={rollback().length > 0}>
+                    <box flexDirection="row" gap={1}>
+                      <text flexShrink={0} style={{ fg: theme.warning }}>
+                        ↳
+                      </text>
+                      <text
+                        fg={theme.textMuted}
+                        wrapMode="word"
+                        onMouseUp={(e: any) => {
+                          e.stopPropagation()
+                          command.trigger("session.rollback")
+                        }}
+                      >
+                        {SessionRollback.summary(rollback()!) ?? ""}
+                      </text>
+                    </box>
+                  </Show>
                   <For each={diff() || []}>
                     {(item) => {
                       const icon = item.status === "added" ? "+" : item.status === "deleted" ? "-" : "~"

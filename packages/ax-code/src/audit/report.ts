@@ -12,7 +12,10 @@ export function truncate(s: string, max: number): string {
 
 function formatTimestamp(ms: number): string {
   const d = new Date(ms)
-  return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, "")
+  return d
+    .toISOString()
+    .replace("T", " ")
+    .replace(/\.\d+Z$/, "")
 }
 
 function formatDuration(ms: number): string {
@@ -349,10 +352,15 @@ export namespace AuditReport {
     lines.push(`- **Summary:** ${risk.summary}`)
     const s = risk.signals
     if (s.filesChanged > 0) lines.push(`- **Files changed:** ${s.filesChanged}`)
+    if (s.linesChanged > 0) lines.push(`- **Lines changed:** ${s.linesChanged}`)
+    if (s.apiEndpointsAffected > 0) lines.push(`- **Route files affected:** ${s.apiEndpointsAffected}`)
     if (s.securityRelated) lines.push(`- **Security-related:** yes`)
     if (s.crossModule) lines.push(`- **Cross-module:** yes`)
     if (s.validationPassed !== undefined) lines.push(`- **Validation:** ${s.validationPassed ? "passed" : "failed"}`)
     if (s.toolFailures > 0) lines.push(`- **Tool failures:** ${s.toolFailures}/${s.totalTools}`)
+    for (const item of Risk.top(risk, 4)) {
+      lines.push(`- **${item.label}:** ${item.detail} (+${item.points})`)
+    }
     lines.push("")
 
     // Token Usage

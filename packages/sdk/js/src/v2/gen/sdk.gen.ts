@@ -20,6 +20,8 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  AutonomousGetResponses,
+  AutonomousSetResponses,
   CommandListResponses,
   Config as Config3,
   ConfigGetResponses,
@@ -51,6 +53,10 @@ import type {
   GlobalHealthResponses,
   GlobalUpgradeErrors,
   GlobalUpgradeResponses,
+  GraphGetErrors,
+  GraphGetResponses,
+  GraphTopologyErrors,
+  GraphTopologyResponses,
   InstanceDisposeResponses,
   InstanceRestartResponses,
   IsolationGetResponses,
@@ -114,10 +120,14 @@ import type {
   QuestionReplyResponses,
   SessionAbortErrors,
   SessionAbortResponses,
+  SessionBranchRankErrors,
+  SessionBranchRankResponses,
   SessionChildrenErrors,
   SessionChildrenResponses,
   SessionCommandErrors,
   SessionCommandResponses,
+  SessionCompareErrors,
+  SessionCompareResponses,
   SessionCreateErrors,
   SessionCreateResponses,
   SessionDeleteErrors,
@@ -125,9 +135,13 @@ import type {
   SessionDeleteMessageResponses,
   SessionDeleteResponses,
   SessionDiffResponses,
+  SessionDreErrors,
+  SessionDreResponses,
   SessionForkResponses,
   SessionGetErrors,
   SessionGetResponses,
+  SessionGraphErrors,
+  SessionGraphResponses,
   SessionInitErrors,
   SessionInitResponses,
   SessionListResponses,
@@ -141,6 +155,12 @@ import type {
   SessionPromptResponses,
   SessionRevertErrors,
   SessionRevertResponses,
+  SessionRiskErrors,
+  SessionRiskResponses,
+  SessionRollbackPointsErrors,
+  SessionRollbackPointsResponses,
+  SessionSemanticDiffErrors,
+  SessionSemanticDiffResponses,
   SessionShareErrors,
   SessionShareResponses,
   SessionShellErrors,
@@ -157,6 +177,8 @@ import type {
   SessionUnshareResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
+  SmartLlmGetResponses,
+  SmartLlmSetResponses,
   SubtaskPartInput,
   TextPartInput,
   ToolIdsErrors,
@@ -835,6 +857,118 @@ export class Isolation extends HeyApiClient {
   }
 }
 
+export class Autonomous extends HeyApiClient {
+  /**
+   * Get autonomous mode state
+   *
+   * Returns whether autonomous mode is enabled.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<AutonomousGetResponses, unknown, ThrowOnError>({
+      url: "/autonomous",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Set autonomous mode
+   *
+   * Toggle autonomous mode on or off. Persists to ax-code.json.
+   */
+  public set<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      enabled?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "enabled" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<AutonomousSetResponses, unknown, ThrowOnError>({
+      url: "/autonomous",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class SmartLlm extends HeyApiClient {
+  /**
+   * Get smart LLM routing state
+   *
+   * Returns whether LLM-based agent routing is enabled.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SmartLlmGetResponses, unknown, ThrowOnError>({
+      url: "/smart-llm",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Set smart LLM routing
+   *
+   * Toggle LLM-based agent routing on or off. Persists to ax-code.json.
+   */
+  public set<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      enabled?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "enabled" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<SmartLlmSetResponses, unknown, ThrowOnError>({
+      url: "/smart-llm",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Tool extends HeyApiClient {
   /**
    * List tool IDs
@@ -1316,6 +1450,228 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Rank session branches
+   *
+   * Compare the root session and its forks, then recommend the strongest branch based on risk and decision signals.
+   */
+  public branchRank<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      deep?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "deep" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionBranchRankResponses, SessionBranchRankErrors, ThrowOnError>({
+      url: "/session/{sessionID}/branch/rank",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get session DRE detail
+   *
+   * Return the session decision summary, explainable risk detail, and execution timeline for DRE-aware clients.
+   */
+  public dre<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionDreResponses, SessionDreErrors, ThrowOnError>({
+      url: "/session/{sessionID}/dre",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get session graph snapshot
+   *
+   * Return the execution graph and structured topology view for a session.
+   */
+  public graph<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionGraphResponses, SessionGraphErrors, ThrowOnError>({
+      url: "/session/{sessionID}/graph",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get session risk detail
+   *
+   * Return the explainable risk assessment, breakdown, and semantic change summary for a session.
+   */
+  public risk<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionRiskResponses, SessionRiskErrors, ThrowOnError>({
+      url: "/session/{sessionID}/risk",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get semantic diff summary
+   *
+   * Return a semantic classification of the recorded file changes for a session.
+   */
+  public semanticDiff<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionSemanticDiffResponses, SessionSemanticDiffErrors, ThrowOnError>({
+      url: "/session/{sessionID}/diff/semantic",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Compare session executions
+   *
+   * Compare two sessions by risk, decision score, event flow, and optional replay divergence signals.
+   */
+  public compare<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      otherSessionID: string
+      directory?: string
+      deep?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "otherSessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "deep" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionCompareResponses, SessionCompareErrors, ThrowOnError>({
+      url: "/session/{sessionID}/compare/{otherSessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List rollback points
+   *
+   * Return the step-level rollback points available for a session, including tool and token context. Use the optional tool query to narrow the list.
+   */
+  public rollbackPoints<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      tool?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "tool" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      SessionRollbackPointsResponses,
+      SessionRollbackPointsErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/rollback",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Get session todos
    *
    * Retrieve the todo list associated with a specific session, showing tasks and action items.
@@ -1635,6 +1991,7 @@ export class Session2 extends HeyApiClient {
         modelID: string
       }
       agent?: string
+      userSelectedAgent?: boolean
       noReply?: boolean
       tools?: {
         [key: string]: boolean
@@ -1656,6 +2013,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "messageID" },
             { in: "body", key: "model" },
             { in: "body", key: "agent" },
+            { in: "body", key: "userSelectedAgent" },
             { in: "body", key: "noReply" },
             { in: "body", key: "tools" },
             { in: "body", key: "format" },
@@ -1761,6 +2119,7 @@ export class Session2 extends HeyApiClient {
         modelID: string
       }
       agent?: string
+      userSelectedAgent?: boolean
       noReply?: boolean
       tools?: {
         [key: string]: boolean
@@ -1782,6 +2141,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "messageID" },
             { in: "body", key: "model" },
             { in: "body", key: "agent" },
+            { in: "body", key: "userSelectedAgent" },
             { in: "body", key: "noReply" },
             { in: "body", key: "tools" },
             { in: "body", key: "format" },
@@ -2187,7 +2547,9 @@ export class Audit extends HeyApiClient {
   public exportAll<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      since?: string
+      since?: number
+      risk?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+      type?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2198,6 +2560,8 @@ export class Audit extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "since" },
+            { in: "query", key: "risk" },
+            { in: "query", key: "type" },
           ],
         },
       ],
@@ -2236,6 +2600,70 @@ export class Audit extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<AuditReplayResponses, unknown, ThrowOnError>({
       url: "/audit/replay/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Graph extends HeyApiClient {
+  /**
+   * Get execution graph topology
+   *
+   * Return the structured topology view for a session execution graph.
+   */
+  public topology<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GraphTopologyResponses, GraphTopologyErrors, ThrowOnError>({
+      url: "/graph/{sessionID}/topology",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get execution graph
+   *
+   * Build and return the execution graph for a session.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      format?: "ascii" | "json" | "mermaid" | "markdown" | "timeline" | "topology"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "format" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GraphGetResponses, GraphGetErrors, ThrowOnError>({
+      url: "/graph/{sessionID}",
       ...options,
       ...params,
     })
@@ -3652,6 +4080,16 @@ export class OpencodeClient extends HeyApiClient {
     return (this._isolation ??= new Isolation({ client: this.client }))
   }
 
+  private _autonomous?: Autonomous
+  get autonomous(): Autonomous {
+    return (this._autonomous ??= new Autonomous({ client: this.client }))
+  }
+
+  private _smartLlm?: SmartLlm
+  get smartLlm(): SmartLlm {
+    return (this._smartLlm ??= new SmartLlm({ client: this.client }))
+  }
+
   private _tool?: Tool
   get tool(): Tool {
     return (this._tool ??= new Tool({ client: this.client }))
@@ -3685,6 +4123,11 @@ export class OpencodeClient extends HeyApiClient {
   private _audit?: Audit
   get audit(): Audit {
     return (this._audit ??= new Audit({ client: this.client }))
+  }
+
+  private _graph?: Graph
+  get graph(): Graph {
+    return (this._graph ??= new Graph({ client: this.client }))
   }
 
   private _question?: Question

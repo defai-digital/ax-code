@@ -17,6 +17,7 @@ import { DiffChanges } from "./diff-changes"
 import { Icon } from "./icon"
 import { TextShimmer } from "./text-shimmer"
 import { SessionRetry } from "./session-retry"
+import { SessionInsights, type SessionInsightsProps } from "./session-insights"
 import { TextReveal } from "./text-reveal"
 import { createAutoScroll } from "../hooks"
 import { useI18n } from "../context/i18n"
@@ -149,6 +150,7 @@ export function SessionTurn(
     editToolDefaultOpen?: boolean
     active?: boolean
     status?: SessionStatus
+    insights?: Omit<SessionInsightsProps, "class" | "classList">
     onUserInteracted?: () => void
     classes?: {
       root?: string
@@ -427,6 +429,7 @@ export function SessionTurn(
                 </div>
               </Show>
               <SessionRetry status={status()} show={active()} />
+              <Show when={props.insights}>{(value) => <SessionInsights {...value()} />}</Show>
               <Show when={edited() > 0 && !working()}>
                 <div data-slot="session-turn-diffs">
                   <Collapsible open={open()} onOpenChange={(value) => setState("open", value)} variant="ghost">

@@ -171,8 +171,8 @@ export const createSseClient = <TData = unknown>({
                   lastEventId = line.replace(/^id:\s*/, "")
                 } else if (line.startsWith("retry:")) {
                   const parsed = Number.parseInt(line.replace(/^retry:\s*/, ""), 10)
-                  if (!Number.isNaN(parsed) && parsed >= 0) {
-                    retryDelay = Math.min(parsed, 60_000)
+                  if (!Number.isNaN(parsed)) {
+                    retryDelay = parsed
                   }
                 }
               }

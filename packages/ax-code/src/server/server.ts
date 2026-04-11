@@ -46,6 +46,7 @@ import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
 import { GlobalRoutes } from "./routes/global"
+import { DreGraphRoutes } from "./routes/dre-graph"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "@/util/filesystem"
@@ -681,6 +682,7 @@ export namespace Server {
       .route("/permission", PermissionRoutes())
       .route("/audit", AuditRoutes())
       .route("/graph", GraphRoutes())
+      .route("/dre-graph", DreGraphRoutes())
       .route("/question", QuestionRoutes())
       .route("/provider", ProviderRoutes())
       .route("/", FileRoutes())

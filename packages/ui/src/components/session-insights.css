@@ -1,0 +1,13 @@
+[data-component="session-insights"] {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  align-items: start;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+
+  > [data-component="session-compare"],
+  > [data-component="session-graph"] {
+    grid-column: 1 / -1;
+  }
+}
