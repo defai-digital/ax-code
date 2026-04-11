@@ -15,6 +15,8 @@ import { ModelsDev } from "../../provider/models"
 import { NativeStore } from "../../code-intelligence/native-store"
 import { Log } from "../../util/log"
 import { Server } from "../../server/server"
+import { Instance } from "../../project/instance"
+import { InstanceBootstrap } from "../../project/bootstrap"
 import path from "path"
 import fs from "fs/promises"
 
@@ -326,10 +328,14 @@ export const DoctorCommand: CommandModule = {
     try {
       const { Provider } = await import("../../provider/provider")
       const start = performance.now()
-      const providers = await Promise.race([
-        Provider.list(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
-      ])
+      const providers = await Instance.provide({
+        directory: process.cwd(),
+        init: InstanceBootstrap,
+        fn: () => Promise.race([
+          Provider.list(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
+        ]),
+      })
       const elapsed = Math.round(performance.now() - start)
       if (providers === null) {
         checks.push({

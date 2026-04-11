@@ -87,11 +87,15 @@ export namespace Process {
     const reader = stream.getReader()
     const decoder = new TextDecoder()
     let timedOut = false
+    let rejectTimeout: (() => void) | undefined
     const id =
       typeof opts.timeout === "number" && opts.timeout > 0
         ? setTimeout(() => {
             timedOut = true
             opts.onTimeout?.()
+            // Unblock any pending reader.read() that reader.cancel() may
+            // not resolve in Bun — the rejection races the read below.
+            rejectTimeout?.()
             void reader.cancel().catch(() => undefined)
           }, opts.timeout)
         : undefined
@@ -99,10 +103,16 @@ export namespace Process {
     try {
       let text = ""
       while (true) {
-        const part = await reader.read().catch((err) => {
-          if (timedOut) return { done: true as const, value: undefined }
-          throw err
-        })
+        const part = await Promise.race([
+          reader.read().catch((err) => {
+            if (timedOut) return { done: true as const, value: undefined }
+            throw err
+          }),
+          new Promise<{ done: true; value: undefined }>((_, reject) => {
+            rejectTimeout = () => reject(new Error("readText timeout"))
+            if (timedOut) reject(new Error("readText timeout"))
+          }).catch(() => ({ done: true as const, value: undefined })),
+        ])
         if (part.done) break
         text += decoder.decode(part.value, { stream: true })
       }
