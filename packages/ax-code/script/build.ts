@@ -4,7 +4,7 @@ import { $ } from "bun"
 import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
-import { ensureRuntimePluginSupport } from "@opentui/solid/runtime-plugin-support"
+import solidPlugin from "@opentui/solid/bun-plugin"
 
 // Inlined from script/models-snapshot.ts (which lives in an uncommitted local
 // refactor) so build.ts stays self-contained. Preserves local-only providers
@@ -22,13 +22,6 @@ function preserveLocalProviders(fetched: ModelsSnapshot, existing: ModelsSnapsho
 function formatModelsSnapshot(snapshot: ModelsSnapshot) {
   return JSON.stringify(snapshot, null, 2) + "\n"
 }
-
-// Install the OpenTUI Solid transform + runtime resolver globally so Bun.build
-// below can resolve the `opentui:runtime-module:…` specifiers emitted by the
-// Solid babel transform. `autoloadBunfig: false` on the compile step means the
-// usual `bunfig.toml` preload (./src/cli/cmd/tui/preload.ts) doesn't run during
-// the build — we need to install the plugins explicitly here instead.
-ensureRuntimePluginSupport()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -212,9 +205,7 @@ for (const item of targets) {
   await Bun.build({
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
-    // No explicit `plugins` — ensureRuntimePluginSupport() above registered
-    // both the Solid transform (with the runtime module name) and the runtime
-    // resolver globally via `bun.plugin()`, which `Bun.build()` inherits.
+    plugins: [solidPlugin],
     compile: {
       autoloadBunfig: false,
       autoloadDotenv: false,

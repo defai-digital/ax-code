@@ -35,7 +35,6 @@ import {
   ProviderError,
   ToolError,
 } from "../../../sdk/js/src/programmatic/types.js"
-import { AX_CODE_INTERNAL_ORIGIN } from "../constants/network.js"
 
 // Re-export error classes so they can be imported from this module
 export {
@@ -405,7 +404,7 @@ function createInProcessClient(directory: string): OpencodeClient {
   }) as typeof globalThis.fetch
 
   return createOpencodeClient({
-    baseUrl: AX_CODE_INTERNAL_ORIGIN,
+    baseUrl: "http://opencode.internal",
     fetch: fetchFn,
     directory,
   })

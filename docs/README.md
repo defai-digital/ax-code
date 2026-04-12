@@ -8,24 +8,23 @@ This folder holds **product-facing** documentation: user guides, architecture po
 | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | [Repository Structure](architecture/repo-structure.md) | Canonical repo layout, dependency rules, hotspot folders, and placement guidance |
 | [Testing Policy](architecture/testing-policy.md)       | Default test layout by package type and when tests are required                  |
-| [TUI Rework Plan](architecture/tui-rework-plan.md)     | Incremental TUI decoupling plan and OpenTUI quality review criteria              |
 
 ## Guides
 
-| Document                   | Summary                                                                         |
-| -------------------------- | ------------------------------------------------------------------------------- |
+| Document                   | Summary                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------- |
 | [Sandbox Mode](sandbox.md) | Execution sandbox — toggle, configuration, isolation modes, enforcement details |
 
 ## Specs
 
-| Document                               | Summary                                 |
-| -------------------------------------- | --------------------------------------- |
+| Document                           | Summary                                    |
+| ---------------------------------- | ------------------------------------------ |
 | [`specs/project.md`](specs/project.md) | API spec for project/session management |
 
 ## Reference
 
-| Document                                        | Summary                                                                 |
-| ----------------------------------------------- | ----------------------------------------------------------------------- |
+| Document                                        | Summary                                                                |
+| ----------------------------------------------- | ---------------------------------------------------------------------- |
 | [Migration Review](ax-code-migration-review.md) | Feature comparison and migration strategy: OpenCode + ax-cli -> AX Code |
 
 ## Policies

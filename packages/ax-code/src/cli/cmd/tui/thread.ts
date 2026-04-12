@@ -15,7 +15,6 @@ import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
 import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
 import { writeHeapSnapshot } from "v8"
-import { TUI_INTERNAL_ORIGIN } from "./transport"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -191,7 +190,7 @@ export const TuiThreadCommand = cmd({
             events: undefined,
           }
         : {
-            url: TUI_INTERNAL_ORIGIN,
+            url: "http://opencode.internal",
             fetch: createWorkerFetch(client),
             events: createEventSource(client),
           }

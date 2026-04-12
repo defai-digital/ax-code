@@ -1,4 +1,4 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 import { MouseButton, TextAttributes } from "@opentui/core"
@@ -42,8 +42,6 @@ import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
-import { applyTuiDirectoryHeaders } from "./transport"
-import { renderTui } from "./renderer"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -134,7 +132,7 @@ export function tui(input: {
       resolve()
     }
 
-    renderTui(
+    render(
       () => {
         return (
           <ErrorBoundary
@@ -185,10 +183,19 @@ export function tui(input: {
         )
       },
       {
-        onCopySelection: (text) => {
-          Clipboard.copy(text).catch((error) => {
-            console.error(`Failed to copy console selection to clipboard: ${error}`)
-          })
+        targetFps: 60,
+        gatherStats: false,
+        exitOnCtrlC: false,
+        useKittyKeyboard: {},
+        autoFocus: false,
+        openConsoleOnError: false,
+        consoleOptions: {
+          keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
+          onCopySelection: (text) => {
+            Clipboard.copy(text).catch((error) => {
+              console.error(`Failed to copy console selection to clipboard: ${error}`)
+            })
+          },
         },
       },
     )
@@ -199,6 +206,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
+  renderer.disableStdoutInterception()
   const dialog = useDialog()
   const local = useLocal()
   const kv = useKV()
@@ -727,7 +735,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         sync.set("isolation", "mode", next)
         sync.set("isolation", "network", next === "full-access")
         const headers: Record<string, string> = { "content-type": "application/json" }
-        applyTuiDirectoryHeaders(headers, sdk.directory)
+        if (sdk.directory) {
+          const encoded = /[^\x00-\x7F]/.test(sdk.directory) ? encodeURIComponent(sdk.directory) : sdk.directory
+          headers["x-ax-code-directory"] = encoded
+          headers["x-opencode-directory"] = encoded
+        }
         sdk
           .fetch(`${sdk.url}/isolation`, {
             method: "PUT",

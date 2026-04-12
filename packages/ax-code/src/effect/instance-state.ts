@@ -3,7 +3,6 @@ import { Instance, type Shape } from "@/project/instance"
 import { registerDisposer } from "./instance-registry"
 
 const TypeId = "~ax-code/InstanceState"
-const EFFECT_INTERRUPT_WITHOUT_ERROR = "All fibers interrupted without error"
 
 export interface InstanceState<A, E = never, R = never> {
   readonly [TypeId]: typeof TypeId
@@ -26,7 +25,6 @@ export namespace InstanceState {
       // the generic Effect error carries no useful diagnostic context.
       const off = registerDisposer((directory) =>
         Effect.runPromise(ScopedCache.invalidate(cache, directory)).catch((err) => {
-          if (err instanceof Error && err.message === EFFECT_INTERRUPT_WITHOUT_ERROR) return
           // eslint-disable-next-line no-console
           console.error("InstanceState disposer: cache invalidate failed", { directory, err })
         }),

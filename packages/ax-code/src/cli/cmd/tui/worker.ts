@@ -11,7 +11,6 @@ import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
 import { Flag } from "@/flag/flag"
 import { setTimeout as sleep } from "node:timers/promises"
 import { writeHeapSnapshot } from "node:v8"
-import { TUI_INTERNAL_ORIGIN } from "./transport"
 
 await Log.init({
   print: process.argv.includes("--print-logs"),
@@ -59,7 +58,7 @@ const startEventStream = (input: { directory?: string }) => {
   }) as typeof globalThis.fetch
 
   const sdk = createOpencodeClient({
-    baseUrl: TUI_INTERNAL_ORIGIN,
+    baseUrl: "http://opencode.internal",
     directory: input.directory ?? process.cwd(),
     fetch: fetchFn,
     signal,

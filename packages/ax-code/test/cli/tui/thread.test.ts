@@ -88,7 +88,7 @@ describe("tui thread", () => {
     const { TuiThreadCommand } = await import("../../../src/cli/cmd/tui/thread")
     const args: Parameters<NonNullable<typeof TuiThreadCommand.handler>>[0] = {
       _: [],
-      $0: "ax-code",
+      $0: "opencode",
       project,
       prompt: "hi",
       model: undefined,
@@ -99,8 +99,8 @@ describe("tui thread", () => {
       port: 0,
       hostname: "127.0.0.1",
       mdns: false,
-      "mdns-domain": "ax-code.local",
-      mdnsDomain: "ax-code.local",
+      "mdns-domain": "opencode.local",
+      mdnsDomain: "opencode.local",
       cors: [],
     }
     return TuiThreadCommand.handler(args)
