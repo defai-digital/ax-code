@@ -1,14 +1,17 @@
 /**
- * /init command — generates AX.md project context
- * Ported from ax-cli's init command
+ * /init command — generates AGENTS.md project context
  */
 
 import type { CommandModule } from "yargs"
 import { Context, type DepthLevel } from "../../context"
+import { Filesystem } from "../../util/filesystem"
 
-export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dry-run": boolean; directory: string }> = {
+export const InitCommand: CommandModule<
+  {},
+  { depth: string; force: boolean; "dry-run": boolean; directory?: string }
+> = {
   command: "init",
-  describe: "Generate AX.md project context for AI comprehension",
+  describe: "Generate AGENTS.md project context for AI comprehension",
   builder: (yargs) =>
     yargs
       .option("depth", {
@@ -19,7 +22,7 @@ export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dr
       })
       .option("force", {
         type: "boolean",
-        describe: "Force regeneration even if AX.md exists",
+        describe: "Force regeneration even if AGENTS.md exists",
         default: false,
       })
       .option("dry-run", {
@@ -29,11 +32,10 @@ export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dr
       })
       .option("directory", {
         type: "string",
-        describe: "Project directory to analyze",
-        default: process.cwd(),
+        describe: "Project directory to analyze (defaults to the caller's cwd)",
       }),
   handler: async (args) => {
-    const root = args.directory
+    const root = args.directory || Filesystem.callerCwd()
     const depth = args.depth as DepthLevel
 
     console.log(`Analyzing project at ${root} (depth: ${depth})...`)
@@ -46,24 +48,30 @@ export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dr
     })
 
     if (args["dry-run"]) {
-      console.log("\n--- AX.md Preview ---\n")
+      console.log("\n--- AGENTS.md Preview ---\n")
       console.log(result.content)
       console.log("\n--- End Preview ---")
       return
     }
 
     if (!result.created) {
-      console.log("AX.md already exists. Use --force to regenerate.")
+      console.log("AGENTS.md already exists. Use --force to regenerate.")
+      if (result.legacyPath) {
+        console.log(`Note: legacy ${result.legacyPath} is also present and will be ignored in favor of AGENTS.md.`)
+      }
       return
     }
 
     const c = result.info.complexity
-    console.log(`\nAX.md generated successfully!`)
+    console.log(`\nAGENTS.md generated successfully!`)
     console.log(`  File: ${result.path}`)
     console.log(`  Project: ${result.info.name} (${result.info.primaryLanguage})`)
     console.log(`  Stack: ${result.info.techStack.join(", ")}`)
     if (c) {
       console.log(`  Complexity: ${c.level} (${c.fileCount} files, ~${c.linesOfCode} LOC)`)
+    }
+    if (result.legacyPath) {
+      console.log(`\nLegacy ${result.legacyPath} detected. You can delete it — AGENTS.md is the canonical file now.`)
     }
   },
 }

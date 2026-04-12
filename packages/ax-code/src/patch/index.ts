@@ -3,10 +3,8 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { readFileSync } from "fs"
 import { Log } from "../util/log"
-import { Flag } from "../flag/flag"
 import { NativePerf } from "../perf/native"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "../native/addon"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
@@ -467,9 +465,9 @@ export namespace Patch {
   }
 
   function seekSequence(lines: string[], pattern: string[], startIndex: number, eof = false): number {
-    if (Flag.AX_CODE_NATIVE_DIFF) {
+    const native = NativeAddon.diff()
+    if (native) {
       try {
-        const native = _require("@ax-code/diff")
         return NativePerf.run(
           "diff.seekSequence",
           { lines: lines.length, pattern: pattern.length, startIndex, eof },
@@ -506,9 +504,9 @@ export namespace Patch {
   }
 
   function generateUnifiedDiff(oldContent: string, newContent: string): string {
-    if (Flag.AX_CODE_NATIVE_DIFF) {
+    const native = NativeAddon.diff()
+    if (native) {
       try {
-        const native = _require("@ax-code/diff")
         return NativePerf.run("diff.unifiedDiff", { oldBytes: oldContent.length, newBytes: newContent.length }, () =>
           native.unifiedDiff("file", oldContent, newContent),
         )

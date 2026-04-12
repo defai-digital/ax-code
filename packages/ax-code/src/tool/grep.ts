@@ -11,10 +11,8 @@ import { Instance } from "../project/instance"
 import path from "path"
 import { assertExternalDirectory } from "./external-directory"
 import { MAX_LINE_LENGTH } from "@/constants/tool"
-import { Flag } from "../flag/flag"
 import { NativePerf } from "../perf/native"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "../native/addon"
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
@@ -55,9 +53,9 @@ export const GrepTool = Tool.define("grep", {
     }
 
     // Native fast-path: in-process search via Rust addon
-    if (Flag.AX_CODE_NATIVE_FS) {
+    const native = NativeAddon.fs()
+    if (native) {
       try {
-        const native = _require("@ax-code/fs")
         const json = NativePerf.run(
           "fs.searchContent",
           {
@@ -77,13 +75,16 @@ export const GrepTool = Tool.define("grep", {
               }),
             ),
         )
+        // Schema matches `SearchMatch` in crates/ax-code-fs/src/lib.rs.
+        // `path` is absolute so `Filesystem.contains` works, and `line` +
+        // `matchText` are the field names the native emits. `modTime` was
+        // never populated and its old sort was a no-op — dropped.
         const matches = (
-          JSON.parse(json) as Array<{ path: string; lineNum: number; lineText: string; modTime: number }>
+          JSON.parse(json) as Array<{ path: string; line: number; column: number; matchText: string }>
         ).filter(
           (match) =>
             !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path),
         )
-        matches.sort((a, b) => b.modTime - a.modTime)
 
         if (matches.length === 0) {
           return {
@@ -103,10 +104,10 @@ export const GrepTool = Tool.define("grep", {
             outputLines.push(`${match.path}:`)
           }
           const truncatedLineText =
-            match.lineText.length > MAX_LINE_LENGTH
-              ? match.lineText.substring(0, MAX_LINE_LENGTH) + "..."
-              : match.lineText
-          outputLines.push(`  Line ${match.lineNum}: ${truncatedLineText}`)
+            match.matchText.length > MAX_LINE_LENGTH
+              ? match.matchText.substring(0, MAX_LINE_LENGTH) + "..."
+              : match.matchText
+          outputLines.push(`  Line ${match.line}: ${truncatedLineText}`)
         }
 
         return {

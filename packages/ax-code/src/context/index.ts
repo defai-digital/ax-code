@@ -1,6 +1,5 @@
 /**
- * AX.md context system
- * Ported from ax-cli — generates project context for AI comprehension
+ * AGENTS.md context system
  *
  * Usage:
  *   import { Context } from "./context"
@@ -17,6 +16,9 @@ export { type DepthLevel, type ProjectInfo } from "./analyzer"
 export namespace Context {
   const log = Log.create({ service: "context" })
 
+  export const OUTPUT_FILENAME = "AGENTS.md"
+  export const LEGACY_FILENAME = "AX.md"
+
   export interface InitOptions {
     root: string
     depth?: DepthLevel
@@ -29,59 +31,68 @@ export namespace Context {
     content: string
     info: ProjectInfo
     created: boolean
+    legacyPath?: string
   }
 
-  /**
-   * Initialize AX.md for a project
-   * Analyzes the project and generates context file
-   */
   export async function init(opts: InitOptions): Promise<InitResult> {
     const root = opts.root
     const depth = opts.depth ?? "standard"
-    const outputPath = path.join(root, "AX.md")
+    const outputPath = path.join(root, OUTPUT_FILENAME)
+    const legacyPath = path.join(root, LEGACY_FILENAME)
 
     log.info("analyzing project", { root, depth })
 
-    // Check if AX.md already exists
+    const legacyFile = Bun.file(legacyPath)
+    const legacyExists = await legacyFile.exists()
+
     const file = Bun.file(outputPath)
     if ((await file.exists()) && !opts.force) {
-      log.info("AX.md already exists, use --force to regenerate")
+      log.info("AGENTS.md already exists, use --force to regenerate")
       const content = await file.text()
       const info = await analyze(root)
-      return { path: outputPath, content, info, created: false }
+      return {
+        path: outputPath,
+        content,
+        info,
+        created: false,
+        legacyPath: legacyExists ? legacyPath : undefined,
+      }
     }
 
-    // Analyze the project
     const info = await analyze(root)
-
-    // Generate AX.md content
     const content = generate(info, { depth })
 
     if (opts.dryRun) {
       log.info("dry run — not writing file")
-      return { path: outputPath, content, info, created: false }
+      return {
+        path: outputPath,
+        content,
+        info,
+        created: false,
+        legacyPath: legacyExists ? legacyPath : undefined,
+      }
     }
 
-    // Write the file
     await Bun.write(outputPath, content)
-    log.info("wrote AX.md", { path: outputPath, lines: content.split("\n").length })
+    log.info("wrote AGENTS.md", { path: outputPath, lines: content.split("\n").length })
 
-    return { path: outputPath, content, info, created: true }
+    return {
+      path: outputPath,
+      content,
+      info,
+      created: true,
+      legacyPath: legacyExists ? legacyPath : undefined,
+    }
   }
 
-  /**
-   * Read existing AX.md content for prompt injection
-   * Returns null if no AX.md exists
-   */
   export async function read(root: string): Promise<string | null> {
-    const file = Bun.file(path.join(root, "AX.md"))
-    if (!(await file.exists())) return null
-    return file.text()
+    const primary = Bun.file(path.join(root, OUTPUT_FILENAME))
+    if (await primary.exists()) return primary.text()
+    const legacy = Bun.file(path.join(root, LEGACY_FILENAME))
+    if (await legacy.exists()) return legacy.text()
+    return null
   }
 
-  /**
-   * Refresh an existing AX.md with fresh analysis
-   */
   export async function refresh(root: string, depth?: DepthLevel): Promise<InitResult> {
     return init({ root, depth, force: true })
   }

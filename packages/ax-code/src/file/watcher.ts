@@ -17,8 +17,7 @@ import { Config } from "../config/config"
 import { FileIgnore } from "./ignore"
 import { Protected } from "./protected"
 import { Log } from "../util/log"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "../native/addon"
 
 declare const AX_CODE_LIBC: string | undefined
 
@@ -115,7 +114,8 @@ export namespace FileWatcher {
             // Native watcher: OS-level events via Rust addon (fsevents/inotify)
             const subscribeNative = (dir: string, ignore: string[]) => {
               return Effect.tryPromise(async () => {
-                const native = _require("@ax-code/fs")
+                const native = NativeAddon.fs()
+                if (!native) throw new Error("@ax-code/fs native addon unavailable")
                 const watcher = new native.NativeWatcher(dir, JSON.stringify(ignore))
 
                 let pollErrorCount = 0

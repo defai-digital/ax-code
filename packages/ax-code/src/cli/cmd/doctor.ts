@@ -14,6 +14,8 @@ import { Auth } from "../../auth"
 import { ModelsDev } from "../../provider/models"
 import { NativeStore } from "../../code-intelligence/native-store"
 import { Log } from "../../util/log"
+import { Filesystem } from "../../util/filesystem"
+import { NativeAddon } from "../../native/addon"
 import path from "path"
 import fs from "fs/promises"
 
@@ -135,12 +137,20 @@ export const DoctorCommand: CommandModule = {
       })
     }
 
-    // 7. AX.md
-    const axMdExists = await Bun.file("AX.md").exists()
+    // 7. AGENTS.md (checked in the caller's cwd, not the bin shim's --cwd)
+    const callerCwd = Filesystem.callerCwd()
+    const agentsMdExists = await Bun.file(path.join(callerCwd, "AGENTS.md")).exists()
+    const legacyAxMdExists = await Bun.file(path.join(callerCwd, "AX.md")).exists()
     checks.push({
-      name: "AX.md context",
-      status: axMdExists ? "ok" : "warn",
-      detail: axMdExists ? "Found — project context will be injected" : 'Not found — run "ax-code init" to generate',
+      name: "AGENTS.md context",
+      status: agentsMdExists ? "ok" : "warn",
+      detail: agentsMdExists
+        ? legacyAxMdExists
+          ? "Found — project context will be injected (legacy AX.md also present; safe to delete)"
+          : "Found — project context will be injected"
+        : legacyAxMdExists
+          ? 'Legacy AX.md found — run "ax-code init --force" to migrate to AGENTS.md'
+          : 'Not found — run "ax-code init" to generate',
     })
 
     // 8. Git
@@ -151,32 +161,23 @@ export const DoctorCommand: CommandModule = {
       detail: gitExists ? "Found" : "Not a git repository",
     })
 
-    // 9. Native Rust addons
-    const nativeStatus: string[] = []
+    // 9. Native Rust addons — routed through the central NativeAddon registry
+    // so the doctor reflects the exact same load semantics (flag gating +
+    // MODULE_NOT_FOUND filtering) as every runtime call site.
     const addons = [
-      { name: "index-core", flag: Flag.AX_CODE_NATIVE_INDEX, pkg: "@ax-code/index-core" },
-      { name: "fs", flag: Flag.AX_CODE_NATIVE_FS, pkg: "@ax-code/fs" },
-      { name: "diff", flag: Flag.AX_CODE_NATIVE_DIFF, pkg: "@ax-code/diff" },
-      { name: "parser", flag: Flag.AX_CODE_NATIVE_PARSER, pkg: "@ax-code/parser" },
+      { name: "index-core", load: () => NativeAddon.index() },
+      { name: "fs", load: () => NativeAddon.fs() },
+      { name: "diff", load: () => NativeAddon.diff() },
+      { name: "parser", load: () => NativeAddon.parser() },
     ]
-    let nativeAvailable = 0
-    for (const addon of addons) {
-      try {
-        const { createRequire } = await import("node:module")
-        const _require = createRequire(import.meta.url)
-        _require(addon.pkg)
-        nativeAvailable++
-        nativeStatus.push(`${addon.name}: installed`)
-      } catch {
-        nativeStatus.push(`${addon.name}: not installed (TS fallback)`)
-      }
-    }
+    const installed = addons.filter((a) => !!a.load()).map((a) => a.name)
     checks.push({
       name: "Native addons",
-      status: nativeAvailable > 0 ? "ok" : "warn",
-      detail: nativeAvailable > 0
-        ? `${nativeAvailable}/4 installed (${nativeStatus.filter(s => s.includes("installed") && !s.includes("not")).map(s => s.split(":")[0]).join(", ")})`
-        : "None installed — using TypeScript fallbacks (this is fine)",
+      status: installed.length > 0 ? "ok" : "warn",
+      detail:
+        installed.length > 0
+          ? `${installed.length}/${addons.length} installed (${installed.join(", ")})`
+          : 'None installed — using TypeScript fallbacks (run "pnpm build:native" at the repo root for faster indexing/search)',
     })
 
     // 10. Recent logs analysis

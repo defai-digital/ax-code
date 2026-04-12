@@ -119,8 +119,13 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
   let root = PathBuf::from(&cwd);
   let mut builder = WalkBuilder::new(&root);
 
-  // Always respect .gitignore (on by default), enable hidden if requested
-  builder.hidden(!(opts.hidden.unwrap_or(false)));
+  // Default to include hidden files (matches ripgrep's `--hidden` behavior
+  // and the TS caller convention that only `hidden: false` suppresses them).
+  // `builder.hidden(true)` in the `ignore` crate means *skip* hidden, so we
+  // invert: pass `true` (skip hidden) only when the caller explicitly set
+  // `hidden: false`.
+  let include_hidden = opts.hidden.unwrap_or(true);
+  builder.hidden(!include_hidden);
   builder.git_ignore(true);
   builder.git_global(true);
   builder.git_exclude(true);
@@ -145,27 +150,30 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
       continue;
     }
 
-    let path = match entry.path().strip_prefix(&root) {
+    let rel = match entry.path().strip_prefix(&root) {
       Ok(p) => p,
       Err(_) => continue,
     };
 
-    let path_str = match path.to_str() {
+    let rel_str = match rel.to_str() {
       Some(s) => s,
       None => continue,
     };
 
     // Always exclude .git contents
-    if path.components().any(|c| c.as_os_str() == ".git") {
+    if rel.components().any(|c| c.as_os_str() == ".git") {
       continue;
     }
 
     // If globs are specified, the file must match at least one
-    if !globs.is_empty() && !globs.iter().any(|g| g.is_match(path_str)) {
+    if !globs.is_empty() && !globs.iter().any(|g| g.is_match(rel_str)) {
       continue;
     }
 
-    results.push(path_str.to_string());
+    // Return the *relative* path. TS callers that want absolute can join with
+    // `cwd` themselves; keeping it relative preserves existing test contracts
+    // (e.g. `files.includes("visible.txt")`).
+    results.push(rel_str.to_string());
   }
 
   Ok(results)
@@ -435,8 +443,12 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
       .after_context(context_lines)
       .build();
 
+    // Report absolute paths. The TS caller filters matches against
+    // `Instance.directory` (absolute) via `Filesystem.contains`, which only
+    // works when the reported path is absolute — returning a relative string
+    // silently dropped every match when `searchPath != Instance.directory`.
     let mut sink = ContentSink {
-      path: rel_str.to_string(),
+      path: full.to_string_lossy().into_owned(),
       matcher: &matcher,
       results: &mut results,
       limit,

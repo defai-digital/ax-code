@@ -7,10 +7,8 @@ import DESCRIPTION from "./glob.txt"
 import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
-import { Flag } from "../flag/flag"
 import { NativePerf } from "../perf/native"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "../native/addon"
 
 export const GlobTool = Tool.define("glob", {
   description: DESCRIPTION,
@@ -49,9 +47,9 @@ export const GlobTool = Tool.define("glob", {
     }
 
     // Native fast-path: in-process glob via Rust addon
-    if (Flag.AX_CODE_NATIVE_FS) {
+    const native = NativeAddon.fs()
+    if (native) {
       try {
-        const native = _require("@ax-code/fs")
         const json = NativePerf.run("fs.globFiles", { search, pattern: params.pattern, limit: 100 }, () =>
           native.globFiles(search, params.pattern, 100),
         )

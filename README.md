@@ -312,15 +312,17 @@ ax-code mcp list --discover  # Auto-detect available servers
 
 Supports SSE, HTTP, and stdio transports with OAuth authentication.
 
-### AX.md Context System
+### AGENTS.md Context System
 
 Generate AI-optimized project context that helps every conversation start informed:
 
 ```bash
-ax-code init                 # Generate AX.md context
+ax-code init                 # Generate AGENTS.md context
 ax-code init --depth full    # Deep analysis with code patterns
 ax-code memory warmup        # Pre-cache for faster responses
 ```
+
+> Legacy `AX.md` (from ax-cli) is still read as a fallback if no `AGENTS.md` is present. Run `ax-code init --force` to migrate.
 
 ### Design Check
 
@@ -496,9 +498,27 @@ Config is hierarchical: remote org defaults -> global -> custom path -> project 
 
 ---
 
+## Native Addons (optional)
+
+AX Code ships optional Rust addons (via napi-rs) that accelerate indexing, file scanning, diffing, and parsing on large repos. When they are not installed, AX Code falls back to pure-TypeScript implementations — identical behavior, just slower on hot paths.
+
+**Build locally:**
+
+```bash
+pnpm build:native            # release build (all 4 addons)
+pnpm build:native:debug      # faster to compile, slower to run
+pnpm build:native fs diff    # build a subset
+```
+
+Requires a Rust toolchain (`cargo` — any recent stable). The build produces `.node` binaries under `packages/ax-code-{fs,diff,parser}-native/` and `packages/ax-code-index-core/`, which pnpm symlinks into `@ax-code/*` for runtime resolution. Run `ax-code doctor` to confirm — the "Native addons" row will flip from warn to ok.
+
+Outputs are gitignored and rebuilt per machine; no CI/publishing setup is required for local use.
+
+---
+
 ## Best Practices
 
-- **Always initialize context**: Run `ax-code init` (or `--depth full`) first in new projects to generate AX.md for better agent understanding.
+- **Always initialize context**: Run `ax-code init` (or `--depth full`) first in new projects to generate AGENTS.md for better agent understanding.
 - **Use the right agent**: Let auto-routing work, or switch manually (Tab). Use `debug` for bugs, `perf` for optimization, `security` for audits.
 - **Enable sandbox early**: Toggle with `/sandbox` or `--sandbox workspace-write` for safety, especially with untrusted code or bash.
 - **Leverage DRE tools**: For refactors use `refactor_plan` -> review -> `refactor_apply`; `impact_analyze` before edits; `dedup_scan`/`hardcode_scan` for cleanup; `race_scan`/`lifecycle_scan`/`security_scan` for proactive bug detection.
@@ -524,7 +544,7 @@ ax-code providers login groq         # Quick setup
 ax-code models                       # List models
 
 # Project Context
-ax-code init                         # Generate AX.md
+ax-code init                         # Generate AGENTS.md
 ax-code init --depth full            # Full analysis
 ax-code memory warmup                # Pre-cache context
 

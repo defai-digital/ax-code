@@ -20,6 +20,14 @@ Session.vim
 /ax-code.json
 a.out
 target
+
+# napi-rs build outputs
+packages/ax-code-*/index.js
+packages/ax-code-*/index.d.ts
+packages/ax-code-*/*.node
+crates/*/index.js
+crates/*/index.d.ts
+crates/*/*.node
 .scripts
 .direnv/
 

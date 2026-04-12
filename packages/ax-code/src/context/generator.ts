@@ -1,8 +1,7 @@
 /**
- * AX.md instruction generator
- * Ported from ax-cli's LLMOptimizedInstructionGenerator
+ * AGENTS.md instruction generator
  *
- * Generates token-efficient, comprehension-optimized project context
+ * Generates token-efficient, comprehension-optimized project context.
  * Supports depth levels: basic, standard, full, security
  */
 

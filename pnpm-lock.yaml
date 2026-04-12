@@ -241,6 +241,18 @@ importers:
       '@ai-sdk/xai':
         specifier: 3.0.77
         version: 3.0.77(zod@4.3.6)
+      '@ax-code/diff':
+        specifier: workspace:*
+        version: link:../ax-code-diff-native
+      '@ax-code/fs':
+        specifier: workspace:*
+        version: link:../ax-code-fs-native
+      '@ax-code/index-core':
+        specifier: workspace:*
+        version: link:../ax-code-index-core
+      '@ax-code/parser':
+        specifier: workspace:*
+        version: link:../ax-code-parser-native
       '@ax-code/plugin':
         specifier: workspace:*
         version: link:../plugin

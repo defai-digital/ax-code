@@ -112,7 +112,7 @@ export function formatBreakdown(breakdown: ContextBreakdown): string {
     `${bold}Breakdown:${reset}`,
     bar(breakdown.systemPrompt, "System prompt"),
     bar(breakdown.toolDefinitions, "Tool definitions"),
-    bar(breakdown.memory, "Memory / AX.md"),
+    bar(breakdown.memory, "Memory / AGENTS.md"),
     bar(breakdown.conversationHistory, "Conversation history"),
     "",
   ]

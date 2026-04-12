@@ -13,10 +13,8 @@ import { text } from "node:stream/consumers"
 
 import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
 import { Log } from "@/util/log"
-import { Flag } from "../flag/flag"
 import { NativePerf } from "../perf/native"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "../native/addon"
 
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })
@@ -237,9 +235,9 @@ export namespace Ripgrep {
     input.signal?.throwIfAborted()
 
     // Native fast-path: in-process file walker via Rust addon
-    if (Flag.AX_CODE_NATIVE_FS) {
+    const native = NativeAddon.fs()
+    if (native) {
       try {
-        const native = _require("@ax-code/fs")
         const results = NativePerf.run(
           "fs.walkFiles",
           {

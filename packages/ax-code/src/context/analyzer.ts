@@ -1,9 +1,8 @@
 /**
- * Project analyzer for AX.md context generation
- * Ported from ax-cli's ProjectAnalyzer
+ * Project analyzer for AGENTS.md context generation
  *
- * Detects project language, tech stack, structure, scripts, and conventions
- * Uses Bun APIs for file I/O
+ * Detects project language, tech stack, structure, scripts, and conventions.
+ * Uses Bun APIs for file I/O.
  */
 
 import path from "path"

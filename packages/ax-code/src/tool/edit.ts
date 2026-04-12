@@ -16,10 +16,8 @@ import { Snapshot } from "@/snapshot"
 import { assertExternalDirectory } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
-import { Flag } from "../flag/flag"
 import { NativePerf } from "../perf/native"
-import { createRequire } from "node:module"
-const _require = createRequire(import.meta.url)
+import { NativeAddon } from "../native/addon"
 
 function normalizeLineEndings(text: string): string {
   return text.replaceAll("\r\n", "\n")
@@ -657,9 +655,9 @@ export function trimDiff(diff: string): string {
 }
 
 export function replace(content: string, oldString: string, newString: string, replaceAll = false): string {
-  if (Flag.AX_CODE_NATIVE_DIFF) {
+  const native = NativeAddon.diff()
+  if (native) {
     try {
-      const native = _require("@ax-code/diff")
       const json = NativePerf.run(
         "diff.editReplace",
         {
