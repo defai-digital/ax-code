@@ -42,6 +42,7 @@ import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
+import { applyTuiDirectoryHeaders } from "./transport"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -189,6 +190,7 @@ export function tui(input: {
         useKittyKeyboard: {},
         autoFocus: false,
         openConsoleOnError: false,
+        externalOutputMode: "passthrough",
         consoleOptions: {
           keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
           onCopySelection: (text) => {
@@ -206,7 +208,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
-  renderer.disableStdoutInterception()
   const dialog = useDialog()
   const local = useLocal()
   const kv = useKV()
@@ -735,11 +736,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         sync.set("isolation", "mode", next)
         sync.set("isolation", "network", next === "full-access")
         const headers: Record<string, string> = { "content-type": "application/json" }
-        if (sdk.directory) {
-          const encoded = /[^\x00-\x7F]/.test(sdk.directory) ? encodeURIComponent(sdk.directory) : sdk.directory
-          headers["x-ax-code-directory"] = encoded
-          headers["x-opencode-directory"] = encoded
-        }
+        applyTuiDirectoryHeaders(headers, sdk.directory)
         sdk
           .fetch(`${sdk.url}/isolation`, {
             method: "PUT",

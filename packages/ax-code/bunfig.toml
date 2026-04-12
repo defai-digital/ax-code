@@ -1,4 +1,4 @@
-preload = ["@opentui/solid/preload"]
+preload = ["./src/cli/cmd/tui/preload.ts"]
 
 [test]
 preload = ["./test/preload.ts"]
