@@ -32,6 +32,22 @@ Run this checklist when changing OpenTUI versions or TUI transport behavior:
 - Manual TUI pass: prompt input, Tab/Shift-Tab, dialog focus, transcript scroll, mouse selection, and terminal state after
   exit.
 
+## Near-Term Status
+
+Completed:
+
+- OpenTUI is retained and pinned to `0.1.98`.
+- TUI preload behavior is routed through local AX Code code, with the `0.1.98` runtime plugin support entrypoint preferred
+  over the legacy preload entrypoint.
+- Internal TUI, `ax-code run`, and programmatic SDK fetch origins use `ax-code.internal`.
+- AX Code and legacy OpenCode TUI transport headers/env names are centralized and covered by unit tests.
+- Local PTY smoke covers TUI render, prompt input, Tab/Shift-Tab/Esc handling, clean Ctrl-C exit, and terminal reset.
+
+Remaining:
+
+- No remaining short-term implementation items. Keep the full manual regression checklist for release and for future
+  transcript, mouse, keyboard, or renderer changes.
+
 ## Medium-Term Work
 
 - Introduce a renderer adapter boundary for high-churn surfaces: prompt, dialogs, scroll containers, transcript items,

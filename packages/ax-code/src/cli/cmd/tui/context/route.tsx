@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import type { PromptInfo } from "../component/prompt/history"
-import { AX_CODE_ROUTE_ENV, LEGACY_OPENCODE_ROUTE_ENV } from "../transport"
+import { readTuiRouteEnv } from "../transport"
 
 export type HomeRoute = {
   type: "home"
@@ -22,7 +22,7 @@ export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
   init: () => {
     const [store, setStore] = createStore<Route>(
       (() => {
-        const raw = process.env[AX_CODE_ROUTE_ENV] || process.env[LEGACY_OPENCODE_ROUTE_ENV]
+        const raw = readTuiRouteEnv()
         if (!raw) return { type: "home" } as Route
         try {
           return JSON.parse(raw)

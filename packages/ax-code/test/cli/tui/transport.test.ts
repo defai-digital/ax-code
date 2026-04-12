@@ -4,6 +4,7 @@ import {
   LEGACY_OPENCODE_DIRECTORY_HEADER,
   applyTuiDirectoryHeaders,
   encodeTuiDirectory,
+  readTuiRouteEnv,
 } from "../../../src/cli/cmd/tui/transport"
 
 describe("tui transport", () => {
@@ -29,5 +30,20 @@ describe("tui transport", () => {
     applyTuiDirectoryHeaders(headers)
 
     expect(headers).toEqual({ accept: "application/json" })
+  })
+
+  test("prefers the AX Code route env over the legacy OpenCode route env", () => {
+    expect(
+      readTuiRouteEnv({
+        AX_CODE_ROUTE: '{"type":"home"}',
+        OPENCODE_ROUTE: '{"type":"session","sessionID":"legacy"}',
+      }),
+    ).toBe('{"type":"home"}')
+  })
+
+  test("falls back to the legacy OpenCode route env", () => {
+    expect(readTuiRouteEnv({ OPENCODE_ROUTE: '{"type":"session","sessionID":"legacy"}' })).toBe(
+      '{"type":"session","sessionID":"legacy"}',
+    )
   })
 })
