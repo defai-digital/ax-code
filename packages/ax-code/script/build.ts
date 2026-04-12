@@ -4,7 +4,15 @@ import { $ } from "bun"
 import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
-import solidPlugin from "@opentui/solid/bun-plugin"
+import { ensureRuntimePluginSupport } from "@opentui/solid/runtime-plugin-support"
+import { formatModelsSnapshot, preserveLocalProviders } from "./models-snapshot"
+
+// Install the OpenTUI Solid transform + runtime resolver globally so Bun.build
+// below can resolve the `opentui:runtime-module:…` specifiers emitted by the
+// Solid babel transform. `autoloadBunfig: false` on the compile step means the
+// usual `bunfig.toml` preload (./src/cli/cmd/tui/preload.ts) doesn't run during
+// the build — we need to install the plugins explicitly here instead.
+ensureRuntimePluginSupport()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -16,19 +24,24 @@ import { Script } from "@ax-code/script"
 import pkg from "../package.json"
 
 const modelsUrl = process.env.AX_CODE_MODELS_URL || "https://models.dev"
-// Fetch and generate models.dev snapshot, preserving CLI provider entries
-const modelsData = process.env.MODELS_DEV_API_JSON
-  ? await Bun.file(process.env.MODELS_DEV_API_JSON).text()
-  : await fetch(`${modelsUrl}/api.json`).then((x) => x.text())
 const snapshotPath = path.join(dir, "src/provider/models-snapshot.json")
-const existingSnapshot = JSON.parse(await Bun.file(snapshotPath).text().catch(() => "{}"))
-const fetched = JSON.parse(modelsData)
-const cliProviderIDs = ["claude-code", "gemini-cli", "codex-cli"]
-for (const id of cliProviderIDs) {
-  if (existingSnapshot[id] && !fetched[id]) fetched[id] = existingSnapshot[id]
+if (process.env.MODELS_DEV_API_JSON || process.env.AX_CODE_UPDATE_MODELS === "1") {
+  // Explicit refresh path only. Enterprise/offline builds should use the
+  // committed, reviewed snapshot instead of live upstream data.
+  const modelsData = process.env.MODELS_DEV_API_JSON
+    ? await Bun.file(process.env.MODELS_DEV_API_JSON).text()
+    : await fetch(`${modelsUrl}/api.json`).then((x) => x.text())
+  const existingSnapshot = JSON.parse(
+    await Bun.file(snapshotPath)
+      .text()
+      .catch(() => "{}"),
+  )
+  const fetched = JSON.parse(modelsData)
+  await Bun.write(snapshotPath, formatModelsSnapshot(preserveLocalProviders(fetched, existingSnapshot)))
+  console.log("Generated models-snapshot.json")
+} else {
+  console.log("Using committed models-snapshot.json")
 }
-await Bun.write(snapshotPath, JSON.stringify(fetched, null, 2) + "\n")
-console.log("Generated models-snapshot.json")
 
 // Load migrations from migration directories
 const migrationDirs = (
@@ -183,7 +196,9 @@ for (const item of targets) {
   await Bun.build({
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
-    plugins: [solidPlugin],
+    // No explicit `plugins` — ensureRuntimePluginSupport() above registered
+    // both the Solid transform (with the runtime module name) and the runtime
+    // resolver globally via `bun.plugin()`, which `Bun.build()` inherits.
     compile: {
       autoloadBunfig: false,
       autoloadDotenv: false,
