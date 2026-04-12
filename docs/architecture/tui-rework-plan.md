@@ -42,6 +42,10 @@ Completed:
 - Internal TUI, `ax-code run`, and programmatic SDK fetch origins use `ax-code.internal`.
 - AX Code and legacy OpenCode TUI transport headers/env names are centralized and covered by unit tests.
 - Local PTY smoke covers TUI render, prompt input, Tab/Shift-Tab/Esc handling, clean Ctrl-C exit, and terminal reset.
+- OpenTUI `render` options now go through `packages/ax-code/src/cli/cmd/tui/renderer.ts`, giving AX Code a local
+  renderer adapter entrypoint before any larger component extraction.
+- TUI performance criteria are versioned in `packages/ax-code/src/cli/cmd/tui/performance-criteria.ts` and covered by
+  unit tests so rewrite/fork discussions use stable targets.
 
 Remaining:
 
@@ -51,7 +55,8 @@ Remaining:
 ## Medium-Term Work
 
 - Introduce a renderer adapter boundary for high-churn surfaces: prompt, dialogs, scroll containers, transcript items,
-  and diff/code display.
+  and diff/code display. The current adapter covers the render entrypoint; component-level adapters should be added only
+  around measured hotspots.
 - Move session UI state into renderer-independent view models where practical.
 - Keep OpenTUI-specific imports in leaf components or adapter modules, not shared session or transport logic.
 - Track hotspot files above 500 lines and split only when extracted units gain direct or adjacent integration coverage.
@@ -66,6 +71,9 @@ Before considering a fork or replacement, measure:
 - terminal compatibility across macOS, Linux, tmux, and common CI terminals
 - stability of OpenTUI public APIs used by AX Code
 - install/build complexity from Bun, native binaries, and tree-sitter assets
+
+Use `TUI_PERFORMANCE_CRITERIA` as the canonical target list. Do not start a fork or Rust/native renderer until at least
+one criterion fails with reproducible evidence and the adapter boundary shows the bottleneck is renderer-specific.
 
 ## Long-Term Decision Gate
 
