@@ -9,6 +9,11 @@ const e2e = new Set([
   "test/control-plane/session-proxy-middleware.test.ts",
   "test/control-plane/workspace-sync.test.ts",
   "test/control-plane/workspace-server-sse.test.ts",
+  // LSP client interop spawns a real child process and is flaky on CI —
+  // 30s timeouts when the handshake JSON-RPC message misses its window.
+  // The other LSP test files (incremental, launch, orchestrator, server-helpers)
+  // stay in deterministic; they don't spawn subprocesses.
+  "test/lsp/client.test.ts",
   "test/mcp/oauth-browser.test.ts",
   "test/script/update-models.test.ts",
   "test/server/global-session-list.test.ts",
