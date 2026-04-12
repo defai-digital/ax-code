@@ -5,7 +5,23 @@ import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
 import { ensureRuntimePluginSupport } from "@opentui/solid/runtime-plugin-support"
-import { formatModelsSnapshot, preserveLocalProviders } from "./models-snapshot"
+
+// Inlined from script/models-snapshot.ts (which lives in an uncommitted local
+// refactor) so build.ts stays self-contained. Preserves local-only providers
+// (claude-code, gemini-cli, etc.) that models.dev doesn't serve so a refresh
+// doesn't drop them from the snapshot.
+const LOCAL_PROVIDER_IDS = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-studio"] as const
+type ModelsSnapshot = Record<string, unknown>
+function preserveLocalProviders(fetched: ModelsSnapshot, existing: ModelsSnapshot) {
+  const next = { ...fetched }
+  for (const id of LOCAL_PROVIDER_IDS) {
+    if (existing[id] && !next[id]) next[id] = existing[id]
+  }
+  return next
+}
+function formatModelsSnapshot(snapshot: ModelsSnapshot) {
+  return JSON.stringify(snapshot, null, 2) + "\n"
+}
 
 // Install the OpenTUI Solid transform + runtime resolver globally so Bun.build
 // below can resolve the `opentui:runtime-module:…` specifiers emitted by the
