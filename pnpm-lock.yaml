@@ -458,9 +458,6 @@ importers:
       '@parcel/watcher-darwin-arm64':
         specifier: 2.5.1
         version: 2.5.1
-      '@parcel/watcher-darwin-x64':
-        specifier: 2.5.1
-        version: 2.5.1
       '@parcel/watcher-linux-arm64-glibc':
         specifier: 2.5.1
         version: 2.5.1

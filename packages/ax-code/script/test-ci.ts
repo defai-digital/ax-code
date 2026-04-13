@@ -14,6 +14,8 @@ type Result = {
   }
 }
 
+const harmlessEffectInterrupt = "All fibers interrupted without error"
+
 function arg(name: string) {
   const idx = process.argv.indexOf(name)
   if (idx === -1) return
@@ -40,16 +42,22 @@ async function parse(file: string) {
   const rootTag = text.match(/<(testsuites|testsuite)\s+([^>]+)>/)
   const data = rootTag ? attrs(rootTag[2] ?? "") : {}
   const tests = Number.parseInt(data.tests ?? "") || text.match(/<testcase\b/g)?.length || 0
-  const failures =
-    Number.parseInt(data.failures ?? "") ||
-    (text.match(/<(failure|error)\b/g)?.length ?? 0)
+  const errorTags = Array.from(text.matchAll(/<error\b[^>]*(?:\/>|>[\s\S]*?<\/error>)/g), (match) => match[0] ?? "")
+  const failureCount = Number.parseInt(data.failures ?? "") || (text.match(/<failure\b/g)?.length ?? 0)
+  const errorCount = Number.parseInt(data.errors ?? "") || errorTags.length
+  const failures = failureCount + errorCount
   const skipped =
     Number.parseInt(data.skipped ?? "") ||
     (text.match(/<skipped\b/g)?.length ?? 0)
   const time = Number.parseFloat(data.time ?? "") || 0
   const ignored =
-    failures === 1 && !/<failure\b/.test(text) && text.includes("All fibers interrupted without error") ? 1 : 0
-  return { tests, failures: failures - ignored, skipped, time, ignored }
+    failureCount === 0 &&
+    errorCount <= 1 &&
+    text.includes(harmlessEffectInterrupt) &&
+    errorTags.every((tag) => tag.includes(harmlessEffectInterrupt))
+      ? errorCount || 1
+      : 0
+  return { tests, failures: Math.max(0, failures - ignored), skipped, time, ignored }
 }
 
 async function run(group: string, files: string[], dir: string, run: number) {

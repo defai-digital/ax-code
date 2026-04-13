@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "2.22.9",
+  "version": "2.22.10",
   "name": "ax-code",
   "type": "module",
   "license": "MIT",
@@ -42,7 +42,6 @@
     "@effect/language-service": "0.79.0",
     "@octokit/webhooks-types": "catalog:",
     "@parcel/watcher-darwin-arm64": "2.5.1",
-    "@parcel/watcher-darwin-x64": "2.5.1",
     "@parcel/watcher-linux-arm64-glibc": "2.5.1",
     "@parcel/watcher-linux-arm64-musl": "2.5.1",
     "@parcel/watcher-linux-x64-glibc": "2.5.1",
