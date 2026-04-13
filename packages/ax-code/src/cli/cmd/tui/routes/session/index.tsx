@@ -90,6 +90,9 @@ import { RevertNotice } from "./revert-notice"
 import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.session" })
 
 addDefaultParsers(parsers.parsers)
 
@@ -210,7 +213,7 @@ export function Session() {
         if (scroll) scroll.scrollBy(100_000)
       })
       .catch((e) => {
-        console.error(e)
+        log.error("session load failed", { error: e })
         toast.show({
           message: `Session not found: ${route.sessionID}`,
           variant: "error",

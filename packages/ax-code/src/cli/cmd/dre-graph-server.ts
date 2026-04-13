@@ -25,10 +25,10 @@ export namespace DreGraphServer {
     return url
   }
 
-  export async function ensure() {
+  export async function ensure(): Promise<Live> {
     if (shared) return shared
-    const next = Promise.resolve(listen(0))
-    shared = next.catch((err) => {
+    const next: Promise<Live> = Promise.resolve(listen(0))
+    shared = next.catch((err: unknown) => {
       if (shared === next) shared = undefined
       throw err
     })
@@ -41,7 +41,8 @@ export namespace DreGraphServer {
     directory?: string
     index?: boolean
   }) {
-    const root = local(input.base) ?? new URL(`http://127.0.0.1:${(await ensure()).port}`)
+    const server = local(input.base)
+    const root = server ?? new URL(`http://127.0.0.1:${(await ensure()).port}`)
     const url = new URL(input.index ? "/dre-graph" : `/dre-graph/session/${input.sessionID}`, root.toString())
     url.hostname = "127.0.0.1"
     url.search = ""
