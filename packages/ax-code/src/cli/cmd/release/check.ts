@@ -113,6 +113,12 @@ export interface CheckContext {
   version: string
   /** Whether to run the (slow) deterministic test suite. */
   withTests: boolean
+  /**
+   * Whether branch-sync may `git fetch origin` to refresh the remote ref.
+   * Default `false` so the check has no side effects. Pass `true` (via
+   * `--fetch`) when you want fresh divergence info before tagging.
+   */
+  fetch: boolean
   /** Names of checks to skip. */
   skip: Set<string>
 }
@@ -281,16 +287,20 @@ async function checkWorkingTree(ctx: CheckContext): Promise<CheckResult> {
 
 async function checkBranchSync(ctx: CheckContext): Promise<CheckResult> {
   const [r, durationMs] = await timed(async () => {
-    const fetchRes = await git(["fetch", "origin", "main", "--depth=10"], { cwd: ctx.repoRoot })
-    if (fetchRes.exitCode !== 0) {
-      return mkResult(
-        "Branch sync",
-        "branch-sync",
-        "warn",
-        `Could not fetch origin/main (${fetchRes.stderr.toString().trim() || "unknown error"})`,
-        0,
-        "Check network/auth.",
-      )
+    if (ctx.fetch) {
+      // Side-effectful: updates origin/main ref. Gated behind --fetch per PRD
+      // "validate, don't mutate" contract.
+      const fetchRes = await git(["fetch", "origin", "main", "--depth=10"], { cwd: ctx.repoRoot })
+      if (fetchRes.exitCode !== 0) {
+        return mkResult(
+          "Branch sync",
+          "branch-sync",
+          "warn",
+          `Could not fetch origin/main (${fetchRes.stderr.toString().trim() || "unknown error"})`,
+          0,
+          "Check network/auth.",
+        )
+      }
     }
     const counts = await git(["rev-list", "--left-right", "--count", "origin/main...HEAD"], {
       cwd: ctx.repoRoot,
@@ -300,12 +310,23 @@ async function checkBranchSync(ctx: CheckContext): Promise<CheckResult> {
         "Branch sync",
         "branch-sync",
         "warn",
-        "Could not compute divergence from origin/main",
+        "Could not compute divergence from origin/main (is the branch tracked?)",
         0,
-        counts.stderr.toString(),
+        ctx.fetch ? counts.stderr.toString() : "Try `ax-code release check --fetch` for a fresh check.",
       )
     }
-    const [behind, ahead] = counts.text().trim().split(/\s+/).map(Number)
+    const parts = counts.text().trim().split(/\s+/)
+    const behind = Number(parts[0])
+    const ahead = Number(parts[1])
+    if (!Number.isFinite(behind) || !Number.isFinite(ahead)) {
+      return mkResult(
+        "Branch sync",
+        "branch-sync",
+        "warn",
+        `unexpected rev-list output: ${counts.text().trim()}`,
+        0,
+      )
+    }
     if (behind > 0) {
       return mkResult(
         "Branch sync",
@@ -360,7 +381,13 @@ async function checkReleaseNotes(ctx: CheckContext): Promise<CheckResult> {
 async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
   const [r, durationMs] = await timed(async () => {
     const srcDir = path.join(ctx.repoRoot, AX_CODE_PKG, "src")
-    const lsRes = await git(["ls-files", "--", `${AX_CODE_PKG}/src/`], { cwd: ctx.repoRoot })
+    // Scope 1: pick source files to scan — only under src/.
+    // Scope 2: resolve imports against *every* tracked file in the package
+    //   (not just src/), because source code legitimately imports files at
+    //   the package root (e.g. parsers-config.ts) and under assets/,
+    //   migration/, etc. Restricting the tracked set to src/ produced
+    //   false-positive phantom reports for any cross-directory import.
+    const lsRes = await git(["ls-files", "--", `${AX_CODE_PKG}/`], { cwd: ctx.repoRoot })
     if (lsRes.exitCode !== 0) {
       return mkResult(
         "Phantom imports",
@@ -671,6 +698,11 @@ export const ReleaseCheckCommand = cmd({
         default: false,
         describe: "Run the deterministic test group (adds 2-5 minutes)",
       })
+      .option("fetch", {
+        type: "boolean",
+        default: false,
+        describe: "Run `git fetch origin main` before branch-sync (default: off; purely read-only otherwise)",
+      })
       .option("skip", {
         type: "string",
         describe: "Comma-separated check ids to skip (e.g. typecheck,tests)",
@@ -699,6 +731,7 @@ export const ReleaseCheckCommand = cmd({
         repoRoot,
         version,
         withTests: args["with-tests"] === true,
+        fetch: args.fetch === true,
         skip,
       }
       const results = await runChecks(ctx)

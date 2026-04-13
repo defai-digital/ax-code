@@ -47,6 +47,7 @@ function mkCtx(repoRoot: string, version: string, overrides: Partial<CheckContex
     repoRoot,
     version,
     withTests: false,
+    fetch: false,
     // Skip the slow/network-heavy checks by default in unit tests.
     skip: new Set(["typecheck", "tests", "remote-tag", "branch-sync", "workflow-changes"]),
     ...overrides,
@@ -129,6 +130,28 @@ describe("release check (full checks)", () => {
 
     expect(find(results, "phantom-imports").status).toBe("fail")
     expect(find(results, "phantom-imports").detail).toContain("untracked")
+  })
+
+  test("import of a tracked file OUTSIDE src/ does not false-positive", async () => {
+    // Regression for a bug where the tracked-file set was scoped to src/,
+    // so any legitimate import from src/ into a sibling directory at the
+    // package root (parsers-config.ts, migration/, assets/, etc.) was
+    // reported as a phantom import.
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const axPath = path.join(repo, "packages", "ax-code")
+    const srcPath = path.join(axPath, "src")
+
+    // Tracked config file at package root.
+    await writeFile(path.join(axPath, "parsers-config.ts"), "export default { foo: 1 }\n")
+    // Tracked source file that imports it.
+    await writeFile(path.join(srcPath, "entry.ts"), 'import config from "../parsers-config"\nexport const c = config\n')
+
+    await run("git", ["add", "."], repo)
+    await run("git", ["commit", "-qm", "cross-dir import"], repo)
+
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "phantom-imports").status).toBe("ok")
   })
 
   test("dirty working tree in packages/ax-code fails", async () => {
