@@ -285,12 +285,15 @@ export function Session() {
     dialog.clear()
   }
 
+  let scrollTimer: ReturnType<typeof setTimeout> | undefined
   function toBottom() {
-    setTimeout(() => {
+    clearTimeout(scrollTimer)
+    scrollTimer = setTimeout(() => {
       if (!scroll || scroll.isDestroyed) return
       scroll.scrollTo(scroll.scrollHeight)
     }, 50)
   }
+  onCleanup(() => clearTimeout(scrollTimer))
 
   const local = useLocal()
 
@@ -861,7 +864,9 @@ function UserMessage(props: {
   const queuedFg = createMemo(() => selectedForeground(theme, color()))
   const route = createMemo(() => userRoute(props.message, props.parts, sync.data.agent))
   const showPrimary = createMemo(() => props.message.agent !== "build" || route().delegated.length > 0)
-  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps() || showPrimary() || route().delegated.length > 0)
+  const metadataVisible = createMemo(
+    () => queued() || ctx.showTimestamps() || showPrimary() || route().delegated.length > 0,
+  )
 
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
 
@@ -1502,12 +1507,7 @@ function Write(props: ToolProps<typeof WriteTool>) {
       <Match when={props.metadata.diagnostics !== undefined}>
         <BlockTool title={"# Wrote " + normalize(props.input.filePath)} part={props.part}>
           <line_number fg={theme.textMuted} minWidth={3} paddingRight={1}>
-            <SessionCodeRenderer
-              display={display()}
-              conceal={false}
-              fg={theme.text}
-              syntaxStyle={syntax()}
-            />
+            <SessionCodeRenderer display={display()} conceal={false} fg={theme.text} syntaxStyle={syntax()} />
           </line_number>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
         </BlockTool>
@@ -1834,9 +1834,7 @@ function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
       <Match when={view().state === "items"}>
         <BlockTool title="# Todos" part={props.part}>
           <box>
-            <For each={view().todos}>
-              {(todo) => <TodoItem status={todo.status} content={todo.content} />}
-            </For>
+            <For each={view().todos}>{(todo) => <TodoItem status={todo.status} content={todo.content} />}</For>
           </box>
         </BlockTool>
       </Match>

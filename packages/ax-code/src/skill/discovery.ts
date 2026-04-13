@@ -1,5 +1,6 @@
 import { NodePath } from "@effect/platform-node"
 import { Effect, Layer, Path, Schema, ServiceMap } from "effect"
+import { createHash } from "crypto"
 import { AppFileSystem } from "@/filesystem"
 import { Global } from "../global"
 import { Log } from "../util/log"
@@ -8,11 +9,20 @@ import { Ssrf } from "@/util/ssrf"
 export namespace Discovery {
   const skillConcurrency = 4
   const fileConcurrency = 8
+  const MAX_SKILL_FILE_BYTES = 1024 * 1024
   const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+  const SHA256_PATTERN = /^[a-f0-9]{64}$/i
+
+  class IndexSkillFile extends Schema.Class<IndexSkillFile>("IndexSkillFile")({
+    path: Schema.String,
+    sha256: Schema.optional(Schema.String),
+  }) {}
+
+  const IndexSkillFileEntry = Schema.Union([Schema.String, IndexSkillFile])
 
   class IndexSkill extends Schema.Class<IndexSkill>("IndexSkill")({
     name: Schema.String,
-    files: Schema.Array(Schema.String),
+    files: Schema.Array(IndexSkillFileEntry),
   }) {}
 
   class Index extends Schema.Class<Index>("Index")({
@@ -34,6 +44,26 @@ export namespace Discovery {
       const cache = path.join(Global.Path.cache, "skills")
       const isExternalFileReference = (file: string) => /^[A-Za-z][A-Za-z0-9+.-]*:/.test(file) || file.startsWith("//")
 
+      const normalizeFile = (file: string | IndexSkillFile) =>
+        typeof file === "string" ? { path: file, sha256: undefined } : file
+
+      const verifyFile = (body: ArrayBuffer | Uint8Array, expectedSha256: string | undefined, source: string) => {
+        const buffer = Buffer.from(body instanceof ArrayBuffer ? new Uint8Array(body) : body)
+        if (buffer.byteLength > MAX_SKILL_FILE_BYTES) {
+          throw new Error(`skill-discovery: ${source} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
+        }
+        if (!expectedSha256) return buffer
+        const expected = expectedSha256.toLowerCase()
+        if (!SHA256_PATTERN.test(expected)) {
+          throw new Error(`skill-discovery: invalid sha256 for ${source}`)
+        }
+        const actual = createHash("sha256").update(buffer).digest("hex")
+        if (actual !== expected) {
+          throw new Error(`skill-discovery: sha256 mismatch for ${source}`)
+        }
+        return buffer
+      }
+
       const fetchArrayBuffer = (url: string, init?: RequestInit) =>
         Effect.tryPromise({
           try: async () => {
@@ -44,11 +74,29 @@ export namespace Discovery {
           catch: (err) => err,
         })
 
-      const download = Effect.fn("Discovery.download")(function* (url: string, dest: string) {
-        if (yield* fs.exists(dest).pipe(Effect.orDie)) return true
+      const download = Effect.fn("Discovery.download")(function* (url: string, dest: string, expectedSha256?: string) {
+        if (yield* fs.exists(dest).pipe(Effect.orDie)) {
+          if (!expectedSha256) return true
+
+          const cached = yield* fs.readFile(dest).pipe(Effect.catch(() => Effect.succeed(undefined)))
+          if (cached) {
+            try {
+              verifyFile(cached, expectedSha256, dest)
+              return true
+            } catch (err) {
+              log.warn("cached skill file failed integrity check", { url, dest, err })
+            }
+          }
+        }
 
         return yield* fetchArrayBuffer(url).pipe(
-          Effect.flatMap((body) => fs.writeWithDirs(dest, new Uint8Array(body))),
+          Effect.flatMap((body) =>
+            Effect.try({
+              try: () => verifyFile(body, expectedSha256, url),
+              catch: (err) => err,
+            }),
+          ),
+          Effect.flatMap((body) => fs.writeWithDirs(dest, body)),
           Effect.as(true),
           Effect.catch((err) =>
             Effect.sync(() => {
@@ -84,8 +132,19 @@ export namespace Discovery {
             log.warn("skill entry has unsafe name", { url: index, skill: skill.name })
             return false
           }
-          if (!skill.files.includes("SKILL.md")) {
+          const files = skill.files.map(normalizeFile)
+          if (!files.some((file) => file.path === "SKILL.md")) {
             log.warn("skill entry missing SKILL.md", { url: index, skill: skill.name })
+            return false
+          }
+          const hashless = files.find((file) => !file.sha256)
+          if (hashless) {
+            log.warn("skill entry missing sha256", { url: index, skill: skill.name, file: hashless.path })
+            return false
+          }
+          const invalidHash = files.find((file) => file.sha256 && !SHA256_PATTERN.test(file.sha256))
+          if (invalidHash) {
+            log.warn("skill entry has invalid sha256", { url: index, skill: skill.name, file: invalidHash.path })
             return false
           }
           return true
@@ -95,6 +154,7 @@ export namespace Discovery {
           list,
           (skill) =>
             Effect.gen(function* () {
+              const files = skill.files.map(normalizeFile)
               const cacheRoot = path.resolve(cache)
               const root = path.resolve(cache, skill.name)
               const rootPrefix = root + path.sep
@@ -109,23 +169,33 @@ export namespace Discovery {
               // the cache directory. Reject any file whose resolved
               // path doesn't stay within `root` so a malicious skill
               // repo cannot write arbitrary files to disk.
-              const safeFiles = skill.files.filter((file) => {
-                if (isExternalFileReference(file)) {
+              const safeFiles = files.filter((file) => {
+                if (isExternalFileReference(file.path)) {
                   log.warn("skill entry has external file reference", { url: index, skill: skill.name, file })
                   return false
                 }
-                const resolved = path.resolve(root, file)
+                if (file.sha256 && !SHA256_PATTERN.test(file.sha256)) {
+                  log.warn("skill entry has invalid sha256", { url: index, skill: skill.name, file })
+                  return false
+                }
+                const resolved = path.resolve(root, file.path)
                 if ((resolved + path.sep).startsWith(rootPrefix)) return true
                 return false
               })
 
-              yield* Effect.forEach(
+              const downloads = yield* Effect.forEach(
                 safeFiles,
-                (file) => download(new URL(file, `${host}/${skill.name}/`).href, path.join(root, file)),
+                (file) =>
+                  download(
+                    new URL(file.path, `${host}/${skill.name}/`).href,
+                    path.join(root, file.path),
+                    file.sha256,
+                  ),
                 {
                   concurrency: fileConcurrency,
                 },
               )
+              if (!downloads.every(Boolean)) return null
 
               const md = path.join(root, "SKILL.md")
               return (yield* fs.exists(md).pipe(Effect.orDie)) ? root : null

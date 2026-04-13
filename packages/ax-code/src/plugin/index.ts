@@ -12,6 +12,10 @@ import { Effect, Layer, ServiceMap } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
 import { Env } from "@/util/env"
+import { fileURLToPath } from "url"
+import { Filesystem } from "@/util/filesystem"
+import { Instance } from "@/project/instance"
+import { Global } from "@/global"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -107,6 +111,20 @@ export namespace Plugin {
                   return ""
                 })
                 if (!plugin) continue
+              } else {
+                const pluginPath = fileURLToPath(plugin)
+                const allowed =
+                  Filesystem.contains(Instance.directory, pluginPath) ||
+                  (Instance.worktree !== "/" && Filesystem.contains(Instance.worktree, pluginPath)) ||
+                  Filesystem.contains(Global.Path.config, pluginPath)
+                if (!allowed) {
+                  const message = `Refusing to load plugin outside trusted plugin directories: ${pluginPath}`
+                  log.error("blocked plugin outside trusted directories", { pluginPath })
+                  Bus.publish(Session.Event.Error, {
+                    error: new NamedError.Unknown({ message }).toObject(),
+                  })
+                  continue
+                }
               }
 
               // Prevent duplicate initialization when plugins export the same function

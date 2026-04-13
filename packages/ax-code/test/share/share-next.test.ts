@@ -1,4 +1,4 @@
-import { afterEach, test, expect, mock } from "bun:test"
+import { afterEach, test, expect, mock, spyOn } from "bun:test"
 import { ShareNext } from "../../src/share/share-next"
 import { AccessToken, Account, AccountID, OrgID } from "../../src/account"
 import { Config } from "../../src/config/config"
@@ -8,6 +8,7 @@ import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import { SessionShareTable } from "../../src/share/share.sql"
 import path from "path"
+import dns from "dns/promises"
 
 const projectRoot = path.join(__dirname, "../..")
 
@@ -91,6 +92,7 @@ test("ShareNext stops retrying after the max retry count", async () => {
   const originalFetch = globalThis.fetch
   const originalSetTimeout = globalThis.setTimeout
   const originalClearTimeout = globalThis.clearTimeout
+  const lookupSpy = spyOn(dns, "lookup").mockImplementation(async () => [{ address: "93.184.216.34", family: 4 }] as any)
   let calls = 0
 
   globalThis.fetch = ((async () => {
@@ -130,5 +132,6 @@ test("ShareNext stops retrying after the max retry count", async () => {
     globalThis.fetch = originalFetch
     globalThis.setTimeout = originalSetTimeout
     globalThis.clearTimeout = originalClearTimeout
+    lookupSpy.mockRestore()
   }
 })

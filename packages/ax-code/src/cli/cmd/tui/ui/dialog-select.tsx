@@ -1,6 +1,6 @@
 import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
 import { useTheme, selectedForeground } from "@tui/context/theme"
-import { batch, createEffect, createMemo, For, Show, type JSX, on } from "solid-js"
+import { batch, createEffect, createMemo, For, Show, type JSX, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { isDeepEqual } from "remeda"
@@ -116,7 +116,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   createEffect(
     on([() => store.filter, () => props.current], ([filter, current]) => {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (filter.length > 0) {
           moveTo(0, true)
         } else if (current) {
@@ -126,6 +126,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           }
         }
       }, 0)
+      onCleanup(() => clearTimeout(timer))
     }),
   )
 
@@ -229,11 +230,12 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             focusedTextColor={theme.textMuted}
             ref={(r) => {
               input = r
-              setTimeout(() => {
+              const timer = setTimeout(() => {
                 if (!input) return
                 if (input.isDestroyed) return
                 input.focus()
               }, 1)
+              onCleanup(() => clearTimeout(timer))
             }}
             placeholder={props.placeholder ?? "Search"}
           />

@@ -1,7 +1,7 @@
 import { TextareaRenderable, TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
-import { onMount, type JSX } from "solid-js"
+import { onCleanup, onMount, type JSX } from "solid-js"
 
 export type DialogPromptProps = {
   title: string
@@ -19,10 +19,11 @@ export function DialogPrompt(props: DialogPromptProps) {
 
   onMount(() => {
     dialog.setSize("medium")
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       if (!textarea || textarea.isDestroyed) return
       textarea.focus()
     }, 1)
+    onCleanup(() => clearTimeout(timer))
     textarea.gotoLineEnd()
   })
 

@@ -9,6 +9,7 @@ import { MessageV2 } from "@/session/message-v2"
 import { Database, eq } from "@/storage/db"
 import { SessionShareTable } from "./share.sql"
 import { Log } from "@/util/log"
+import { Ssrf } from "@/util/ssrf"
 import type * as SDK from "@ax-code/sdk/v2"
 
 export namespace ShareNext {
@@ -32,6 +33,22 @@ export namespace ShareNext {
 
   const legacyApi = apiEndpoints("share")
   const consoleApi = apiEndpoints("shares")
+
+  function shareEndpoint(req: { baseUrl: string }, endpoint: string) {
+    return new URL(endpoint, req.baseUrl).toString()
+  }
+
+  function fetchShare(
+    req: { baseUrl: string; headers: Record<string, string> },
+    endpoint: string,
+    init?: RequestInit,
+  ) {
+    return Ssrf.pinnedFetch(shareEndpoint(req, endpoint), {
+      ...init,
+      headers: init?.headers,
+      label: "share",
+    })
+  }
 
   export async function url() {
     const req = await request()
@@ -146,7 +163,7 @@ export namespace ShareNext {
     if (disabled) return { id: "", url: "", secret: "" }
     log.info("creating share", { sessionID })
     const req = await request()
-    const response = await fetch(`${req.baseUrl}${req.api.create}`, {
+    const response = await fetchShare(req, req.api.create, {
       method: "POST",
       headers: { ...req.headers, "Content-Type": "application/json" },
       body: JSON.stringify({ sessionID: sessionID }),
@@ -275,7 +292,7 @@ export namespace ShareNext {
         let success = false
         try {
           const req = await request()
-          const response = await fetch(`${req.baseUrl}${req.api.sync(share.id)}`, {
+          const response = await fetchShare(req, req.api.sync(share.id), {
             method: "POST",
             headers: { ...req.headers, "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -337,7 +354,7 @@ export namespace ShareNext {
     if (!share) return
 
     const req = await request()
-    const response = await fetch(`${req.baseUrl}${req.api.remove(share.id)}`, {
+    const response = await fetchShare(req, req.api.remove(share.id), {
       method: "DELETE",
       headers: { ...req.headers, "Content-Type": "application/json" },
       body: JSON.stringify({

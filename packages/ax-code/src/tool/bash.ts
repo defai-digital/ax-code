@@ -31,7 +31,9 @@ const log = Log.create({ service: "bash-tool" })
 const trackedPIDs = new Set<number>()
 process.on("exit", () => {
   for (const pid of trackedPIDs) {
-    try { process.kill(-pid, "SIGTERM") } catch {}
+    try {
+      process.kill(-pid, "SIGTERM")
+    } catch {}
   }
 })
 
@@ -88,7 +90,7 @@ export const BashTool = Tool.define("bash", async () => {
         ),
     }),
     async execute(params, ctx) {
-      const cwd = params.workdir || Instance.directory
+      const cwd = params.workdir ? path.resolve(Instance.directory, params.workdir) : Instance.directory
       if (params.timeout !== undefined && (!Number.isFinite(params.timeout) || params.timeout < 1)) {
         // Reject NaN, Infinity, 0, and negatives: timeout=0 combined
         // with the `+ 100` in the kill timer fires ~100ms later,
@@ -203,7 +205,7 @@ export const BashTool = Tool.define("bash", async () => {
       // must not see provider tokens, passwords, or other credentials
       // held by the parent process.
       const sanitizedEnv = Env.sanitize({
-        ...Env.sanitize(process.env),
+        ...process.env,
         ...shellEnv.env,
       })
       const proc = spawn(params.command, {

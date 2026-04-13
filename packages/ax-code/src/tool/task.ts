@@ -12,8 +12,10 @@ import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { Permission } from "@/permission"
+import { Log } from "@/util/log"
 
 const MAX_DEPTH = 5
+const log = Log.create({ service: "task-tool" })
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
@@ -57,7 +59,9 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       let depth = 0
       let parent: SessionID | undefined = ctx.sessionID
       while (parent) {
-        const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch(() => undefined)
+        const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch(
+          () => undefined,
+        )
         if (!current?.parentID) break
         depth++
         if (depth >= MAX_DEPTH) {
@@ -169,7 +173,9 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           parts: promptParts,
         })
       } catch (e) {
-        await Session.remove(session.id).catch(() => {})
+        await Session.remove(session.id).catch((error) => {
+          log.warn("failed to remove session after task error", { sessionID: session.id, error })
+        })
         throw e
       }
 

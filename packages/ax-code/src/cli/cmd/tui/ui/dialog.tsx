@@ -1,5 +1,5 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { batch, createContext, Show, useContext, type JSX, type ParentProps } from "solid-js"
+import { batch, createContext, onCleanup, Show, useContext, type JSX, type ParentProps } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { MouseButton, Renderable, RGBA } from "@opentui/core"
 import { createStore } from "solid-js/store"
@@ -72,9 +72,10 @@ function init() {
     if (evt.defaultPrevented) return
     if ((evt.name === "escape" || (evt.ctrl && evt.name === "c")) && renderer.getSelection()?.getSelectedText()) return
     if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) {
-      const current = store.stack.at(-1)!
-      current.onClose?.()
+      const current = store.stack.at(-1)
+      if (!current) return
       setStore("stack", store.stack.slice(0, -1))
+      current.onClose?.()
       evt.preventDefault()
       evt.stopPropagation()
       refocus()
@@ -82,8 +83,10 @@ function init() {
   })
 
   let focus: Renderable | null
+  let refocusTimer: ReturnType<typeof setTimeout> | undefined
   function refocus() {
-    setTimeout(() => {
+    clearTimeout(refocusTimer)
+    refocusTimer = setTimeout(() => {
       if (!focus) return
       if (focus.isDestroyed) return
       function find(item: Renderable) {
@@ -98,6 +101,7 @@ function init() {
       focus.focus()
     }, 1)
   }
+  onCleanup(() => clearTimeout(refocusTimer))
 
   return {
     clear() {

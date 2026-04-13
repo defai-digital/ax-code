@@ -196,11 +196,12 @@ describe("session.prompt helpers", () => {
       },
     ] as any as MessageV2.WithParts[]
 
-    remindQueuedMessages(msgs, msgs[0].info as MessageV2.Assistant)
+    const next = remindQueuedMessages(msgs, msgs[0].info as MessageV2.Assistant)
 
-    expect((msgs[1].parts[0] as MessageV2.TextPart).text).toContain("The user sent the following message:")
-    expect((msgs[1].parts[0] as MessageV2.TextPart).text).toContain("Ship it")
-    expect((msgs[2].parts[0] as MessageV2.TextPart).text).toBe("ignored")
+    expect((next[1].parts[0] as MessageV2.TextPart).text).toContain("The user sent the following message:")
+    expect((next[1].parts[0] as MessageV2.TextPart).text).toContain("Ship it")
+    expect((next[2].parts[0] as MessageV2.TextPart).text).toBe("ignored")
+    expect((msgs[1].parts[0] as MessageV2.TextPart).text).toBe("Ship it")
   })
 
   test("does not mutate the original text part object when wrapping reminders", () => {
@@ -216,10 +217,10 @@ describe("session.prompt helpers", () => {
       },
     ] as any as MessageV2.WithParts[]
 
-    remindQueuedMessages(msgs, msgs[0].info as MessageV2.Assistant)
+    const next = remindQueuedMessages(msgs, msgs[0].info as MessageV2.Assistant)
 
     expect(part.text).toBe("Ship it")
-    expect((msgs[1].parts[0] as MessageV2.TextPart).text).toContain("The user sent the following message:")
+    expect((next[1].parts[0] as MessageV2.TextPart).text).toContain("The user sent the following message:")
   })
 
   test("loads compacted history on first loop pass and appends newer messages", async () => {
@@ -231,7 +232,9 @@ describe("session.prompt helpers", () => {
       filterCompacted: async () => first,
       after: async () => second,
     })
-    expect(loaded.msgs).toBe(first)
+    expect(loaded.cached).toBe(first)
+    expect(loaded.msgs).toEqual(first)
+    expect(loaded.msgs).not.toBe(first)
 
     const next = await loopMessages({
       sessionID: "ses_test" as any,

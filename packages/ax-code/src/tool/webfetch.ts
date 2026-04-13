@@ -4,15 +4,18 @@ import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
 import { abortAfterAny } from "../util/abort"
 import { Ssrf } from "../util/ssrf"
-import { WEBFETCH_MAX_RESPONSE_SIZE as MAX_RESPONSE_SIZE, WEBFETCH_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT, WEBFETCH_MAX_TIMEOUT as MAX_TIMEOUT } from "@/constants/network"
+import {
+  WEBFETCH_MAX_RESPONSE_SIZE as MAX_RESPONSE_SIZE,
+  WEBFETCH_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT,
+  WEBFETCH_MAX_TIMEOUT as MAX_TIMEOUT,
+} from "@/constants/network"
 import { Isolation } from "@/isolation"
 
 // Block SSRF to private/reserved IP ranges. Uses pinnedFetch to
 // resolve DNS once and connect to the validated IP directly —
 // prevents DNS rebinding attacks (BUG-15).
 const assertPublicUrl = (url: string) => Ssrf.assertPublicUrl(url, "webfetch")
-const pinnedFetch = (url: string, init?: RequestInit) =>
-  Ssrf.pinnedFetch(url, { ...init, label: "webfetch" })
+const pinnedFetch = (url: string, init?: RequestInit) => Ssrf.pinnedFetch(url, { ...init, label: "webfetch" })
 
 export const WebFetchTool = Tool.define("webfetch", {
   description: DESCRIPTION,
@@ -169,9 +172,6 @@ export const WebFetchTool = Tool.define("webfetch", {
 
       if (isImage) {
         const base64Content = Buffer.from(arrayBuffer).toString("base64")
-        if (base64Content.length > MAX_RESPONSE_SIZE) {
-          throw new Error("Response too large after image encoding")
-        }
         return {
           title,
           output: "Image fetched successfully",
@@ -242,14 +242,15 @@ export const WebFetchTool = Tool.define("webfetch", {
 
 async function extractTextFromHTML(html: string) {
   let text = ""
-  const SKIP_TAGS = new Set(["script", "style", "noscript", "iframe", "object", "embed"])
   let skipDepth = 0
 
   const rewriter = new HTMLRewriter()
-    .on("script, style, noscript, iframe, object, embed", {
+    .on("script, style, noscript, iframe, object", {
       element(element) {
         skipDepth++
-        element.onEndTag(() => { skipDepth-- })
+        element.onEndTag(() => {
+          skipDepth--
+        })
       },
     })
     .on("*", {

@@ -91,6 +91,7 @@ export function Autocomplete(props: {
   })
 
   const [positionTick, setPositionTick] = createSignal(0)
+  const [cursorTick, setCursorTick] = createSignal(0)
 
   createEffect(() => {
     if (store.visible) {
@@ -127,6 +128,7 @@ export function Autocomplete(props: {
     if (!store.visible) return
     // Track props.value to make memo reactive to text changes
     props.value // <- there surely is a better way to do this, like making .input() reactive
+    cursorTick()
 
     return props.input().getTextRange(store.index + 1, props.input().cursorOffset)
   })
@@ -487,6 +489,10 @@ export function Autocomplete(props: {
     })
   }
 
+  function refreshCursorAfterKey() {
+    setTimeout(() => setCursorTick((tick) => tick + 1), 0)
+  }
+
   function hide() {
     const text = props.input().plainText
     if (store.visible === "/" && !text.endsWith(" ") && text.startsWith("/")) {
@@ -582,6 +588,9 @@ export function Autocomplete(props: {
             }
             e.preventDefault()
             return
+          }
+          if (["left", "right", "home", "end"].includes(name ?? "")) {
+            refreshCursorAfterKey()
           }
         }
         if (!store.visible) {

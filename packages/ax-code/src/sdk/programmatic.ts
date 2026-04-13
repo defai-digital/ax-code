@@ -62,7 +62,12 @@ function last<T>(list: T[], test: (item: T) => boolean): T | undefined {
 // package's `withTimeout` already documents and avoids. Keeping this
 // one local so we can plug in a typed TimeoutError instead of the
 // util's generic Error.
-function withSdkTimeout<T>(promise: Promise<T>, ms: number, makeError: () => Error, onTimeout?: () => void): Promise<T> {
+function withSdkTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  makeError: () => Error,
+  onTimeout?: () => void,
+): Promise<T> {
   let settled = false
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -75,6 +80,7 @@ function withSdkTimeout<T>(promise: Promise<T>, ms: number, makeError: () => Err
         reject(e instanceof Error ? e : new Error(String(e)))
       }
     }, ms)
+    if (typeof timer === "object" && "unref" in timer) timer.unref()
     promise.then(
       (value) => {
         if (settled) return
@@ -144,7 +150,9 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>): StreamHandle {
   let cachedResult: RunResult | undefined
   let iteratorStarted = false
   let resolveCompletion: (() => void) | undefined
-  const completionPromise = new Promise<void>((r) => { resolveCompletion = r })
+  const completionPromise = new Promise<void>((r) => {
+    resolveCompletion = r
+  })
 
   async function* wrappedIterator(): AsyncGenerator<StreamEvent> {
     for await (const event of source) {
@@ -436,77 +444,77 @@ async function collectResult(
   let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 
   try {
-  for await (const event of events.stream) {
-    if (event.type === "message.updated") {
-      const info = (event as any).properties.info
-      if (info.role === "assistant") {
-        agent = info.agent ?? ""
-        modelInfo = { providerID: info.providerID ?? "", modelID: info.modelID ?? "" }
-        messageID = info.id
-      }
-    }
-
-    if (event.type === "message.part.updated") {
-      const part = (event as any).properties.part
-      if (part.sessionID !== sessionID) continue
-
-      if (part.type === "text" && part.time?.end) {
-        text = part.text ?? ""
-      }
-
-      if (part.type === "tool") {
-        if (part.state.status === "running" && hooks?.onToolCall) {
-          await hooks.onToolCall(part.tool, part.state.input)
+    for await (const event of events.stream) {
+      if (event.type === "message.updated") {
+        const info = (event as any).properties.info
+        if (info.role === "assistant") {
+          agent = info.agent ?? ""
+          modelInfo = { providerID: info.providerID ?? "", modelID: info.modelID ?? "" }
+          messageID = info.id
         }
-        if (part.state.status === "completed" || part.state.status === "error") {
-          toolCalls.push({
-            tool: part.tool,
-            input: part.state.input,
-            output: part.state.output ?? "",
-            status: part.state.status,
-          })
-          if (hooks?.onToolResult) {
-            await hooks.onToolResult(part.tool, part.state.output ?? "")
+      }
+
+      if (event.type === "message.part.updated") {
+        const part = (event as any).properties.part
+        if (part.sessionID !== sessionID) continue
+
+        if (part.type === "text" && part.time?.end) {
+          text = part.text ?? ""
+        }
+
+        if (part.type === "tool") {
+          if (part.state.status === "running" && hooks?.onToolCall) {
+            await hooks.onToolCall(part.tool, part.state.input)
+          }
+          if (part.state.status === "completed" || part.state.status === "error") {
+            toolCalls.push({
+              tool: part.tool,
+              input: part.state.input,
+              output: part.state.output ?? "",
+              status: part.state.status,
+            })
+            if (hooks?.onToolResult) {
+              await hooks.onToolResult(part.tool, part.state.output ?? "")
+            }
           }
         }
       }
-    }
 
-    if (event.type === "session.error") {
-      const errProps = (event as any).properties.error
-      const errMsg = errProps?.data?.message ?? errProps?.message ?? "Unknown error"
-      const err = classifyError(errMsg, errProps)
-      if (hooks?.onError) hooks.onError(err)
-      throw err
-    }
+      if (event.type === "session.error") {
+        const errProps = (event as any).properties.error
+        const errMsg = errProps?.data?.message ?? errProps?.message ?? "Unknown error"
+        const err = classifyError(errMsg, errProps)
+        if (hooks?.onError) hooks.onError(err)
+        throw err
+      }
 
-    if (event.type === "permission.asked") {
-      const perm = (event as any).properties
-      if (perm.sessionID !== sessionID) continue
-      const hookReply = hooks?.onPermissionRequest
-        ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
-        : "deny"
-      const reply = hookReply === "allow" ? "once" : "reject"
-      await sdk.permission.reply({ requestID: perm.id, reply })
-    }
+      if (event.type === "permission.asked") {
+        const perm = (event as any).properties
+        if (perm.sessionID !== sessionID) continue
+        const hookReply = hooks?.onPermissionRequest
+          ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
+          : "deny"
+        const reply = hookReply === "allow" ? "once" : "reject"
+        await sdk.permission.reply({ requestID: perm.id, reply })
+      }
 
-    if (event.type === "session.status") {
-      const props = (event as any).properties
-      if (props.sessionID === sessionID && props.status.type === "idle") {
-        const msgs = await sdk.session.messages({ sessionID })
-        const lastAssistant = last((msgs.data as any[]) ?? [], (m: any) => m.info?.role === "assistant")
-        if (lastAssistant?.info?.tokens) {
-          const t = lastAssistant.info.tokens
-          usage = {
-            promptTokens: t.input ?? 0,
-            completionTokens: t.output ?? 0,
-            totalTokens: t.total ?? ((t.input ?? 0) + (t.output ?? 0)),
+      if (event.type === "session.status") {
+        const props = (event as any).properties
+        if (props.sessionID === sessionID && props.status.type === "idle") {
+          const msgs = await sdk.session.messages({ sessionID })
+          const lastAssistant = last((msgs.data as any[]) ?? [], (m: any) => m.info?.role === "assistant")
+          if (lastAssistant?.info?.tokens) {
+            const t = lastAssistant.info.tokens
+            usage = {
+              promptTokens: t.input ?? 0,
+              completionTokens: t.output ?? 0,
+              totalTokens: t.total ?? (t.input ?? 0) + (t.output ?? 0),
+            }
           }
+          break
         }
-        break
       }
     }
-  }
   } finally {
     await closeEvents(events)
   }
@@ -584,7 +592,13 @@ async function* streamEvents(
             output: part.state.output ?? "",
             status: part.state.status,
           })
-          yield { type: "tool-result", tool: part.tool, output: part.state.output ?? "", id: part.id, status: part.state.status }
+          yield {
+            type: "tool-result",
+            tool: part.tool,
+            output: part.state.output ?? "",
+            id: part.id,
+            status: part.state.status,
+          }
           if (hooks?.onToolResult) await hooks.onToolResult(part.tool, part.state.output ?? "")
         }
       }
@@ -619,7 +633,7 @@ async function* streamEvents(
           usage = {
             promptTokens: t.input ?? 0,
             completionTokens: t.output ?? 0,
-            totalTokens: t.total ?? ((t.input ?? 0) + (t.output ?? 0)),
+            totalTokens: t.total ?? (t.input ?? 0) + (t.output ?? 0),
           }
         }
         // Get the final text from the stored message parts (not streamed text which may have echoes)
@@ -638,12 +652,20 @@ async function* streamEvents(
 // SESSION HANDLE
 // ============================================================
 
-function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: AgentOptions, isDisposed?: () => boolean): SessionHandle {
+function createSessionHandle(
+  sdk: OpencodeClient,
+  sessionID: string,
+  opts: AgentOptions,
+  isDisposed?: () => boolean,
+): SessionHandle {
   return {
-    get id() { return sessionID },
+    get id() {
+      return sessionID
+    },
 
     async run(message: string, options?: RunOptions): Promise<RunResult> {
-      const model = options?.model ?? (opts.model && opts.provider ? { providerID: opts.provider, modelID: opts.model } : undefined)
+      const model =
+        options?.model ?? (opts.model && opts.provider ? { providerID: opts.provider, modelID: opts.model } : undefined)
 
       const collect = async () => {
         const events = await sdk.event.subscribe()
@@ -662,9 +684,7 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
         }
         return result
       }
-      const resultPromise = opts.maxRetries
-        ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry)
-        : collect()
+      const resultPromise = opts.maxRetries ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry) : collect()
       const abortable = options?.signal
         ? withAbort(resultPromise, options.signal, () => {
             void sdk.session.abort({ sessionID }).catch(() => {})
@@ -679,9 +699,14 @@ function createSessionHandle(sdk: OpencodeClient, sessionID: string, opts: Agent
     },
 
     stream(message: string, options?: RunOptions): StreamHandle {
-      const model = options?.model ?? (opts.model && opts.provider ? { providerID: opts.provider, modelID: opts.model } : undefined)
+      const model =
+        options?.model ?? (opts.model && opts.provider ? { providerID: opts.provider, modelID: opts.model } : undefined)
       const rawStream = (async function* () {
         const events = await sdk.event.subscribe()
+        if (options?.signal?.aborted) {
+          await closeEvents(events)
+          return
+        }
         const abort = () => {
           void sdk.session.abort({ sessionID }).catch(() => {})
         }
@@ -856,12 +881,18 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
                 const session = await sdk.session.create()
                 const sessionID = (session.data as any)?.id
                 if (!sessionID) throw new Error("Failed to create session")
-                gen = createSessionHandle(sdk, sessionID, opts, () => disposed).stream(message, runOptions)[Symbol.asyncIterator]() as AsyncGenerator<StreamEvent>
+                gen = createSessionHandle(sdk, sessionID, opts, () => disposed)
+                  .stream(message, runOptions)
+                  [Symbol.asyncIterator]() as AsyncGenerator<StreamEvent>
               }
               return gen!.next()
             },
-            async return(v?: any) { return gen?.return?.(v) ?? { done: true as const, value: undefined } },
-            async throw(e?: any) { return gen?.throw?.(e) ?? { done: true as const, value: undefined } },
+            async return(v?: any) {
+              return gen?.return?.(v) ?? { done: true as const, value: undefined }
+            },
+            async throw(e?: any) {
+              return gen?.throw?.(e) ?? { done: true as const, value: undefined }
+            },
           }
         },
       }
@@ -879,7 +910,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     async tool(name: string, input: Record<string, unknown>): Promise<unknown> {
       if (disposed) throw new DisposedError()
       const toolsList = await sdk.tool.ids()
-      const available = Array.isArray(toolsList.data) ? toolsList.data as string[] : []
+      const available = Array.isArray(toolsList.data) ? (toolsList.data as string[]) : []
       if (!available.includes(name)) {
         throw new ToolError(name, `Not found. Available: ${available.join(", ")}`)
       }
@@ -888,11 +919,21 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
       if (!sessionID) throw new Error("Failed to create session")
       const events = await sdk.event.subscribe()
       const resultPromise = collectResult(sdk, events, sessionID, opts.hooks)
-      await sdk.session.prompt({
-        sessionID,
-        agent: "build",
-        parts: [{ type: "text", text: `Use the ${name} tool with these arguments: ${JSON.stringify(input)}. Only use this one tool, nothing else.` }],
-      })
+      try {
+        await sdk.session.prompt({
+          sessionID,
+          agent: "build",
+          parts: [
+            {
+              type: "text",
+              text: `Use the ${name} tool with these arguments: ${JSON.stringify(input)}. Only use this one tool, nothing else.`,
+            },
+          ],
+        })
+      } catch (err) {
+        await closeEvents(events)
+        throw err instanceof Error ? err : new Error(String(err))
+      }
       const result = await resultPromise
       const toolResult = result.toolCalls.find((t) => t.tool === name)
       return toolResult?.output ?? result.text
@@ -902,7 +943,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     async models(): Promise<string[]> {
       if (disposed) throw new DisposedError()
       const resp = await sdk.config.providers()
-      const wrapper = resp.data as any ?? {}
+      const wrapper = (resp.data as any) ?? {}
       const providers = Array.isArray(wrapper.providers) ? wrapper.providers : []
       const models: string[] = []
       for (const provider of providers) {

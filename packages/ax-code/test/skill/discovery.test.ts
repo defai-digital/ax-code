@@ -6,6 +6,7 @@ import { Filesystem } from "../../src/util/filesystem"
 import { rm } from "fs/promises"
 import path from "path"
 import dns from "dns/promises"
+import { createHash } from "crypto"
 
 let CLOUDFLARE_SKILLS_URL: string
 let downloadCount = 0
@@ -16,6 +17,8 @@ let lookupSpy: ReturnType<typeof spyOn>
 
 const fixturePath = path.join(import.meta.dir, "../fixture/skills")
 const cacheDir = path.join(Global.Path.cache, "skills")
+const safeSkillBody = "# Safe Skill"
+const safeSkillHash = createHash("sha256").update(safeSkillBody).digest("hex")
 
 beforeAll(async () => {
   await rm(cacheDir, { recursive: true, force: true })
@@ -39,12 +42,50 @@ beforeAll(async () => {
 
       if (url.pathname === "/external-file/index.json") {
         return Response.json({
-          skills: [{ name: "safe-skill", files: ["SKILL.md", "https://attacker.example/payload.md"] }],
+          skills: [
+            {
+              name: "safe-skill",
+              files: [
+                { path: "SKILL.md", sha256: safeSkillHash },
+                { path: "https://attacker.example/payload.md", sha256: "0".repeat(64) },
+              ],
+            },
+          ],
         })
       }
 
       if (url.pathname === "/external-file/safe-skill/SKILL.md") {
-        return new Response(`# Safe Skill`)
+        return new Response(safeSkillBody)
+      }
+
+      if (url.pathname === "/hashed-skill/index.json") {
+        return Response.json({
+          skills: [{ name: "safe-skill", files: [{ path: "SKILL.md", sha256: safeSkillHash }] }],
+        })
+      }
+
+      if (url.pathname === "/hashed-skill/safe-skill/SKILL.md") {
+        return new Response(safeSkillBody)
+      }
+
+      if (url.pathname === "/bad-hash/index.json") {
+        return Response.json({
+          skills: [{ name: "safe-skill", files: [{ path: "SKILL.md", sha256: "0".repeat(64) }] }],
+        })
+      }
+
+      if (url.pathname === "/bad-hash/safe-skill/SKILL.md") {
+        return new Response(safeSkillBody)
+      }
+
+      if (url.pathname === "/hashless-skill/index.json") {
+        return Response.json({
+          skills: [{ name: "safe-skill", files: ["SKILL.md"] }],
+        })
+      }
+
+      if (url.pathname === "/hashless-skill/safe-skill/SKILL.md") {
+        return new Response(safeSkillBody)
       }
 
       // route /.well-known/skills/* to the fixture directory
@@ -126,6 +167,27 @@ describe("Discovery.pull", () => {
     const dirs = await pull(`${origin}/external-file/`)
     expect(dirs.length).toBe(1)
     expect(externalFetchCount).toBe(0)
+  })
+
+  test("accepts skill files with matching sha256 integrity metadata", async () => {
+    await rm(path.join(cacheDir, "safe-skill"), { recursive: true, force: true })
+    const dirs = await pull(`${origin}/hashed-skill/`)
+    expect(dirs.length).toBe(1)
+    expect(await Filesystem.exists(path.join(cacheDir, "safe-skill", "SKILL.md"))).toBe(true)
+  })
+
+  test("rejects skill files with mismatched sha256 integrity metadata", async () => {
+    await rm(path.join(cacheDir, "safe-skill"), { recursive: true, force: true })
+    const dirs = await pull(`${origin}/bad-hash/`)
+    expect(dirs).toEqual([])
+    expect(await Filesystem.exists(path.join(cacheDir, "safe-skill", "SKILL.md"))).toBe(false)
+  })
+
+  test("rejects hashless skill file entries", async () => {
+    await rm(path.join(cacheDir, "safe-skill"), { recursive: true, force: true })
+    const dirs = await pull(`${origin}/hashless-skill/`)
+    expect(dirs).toEqual([])
+    expect(await Filesystem.exists(path.join(cacheDir, "safe-skill", "SKILL.md"))).toBe(false)
   })
 
   test("downloads reference files alongside SKILL.md", async () => {

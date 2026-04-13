@@ -1,5 +1,6 @@
 // Ripgrep utility functions
 import path from "path"
+import { createHash } from "crypto"
 import { Global } from "../global"
 import fs from "fs/promises"
 import z from "zod"
@@ -15,6 +16,7 @@ import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
 import { Log } from "@/util/log"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { Ssrf } from "@/util/ssrf"
 
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })
@@ -129,6 +131,36 @@ export namespace Ripgrep {
     }),
   )
 
+  export const IntegrityError = NamedError.create(
+    "RipgrepIntegrityError",
+    z.object({
+      url: z.string(),
+      expected: z.string(),
+      actual: z.string(),
+    }),
+  )
+
+  export const ChecksumParseError = NamedError.create(
+    "RipgrepChecksumParseError",
+    z.object({
+      url: z.string(),
+    }),
+  )
+
+  async function fetchReleaseAsset(url: string) {
+    const response = await Ssrf.pinnedFetch(url, { label: "ripgrep" })
+    if (!response.ok) throw new DownloadFailedError({ url, status: response.status })
+    return Buffer.from(await response.arrayBuffer())
+  }
+
+  async function fetchExpectedSha256(url: string) {
+    const checksumUrl = `${url}.sha256`
+    const body = await fetchReleaseAsset(checksumUrl).then((buffer) => buffer.toString("utf8"))
+    const match = body.match(/\b[a-f0-9]{64}\b/i)
+    if (!match) throw new ChecksumParseError({ url: checksumUrl })
+    return match[0].toLowerCase()
+  }
+
   const state = lazy(async () => {
     const system = which("rg")
     if (system) {
@@ -147,12 +179,15 @@ export namespace Ripgrep {
       const filename = `ripgrep-${version}-${config.platform}.${config.extension}`
       const url = `https://github.com/BurntSushi/ripgrep/releases/download/${version}/${filename}`
 
-      const response = await fetch(url)
-      if (!response.ok) throw new DownloadFailedError({ url, status: response.status })
+      const expectedHash = await fetchExpectedSha256(url)
+      const archive = await fetchReleaseAsset(url)
+      const actualHash = createHash("sha256").update(archive).digest("hex")
+      if (actualHash !== expectedHash) {
+        throw new IntegrityError({ url, expected: expectedHash, actual: actualHash })
+      }
 
-      const arrayBuffer = await response.arrayBuffer()
       const archivePath = path.join(Global.Path.bin, filename)
-      await Filesystem.write(archivePath, Buffer.from(arrayBuffer))
+      await Filesystem.write(archivePath, archive)
       if (config.extension === "tar.gz") {
         try {
           const args = ["tar", "-xzf", archivePath, "--strip-components=1"]
@@ -178,7 +213,7 @@ export namespace Ripgrep {
         }
       }
       if (config.extension === "zip") {
-        const zipFileReader = new ZipReader(new BlobReader(new Blob([arrayBuffer])))
+        const zipFileReader = new ZipReader(new BlobReader(new Blob([archive])))
         try {
           const entries = await zipFileReader.getEntries()
           let rgEntry: any

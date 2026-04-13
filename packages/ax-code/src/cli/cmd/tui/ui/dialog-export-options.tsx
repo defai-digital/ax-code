@@ -2,7 +2,7 @@ import { TextareaRenderable, TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
-import { onMount, Show, type JSX } from "solid-js"
+import { onMount, onCleanup, Show, type JSX } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 
 export type DialogExportOptionsProps = {
@@ -67,10 +67,11 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
 
   onMount(() => {
     dialog.setSize("medium")
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       if (!textarea || textarea.isDestroyed) return
       textarea.focus()
     }, 1)
+    onCleanup(() => clearTimeout(timer))
     textarea.gotoLineEnd()
   })
 

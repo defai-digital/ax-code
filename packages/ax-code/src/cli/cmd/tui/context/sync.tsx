@@ -194,9 +194,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       try {
         const headers: Record<string, string> = { accept: "application/json" }
         if (sdk.directory) {
-          const encoded = /[^\x00-\x7F]/.test(sdk.directory)
-            ? encodeURIComponent(sdk.directory)
-            : sdk.directory
+          const encoded = /[^\x00-\x7F]/.test(sdk.directory) ? encodeURIComponent(sdk.directory) : sdk.directory
           headers["x-ax-code-directory"] = encoded
           headers["x-opencode-directory"] = encoded
         }
@@ -275,9 +273,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       try {
         const headers: Record<string, string> = { accept: "application/json" }
         if (sdk.directory) {
-          const encoded = /[^\x00-\x7F]/.test(sdk.directory)
-            ? encodeURIComponent(sdk.directory)
-            : sdk.directory
+          const encoded = /[^\x00-\x7F]/.test(sdk.directory) ? encodeURIComponent(sdk.directory) : sdk.directory
           headers["x-ax-code-directory"] = encoded
           headers["x-opencode-directory"] = encoded
         }
@@ -290,7 +286,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       }
     }
 
-    sdk.event.listen((e) => {
+    const unsubscribeEvents = sdk.event.listen((e) => {
       const event = e.details
       switch (event.type) {
         case "server.instance.disposed":
@@ -571,6 +567,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         }
       }
     })
+    onCleanup(unsubscribeEvents)
 
     const exit = useExit()
     const args = useArgs()
@@ -638,7 +635,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           // non-blocking — each call is individually guarded so one failure
           // doesn't prevent the rest from completing or status from advancing.
           Promise.allSettled([
-            ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(mergeSorted(store.session, sessions))))]),
+            ...(args.continue
+              ? []
+              : [
+                  sessionListPromise.then((sessions) =>
+                    setStore("session", reconcile(mergeSorted(store.session, sessions))),
+                  ),
+                ]),
             sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data ?? []))),
             sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data ?? {}))),
             sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
@@ -656,7 +659,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             syncSmartLlm(),
           ]).then((results) => {
             for (const r of results) {
-              if (r.status === "rejected") Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
+              if (r.status === "rejected")
+                Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
             }
             setStore("status", "complete")
           })

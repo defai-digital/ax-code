@@ -6,6 +6,7 @@ import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
 import type { PromptInfo } from "./history"
+import { Log } from "@/util/log"
 
 export type StashEntry = {
   input: string
@@ -14,6 +15,13 @@ export type StashEntry = {
 }
 
 const MAX_STASH_ENTRIES = 50
+const log = Log.create({ service: "tui.prompt-stash" })
+
+function logStashWriteFailure(operation: string) {
+  return (error: unknown) => {
+    log.warn("prompt stash write failed", { operation, error })
+  }
+}
 
 export const { use: usePromptStash, provider: PromptStashProvider } = createSimpleContext({
   name: "PromptStash",
@@ -39,7 +47,7 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
       // Rewrite file with only valid entries to self-heal corruption
       if (lines.length > 0) {
         const content = lines.map((line) => JSON.stringify(line)).join("\n") + "\n"
-        writeFile(stashPath, content).catch(() => {})
+        writeFile(stashPath, content).catch(logStashWriteFailure("rewrite"))
       }
     })
 
@@ -66,11 +74,11 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
 
         if (trimmed) {
           const content = store.entries.map((line) => JSON.stringify(line)).join("\n") + "\n"
-          writeFile(stashPath, content).catch(() => {})
+          writeFile(stashPath, content).catch(logStashWriteFailure("trim"))
           return
         }
 
-        appendFile(stashPath, JSON.stringify(stash) + "\n").catch(() => {})
+        appendFile(stashPath, JSON.stringify(stash) + "\n").catch(logStashWriteFailure("append"))
       },
       pop() {
         if (store.entries.length === 0) return undefined
@@ -82,7 +90,7 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
         )
         const content =
           store.entries.length > 0 ? store.entries.map((line) => JSON.stringify(line)).join("\n") + "\n" : ""
-        writeFile(stashPath, content).catch(() => {})
+        writeFile(stashPath, content).catch(logStashWriteFailure("pop"))
         return entry
       },
       remove(index: number) {
@@ -94,7 +102,7 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
         )
         const content =
           store.entries.length > 0 ? store.entries.map((line) => JSON.stringify(line)).join("\n") + "\n" : ""
-        writeFile(stashPath, content).catch(() => {})
+        writeFile(stashPath, content).catch(logStashWriteFailure("remove"))
       },
     }
   },

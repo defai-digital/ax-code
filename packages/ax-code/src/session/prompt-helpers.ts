@@ -260,8 +260,9 @@ export async function agentInfo<T extends AgentLike = AgentInfo>(input: {
   const agent = await (input.get ?? Agent.get)(input.name)
   if (agent) return agent
 
-  const available = await (input.list ?? Agent.list)()
-    .then((items) => items.filter((item) => Agent.resolveTier(item) !== "internal").map((item) => item.name))
+  const available = await (input.list ?? Agent.list)().then((items) =>
+    items.filter((item) => Agent.resolveTier(item) !== "internal").map((item) => item.name),
+  )
   const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
   const error = new NamedError.Unknown({ message: `Agent not found: "${input.name}".${hint}` })
   if (input.report) input.report(input.sessionID, error.toObject())
@@ -286,7 +287,9 @@ export async function modelInfo<T = ModelInfo>(input: {
     if (Provider.ModelNotFoundError.isInstance(error)) {
       const { providerID, modelID, suggestions } = error.data
       const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : ""
-      const payload = new NamedError.Unknown({ message: `Model not found: ${providerID}/${modelID}.${hint}` }).toObject()
+      const payload = new NamedError.Unknown({
+        message: `Model not found: ${providerID}/${modelID}.${hint}`,
+      }).toObject()
       if (input.report) input.report(input.sessionID, payload)
       if (!input.report)
         Bus.publish(Session.Event.Error, {
@@ -309,7 +312,8 @@ export async function commandParts(input: {
   const base = await resolvePromptParts(input.template)
   const hasExtra = [...base, ...(input.parts ?? [])].some((item) => item.type !== "text")
   const subtask =
-    !hasExtra && ((input.agent.mode === "subagent" && input.command.subtask !== false) || input.command.subtask === true)
+    !hasExtra &&
+    ((input.agent.mode === "subagent" && input.command.subtask !== false) || input.command.subtask === true)
   if (!subtask) return { subtask, parts: [...base, ...(input.parts ?? [])] }
 
   return {
@@ -344,7 +348,8 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
       lastUserParts = msg.parts
     }
     if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
-    if (!lastFinished && msg.info.role === "assistant" && msg.info.finish) lastFinished = msg.info as MessageV2.Assistant
+    if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
+      lastFinished = msg.info as MessageV2.Assistant
     const found = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
     if (found.length > 0 && !lastFinished) tasks.push(...found)
     if (lastUser && lastFinished) break
@@ -360,8 +365,9 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
 }
 
 export function remindQueuedMessages(msgs: MessageV2.WithParts[], lastFinished?: MessageV2.Assistant) {
-  if (!lastFinished) return
+  if (!lastFinished) return msgs
   const REMINDER_PREFIX = "<system-reminder>\nThe user sent the following message:"
+  let result = msgs
   for (let i = 0; i < msgs.length; i++) {
     const msg = msgs[i]
     if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
@@ -375,23 +381,25 @@ export function remindQueuedMessages(msgs: MessageV2.WithParts[], lastFinished?:
       parts[j] = {
         ...part,
         text: [
-        "<system-reminder>",
-        "The user sent the following message:",
-        part.text,
-        "",
-        "Please address this message and continue with your tasks.",
-        "</system-reminder>",
+          "<system-reminder>",
+          "The user sent the following message:",
+          part.text,
+          "",
+          "Please address this message and continue with your tasks.",
+          "</system-reminder>",
         ].join("\n"),
       }
       changed = true
     }
     if (changed) {
-      msgs[i] = {
+      if (result === msgs) result = [...msgs]
+      result[i] = {
         ...msg,
         parts,
       }
     }
   }
+  return result
 }
 
 export async function loopMessages(input: {
@@ -403,7 +411,7 @@ export async function loopMessages(input: {
   if (!input.cached) {
     const msgs = await (input.filterCompacted ?? MessageV2.filterCompacted)(MessageV2.stream(input.sessionID))
     return {
-      msgs,
+      msgs: [...msgs],
       cached: msgs,
     }
   }
@@ -412,7 +420,7 @@ export async function loopMessages(input: {
   const newer = await (input.after ?? MessageV2.after)(input.sessionID, lastID)
   if (newer.length > 0) input.cached.push(...newer)
   return {
-    msgs: input.cached,
+    msgs: [...input.cached],
     cached: input.cached,
   }
 }

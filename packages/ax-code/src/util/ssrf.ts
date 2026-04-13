@@ -23,6 +23,9 @@ import net from "net"
 // could return a different address.
 
 export namespace Ssrf {
+  type PinnedFetchInit = RequestInit & { label?: string }
+  const MAX_REDIRECTS = 10
+
   function isPrivateIPv4(addr: string): boolean {
     const parts = addr.split(".").map((p) => parseInt(p, 10))
     if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false
@@ -36,6 +39,25 @@ export namespace Ssrf {
     if (a === 0) return true // 0.0.0.0/8
     if (a >= 224) return true // multicast / reserved
     return false
+  }
+
+  function isRedirect(status: number) {
+    return status >= 300 && status < 400
+  }
+
+  function redirectInit(init: PinnedFetchInit | undefined, status: number): PinnedFetchInit {
+    const headers = new Headers(init?.headers)
+    headers.delete("Host")
+
+    const next: PinnedFetchInit = { ...init, headers, redirect: "manual" }
+    const method = init?.method?.toUpperCase()
+    if (status === 303 || ((status === 301 || status === 302) && method && method !== "GET" && method !== "HEAD")) {
+      next.method = "GET"
+      delete next.body
+      headers.delete("content-length")
+      headers.delete("content-type")
+    }
+    return next
   }
 
   function isPrivateIPv6(addr: string): boolean {
@@ -88,11 +110,7 @@ export namespace Ssrf {
    * The URL is rewritten to use the resolved IP, and the original Host
    * header is set so TLS SNI and virtual hosting work correctly.
    */
-  export async function pinnedFetch(
-    url: string,
-    init?: RequestInit & { label?: string },
-  ): Promise<Response> {
-    const label = init?.label ?? "ssrf"
+  async function pinnedFetchOnce(url: string, init: PinnedFetchInit | undefined, label: string): Promise<Response> {
     const parsed = new URL(url)
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new Error(`${label}: unsupported URL scheme: ${parsed.protocol}`)
@@ -104,7 +122,8 @@ export namespace Ssrf {
     if (net.isIP(hostname)) {
       const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
-      return fetch(url, init)
+      const { label: _, ...fetchInit } = init ?? {}
+      return fetch(url, { ...fetchInit, redirect: "manual" })
     }
 
     // Resolve DNS once
@@ -138,9 +157,34 @@ export namespace Ssrf {
     return fetch(pinnedUrl.toString(), {
       ...fetchInit,
       headers,
+      redirect: "manual",
       // Bun supports `tls.serverName` for SNI override when connecting
       // to an IP that differs from the Host header
       ...(parsed.protocol === "https:" ? { tls: { serverName: hostname } } : {}),
     } as RequestInit)
+  }
+
+  export async function pinnedFetch(url: string, init?: PinnedFetchInit): Promise<Response> {
+    const label = init?.label ?? "ssrf"
+    const redirectMode = init?.redirect ?? "follow"
+    let currentUrl = url
+    let currentInit = { ...init, redirect: "manual" } as PinnedFetchInit
+
+    for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
+      const response = await pinnedFetchOnce(currentUrl, currentInit, label)
+      if (!isRedirect(response.status)) return response
+      if (redirectMode === "manual") return response
+      if (redirectMode === "error") throw new Error(`${label}: redirect refused: ${currentUrl}`)
+      if (redirectCount === MAX_REDIRECTS) {
+        throw new Error(`${label}: too many redirects while fetching: ${url}`)
+      }
+
+      const location = response.headers.get("location")
+      if (!location) return response
+      currentUrl = new URL(location, currentUrl).toString()
+      currentInit = redirectInit(currentInit, response.status)
+    }
+
+    throw new Error(`${label}: too many redirects while fetching: ${url}`)
   }
 }

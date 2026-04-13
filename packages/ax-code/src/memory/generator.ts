@@ -23,7 +23,10 @@ function estimateTokens(text: string): number {
 function truncateToTokens(text: string, maxTokens: number): string {
   const maxChars = maxTokens * 4
   if (text.length <= maxChars) return text
-  return text.slice(0, maxChars) + "\n... (truncated)"
+  let truncated = text.slice(0, maxChars)
+  const last = truncated.charCodeAt(truncated.length - 1)
+  if (last >= 0xd800 && last <= 0xdbff) truncated = truncated.slice(0, -1)
+  return truncated + "\n... (truncated)"
 }
 
 /**
@@ -31,7 +34,19 @@ function truncateToTokens(text: string, maxTokens: number): string {
  */
 async function scanStructure(root: string, depth: number): Promise<MemorySection> {
   const lines: string[] = []
-  const ignore = new Set(["node_modules", ".git", "dist", "build", ".next", ".nuxt", ".output", "coverage", "__pycache__", ".ax-code", ".vscode"])
+  const ignore = new Set([
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    ".output",
+    "coverage",
+    "__pycache__",
+    ".ax-code",
+    ".vscode",
+  ])
 
   async function walk(dir: string, prefix: string, currentDepth: number) {
     if (currentDepth > depth) return
@@ -97,25 +112,33 @@ async function scanConfig(root: string): Promise<MemorySection> {
     if (pkg.dependencies) {
       parts.push(`Dependencies: ${Object.keys(pkg.dependencies).length} packages`)
     }
-  } catch (e) { if (!isFileNotFound(e) && !(e instanceof SyntaxError)) throw e }
+  } catch (e) {
+    if (!isFileNotFound(e) && !(e instanceof SyntaxError)) throw e
+  }
 
   // tsconfig.json
   try {
     const text = await fs.readFile(path.join(root, "tsconfig.json"), "utf-8")
     parts.push(`TypeScript: configured`)
-  } catch (e) { if (!isFileNotFound(e)) throw e }
+  } catch (e) {
+    if (!isFileNotFound(e)) throw e
+  }
 
   // Docker
   try {
     await fs.access(path.join(root, "Dockerfile"))
     parts.push(`Docker: configured`)
-  } catch (e) { if (!isFileNotFound(e)) throw e }
+  } catch (e) {
+    if (!isFileNotFound(e)) throw e
+  }
 
   // Git
   try {
     await fs.access(path.join(root, ".git"))
     parts.push(`Git: initialized`)
-  } catch (e) { if (!isFileNotFound(e)) throw e }
+  } catch (e) {
+    if (!isFileNotFound(e)) throw e
+  }
 
   const content = parts.join("\n")
   return { content, tokens: estimateTokens(content) }
@@ -149,25 +172,33 @@ async function scanPatterns(root: string): Promise<MemorySection> {
     if (deps.includes("zod")) patterns.push("Validation: Zod")
     if (deps.includes("tailwindcss")) patterns.push("CSS: Tailwind")
     if (deps.includes("vitest") || deps.includes("jest")) patterns.push("Testing: configured")
-  } catch (e) { if (!isFileNotFound(e) && !(e instanceof SyntaxError)) throw e }
+  } catch (e) {
+    if (!isFileNotFound(e) && !(e instanceof SyntaxError)) throw e
+  }
 
   // Check for Python
   try {
     await fs.access(path.join(root, "pyproject.toml"))
     patterns.push("Language: Python")
-  } catch (e) { if (!isFileNotFound(e)) throw e }
+  } catch (e) {
+    if (!isFileNotFound(e)) throw e
+  }
 
   // Check for Go
   try {
     await fs.access(path.join(root, "go.mod"))
     patterns.push("Language: Go")
-  } catch (e) { if (!isFileNotFound(e)) throw e }
+  } catch (e) {
+    if (!isFileNotFound(e)) throw e
+  }
 
   // Check for Rust
   try {
     await fs.access(path.join(root, "Cargo.toml"))
     patterns.push("Language: Rust")
-  } catch (e) { if (!isFileNotFound(e)) throw e }
+  } catch (e) {
+    if (!isFileNotFound(e)) throw e
+  }
 
   const content = patterns.join("\n")
   return { content, tokens: estimateTokens(content) }
@@ -200,7 +231,12 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   const sections: ProjectMemory["sections"] = {}
   let remaining = maxTokens
 
-  for (const [key, section] of [["patterns", patterns], ["config", config], ["structure", structure], ["readme", readme]] as const) {
+  for (const [key, section] of [
+    ["patterns", patterns],
+    ["config", config],
+    ["structure", structure],
+    ["readme", readme],
+  ] as const) {
     if (section.tokens > 0 && remaining > 0) {
       const content = truncateToTokens(section.content, remaining)
       const tokens = estimateTokens(content)
@@ -212,7 +248,9 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   totalTokens = Object.values(sections).reduce((sum, s) => sum + (s?.tokens ?? 0), 0)
 
   // Content hash for change detection
-  const allContent = Object.values(sections).map((s) => s?.content ?? "").join("\n")
+  const allContent = Object.values(sections)
+    .map((s) => s?.content ?? "")
+    .join("\n")
   const contentHash = crypto.createHash("sha256").update(allContent).digest("hex").slice(0, 16)
 
   const now = new Date().toISOString()

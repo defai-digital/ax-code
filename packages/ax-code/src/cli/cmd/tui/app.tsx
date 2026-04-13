@@ -3,7 +3,19 @@ import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 import { MouseButton, TextAttributes } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
-import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, Show, on } from "solid-js"
+import {
+  Switch,
+  Match,
+  createEffect,
+  untrack,
+  ErrorBoundary,
+  createSignal,
+  onMount,
+  batch,
+  Show,
+  on,
+  onCleanup,
+} from "solid-js"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
 import { Flag } from "@/flag/flag"
 import semver from "semver"
@@ -43,6 +55,7 @@ import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { Log } from "@/util/log"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -134,57 +147,55 @@ export function tui(input: {
       resolve()
     }
 
-    renderTui(
-      () => {
-        return (
-          <ErrorBoundary
-            fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}
-          >
-            <ArgsProvider {...input.args}>
-              <ExitProvider onExit={onExit}>
-                <KVProvider>
-                  <ToastProvider>
-                    <RouteProvider>
-                      <TuiConfigProvider config={input.config}>
-                        <SDKProvider
-                          url={input.url}
-                          directory={input.directory}
-                          fetch={input.fetch}
-                          headers={input.headers}
-                          events={input.events}
-                        >
-                          <SyncProvider>
-                            <ThemeProvider mode={mode}>
-                              <LocalProvider>
-                                <KeybindProvider>
-                                  <PromptStashProvider>
-                                    <DialogProvider>
-                                      <CommandProvider>
-                                        <FrecencyProvider>
-                                          <PromptHistoryProvider>
-                                            <PromptRefProvider>
-                                              <App onSnapshot={input.onSnapshot} />
-                                            </PromptRefProvider>
-                                          </PromptHistoryProvider>
-                                        </FrecencyProvider>
-                                      </CommandProvider>
-                                    </DialogProvider>
-                                  </PromptStashProvider>
-                                </KeybindProvider>
-                              </LocalProvider>
-                            </ThemeProvider>
-                          </SyncProvider>
-                        </SDKProvider>
-                      </TuiConfigProvider>
-                    </RouteProvider>
-                  </ToastProvider>
-                </KVProvider>
-              </ExitProvider>
-            </ArgsProvider>
-          </ErrorBoundary>
-        )
-      },
-    )
+    renderTui(() => {
+      return (
+        <ErrorBoundary
+          fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}
+        >
+          <ArgsProvider {...input.args}>
+            <ExitProvider onExit={onExit}>
+              <KVProvider>
+                <ToastProvider>
+                  <RouteProvider>
+                    <TuiConfigProvider config={input.config}>
+                      <SDKProvider
+                        url={input.url}
+                        directory={input.directory}
+                        fetch={input.fetch}
+                        headers={input.headers}
+                        events={input.events}
+                      >
+                        <SyncProvider>
+                          <ThemeProvider mode={mode}>
+                            <LocalProvider>
+                              <KeybindProvider>
+                                <PromptStashProvider>
+                                  <DialogProvider>
+                                    <CommandProvider>
+                                      <FrecencyProvider>
+                                        <PromptHistoryProvider>
+                                          <PromptRefProvider>
+                                            <App onSnapshot={input.onSnapshot} />
+                                          </PromptRefProvider>
+                                        </PromptHistoryProvider>
+                                      </FrecencyProvider>
+                                    </CommandProvider>
+                                  </DialogProvider>
+                                </PromptStashProvider>
+                              </KeybindProvider>
+                            </LocalProvider>
+                          </ThemeProvider>
+                        </SyncProvider>
+                      </SDKProvider>
+                    </TuiConfigProvider>
+                  </RouteProvider>
+                </ToastProvider>
+              </KVProvider>
+            </ExitProvider>
+          </ArgsProvider>
+        </ErrorBoundary>
+      )
+    })
   })
 }
 
@@ -321,13 +332,21 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   createEffect(() => {
     if (forked || sync.status !== "complete" || !args.sessionID || !args.fork) return
     forked = true
-    sdk.client.session.fork({ sessionID: args.sessionID }).then((result) => {
-      if (result.data?.id) {
-        route.navigate({ type: "session", sessionID: result.data.id })
-      } else {
+    sdk.client.session
+      .fork({ sessionID: args.sessionID })
+      .then((result) => {
+        if (result.data?.id) {
+          route.navigate({ type: "session", sessionID: result.data.id })
+        } else {
+          toast.show({ message: "Failed to fork session", variant: "error" })
+          forked = false
+        }
+      })
+      .catch((error) => {
+        Log.Default.warn("failed to fork startup session", { sessionID: args.sessionID, error })
         toast.show({ message: "Failed to fork session", variant: "error" })
-      }
-    })
+        forked = false
+      })
   })
 
   createEffect(
@@ -741,103 +760,108 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     },
   ])
 
-  sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
-    command.trigger(evt.properties.command)
-  })
+  const eventUnsubs = [
+    sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
+      command.trigger(evt.properties.command)
+    }),
 
-  sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
-    toast.show({
-      title: evt.properties.title,
-      message: evt.properties.message,
-      variant: evt.properties.variant,
-      duration: evt.properties.duration,
-    })
-  })
-
-  sdk.event.on(TuiEvent.SessionSelect.type, (evt) => {
-    route.navigate({
-      type: "session",
-      sessionID: evt.properties.sessionID,
-    })
-  })
-
-  sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {
-    if (route.data.type === "session" && route.data.sessionID === evt.properties.info.id) {
-      route.navigate({ type: "home" })
+    sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
       toast.show({
-        variant: "info",
-        message: "The current session was deleted",
+        title: evt.properties.title,
+        message: evt.properties.message,
+        variant: evt.properties.variant,
+        duration: evt.properties.duration,
       })
-    }
-  })
+    }),
 
-  sdk.event.on(SessionApi.Event.Error.type, (evt) => {
-    const error = evt.properties.error
-    if (error && typeof error === "object" && error.name === "MessageAbortedError") return
-    const message = (() => {
-      if (!error) return "An error occurred"
+    sdk.event.on(TuiEvent.SessionSelect.type, (evt) => {
+      route.navigate({
+        type: "session",
+        sessionID: evt.properties.sessionID,
+      })
+    }),
 
-      if (typeof error === "object") {
-        const data = error.data
-        if (data && typeof data === "object" && "message" in data && typeof data.message === "string") {
-          return data.message
-        }
+    sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {
+      if (route.data.type === "session" && route.data.sessionID === evt.properties.info.id) {
+        route.navigate({ type: "home" })
+        toast.show({
+          variant: "info",
+          message: "The current session was deleted",
+        })
       }
-      return String(error)
-    })()
+    }),
 
-    toast.show({
-      variant: "error",
-      message,
-      duration: 5000,
-    })
-  })
+    sdk.event.on(SessionApi.Event.Error.type, (evt) => {
+      const error = evt.properties.error
+      if (error && typeof error === "object" && error.name === "MessageAbortedError") return
+      const message = (() => {
+        if (!error) return "An error occurred"
 
-  sdk.event.on("installation.update-available", async (evt) => {
-    const version = evt.properties.version
+        if (typeof error === "object") {
+          const data = error.data
+          if (data && typeof data === "object" && "message" in data && typeof data.message === "string") {
+            return data.message
+          }
+        }
+        return String(error)
+      })()
 
-    const skipped = kv.get("skipped_version")
-    if (skipped && !semver.gt(version, skipped)) return
-
-    const choice = await DialogConfirm.show(
-      dialog,
-      `Update Available`,
-      `A new release v${version} is available. Would you like to update now?`,
-      "skip",
-    )
-
-    if (choice === false) {
-      kv.set("skipped_version", version)
-      return
-    }
-
-    if (choice !== true) return
-
-    toast.show({
-      variant: "info",
-      message: `Updating to v${version}...`,
-      duration: 30000,
-    })
-
-    const result = await sdk.client.global.upgrade({ target: version })
-
-    if (result.error || !result.data?.success) {
       toast.show({
         variant: "error",
-        title: "Update Failed",
-        message: "Update failed",
-        duration: 10000,
+        message,
+        duration: 5000,
       })
-      return
-    }
+    }),
 
-    await DialogAlert.show(
-      dialog,
-      "Update Complete",
-      `Successfully updated to ax-code v${result.data.version}. Please restart the application.`,
-    )
+    sdk.event.on("installation.update-available", async (evt) => {
+      const version = evt.properties.version
 
-    exit()
+      const skipped = kv.get("skipped_version")
+      if (skipped && !semver.gt(version, skipped)) return
+
+      const choice = await DialogConfirm.show(
+        dialog,
+        `Update Available`,
+        `A new release v${version} is available. Would you like to update now?`,
+        "skip",
+      )
+
+      if (choice === false) {
+        kv.set("skipped_version", version)
+        return
+      }
+
+      if (choice !== true) return
+
+      toast.show({
+        variant: "info",
+        message: `Updating to v${version}...`,
+        duration: 30000,
+      })
+
+      const result = await sdk.client.global.upgrade({ target: version })
+
+      if (result.error || !result.data?.success) {
+        toast.show({
+          variant: "error",
+          title: "Update Failed",
+          message: "Update failed",
+          duration: 10000,
+        })
+        return
+      }
+
+      await DialogAlert.show(
+        dialog,
+        "Update Complete",
+        `Successfully updated to ax-code v${result.data.version}. Please restart the application.`,
+      )
+
+      exit()
+    }),
+  ]
+  onCleanup(() => {
+    for (const unsub of eventUnsubs) unsub()
   })
 
   return (

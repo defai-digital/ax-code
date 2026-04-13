@@ -209,7 +209,14 @@ export namespace SessionPrompt {
     }
     const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
       executionError = error
-      log.error("subtask execution failed", { command: "session.prompt.subtask", status: "error", error, agent: task.agent, description: task.description, sessionID })
+      log.error("subtask execution failed", {
+        command: "session.prompt.subtask",
+        status: "error",
+        error,
+        agent: task.agent,
+        description: task.description,
+        sessionID,
+      })
       return undefined
     })
     const attachments = result?.attachments?.map((attachment) => ({
@@ -461,7 +468,12 @@ export namespace SessionPrompt {
       // Queued messages are waiting — re-enter the loop to process them.
       // Mirrors the pattern in shell() at lines 1681-1692.
       loop({ sessionID, resume_existing: true }).catch((error) => {
-        log.error("session loop failed to resume for queued messages", { command: "session.prompt.loop", status: "error", sessionID, error })
+        log.error("session loop failed to resume for queued messages", {
+          command: "session.prompt.loop",
+          status: "error",
+          sessionID,
+          error,
+        })
         cancel(sessionID)
       })
     })
@@ -517,7 +529,13 @@ export namespace SessionPrompt {
       await SessionStatus.set(sessionID, { type: "busy", step, maxSteps: GLOBAL_STEP_LIMIT })
       log.info("loop", { command: "session.prompt.loop", status: "started", step, sessionID, consecutiveErrors })
       if (step > 0 && step % 10 === 0) {
-        log.warn("long-running task", { command: "session.prompt.loop", status: "ok", step, sessionID, message: `Agent has been working for ${step} steps` })
+        log.warn("long-running task", {
+          command: "session.prompt.loop",
+          status: "ok",
+          step,
+          sessionID,
+          message: `Agent has been working for ${step} steps`,
+        })
       }
       if (abort.aborted) {
         reason = "aborted"
@@ -536,24 +554,43 @@ export namespace SessionPrompt {
           cachedMsgs = undefined
           cachedAgent = undefined
           cachedModel = undefined
-          log.info("autonomous auto-continue", { command: "session.prompt.loop", status: "ok", sessionID, continuation: continuations, maxContinuations })
+          log.info("autonomous auto-continue", {
+            command: "session.prompt.loop",
+            status: "ok",
+            sessionID,
+            continuation: continuations,
+            maxContinuations,
+          })
           const lastMsgs = await Session.messages({ sessionID })
           const lastUserInfo = lastMsgs.filter((m) => m.info.role === "user").pop()?.info as MessageV2.User | undefined
           await createUserMessage({
             sessionID,
-            parts: [{ type: "text", text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations}/${maxContinuations}. Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, and verify before expanding scope.` }],
+            parts: [
+              {
+                type: "text",
+                text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations}/${maxContinuations}. Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, and verify before expanding scope.`,
+              },
+            ],
             agent: lastUserInfo?.agent,
             model: lastUserInfo?.model,
           })
           continue
         }
-        log.warn("global step limit reached", { command: "session.prompt.loop", status: "error", errorCode: "STEP_LIMIT", step, sessionID, continuations })
+        log.warn("global step limit reached", {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "STEP_LIMIT",
+          step,
+          sessionID,
+          continuations,
+        })
         Bus.publish(Session.Event.Error, {
           sessionID,
           error: new NamedError.Unknown({
-            message: `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT} steps${continuations > 0 ? ` after ${continuations} auto-continuations` : ""}). `
-              + `To increase, set "session.max_steps" in ax-code.json. `
-              + `Try breaking the task into smaller parts or increase the limit for complex autonomous tasks.`,
+            message:
+              `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT} steps${continuations > 0 ? ` after ${continuations} auto-continuations` : ""}). ` +
+              `To increase, set "session.max_steps" in ax-code.json. ` +
+              `Try breaking the task into smaller parts or increase the limit for complex autonomous tasks.`,
           }).toObject(),
         })
         reason = "step_limit"
@@ -581,7 +618,10 @@ export namespace SessionPrompt {
         !tasks.some((t) => t.type === "subtask") &&
         lastUser.id < lastAssistant.id
       ) {
-        log.warn("model returned unknown finish with no actionable output", { command: "session.prompt.loop", sessionID })
+        log.warn("model returned unknown finish with no actionable output", {
+          command: "session.prompt.loop",
+          sessionID,
+        })
         reason = "completed"
         break
       }
@@ -651,16 +691,17 @@ export namespace SessionPrompt {
       }
 
       const modelKey = `${lastUser.model.providerID}/${lastUser.model.modelID}`
-      const model = cachedModel?.key === modelKey
-        ? cachedModel.value
-        : await modelInfo({
-          sessionID,
-          providerID: lastUser.model.providerID,
-          modelID: lastUser.model.modelID,
-        }).catch((e) => {
-          reason = "error"
-          throw e
-        })
+      const model =
+        cachedModel?.key === modelKey
+          ? cachedModel.value
+          : await modelInfo({
+              sessionID,
+              providerID: lastUser.model.providerID,
+              modelID: lastUser.model.modelID,
+            }).catch((e) => {
+              reason = "error"
+              throw e
+            })
       cachedModel = { key: modelKey, value: model }
       const task = tasks.pop()
 
@@ -705,12 +746,13 @@ export namespace SessionPrompt {
       }
 
       // normal processing
-      const agent = cachedAgent?.key === lastUser.agent
-        ? cachedAgent.value
-        : await agentInfo({ sessionID, name: lastUser.agent }).catch((error) => {
-          reason = "error"
-          throw error
-        })
+      const agent =
+        cachedAgent?.key === lastUser.agent
+          ? cachedAgent.value
+          : await agentInfo({ sessionID, name: lastUser.agent }).catch((error) => {
+              reason = "error"
+              throw error
+            })
       cachedAgent = { key: lastUser.agent, value: agent }
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
@@ -784,13 +826,18 @@ export namespace SessionPrompt {
           },
           msgs,
         ).catch(async (e) => {
-          log.warn("summarize failed, setting fallback title", { command: "session.prompt.summarize", status: "error", sessionID, error: e })
+          log.warn("summarize failed, setting fallback title", {
+            command: "session.prompt.summarize",
+            status: "error",
+            sessionID,
+            error: e,
+          })
           await Session.setTitle({ sessionID, title: "Untitled session" }).catch(() => {})
         })
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
-      if (step > 1) remindQueuedMessages(msgs, lastFinished)
+      if (step > 1) msgs = remindQueuedMessages(msgs, lastFinished)
 
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
@@ -863,9 +910,23 @@ export namespace SessionPrompt {
       // Track consecutive errors — break if agent is stuck
       if (processor.message.error) {
         consecutiveErrors++
-        log.warn("consecutive error", { command: "session.prompt.loop", status: "error", errorCode: "CONSECUTIVE_ERROR", consecutiveErrors, step, sessionID, error: processor.message.error })
+        log.warn("consecutive error", {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "CONSECUTIVE_ERROR",
+          consecutiveErrors,
+          step,
+          sessionID,
+          error: processor.message.error,
+        })
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-          log.warn("too many consecutive errors, stopping", { command: "session.prompt.loop", status: "error", errorCode: "MAX_CONSECUTIVE_ERRORS", consecutiveErrors, sessionID })
+          log.warn("too many consecutive errors, stopping", {
+            command: "session.prompt.loop",
+            status: "error",
+            errorCode: "MAX_CONSECUTIVE_ERRORS",
+            consecutiveErrors,
+            sessionID,
+          })
           Bus.publish(Session.Event.Error, {
             sessionID,
             error: new NamedError.Unknown({
@@ -890,7 +951,9 @@ export namespace SessionPrompt {
       }
       continue
     }
-    SessionCompaction.prune({ sessionID }).catch((e) => log.warn("prune failed", { command: "session.prompt.prune", status: "error", sessionID, error: e }))
+    SessionCompaction.prune({ sessionID }).catch((e) =>
+      log.warn("prune failed", { command: "session.prompt.prune", status: "error", sessionID, error: e }),
+    )
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       const queued = state()[sessionID]?.callbacks ?? []
@@ -919,7 +982,8 @@ export namespace SessionPrompt {
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
-    const isolation = input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory, Instance.worktree)
+    const isolation =
+      input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory, Instance.worktree)
     // Cache transformed schemas across steps — key: "toolId:npm"
     if (!_schemaCache) _schemaCache = new Map()
     const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
@@ -966,30 +1030,29 @@ export namespace SessionPrompt {
     )) {
       const cacheKey = schemaCacheKey(item.id)
       const cached = _schemaCache!.get(cacheKey)
-      const schema = cached !== undefined
-        ? (// LRU: move to end so recently-used entries survive eviction
-          _schemaCache!.delete(cacheKey),
-          _schemaCache!.set(cacheKey, cached),
-          cached)
-        : (() => {
-          const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
-          // Bound the cache to avoid a slow memory leak in long-running
-          // processes (TUI/daemon) that accumulate tool×model entries
-          // across session lifetimes. LRU eviction: when we reach the
-          // cap, drop the 100 least-recently-used entries. Maps preserve
-          // insertion order, so `.keys()` iterates oldest first.
-          const SCHEMA_CACHE_MAX = 500
-          if (_schemaCache!.size >= SCHEMA_CACHE_MAX) {
-            const drop = 100
-            let dropped = 0
-            for (const key of _schemaCache!.keys()) {
-              _schemaCache!.delete(key)
-              if (++dropped >= drop) break
-            }
-          }
-          _schemaCache!.set(cacheKey, s)
-          return s
-        })()
+      const schema =
+        cached !== undefined
+          ? // LRU: move to end so recently-used entries survive eviction
+            (_schemaCache!.delete(cacheKey), _schemaCache!.set(cacheKey, cached), cached)
+          : (() => {
+              const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+              // Bound the cache to avoid a slow memory leak in long-running
+              // processes (TUI/daemon) that accumulate tool×model entries
+              // across session lifetimes. LRU eviction: when we reach the
+              // cap, drop the 100 least-recently-used entries. Maps preserve
+              // insertion order, so `.keys()` iterates oldest first.
+              const SCHEMA_CACHE_MAX = 500
+              if (_schemaCache!.size >= SCHEMA_CACHE_MAX) {
+                const drop = 100
+                let dropped = 0
+                for (const key of _schemaCache!.keys()) {
+                  _schemaCache!.delete(key)
+                  if (++dropped >= drop) break
+                }
+              }
+              _schemaCache!.set(cacheKey, s)
+              return s
+            })()
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
@@ -1068,7 +1131,10 @@ export namespace SessionPrompt {
         _schemaCache!.delete(mcpCacheKey)
         _schemaCache!.set(mcpCacheKey, transformed)
       } else {
-        transformed = ProviderTransform.schema(input.model, await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema))
+        transformed = ProviderTransform.schema(
+          input.model,
+          await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema),
+        )
         _schemaCache!.set(mcpCacheKey, transformed)
       }
       mcpTool.inputSchema = jsonSchema(transformed)
@@ -1170,9 +1236,7 @@ export namespace SessionPrompt {
     const messageID = input.messageID ?? MessageID.ascending()
     let agentName = input.agent || (await Agent.defaultAgent())
     const cfg = await Config.get()
-    const routingMode =
-      cfg.routing?.mode ??
-      (cfg.routing?.auto_switch === true ? "switch" : "delegate")
+    const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === true ? "switch" : "delegate")
     const msgs = await Session.messages({ sessionID: input.sessionID })
     const hasUser = msgs.some((msg) => msg.info.role === "user")
     const messageText = input.parts
@@ -1184,7 +1248,8 @@ export namespace SessionPrompt {
     const hasNonTextPart = input.parts.some((p) => p.type !== "text")
     const canDelegate = routingMode === "delegate" && !hasNonTextPart
     const canSwitch = routingMode === "switch"
-    const skipRouting = input.userSelectedAgent || hasAgentPart || routingMode === "off" || !hasUser || (!canSwitch && !canDelegate)
+    const skipRouting =
+      input.userSelectedAgent || hasAgentPart || routingMode === "off" || !hasUser || (!canSwitch && !canDelegate)
     const routedParts: PromptInput["parts"] = [...input.parts]
     if (messageText && !skipRouting) {
       const routeResult = await routeAgent(messageText, agentName)
@@ -1206,7 +1271,14 @@ export namespace SessionPrompt {
           const routedLabel = routedAgent.displayName ?? routeResult.agent
           if (canSwitch) {
             agentName = routeResult.agent
-            log.info("auto-routed to agent", { command: "session.prompt.route", status: "ok", sessionID: input.sessionID, agent: routeResult.agent, confidence: routeResult.confidence, mode: "switch" })
+            log.info("auto-routed to agent", {
+              command: "session.prompt.route",
+              status: "ok",
+              sessionID: input.sessionID,
+              agent: routeResult.agent,
+              confidence: routeResult.confidence,
+              mode: "switch",
+            })
             Bus.publish(TuiEvent.ToastShow, {
               title: "Primary Agent Auto-Switched",
               message: `Switched the primary agent to "${routedLabel}" for this task`,
@@ -1220,7 +1292,14 @@ export namespace SessionPrompt {
               description: `${routedLabel} specialist review`,
               prompt: `Use your ${routedLabel} specialty for this request:\n\n${messageText}\n\nReturn concise findings and actionable guidance for the parent agent.`,
             })
-            log.info("auto-delegated to agent", { command: "session.prompt.route", status: "ok", sessionID: input.sessionID, agent: routeResult.agent, confidence: routeResult.confidence, mode: "delegate" })
+            log.info("auto-delegated to agent", {
+              command: "session.prompt.route",
+              status: "ok",
+              sessionID: input.sessionID,
+              agent: routeResult.agent,
+              confidence: routeResult.confidence,
+              mode: "delegate",
+            })
             Bus.publish(TuiEvent.ToastShow, {
               title: "Specialist Auto-Delegated",
               message: `Kept the primary agent active and delegated "${routedLabel}" as a specialist`,
@@ -1264,7 +1343,14 @@ export namespace SessionPrompt {
           // before checking the protocol we check if this is an mcp resource because it needs special handling
           if (part.source?.type === "resource") {
             const { clientName, uri } = part.source
-            log.info("mcp resource", { command: "session.prompt.mcpResource", status: "started", sessionID: input.sessionID, clientName, uri, mime: part.mime })
+            log.info("mcp resource", {
+              command: "session.prompt.mcpResource",
+              status: "started",
+              sessionID: input.sessionID,
+              clientName,
+              uri,
+              mime: part.mime,
+            })
 
             const pieces: Draft<MessageV2.Part>[] = [
               {
@@ -1315,7 +1401,15 @@ export namespace SessionPrompt {
                 sessionID: input.sessionID,
               })
             } catch (error: unknown) {
-              log.error("failed to read MCP resource", { command: "session.prompt.mcpResource", status: "error", errorCode: "MCP_RESOURCE_READ", sessionID: input.sessionID, error, clientName, uri })
+              log.error("failed to read MCP resource", {
+                command: "session.prompt.mcpResource",
+                status: "error",
+                errorCode: "MCP_RESOURCE_READ",
+                sessionID: input.sessionID,
+                error,
+                clientName,
+                uri,
+              })
               const message = NamedError.message(error)
               pieces.push({
                 messageID: info.id,
@@ -1356,7 +1450,12 @@ export namespace SessionPrompt {
               }
               break
             case "file:":
-              log.info("file", { command: "session.prompt.fileAttach", status: "started", sessionID: input.sessionID, mime: part.mime })
+              log.info("file", {
+                command: "session.prompt.fileAttach",
+                status: "started",
+                sessionID: input.sessionID,
+                mime: part.mime,
+              })
               // have to normalize, symbol search returns absolute paths
               // Decode the pathname since URL constructor doesn't automatically decode it
               const filepath = fileURLToPath(part.url)
@@ -1364,7 +1463,12 @@ export namespace SessionPrompt {
               // Path containment: reject file:// paths outside the project directory
               // and resolve symlinks to prevent symlink escapes (BUG-001, BUG-002)
               if (!Instance.containsPath(filepath)) {
-                log.warn("file attachment outside project", { command: "session.prompt.fileAttach", status: "denied", sessionID: input.sessionID, filepath })
+                log.warn("file attachment outside project", {
+                  command: "session.prompt.fileAttach",
+                  status: "denied",
+                  sessionID: input.sessionID,
+                  filepath,
+                })
                 return [
                   {
                     messageID: info.id,
@@ -1377,7 +1481,13 @@ export namespace SessionPrompt {
               }
               const realFilepath = await fs.realpath(filepath).catch(() => null)
               if (realFilepath && !Instance.containsPath(realFilepath)) {
-                log.warn("file attachment symlink escapes project", { command: "session.prompt.fileAttach", status: "denied", sessionID: input.sessionID, filepath, realFilepath })
+                log.warn("file attachment symlink escapes project", {
+                  command: "session.prompt.fileAttach",
+                  status: "denied",
+                  sessionID: input.sessionID,
+                  filepath,
+                  realFilepath,
+                })
                 return [
                   {
                     messageID: info.id,
@@ -1492,7 +1602,13 @@ export namespace SessionPrompt {
                     }
                   })
                   .catch((error) => {
-                    log.error("failed to read file", { command: "session.prompt.readFile", status: "error", errorCode: "FILE_READ", sessionID: input.sessionID, error })
+                    log.error("failed to read file", {
+                      command: "session.prompt.readFile",
+                      status: "error",
+                      errorCode: "FILE_READ",
+                      sessionID: input.sessionID,
+                      error,
+                    })
                     const message = error instanceof Error ? error.message : error.toString()
                     Bus.publish(Session.Event.Error, {
                       sessionID: input.sessionID,
@@ -1550,7 +1666,13 @@ export namespace SessionPrompt {
                     ]
                   })
                   .catch((error) => {
-                    log.error("failed to read directory", { command: "session.prompt.readDir", status: "error", errorCode: "DIR_READ", sessionID: input.sessionID, error })
+                    log.error("failed to read directory", {
+                      command: "session.prompt.readDir",
+                      status: "error",
+                      errorCode: "DIR_READ",
+                      sessionID: input.sessionID,
+                      error,
+                    })
                     const message = error instanceof Error ? error.message : error.toString()
                     Bus.publish(Session.Event.Error, {
                       sessionID: input.sessionID,
@@ -1587,16 +1709,23 @@ export namespace SessionPrompt {
                     type: "file",
                     url: await (async () => {
                       const buffer = await Filesystem.readBytes(filepath)
-                      if (buffer.length > 50 * 1024 * 1024) throw new Error(`Attachment too large: ${buffer.length} bytes`)
+                      if (buffer.length > 50 * 1024 * 1024)
+                        throw new Error(`Attachment too large: ${buffer.length} bytes`)
                       return `data:${part.mime};base64,` + buffer.toString("base64")
                     })(),
                     mime: part.mime,
-                    filename: part.filename!,
+                    filename: part.filename ?? path.basename(filepath),
                     source: part.source,
                   },
                 ]
               } catch (error) {
-                log.error("failed to read binary file", { command: "session.prompt.readBinaryFile", status: "error", errorCode: "BINARY_READ", sessionID: input.sessionID, error })
+                log.error("failed to read binary file", {
+                  command: "session.prompt.readBinaryFile",
+                  status: "error",
+                  errorCode: "BINARY_READ",
+                  sessionID: input.sessionID,
+                  error,
+                })
                 const message = error instanceof Error ? error.message : String(error)
                 Bus.publish(Session.Event.Error, {
                   sessionID: input.sessionID,
@@ -1748,7 +1877,8 @@ export namespace SessionPrompt {
     // Shallow-copy to avoid mutating cached message parts
     const userMessage = { ...userMsg, parts: [...userMsg.parts] }
     const messages = input.messages.map((m) => (m === userMsg ? userMessage : m))
-    const autonomousDecisionLedger = process.env["AX_CODE_AUTONOMOUS"] === "true" ? autonomousDecisionLedgerReminder(input.messages) : undefined
+    const autonomousDecisionLedger =
+      process.env["AX_CODE_AUTONOMOUS"] === "true" ? autonomousDecisionLedgerReminder(input.messages) : undefined
     if (autonomousDecisionLedger) {
       userMessage.parts.push({
         id: PartID.ascending(),
@@ -1762,7 +1892,10 @@ export namespace SessionPrompt {
 
     // Original logic when experimental plan mode is disabled
     if (!Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE) {
-      if (input.agent.name === "plan" && !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === PROMPT_PLAN)) {
+      if (
+        input.agent.name === "plan" &&
+        !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === PROMPT_PLAN)
+      ) {
         userMessage.parts.push({
           id: PartID.ascending(),
           messageID: userMessage.info.id,
@@ -1773,7 +1906,11 @@ export namespace SessionPrompt {
         })
       }
       const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
-      if (wasPlan && input.agent.name === "build" && !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH)) {
+      if (
+        wasPlan &&
+        input.agent.name === "build" &&
+        !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH)
+      ) {
         userMessage.parts.push({
           id: PartID.ascending(),
           messageID: userMessage.info.id,
@@ -1922,7 +2059,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         for (const decision of decisions) {
           if (!decision || typeof decision !== "object") continue
           const value = decision as Record<string, unknown>
-          const selected = Array.isArray(value["selected"]) ? value["selected"].map((item) => safeDecisionText(item, 120)).filter(Boolean).join(", ") : ""
+          const selected = Array.isArray(value["selected"])
+            ? value["selected"]
+                .map((item) => safeDecisionText(item, 120))
+                .filter(Boolean)
+                .join(", ")
+            : ""
           const header = safeDecisionText(value["header"], 80)
           const question = safeDecisionText(value["question"], 180)
           const confidence = safeDecisionText(value["confidence"], 32)
@@ -1973,7 +2115,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       } else {
         // Otherwise, trigger the session loop to process queued items
         loop({ sessionID: input.sessionID, resume_existing: true }).catch((error) => {
-          log.error("session loop failed to resume after shell command", { command: "session.prompt.shell", status: "error", sessionID: input.sessionID, error })
+          log.error("session loop failed to resume after shell command", {
+            command: "session.prompt.shell",
+            status: "error",
+            sessionID: input.sessionID,
+            error,
+          })
         })
       }
     })
@@ -2071,7 +2218,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...Env.sanitize({
-          ...Env.sanitize(process.env),
+          ...process.env,
           ...shellEnv.env,
         }),
         TERM: "dumb",
@@ -2087,7 +2234,14 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         .then(async () => {
           await Session.updatePart(part)
         })
-        .catch((e) => log.warn("shell metadata write failed", { command: "session.prompt.shell", status: "error", errorCode: "METADATA_WRITE", error: e }))
+        .catch((e) =>
+          log.warn("shell metadata write failed", {
+            command: "session.prompt.shell",
+            status: "error",
+            errorCode: "METADATA_WRITE",
+            error: e,
+          }),
+        )
     }
 
     proc.stdout?.on("data", (chunk) => {
@@ -2122,7 +2276,13 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     const SHELL_TIMEOUT = 300_000 // 5 minutes
     const shellTimer = setTimeout(() => {
       if (!exited) {
-        log.warn("shell command timed out", { command: "session.prompt.shell", status: "error", errorCode: "SHELL_TIMEOUT", shell, args })
+        log.warn("shell command timed out", {
+          command: "session.prompt.shell",
+          status: "error",
+          errorCode: "SHELL_TIMEOUT",
+          shell,
+          args,
+        })
         void kill()
       }
     }, SHELL_TIMEOUT)
@@ -2230,7 +2390,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
    */
 
   export async function command(input: CommandInput) {
-    log.info("command", { command: "session.prompt.command", status: "started", sessionID: input.sessionID, commandName: input.command })
+    log.info("command", {
+      command: "session.prompt.command",
+      status: "started",
+      sessionID: input.sessionID,
+      commandName: input.command,
+    })
     const command = await Command.get(input.command)
     if (!command) {
       const available = await Command.list().then((cmds) => cmds.map((c) => c.name))

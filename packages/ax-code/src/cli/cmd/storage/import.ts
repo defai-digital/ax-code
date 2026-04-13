@@ -108,9 +108,7 @@ export const ImportCommand = cmd({
           return
         }
 
-        // SSRF guard: validate the URL before fetching (BUG-009)
         const { Ssrf } = await import("../../../util/ssrf")
-        await Ssrf.assertPublicUrl(args.file, "storage-import")
 
         const parsed = new URL(args.file)
         const baseUrl = parsed.origin
@@ -118,13 +116,15 @@ export const ImportCommand = cmd({
         const headers = shouldAttachShareAuthHeaders(args.file, req.baseUrl) ? req.headers : {}
 
         const dataPath = req.api.data(slug)
-        let response = await fetch(`${baseUrl}${dataPath}`, {
+        let response = await Ssrf.pinnedFetch(new URL(dataPath, baseUrl).toString(), {
           headers,
+          label: "storage-import",
         })
 
         if (!response.ok && dataPath !== `/api/share/${slug}/data`) {
-          response = await fetch(`${baseUrl}/api/share/${slug}/data`, {
+          response = await Ssrf.pinnedFetch(new URL(`/api/share/${slug}/data`, baseUrl).toString(), {
             headers,
+            label: "storage-import",
           })
         }
 

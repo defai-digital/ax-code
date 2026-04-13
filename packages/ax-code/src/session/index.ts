@@ -286,29 +286,32 @@ export namespace Session {
       // partial session is left behind — the previous loop issued one
       // auto-commit write per message/part, so a crash after the first few
       // messages left an un-resumable half-fork.
-      const plan = filtered.filter((msg) => {
-        if (msg.info.role === "assistant" && msg.info.parentID && !idMap.has(msg.info.parentID)) return false
-        return true
-      }).map((msg) => {
-        const newID = idMap.get(msg.info.id)!
-        const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
-        const info = {
-          ...msg.info,
-          sessionID: session.id,
-          id: newID,
-          ...(parentID && { parentID }),
-        } as MessageV2.Info
-        const parts = msg.parts.map(
-          (part) =>
-            ({
-              ...part,
-              id: PartID.ascending(),
-              messageID: newID,
-              sessionID: session.id,
-            }) as MessageV2.Part,
-        )
-        return { info, parts }
-      })
+      const plan = filtered
+        .filter((msg) => {
+          if (msg.info.role === "assistant" && msg.info.parentID && !idMap.has(msg.info.parentID)) return false
+          return true
+        })
+        .map((msg) => {
+          const newID = idMap.get(msg.info.id)
+          if (!newID) throw new Error(`message ${msg.info.id} missing from session fork id map`)
+          const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
+          const info = {
+            ...msg.info,
+            sessionID: session.id,
+            id: newID,
+            ...(parentID && { parentID }),
+          } as MessageV2.Info
+          const parts = msg.parts.map(
+            (part) =>
+              ({
+                ...part,
+                id: PartID.ascending(),
+                messageID: newID,
+                sessionID: session.id,
+              }) as MessageV2.Part,
+          )
+          return { info, parts }
+        })
 
       Database.transaction((db) => {
         for (const { info } of plan) {
@@ -442,12 +445,7 @@ export namespace Session {
 
   function updateAndPublish(sessionID: SessionID, fields: Record<string, unknown>): Info {
     return Database.use((db) => {
-      const row = db
-        .update(SessionTable)
-        .set(fields)
-        .where(eq(SessionTable.id, sessionID))
-        .returning()
-        .get()
+      const row = db.update(SessionTable).set(fields).where(eq(SessionTable.id, sessionID)).returning().get()
       if (!row) throw new NotFoundError({ message: `Session not found: ${sessionID}` })
       const info = fromRow(row)
       Database.effect(() => Bus.publish(Event.Updated, { info }))
@@ -455,14 +453,12 @@ export namespace Session {
     })
   }
 
-  export const setTitle = fn(
-    z.object({ sessionID: SessionID.zod, title: z.string().min(1) }),
-    async (input) => updateAndPublish(input.sessionID, { title: input.title }),
+  export const setTitle = fn(z.object({ sessionID: SessionID.zod, title: z.string().min(1) }), async (input) =>
+    updateAndPublish(input.sessionID, { title: input.title }),
   )
 
-  export const setArchived = fn(
-    z.object({ sessionID: SessionID.zod, time: z.number().optional() }),
-    async (input) => updateAndPublish(input.sessionID, { time_archived: input.time }),
+  export const setArchived = fn(z.object({ sessionID: SessionID.zod, time: z.number().optional() }), async (input) =>
+    updateAndPublish(input.sessionID, { time_archived: input.time }),
   )
 
   export const setPermission = fn(
@@ -486,15 +482,13 @@ export namespace Session {
     updateAndPublish(sessionID, { revert: null, time_updated: Date.now() }),
   )
 
-  export const setSummary = fn(
-    z.object({ sessionID: SessionID.zod, summary: Info.shape.summary }),
-    async (input) =>
-      updateAndPublish(input.sessionID, {
-        summary_additions: input.summary?.additions,
-        summary_deletions: input.summary?.deletions,
-        summary_files: input.summary?.files,
-        time_updated: Date.now(),
-      }),
+  export const setSummary = fn(z.object({ sessionID: SessionID.zod, summary: Info.shape.summary }), async (input) =>
+    updateAndPublish(input.sessionID, {
+      summary_additions: input.summary?.additions,
+      summary_deletions: input.summary?.deletions,
+      summary_files: input.summary?.files,
+      time_updated: Date.now(),
+    }),
   )
 
   export const diff = fn(SessionID.zod, async (sessionID) =>
@@ -766,7 +760,13 @@ export namespace Session {
     async (input) => {
       Database.use((db) => {
         db.delete(PartTable)
-          .where(and(eq(PartTable.id, input.partID), eq(PartTable.session_id, input.sessionID), eq(PartTable.message_id, input.messageID)))
+          .where(
+            and(
+              eq(PartTable.id, input.partID),
+              eq(PartTable.session_id, input.sessionID),
+              eq(PartTable.message_id, input.messageID),
+            ),
+          )
           .run()
         Database.effect(() =>
           Bus.publish(MessageV2.Event.PartRemoved, {
@@ -815,10 +815,17 @@ export namespace Session {
     }),
     async (input) => {
       const part = Database.use((db) =>
-        db.select({ id: PartTable.id })
+        db
+          .select({ id: PartTable.id })
           .from(PartTable)
-          .where(and(eq(PartTable.id, input.partID), eq(PartTable.session_id, input.sessionID), eq(PartTable.message_id, input.messageID)))
-          .get()
+          .where(
+            and(
+              eq(PartTable.id, input.partID),
+              eq(PartTable.session_id, input.sessionID),
+              eq(PartTable.message_id, input.messageID),
+            ),
+          )
+          .get(),
       )
       if (!part) throw new NotFoundError({ message: `Part not found: ${input.partID}` })
       Bus.publish(MessageV2.Event.PartDelta, input)
@@ -843,7 +850,9 @@ export namespace Session {
 
       const cacheReadInputTokens = safe(input.usage?.cachedInputTokens ?? 0)
 
-      const anthropicMeta = (input.metadata as Record<string, unknown>)?.["anthropic"] as Record<string, number> | undefined
+      const anthropicMeta = (input.metadata as Record<string, unknown>)?.["anthropic"] as
+        | Record<string, number>
+        | undefined
       const cacheWriteInputTokens = safe(
         (anthropicMeta?.["cacheCreationInputTokens"] ??
           // @ts-expect-error

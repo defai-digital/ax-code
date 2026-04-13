@@ -7,6 +7,10 @@ import { LSP } from "../../lsp"
 import { Instance } from "../../project/instance"
 import { lazy } from "../../util/lazy"
 
+const FilePathQuery = z.object({
+  path: z.string().max(4096),
+})
+
 export const FileRoutes = lazy(() =>
   new Hono()
     .get(
@@ -131,12 +135,7 @@ export const FileRoutes = lazy(() =>
           },
         },
       }),
-      validator(
-        "query",
-        z.object({
-          path: z.string(),
-        }),
-      ),
+      validator("query", FilePathQuery),
       async (c) => {
         const path = c.req.valid("query").path
         const content = await File.list(path)
@@ -160,12 +159,7 @@ export const FileRoutes = lazy(() =>
           },
         },
       }),
-      validator(
-        "query",
-        z.object({
-          path: z.string(),
-        }),
-      ),
+      validator("query", FilePathQuery),
       async (c) => {
         const path = c.req.valid("query").path
         const content = await File.read(path)

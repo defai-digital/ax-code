@@ -11,6 +11,9 @@ import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { replace, trimDiff } from "./edit"
 import { Isolation } from "@/isolation"
 import DESCRIPTION from "./multiedit.txt"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "multiedit-tool" })
 
 export const MultiEditTool = Tool.define("multiedit", {
   description: DESCRIPTION,
@@ -71,12 +74,7 @@ export const MultiEditTool = Tool.define("multiedit", {
           }
           const after = replace(before, edit.oldString, edit.newString, edit.replaceAll)
           const diff = trimDiff(
-            createTwoFilesPatch(
-              file,
-              file,
-              before.replaceAll("\r\n", "\n"),
-              after.replaceAll("\r\n", "\n"),
-            ),
+            createTwoFilesPatch(file, file, before.replaceAll("\r\n", "\n"), after.replaceAll("\r\n", "\n")),
           )
           await ctx.ask({
             permission: "edit",
@@ -119,13 +117,21 @@ export const MultiEditTool = Tool.define("multiedit", {
           await FileTime.read(ctx.sessionID, file)
         }
       } catch (error) {
+        const rollbackErrors: { file: string; error: unknown }[] = []
         await Promise.all(
           files.map((file) => {
             const text = original.get(file)
             if (text === undefined) return Promise.resolve()
-            return Filesystem.write(file, text).catch(() => {})
+            return Filesystem.write(file, text).catch((rollbackError) => {
+              rollbackErrors.push({ file, error: rollbackError })
+              log.error("failed to roll back multiedit file", { file, error: rollbackError })
+            })
           }),
         )
+        if (rollbackErrors.length > 0) {
+          const message = rollbackErrors.map((item) => item.file).join(", ")
+          throw new Error(`Multiedit failed and rollback also failed for: ${message}`, { cause: error })
+        }
         throw error
       }
     })

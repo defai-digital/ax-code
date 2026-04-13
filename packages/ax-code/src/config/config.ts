@@ -818,6 +818,13 @@ export namespace Config {
           }
         }
       }
+      if (data.plugin && options.trusted === false) {
+        data.plugin = data.plugin.filter((plugin) => {
+          if (plugin.startsWith("file://")) return true
+          log.warn("ignoring unresolved package plugin from untrusted config", { plugin, source })
+          return false
+        })
+      }
       return data
     }
 

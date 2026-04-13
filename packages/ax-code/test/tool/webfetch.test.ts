@@ -40,7 +40,7 @@ describe("tool.webfetch", () => {
           directory: projectRoot,
           fn: async () => {
             const webfetch = await WebFetchTool.init()
-            const result = await webfetch.execute({ url: "https://example.com/image.png", format: "markdown" }, ctx)
+            const result = await webfetch.execute({ url: "https://93.184.216.34/image.png", format: "markdown" }, ctx)
             expect(result.output).toBe("Image fetched successfully")
             expect(result.attachments).toBeDefined()
             expect(result.attachments?.length).toBe(1)
@@ -69,7 +69,7 @@ describe("tool.webfetch", () => {
           directory: projectRoot,
           fn: async () => {
             const webfetch = await WebFetchTool.init()
-            const result = await webfetch.execute({ url: "https://example.com/image.svg", format: "html" }, ctx)
+            const result = await webfetch.execute({ url: "https://93.184.216.34/image.svg", format: "html" }, ctx)
             expect(result.output).toContain("<svg")
             expect(result.attachments).toBeUndefined()
           },
@@ -90,7 +90,7 @@ describe("tool.webfetch", () => {
           directory: projectRoot,
           fn: async () => {
             const webfetch = await WebFetchTool.init()
-            const result = await webfetch.execute({ url: "https://example.com/file.txt", format: "text" }, ctx)
+            const result = await webfetch.execute({ url: "https://93.184.216.34/file.txt", format: "text" }, ctx)
             expect(result.output).toBe("hello from webfetch")
             expect(result.attachments).toBeUndefined()
           },
@@ -127,7 +127,7 @@ describe("tool.webfetch", () => {
           directory: projectRoot,
           fn: async () => {
             const webfetch = await WebFetchTool.init()
-            const result = await webfetch.execute({ url: "https://example.com/file.txt", format: "text" }, ctx)
+            const result = await webfetch.execute({ url: "https://93.184.216.34/file.txt", format: "text" }, ctx)
             expect(result.output).toBe("retry ok")
             expect(calls).toBe(2)
             expect(cancelled).toBe(1)
@@ -157,7 +157,7 @@ describe("tool.webfetch", () => {
           fn: async () => {
             const webfetch = await WebFetchTool.init()
             await expect(
-              webfetch.execute({ url: "https://example.com/file.txt", format: "text" }, ctx),
+              webfetch.execute({ url: "https://93.184.216.34/file.txt", format: "text" }, ctx),
             ).rejects.toThrow()
             expect(calls).toBe(1)
           },

@@ -892,7 +892,26 @@ test("resolves scoped npm plugins in config", async () => {
   })
 })
 
-test("merges plugin arrays from global and local configs", async () => {
+test("drops unresolved package plugins from untrusted project config", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Filesystem.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: ["malicious-package-name"] }, null, 2),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.plugin ?? []).not.toContain("malicious-package-name")
+    },
+  })
+})
+
+test("drops unresolved package plugins from untrusted config directories", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       // Create a nested project structure with local .ax-code config
@@ -926,14 +945,14 @@ test("merges plugin arrays from global and local configs", async () => {
       const config = await Config.get()
       const plugins = config.plugin ?? []
 
-      // Should contain both global and local plugins
-      expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(true)
-      expect(plugins.some((p) => p.includes("global-plugin-2"))).toBe(true)
-      expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(true)
+      // Unresolved package plugin specifiers from untrusted project
+      // configs are dropped before the plugin loader can install them.
+      expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(false)
+      expect(plugins.some((p) => p.includes("global-plugin-2"))).toBe(false)
+      expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(false)
 
-      // Should have all 3 plugins (not replaced, but merged)
       const pluginNames = plugins.filter((p) => p.includes("global-plugin") || p.includes("local-plugin"))
-      expect(pluginNames.length).toBeGreaterThanOrEqual(3)
+      expect(pluginNames.length).toBe(0)
     },
   })
 })
@@ -1051,7 +1070,7 @@ test("deduplicates duplicate instructions from global and local configs", async 
   })
 })
 
-test("deduplicates duplicate plugins from global and local configs", async () => {
+test("drops duplicate unresolved package plugins from untrusted config directories", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       // Create a nested project structure with local .ax-code config
@@ -1085,20 +1104,17 @@ test("deduplicates duplicate plugins from global and local configs", async () =>
       const config = await Config.get()
       const plugins = config.plugin ?? []
 
-      // Should contain all unique plugins
-      expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(true)
-      expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(true)
-      expect(plugins.some((p) => p.includes("duplicate-plugin"))).toBe(true)
+      expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(false)
+      expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(false)
+      expect(plugins.some((p) => p.includes("duplicate-plugin"))).toBe(false)
 
-      // Should deduplicate the duplicate plugin
       const duplicatePlugins = plugins.filter((p) => p.includes("duplicate-plugin"))
-      expect(duplicatePlugins.length).toBe(1)
+      expect(duplicatePlugins.length).toBe(0)
 
-      // Should have exactly 3 unique plugins
       const pluginNames = plugins.filter(
         (p) => p.includes("global-plugin") || p.includes("local-plugin") || p.includes("duplicate-plugin"),
       )
-      expect(pluginNames.length).toBe(3)
+      expect(pluginNames.length).toBe(0)
     },
   })
 })
