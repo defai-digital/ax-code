@@ -150,6 +150,7 @@ export namespace Truncate {
         }),
         Effect.repeat(Schedule.spaced(Duration.hours(1))),
         Effect.delay(Duration.minutes(1)),
+        Effect.catchCause(() => Effect.void),
         Effect.forkScoped,
       )
 
