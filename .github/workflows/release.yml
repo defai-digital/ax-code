@@ -139,6 +139,22 @@ jobs:
           AX_CODE_CHANNEL: latest
           AX_CODE_RELEASE: "true"
 
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          # Idempotent: if the release already exists (e.g. created manually
+          # from a release-notes file), skip creation and proceed to upload.
+          # Without this step the homebrew job's `gh release download` fails
+          # with "release not found" and silently skips the tap update.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes \
+              --verify-tag
+          fi
+
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
