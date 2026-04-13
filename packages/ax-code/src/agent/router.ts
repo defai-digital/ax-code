@@ -349,11 +349,8 @@ export async function route(message: string, currentAgent: string): Promise<Rout
   const keyword = keywordRoute(message, currentAgent)
   if (keyword && keyword.confidence >= 0.5) return keyword
 
-  // No keyword matches at all — message is generic, skip LLM
-  if (!keyword) return null
-
-  // Short messages: only route on high confidence, skip LLM
-  if (message.length < 30) return null
+  // Short messages: skip LLM fallback and keep any keyword result.
+  if (message.length < 30) return keyword
 
   // Check if LLM fallback is enabled (set by server via env var)
   if (process.env["AX_CODE_SMART_LLM"] !== "true") return keyword

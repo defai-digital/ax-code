@@ -704,7 +704,7 @@ export const Info = z
         mode: z
           .enum(["off", "delegate", "switch"])
           .optional()
-          .describe("How specialist routing behaves: off disables auto-routing, delegate creates a specialist subtask, switch changes the primary agent (default: delegate)"),
+          .describe("How specialist routing behaves: off disables auto-routing, delegate creates a specialist subtask, switch changes the primary agent (default: switch)"),
         auto_switch: z
           .boolean()
           .optional()

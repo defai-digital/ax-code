@@ -1236,9 +1236,7 @@ export namespace SessionPrompt {
     const messageID = input.messageID ?? MessageID.ascending()
     let agentName = input.agent || (await Agent.defaultAgent())
     const cfg = await Config.get()
-    const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === true ? "switch" : "delegate")
-    const msgs = await Session.messages({ sessionID: input.sessionID })
-    const hasUser = msgs.some((msg) => msg.info.role === "user")
+    const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === false ? "delegate" : "switch")
     const messageText = input.parts
       .filter((p): p is typeof p & { type: "text" } => p.type === "text")
       .map((p) => p.text)
@@ -1248,8 +1246,7 @@ export namespace SessionPrompt {
     const hasNonTextPart = input.parts.some((p) => p.type !== "text")
     const canDelegate = routingMode === "delegate" && !hasNonTextPart
     const canSwitch = routingMode === "switch"
-    const skipRouting =
-      input.userSelectedAgent || hasAgentPart || routingMode === "off" || !hasUser || (!canSwitch && !canDelegate)
+    const skipRouting = input.userSelectedAgent || hasAgentPart || routingMode === "off" || (!canSwitch && !canDelegate)
     const routedParts: PromptInput["parts"] = [...input.parts]
     if (messageText && !skipRouting) {
       const routeResult = await routeAgent(messageText, agentName)

@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
+import { buildCliCommand, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
 import { claudeCodeParser, geminiCliParser, codexCliParser } from "../../../src/provider/cli/parser"
 
 function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageModel>[0]>) {
@@ -16,6 +16,13 @@ function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageM
 }
 
 describe("CliLanguageModel", () => {
+  const originalAutonomous = process.env.AX_CODE_AUTONOMOUS
+
+  function restoreAutonomous() {
+    if (originalAutonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = originalAutonomous
+  }
+
   test("implements LanguageModelV3 spec", () => {
     const model = makeModel()
     expect(model.specificationVersion).toBe("v3")
@@ -136,5 +143,68 @@ describe("CliLanguageModel", () => {
 
     // Should have received stream-start at minimum
     expect(parts.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test("adds Claude Code permission bypass in autonomous mode", () => {
+    process.env.AX_CODE_AUTONOMOUS = "true"
+    try {
+      const cmd = buildCliCommand(
+        {
+          providerID: "claude-code",
+          modelID: "claude-sonnet-4-6",
+          binary: "claude",
+          args: ["--print", "--output-format", "stream-json"],
+          parser: claudeCodeParser,
+          promptMode: "stdin",
+        },
+        "write file",
+      )
+      expect(cmd).toContain("--dangerously-skip-permissions")
+    } finally {
+      restoreAutonomous()
+    }
+  })
+
+  test("adds Gemini CLI yolo approval mode in autonomous mode", () => {
+    process.env.AX_CODE_AUTONOMOUS = "true"
+    try {
+      const cmd = buildCliCommand(
+        {
+          providerID: "gemini-cli",
+          modelID: "gemini-2.5-flash",
+          binary: "gemini",
+          args: ["--output-format", "stream-json"],
+          parser: geminiCliParser,
+          promptMode: "arg",
+          promptFlag: "-p",
+        },
+        "write file",
+      )
+      expect(cmd).toContain("--approval-mode")
+      expect(cmd).toContain("yolo")
+      expect(cmd.slice(-2)).toEqual(["-p", "write file"])
+    } finally {
+      restoreAutonomous()
+    }
+  })
+
+  test("does not add autonomous-only flags by default", () => {
+    delete process.env.AX_CODE_AUTONOMOUS
+    try {
+      const cmd = buildCliCommand(
+        {
+          providerID: "claude-code",
+          modelID: "claude-sonnet-4-6",
+          binary: "claude",
+          args: ["--print"],
+          parser: claudeCodeParser,
+          promptMode: "stdin",
+        },
+        "write file",
+      )
+      expect(cmd).not.toContain("--dangerously-skip-permissions")
+    } finally {
+      restoreAutonomous()
+    }
   })
 })

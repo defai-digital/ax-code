@@ -18,6 +18,19 @@ export interface CliLanguageModelConfig {
 function cliEnv() {
   return { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" }
 }
+
+function autonomousCliArgs(providerID: string): string[] {
+  if (process.env["AX_CODE_AUTONOMOUS"] !== "true") return []
+  if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
+  if (providerID === "gemini-cli") return ["--approval-mode", "yolo"]
+  return []
+}
+
+export function buildCliCommand(config: CliLanguageModelConfig, prompt: string) {
+  const cmd = [config.binary, ...config.args, ...autonomousCliArgs(config.providerID), "--model", config.modelID]
+  if (config.promptMode === "arg") cmd.push(config.promptFlag ?? "-p", prompt)
+  return cmd
+}
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
 const EMPTY_USAGE: LanguageModelV3Usage = {
@@ -37,9 +50,7 @@ export class CliLanguageModel implements LanguageModelV3 {
   }
 
   private buildCmd(prompt: string) {
-    const cmd = [this.config.binary, ...this.config.args, "--model", this.config.modelID]
-    if (this.config.promptMode === "arg") cmd.push(this.config.promptFlag ?? "-p", prompt)
-    return cmd
+    return buildCliCommand(this.config, prompt)
   }
 
   private useStdin() {

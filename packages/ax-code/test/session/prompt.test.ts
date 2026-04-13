@@ -362,7 +362,7 @@ describe("session.agent-resolution", () => {
 })
 
 describe("session.prompt auto routing", () => {
-  test("delegates by default instead of switching the primary agent", async () => {
+  test("switches the primary agent by default on the first user turn", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -379,31 +379,22 @@ describe("session.prompt auto routing", () => {
       fn: async () => {
         const session = await Session.create({})
 
-        const first = await SessionPrompt.prompt({
-          sessionID: session.id,
-          agent: "build",
-          noReply: true,
-          parts: [{ type: "text", text: "build a dashboard app" }],
-        })
-        if (first.info.role !== "user") throw new Error("expected user message")
-        expect(first.info.agent).toBe("build")
-
-        const second = await SessionPrompt.prompt({
+        const msg = await SessionPrompt.prompt({
           sessionID: session.id,
           agent: "build",
           noReply: true,
           parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
         })
-        if (second.info.role !== "user") throw new Error("expected user message")
-        expect(second.info.agent).toBe("build")
-        expect(second.parts.some((part) => part.type === "subtask" && part.agent === "perf")).toBe(true)
+        if (msg.info.role !== "user") throw new Error("expected user message")
+        expect(msg.info.agent).toBe("perf")
+        expect(msg.parts.some((part) => part.type === "subtask")).toBe(false)
 
         await Session.remove(session.id)
       },
     })
   })
 
-  test("does not auto-switch the first user turn even when enabled", async () => {
+  test("does not route bare specialist topics on the first user turn", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -571,6 +562,9 @@ describe("session.prompt auto routing", () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
+        routing: {
+          mode: "delegate",
+        },
         agent: {
           build: {
             model: "openai/gpt-5.2",

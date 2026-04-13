@@ -205,11 +205,13 @@ describe("tiered routing — LLM fallback", () => {
   })
 
   test("skips LLM classification when no small model available", async () => {
-    spies.push(spyOn(Provider, "defaultModel").mockResolvedValue({ providerID: "test", modelID: "test-model" } as any))
+    const defaultModel = spyOn(Provider, "defaultModel").mockResolvedValue({ providerID: "test", modelID: "test-model" } as any)
+    spies.push(defaultModel)
     spies.push(spyOn(Provider, "getSmallModel").mockResolvedValue(undefined as any))
     // message with no keyword match — would need LLM to route
     const result = await tieredRoute("this function is really sluggish and needs attention", "build")
     expect(result).toBeNull()
+    expect(defaultModel).toHaveBeenCalled()
   })
 
   test("falls back to keyword result when LLM errors", async () => {
