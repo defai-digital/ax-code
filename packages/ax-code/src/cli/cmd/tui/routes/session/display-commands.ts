@@ -2,6 +2,7 @@ import { batch, type Accessor, type Setter } from "solid-js"
 import path from "path"
 import type { CliRenderer, ScrollBoxRenderable } from "@opentui/core"
 import type { Part } from "@ax-code/sdk/v2"
+import open from "open"
 import type { DialogContext } from "@tui/ui/dialog"
 import { Clipboard } from "../../util/clipboard"
 import { Editor } from "../../util/editor"
@@ -9,9 +10,11 @@ import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript, type MessageWithParts, type SessionInfo } from "../../util/transcript"
 import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./display"
 import { shareTitle, transcriptFilename } from "./display-command-helpers"
+import { DreGraphServer } from "@/cli/cmd/dre-graph-server"
 import { Filesystem } from "@/util/filesystem"
 
 type Session = SessionInfo & {
+  directory?: string
   share?: {
     url?: string
   }
@@ -33,6 +36,11 @@ export function displayCommands(input: {
   conceal: Accessor<boolean>
   currentModel: () => Model | undefined
   dialogReplaceActivity: (dialog: DialogContext) => void
+  dialogReplaceBranch: (dialog: DialogContext) => void
+  dialogReplaceCompare: (dialog: DialogContext) => void
+  dialogReplaceDre: (dialog: DialogContext) => void
+  dialogReplaceDreGraph: (dialog: DialogContext) => void
+  dialogReplaceRollback: (dialog: DialogContext) => void
   dialogReplaceTimeline: (dialog: DialogContext) => void
   dialogReplaceFork: (dialog: DialogContext) => void
   dialogReplaceRename: (dialog: DialogContext) => void
@@ -44,6 +52,7 @@ export function displayCommands(input: {
   scroll: ScrollBoxRenderable
   scrollToMessage: (direction: "next" | "prev", dialog: DialogContext) => void
   sdk: {
+    url: string
     client: {
       session: {
         share: (input: { sessionID: string }) => Promise<{ data?: { share?: { url: string } } }>
@@ -132,6 +141,74 @@ export function displayCommands(input: {
         name: "activity",
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceActivity(dialog),
+    },
+    {
+      title: "View branch ranking",
+      value: "session.branch",
+      category: "Session",
+      slash: {
+        name: "branches",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceBranch(dialog),
+    },
+    {
+      title: "Compare branch executions",
+      value: "session.compare",
+      category: "Session",
+      slash: {
+        name: "compare",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceCompare(dialog),
+    },
+    {
+      title: "Open DRE dashboard in browser",
+      value: "session.dre.web",
+      category: "Session",
+      slash: {
+        name: "dre-dashboard",
+      },
+      onSelect: async (dialog: DialogContext) => {
+        await DreGraphServer.page({
+          base: input.sdk.url,
+          sessionID: input.routeSessionID,
+          directory: input.session()?.directory,
+        })
+          .then((url) => open(url.toString()))
+          .catch(() =>
+            input.toast.show({
+              message: "Failed to open DRE graph in the browser",
+              variant: "error",
+            }),
+          )
+          .finally(() => dialog.clear())
+      },
+    },
+    {
+      title: "View DRE details",
+      value: "session.dre",
+      category: "Session",
+      slash: {
+        name: "dre",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceDre(dialog),
+    },
+    {
+      title: "View DRE graph",
+      value: "session.dre.graph",
+      category: "Session",
+      slash: {
+        name: "dre-graph",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceDreGraph(dialog),
+    },
+    {
+      title: "View rollback points",
+      value: "session.rollback",
+      category: "Session",
+      slash: {
+        name: "rollback",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceRollback(dialog),
     },
     {
       title: "Jump to message",

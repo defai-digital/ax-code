@@ -59,6 +59,12 @@ import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
 import { DialogActivity } from "./dialog-activity"
+import { DialogBranch } from "./dialog-branch"
+import { DialogCompare } from "./dialog-compare"
+import { DialogDre } from "./dialog-dre"
+import { DialogDreGraph } from "./dialog-dre-graph"
+import { DialogRollback } from "./dialog-rollback"
+import { SessionRollback } from "./rollback"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
@@ -76,7 +82,7 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
-import { detail, diagnostics, normalize, workdir } from "./format"
+import { detail, diagnostics, filetype, normalize, workdir } from "./format"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
@@ -84,13 +90,8 @@ import { RevertNotice } from "./revert-notice"
 import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
-import { codeDisplayView, diffDisplayView, todoWriteView } from "./view-model"
-import { SessionCodeRenderer, SessionDiffRenderer } from "./render-adapter"
-import { Log } from "@/util/log"
 
 addDefaultParsers(parsers.parsers)
-
-const log = Log.create({ service: "tui.session" })
 
 class CustomSpeedScroll implements ScrollAcceleration {
   constructor(private speed: number) {}
@@ -147,6 +148,12 @@ export function Session() {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
+  const messagesWithParts = createMemo(() =>
+    messages().map((item) => ({
+      info: item,
+      parts: sync.data.part[item.id] ?? [],
+    })),
+  )
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -203,7 +210,7 @@ export function Session() {
         if (scroll) scroll.scrollBy(100_000)
       })
       .catch((e) => {
-        log.warn("session sync failed", { error: e, sessionID: route.sessionID })
+        console.error(e)
         toast.show({
           message: `Session not found: ${route.sessionID}`,
           variant: "error",
@@ -285,15 +292,12 @@ export function Session() {
     dialog.clear()
   }
 
-  let scrollTimer: ReturnType<typeof setTimeout> | undefined
   function toBottom() {
-    clearTimeout(scrollTimer)
-    scrollTimer = setTimeout(() => {
+    setTimeout(() => {
       if (!scroll || scroll.isDestroyed) return
       scroll.scrollTo(scroll.scrollHeight)
     }, 50)
   }
-  onCleanup(() => clearTimeout(scrollTimer))
 
   const local = useLocal()
 
@@ -324,12 +328,75 @@ export function Session() {
     }
   }
 
+  function continueBranch(sessionID: string) {
+    navigate({
+      type: "session",
+      sessionID,
+    })
+    setTimeout(() => {
+      promptRef.current?.focus()
+    }, 0)
+  }
+
   const command = useCommandDialog()
   command.register(() => [
     ...displayCommands({
       conceal,
       currentModel: () => local.model.current(),
       dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
+      dialogReplaceBranch: (dialog) =>
+        dialog.replace(() => (
+          <DialogBranch
+            currentID={route.sessionID}
+            sessions={children().map((item) => ({ id: item.id, title: item.title }))}
+            onSelect={(sessionID) =>
+              navigate({
+                type: "session",
+                sessionID,
+              })
+            }
+            onContinue={continueBranch}
+          />
+        )),
+      dialogReplaceCompare: (dialog) =>
+        dialog.replace(() => (
+          <DialogCompare
+            currentID={route.sessionID}
+            sessions={children().map((item) => ({ id: item.id, title: item.title }))}
+          />
+        )),
+      dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
+      dialogReplaceDreGraph: (dialog) => dialog.replace(() => <DialogDreGraph sessionID={route.sessionID} />),
+      dialogReplaceRollback: (dialog) =>
+        dialog.replace(() => (
+          <DialogRollback
+            sessionID={route.sessionID}
+            messages={messagesWithParts()}
+            onSelect={async (point) => {
+              const status = sync.data.session_status?.[route.sessionID]
+              if (status?.type !== "idle")
+                await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
+              return sdk.client.session
+                .revert({
+                  sessionID: route.sessionID,
+                  messageID: point.messageID,
+                  partID: point.partID,
+                })
+                .then(() => {
+                  const messageID = SessionRollback.promptID(messagesWithParts(), point)
+                  if (messageID) prompt.set(promptState(sync.data.part[messageID]))
+                  toBottom()
+                })
+                .catch((error) => {
+                  toast.show({
+                    message: error instanceof Error ? error.message : "Failed to rollback to selected step",
+                    variant: "error",
+                  })
+                  throw error
+                })
+            }}
+          />
+        )),
       dialogReplaceTimeline: (dialog) =>
         dialog.replace(() => (
           <DialogTimeline
@@ -741,9 +808,7 @@ export function Session() {
                 {(message, index) => (
                   <Switch>
                     <Match when={message.id === revert()?.messageID}>
-                      <Show when={revert()}>
-                        {(state) => <RevertNotice count={state().reverted.length} files={state().diffFiles} />}
-                      </Show>
+                      <RevertNotice count={revert()!.reverted.length} files={revert()!.diffFiles} />
                     </Match>
                     <Match when={revert()?.messageID && hiddenIDs().has(message.id)}>
                       <></>
@@ -1080,12 +1145,6 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
     // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
     return props.part.text.replace("[REDACTED]", "").trim()
   })
-  const display = createMemo(() =>
-    codeDisplayView({
-      filePath: "thinking.md",
-      content: "_Thinking:_ " + content(),
-    }),
-  )
   return (
     <Show when={content() && ctx.showThinking()}>
       <box
@@ -1097,10 +1156,12 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         customBorderChars={SplitBorder.customBorderChars}
         borderColor={theme.backgroundElement}
       >
-        <SessionCodeRenderer
-          display={display()}
+        <code
+          filetype="markdown"
+          drawUnstyledText={false}
           streaming={true}
           syntaxStyle={subtleSyntax()}
+          content={"_Thinking:_ " + content()}
           conceal={ctx.conceal()}
           fg={theme.textMuted}
         />
@@ -1127,10 +1188,12 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
             />
           </Match>
           <Match when={!Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
-            <SessionCodeRenderer
-              display={codeDisplayView({ filePath: "message.md", content: props.part.text.trim() })}
+            <code
+              filetype="markdown"
+              drawUnstyledText={false}
               streaming={true}
               syntaxStyle={syntax()}
+              content={props.part.text.trim()}
               conceal={ctx.conceal()}
               fg={theme.text}
             />
@@ -1500,21 +1563,30 @@ function Bash(props: ToolProps<typeof BashTool>) {
 
 function Write(props: ToolProps<typeof WriteTool>) {
   const { theme, syntax } = useTheme()
-  const display = createMemo(() => codeDisplayView({ filePath: props.input.filePath, content: props.input.content }))
+  const code = createMemo(() => {
+    if (!props.input.content) return ""
+    return props.input.content
+  })
 
   return (
     <Switch>
       <Match when={props.metadata.diagnostics !== undefined}>
-        <BlockTool title={"# Wrote " + normalize(props.input.filePath)} part={props.part}>
+        <BlockTool title={"# Wrote " + normalize(props.input.filePath!)} part={props.part}>
           <line_number fg={theme.textMuted} minWidth={3} paddingRight={1}>
-            <SessionCodeRenderer display={display()} conceal={false} fg={theme.text} syntaxStyle={syntax()} />
+            <code
+              conceal={false}
+              fg={theme.text}
+              filetype={filetype(props.input.filePath!)}
+              syntaxStyle={syntax()}
+              content={code()}
+            />
           </line_number>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
         </BlockTool>
       </Match>
       <Match when={true}>
         <InlineTool icon="←" pending="Preparing write..." complete={props.input.filePath} part={props.part}>
-          Write {normalize(props.input.filePath)}
+          Write {normalize(props.input.filePath!)}
         </InlineTool>
       </Match>
     </Switch>
@@ -1551,7 +1623,7 @@ function Read(props: ToolProps<typeof ReadTool>) {
         spinner={isRunning()}
         part={props.part}
       >
-        Read {normalize(props.input.filePath)} {detail(props.input, ["filePath"])}
+        Read {normalize(props.input.filePath!)} {detail(props.input, ["filePath"])}
       </InlineTool>
       <For each={loaded()}>
         {(filepath) => (
@@ -1662,8 +1734,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
 
     if (isRunning() && tools().length > 0) {
       // content[0] += ` · ${tools().length} toolcalls`
-      const active = current()
-      if (active) content.push(`↳ ${Locale.titlecase(active.tool)} ${(active.state as any).title}`)
+      if (current()) content.push(`↳ ${Locale.titlecase(current()!.tool)} ${(current()!.state as any).title}`)
       else content.push(`↳ ${tools().length} toolcalls`)
     }
 
@@ -1697,37 +1768,39 @@ function Edit(props: ToolProps<typeof EditTool>) {
   const { theme, syntax } = useTheme()
 
   const view = createMemo(() => {
-    return diffDisplayView({
-      diffStyle: ctx.tui.diff_style,
-      width: ctx.width,
-      filePath: props.input.filePath,
-      wrapMode: ctx.diffWrapMode(),
-    })
+    const diffStyle = ctx.tui.diff_style
+    if (diffStyle === "stacked") return "unified"
+    // Default to "auto" behavior
+    return ctx.width > 120 ? "split" : "unified"
   })
+
+  const ft = createMemo(() => filetype(props.input.filePath))
 
   const diffContent = createMemo(() => props.metadata.diff)
 
   return (
     <Switch>
       <Match when={props.metadata.diff !== undefined}>
-        <BlockTool title={"← Edit " + normalize(props.input.filePath)} part={props.part}>
+        <BlockTool title={"← Edit " + normalize(props.input.filePath!)} part={props.part}>
           <box paddingLeft={1}>
-            <SessionDiffRenderer
+            <diff
               diff={diffContent()}
-              display={view()}
+              view={view()}
+              filetype={ft()}
               syntaxStyle={syntax()}
-              colors={{
-                fg: theme.text,
-                addedBg: theme.diffAddedBg,
-                removedBg: theme.diffRemovedBg,
-                contextBg: theme.diffContextBg,
-                addedSignColor: theme.diffHighlightAdded,
-                removedSignColor: theme.diffHighlightRemoved,
-                lineNumberFg: theme.diffLineNumber,
-                lineNumberBg: theme.diffContextBg,
-                addedLineNumberBg: theme.diffAddedLineNumberBg,
-                removedLineNumberBg: theme.diffRemovedLineNumberBg,
-              }}
+              showLineNumbers={true}
+              width="100%"
+              wrapMode={ctx.diffWrapMode()}
+              fg={theme.text}
+              addedBg={theme.diffAddedBg}
+              removedBg={theme.diffRemovedBg}
+              contextBg={theme.diffContextBg}
+              addedSignColor={theme.diffHighlightAdded}
+              removedSignColor={theme.diffHighlightRemoved}
+              lineNumberFg={theme.diffLineNumber}
+              lineNumberBg={theme.diffContextBg}
+              addedLineNumberBg={theme.diffAddedLineNumberBg}
+              removedLineNumberBg={theme.diffRemovedLineNumberBg}
             />
           </box>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
@@ -1735,7 +1808,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="←" pending="Preparing edit..." complete={props.input.filePath} part={props.part}>
-          Edit {normalize(props.input.filePath)} {detail({ replaceAll: props.input.replaceAll })}
+          Edit {normalize(props.input.filePath!)} {detail({ replaceAll: props.input.replaceAll })}
         </InlineTool>
       </Match>
     </Switch>
@@ -1749,34 +1822,32 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
   const files = createMemo(() => props.metadata.files ?? [])
 
   const view = createMemo(() => {
-    return (filePath: string) =>
-      diffDisplayView({
-        diffStyle: ctx.tui.diff_style,
-        width: ctx.width,
-        filePath,
-        wrapMode: ctx.diffWrapMode(),
-      })
+    const diffStyle = ctx.tui.diff_style
+    if (diffStyle === "stacked") return "unified"
+    return ctx.width > 120 ? "split" : "unified"
   })
 
   function Diff(p: { diff: string; filePath: string }) {
     return (
       <box paddingLeft={1}>
-        <SessionDiffRenderer
+        <diff
           diff={p.diff}
-          display={view()(p.filePath)}
+          view={view()}
+          filetype={filetype(p.filePath)}
           syntaxStyle={syntax()}
-          colors={{
-            fg: theme.text,
-            addedBg: theme.diffAddedBg,
-            removedBg: theme.diffRemovedBg,
-            contextBg: theme.diffContextBg,
-            addedSignColor: theme.diffHighlightAdded,
-            removedSignColor: theme.diffHighlightRemoved,
-            lineNumberFg: theme.diffLineNumber,
-            lineNumberBg: theme.diffContextBg,
-            addedLineNumberBg: theme.diffAddedLineNumberBg,
-            removedLineNumberBg: theme.diffRemovedLineNumberBg,
-          }}
+          showLineNumbers={true}
+          width="100%"
+          wrapMode={ctx.diffWrapMode()}
+          fg={theme.text}
+          addedBg={theme.diffAddedBg}
+          removedBg={theme.diffRemovedBg}
+          contextBg={theme.diffContextBg}
+          addedSignColor={theme.diffHighlightAdded}
+          removedSignColor={theme.diffHighlightRemoved}
+          lineNumberFg={theme.diffLineNumber}
+          lineNumberBg={theme.diffContextBg}
+          addedLineNumberBg={theme.diffAddedLineNumberBg}
+          removedLineNumberBg={theme.diffRemovedLineNumberBg}
         />
       </box>
     )
@@ -1820,28 +1891,16 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
 }
 
 function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
-  const view = createMemo(() =>
-    todoWriteView({
-      status: props.part.state.status,
-      inputTodos: props.input.todos,
-      metadataTodos: props.metadata.todos,
-      output: props.output,
-    }),
-  )
-
   return (
     <Switch>
-      <Match when={view().state === "items"}>
+      <Match when={props.metadata.todos?.length}>
         <BlockTool title="# Todos" part={props.part}>
           <box>
-            <For each={view().todos}>{(todo) => <TodoItem status={todo.status} content={todo.content} />}</For>
+            <For each={props.input.todos ?? []}>
+              {(todo) => <TodoItem status={todo.status} content={todo.content} />}
+            </For>
           </box>
         </BlockTool>
-      </Match>
-      <Match when={view().state === "empty"}>
-        <InlineTool icon="✓" pending="Updating todos..." complete={true} part={props.part}>
-          No todos
-        </InlineTool>
       </Match>
       <Match when={true}>
         <InlineTool icon="⚙" pending="Updating todos..." complete={false} part={props.part}>
