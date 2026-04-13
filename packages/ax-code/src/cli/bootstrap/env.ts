@@ -1,10 +1,16 @@
 import { Installation } from "../../installation"
 import { NativePerf } from "../../perf/native"
 import { Log } from "../../util/log"
+import path from "path"
+import os from "os"
+import { DiagnosticLog } from "../../debug/diagnostic-log"
 
 export type Opts = {
   logLevel?: string
   sandbox?: string
+  debug?: boolean
+  debugDir?: string
+  debugIncludeContent?: boolean
 }
 
 export type InitDep = {
@@ -12,23 +18,52 @@ export type InitDep = {
   local?: boolean
   version?: string
   pid?: number
+  cwd?: string
+  now?: Date
   env?: Record<string, string | undefined>
   log?: (opts: Log.Options) => void | Promise<void>
   info?: (msg: string, data: Record<string, unknown>) => void
 }
 
-export function level(log?: string, local = Installation.isLocal()): Log.Level {
+export function level(log?: string, local = Installation.isLocal(), debug = false): Log.Level {
+  if (debug) return "DEBUG"
   if (log) return log as Log.Level
   if (local) return "DEBUG"
   return "INFO"
 }
 
-export function apply(opts: Pick<Opts, "sandbox">, env = process.env, pid = process.pid) {
+export function debugOptions(opts: Pick<Opts, "debug" | "debugDir" | "debugIncludeContent">, cwd = process.cwd()) {
+  const enabled = opts.debug === true
+  const baseDir = enabled ? (opts.debugDir ? path.resolve(cwd, opts.debugDir) : path.join(os.tmpdir(), "ax-code-log")) : undefined
+  return {
+    enabled,
+    baseDir,
+    dir: baseDir,
+    includeContent: opts.debugIncludeContent === true,
+  }
+}
+
+export function debugRunDir(baseDir: string, pid = process.pid, now = new Date()) {
+  const stamp = now.toISOString().replace(/\.\d{3}Z$/, "Z").replace(/[-:]/g, "").replace("T", "-")
+  return path.join(baseDir, `${stamp}-${pid}`)
+}
+
+export function apply(
+  opts: Pick<Opts, "sandbox" | "debug" | "debugDir" | "debugIncludeContent">,
+  env = process.env,
+  pid = process.pid,
+  debugDir?: string,
+) {
   env.AGENT = "1"
   env.AX_CODE = "1"
   env.OPENCODE = "1"
   env.AX_CODE_PID = String(pid)
   if (opts.sandbox) env.AX_CODE_ISOLATION_MODE = opts.sandbox
+  if (opts.debug) {
+    env.AX_CODE_DEBUG = "1"
+    env.AX_CODE_DEBUG_DIR = debugDir ?? debugOptions(opts).dir
+    env.AX_CODE_DEBUG_INCLUDE_CONTENT = opts.debugIncludeContent ? "1" : "0"
+  }
 }
 
 async function loadShellEnv(env: Record<string, string | undefined>) {
@@ -68,20 +103,39 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   const local = dep.local ?? Installation.isLocal()
   const version = dep.version ?? Installation.VERSION
   const pid = dep.pid ?? process.pid
+  const cwd = dep.cwd ?? process.cwd()
+  const now = dep.now ?? new Date()
   const env = dep.env ?? process.env
   const log = dep.log ?? Log.init
   const info = dep.info ?? ((msg: string, data: Record<string, unknown>) => Log.Default.info(msg, data))
 
   await loadShellEnv(env)
 
+  const debug = debugOptions(opts, cwd)
+  const debugDir = debug.enabled && debug.baseDir ? debugRunDir(debug.baseDir, pid, now) : undefined
+  await DiagnosticLog.configure({
+    enabled: debug.enabled,
+    dir: debugDir,
+    includeContent: debug.includeContent,
+    manifest: {
+      component: "main",
+      version,
+      pid,
+      argv: argv.slice(2),
+      cwd,
+    },
+  })
+  if (debug.enabled) DiagnosticLog.installProcessDiagnostics()
+
   await log({
     print: argv.includes("--print-logs"),
     dev: local,
-    level: level(opts.logLevel, local),
+    level: level(opts.logLevel, local, debug.enabled),
+    ...(debugDir ? { dir: debugDir, name: "main" } : {}),
   })
   NativePerf.install()
 
-  apply(opts, env, pid)
+  apply(opts, env, pid, debugDir)
 
   info("ax-code", {
     version,

@@ -232,6 +232,7 @@ export const DoctorCommand: CommandModule = {
     if (Flag.AX_CODE_NATIVE_FS) flags.push("NATIVE_FS=on")
     if (Flag.AX_CODE_NATIVE_DIFF) flags.push("NATIVE_DIFF=on")
     if (Flag.AX_CODE_NATIVE_PARSER) flags.push("NATIVE_PARSER=on")
+    if (Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN) flags.push("DEBUG_ENGINE_NATIVE_SCAN=on")
     if (flags.length > 0) {
       checks.push({ name: "Feature flags", status: "ok", detail: flags.join(", ") })
     }

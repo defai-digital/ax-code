@@ -54,6 +54,13 @@ export namespace Keybind {
     return result
   }
 
+  export function toDisplayString(info: Info | undefined, leader: Info | undefined): string {
+    const result = toString(info)
+    if (!result.includes("<leader>")) return result
+    const leaderText = leader ? toString({ ...leader, leader: false }) : "<leader>"
+    return result.replace(/<leader>/g, leaderText)
+  }
+
   export function parse(key: string): Info[] {
     if (key === "none") return []
 

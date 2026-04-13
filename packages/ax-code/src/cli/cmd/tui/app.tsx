@@ -1,4 +1,4 @@
-import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 import { MouseButton, TextAttributes } from "@opentui/core"
@@ -42,6 +42,7 @@ import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -105,6 +106,7 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
 
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
+import { renderTui } from "./renderer"
 
 export function tui(input: {
   url: string
@@ -132,7 +134,7 @@ export function tui(input: {
       resolve()
     }
 
-    render(
+    renderTui(
       () => {
         return (
           <ErrorBoundary
@@ -181,22 +183,6 @@ export function tui(input: {
             </ArgsProvider>
           </ErrorBoundary>
         )
-      },
-      {
-        targetFps: 60,
-        gatherStats: false,
-        exitOnCtrlC: false,
-        useKittyKeyboard: {},
-        autoFocus: false,
-        openConsoleOnError: false,
-        consoleOptions: {
-          keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
-          onCopySelection: (text) => {
-            Clipboard.copy(text).catch((error) => {
-              console.error(`Failed to copy console selection to clipboard: ${error}`)
-            })
-          },
-        },
       },
     )
   })
@@ -889,6 +875,10 @@ function ErrorComponent(props: {
 }) {
   const term = useTerminalDimensions()
   const renderer = useRenderer()
+
+  createEffect(() => {
+    DiagnosticLog.recordProcess("tui.errorBoundary", { error: props.error })
+  })
 
   const handleExit = async () => {
     renderer.setTerminalTitle("")

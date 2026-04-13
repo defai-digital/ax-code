@@ -1,7 +1,9 @@
 import { NamedError } from "@ax-code/util/error"
 import { describe, expect, test } from "bun:test"
+import os from "os"
+import path from "path"
 import z from "zod"
-import { apply, init, level } from "../../src/cli/bootstrap/env"
+import { apply, debugOptions, debugRunDir, init, level } from "../../src/cli/bootstrap/env"
 import { data, fatal } from "../../src/cli/bootstrap/fatal"
 import { migrate } from "../../src/cli/bootstrap/migrate"
 
@@ -17,6 +19,10 @@ describe("cli.boot.level", () => {
   test("uses INFO outside local installs", () => {
     expect(level(undefined, false)).toBe("INFO")
   })
+
+  test("uses DEBUG when diagnostics are enabled", () => {
+    expect(level("ERROR", false, true)).toBe("DEBUG")
+  })
 })
 
 describe("cli.boot.apply", () => {
@@ -28,6 +34,44 @@ describe("cli.boot.apply", () => {
     expect(env.OPENCODE).toBe("1")
     expect(env.AX_CODE_PID).toBe("42")
     expect(env.AX_CODE_ISOLATION_MODE).toBe("workspace-write")
+  })
+
+  test("sets debug env vars for child processes", () => {
+    const env: Record<string, string | undefined> = {}
+    apply({ debug: true, debugIncludeContent: true }, env, 42, "/tmp/ax-code-log/run")
+    expect(env.AX_CODE_DEBUG).toBe("1")
+    expect(env.AX_CODE_DEBUG_DIR).toBe("/tmp/ax-code-log/run")
+    expect(env.AX_CODE_DEBUG_INCLUDE_CONTENT).toBe("1")
+  })
+})
+
+describe("cli.boot.debugOptions", () => {
+  test("keeps diagnostics disabled by default", () => {
+    expect(debugOptions({}, "/repo")).toEqual({
+      enabled: false,
+      baseDir: undefined,
+      dir: undefined,
+      includeContent: false,
+    })
+  })
+
+  test("resolves the debug base directory from cwd", () => {
+    expect(debugOptions({ debug: true, debugDir: "logs", debugIncludeContent: true }, "/repo")).toEqual({
+      enabled: true,
+      baseDir: "/repo/logs",
+      dir: "/repo/logs",
+      includeContent: true,
+    })
+  })
+
+  test("uses OS temp by default to avoid repo-local data leakage", () => {
+    expect(debugOptions({ debug: true }, "/repo").baseDir).toBe(path.join(os.tmpdir(), "ax-code-log"))
+  })
+
+  test("formats a stable per-run directory", () => {
+    expect(debugRunDir("/repo/ax-code-log", 42, new Date("2026-04-12T23:32:46.123Z"))).toBe(
+      "/repo/ax-code-log/20260412-233246Z-42",
+    )
   })
 })
 

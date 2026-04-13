@@ -22,6 +22,7 @@ import { Process } from "@/util/process"
 import { Shell } from "@/shell/shell"
 import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -609,7 +610,7 @@ export async function ensureTitle(input: {
   // today but silently breaks if log.error ever returns something
   // truthy.
   const text = await Promise.resolve(result.text).catch((err: any) => {
-    log.error("failed to generate title", { error: err })
+    log.error("failed to generate title", { error: DiagnosticLog.redactForLog(err) })
     return undefined
   })
   if (text) {

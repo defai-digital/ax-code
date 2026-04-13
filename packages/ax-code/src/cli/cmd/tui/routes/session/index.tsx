@@ -76,7 +76,7 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
-import { detail, diagnostics, filetype, normalize, workdir } from "./format"
+import { detail, diagnostics, normalize, workdir } from "./format"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
@@ -84,8 +84,13 @@ import { RevertNotice } from "./revert-notice"
 import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
+import { codeDisplayView, diffDisplayView, todoWriteView } from "./view-model"
+import { SessionCodeRenderer, SessionDiffRenderer } from "./render-adapter"
+import { Log } from "@/util/log"
 
 addDefaultParsers(parsers.parsers)
+
+const log = Log.create({ service: "tui.session" })
 
 class CustomSpeedScroll implements ScrollAcceleration {
   constructor(private speed: number) {}
@@ -198,7 +203,7 @@ export function Session() {
         if (scroll) scroll.scrollBy(100_000)
       })
       .catch((e) => {
-        console.error(e)
+        log.warn("session sync failed", { error: e, sessionID: route.sessionID })
         toast.show({
           message: `Session not found: ${route.sessionID}`,
           variant: "error",
@@ -1068,6 +1073,12 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
     // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
     return props.part.text.replace("[REDACTED]", "").trim()
   })
+  const display = createMemo(() =>
+    codeDisplayView({
+      filePath: "thinking.md",
+      content: "_Thinking:_ " + content(),
+    }),
+  )
   return (
     <Show when={content() && ctx.showThinking()}>
       <box
@@ -1079,12 +1090,10 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         customBorderChars={SplitBorder.customBorderChars}
         borderColor={theme.backgroundElement}
       >
-        <code
-          filetype="markdown"
-          drawUnstyledText={false}
+        <SessionCodeRenderer
+          display={display()}
           streaming={true}
           syntaxStyle={subtleSyntax()}
-          content={"_Thinking:_ " + content()}
           conceal={ctx.conceal()}
           fg={theme.textMuted}
         />
@@ -1111,12 +1120,10 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
             />
           </Match>
           <Match when={!Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
-            <code
-              filetype="markdown"
-              drawUnstyledText={false}
+            <SessionCodeRenderer
+              display={codeDisplayView({ filePath: "message.md", content: props.part.text.trim() })}
               streaming={true}
               syntaxStyle={syntax()}
-              content={props.part.text.trim()}
               conceal={ctx.conceal()}
               fg={theme.text}
             />
@@ -1486,22 +1493,18 @@ function Bash(props: ToolProps<typeof BashTool>) {
 
 function Write(props: ToolProps<typeof WriteTool>) {
   const { theme, syntax } = useTheme()
-  const code = createMemo(() => {
-    if (!props.input.content) return ""
-    return props.input.content
-  })
+  const display = createMemo(() => codeDisplayView({ filePath: props.input.filePath, content: props.input.content }))
 
   return (
     <Switch>
       <Match when={props.metadata.diagnostics !== undefined}>
         <BlockTool title={"# Wrote " + normalize(props.input.filePath!)} part={props.part}>
           <line_number fg={theme.textMuted} minWidth={3} paddingRight={1}>
-            <code
+            <SessionCodeRenderer
+              display={display()}
               conceal={false}
               fg={theme.text}
-              filetype={filetype(props.input.filePath!)}
               syntaxStyle={syntax()}
-              content={code()}
             />
           </line_number>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
@@ -1691,13 +1694,13 @@ function Edit(props: ToolProps<typeof EditTool>) {
   const { theme, syntax } = useTheme()
 
   const view = createMemo(() => {
-    const diffStyle = ctx.tui.diff_style
-    if (diffStyle === "stacked") return "unified"
-    // Default to "auto" behavior
-    return ctx.width > 120 ? "split" : "unified"
+    return diffDisplayView({
+      diffStyle: ctx.tui.diff_style,
+      width: ctx.width,
+      filePath: props.input.filePath,
+      wrapMode: ctx.diffWrapMode(),
+    })
   })
-
-  const ft = createMemo(() => filetype(props.input.filePath))
 
   const diffContent = createMemo(() => props.metadata.diff)
 
@@ -1706,24 +1709,22 @@ function Edit(props: ToolProps<typeof EditTool>) {
       <Match when={props.metadata.diff !== undefined}>
         <BlockTool title={"← Edit " + normalize(props.input.filePath!)} part={props.part}>
           <box paddingLeft={1}>
-            <diff
+            <SessionDiffRenderer
               diff={diffContent()}
-              view={view()}
-              filetype={ft()}
+              display={view()}
               syntaxStyle={syntax()}
-              showLineNumbers={true}
-              width="100%"
-              wrapMode={ctx.diffWrapMode()}
-              fg={theme.text}
-              addedBg={theme.diffAddedBg}
-              removedBg={theme.diffRemovedBg}
-              contextBg={theme.diffContextBg}
-              addedSignColor={theme.diffHighlightAdded}
-              removedSignColor={theme.diffHighlightRemoved}
-              lineNumberFg={theme.diffLineNumber}
-              lineNumberBg={theme.diffContextBg}
-              addedLineNumberBg={theme.diffAddedLineNumberBg}
-              removedLineNumberBg={theme.diffRemovedLineNumberBg}
+              colors={{
+                fg: theme.text,
+                addedBg: theme.diffAddedBg,
+                removedBg: theme.diffRemovedBg,
+                contextBg: theme.diffContextBg,
+                addedSignColor: theme.diffHighlightAdded,
+                removedSignColor: theme.diffHighlightRemoved,
+                lineNumberFg: theme.diffLineNumber,
+                lineNumberBg: theme.diffContextBg,
+                addedLineNumberBg: theme.diffAddedLineNumberBg,
+                removedLineNumberBg: theme.diffRemovedLineNumberBg,
+              }}
             />
           </box>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
@@ -1745,32 +1746,34 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
   const files = createMemo(() => props.metadata.files ?? [])
 
   const view = createMemo(() => {
-    const diffStyle = ctx.tui.diff_style
-    if (diffStyle === "stacked") return "unified"
-    return ctx.width > 120 ? "split" : "unified"
+    return (filePath: string) =>
+      diffDisplayView({
+        diffStyle: ctx.tui.diff_style,
+        width: ctx.width,
+        filePath,
+        wrapMode: ctx.diffWrapMode(),
+      })
   })
 
   function Diff(p: { diff: string; filePath: string }) {
     return (
       <box paddingLeft={1}>
-        <diff
+        <SessionDiffRenderer
           diff={p.diff}
-          view={view()}
-          filetype={filetype(p.filePath)}
+          display={view()(p.filePath)}
           syntaxStyle={syntax()}
-          showLineNumbers={true}
-          width="100%"
-          wrapMode={ctx.diffWrapMode()}
-          fg={theme.text}
-          addedBg={theme.diffAddedBg}
-          removedBg={theme.diffRemovedBg}
-          contextBg={theme.diffContextBg}
-          addedSignColor={theme.diffHighlightAdded}
-          removedSignColor={theme.diffHighlightRemoved}
-          lineNumberFg={theme.diffLineNumber}
-          lineNumberBg={theme.diffContextBg}
-          addedLineNumberBg={theme.diffAddedLineNumberBg}
-          removedLineNumberBg={theme.diffRemovedLineNumberBg}
+          colors={{
+            fg: theme.text,
+            addedBg: theme.diffAddedBg,
+            removedBg: theme.diffRemovedBg,
+            contextBg: theme.diffContextBg,
+            addedSignColor: theme.diffHighlightAdded,
+            removedSignColor: theme.diffHighlightRemoved,
+            lineNumberFg: theme.diffLineNumber,
+            lineNumberBg: theme.diffContextBg,
+            addedLineNumberBg: theme.diffAddedLineNumberBg,
+            removedLineNumberBg: theme.diffRemovedLineNumberBg,
+          }}
         />
       </box>
     )
@@ -1814,16 +1817,30 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
 }
 
 function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
+  const view = createMemo(() =>
+    todoWriteView({
+      status: props.part.state.status,
+      inputTodos: props.input.todos,
+      metadataTodos: props.metadata.todos,
+      output: props.output,
+    }),
+  )
+
   return (
     <Switch>
-      <Match when={props.metadata.todos?.length}>
+      <Match when={view().state === "items"}>
         <BlockTool title="# Todos" part={props.part}>
           <box>
-            <For each={props.input.todos ?? []}>
+            <For each={view().todos}>
               {(todo) => <TodoItem status={todo.status} content={todo.content} />}
             </For>
           </box>
         </BlockTool>
+      </Match>
+      <Match when={view().state === "empty"}>
+        <InlineTool icon="✓" pending="Updating todos..." complete={true} part={props.part}>
+          No todos
+        </InlineTool>
       </Match>
       <Match when={true}>
         <InlineTool icon="⚙" pending="Updating todos..." complete={false} part={props.part}>

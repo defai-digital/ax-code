@@ -51,6 +51,10 @@ export namespace Flag {
   export const AX_CODE_NATIVE_FS = !falsy("AX_CODE_NATIVE_FS")
   export const AX_CODE_NATIVE_DIFF = !falsy("AX_CODE_NATIVE_DIFF")
   export const AX_CODE_NATIVE_PARSER = !falsy("AX_CODE_NATIVE_PARSER")
+  // Debug-engine native scanners run larger worktree scans through the
+  // @ax-code/fs addon. A native process crash cannot be caught by JS, so
+  // keep this path opt-in until it has crash-isolation coverage.
+  export const AX_CODE_DEBUG_ENGINE_NATIVE_SCAN = truthy("AX_CODE_DEBUG_ENGINE_NATIVE_SCAN")
 
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")

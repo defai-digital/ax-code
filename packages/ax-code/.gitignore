@@ -2,4 +2,12 @@ research
 dist
 gen
 app.log
+AX.md
 src/provider/models-snapshot.ts
+.tmp/*
+!.tmp/test-report/
+.tmp/test-report/*
+!.tmp/test-report/.keep
+session-*.md
+ax-code-log/
+*.heapsnapshot

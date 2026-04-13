@@ -199,10 +199,14 @@ export namespace Config {
       const inWorktree = Filesystem.contains(Instance.worktree, dir)
       const isUserConfigDir = dir === Global.Path.config || dir === Flag.AX_CODE_CONFIG_DIR
       const trusted = !inWorktree || isUserConfigDir
+      const dependencyManaged = !inWorktree || isUserConfigDir
+      const configuredPlugins: string[] = []
       if (dir.endsWith(".ax-code") || dir === Flag.AX_CODE_CONFIG_DIR) {
         for (const file of ["ax-code.jsonc", "ax-code.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
-          result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file), { trusted }))
+          const loaded = await loadFile(path.join(dir, file), { trusted })
+          configuredPlugins.push(...(loaded.plugin ?? []))
+          result = mergeConfigConcatArrays(result, loaded)
           // to satisfy the type checker
           result.agent ??= {}
           result.mode ??= {}
@@ -210,17 +214,20 @@ export namespace Config {
         }
       }
 
-      deps.push(
-        iife(async () => {
-          const shouldInstall = await needsInstall(dir)
-          if (shouldInstall) await installDependencies(dir)
-        }),
-      )
-
       result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
       result.agent = mergeDeep(result.agent, await loadAgent(dir))
       result.agent = mergeDeep(result.agent, await loadMode(dir))
-      result.plugin.push(...(await loadPlugin(dir)))
+      const pluginFiles = await loadPlugin(dir)
+      result.plugin.push(...pluginFiles)
+
+      if (dependencyManaged && [...configuredPlugins, ...pluginFiles].some((plugin) => isLocalFilePlugin(plugin, dir))) {
+        deps.push(
+          iife(async () => {
+            const shouldInstall = await needsInstall(dir)
+            if (shouldInstall) await installDependencies(dir)
+          }),
+        )
+      }
     }
 
     // Inline config content overrides all non-managed config sources.
@@ -604,6 +611,15 @@ export namespace Config {
       plugins.push(pathToFileURL(item).href)
     }
     return plugins
+  }
+
+  function isLocalFilePlugin(plugin: string, dir: string) {
+    if (!plugin.startsWith("file://")) return false
+    try {
+      return Filesystem.contains(dir, fileURLToPath(plugin))
+    } catch {
+      return false
+    }
   }
 
   /**

@@ -1,8 +1,13 @@
 import { NativePerf } from "../perf/native"
 import { Log } from "../util/log"
 import { NativeAddon } from "../native/addon"
+import { Flag } from "../flag/flag"
 
 const log = Log.create({ service: "debug-engine.native-scan" })
+
+function nativeScanEnabled() {
+  return Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN
+}
 
 export interface ScanPattern {
   label: string
@@ -38,6 +43,7 @@ export function nativeScanFiles(input: {
   maxPerFile?: number
   contextLines?: number
 }): ScanResult | undefined {
+  if (!nativeScanEnabled()) return undefined
   const native = NativeAddon.fs()
   if (!native) return undefined
   try {
@@ -77,6 +83,7 @@ export function nativeScanFiles(input: {
  */
 export function nativeReadFilesBatch(files: string[]): Map<string, string> | undefined {
   if (files.length === 0) return new Map()
+  if (!nativeScanEnabled()) return undefined
   const native = NativeAddon.fs()
   if (!native) return undefined
   try {
@@ -113,6 +120,7 @@ interface DetectResult<F> {
 }
 
 function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult<F> | undefined {
+  if (!nativeScanEnabled()) return undefined
   const native = NativeAddon.fs()
   if (!native) return undefined
   if (typeof native[fnName] !== "function") return undefined

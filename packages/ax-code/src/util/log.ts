@@ -51,6 +51,8 @@ export namespace Log {
     print: boolean
     dev?: boolean
     level?: Level
+    dir?: string
+    name?: string
   }
 
   let logpath = ""
@@ -70,16 +72,20 @@ export namespace Log {
   export async function init(options: Options) {
     if (options.level) level = options.level
     const pinoLevel = level === "DEBUG" ? "debug" : level === "INFO" ? "info" : level === "WARN" ? "warn" : "error"
-    cleanup(Global.Path.log)
+    const dir = options.dir ?? Global.Path.log
+    await fs.mkdir(dir, { recursive: true }).catch(() => {})
+    cleanup(dir)
     if (options.print) {
       // Print mode: stderr only, no Pino (avoid JSON/text interleaving)
       pinoLogger = undefined
       return
     }
-    logpath = path.join(
-      Global.Path.log,
-      options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
-    )
+    const name = options.name
+      ? `${options.name}.log`
+      : options.dev
+        ? "dev.log"
+        : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log"
+    logpath = path.join(dir, name)
     await fs.truncate(logpath).catch(() => {})
     // Drain and close the previous stream before opening a new one.
     // Without this, every init() (e.g. after a worker reload) leaks

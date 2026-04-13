@@ -10,11 +10,12 @@ import { Flag } from "@/flag/flag"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Usage } from "./usage"
 
-const Title = (props: { session: Accessor<Session> }) => {
+const Title = (props: { session: Accessor<Session | undefined> }) => {
   const { theme } = useTheme()
   return (
     <text fg={theme.text}>
-      <span style={{ bold: true }}>#</span> <span style={{ bold: true }}>{props.session().title}</span>
+      <span style={{ bold: true }}>#</span>{" "}
+      <span style={{ bold: true }}>{props.session()?.title ?? "Loading session..."}</span>
     </text>
   )
 }
@@ -44,7 +45,7 @@ const WorkspaceInfo = (props: { workspace: Accessor<string | undefined> }) => {
 export function Header() {
   const route = useRouteData("session")
   const sync = useSync()
-  const session = createMemo(() => sync.session.get(route.sessionID)!)
+  const session = createMemo(() => sync.session.get(route.sessionID))
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
 
   const context = createMemo(() => {

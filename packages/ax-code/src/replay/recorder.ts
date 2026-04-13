@@ -3,6 +3,7 @@ import { EventLogID } from "./index"
 import { EventQuery } from "./query"
 import type { ReplayEvent } from "./event"
 import type { SessionID } from "@/session/schema"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
 
 const log = Log.create({ service: "replay.recorder" })
 
@@ -28,6 +29,7 @@ export namespace Recorder {
     const id = EventLogID.ascending()
     const seq = state.sequence++
     const stepId = event.stepIndex?.toString() ?? null
+    DiagnosticLog.record(event, { id, sequence: seq })
     queueMicrotask(() => {
       EventQuery.insert({
         id,

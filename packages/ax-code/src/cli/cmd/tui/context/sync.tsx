@@ -313,7 +313,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         case "permission.asked": {
           const request = event.properties
           if (store.autonomous) {
-            sdk.client.permission.reply({ reply: "once", requestID: request.id })
+            sdk.client.permission.reply({ reply: "once", requestID: request.id }).catch((error) => {
+              Log.Default.warn("autonomous permission reply failed", { error })
+            })
             break
           }
           const requests = store.permission[request.sessionID]
@@ -358,7 +360,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             const answers = request.questions.map((q: { options: { label: string }[] }) =>
               q.options.length > 0 ? [q.options[0].label] : [],
             )
-            sdk.client.question.reply({ requestID: request.id, answers })
+            sdk.client.question.reply({ requestID: request.id, answers }).catch((error) => {
+              Log.Default.warn("autonomous question reply failed", { error })
+            })
             break
           }
           const requests = store.question[request.sessionID]
@@ -526,11 +530,21 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         }
 
         case "mcp.tools.changed":
-          sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))).catch(() => {})
+          sdk.client.mcp
+            .status()
+            .then((x) => {
+              if (x.data) setStore("mcp", reconcile(x.data))
+            })
+            .catch((error) => Log.Default.warn("mcp status sync failed", { error }))
           break
 
         case "lsp.updated": {
-          sdk.client.lsp.status().then((x) => setStore("lsp", x.data!))
+          sdk.client.lsp
+            .status()
+            .then((x) => {
+              if (x.data) setStore("lsp", x.data)
+            })
+            .catch((error) => Log.Default.warn("lsp status sync failed", { error }))
           // Piggyback on lsp.updated as a cheap "project state changed"
           // trigger until DRE ships its own Bus event in a later
           // release. LSP updates fire frequently enough to keep the

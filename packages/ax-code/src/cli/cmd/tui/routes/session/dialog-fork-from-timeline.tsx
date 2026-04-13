@@ -8,6 +8,9 @@ import { useRoute } from "@tui/context/route"
 import { useDialog } from "../../ui/dialog"
 import type { PromptInfo } from "@tui/component/prompt/history"
 import { strip } from "@tui/component/prompt/part"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.dialog-fork-from-timeline" })
 
 export function DialogForkFromTimeline(props: { sessionID: string; onMove: (messageID: string) => void }) {
   const sync = useSync()
@@ -37,6 +40,10 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
             sessionID: props.sessionID,
             messageID: message.id,
           })
+          if (!forked.data) {
+            log.warn("session fork failed", { sessionID: props.sessionID, messageID: message.id, error: forked.error })
+            return
+          }
           const parts = sync.data.part[message.id] ?? []
           const initialPrompt = parts.reduce(
             (agg, part) => {
@@ -49,7 +56,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
             { input: "", parts: [] as PromptInfo["parts"] },
           )
           route.navigate({
-            sessionID: forked.data!.id,
+            sessionID: forked.data.id,
             type: "session",
             initialPrompt,
           })

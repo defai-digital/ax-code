@@ -95,6 +95,21 @@ describe("Keybind.toString", () => {
   })
 })
 
+describe("Keybind.toDisplayString", () => {
+  test("replaces leader placeholder with the configured leader key", () => {
+    const info: Keybind.Info = { ctrl: false, meta: false, shift: false, leader: true, name: "f" }
+    const leader: Keybind.Info = { ctrl: true, meta: false, shift: false, leader: false, name: "x" }
+
+    expect(Keybind.toDisplayString(info, leader)).toBe("ctrl+x f")
+  })
+
+  test("does not crash when a leader binding is missing", () => {
+    const info: Keybind.Info = { ctrl: false, meta: false, shift: false, leader: true, name: "f" }
+
+    expect(Keybind.toDisplayString(info, undefined)).toBe("<leader> f")
+  })
+})
+
 describe("Keybind.match", () => {
   test("should match identical keybinds", () => {
     const a: Keybind.Info = { ctrl: true, meta: false, shift: false, leader: false, name: "x" }

@@ -11,23 +11,43 @@ import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
 import { Flag } from "@/flag/flag"
 import { setTimeout as sleep } from "node:timers/promises"
 import { writeHeapSnapshot } from "node:v8"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
+
+const debugDir = process.env.AX_CODE_DEBUG === "1" ? process.env.AX_CODE_DEBUG_DIR : undefined
+await DiagnosticLog.configure({
+  enabled: Boolean(debugDir),
+  dir: debugDir,
+  includeContent: process.env.AX_CODE_DEBUG_INCLUDE_CONTENT === "1",
+  manifest: {
+    component: "tui-worker",
+    version: Installation.VERSION,
+    pid: process.pid,
+    argv: process.argv.slice(2),
+    cwd: process.cwd(),
+  },
+})
+if (debugDir) DiagnosticLog.installProcessDiagnostics()
 
 await Log.init({
   print: process.argv.includes("--print-logs"),
   dev: Installation.isLocal(),
   level: (() => {
+    if (debugDir) return "DEBUG"
     if (Installation.isLocal()) return "DEBUG"
     return "INFO"
   })(),
+  ...(debugDir ? { dir: debugDir, name: "tui-worker" } : {}),
 })
 
 process.on("unhandledRejection", (e) => {
+  DiagnosticLog.recordProcess("worker.unhandledRejection", { error: e })
   Log.Default.error("rejection", {
     e: e instanceof Error ? e.message : e,
   })
 })
 
 process.on("uncaughtException", (e) => {
+  DiagnosticLog.recordProcess("worker.uncaughtException", { error: e })
   Log.Default.error("exception", {
     e: e instanceof Error ? e.message : e,
   })
@@ -89,6 +109,7 @@ const startEventStream = (input: { directory?: string }) => {
       }
     }
   })().catch((error) => {
+    DiagnosticLog.recordProcess("worker.eventStreamError", { error })
     Log.Default.error("event stream error", {
       error: error instanceof Error ? error.message : error,
     })

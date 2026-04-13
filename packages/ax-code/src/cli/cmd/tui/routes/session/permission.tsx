@@ -10,12 +10,13 @@ import { SplitBorder } from "../../component/border"
 import { useSync } from "../../context/sync"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import path from "path"
-import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
 import { Global } from "@/global"
 import { useDialog } from "../../ui/dialog"
 import { useTuiConfig } from "../../context/tui-config"
+import { diffDisplayView } from "./view-model"
+import { SessionDiffRenderer } from "./render-adapter"
 
 type PermissionStage = "permission" | "always" | "reject"
 
@@ -37,14 +38,6 @@ function normalizePath(input?: string) {
   return absolute
 }
 
-function filetype(input?: string) {
-  if (!input) return "none"
-  const ext = path.extname(input)
-  const language = LANGUAGE_EXTENSIONS[ext]
-  if (["typescriptreact", "javascriptreact", "javascript"].includes(language)) return "typescript"
-  return language
-}
-
 function EditBody(props: { request: PermissionRequest }) {
   const themeState = useTheme()
   const theme = themeState.theme
@@ -55,13 +48,14 @@ function EditBody(props: { request: PermissionRequest }) {
   const filepath = createMemo(() => (props.request.metadata?.filepath as string) ?? "")
   const diff = createMemo(() => (props.request.metadata?.diff as string) ?? "")
 
-  const view = createMemo(() => {
-    const diffStyle = config.diff_style
-    if (diffStyle === "stacked") return "unified"
-    return dimensions().width > 120 ? "split" : "unified"
-  })
-
-  const ft = createMemo(() => filetype(filepath()))
+  const view = createMemo(() =>
+    diffDisplayView({
+      diffStyle: config.diff_style,
+      width: dimensions().width,
+      filePath: filepath(),
+      wrapMode: "word",
+    }),
+  )
 
   return (
     <box flexDirection="column" gap={1}>
@@ -75,24 +69,22 @@ function EditBody(props: { request: PermissionRequest }) {
             },
           }}
         >
-          <diff
+          <SessionDiffRenderer
             diff={diff()}
-            view={view()}
-            filetype={ft()}
+            display={view()}
             syntaxStyle={syntax()}
-            showLineNumbers={true}
-            width="100%"
-            wrapMode="word"
-            fg={theme.text}
-            addedBg={theme.diffAddedBg}
-            removedBg={theme.diffRemovedBg}
-            contextBg={theme.diffContextBg}
-            addedSignColor={theme.diffHighlightAdded}
-            removedSignColor={theme.diffHighlightRemoved}
-            lineNumberFg={theme.diffLineNumber}
-            lineNumberBg={theme.diffContextBg}
-            addedLineNumberBg={theme.diffAddedLineNumberBg}
-            removedLineNumberBg={theme.diffRemovedLineNumberBg}
+            colors={{
+              fg: theme.text,
+              addedBg: theme.diffAddedBg,
+              removedBg: theme.diffRemovedBg,
+              contextBg: theme.diffContextBg,
+              addedSignColor: theme.diffHighlightAdded,
+              removedSignColor: theme.diffHighlightRemoved,
+              lineNumberFg: theme.diffLineNumber,
+              lineNumberBg: theme.diffContextBg,
+              addedLineNumberBg: theme.diffAddedLineNumberBg,
+              removedLineNumberBg: theme.diffRemovedLineNumberBg,
+            }}
           />
         </scrollbox>
       </Show>

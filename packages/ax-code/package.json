@@ -18,6 +18,7 @@
     "test:risk": "bun run script/test-risk.ts",
     "perf:index": "bun run script/perf-index.ts",
     "perf:report": "bun run script/perf-report.ts",
+    "perf:tui": "bun run script/tui-benchmark.ts",
     "build": "bun run script/build.ts",
     "dev": "bun run --conditions=browser ./src/index.ts",
     "db": "bun drizzle-kit"

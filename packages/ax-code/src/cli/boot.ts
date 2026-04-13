@@ -43,6 +43,7 @@ import { FormatError } from "./error"
 import { UI } from "./ui"
 import { Installation } from "../installation"
 import { Log } from "../util/log"
+import { DiagnosticLog } from "../debug/diagnostic-log"
 
 const cmds = [
   AcpCommand,
@@ -84,6 +85,7 @@ const cmds = [
 
 export function hooks() {
   process.on("unhandledRejection", (err) => {
+    DiagnosticLog.recordProcess("cli.unhandledRejection", { error: err })
     Log.Default.error("rejection", {
       e: err instanceof Error ? err.message : err,
     })
@@ -91,6 +93,7 @@ export function hooks() {
   })
 
   process.on("uncaughtException", (err) => {
+    DiagnosticLog.recordProcess("cli.uncaughtException", { error: err })
     Log.Default.error("exception", {
       e: err instanceof Error ? err.message : err,
     })
@@ -121,6 +124,18 @@ export function cli(argv = hideBin(process.argv)) {
       describe: "isolation sandbox mode",
       type: "string",
       choices: ["read-only", "workspace-write", "full-access"],
+    })
+    .option("debug", {
+      describe: "write local diagnostic logs to the OS temp directory",
+      type: "boolean",
+    })
+    .option("debug-dir", {
+      describe: "explicit directory for --debug diagnostic logs",
+      type: "string",
+    })
+    .option("debug-include-content", {
+      describe: "include prompt, output, and tool content in --debug logs",
+      type: "boolean",
     })
     .middleware(async (opts) => {
       await init(opts)

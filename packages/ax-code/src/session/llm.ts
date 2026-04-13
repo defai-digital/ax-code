@@ -22,6 +22,7 @@ import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { Permission } from "@/permission"
 import { Isolation } from "@/isolation"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -180,7 +181,7 @@ export namespace LLM {
       maxDuration: 300_000,
       onError(error) {
         l.error("stream error", {
-          error,
+          error: DiagnosticLog.redactForLog(error),
         })
       },
       async experimental_repairToolCall(failed) {

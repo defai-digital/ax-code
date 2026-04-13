@@ -737,7 +737,7 @@ test("does not try to install dependencies in read-only AX_CODE_CONFIG_DIR", asy
   }
 })
 
-test("installs dependencies in writable AX_CODE_CONFIG_DIR", async () => {
+test("does not install dependencies in writable AX_CODE_CONFIG_DIR without local plugins", async () => {
   await using tmp = await tmpdir<string>({
     init: async (dir) => {
       const cfg = path.join(dir, "configdir")
@@ -758,13 +758,50 @@ test("installs dependencies in writable AX_CODE_CONFIG_DIR", async () => {
       },
     })
 
-    expect(await Filesystem.exists(path.join(tmp.extra, "package.json"))).toBe(true)
-    expect(await Filesystem.exists(path.join(tmp.extra, ".gitignore"))).toBe(true)
+    expect(await Filesystem.exists(path.join(tmp.extra, "package.json"))).toBe(false)
+    expect(await Filesystem.exists(path.join(tmp.extra, ".gitignore"))).toBe(false)
   } finally {
     if (prev === undefined) delete process.env.AX_CODE_CONFIG_DIR
     else process.env.AX_CODE_CONFIG_DIR = prev
   }
-}, 60000)
+})
+
+test("installs dependencies in writable AX_CODE_CONFIG_DIR when local plugins exist", async () => {
+  await using tmp = await tmpdir<string>({
+    init: async (dir) => {
+      const cfg = path.join(dir, "configdir")
+      await fs.mkdir(path.join(cfg, "plugin"), { recursive: true })
+      await Filesystem.write(path.join(cfg, "plugin", "local.ts"), "export default function plugin() { return {} }\n")
+      return cfg
+    },
+  })
+
+  const prev = process.env.AX_CODE_CONFIG_DIR
+  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+    code: 0,
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+  }))
+  process.env.AX_CODE_CONFIG_DIR = tmp.extra
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.get()
+        await Config.waitForDependencies()
+      },
+    })
+
+    expect(run).toHaveBeenCalled()
+    expect(await Filesystem.exists(path.join(tmp.extra, "package.json"))).toBe(true)
+    expect(await Filesystem.exists(path.join(tmp.extra, ".gitignore"))).toBe(true)
+  } finally {
+    run.mockRestore()
+    if (prev === undefined) delete process.env.AX_CODE_CONFIG_DIR
+    else process.env.AX_CODE_CONFIG_DIR = prev
+  }
+})
 
 test("serializes concurrent config dependency installs", async () => {
   await using tmp = await tmpdir()
@@ -1818,6 +1855,7 @@ describe("deduplicatePlugins", () => {
         const myPlugins = plugins.filter((p) => Config.getPluginName(p) === "my-plugin")
         expect(myPlugins.length).toBe(1)
         expect(myPlugins[0].startsWith("file://")).toBe(true)
+        expect(await Filesystem.exists(path.join(tmp.path, "project", ".ax-code", "package.json"))).toBe(false)
       },
     })
   })

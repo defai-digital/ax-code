@@ -15,6 +15,7 @@ import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
 import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
 import { writeHeapSnapshot } from "v8"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -134,12 +135,19 @@ export const TuiThreadCommand = cmd({
       const worker = new Worker(file, {
         env: Object.fromEntries(Object.entries(sanitized).filter((e): e is [string, string] => e[1] !== undefined)),
       })
+      DiagnosticLog.recordProcess("tui.workerSpawned", { target: String(file) })
       worker.onerror = (e) => {
+        DiagnosticLog.recordProcess("tui.workerError", { error: e })
+        Log.Default.error(e)
+      }
+      worker.onmessageerror = (e) => {
+        DiagnosticLog.recordProcess("tui.workerMessageError", { error: e })
         Log.Default.error(e)
       }
 
       const client = Rpc.client<typeof rpc>(worker)
       const error = (e: unknown) => {
+        DiagnosticLog.recordProcess("tui.threadError", { error: e })
         Log.Default.error(e)
       }
       const reload = () => {

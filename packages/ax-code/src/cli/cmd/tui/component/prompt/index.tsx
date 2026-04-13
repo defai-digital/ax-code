@@ -36,6 +36,10 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 import { Usage } from "../../routes/session/usage"
+import { Log } from "@/util/log"
+import { isPromptExitCommand, promptSubmissionView } from "./view-model"
+
+const log = Log.create({ service: "tui.prompt" })
 
 export type PromptProps = {
   sessionID?: string
@@ -90,6 +94,21 @@ export function Prompt(props: PromptProps) {
     if (sync.data.provider.length === 0) {
       dialog.replace(() => <DialogProviderConnect />)
     }
+  }
+
+  function errorMessage(error: unknown) {
+    if (error instanceof Error) return error.message
+    if (typeof error === "string") return error
+    return "Unknown error"
+  }
+
+  function reportSubmitFailure(action: string, error: unknown) {
+    const message = errorMessage(error)
+    log.error(`${action} failed`, { error })
+    toast.show({
+      message: `${action} failed: ${message}`,
+      variant: "error",
+    })
   }
 
   const textareaKeybindings = useTextareaKeybindings()
@@ -553,8 +572,7 @@ export function Prompt(props: PromptProps) {
     if (props.disabled) return
     if (autocomplete?.visible) return
     if (!store.prompt.input) return
-    const trimmed = store.prompt.input.trim()
-    if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
+    if (isPromptExitCommand(store.prompt.input)) {
       exit()
       return
     }
@@ -566,13 +584,16 @@ export function Prompt(props: PromptProps) {
 
     let sessionID = props.sessionID
     if (sessionID == null) {
-      const res = await sdk.client.session.create({})
+      const res = await sdk.client.session.create({}).catch((error: unknown) => {
+        reportSubmitFailure("Session creation", error)
+        return undefined
+      })
+      if (!res) return
 
       if (res.error) {
-        console.log("Creating a session failed:", res.error)
-
+        log.error("session create failed", { error: res.error })
         toast.show({
-          message: "Creating a session failed. Open console for more details.",
+          message: `Creating a session failed: ${errorMessage(res.error)}`,
           variant: "error",
         })
 
@@ -583,83 +604,81 @@ export function Prompt(props: PromptProps) {
     }
 
     const messageID = MessageID.ascending()
-    let inputText = store.prompt.input
-
-    // Expand pasted text inline before submitting
-    const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
-    const sortedExtmarks = allExtmarks.sort((a: { start: number }, b: { start: number }) => b.start - a.start)
-
-    for (const extmark of sortedExtmarks) {
-      const partIndex = store.extmarkToPartIndex.get(extmark.id)
-      if (partIndex !== undefined) {
-        const part = store.prompt.parts[partIndex]
-        if (part?.type === "text" && part.text) {
-          const before = inputText.slice(0, extmark.start)
-          const after = inputText.slice(extmark.end)
-          inputText = before + part.text + after
-        }
-      }
-    }
-
-    // Filter out text parts (pasted content) since they're now expanded inline
-    const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
+    const submission = promptSubmissionView({
+      text: store.prompt.input,
+      parts: store.prompt.parts,
+      extmarks: input.extmarks.getAllForTypeId(promptPartTypeId),
+      extmarkToPartIndex: store.extmarkToPartIndex,
+    })
+    const inputText = submission.text
+    const nonTextParts = submission.parts
 
     // Capture mode before it gets reset
     const currentMode = store.mode
     const variant = local.model.variant.current()
 
-    if (store.mode === "shell") {
-      sdk.client.session.shell({
-        sessionID,
-        agent: local.agent.current().name,
-        model: {
-          providerID: selectedModel.providerID,
-          modelID: selectedModel.modelID,
-        },
-        command: inputText,
-      })
-      setStore("mode", "normal")
-    } else if (
-      inputText.startsWith("/") &&
-      iife(() => {
-        const name = inputText.split("\n")[0].split(" ")[0].slice(1)
-        return command.trySlash(name)
-      })
-    ) {
-      // Client-side slash command handled by trySlash
-    } else if (
-      inputText.startsWith("/") &&
-      iife(() => {
-        const firstLine = inputText.split("\n")[0]
-        const command = firstLine.split(" ")[0].slice(1)
-        return sync.data.command.some((x) => x.name === command)
-      })
-    ) {
-      // Parse command from first line, preserve multi-line content in arguments
-      const firstLineEnd = inputText.indexOf("\n")
-      const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
-      const [command, ...firstLineArgs] = firstLine.split(" ")
-      const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
-      const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
+    try {
+      if (store.mode === "shell") {
+        void sdk.client.session
+          .shell({
+            sessionID,
+            agent: local.agent.current().name,
+            model: {
+              providerID: selectedModel.providerID,
+              modelID: selectedModel.modelID,
+            },
+            command: inputText,
+          })
+          .then((res) => {
+            if (res.error) reportSubmitFailure("Shell command submission", res.error)
+          })
+          .catch((error: unknown) => reportSubmitFailure("Shell command submission", error))
+        setStore("mode", "normal")
+      } else if (
+        inputText.startsWith("/") &&
+        iife(() => {
+          const name = inputText.split("\n")[0].split(" ")[0].slice(1)
+          return command.trySlash(name)
+        })
+      ) {
+        // Client-side slash command handled by trySlash.
+      } else if (
+        inputText.startsWith("/") &&
+        iife(() => {
+          const firstLine = inputText.split("\n")[0]
+          const command = firstLine.split(" ")[0].slice(1)
+          return sync.data.command.some((x) => x.name === command)
+        })
+      ) {
+        // Parse command from first line, preserve multi-line content in arguments
+        const firstLineEnd = inputText.indexOf("\n")
+        const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
+        const [command, ...firstLineArgs] = firstLine.split(" ")
+        const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
+        const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
 
-      sdk.client.session.command({
-        sessionID,
-        command: command.slice(1),
-        arguments: args,
-        agent: local.agent.current().name,
-        model: `${selectedModel.providerID}/${selectedModel.modelID}`,
-        messageID,
-        variant,
-        parts: nonTextParts
-          .filter((x) => x.type === "file")
-          .map((x) => ({
-            id: PartID.ascending(),
-            ...x,
-          })),
-      })
-    } else {
-      sdk.client.session
-        .prompt({
+        void sdk.client.session
+          .command({
+            sessionID,
+            command: command.slice(1),
+            arguments: args,
+            agent: local.agent.current().name,
+            model: `${selectedModel.providerID}/${selectedModel.modelID}`,
+            messageID,
+            variant,
+            parts: nonTextParts
+              .filter((x) => x.type === "file")
+              .map((x) => ({
+                id: PartID.ascending(),
+                ...x,
+              })),
+          })
+          .then((res) => {
+            if (res.error) reportSubmitFailure("Command submission", res.error)
+          })
+          .catch((error: unknown) => reportSubmitFailure("Command submission", error))
+      } else {
+        const res = await sdk.client.session.promptAsync({
           sessionID,
           ...selectedModel,
           messageID,
@@ -674,21 +693,18 @@ export function Prompt(props: PromptProps) {
             },
             ...nonTextParts.map(assign),
           ],
-          ...( local.agent.current().name !== syncedAgentName ? { userSelectedAgent: true } as any : {}),
+          ...(local.agent.current().name !== syncedAgentName ? ({ userSelectedAgent: true } as any) : {}),
         })
-        // Surface submission failures via the toast. Previously the
-        // empty `.catch(() => {})` left the user staring at a blank
-        // screen when the SDK call failed (network down, server
-        // stopped, auth expired) with no indication of what went wrong.
-        .catch((error: unknown) => {
-          const message = error instanceof Error ? error.message : "Unknown error"
-          console.log("Prompt submission failed:", error)
-          toast.show({
-            message: `Prompt submission failed: ${message}`,
-            variant: "error",
-          })
-        })
+        if (res.error) {
+          reportSubmitFailure("Prompt submission", res.error)
+          return
+        }
+      }
+    } catch (error) {
+      reportSubmitFailure("Prompt submission", error)
+      return
     }
+
     history.append({
       ...store.prompt,
       mode: currentMode,

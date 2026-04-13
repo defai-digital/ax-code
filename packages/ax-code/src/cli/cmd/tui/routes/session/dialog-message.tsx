@@ -8,6 +8,9 @@ import type { PromptInfo } from "@tui/component/prompt/history"
 import { strip } from "@tui/component/prompt/part"
 import { EventQuery } from "@/replay/query"
 import { messageRoute } from "./route"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.dialog-message" })
 
 export function DialogMessage(props: {
   messageID: string
@@ -53,7 +56,7 @@ export function DialogMessage(props: {
             })
 
             if (props.setPrompt) {
-              const parts = sync.data.part[msg.id]
+              const parts = sync.data.part[msg.id] ?? []
               const promptInfo = parts.reduce(
                 (agg, part) => {
                   if (part.type === "text") {
@@ -79,7 +82,7 @@ export function DialogMessage(props: {
             const msg = message()
             if (!msg) return
 
-            const parts = sync.data.part[msg.id]
+            const parts = sync.data.part[msg.id] ?? []
             const text = parts.reduce((agg, part) => {
               if (part.type === "text" && !part.synthetic) {
                 agg += part.text
@@ -101,10 +104,18 @@ export function DialogMessage(props: {
               sessionID: props.sessionID,
               messageID: props.messageID,
             })
+            if (!result.data) {
+              log.warn("session fork failed", {
+                sessionID: props.sessionID,
+                messageID: props.messageID,
+                error: result.error,
+              })
+              return
+            }
             const initialPrompt = (() => {
               const msg = message()
               if (!msg) return undefined
-              const parts = sync.data.part[msg.id]
+              const parts = sync.data.part[msg.id] ?? []
               return parts.reduce(
                 (agg, part) => {
                   if (part.type === "text") {
@@ -117,7 +128,7 @@ export function DialogMessage(props: {
               )
             })()
             route.navigate({
-              sessionID: result.data!.id,
+              sessionID: result.data.id,
               type: "session",
               initialPrompt,
             })

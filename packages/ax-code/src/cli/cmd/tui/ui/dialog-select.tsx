@@ -1,15 +1,20 @@
 import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
 import { useTheme, selectedForeground } from "@tui/context/theme"
-import { entries, filter, flatMap, groupBy, pipe, take } from "remeda"
 import { batch, createEffect, createMemo, For, Show, type JSX, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
-import * as fuzzysort from "fuzzysort"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
+import {
+  dialogSelectFlatOptions,
+  dialogSelectGroupedOptions,
+  dialogSelectMoveIndex,
+  dialogSelectRows,
+  dialogSelectVisibleHeight,
+} from "./dialog-select-view-model"
 
 export interface DialogSelectProps<T> {
   title: string
@@ -57,6 +62,23 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     input: "keyboard" as "keyboard" | "mouse",
   })
 
+  let input: InputRenderable
+
+  const flatten = createMemo(() => props.flat && store.filter.length > 0)
+
+  const grouped = createMemo<[string, DialogSelectOption<T>[]][]>(() => {
+    return dialogSelectGroupedOptions({
+      options: props.options,
+      query: store.filter,
+      flat: flatten(),
+      skipFilter: props.skipFilter,
+    })
+  })
+
+  const flat = createMemo(() => {
+    return dialogSelectFlatOptions(grouped())
+  })
+
   createEffect(
     on(
       () => props.current,
@@ -71,67 +93,18 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     ),
   )
 
-  let input: InputRenderable
-
-  const filtered = createMemo(() => {
-    if (props.skipFilter) return props.options.filter((x) => x.disabled !== true)
-    const needle = store.filter.toLowerCase()
-    const options = pipe(
-      props.options,
-      filter((x) => x.disabled !== true),
-    )
-    if (!needle) return options
-
-    // prioritize title matches (weight: 2) over category matches (weight: 1).
-    // users typically search by the item name, and not its category.
-    const result = fuzzysort
-      .go(needle, options, {
-        keys: ["title", "category"],
-        scoreFn: (r) => r[0].score * 2 + r[1].score,
-      })
-      .map((x) => x.obj)
-
-    return result
-  })
-
   // When the filter changes due to how TUI works, the mousemove might still be triggered
   // via a synthetic event as the layout moves underneath the cursor. This is a workaround to make sure the input mode remains keyboard
   // that the mouseover event doesn't trigger when filtering.
   createEffect(() => {
-    filtered()
+    grouped()
     setStore("input", "keyboard")
   })
 
-  const flatten = createMemo(() => props.flat && store.filter.length > 0)
-
-  const grouped = createMemo<[string, DialogSelectOption<T>[]][]>(() => {
-    if (flatten()) return [["", filtered()]]
-    const result = pipe(
-      filtered(),
-      groupBy((x) => x.category ?? ""),
-      // mapValues((x) => x.sort((a, b) => a.title.localeCompare(b.title))),
-      entries(),
-    )
-    return result
-  })
-
-  const flat = createMemo(() => {
-    return pipe(
-      grouped(),
-      flatMap(([_, options]) => options),
-    )
-  })
-
-  const rows = createMemo(() => {
-    const headers = grouped().reduce((acc, [category], i) => {
-      if (!category) return acc
-      return acc + (i > 0 ? 2 : 1)
-    }, 0)
-    return flat().length + headers
-  })
+  const rows = createMemo(() => dialogSelectRows(grouped()))
 
   const dimensions = useTerminalDimensions()
-  const height = createMemo(() => Math.min(rows(), Math.floor(dimensions().height / 2) - 6))
+  const height = createMemo(() => dialogSelectVisibleHeight(rows(), dimensions().height))
 
   const selected = createMemo(() => flat()[store.selected])
 
@@ -151,11 +124,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   )
 
   function move(direction: number) {
-    if (flat().length === 0) return
-    let next = store.selected + direction
-    if (next < 0) next = flat().length - 1
-    if (next >= flat().length) next = 0
-    moveTo(next, true)
+    moveTo(dialogSelectMoveIndex(store.selected, direction, flat().length), true)
   }
 
   function moveTo(next: number, center = false) {
@@ -223,7 +192,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       return store.filter
     },
     get filtered() {
-      return filtered()
+      return flat()
     },
   }
   props.ref?.(ref)

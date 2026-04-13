@@ -1,6 +1,7 @@
 import { NamedError } from "@ax-code/util/error"
 import { EOL } from "os"
 import { Log } from "../../util/log"
+import { DiagnosticLog } from "../../debug/diagnostic-log"
 
 export type FatalDep = {
   error?: (msg: string, data: Record<string, unknown>) => void
@@ -53,7 +54,9 @@ export function fatal(err: unknown, dep: FatalDep) {
   const out = dep.out ?? process.stderr
   const text = dep.text ?? NamedError.message
 
-  error("fatal", data(err))
+  const detail = data(err)
+  DiagnosticLog.recordProcess("fatal", { error: detail })
+  error("fatal", detail)
   const formatted = format(err)
   if (formatted) {
     ui(formatted)
