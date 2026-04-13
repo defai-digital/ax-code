@@ -195,6 +195,7 @@ export async function probeLspServers(
 ): Promise<{ ready: Set<string>; missing: Map<string, number> }> {
   const ready = new Set<string>()
   const missing = new Map<string, number>()
+  const openedByLanguage = new Map<string, number>()
 
   // Touch one file per language. LSP.touchFile triggers a lazy spawn
   // of any client that matches the file's extension. Do this
@@ -204,7 +205,8 @@ export async function probeLspServers(
     if (lang === "unknown" || lang === "plaintext") continue
     const first = files[0]
     if (!first) continue
-    await LSP.touchFile(first, false).catch(() => {})
+    const opened = await LSP.touchFile(first, false).catch(() => 0)
+    openedByLanguage.set(lang, opened)
   }
 
   // Read the set of connected clients. Each client has a `root` and a
@@ -218,14 +220,10 @@ export async function probeLspServers(
   const statuses = await LSP.status().catch(() => [])
   for (const [lang, files] of groups) {
     if (lang === "unknown" || lang === "plaintext") continue
-    // If any file in this language group has a corresponding LSP
-    // client, mark the language ready. hasClients() is a cheap
-    // in-memory lookup.
-    let languageReady = false
-    const first = files[0]
-    if (first) {
-      languageReady = await LSP.hasClients(first).catch(() => false)
-    }
+    // Use the observed touch result rather than hasClients(). The
+    // latter is intentionally optimistic (extension + root match),
+    // while the probe wants actual readiness after spawn/init.
+    const languageReady = (openedByLanguage.get(lang) ?? 0) > 0
     if (languageReady) {
       ready.add(lang)
     } else {

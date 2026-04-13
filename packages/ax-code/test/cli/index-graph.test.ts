@@ -1,8 +1,19 @@
-import { describe, expect, test } from "bun:test"
-import { buildIndexReport, groupFilesByLanguage, phaseRows } from "../../src/cli/cmd/index-graph"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { buildIndexReport, groupFilesByLanguage, phaseRows, probeLspServers } from "../../src/cli/cmd/index-graph"
+import { LSP } from "../../src/lsp"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
+
+let touchFileSpy: ReturnType<typeof spyOn> | undefined
+let statusSpy: ReturnType<typeof spyOn> | undefined
+
+afterEach(() => {
+  touchFileSpy?.mockRestore()
+  statusSpy?.mockRestore()
+  touchFileSpy = undefined
+  statusSpy = undefined
+})
 
 // groupFilesByLanguage is the helper the LSP pre-flight probe uses to
 // build its "N files in language X" readiness table. Tested here
@@ -138,5 +149,22 @@ describe("groupFilesByLanguage", () => {
       ms: 50,
     })
     expect(report.native?.total.calls).toBe(3)
+  })
+
+  test("probeLspServers uses successful touches as readiness", async () => {
+    const groups = new Map<string, string[]>([
+      ["typescript", ["/p/a.ts"]],
+      ["rust", ["/p/lib.rs"]],
+    ])
+
+    touchFileSpy = spyOn(LSP, "touchFile").mockImplementation(async (file) => {
+      if (file === "/p/a.ts") return 1
+      return 0
+    })
+    statusSpy = spyOn(LSP, "status").mockResolvedValue([])
+
+    const probe = await probeLspServers(groups)
+    expect(probe.ready).toEqual(new Set(["typescript"]))
+    expect(probe.missing).toEqual(new Map([["rust", 1]]))
   })
 })

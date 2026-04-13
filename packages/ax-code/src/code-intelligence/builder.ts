@@ -194,6 +194,7 @@ const MAX_SYMBOL_DEPTH = 64
 // Phase 2 caps this at a number of the largest-range symbols first (which
 // are typically top-level definitions). Small inner helpers get skipped.
 const MAX_REFERENCE_QUERIES_PER_FILE = 100
+const REFERENCE_QUERY_CONCURRENCY = 8
 
 // Kinds that are "containers" — edges can terminate inside them. A reference
 // at line N is attributed to the innermost container whose range covers N.
@@ -548,11 +549,10 @@ export namespace CodeGraphBuilder {
     let completeness: "full" | "partial" | "lsp-only" = raw.length === 0 ? "partial" : "lsp-only"
 
     if (eligibleBookmarks.length > 0) {
-      // Resolve each bookmark's references. Parallelism is bounded by
-      // LSP.references itself (each call hits the underlying LSP server
-      // which has its own concurrency limits). For very large files we
-      // could limit further here, but 100 queries in parallel is
-      // reasonable for typical projects.
+      // Resolve each bookmark's references in small batches. A wide
+      // Promise.all here can stampede tsserver/gopls/pyright with
+      // hundreds of concurrent RPCs once file-level concurrency is
+      // factored in, so we keep modest per-file parallelism.
       const tRefs = performance.now()
       // Track reference-query failures. When LSP.references throws
       // (server crash, RPC timeout, malformed response) the old code
@@ -564,25 +564,30 @@ export namespace CodeGraphBuilder {
       // flag is the contract with downstream consumers (findCallers,
       // findReferences) for "trust this file's edges". See BUG-76.
       let referenceFailures = 0
-      const refResults = await Promise.all(
-        eligibleBookmarks.map(async (bookmark) => {
-          const locations = (await LSP.references({
-            file: absPath,
-            line: bookmark.selectionLine,
-            character: bookmark.selectionChar,
-          }).catch((err) => {
-            referenceFailures++
-            log.warn("LSP references failed; edges will be incomplete for this symbol", {
+      const refResults: Array<{ bookmark: ReferenceBookmark; locations: LspLocation[] }> = []
+      for (let i = 0; i < eligibleBookmarks.length; i += REFERENCE_QUERY_CONCURRENCY) {
+        const batch = eligibleBookmarks.slice(i, i + REFERENCE_QUERY_CONCURRENCY)
+        const batchResults = await Promise.all(
+          batch.map(async (bookmark) => {
+            const locations = (await LSP.references({
               file: absPath,
-              symbol: bookmark.nodeId,
               line: bookmark.selectionLine,
-              err: err instanceof Error ? err.message : String(err),
-            })
-            return []
-          })) as LspLocation[]
-          return { bookmark, locations }
-        }),
-      )
+              character: bookmark.selectionChar,
+            }).catch((err) => {
+              referenceFailures++
+              log.warn("LSP references failed; edges will be incomplete for this symbol", {
+                file: absPath,
+                symbol: bookmark.nodeId,
+                line: bookmark.selectionLine,
+                err: err instanceof Error ? err.message : String(err),
+              })
+              return []
+            })) as LspLocation[]
+            return { bookmark, locations }
+          }),
+        )
+        refResults.push(...batchResults)
+      }
       timings.lspReferences = performance.now() - tRefs
 
       const tResolve = performance.now()

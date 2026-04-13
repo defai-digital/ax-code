@@ -13,6 +13,7 @@ import { Flag } from "@/flag/flag"
 import { Process } from "../util/process"
 import { spawn as lspspawn } from "./launch"
 import { withTimeout } from "../util/timeout"
+import { Ripgrep } from "../file/ripgrep"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -51,6 +52,7 @@ export namespace LSP {
   // (kill -0 syscall), so we can run it frequently without concern. 60s is
   // responsive enough for interactive use without generating log noise.
   const HEALTH_CHECK_INTERVAL_MS = 60_000
+  const MAX_ROOT_CACHE_ENTRIES = 2_000
 
   // Check whether a (root, server) key is currently in cooldown. If the
   // cooldown has expired we eagerly drop the entry so the next caller can
@@ -153,6 +155,7 @@ export namespace LSP {
           broken: new Map<string, BrokenEntry>(),
           servers,
           clients,
+          rootCache: new Map<string, string | null>(),
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
           healthCheck: undefined,
         }
@@ -201,6 +204,7 @@ export namespace LSP {
         broken: new Map<string, BrokenEntry>(),
         servers,
         clients,
+        rootCache: new Map<string, string | null>(),
         spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
         healthCheck: undefined as ReturnType<typeof setInterval> | undefined,
       }
@@ -287,51 +291,73 @@ export namespace LSP {
     })
   }
 
+  type State = Awaited<ReturnType<typeof state>>
+
+  async function resolveRoot(s: State, server: LSPServer.Info, file: string) {
+    const key = `${server.id}:${file}`
+    if (s.rootCache.has(key)) {
+      const cached = s.rootCache.get(key)
+      return cached === null ? undefined : cached
+    }
+    const root = await server.root(file)
+    s.rootCache.set(key, root ?? null)
+    if (s.rootCache.size > MAX_ROOT_CACHE_ENTRIES) {
+      const oldest = s.rootCache.keys().next().value
+      if (oldest) s.rootCache.delete(oldest)
+    }
+    return root
+  }
+
+  async function scheduleClient(
+    s: State,
+    server: LSPServer.Info,
+    root: string,
+    key: string,
+  ): Promise<LSPClient.Info | undefined> {
+    const handle = await server
+      .spawn(root)
+      .then((value) => {
+        if (!value) markBroken(s.broken, key)
+        return value
+      })
+      .catch((err) => {
+        markBroken(s.broken, key)
+        log.error(`Failed to spawn LSP server ${server.id}`, { error: err })
+        return undefined
+      })
+
+    if (!handle) return undefined
+    log.info("spawned lsp server", { serverID: server.id })
+
+    const client = await LSPClient.create({
+      serverID: server.id,
+      server: handle,
+      root,
+    }).catch(async (err) => {
+      markBroken(s.broken, key)
+      await Process.stop(handle.process)
+      log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
+      return undefined
+    })
+
+    if (!client) {
+      return undefined
+    }
+
+    const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
+    if (existing) {
+      await Process.stop(handle.process)
+      return existing
+    }
+
+    s.clients.push(client)
+    return client
+  }
+
   async function getClients(file: string) {
     const s = await state()
     const extension = path.parse(file).ext || file
     const result: LSPClient.Info[] = []
-
-    async function schedule(server: LSPServer.Info, root: string, key: string) {
-      const handle = await server
-        .spawn(root)
-        .then((value) => {
-          if (!value) markBroken(s.broken, key)
-          return value
-        })
-        .catch((err) => {
-          markBroken(s.broken, key)
-          log.error(`Failed to spawn LSP server ${server.id}`, { error: err })
-          return undefined
-        })
-
-      if (!handle) return undefined
-      log.info("spawned lsp server", { serverID: server.id })
-
-      const client = await LSPClient.create({
-        serverID: server.id,
-        server: handle,
-        root,
-      }).catch(async (err) => {
-        markBroken(s.broken, key)
-        await Process.stop(handle.process)
-        log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
-        return undefined
-      })
-
-      if (!client) {
-        return undefined
-      }
-
-      const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
-      if (existing) {
-        await Process.stop(handle.process)
-        return existing
-      }
-
-      s.clients.push(client)
-      return client
-    }
 
     // Pass 1: classify each server-for-this-file and collect pending promises.
     // Servers that already have a client land in `result` directly. Servers
@@ -342,7 +368,7 @@ export namespace LSP {
     for (const server of Object.values(s.servers)) {
       if (server.extensions.length && !server.extensions.includes(extension)) continue
 
-      const root = await server.root(file)
+      const root = await resolveRoot(s, server, file)
       if (!root) continue
       const key = root + server.id
       if (isBroken(s.broken, key)) continue
@@ -361,7 +387,7 @@ export namespace LSP {
         continue
       }
 
-      const task = schedule(server, root, key)
+      const task = scheduleClient(s, server, root, key)
       s.spawning.set(key, task)
       task.finally(() => {
         if (s.spawning.get(key) === task) {
@@ -386,12 +412,75 @@ export namespace LSP {
     return result
   }
 
+  async function getWorkspaceClients() {
+    const s = await state()
+    const result: LSPClient.Info[] = []
+    const pending: { key: string; task: Promise<LSPClient.Info | undefined>; fresh: boolean }[] = []
+    const probeByServer = new Map<string, string>()
+
+    // Cold workspace symbol should not spawn every configured server.
+    // Scan the workspace once and only prime servers for languages that
+    // actually exist in the current project.
+    for await (const rel of Ripgrep.files({ cwd: Instance.directory })) {
+      const probe = path.join(Instance.directory, rel)
+      const extension = path.parse(probe).ext || probe
+      for (const server of Object.values(s.servers)) {
+        if (probeByServer.has(server.id)) continue
+        if (server.extensions.length && !server.extensions.includes(extension)) continue
+        probeByServer.set(server.id, probe)
+      }
+      if (probeByServer.size === Object.keys(s.servers).length) break
+    }
+
+    for (const server of Object.values(s.servers)) {
+      const probe = probeByServer.get(server.id)
+      if (!probe) continue
+      const root = await server.root(probe)
+      if (!root) continue
+      const key = root + server.id
+      if (isBroken(s.broken, key)) continue
+
+      const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
+      if (match) {
+        result.push(match)
+        continue
+      }
+
+      const inflight = s.spawning.get(key)
+      if (inflight) {
+        pending.push({ key, task: inflight, fresh: false })
+        continue
+      }
+
+      const task = scheduleClient(s, server, root, key)
+      s.spawning.set(key, task)
+      task.finally(() => {
+        if (s.spawning.get(key) === task) {
+          s.spawning.delete(key)
+        }
+      })
+      pending.push({ key, task, fresh: true })
+    }
+
+    if (pending.length > 0) {
+      const resolved = await Promise.all(pending.map((p) => p.task.catch(() => undefined)))
+      for (let i = 0; i < resolved.length; i++) {
+        const client = resolved[i]
+        if (!client) continue
+        result.push(client)
+        if (pending[i].fresh) Bus.publish(Event.Updated, {})
+      }
+    }
+
+    return result
+  }
+
   export async function hasClients(file: string) {
     const s = await state()
     const extension = path.parse(file).ext || file
     for (const server of Object.values(s.servers)) {
       if (server.extensions.length && !server.extensions.includes(extension)) continue
-      const root = await server.root(file)
+      const root = await resolveRoot(s, server, file)
       if (!root) continue
       if (isBroken(s.broken, root + server.id)) continue
       return true
@@ -411,6 +500,7 @@ export namespace LSP {
     const results = await Promise.allSettled(
       clients.map((client) => client.notify.open({ path: input, waitForDiagnostics })),
     )
+    let opened = 0
     for (let i = 0; i < results.length; i++) {
       const r = results[i]
       if (r.status === "rejected") {
@@ -419,8 +509,11 @@ export namespace LSP {
           file: input,
           serverID: clients[i]?.serverID,
         })
+        continue
       }
+      opened++
     }
+    return opened
   }
 
   // Close a file on every client that has it open. Sends textDocument/didClose
@@ -533,7 +626,9 @@ export namespace LSP {
   ]
 
   export async function workspaceSymbol(query: string) {
-    return runAll((client) =>
+    const clients = await getWorkspaceClients()
+    const result = await Promise.all(
+      clients.map((client) =>
       withTimeout(
         client.connection.sendRequest("workspace/symbol", {
           query,
@@ -541,9 +636,32 @@ export namespace LSP {
         RPC_TIMEOUT_LONG_MS,
       )
         .then((result) => (result as LSP.Symbol[]).filter((x: LSP.Symbol) => kinds.includes(x.kind)))
-        .then((result) => result.slice(0, 10))
-        .catch(() => []),
-    ).then((result) => result.flat() as LSP.Symbol[])
+        .catch((err) => {
+          log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
+          return []
+        }),
+      ),
+    )
+
+    const seen = new Set<string>()
+    return result
+      .flat()
+      .filter((symbol): symbol is LSP.Symbol => Boolean(symbol))
+      .filter((symbol) => {
+        const key = [
+          symbol.name,
+          symbol.kind,
+          symbol.location.uri,
+          symbol.location.range.start.line,
+          symbol.location.range.start.character,
+          symbol.location.range.end.line,
+          symbol.location.range.end.character,
+        ].join(":")
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 10)
   }
 
   export async function documentSymbol(uri: string) {

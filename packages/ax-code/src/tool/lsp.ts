@@ -24,11 +24,38 @@ export const LspTool = Tool.define("lsp", {
   description: DESCRIPTION,
   parameters: z.object({
     operation: z.enum(operations).describe("The LSP operation to perform"),
-    filePath: z.string().describe("The absolute or relative path to the file"),
-    line: z.number().int().min(1).describe("The line number (1-based, as shown in editors)"),
-    character: z.number().int().min(1).describe("The character offset (1-based, as shown in editors)"),
+    query: z.string().optional().describe("Search query for workspaceSymbol"),
+    filePath: z.string().optional().describe("The absolute or relative path to the file"),
+    line: z.number().int().min(1).optional().describe("The line number (1-based, as shown in editors)"),
+    character: z.number().int().min(1).optional().describe("The character offset (1-based, as shown in editors)"),
   }),
   execute: async (args, ctx) => {
+    if (args.operation === "workspaceSymbol") {
+      if (!args.query?.trim()) {
+        throw new Error("workspaceSymbol requires `query`")
+      }
+
+      await ctx.ask({
+        permission: "lsp",
+        patterns: ["*"],
+        always: ["*"],
+        metadata: {},
+      })
+
+      const result = await LSP.workspaceSymbol(args.query)
+      const output = result.length === 0 ? `No results found for workspaceSymbol` : JSON.stringify(result, null, 2)
+
+      return {
+        title: `workspaceSymbol ${args.query}`,
+        metadata: { result },
+        output,
+      }
+    }
+
+    if (!args.filePath) throw new Error(`${args.operation} requires \`filePath\``)
+    if (args.line === undefined) throw new Error(`${args.operation} requires \`line\``)
+    if (args.character === undefined) throw new Error(`${args.operation} requires \`character\``)
+
     const file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
     await assertExternalDirectory(ctx, file)
 
@@ -64,7 +91,10 @@ export const LspTool = Tool.define("lsp", {
     const relPath = path.relative(Instance.worktree, file)
     const title = `${args.operation} ${relPath}:${args.line}:${args.character}`
 
-    await LSP.touchFile(file, true)
+    const opened = await LSP.touchFile(file, true)
+    if (opened === 0) {
+      throw new Error("LSP server matched this file type but could not be started or did not accept the file.")
+    }
 
     const result: unknown[] = await (async () => {
       switch (args.operation) {
@@ -76,8 +106,6 @@ export const LspTool = Tool.define("lsp", {
           return LSP.hover(position)
         case "documentSymbol":
           return LSP.documentSymbol(uri)
-        case "workspaceSymbol":
-          return LSP.workspaceSymbol("")
         case "goToImplementation":
           return LSP.implementation(position)
         case "prepareCallHierarchy":
