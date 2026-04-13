@@ -371,4 +371,61 @@ export namespace CodeIntelligence {
   export function __clearProject(projectID: ProjectID): void {
     CodeGraphBuilder.clearProject(projectID)
   }
+
+  // ─── Envelope builder (Semantic Trust v2 §S4) ──────────────────────
+  //
+  // AI-facing semantic surfaces are expected to return SemanticEnvelope
+  // so AI consumers can inspect provenance (source, timestamp, freshness
+  // via LSP.envelopeFreshness). The code-graph path is one such source.
+  //
+  // `graphEnvelope` wraps any payload in an envelope stamped with the
+  // graph's cursor timestamp — consumer can then evaluate how old the
+  // graph index is and decide whether to trust it or cross-check via
+  // the live LSP tool. This is deliberately *not* a fallback router:
+  // the tool is graph-only by design; freshness information is the
+  // contract we make with consumers so they can route themselves.
+  export type GraphEnvelope<T> = {
+    data: T
+    source: "graph"
+    completeness: "full" | "partial" | "empty"
+    timestamp: number
+    serverIDs: string[]
+    degraded?: boolean
+  }
+
+  // Wrap a code-graph query result in an envelope stamped with
+  // provenance. `timestamp` is the graph's last-indexed time (from
+  // code_index_cursor). `degraded` is true when the cursor is missing
+  // — i.e. the graph may have rows but was never completed cleanly
+  // (partial index from an interrupted run, clearProject without
+  // reindex, etc.). `completeness` is "empty" when the payload is an
+  // empty array/object, "full" otherwise. `partial` is not produced
+  // here — the graph doesn't have a mid-flight partial concept; a
+  // query either has results or doesn't.
+  export function graphEnvelope<T>(
+    projectID: ProjectID,
+    data: T,
+    opts?: { isEmpty?: boolean },
+  ): GraphEnvelope<T> {
+    const cursor = CodeGraphQuery.getCursor(projectID)
+    // Without a cursor we still return what we have, but mark as
+    // degraded so consumers know to treat the payload with caution.
+    const timestamp = cursor?.time_updated ?? Date.now()
+    const degraded = cursor === undefined
+    const isEmpty = opts?.isEmpty ?? isPayloadEmpty(data)
+    return {
+      data,
+      source: "graph",
+      completeness: isEmpty ? "empty" : "full",
+      timestamp,
+      serverIDs: [],
+      degraded,
+    }
+  }
+
+  function isPayloadEmpty(data: unknown): boolean {
+    if (data == null) return true
+    if (Array.isArray(data)) return data.length === 0
+    return false
+  }
 }

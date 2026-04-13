@@ -6,6 +6,13 @@ import { CodeIntelligence } from "../code-intelligence"
 import { CodeNodeID } from "../code-intelligence/id"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
 
+// Semantic Trust v2 §S4: every operation returns an envelope stamped
+// with graph provenance (source, timestamp, degraded). The `output`
+// text string is preserved for back-compat; AI consumers that inspect
+// metadata now see `envelope` alongside the existing typed fields.
+// Consumers that want freshness evaluation can call
+// LSP.envelopeFreshness on `metadata.envelope`.
+
 // Tool that exposes the public CodeIntelligence API to agents. Audit
 // trail is handled automatically by the tool.call/tool.result events
 // the session recorder emits for every tool invocation — we don't
@@ -82,71 +89,77 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       if (args.operation === "findSymbol") {
         if (!args.name) throw new Error("findSymbol requires `name`")
         const symbols = CodeIntelligence.findSymbol(projectID, args.name, { kind: args.kind, limit, scope })
+        const envelope = CodeIntelligence.graphEnvelope(projectID, symbols)
         return {
           title: `findSymbol ${args.name}${args.kind ? ` (${args.kind})` : ""}`,
           output: symbols.length === 0
             ? `No symbols named "${args.name}"`
             : symbols.map(formatSymbol).join("\n"),
-          metadata: { count: symbols.length, symbols },
+          metadata: { count: symbols.length, symbols, envelope },
         }
       }
       if (args.operation === "findSymbolByPrefix") {
         if (!args.name) throw new Error("findSymbolByPrefix requires `name`")
         const symbols = CodeIntelligence.findSymbolByPrefix(projectID, args.name, { kind: args.kind, limit, scope })
+        const envelope = CodeIntelligence.graphEnvelope(projectID, symbols)
         return {
           title: `findSymbolByPrefix ${args.name}`,
           output: symbols.length === 0
             ? `No symbols with prefix "${args.name}"`
             : symbols.map(formatSymbol).join("\n"),
-          metadata: { count: symbols.length, symbols },
+          metadata: { count: symbols.length, symbols, envelope },
         }
       }
       if (args.operation === "symbolsInFile") {
         if (!args.file) throw new Error("symbolsInFile requires `file`")
         const symbols = CodeIntelligence.symbolsInFile(projectID, args.file, { scope })
         const clipped = symbols.slice(0, limit)
+        const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
           title: `symbolsInFile ${args.file}`,
           output: clipped.length === 0
             ? `No indexed symbols in ${args.file}`
             : clipped.map(formatSymbol).join("\n"),
-          metadata: { count: symbols.length, truncated: symbols.length > clipped.length, symbols: clipped },
+          metadata: { count: symbols.length, truncated: symbols.length > clipped.length, symbols: clipped, envelope },
         }
       }
       if (args.operation === "findReferences") {
         if (!args.symbolID) throw new Error("findReferences requires `symbolID`")
         const refs = CodeIntelligence.findReferences(projectID, CodeNodeID.make(args.symbolID), { scope })
         const clipped = refs.slice(0, limit)
+        const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
           title: `findReferences ${args.symbolID}`,
           output: clipped.length === 0
             ? `No references found`
             : clipped.map(formatReference).join("\n"),
-          metadata: { count: refs.length, truncated: refs.length > clipped.length, references: clipped },
+          metadata: { count: refs.length, truncated: refs.length > clipped.length, references: clipped, envelope },
         }
       }
       if (args.operation === "findCallers") {
         if (!args.symbolID) throw new Error("findCallers requires `symbolID`")
         const callers = CodeIntelligence.findCallers(projectID, CodeNodeID.make(args.symbolID), { scope })
         const clipped = callers.slice(0, limit)
+        const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
           title: `findCallers ${args.symbolID}`,
           output: clipped.length === 0
             ? `No callers found`
             : clipped.map(formatCallChainNode).join("\n"),
-          metadata: { count: callers.length, truncated: callers.length > clipped.length, callers: clipped },
+          metadata: { count: callers.length, truncated: callers.length > clipped.length, callers: clipped, envelope },
         }
       }
       if (args.operation === "findCallees") {
         if (!args.symbolID) throw new Error("findCallees requires `symbolID`")
         const callees = CodeIntelligence.findCallees(projectID, CodeNodeID.make(args.symbolID), { scope })
         const clipped = callees.slice(0, limit)
+        const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
           title: `findCallees ${args.symbolID}`,
           output: clipped.length === 0
             ? `No callees found`
             : clipped.map(formatCallChainNode).join("\n"),
-          metadata: { count: callees.length, truncated: callees.length > clipped.length, callees: clipped },
+          metadata: { count: callees.length, truncated: callees.length > clipped.length, callees: clipped, envelope },
         }
       }
       throw new Error(`Unknown operation: ${args.operation}`)

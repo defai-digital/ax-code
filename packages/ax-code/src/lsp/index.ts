@@ -918,15 +918,27 @@ export namespace LSP {
   //                 "partial" — one or more servers failed and were skipped.
   //                 "empty"   — no server was matched for this request.
   //   timestamp:    wall-clock ms at response assembly time (or at the
-  //                 original LSP fetch time, for cache hits).
+  //                 original LSP fetch time, for cache hits; or the
+  //                 code-graph index cursor time, for graph-sourced
+  //                 results).
   //   serverIDs:    which servers contributed, for provenance/audit.
+  //                 Empty array for graph-sourced envelopes.
   //   cacheKey:     opaque identifier of the cache row that served the
   //                 response; absent for live LSP responses. Surfaces in
   //                 audit rows (S3) so replay can assert cache-source
   //                 equality.
+  //
+  // Source semantics:
+  //   "lsp"    — result came from a live language server query.
+  //   "cache"  — result came from the content-addressable response cache.
+  //   "graph"  — result came from the persistent code-graph index.
+  //              Staleness is signalled via `timestamp` (= graph cursor
+  //              last-indexed time) + `degraded`. Graph-sourced envelopes
+  //              don't fall back to LSP; consumers that need live data
+  //              should call the LSP tool directly.
   export type SemanticEnvelope<T> = {
     data: T
-    source: "lsp" | "cache"
+    source: "lsp" | "cache" | "graph"
     completeness: "full" | "partial" | "empty"
     timestamp: number
     serverIDs: string[]

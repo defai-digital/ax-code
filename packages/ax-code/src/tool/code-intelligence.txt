@@ -16,4 +16,6 @@ Supported operations:
 
 Every result carries an "explain" field with source, indexedAt, completeness ("full" | "partial" | "lsp-only"), and a queryId. "lsp-only" means the file was indexed for symbols but not yet for cross-references — call/reference queries may be incomplete for those files.
 
+Every result also carries an "envelope" field (Semantic Trust v2 §S4) with source="graph", a timestamp matching the graph's last full index, and a "degraded" flag when the graph cursor is missing or interrupted. Use this to decide whether graph results are fresh enough for your task — fresh symbol lookups are always safe to trust; references and call chains may be stale if the graph hasn't caught up to recent edits. When you need guaranteed-live references for a refactor, use the `lsp` tool's findReferences instead.
+
 If the graph has never been built for this project, queries return empty results. The graph is populated automatically when the project is indexed (background) or explicitly via the indexing subsystem.

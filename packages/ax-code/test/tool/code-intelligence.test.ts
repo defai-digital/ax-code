@@ -408,3 +408,85 @@ describe("tool.code_intelligence", () => {
     })
   })
 })
+
+// Semantic Trust v2 §S4: every operation metadata carries an envelope
+// stamped with graph provenance.
+describe("CodeIntelligence tool envelope (§S4)", () => {
+  test("findSymbol metadata includes graph envelope", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id as ProjectID
+        CodeIntelligence.__clearProject(projectID)
+        seedSymbol(projectID, { name: "foo", base: tmp.path })
+        CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute({ operation: "findSymbol", name: "foo" }, ctx)
+
+        const envelope = result.metadata.envelope as {
+          source: string
+          completeness: string
+          timestamp: number
+          degraded: boolean
+          serverIDs: string[]
+        }
+        expect(envelope).toBeDefined()
+        expect(envelope.source).toBe("graph")
+        expect(envelope.completeness).toBe("full")
+        expect(envelope.degraded).toBe(false)
+        expect(envelope.serverIDs).toEqual([])
+        // Existing contract preserved.
+        expect(result.metadata.count).toBe(1)
+        expect(result.output).toContain("foo")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("envelope.degraded=true when no cursor exists (interrupted index)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id as ProjectID
+        CodeIntelligence.__clearProject(projectID)
+        seedSymbol(projectID, { name: "bar", base: tmp.path })
+        // Intentionally do NOT call upsertCursor — simulates an
+        // interrupted indexing run (nodes present, cursor missing).
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute({ operation: "findSymbol", name: "bar" }, ctx)
+
+        const envelope = result.metadata.envelope as { degraded: boolean; source: string }
+        expect(envelope.source).toBe("graph")
+        expect(envelope.degraded).toBe(true)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("envelope.completeness=empty when no results", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id as ProjectID
+        CodeIntelligence.__clearProject(projectID)
+        CodeGraphQuery.upsertCursor(projectID, null, 0, 0)
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute({ operation: "findSymbol", name: "does-not-exist" }, ctx)
+
+        const envelope = result.metadata.envelope as { completeness: string }
+        expect(envelope.completeness).toBe("empty")
+        expect(result.metadata.count).toBe(0)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+})
