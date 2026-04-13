@@ -819,7 +819,12 @@ export namespace LSP {
     return {
       data,
       source: "lsp",
-      completeness: "full",
+      // Match runWithEnvelopeUncollapsed's convention: "empty" iff no
+      // server actually contributed data, "full" otherwise. Previously
+      // this branch always returned "full", which was misleading when
+      // connected clients had empty diagnostic maps (servers up but
+      // none have published anything for the requested file(s)).
+      completeness: participatingServerIDs.size === 0 ? "empty" : "full",
       timestamp: opts.now,
       serverIDs: [...participatingServerIDs],
       degraded: false,

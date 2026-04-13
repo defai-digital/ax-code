@@ -112,7 +112,7 @@ describe("LSP.aggregateDiagnosticsForTest", () => {
     expect(env.data[0].path).toBe("/a.ts")
   })
 
-  test("file filter with no matching diagnostics returns empty but full", () => {
+  test("file filter with no matching diagnostics returns empty-completeness envelope", () => {
     // A server exists but hasn't published for the requested file.
     const env = LSP.aggregateDiagnosticsForTest(
       [
@@ -126,6 +126,9 @@ describe("LSP.aggregateDiagnosticsForTest", () => {
     // Server exists but didn't contribute to this file — participating = 0.
     expect(env.data).toEqual([])
     expect(env.serverIDs).toEqual([])
+    // Bug hunt v2: completeness now matches runWithEnvelope's
+    // convention — zero contributors means "empty", not "full".
+    expect(env.completeness).toBe("empty")
   })
 
   test("ordering is stable across calls", () => {
@@ -190,5 +193,20 @@ describe("LSP.aggregateDiagnosticsForTest", () => {
     expect(LSP.envelopeFreshness(env, now)).toBe("fresh")
     // Older: warm.
     expect(LSP.envelopeFreshness(env, now + 60_000)).toBe("warm")
+  })
+
+  // Regression for v2 bug hunt: clients present but all diagnostic
+  // maps empty → completeness must be "empty", not "full".
+  test("connected clients with empty diagnostic maps produce empty completeness", () => {
+    const env = LSP.aggregateDiagnosticsForTest(
+      [
+        { serverID: "ts", diagnostics: makeMap([]) },
+        { serverID: "es", diagnostics: makeMap([]) },
+      ],
+      { now },
+    )
+    expect(env.data).toEqual([])
+    expect(env.serverIDs).toEqual([])
+    expect(env.completeness).toBe("empty")
   })
 })

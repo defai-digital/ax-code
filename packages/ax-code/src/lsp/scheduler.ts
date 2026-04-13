@@ -41,7 +41,22 @@ export namespace LspScheduler {
       const existing = registry.get(key) as Promise<T> | undefined
       if (existing) return existing
 
-      const promise = fn().finally(() => {
+      // Defensive against sync throws inside `fn`. Even though the
+      // signature is `() => Promise<T>` and all current call sites
+      // are async functions (which can't throw sync), a future
+      // non-async caller could accidentally throw before the first
+      // await — that would skip `registry.set` below and leave us
+      // with no dedup AND a rejected promise propagating to the
+      // caller. Normalizing to a rejected promise makes the
+      // registry contract stable regardless of how fn signals failure.
+      let inflight: Promise<T>
+      try {
+        inflight = fn()
+      } catch (err) {
+        inflight = Promise.reject(err)
+      }
+
+      const promise = inflight.finally(() => {
         // Only evict if we're still the registered entry. A second
         // `run(key, ...)` after ours settles is allowed to register its
         // own promise — don't unregister theirs.
@@ -87,14 +102,20 @@ export namespace LspScheduler {
     const DEFAULT_BUDGET = 4
     const ACQUIRE_TIMEOUT_MS = 30_000
 
+    type Waiter = {
+      resolve: (release: () => void) => void
+      reject: (err: Error) => void
+      timer: ReturnType<typeof setTimeout>
+      // Marks the waiter as already woken up (resolved or rejected).
+      // Used to resolve the race between a slot free-up shift() and a
+      // timeout firing on the same waiter. See Bug #2 fix below.
+      settled: boolean
+    }
+
     type Slot = {
       budget: number
       inUse: number
-      waiters: Array<{
-        resolve: (release: () => void) => void
-        reject: (err: Error) => void
-        timer: ReturnType<typeof setTimeout>
-      }>
+      waiters: Waiter[]
     }
 
     const slots = new Map<string, Slot>()
@@ -121,13 +142,19 @@ export namespace LspScheduler {
         const slot = slots.get(serverID)
         if (!slot) return
         slot.inUse--
-        // Wake one waiter FIFO. Fair ordering avoids the
-        // latest-in-first-out inversion that stacks give.
-        const next = slot.waiters.shift()
-        if (next) {
+        // Wake one waiter FIFO. Skip waiters that already settled via
+        // a timeout that fired in the same tick — otherwise we'd
+        // increment inUse for a slot that nobody actually owns
+        // (because the "winner" already got rejected), eventually
+        // looking like "budget full but nothing using it".
+        while (slot.waiters.length > 0) {
+          const next = slot.waiters.shift()!
+          if (next.settled) continue
+          next.settled = true
           clearTimeout(next.timer)
           slot.inUse++
           next.resolve(makeRelease(serverID))
+          return
         }
       }
     }
@@ -143,27 +170,40 @@ export namespace LspScheduler {
         return Promise.resolve(makeRelease(serverID))
       }
       return new Promise((resolve, reject) => {
+        const waiter = { resolve, reject, timer: null as any, settled: false }
         const timer = setTimeout(() => {
+          if (waiter.settled) return
+          waiter.settled = true
           // Remove ourselves from the waiter queue so we don't get
           // woken up into a leaked slot after timing out.
-          const idx = slot.waiters.findIndex((w) => w.timer === timer)
+          const idx = slot.waiters.indexOf(waiter)
           if (idx >= 0) slot.waiters.splice(idx, 1)
           log.warn("budget.acquire timed out", { serverID, budget: slot.budget })
           reject(new Error(`lsp scheduler: budget acquire timed out on ${serverID}`))
         }, ACQUIRE_TIMEOUT_MS)
-        slot.waiters.push({ resolve, reject, timer })
+        // Don't keep the event loop alive just because a waiter is
+        // queued. Short-lived CLI processes (e.g. `ax-code debug
+        // replay`) would otherwise hang 30s on exit if a budget
+        // slot never freed up.
+        if (typeof timer.unref === "function") timer.unref()
+        waiter.timer = timer
+        slot.waiters.push(waiter)
       })
     }
 
-    // Override the per-server budget. Reading from Config is a later
-    // wire-up; for now tests and explicit callers use this. A zero or
-    // negative budget is coerced to 1 to avoid deadlocking the server.
-    export function setBudgetForTest(serverID: string, budget: number): void {
+    // Override the per-server budget. Safe to call from production
+    // code (e.g. once Config grows a `lsp.<id>.concurrency` field).
+    // A zero or negative budget is coerced to 1 to avoid deadlocking
+    // the server. Increasing the budget does NOT retroactively wake
+    // queued waiters — only new acquires see the new cap; document
+    // this limit at call sites that might reconfigure mid-run.
+    export function setBudget(serverID: string, budget: number): void {
       overrides.set(serverID, Math.max(1, budget))
       const slot = slots.get(serverID)
       if (slot) slot.budget = Math.max(1, budget)
     }
 
+    // Exported for tests and diagnostics.
     export function inUseForTest(serverID: string): number {
       return slots.get(serverID)?.inUse ?? 0
     }
