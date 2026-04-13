@@ -395,6 +395,70 @@ test("ask - autonomous mode treats over-engineering risk as stronger than recomm
   }
 })
 
+test("ask - autonomous mode avoids risky recommended options in multi-select questions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const original = process.env.AX_CODE_AUTONOMOUS
+  process.env.AX_CODE_AUTONOMOUS = "true"
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const answers = await Question.ask({
+          sessionID: SessionID.make("ses_auto_multi_risk"),
+          questions: [
+            {
+              question: "Which actions?",
+              header: "Actions",
+              multiple: true,
+              options: [
+                { label: "Rewrite (Recommended)", description: "Complex large refactor" },
+                { label: "Add focused test", description: "Simple best practice" },
+                { label: "Minimal fix", description: "Common safe change" },
+              ],
+            },
+          ],
+        })
+
+        expect(answers).toEqual([["Add focused test", "Minimal fix"]])
+      },
+    })
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = original
+  }
+})
+
+test("ask - autonomous mode treats avoid over-engineering as a positive signal", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const original = process.env.AX_CODE_AUTONOMOUS
+  process.env.AX_CODE_AUTONOMOUS = "true"
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const answers = await Question.ask({
+          sessionID: SessionID.make("ses_auto_avoid_overengineering"),
+          questions: [
+            {
+              question: "Which approach?",
+              header: "Approach",
+              options: [
+                { label: "Architecture rewrite", description: "New framework layer" },
+                { label: "Avoid over-engineering", description: "Keep scope narrow" },
+              ],
+            },
+          ],
+        })
+
+        expect(answers).toEqual([["Avoid over-engineering"]])
+      },
+    })
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = original
+  }
+})
+
 // list tests
 
 test("list - returns all pending requests", async () => {

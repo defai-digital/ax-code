@@ -27,26 +27,38 @@ export namespace AutonomousQuestion {
     "i",
   )
 
+  const AVOID_OVERENGINEERING_MARKER = new RegExp(
+    [
+      "\\b(avoid|avoids|avoiding|prevent|prevents|preventing|no|without|reduce|reduces|reducing)\\s+(over-?engineer(?:ing|ed)?|complexity|complex|large refactor|rewrite)\\b",
+      "避免.*(過度工程|複雜|大重構|重寫)",
+    ].join("|"),
+    "i",
+  )
+
   function text(option: OptionLike) {
     return `${option.label} ${option.description ?? ""}`
   }
 
   function scoreOption(option: OptionLike, index: number) {
+    const value = text(option)
+    const avoidsOverengineering = AVOID_OVERENGINEERING_MARKER.test(value)
     let score = -index / 1000
-    if (BEST_PRACTICE_MARKER.test(text(option))) score += 10
-    if (RISK_MARKER.test(text(option))) score -= 20
+    if (BEST_PRACTICE_MARKER.test(value) || avoidsOverengineering) score += 10
+    if (RISK_MARKER.test(value) && !avoidsOverengineering) score -= 20
     return score
   }
 
   function chooseAnswer(question: QuestionLike): Answer {
     if (question.options.length === 0) return []
-    if (question.multiple) {
-      const marked = question.options.filter((option) => BEST_PRACTICE_MARKER.test(text(option)))
-      if (marked.length > 0) return marked.map((option) => option.label)
-    }
-    const selected = question.options
+    const ranked = question.options
       .map((option, index) => ({ option, score: scoreOption(option, index) }))
-      .sort((a, b) => b.score - a.score)[0].option
+      .sort((a, b) => b.score - a.score)
+
+    if (question.multiple) {
+      const selected = ranked.filter((entry) => entry.score > 0)
+      if (selected.length > 0) return selected.map((entry) => entry.option.label)
+    }
+    const selected = ranked[0].option
     return [selected.label]
   }
 
