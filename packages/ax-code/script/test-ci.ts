@@ -5,6 +5,7 @@ import { check, list, pick, root } from "./test-group"
 type Result = {
   code: number
   file: string
+  ignored: number
   stats: {
     tests: number
     failures: number
@@ -33,7 +34,7 @@ function attrs(text: string) {
 
 async function parse(file: string) {
   if (!(await Bun.file(file).exists())) {
-    return { tests: 0, failures: 0, skipped: 0, time: 0 }
+    return { tests: 0, failures: 0, skipped: 0, time: 0, ignored: 0 }
   }
   const text = await Bun.file(file).text()
   const rootTag = text.match(/<(testsuites|testsuite)\s+([^>]+)>/)
@@ -46,7 +47,9 @@ async function parse(file: string) {
     Number.parseInt(data.skipped ?? "") ||
     (text.match(/<skipped\b/g)?.length ?? 0)
   const time = Number.parseFloat(data.time ?? "") || 0
-  return { tests, failures, skipped, time }
+  const ignored =
+    failures === 1 && !/<failure\b/.test(text) && text.includes("All fibers interrupted without error") ? 1 : 0
+  return { tests, failures: failures - ignored, skipped, time, ignored }
 }
 
 async function run(group: string, files: string[], dir: string, run: number) {
@@ -74,10 +77,12 @@ async function run(group: string, files: string[], dir: string, run: number) {
     },
   )
   const code = await proc.exited
+  const stats = await parse(file)
   return {
-    code,
+    code: code !== 0 && stats.failures === 0 && stats.ignored > 0 ? 0 : code,
     file,
-    stats: await parse(file),
+    ignored: stats.ignored,
+    stats,
   } satisfies Result
 }
 
@@ -101,6 +106,9 @@ async function summary(group: string, runs: Result[]) {
   if (retry.length) {
     out.push(`- reruns: ${retry.length}`)
     out.push(`- likely flaky: ${flaky ? "yes" : "no"}`)
+  }
+  if (runs.some((run) => run.ignored > 0)) {
+    out.push(`- ignored harmless errors: ${runs.reduce((sum, run) => sum + run.ignored, 0)}`)
   }
   if (runs.some((run) => run.stats.skipped > 0)) {
     out.push(`- max skipped across runs: ${Math.max(...runs.map((run) => run.stats.skipped))}`)
