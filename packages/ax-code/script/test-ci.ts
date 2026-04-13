@@ -34,11 +34,12 @@ function attrs(text: string) {
   return Object.fromEntries(Array.from(text.matchAll(/(\w+)="([^"]*)"/g)).map((part) => [part[1], part[2]]))
 }
 
-async function parse(file: string) {
+async function parse(file: string, output = "") {
   if (!(await Bun.file(file).exists())) {
     return { tests: 0, failures: 0, skipped: 0, time: 0, ignored: 0 }
   }
   const text = await Bun.file(file).text()
+  const combinedText = `${text}\n${output}`
   const rootTag = text.match(/<(testsuites|testsuite)\s+([^>]+)>/)
   const data = rootTag ? attrs(rootTag[2] ?? "") : {}
   const tests = Number.parseInt(data.tests ?? "") || text.match(/<testcase\b/g)?.length || 0
@@ -53,11 +54,30 @@ async function parse(file: string) {
   const ignored =
     failureCount === 0 &&
     errorCount <= 1 &&
-    text.includes(harmlessEffectInterrupt) &&
+    combinedText.includes(harmlessEffectInterrupt) &&
     errorTags.every((tag) => tag.includes(harmlessEffectInterrupt))
       ? errorCount || 1
       : 0
   return { tests, failures: Math.max(0, failures - ignored), skipped, time, ignored }
+}
+
+async function tee(stream: ReadableStream<Uint8Array> | null, writer: NodeJS.WriteStream) {
+  if (!stream) return ""
+
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let text = ""
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    writer.write(value)
+    text += decoder.decode(value, { stream: true })
+  }
+
+  text += decoder.decode()
+  return text
 }
 
 async function run(group: string, files: string[], dir: string, run: number) {
@@ -80,12 +100,16 @@ async function run(group: string, files: string[], dir: string, run: number) {
     {
       cwd: root,
       stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
+      stdout: "pipe",
+      stderr: "pipe",
     },
   )
-  const code = await proc.exited
-  const stats = await parse(file)
+  const [stdout, stderr, code] = await Promise.all([
+    tee(proc.stdout, process.stdout),
+    tee(proc.stderr, process.stderr),
+    proc.exited,
+  ])
+  const stats = await parse(file, `${stdout}\n${stderr}`)
   return {
     code: code !== 0 && stats.failures === 0 && stats.ignored > 0 ? 0 : code,
     file,
