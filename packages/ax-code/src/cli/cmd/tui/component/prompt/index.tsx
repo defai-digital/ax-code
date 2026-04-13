@@ -15,7 +15,6 @@ import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
 import { assign } from "./part"
 import { usePromptStash } from "./stash"
-import { DialogStash } from "../dialog-stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
 import { useRenderer } from "@opentui/solid"
@@ -29,12 +28,10 @@ import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
 import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
-import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
-import { DialogSkill } from "../dialog-skill"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { isPromptExitCommand, promptSubmissionView } from "./view-model"
@@ -86,13 +83,38 @@ export function Prompt(props: PromptProps) {
   const kv = useKV()
 
   function promptModelWarning() {
+    if (!sync.data.provider_loaded) {
+      toast.show({
+        variant: "info",
+        message: "Providers are still loading",
+        duration: 2000,
+      })
+      return
+    }
+    if (sync.data.provider_failed) {
+      toast.show({
+        variant: "warning",
+        message: "Providers failed to load",
+        duration: 3000,
+      })
+      return
+    }
     toast.show({
       variant: "warning",
       message: "Connect a provider to send prompts",
       duration: 3000,
     })
     if (sync.data.provider.length === 0) {
-      dialog.replace(() => <DialogProviderConnect />)
+      const marker = dialog.stack.at(-1)
+      import("../dialog-provider")
+        .then(({ DialogProvider }) => {
+          if (dialog.stack.at(-1) !== marker) return
+          dialog.replace(() => <DialogProvider />)
+        })
+        .catch((error) => {
+          log.warn("failed to load provider dialog", { error })
+          toast.show({ message: "Failed to open provider dialog", variant: "error" })
+        })
     }
   }
 
@@ -380,18 +402,27 @@ export function Prompt(props: PromptProps) {
           name: "skills",
         },
         onSelect: () => {
-          dialog.replace(() => (
-            <DialogSkill
-              onSelect={(skill) => {
-                input.setText(`/${skill} `)
-                setStore("prompt", {
-                  input: `/${skill} `,
-                  parts: [],
-                })
-                input.gotoBufferEnd()
-              }}
-            />
-          ))
+          const marker = dialog.stack.at(-1)
+          import("../dialog-skill")
+            .then(({ DialogSkill }) => {
+              if (dialog.stack.at(-1) !== marker) return
+              dialog.replace(() => (
+                <DialogSkill
+                  onSelect={(skill) => {
+                    input.setText(`/${skill} `)
+                    setStore("prompt", {
+                      input: `/${skill} `,
+                      parts: [],
+                    })
+                    input.gotoBufferEnd()
+                  }}
+                />
+              ))
+            })
+            .catch((error) => {
+              log.warn("failed to load skill dialog", { error })
+              toast.show({ message: "Failed to open skills", variant: "error" })
+            })
         },
       },
     ]
@@ -554,16 +585,25 @@ export function Prompt(props: PromptProps) {
       category: "Prompt",
       enabled: stash.list().length > 0,
       onSelect: (dialog) => {
-        dialog.replace(() => (
-          <DialogStash
-            onSelect={(entry) => {
-              input.setText(entry.input)
-              setStore("prompt", { input: entry.input, parts: entry.parts })
-              restoreExtmarksFromParts(entry.parts)
-              input.gotoBufferEnd()
-            }}
-          />
-        ))
+        const marker = dialog.stack.at(-1)
+        import("../dialog-stash")
+          .then(({ DialogStash }) => {
+            if (dialog.stack.at(-1) !== marker) return
+            dialog.replace(() => (
+              <DialogStash
+                onSelect={(entry) => {
+                  input.setText(entry.input)
+                  setStore("prompt", { input: entry.input, parts: entry.parts })
+                  restoreExtmarksFromParts(entry.parts)
+                  input.gotoBufferEnd()
+                }}
+              />
+            ))
+          })
+          .catch((error) => {
+            log.warn("failed to load stash dialog", { error })
+            toast.show({ message: "Failed to open stash", variant: "error" })
+          })
       },
     },
   ])

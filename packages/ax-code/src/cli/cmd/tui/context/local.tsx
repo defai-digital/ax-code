@@ -14,6 +14,7 @@ import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
+import { resolveCurrentAgent } from "./local-util"
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
@@ -68,9 +69,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return agents()
         },
         current() {
-          return agents().find((x) => x.name === agentStore.current)!
+          return resolveCurrentAgent(agents(), agentStore.current)
         },
         set(name: string) {
+          if (agents().length === 0) {
+            setAgentStore("current", name)
+            return
+          }
           if (!agents().some((x) => x.name === name))
             return toast.show({
               variant: "warning",
@@ -307,6 +312,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         },
         set(model: { providerID: string; modelID: string }, options?: { recent?: boolean }) {
           batch(() => {
+            const currentAgentName = agent.current().name
+            if (!sync.data.provider_loaded) {
+              setModelStore("model", currentAgentName, model)
+              return
+            }
             if (!isModelValid(model)) {
               toast.show({
                 message: `Model ${model.providerID}/${model.modelID} is not valid`,
@@ -315,7 +325,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               })
               return
             }
-            setModelStore("model", agent.current().name, model)
+            setModelStore("model", currentAgentName, model)
             if (options?.recent) {
               const uniq = uniqueBy([model, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
               if (uniq.length > 10) uniq.pop()

@@ -37,6 +37,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const [store, setStore] = createStore<{
       status: "loading" | "partial" | "complete"
       provider: Provider[]
+      provider_loaded: boolean
+      provider_failed: boolean
       provider_default: Record<string, string>
       provider_next: ProviderListResponse
       provider_auth: Record<string, ProviderAuthMethod[]>
@@ -133,6 +135,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         default: {},
         connected: [],
       },
+      provider_loaded: false,
+      provider_failed: false,
       provider_auth: {},
       config: {},
       status: "loading",
@@ -579,62 +583,50 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         .list({ start: start })
         .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
 
-      // blocking - include session.list when continuing a session
+      // Only keep the continue-session lookup on the blocking path. The
+      // home route can render immediately with empty provider/agent/config
+      // state and hydrate those details afterward.
       const providersPromise = sdk.client.config.providers({}, { throwOnError: true })
       const providerListPromise = sdk.client.provider.list({}, { throwOnError: true })
       const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
       const configPromise = sdk.client.config.get({}, { throwOnError: true })
       const commandPromise = sdk.client.command.list()
-      const blockingRequests: Promise<unknown>[] = [
-        providersPromise,
-        providerListPromise,
-        agentsPromise,
-        configPromise,
-        commandPromise,
-        ...(args.continue ? [sessionListPromise] : []),
-      ]
+      const blockingRequests: Promise<unknown>[] = args.continue ? [sessionListPromise] : []
 
       await Promise.all(blockingRequests)
         .then(() => {
-          const providersResponse = providersPromise.then((x) => x.data ?? { providers: [], default: {} })
-          const providerListResponse = providerListPromise.then((x) => x.data ?? store.provider_next)
-          const agentsResponse = agentsPromise.then((x) => x.data ?? [])
-          const configResponse = configPromise.then((x) => x.data ?? store.config)
-          const sessionListResponse = args.continue ? sessionListPromise : undefined
-
-          const commandResponse = commandPromise.then((x) => x.data ?? [])
-
-          return Promise.all([
-            providersResponse,
-            providerListResponse,
-            agentsResponse,
-            configResponse,
-            commandResponse,
-            ...(sessionListResponse ? [sessionListResponse] : []),
-          ]).then((responses) => {
-            const providers = responses[0]
-            const providerList = responses[1]
-            const agents = responses[2]
-            const config = responses[3]
-            const commands = responses[4]
-            const sessions = responses[5]
-
-            batch(() => {
-              setStore("provider", reconcile(providers.providers))
-              setStore("provider_default", reconcile(providers.default))
-              setStore("provider_next", reconcile(providerList))
-              setStore("agent", reconcile(agents))
-              setStore("config", reconcile(config))
-              setStore("command", reconcile(commands))
-              if (sessions !== undefined) setStore("session", reconcile(mergeSorted(store.session, sessions)))
+          if (args.continue) {
+            return sessionListPromise.then((sessions) => {
+              setStore("session", reconcile(mergeSorted(store.session, sessions)))
             })
-          })
+          }
         })
         .then(() => {
-          if (store.status !== "complete") setStore("status", "partial")
+          if (store.status === "loading") setStore("status", "partial")
           // non-blocking — each call is individually guarded so one failure
           // doesn't prevent the rest from completing or status from advancing.
           Promise.allSettled([
+            providersPromise
+              .then((x) => x.data ?? { providers: [], default: {} })
+              .then((providers) => {
+                batch(() => {
+                  setStore("provider", reconcile(providers.providers))
+                  setStore("provider_default", reconcile(providers.default))
+                  setStore("provider_loaded", true)
+                  setStore("provider_failed", false)
+                })
+              })
+              .catch((error) => {
+                batch(() => {
+                  setStore("provider_loaded", true)
+                  setStore("provider_failed", true)
+                })
+                throw error
+              }),
+            providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
+            agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
+            configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
+            commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
             ...(args.continue
               ? []
               : [

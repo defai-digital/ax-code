@@ -246,7 +246,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
@@ -342,7 +342,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
@@ -427,7 +427,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
@@ -525,7 +525,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
@@ -616,7 +616,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
@@ -715,7 +715,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
@@ -814,7 +814,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {

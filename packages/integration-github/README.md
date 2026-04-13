@@ -117,9 +117,9 @@ To test locally:
 
    ```bash
    MODEL=anthropic/claude-sonnet-4-20250514 \
-     ANTHROPIC_API_KEY=sk-ant-api03-1234567890 \
+     ANTHROPIC_API_KEY=<your-api-key> \
      GITHUB_RUN_ID=dummy \
-     MOCK_TOKEN=github_pat_1234567890 \
+     MOCK_TOKEN=<your-github-pat> \
      MOCK_EVENT='{"eventName":"issue_comment",...}' \
      bun /path/to/ax-code/packages/integration-github/index.ts
    ```

@@ -7,6 +7,7 @@ import { useDialog } from "@tui/ui/dialog"
 import { createDialogProviderOptions, DialogProvider } from "./dialog-provider"
 import { useKeybind } from "../context/keybind"
 import * as fuzzysort from "fuzzysort"
+import { useConnected } from "./provider-state"
 
 // Providers whose models are free to use (hosted free tier, local inference,
 // or flat-fee subscription plans). Drives the "Free" footer tag and whether
@@ -25,11 +26,6 @@ const FREE_PROVIDERS = new Set([
 ])
 const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
 const isFreeProvider = (id: string) => FREE_PROVIDERS.has(id)
-
-export function useConnected() {
-  const sync = useSync()
-  return createMemo(() => sync.data.provider.some((x) => x.id !== "opencode"))
-}
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()

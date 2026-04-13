@@ -38,7 +38,7 @@ async function check(map: (dir: string) => string) {
   Config.global.reset()
   try {
     await writeConfig(globalTmp.path, {
-      $schema: "https://opencode.ai/config.json",
+      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
       snapshot: false,
     })
     await Instance.provide({
@@ -72,7 +72,7 @@ test("loads JSON config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         model: "test/model",
         username: "testuser",
       })
@@ -109,7 +109,7 @@ test("ignores legacy tui keys in opencode config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         model: "test/model",
         theme: "legacy",
         tui: { scroll_speed: 4 },
@@ -134,7 +134,7 @@ test("loads JSONC config file", async () => {
         path.join(dir, "ax-code.jsonc"),
         `{
         // This is a comment
-        "$schema": "https://opencode.ai/config.json",
+        "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         "model": "test/model",
         "username": "testuser"
       }`,
@@ -157,14 +157,14 @@ test("merges multiple config files with correct precedence", async () => {
       await writeConfig(
         dir,
         {
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           model: "base",
           username: "base",
         },
         "ax-code.jsonc",
       )
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         model: "override",
       })
     },
@@ -188,7 +188,7 @@ test("handles environment variable substitution", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await writeConfig(dir, {
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           username: "{env:TEST_VAR}",
         })
       },
@@ -298,7 +298,7 @@ test("handles file inclusion substitution", async () => {
     init: async (dir) => {
       await Filesystem.write(path.join(dir, "included.txt"), "test-user")
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         username: "{file:included.txt}",
       })
     },
@@ -317,7 +317,7 @@ test("handles file inclusion with replacement tokens", async () => {
     init: async (dir) => {
       await Filesystem.write(path.join(dir, "included.md"), "const out = await Bun.$`echo hi`")
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         username: "{file:included.md}",
       })
     },
@@ -335,7 +335,7 @@ test("validates config schema and throws on invalid fields", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         invalid_field: "should cause error",
       })
     },
@@ -367,7 +367,7 @@ test("handles agent configuration", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         agent: {
           test_agent: {
             model: "test/model",
@@ -397,7 +397,7 @@ test("treats agent variant as model-scoped setting (not provider option)", async
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         agent: {
           test_agent: {
             model: "openai/gpt-5.2",
@@ -428,7 +428,7 @@ test("handles command configuration", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         command: {
           test_command: {
             template: "test template",
@@ -458,7 +458,7 @@ test("migrates autoshare to share field", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           autoshare: true,
         }),
       )
@@ -480,7 +480,7 @@ test("migrates mode field to agent field", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mode: {
             test_mode: {
               model: "test/model",
@@ -869,7 +869,7 @@ test("resolves scoped npm plugins in config", async () => {
 
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: ["@scope/plugin"] }, null, 2),
+        JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json", plugin: ["@scope/plugin"] }, null, 2),
       )
     },
   })
@@ -897,7 +897,7 @@ test("drops unresolved package plugins from untrusted project config", async () 
     init: async (dir) => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
-        JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: ["malicious-package-name"] }, null, 2),
+        JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json", plugin: ["malicious-package-name"] }, null, 2),
       )
     },
   })
@@ -923,7 +923,7 @@ test("drops unresolved package plugins from untrusted config directories", async
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           plugin: ["global-plugin-1", "global-plugin-2"],
         }),
       )
@@ -932,7 +932,7 @@ test("drops unresolved package plugins from untrusted config directories", async
       await Filesystem.write(
         path.join(opencodeDir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           plugin: ["local-plugin-1"],
         }),
       )
@@ -999,7 +999,7 @@ test("merges instructions arrays from global and local configs", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           instructions: ["global-instructions.md", "shared-rules.md"],
         }),
       )
@@ -1007,7 +1007,7 @@ test("merges instructions arrays from global and local configs", async () => {
       await Filesystem.write(
         path.join(opencodeDir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           instructions: ["local-instructions.md"],
         }),
       )
@@ -1038,7 +1038,7 @@ test("deduplicates duplicate instructions from global and local configs", async 
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           instructions: ["duplicate.md", "global-only.md"],
         }),
       )
@@ -1046,7 +1046,7 @@ test("deduplicates duplicate instructions from global and local configs", async 
       await Filesystem.write(
         path.join(opencodeDir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           instructions: ["duplicate.md", "local-only.md"],
         }),
       )
@@ -1082,7 +1082,7 @@ test("drops duplicate unresolved package plugins from untrusted config directori
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           plugin: ["duplicate-plugin", "global-plugin-1"],
         }),
       )
@@ -1091,7 +1091,7 @@ test("drops duplicate unresolved package plugins from untrusted config directori
       await Filesystem.write(
         path.join(opencodeDir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           plugin: ["duplicate-plugin", "local-plugin-1"],
         }),
       )
@@ -1127,7 +1127,7 @@ test("migrates legacy tools config to permissions - allow", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           agent: {
             test: {
               tools: {
@@ -1158,7 +1158,7 @@ test("migrates legacy tools config to permissions - deny", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           agent: {
             test: {
               tools: {
@@ -1189,7 +1189,7 @@ test("migrates legacy write tool to edit permission", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           agent: {
             test: {
               tools: {
@@ -1219,7 +1219,7 @@ test("managed settings override user settings", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         model: "user/model",
         share: "auto",
         username: "testuser",
@@ -1228,7 +1228,7 @@ test("managed settings override user settings", async () => {
   })
 
   await writeManagedSettings({
-    $schema: "https://opencode.ai/config.json",
+    $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
     model: "managed/model",
     share: "disabled",
   })
@@ -1248,7 +1248,7 @@ test("managed settings override project settings", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         autoupdate: true,
         disabled_providers: [],
       })
@@ -1256,7 +1256,7 @@ test("managed settings override project settings", async () => {
   })
 
   await writeManagedSettings({
-    $schema: "https://opencode.ai/config.json",
+    $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
     autoupdate: false,
     disabled_providers: ["openai"],
   })
@@ -1275,7 +1275,7 @@ test("missing managed settings file is not an error", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         model: "user/model",
       })
     },
@@ -1296,7 +1296,7 @@ test("migrates legacy edit tool to edit permission", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           agent: {
             test: {
               tools: {
@@ -1325,7 +1325,7 @@ test("migrates legacy patch tool to edit permission", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           agent: {
             test: {
               tools: {
@@ -1354,7 +1354,7 @@ test("migrates legacy multiedit tool to edit permission", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           agent: {
             test: {
               tools: {
@@ -1383,7 +1383,7 @@ test("migrates mixed legacy tools config", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           agent: {
             test: {
               tools: {
@@ -1418,7 +1418,7 @@ test("merges legacy tools with existing permission config", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           agent: {
             test: {
               permission: {
@@ -1451,7 +1451,7 @@ test("permission config preserves key order", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           permission: {
             "*": "deny",
             edit: "ask",
@@ -1499,7 +1499,7 @@ test("project config can override MCP server enabled status", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mcp: {
             jira: {
               type: "remote",
@@ -1518,7 +1518,7 @@ test("project config can override MCP server enabled status", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.jsonc"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mcp: {
             jira: {
               type: "remote",
@@ -1557,7 +1557,7 @@ test("MCP config deep merges preserving base config properties", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mcp: {
             myserver: {
               type: "remote",
@@ -1574,7 +1574,7 @@ test("MCP config deep merges preserving base config properties", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.jsonc"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mcp: {
             myserver: {
               type: "remote",
@@ -1609,7 +1609,7 @@ test("local .ax-code config can override MCP from project config", async () => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mcp: {
             docs: {
               type: "remote",
@@ -1625,7 +1625,7 @@ test("local .ax-code config can override MCP from project config", async () => {
       await Filesystem.write(
         path.join(opencodeDir, "ax-code.json"),
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mcp: {
             docs: {
               type: "remote",
@@ -1693,7 +1693,7 @@ test("project config overrides remote well-known config", async () => {
         await Filesystem.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             mcp: {
               jira: {
                 type: "remote",
@@ -1768,7 +1768,7 @@ test("wellknown URL with trailing slash is normalized", async () => {
         await Filesystem.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           }),
         )
       },
@@ -1853,7 +1853,7 @@ describe("deduplicatePlugins", () => {
         await Filesystem.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             plugin: ["my-plugin@1.0.0"],
           }),
         )
@@ -1889,7 +1889,7 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
           await Filesystem.write(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
-              $schema: "https://opencode.ai/config.json",
+              $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
               model: "project/model",
               username: "project-user",
             }),
@@ -1984,7 +1984,7 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
           await Filesystem.write(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
-              $schema: "https://opencode.ai/config.json",
+              $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
               instructions: ["./CUSTOM.md"],
             }),
           )
@@ -2030,7 +2030,7 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
           await Filesystem.write(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
-              $schema: "https://opencode.ai/config.json",
+              $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
               model: "configdir/model",
             }),
           )
@@ -2043,7 +2043,7 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
           await Filesystem.write(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
-              $schema: "https://opencode.ai/config.json",
+              $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
               model: "project/model",
             }),
           )
@@ -2082,7 +2082,7 @@ describe("AX_CODE_CONFIG_CONTENT token substitution", () => {
     const originalTestVar = process.env["TEST_CONFIG_VAR"]
     process.env["TEST_CONFIG_VAR"] = "test_api_key_12345"
     process.env["AX_CODE_CONFIG_CONTENT"] = JSON.stringify({
-      $schema: "https://opencode.ai/config.json",
+      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
       username: "{env:TEST_CONFIG_VAR}",
     })
 
@@ -2117,7 +2117,7 @@ describe("AX_CODE_CONFIG_CONTENT token substitution", () => {
         init: async (dir) => {
           await Filesystem.write(path.join(dir, "api_key.txt"), "secret_key_from_file")
           process.env["AX_CODE_CONFIG_CONTENT"] = JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             username: "{file:./api_key.txt}",
           })
         },
@@ -2167,7 +2167,7 @@ describe("project config {file:} substitution is sandboxed", () => {
     await using tmp = await tmpdir({ git: true })
     const abs = process.platform === "win32" ? "C:\\Windows\\System32\\drivers\\etc\\hosts" : "/etc/hosts"
     await writeConfig(tmp.path, {
-      $schema: "https://opencode.ai/config.json",
+      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
       username: `{file:${abs}}`,
     })
     await expectEscapeRejection(tmp.path)
@@ -2176,7 +2176,7 @@ describe("project config {file:} substitution is sandboxed", () => {
   test("rejects ~/ expansion in project config", async () => {
     await using tmp = await tmpdir({ git: true })
     await writeConfig(tmp.path, {
-      $schema: "https://opencode.ai/config.json",
+      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
       username: "{file:~/.ssh/id_rsa}",
     })
     await expectEscapeRejection(tmp.path)
@@ -2188,7 +2188,7 @@ describe("project config {file:} substitution is sandboxed", () => {
     await using tmp = await tmpdir({ git: true })
     const escape = path.relative(tmp.path, path.join(outer.path, "secret.txt")).replaceAll("\\", "/")
     await writeConfig(tmp.path, {
-      $schema: "https://opencode.ai/config.json",
+      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
       username: `{file:${escape}}`,
     })
     await expectEscapeRejection(tmp.path)
@@ -2198,7 +2198,7 @@ describe("project config {file:} substitution is sandboxed", () => {
     await using tmp = await tmpdir({ git: true })
     await Filesystem.write(path.join(tmp.path, "allowed.txt"), "inside-project")
     await writeConfig(tmp.path, {
-      $schema: "https://opencode.ai/config.json",
+      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
       username: "{file:allowed.txt}",
     })
     await Instance.provide({
@@ -2224,7 +2224,7 @@ describe("project config {file:} substitution is sandboxed", () => {
     try {
       await using tmp = await tmpdir({ git: true })
       await writeConfig(tmp.path, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         instructions: ["key-is: {env:OPENAI_API_KEY}"],
       })
       await Instance.provide({
@@ -2255,7 +2255,7 @@ describe("project config {file:} substitution is sandboxed", () => {
     try {
       await using tmp = await tmpdir({ git: true })
       await writeConfig(tmp.path, {
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         instructions: ["endpoint: {env:AX_TEST_ENDPOINT}"],
       })
       await Instance.provide({

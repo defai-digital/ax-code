@@ -19,7 +19,7 @@ describe("CLI provider loaders", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             provider: { "claude-code": {} },
           }),
         )
@@ -47,7 +47,7 @@ describe("CLI provider loaders", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             provider: { "gemini-cli": {} },
           }),
         )
@@ -74,7 +74,7 @@ describe("CLI provider loaders", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             provider: { "codex-cli": {} },
           }),
         )
@@ -99,7 +99,7 @@ describe("online provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
         )
       },
     })
@@ -121,7 +121,7 @@ describe("online provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
         )
       },
     })
@@ -144,7 +144,7 @@ describe("online provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
         )
       },
     })
@@ -174,7 +174,7 @@ describe("offline provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
         )
       },
     })
@@ -199,7 +199,7 @@ describe("offline provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://opencode.ai/config.json" }),
+          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
         )
       },
     })
@@ -222,7 +222,7 @@ describe("provider config integration", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             provider: {
               openai: {
                 options: {
@@ -252,7 +252,7 @@ describe("provider config integration", () => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             disabled_providers: ["claude-code"],
             provider: {
               "claude-code": {},

@@ -107,7 +107,7 @@ test("first connect to OAuth server shows needs_auth instead of failed", async (
       await Bun.write(
         `${dir}/ax-code.json`,
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mcp: {
             "test-oauth": {
               type: "remote",
@@ -206,7 +206,7 @@ test("startAuth reuses an existing saved oauth state", async () => {
       await Bun.write(
         `${dir}/ax-code.json`,
         JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           mcp: {
             "test-oauth": {
               type: "remote",

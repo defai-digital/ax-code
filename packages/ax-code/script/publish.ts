@@ -9,11 +9,24 @@ process.chdir(dir)
 
 const binaries: Record<string, string> = {}
 for (const filepath of new Bun.Glob("*/package.json").scanSync({ cwd: "./dist" })) {
-  const pkg = await Bun.file(`./dist/${filepath}`).json()
-  binaries[pkg.name] = pkg.version
+  const binaryPkg = await Bun.file(`./dist/${filepath}`).json()
+  if (typeof binaryPkg.name !== "string" || typeof binaryPkg.version !== "string") {
+    continue
+  }
+  if (!binaryPkg.name.startsWith(`${pkg.name}-`)) {
+    continue
+  }
+  binaries[binaryPkg.name] = binaryPkg.version
 }
 console.log("binaries", binaries)
-const version = Object.values(binaries)[0]
+const versions = new Set(Object.values(binaries))
+if (versions.size === 0) {
+  throw new Error("No platform binary packages found in ./dist")
+}
+if (versions.size > 1) {
+  throw new Error(`Platform binary package versions do not match: ${Array.from(versions).join(", ")}`)
+}
+const version = [...versions][0]!
 
 const npmName = "@defai.digital/ax-code"
 const distDir = `./dist/${pkg.name}`

@@ -4,7 +4,7 @@ Practical phased replacement of Bun `$` calls.
 
 ## Goal
 
-Replace runtime Bun shell template-tag usage in `packages/opencode/src` with a unified `Process` API in `util/process.ts`.
+Replace runtime Bun shell template-tag usage in `packages/ax-code/src` with a unified `Process` API in `util/process.ts`.
 
 Keep behavior stable while improving safety, testability, and observability.
 
@@ -128,7 +128,7 @@ Migrate residual non-git usages:
 
 ## Definition of done
 
-- Runtime Bun `$` usage in `packages/opencode/src` is removed except:
+- Runtime Bun `$` usage in `packages/ax-code/src` is removed except:
   - approved shell-only exceptions
   - temporary plugin compatibility path (1.x)
 - Git paths use `Process.git*` consistently.

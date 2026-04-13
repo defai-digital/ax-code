@@ -18,25 +18,15 @@ import {
 } from "solid-js"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
 import { Flag } from "@/flag/flag"
-import semver from "semver"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
-import { DialogProvider as DialogProviderList } from "@tui/component/dialog-provider"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { SyncProvider, useSync } from "@tui/context/sync"
 import { LocalProvider, useLocal } from "@tui/context/local"
-import { DialogModel, useConnected } from "@tui/component/dialog-model"
-import { DialogMcp } from "@tui/component/dialog-mcp"
-import { DialogStatus } from "@tui/component/dialog-status"
-import { DialogThemeList } from "@tui/component/dialog-theme-list"
-import { DialogHelp } from "./ui/dialog-help"
+import { useConnected } from "@tui/component/provider-state"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
-import { DialogAgent } from "@tui/component/dialog-agent"
-import { DialogSessionList } from "@tui/component/dialog-session-list"
-import { DialogWorkspaceList } from "@tui/component/dialog-workspace-list"
 import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
-import { Session } from "@tui/routes/session"
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
@@ -49,13 +39,15 @@ import { TuiEvent } from "./event"
 import { KVProvider, useKV } from "./context/kv"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
-import open from "open"
-import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
+import { renderTui } from "./renderer"
+import type { EventSource } from "./context/sdk"
+import { Installation } from "@/installation"
+import { Session } from "@tui/routes/session"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -76,17 +68,15 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
       if (match) {
         cleanup()
         const color = match[1]
-        // Parse RGB values from color string
-        // Formats: rgb:RR/GG/BB or #RRGGBB or rgb(R,G,B)
-        let r = 0,
-          g = 0,
-          b = 0
+        let r = 0
+        let g = 0
+        let b = 0
 
         if (color.startsWith("rgb:")) {
           const parts = color.substring(4).split("/")
-          r = parseInt(parts[0], 16) >> 8 // Convert 16-bit to 8-bit
-          g = parseInt(parts[1], 16) >> 8 // Convert 16-bit to 8-bit
-          b = parseInt(parts[2], 16) >> 8 // Convert 16-bit to 8-bit
+          r = parseInt(parts[0], 16) >> 8
+          g = parseInt(parts[1], 16) >> 8
+          b = parseInt(parts[2], 16) >> 8
         } else if (color.startsWith("#")) {
           r = parseInt(color.substring(1, 3), 16)
           g = parseInt(color.substring(3, 5), 16)
@@ -98,10 +88,7 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
           b = parseInt(parts[2])
         }
 
-        // Calculate luminance using relative luminance formula
         const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-
-        // Determine if dark or light based on luminance threshold
         resolve(luminance > 0.5 ? "light" : "dark")
       }
     }
@@ -113,13 +100,9 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
     timeout = setTimeout(() => {
       cleanup()
       resolve("dark")
-    }, 1000)
+    }, 150)
   })
 }
-
-import type { EventSource } from "./context/sdk"
-import { Installation } from "@/installation"
-import { renderTui } from "./renderer"
 
 export function tui(input: {
   url: string
@@ -135,7 +118,6 @@ export function tui(input: {
   return new Promise<void>(async (resolve) => {
     const unguard = win32InstallCtrlCGuard()
     win32DisableProcessedInput()
-
     const mode = await getTerminalBackgroundColor()
 
     // Re-clear after getTerminalBackgroundColor() — setRawMode(false) restores
@@ -214,6 +196,114 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+
+  async function showProviderDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogProvider: ProviderDialog } = await import("@tui/component/dialog-provider")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <ProviderDialog />)
+    } catch (error) {
+      Log.Default.warn("failed to load provider dialog", { error })
+      toast.show({ message: "Failed to open provider dialog", variant: "error" })
+    }
+  }
+
+  async function showModelDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogModel: ModelDialog } = await import("@tui/component/dialog-model")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <ModelDialog />)
+    } catch (error) {
+      Log.Default.warn("failed to load model dialog", { error })
+      toast.show({ message: "Failed to open model dialog", variant: "error" })
+    }
+  }
+
+  async function showSessionListDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogSessionList } = await import("@tui/component/dialog-session-list")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <DialogSessionList />)
+    } catch (error) {
+      Log.Default.warn("failed to load session list dialog", { error })
+      toast.show({ message: "Failed to open session list", variant: "error" })
+    }
+  }
+
+  async function showWorkspaceListDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogWorkspaceList } = await import("@tui/component/dialog-workspace-list")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <DialogWorkspaceList />)
+    } catch (error) {
+      Log.Default.warn("failed to load workspace list dialog", { error })
+      toast.show({ message: "Failed to open workspace list", variant: "error" })
+    }
+  }
+
+  async function showAgentDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogAgent } = await import("@tui/component/dialog-agent")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <DialogAgent />)
+    } catch (error) {
+      Log.Default.warn("failed to load agent dialog", { error })
+      toast.show({ message: "Failed to open agent list", variant: "error" })
+    }
+  }
+
+  async function showMcpDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogMcp } = await import("@tui/component/dialog-mcp")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <DialogMcp />)
+    } catch (error) {
+      Log.Default.warn("failed to load mcp dialog", { error })
+      toast.show({ message: "Failed to open MCP list", variant: "error" })
+    }
+  }
+
+  async function showStatusDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogStatus } = await import("@tui/component/dialog-status")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <DialogStatus />)
+    } catch (error) {
+      Log.Default.warn("failed to load status dialog", { error })
+      toast.show({ message: "Failed to open status", variant: "error" })
+    }
+  }
+
+  async function showThemeListDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogThemeList } = await import("@tui/component/dialog-theme-list")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <DialogThemeList />)
+    } catch (error) {
+      Log.Default.warn("failed to load theme dialog", { error })
+      toast.show({ message: "Failed to open themes", variant: "error" })
+    }
+  }
+
+  async function showHelpDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogHelp } = await import("./ui/dialog-help")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <DialogHelp />)
+    } catch (error) {
+      Log.Default.warn("failed to load help dialog", { error })
+      toast.show({ message: "Failed to open help", variant: "error" })
+    }
+  }
 
   useKeyboard((evt) => {
     if (!Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
@@ -351,11 +441,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   createEffect(
     on(
-      () => sync.status === "complete" && sync.data.provider.length === 0,
+      () =>
+        sync.status === "complete" &&
+        sync.data.provider_loaded &&
+        !sync.data.provider_failed &&
+        sync.data.provider.length === 0,
       (isEmpty, wasEmpty) => {
         // only trigger when we transition into an empty-provider state
         if (!isEmpty || wasEmpty) return
-        dialog.replace(() => <DialogProviderList />)
+        void showProviderDialog()
       },
     ),
   )
@@ -373,7 +467,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         aliases: ["resume", "continue"],
       },
       onSelect: () => {
-        dialog.replace(() => <DialogSessionList />)
+        void showSessionListDialog()
       },
     },
     ...(Flag.AX_CODE_EXPERIMENTAL_WORKSPACES
@@ -386,9 +480,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
             slash: {
               name: "workspaces",
             },
-            onSelect: () => {
-              dialog.replace(() => <DialogWorkspaceList />)
-            },
+      onSelect: () => {
+        void showWorkspaceListDialog()
+      },
           },
         ]
       : []),
@@ -426,7 +520,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "models",
       },
       onSelect: () => {
-        dialog.replace(() => <DialogModel />)
+        void showModelDialog()
       },
     },
     {
@@ -478,7 +572,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "agents",
       },
       onSelect: () => {
-        dialog.replace(() => <DialogAgent />)
+        void showAgentDialog()
       },
     },
     {
@@ -489,7 +583,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "mcps",
       },
       onSelect: () => {
-        dialog.replace(() => <DialogMcp />)
+        void showMcpDialog()
       },
     },
     {
@@ -530,7 +624,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "connect",
       },
       onSelect: () => {
-        dialog.replace(() => <DialogProviderList />)
+        void showProviderDialog()
       },
       category: "Provider",
     },
@@ -542,7 +636,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "status",
       },
       onSelect: () => {
-        dialog.replace(() => <DialogStatus />)
+        void showStatusDialog()
       },
       category: "System",
     },
@@ -554,7 +648,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "themes",
       },
       onSelect: () => {
-        dialog.replace(() => <DialogThemeList />)
+        void showThemeListDialog()
       },
       category: "System",
     },
@@ -584,7 +678,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "help",
       },
       onSelect: () => {
-        dialog.replace(() => <DialogHelp />)
+        void showHelpDialog()
       },
       category: "System",
     },
@@ -592,7 +686,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Open docs",
       value: "docs.open",
       onSelect: () => {
-        open("https://github.com/defai-digital/ax-code").catch(() => {})
+        import("open")
+          .then(({ default: open }) => open("https://github.com/defai-digital/ax-code"))
+          .catch(() => {})
         dialog.clear()
       },
       category: "System",
@@ -817,7 +913,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       const version = evt.properties.version
 
       const skipped = kv.get("skipped_version")
-      if (skipped && !semver.gt(version, skipped)) return
+      if (skipped) {
+        const { gt } = await import("semver")
+        if (!gt(version, skipped)) return
+      }
 
       const choice = await DialogConfirm.show(
         dialog,

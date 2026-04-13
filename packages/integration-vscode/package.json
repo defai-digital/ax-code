@@ -1,29 +1,30 @@
 {
   "name": "ax-code",
-  "displayName": "AX Code",
-  "description": "AI coding agent for VS Code — powered by AX Code",
-  "version": "1.4.0",
-  "publisher": "defai-digital",
+  "version": "2.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/defai-digital/ax-code"
   },
-  "license": "MIT",
-  "icon": "images/icon.png",
-  "galleryBanner": {
-    "color": "#000000",
-    "theme": "dark"
+  "main": "./dist/extension.js",
+  "devDependencies": {
+    "@types/vscode": "^1.94.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "eslint": "^9.25.1",
+    "esbuild": "^0.25.3",
+    "typescript": "^5.8.3",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.2.1"
   },
-  "engines": {
-    "vscode": "^1.94.0"
-  },
+  "activationEvents": [],
   "categories": [
     "AI",
     "Chat",
     "Programming Languages"
   ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -117,23 +118,63 @@
       },
       {
         "command": "ax-code.explainSelection",
-        "key": "ctrl+shift+e",
-        "mac": "cmd+shift+e",
-        "when": "editorHasSelection"
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e",
+        "when": "editorHasSelection && editorTextFocus"
       },
       {
         "command": "ax-code.openTerminal",
         "key": "ctrl+escape",
         "mac": "cmd+escape"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "AX Code",
+      "properties": {
+        "axCode.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the ax-code binary. Leave empty to auto-detect (monorepo dev or PATH)."
+        },
+        "axCode.serverTimeoutMs": {
+          "type": "number",
+          "default": 90000,
+          "minimum": 1e4,
+          "description": "Milliseconds to wait for ax-code serve to report 'listening' before failing."
+        },
+        "axCode.requestTimeoutMs": {
+          "type": "number",
+          "default": 600000,
+          "minimum": 30000,
+          "description": "Per-message timeout in milliseconds (default 10 minutes)."
+        },
+        "axCode.defaultModel": {
+          "type": "string",
+          "default": "",
+          "description": "Default model in providerID/modelID form (e.g. anthropic/claude-opus-4-6). Overridable via the Model picker."
+        }
+      }
+    }
   },
+  "description": "AI coding agent for VS Code — powered by AX Code",
+  "displayName": "AX Code",
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "galleryBanner": {
+    "color": "#000000",
+    "theme": "dark"
+  },
+  "icon": "images/icon.png",
+  "license": "MIT",
+  "publisher": "defai-digital",
   "scripts": {
     "vscode:prepublish": "bun run package",
     "compile": "bun run check-types && bun run lint && node esbuild.js",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "bun run check-types && bun run lint && node esbuild.js --production",
+    "package:vsix": "bun run package && vsce package --no-git-tag-version --no-update-package-json --no-dependencies --skip-license -o dist/ax-code-$npm_package_version.vsix",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "bun run compile-tests && bun run compile && bun run lint",
@@ -142,16 +183,7 @@
     "lint": "eslint src",
     "test": "vscode-test"
   },
-  "devDependencies": {
-    "@types/vscode": "^1.94.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "20.x",
-    "@typescript-eslint/eslint-plugin": "^8.31.1",
-    "@typescript-eslint/parser": "^8.31.1",
-    "eslint": "^9.25.1",
-    "esbuild": "^0.25.3",
-    "typescript": "^5.8.3",
-    "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2"
+  "dependencies": {
+    "marked": "^12"
   }
 }
