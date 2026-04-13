@@ -3,6 +3,7 @@ import { Instance, type Shape } from "@/project/instance"
 import { registerDisposer } from "./instance-registry"
 
 const TypeId = "~ax-code/InstanceState"
+const INTERRUPTED_WITHOUT_ERROR = "All fibers interrupted without error"
 
 export interface InstanceState<A, E = never, R = never> {
   readonly [TypeId]: typeof TypeId
@@ -19,12 +20,11 @@ export namespace InstanceState {
         lookup: () => init(Instance.current),
       })
 
-      // Attach a catch handler so a cache invalidation failure surfaces
-      // as a logged error rather than an unhandled promise rejection.
-      // The global unhandledRejection handler would still absorb it, but
-      // the generic Effect error carries no useful diagnostic context.
       const off = registerDisposer((directory) =>
         Effect.runPromise(ScopedCache.invalidate(cache, directory)).catch((err) => {
+          const message = err instanceof Error ? err.message : String(err)
+          if (message === INTERRUPTED_WITHOUT_ERROR) return
+
           // eslint-disable-next-line no-console
           console.error("InstanceState disposer: cache invalidate failed", { directory, err })
         }),
