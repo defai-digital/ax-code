@@ -65,7 +65,7 @@ jobs:
             build-args: --single --skip-install
           - os: windows-latest
             targets: win32-x64
-            build-args: --single --baseline --skip-install
+            build-args: --single --skip-install
           - os: windows-11-arm
             targets: win32-arm64
             build-args: --single --skip-install

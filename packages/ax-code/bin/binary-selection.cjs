@@ -133,8 +133,7 @@ function candidatePackageNames(options = {}) {
   }
 
   if (arch === "x64") {
-    const names = baseline ? [`${base}-baseline`, base] : [base, `${base}-baseline`]
-    return { platform, arch, binary, names }
+    return { platform, arch, binary, names: [base] }
   }
 
   return { platform, arch, binary, names: [base] }

@@ -34,6 +34,12 @@ describe("binary selection", () => {
     expect(selection.unsupported).toBe("macOS Intel is not supported. ax-code supports macOS arm64 only.")
   })
 
+  test("does not select a Windows baseline package", () => {
+    const selection = candidatePackageNames({ platform: "windows", arch: "x64", avx2: false })
+
+    expect(selection.names).toEqual(["ax-code-windows-x64"])
+  })
+
   test("resolves fallback packages in wrapper order", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "ax-code-binary-selection-"))
     const binary = path.join(dir, "node_modules", "ax-code-linux-x64", "bin", "ax-code")
