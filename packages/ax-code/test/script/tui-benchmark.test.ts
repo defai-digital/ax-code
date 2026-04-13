@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
+  assertTuiBenchmarkOutputPath,
+  createTuiBenchmarkReport,
   createTuiBenchmarkPlan,
   evaluateTuiBenchmarkResults,
   type TuiBenchmarkResult,
@@ -16,6 +18,10 @@ describe("script.tui-benchmark", () => {
     expect(plan.map((item) => item.criterionID)).toEqual([
       "startup.first-frame",
       "input.keypress-echo",
+      "input.paste-echo",
+      "terminal.resize-stability",
+      "mouse.click-release",
+      "selection.drag-stability",
       "transcript.large-append",
       "scroll.long-cjk-wrapped",
     ])
@@ -27,6 +33,10 @@ describe("script.tui-benchmark", () => {
       command: ["bun", "run", "src/index.ts"],
     })
     expect(plan[1]?.inputSequence).toBe("axbench")
+    expect(plan[2]).toMatchObject({ probe: "pty-paste-echo", inputSequence: "axpaste" })
+    expect(plan[3]).toMatchObject({ probe: "pty-resize-stability" })
+    expect(plan[4]).toMatchObject({ probe: "pty-mouse-click-release" })
+    expect(plan[5]).toMatchObject({ probe: "pty-selection-drag-stability" })
   })
 
   test("evaluates p95 and fps thresholds", () => {
@@ -49,6 +59,13 @@ describe("script.tui-benchmark", () => {
     const output = path.join(dir, "reports", "tui.json")
     const report = {
       version: "test",
+      metadata: {
+        generatedAt: "2026-04-13T00:00:00.000Z",
+        os: { platform: "darwin" as const, release: "test", arch: "arm64" },
+        runtime: { bun: "test", node: "v0.0.0" },
+        terminal: {},
+        renderer: { name: "opentui" as const, coreVersion: "test", solidVersion: "test" },
+      },
       results: [] as TuiBenchmarkResult[],
       verdict: { ok: true, failures: [], notes: [] },
     }
@@ -56,5 +73,27 @@ describe("script.tui-benchmark", () => {
     await writeTuiBenchmarkReport(output, report)
 
     expect(JSON.parse(await readFile(output, "utf8"))).toEqual(report)
+  })
+
+  test("creates benchmark reports with environment metadata", async () => {
+    const report = await createTuiBenchmarkReport({
+      generatedAt: "2026-04-13T00:00:00.000Z",
+      command: ["ax-code", "--debug"],
+      results: [],
+      verdict: { ok: true, failures: [], notes: [] },
+    })
+
+    expect(report.version).toBe("2026-04-13")
+    expect(report.metadata.command).toEqual(["ax-code", "--debug"])
+    expect(report.metadata.renderer.name).toBe("opentui")
+    expect(report.metadata.renderer.coreVersion).toBeTruthy()
+    expect(report.metadata.os.platform).toBe(process.platform)
+    expect(report.metadata.runtime.node).toBe(process.version)
+  })
+
+  test("rejects benchmark reports in product documentation paths", () => {
+    expect(() => assertTuiBenchmarkOutputPath(path.resolve(process.cwd(), "docs", "tui-benchmark.json"))).toThrow(
+      "TUI benchmark reports must be written to temp or CI artifact paths",
+    )
   })
 })

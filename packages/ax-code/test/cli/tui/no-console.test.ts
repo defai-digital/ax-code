@@ -13,6 +13,7 @@ const PROVIDER_DIALOG_SRC = path.join(TUI_SRC, "component/dialog-provider.tsx")
 const SYNC_SRC = path.join(TUI_SRC, "context/sync.tsx")
 const WORKSPACE_SESSION_LIST_SRC = path.join(TUI_SRC, "component/workspace/dialog-session-list.tsx")
 const THEME_SRC = path.join(TUI_SRC, "context/theme.tsx")
+const SIDEBAR_SRC = path.join(TUI_SRC, "routes/session/sidebar.tsx")
 const CONSOLE_RE = /\bconsole\.(?:log|error|warn|debug)\b/
 
 async function files(dir: string): Promise<string[]> {
@@ -100,5 +101,12 @@ describe("tui console hygiene", () => {
 
     expect(theme).not.toContain("colors.palette[0]!")
     expect(theme).not.toContain("colors.palette[7]!")
+  })
+
+  test("opens sidebar actions on mouseup after suppressing header toggle", async () => {
+    const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
+
+    expect(sidebar).toMatch(/onMouseUp=\{\(e: any\) => \{\s+e\.stopPropagation\(\)\s+command\.trigger\("session\.activity"\)/)
+    expect(sidebar).toMatch(/onMouseUp=\{\(e: any\) => \{\s+e\.stopPropagation\(\)\s+command\.trigger\("session\.undo"\)/)
   })
 })

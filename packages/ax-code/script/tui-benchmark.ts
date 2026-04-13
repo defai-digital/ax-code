@@ -1,5 +1,6 @@
 import { performance } from "node:perf_hooks"
 import path from "node:path"
+import os from "node:os"
 import { mkdir, writeFile } from "node:fs/promises"
 import {
   TUI_PERFORMANCE_CRITERIA,
@@ -10,7 +11,15 @@ import { lastAssistantText, transcriptItems } from "../src/cli/cmd/tui/routes/se
 import { messageScroll, nextVisibleMessage } from "../src/cli/cmd/tui/routes/session/navigation"
 import { sessionTaskSummary } from "../src/cli/cmd/tui/routes/session/view-model"
 
-export type TuiBenchmarkProbe = "pty-first-frame" | "pty-input-echo" | "fixture-replay" | "scroll-replay"
+export type TuiBenchmarkProbe =
+  | "pty-first-frame"
+  | "pty-input-echo"
+  | "pty-paste-echo"
+  | "pty-resize-stability"
+  | "pty-mouse-click-release"
+  | "pty-selection-drag-stability"
+  | "fixture-replay"
+  | "scroll-replay"
 export type TuiBenchmarkMetric = "p95Ms" | "minFps"
 
 export type TuiBenchmarkPlanItem = {
@@ -42,8 +51,32 @@ export type TuiBenchmarkVerdict = {
   notes: string[]
 }
 
+export type TuiBenchmarkReportMetadata = {
+  generatedAt: string
+  command?: string[]
+  os: {
+    platform: NodeJS.Platform
+    release: string
+    arch: string
+  }
+  runtime: {
+    bun?: string
+    node: string
+  }
+  terminal: {
+    term?: string
+    termProgram?: string
+  }
+  renderer: {
+    name: "opentui"
+    coreVersion?: string
+    solidVersion?: string
+  }
+}
+
 export type TuiBenchmarkReport = {
   version: string
+  metadata: TuiBenchmarkReportMetadata
   results: TuiBenchmarkResult[]
   verdict: TuiBenchmarkVerdict
 }
@@ -51,6 +84,7 @@ export type TuiBenchmarkReport = {
 const DEFAULT_TIMEOUT_MS = 15_000
 const DEFAULT_REPEAT = 3
 const INPUT_ECHO_SEQUENCE = "axbench"
+const PASTE_ECHO_SEQUENCE = "axpaste"
 const SCROLL_REPLAY_ITERATIONS = 120
 
 function criterion(id: string): TuiPerformanceCriterion {
@@ -84,6 +118,35 @@ export function createTuiBenchmarkPlan(
       timeoutMs,
       command: input.command,
       inputSequence: INPUT_ECHO_SEQUENCE,
+    }),
+    planItem(criterion("input.paste-echo"), {
+      probe: "pty-paste-echo",
+      metric: "p95Ms",
+      repeat,
+      timeoutMs,
+      command: input.command,
+      inputSequence: PASTE_ECHO_SEQUENCE,
+    }),
+    planItem(criterion("terminal.resize-stability"), {
+      probe: "pty-resize-stability",
+      metric: "p95Ms",
+      repeat,
+      timeoutMs,
+      command: input.command,
+    }),
+    planItem(criterion("mouse.click-release"), {
+      probe: "pty-mouse-click-release",
+      metric: "p95Ms",
+      repeat,
+      timeoutMs,
+      command: input.command,
+    }),
+    planItem(criterion("selection.drag-stability"), {
+      probe: "pty-selection-drag-stability",
+      metric: "p95Ms",
+      repeat,
+      timeoutMs,
+      command: input.command,
     }),
     planItem(criterion("transcript.large-append"), {
       probe: "fixture-replay",
@@ -145,10 +208,60 @@ export function evaluateTuiBenchmarkResults(results: TuiBenchmarkResult[]): TuiB
   return { ok: failures.length === 0, failures, notes }
 }
 
+export async function createTuiBenchmarkReport(input: {
+  results: TuiBenchmarkResult[]
+  verdict: TuiBenchmarkVerdict
+  command?: string[]
+  generatedAt?: string
+}): Promise<TuiBenchmarkReport> {
+  const packageJSON = await readPackageJSON()
+
+  return {
+    version: TUI_PERFORMANCE_CRITERIA_VERSION,
+    metadata: {
+      generatedAt: input.generatedAt ?? new Date().toISOString(),
+      command: input.command,
+      os: {
+        platform: process.platform,
+        release: os.release(),
+        arch: process.arch,
+      },
+      runtime: {
+        bun: Bun.version,
+        node: process.version,
+      },
+      terminal: {
+        term: process.env["TERM"],
+        termProgram: process.env["TERM_PROGRAM"],
+      },
+      renderer: {
+        name: "opentui",
+        coreVersion: packageJSON.dependencies?.["@opentui/core"],
+        solidVersion: packageJSON.dependencies?.["@opentui/solid"],
+      },
+    },
+    results: input.results,
+    verdict: input.verdict,
+  }
+}
+
+async function readPackageJSON(): Promise<{ dependencies?: Record<string, string> }> {
+  return JSON.parse(await Bun.file(new URL("../package.json", import.meta.url)).text())
+}
+
+export function assertTuiBenchmarkOutputPath(outputPath: string) {
+  const resolved = path.resolve(outputPath)
+  const blocked = ["docs", "automatosx", "TODOS"].map((entry) => path.resolve(process.cwd(), entry))
+  const blockedRoot = blocked.find((root) => resolved === root || resolved.startsWith(root + path.sep))
+  if (blockedRoot) {
+    throw new Error(`TUI benchmark reports must be written to temp or CI artifact paths, not ${blockedRoot}`)
+  }
+}
+
 export async function runTuiBenchmarkPlan(plan: TuiBenchmarkPlanItem[]): Promise<TuiBenchmarkResult[]> {
   const results: TuiBenchmarkResult[] = []
   for (const item of plan) {
-    if ((item.probe === "pty-first-frame" || item.probe === "pty-input-echo") && !item.command?.length) {
+    if (isPtyProbe(item.probe) && !item.command?.length) {
       results.push({
         id: item.id,
         criterionID: item.criterionID,
@@ -174,15 +287,20 @@ export async function runTuiBenchmarkPlan(plan: TuiBenchmarkPlanItem[]): Promise
 }
 
 export async function writeTuiBenchmarkReport(outputPath: string, report: TuiBenchmarkReport) {
+  assertTuiBenchmarkOutputPath(outputPath)
   await mkdir(path.dirname(outputPath), { recursive: true })
   await writeFile(outputPath, JSON.stringify(report, null, 2) + "\n")
 }
 
 async function runSample(item: TuiBenchmarkPlanItem) {
-  if (item.probe === "pty-first-frame" || item.probe === "pty-input-echo") return runPtySample(item)
+  if (isPtyProbe(item.probe)) return runPtySample(item)
   if (item.probe === "fixture-replay") return runTranscriptFixtureSample()
   if (item.probe === "scroll-replay") return runScrollFixtureSample()
   throw new Error(`Unsupported TUI benchmark probe: ${item.probe}`)
+}
+
+function isPtyProbe(probe: TuiBenchmarkProbe) {
+  return probe.startsWith("pty-")
 }
 
 function p95(values: number[]) {
@@ -215,11 +333,13 @@ async function runPtySample(item: TuiBenchmarkPlanItem) {
     let buffer = ""
     let inputStart = 0
     let inputSent = false
+    let settleTimer: ReturnType<typeof setTimeout> | undefined
 
     const finish = (fn: () => void) => {
       if (done) return
       done = true
       clearTimeout(timeout)
+      if (settleTimer) clearTimeout(settleTimer)
       subscription.dispose()
       try {
         proc.kill()
@@ -243,7 +363,34 @@ async function runPtySample(item: TuiBenchmarkPlanItem) {
         inputStart = performance.now()
         proc.write(item.inputSequence ?? INPUT_ECHO_SEQUENCE)
       }
+      if (item.probe === "pty-paste-echo" && text.trim().length > 0 && !inputSent) {
+        inputSent = true
+        inputStart = performance.now()
+        proc.write(`\x1b[200~${item.inputSequence ?? PASTE_ECHO_SEQUENCE}\x1b[201~`)
+      }
+      if (item.probe === "pty-resize-stability" && text.trim().length > 0 && !inputSent) {
+        inputSent = true
+        inputStart = performance.now()
+        const resizable = proc as { resize?: (cols: number, rows: number) => void }
+        resizable.resize?.(100, 30)
+        settleTimer = setTimeout(() => finish(() => resolve(performance.now() - inputStart)), 100)
+      }
+      if (item.probe === "pty-mouse-click-release" && text.trim().length > 0 && !inputSent) {
+        inputSent = true
+        inputStart = performance.now()
+        proc.write("\x1b[<0;10;5M\x1b[<0;10;5m")
+        settleTimer = setTimeout(() => finish(() => resolve(performance.now() - inputStart)), 100)
+      }
+      if (item.probe === "pty-selection-drag-stability" && text.trim().length > 0 && !inputSent) {
+        inputSent = true
+        inputStart = performance.now()
+        proc.write("\x1b[<0;10;5M\x1b[<32;20;5M\x1b[<0;20;5m")
+        settleTimer = setTimeout(() => finish(() => resolve(performance.now() - inputStart)), 100)
+      }
       if (item.probe === "pty-input-echo" && inputSent && text.includes(item.inputSequence ?? INPUT_ECHO_SEQUENCE)) {
+        finish(() => resolve(performance.now() - inputStart))
+      }
+      if (item.probe === "pty-paste-echo" && inputSent && text.includes(item.inputSequence ?? PASTE_ECHO_SEQUENCE)) {
         finish(() => resolve(performance.now() - inputStart))
       }
     })
@@ -319,8 +466,8 @@ function createTranscriptFixture(count: number) {
         type: "text",
         text:
           role === "user"
-            ? `Measure transcript behavior ${idx} 專案 workspace line wraps across terminals.`
-            : `Assistant response ${idx}\n\n\`\`\`diff\n+ added line ${idx}\n- removed line ${idx}\n\`\`\``,
+            ? `Measure transcript behavior ${idx} 專案 workspace line wraps across terminals.\nLongToken_${"x".repeat(96)}`
+            : `Assistant response ${idx}\n\n\u001b[32mANSI green ${idx}\u001b[0m\n\n\`\`\`diff\n+ added line ${idx}\n- removed line ${idx}\n\`\`\`\n\n| column | value |\n| --- | --- |\n| cjk | 測試寬字元 ${idx} |`,
       },
     ]
     if (role === "assistant" && idx % 10 === 1) {
@@ -374,7 +521,7 @@ async function main() {
     ? (JSON.parse(await Bun.file(resultsPath).text()) as TuiBenchmarkResult[])
     : await runTuiBenchmarkPlan(plan)
   const verdict = evaluateTuiBenchmarkResults(results)
-  const report = { version: TUI_PERFORMANCE_CRITERIA_VERSION, results, verdict }
+  const report = await createTuiBenchmarkReport({ results, verdict, command: flag("--run") ? command() : undefined })
   const output = value("--output")
   if (output) await writeTuiBenchmarkReport(output, report)
   console.log(JSON.stringify(report, null, 2))

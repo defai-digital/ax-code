@@ -6,7 +6,7 @@ describe("tui renderer decision gate", () => {
     expect(
       decideTuiRenderer({
         criteriaFailures: [],
-        rendererSpecific: false,
+        issueLayer: "product-layer",
         blocksProductDirection: false,
         installOrBuildRiskAccepted: false,
       }).action,
@@ -17,7 +17,7 @@ describe("tui renderer decision gate", () => {
     expect(
       decideTuiRenderer({
         criteriaFailures: ["transcript.large-append"],
-        rendererSpecific: false,
+        issueLayer: "product-layer",
         blocksProductDirection: true,
         installOrBuildRiskAccepted: true,
       }).action,
@@ -28,10 +28,23 @@ describe("tui renderer decision gate", () => {
     expect(
       decideTuiRenderer({
         criteriaFailures: ["startup.first-frame"],
-        rendererSpecific: true,
+        issueLayer: "renderer-specific",
         blocksProductDirection: true,
         installOrBuildRiskAccepted: true,
+        offlinePackagingDeterministic: true,
       }),
     ).toMatchObject({ action: "propose-rust-native-core", requiresAdr: true })
+  })
+
+  test("requires deterministic offline packaging before native work", () => {
+    expect(
+      decideTuiRenderer({
+        criteriaFailures: ["terminal.resize-stability"],
+        issueLayer: "renderer-specific",
+        blocksProductDirection: true,
+        installOrBuildRiskAccepted: true,
+        offlinePackagingDeterministic: false,
+      }).action,
+    ).toBe("upstream-or-fork-opentui")
   })
 })

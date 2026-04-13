@@ -597,6 +597,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     fg={theme.textMuted}
                     onMouseDown={(e: any) => {
                       e.stopPropagation()
+                    }}
+                    onMouseUp={(e: any) => {
+                      e.stopPropagation()
                       command.trigger("session.activity")
                     }}
                   >
@@ -638,6 +641,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <text
                     fg={theme.textMuted}
                     onMouseDown={(e: any) => {
+                      e.stopPropagation()
+                    }}
+                    onMouseUp={(e: any) => {
                       e.stopPropagation()
                       command.trigger("session.undo")
                     }}
