@@ -37,6 +37,33 @@ export namespace AuditSemanticCall {
 
   const queue: AuditQuery.Insert[] = []
   let flushScheduled = false
+  let exitHookRegistered = false
+
+  // Drain the queue at process exit so short-lived CLI invocations
+  // don't lose rows. `beforeExit` fires when the event loop is about
+  // to drain and has no pending work — at that point our pending
+  // setImmediate callback has not run. `exit` is the last chance for
+  // synchronous cleanup (Bun + Node both guarantee it on normal exit,
+  // SIGINT, and uncaught exceptions after the handler chain).
+  //
+  // Registered lazily on the first record() call so we don't touch
+  // process in module-load contexts that don't want it (tests can
+  // still call flushNow() explicitly).
+  function ensureExitHook(): void {
+    if (exitHookRegistered) return
+    exitHookRegistered = true
+    // beforeExit fires before normal loop-empty exit; final chance to
+    // schedule async work (not needed here but kept for completeness).
+    process.on("beforeExit", () => {
+      flushQueue()
+    })
+    // exit is the synchronous teardown — must be a sync flush. Our
+    // flushQueue is already sync (drizzle .run() is sync on bun-sqlite),
+    // so this is safe.
+    process.on("exit", () => {
+      flushQueue()
+    })
+  }
 
   function toRow(input: RecordInput): AuditQuery.Insert {
     return {
@@ -86,6 +113,7 @@ export namespace AuditSemanticCall {
       AuditQuery.insert(row)
       return row.id
     }
+    ensureExitHook()
     queue.push(row)
     scheduleFlush()
     return row.id

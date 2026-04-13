@@ -101,6 +101,44 @@ export const ReplayCommand = cmd({
       const recordedArgs = row.args_json as RecordedArgs
       const recordedEnvelope = row.envelope_json as RecordedEnvelope
 
+      // If the original call failed before reaching the LSP layer
+      // (MissingQuery, MissingFilePath, FileNotFound, etc.), its args
+      // may be missing required fields or pointing at nonexistent
+      // files. Re-running would either throw or silently pick
+      // different values (undefined line -> 0), producing a false-
+      // positive mismatch. Report the recorded error and stop.
+      if (row.error_code) {
+        if (argv.json) {
+          process.stdout.write(
+            JSON.stringify(
+              {
+                id: row.id,
+                tool: row.tool,
+                operation: row.operation,
+                args: recordedArgs,
+                recorded: recordedEnvelope,
+                replayed: null,
+                mismatches: [],
+                skipped: true,
+                skipReason: `original call failed with error_code=${row.error_code}; replay skipped`,
+              },
+              null,
+              2,
+            ) + EOL,
+          )
+          return
+        }
+        console.log("")
+        console.log(`  audit id:    ${row.id}`)
+        console.log(`  tool:        ${row.tool}`)
+        console.log(`  operation:   ${row.operation}`)
+        console.log(`  recorded at: ${new Date(row.time_created).toISOString()}`)
+        console.log(`  error_code:  ${row.error_code}`)
+        console.log("")
+        console.log("  replay skipped: original call failed before reaching LSP; args may be incomplete.")
+        return
+      }
+
       const replayed = await rerun(recordedArgs)
 
       const compareFields = ["source", "completeness"] as const

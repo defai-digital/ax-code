@@ -96,7 +96,28 @@ export const LspTool = Tool.define("lsp", {
         metadata: {},
       })
 
-      const envelope = await LSP.workspaceSymbolEnvelope(args.query)
+      let envelope: Awaited<ReturnType<typeof LSP.workspaceSymbolEnvelope>>
+      try {
+        envelope = await LSP.workspaceSymbolEnvelope(args.query)
+      } catch (err) {
+        // Audit is load-bearing (PRD §S3): one row per execution,
+        // success or failure. LSP-layer exceptions (server crash,
+        // protocol-level error) must surface in the audit trail as
+        // errored calls, not go missing.
+        audit({
+          operation: "workspaceSymbol",
+          args,
+          envelope: {
+            symbols: [],
+            source: "lsp",
+            completeness: "empty",
+            timestamp: Date.now(),
+            serverIDs: [],
+          },
+          errorCode: err instanceof Error ? err.name : "UnknownError",
+        })
+        throw err
+      }
       audit({ operation: "workspaceSymbol", args, envelope })
 
       // AI consumers read the envelope shape. We stringify the full envelope
@@ -179,28 +200,42 @@ export const LspTool = Tool.define("lsp", {
     // so we audit real provenance. For the rest, wrap the bare
     // result in a synthetic envelope — honest about the gap; future
     // work extends S1 to cover them.
-    const envelope: unknown = await (async () => {
-      switch (args.operation) {
-        case "goToDefinition":
-          return LSP.definitionEnvelope(position)
-        case "findReferences":
-          return LSP.referencesEnvelope(position)
-        case "hover":
-          return LSP.hoverEnvelope(position)
-        case "documentSymbol":
-          return LSP.documentSymbolEnvelope(uri)
-        case "goToImplementation":
-          return syntheticEnvelope(await LSP.implementation(position))
-        case "prepareCallHierarchy":
-          return syntheticEnvelope(await LSP.prepareCallHierarchy(position))
-        case "incomingCalls":
-          return syntheticEnvelope(await LSP.incomingCalls(position))
-        case "outgoingCalls":
-          return syntheticEnvelope(await LSP.outgoingCalls(position))
-        default:
-          return syntheticEnvelope([])
-      }
-    })()
+    //
+    // Audit is load-bearing (PRD §S3): LSP-layer exceptions must
+    // surface in the audit trail as errored calls, not go missing.
+    let envelope: unknown
+    try {
+      envelope = await (async () => {
+        switch (args.operation) {
+          case "goToDefinition":
+            return LSP.definitionEnvelope(position)
+          case "findReferences":
+            return LSP.referencesEnvelope(position)
+          case "hover":
+            return LSP.hoverEnvelope(position)
+          case "documentSymbol":
+            return LSP.documentSymbolEnvelope(uri)
+          case "goToImplementation":
+            return syntheticEnvelope(await LSP.implementation(position))
+          case "prepareCallHierarchy":
+            return syntheticEnvelope(await LSP.prepareCallHierarchy(position))
+          case "incomingCalls":
+            return syntheticEnvelope(await LSP.incomingCalls(position))
+          case "outgoingCalls":
+            return syntheticEnvelope(await LSP.outgoingCalls(position))
+          default:
+            return syntheticEnvelope([])
+        }
+      })()
+    } catch (err) {
+      audit({
+        operation: args.operation,
+        args,
+        envelope: syntheticEnvelope([]),
+        errorCode: err instanceof Error ? err.name : "UnknownError",
+      })
+      throw err
+    }
 
     audit({ operation: args.operation, args, envelope })
 
