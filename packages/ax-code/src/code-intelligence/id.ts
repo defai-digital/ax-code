@@ -38,3 +38,13 @@ export const CodeFileID = Schema.String.pipe(
   })),
 )
 export type CodeFileID = Schema.Schema.Type<typeof CodeFileID>
+
+export const LspCacheID = Schema.String.pipe(
+  Schema.brand("LspCacheID"),
+  withStatics((s) => ({
+    make: (id: string) => s.makeUnsafe(id),
+    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("code_intel_lsp_cache", id)),
+    zod: Identifier.schema("code_intel_lsp_cache").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
+  })),
+)
+export type LspCacheID = Schema.Schema.Type<typeof LspCacheID>

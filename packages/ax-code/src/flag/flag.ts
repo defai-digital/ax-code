@@ -56,6 +56,13 @@ export namespace Flag {
   // keep this path opt-in until it has crash-isolation coverage.
   export const AX_CODE_DEBUG_ENGINE_NATIVE_SCAN = truthy("AX_CODE_DEBUG_ENGINE_NATIVE_SCAN")
 
+  // LSP response cache (Semantic Trust Layer PRD §S2). Opt-in for the
+  // first release window. When on, LSP.referencesEnvelope and
+  // LSP.documentSymbolEnvelope check code_intel_lsp_cache before
+  // issuing an LSP RPC and populate it on every successful `full`
+  // result. Correctness is content-addressable (see schema comment).
+  export const AX_CODE_LSP_CACHE = truthy("AX_CODE_LSP_CACHE")
+
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")
   export const AX_CODE_EXPERIMENTAL_FILEWATCHER = Config.boolean("AX_CODE_EXPERIMENTAL_FILEWATCHER").pipe(

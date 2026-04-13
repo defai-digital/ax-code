@@ -4,6 +4,7 @@ import type { Argv } from "yargs"
 import { CodeIntelligence } from "../../../code-intelligence"
 import { Instance } from "../../../project/instance"
 import { Ripgrep } from "../../../file/ripgrep"
+import { LSP } from "../../../lsp"
 import { NativePerf } from "../../../perf/native"
 import { buildIndexReport, groupFilesByLanguage, isIndexableFile, probeLspServers } from "../index-graph"
 import { cmd } from "../cmd"
@@ -25,6 +26,10 @@ export type Summary = {
     total: Record<"calls" | "fails" | "totalMs" | "inBytes" | "outBytes", Stat>
     rows: Record<string, Record<"calls" | "fails" | "totalMs" | "inBytes" | "outBytes", Stat>>
   }
+  // Per-operation LSP timings aggregated across samples. Keys are the
+  // LSP surface names recorded by `LSP.perfSnapshot()` (touch,
+  // documentSymbol, references, workspaceSymbol).
+  lsp?: Record<string, Record<"count" | "okCount" | "errorCount" | "p50" | "p95" | "maxMs" | "totalMs", Stat>>
 }
 
 type Native = NonNullable<Summary["native"]>
@@ -131,20 +136,64 @@ export function summarize(samples: IndexReport[]): Summary {
     ),
   }
 
-  if (total.size === 0) return summary
+  if (total.size !== 0) {
+    summary.native = {
+      total: Object.fromEntries([...total.entries()].map(([key, vals]) => [key, stat(vals)])) as Native["total"],
+      rows: Object.fromEntries(
+        [...rows.entries()]
+          .map(([name, map]) => {
+            const item = Object.fromEntries(
+              [...map.entries()].map(([key, vals]) => [key, stat(vals)]),
+            ) as Native["rows"][string]
+            return [name, item] as const
+          })
+          .sort((a, b) => b[1].totalMs.median - a[1].totalMs.median),
+      ),
+    }
+  }
 
-  summary.native = {
-    total: Object.fromEntries([...total.entries()].map(([key, vals]) => [key, stat(vals)])) as Native["total"],
-    rows: Object.fromEntries(
-      [...rows.entries()]
+  // Aggregate LSP hotspot snapshots across samples. Each sample contributes
+  // one row per operation; samples without that operation contribute zeros
+  // so the median is meaningful across all runs.
+  const lspKeys = ["count", "okCount", "errorCount", "p50", "p95", "maxMs", "totalMs"] as const
+  type LspKey = (typeof lspKeys)[number]
+  const lspRows = new Map<string, Map<LspKey, number[]>>()
+  for (const [idx, sample] of samples.entries()) {
+    const snap = sample.lspPerf ?? {}
+    const seen = new Set<string>()
+    for (const [op, row] of Object.entries(snap)) {
+      seen.add(op)
+      const map = lspRows.get(op) ?? new Map<LspKey, number[]>()
+      for (const key of lspKeys) {
+        const list = map.get(key) ?? Array.from({ length: idx }, () => 0)
+        list.push(row[key])
+        map.set(key, list)
+      }
+      lspRows.set(op, map)
+    }
+    for (const name of lspRows.keys()) {
+      if (seen.has(name)) continue
+      const map = lspRows.get(name)!
+      for (const key of lspKeys) {
+        const list = map.get(key) ?? []
+        list.push(0)
+        map.set(key, list)
+      }
+    }
+  }
+
+  if (lspRows.size > 0) {
+    summary.lsp = Object.fromEntries(
+      [...lspRows.entries()]
         .map(([name, map]) => {
-          const item = Object.fromEntries(
-            [...map.entries()].map(([key, vals]) => [key, stat(vals)]),
-          ) as Native["rows"][string]
+          const item = Object.fromEntries([...map.entries()].map(([key, vals]) => [key, stat(vals)])) as Record<
+            LspKey,
+            Stat
+          >
           return [name, item] as const
         })
         .sort((a, b) => b[1].totalMs.median - a[1].totalMs.median),
-    ),
+    )
   }
 
   return summary
@@ -182,6 +231,7 @@ async function run(
   probeResult?: Bench["probeResult"],
 ): Promise<IndexReport> {
   if (args.nativeProfile) NativePerf.reset()
+  LSP.perfReset()
   const start = Date.now()
   const result = await CodeIntelligence.indexFiles(Instance.project.id, list, {
     concurrency: args.concurrency,
@@ -193,7 +243,9 @@ async function run(
   const elapsedMs = Date.now() - start
   const status = CodeIntelligence.status(Instance.project.id)
   const native = args.nativeProfile ? NativePerf.snapshot() : undefined
+  const lspPerf = LSP.perfSnapshot()
   if (args.nativeProfile) NativePerf.reset()
+  LSP.perfReset()
 
   return buildIndexReport({
     projectID: Instance.project.id,
@@ -209,6 +261,7 @@ async function run(
     elapsedMs,
     probeResult,
     native,
+    lspPerf: Object.keys(lspPerf).length > 0 ? lspPerf : undefined,
   })
 }
 
@@ -397,6 +450,19 @@ const PerfIndexCommand = cmd({
             for (const [name, value] of Object.entries(summary.native.rows)) {
               print(name, value.totalMs)
             }
+          }
+        }
+        if (summary.lsp) {
+          console.log("")
+          // Phases above are wall-clock time per batch; these rows are per
+          // individual LSP call. Complementary: a long phase with a low p95
+          // means a wide batch; a short phase with a high p95 means a few
+          // slow outliers.
+          console.log("  lsp hotspots (per-call p50/p95, median across samples):")
+          for (const [name, value] of Object.entries(summary.lsp)) {
+            console.log(
+              `  ${name}: p50 ${num(value.p50.median)}ms | p95 ${num(value.p95.median)}ms | max ${num(value.maxMs.median)}ms | calls ${num(value.count.median)} | errors ${num(value.errorCount.median)}`,
+            )
           }
         }
       },

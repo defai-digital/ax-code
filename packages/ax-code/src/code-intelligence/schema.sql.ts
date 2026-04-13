@@ -1,7 +1,7 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import type { ProjectID } from "../project/schema"
-import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
+import type { CodeNodeID, CodeEdgeID, CodeFileID, LspCacheID } from "./id"
 import { Timestamps } from "../storage/schema.sql"
 
 // Graph node: a named, locatable entity in the codebase. The union is
@@ -150,3 +150,73 @@ export const CodeIndexCursorTable = sqliteTable("code_index_cursor", {
   edge_count: integer().notNull(),
   ...Timestamps,
 })
+
+// LSP response cache (Semantic Trust Layer PRD §S2).
+//
+// Correctness model: content-addressable. The unique key includes a
+// SHA-256 (or Bun.hash) of the file content at query time, so a stale
+// row is *unreachable* once the file content changes — the new hash
+// won't match the cached one. No watcher hook, no active invalidation:
+// when content changes, the old row simply ages out via TTL.
+//
+// Scope: AI-facing `references` and `documentSymbol` calls only.
+// workspaceSymbol is not cached here (requires cross-file invalidation
+// logic that belongs in its own PRD). hover/definition are not cached
+// because the hit rate at their typical call frequency doesn't justify
+// the write cost — revisit after v1 telemetry.
+//
+// Feature flag: entries are only written/read when AX_CODE_LSP_CACHE=1.
+// Default off for the first release window.
+export type LspCacheOperation = "references" | "documentSymbol"
+export type LspCacheCompleteness = "full" | "partial"
+
+export const LspCacheTable = sqliteTable(
+  "code_intel_lsp_cache",
+  {
+    id: text().$type<LspCacheID>().primaryKey(),
+    project_id: text()
+      .$type<ProjectID>()
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    operation: text().$type<LspCacheOperation>().notNull(),
+    file_path: text().notNull(),
+    // Content hash of the file at the moment the LSP call was issued.
+    // SHA-256 hex (64 chars). Must match exactly for a row to be reused.
+    content_hash: text().notNull(),
+    // Position at which the query was made. For documentSymbol the
+    // position is meaningless; we store -1/-1 as a sentinel so the
+    // uniqueIndex composition works for both operations.
+    line: integer().notNull(),
+    character: integer().notNull(),
+    // JSON serialization of the envelope's `data` field — the raw LSP
+    // payload as returned to the caller.
+    payload_json: text({ mode: "json" }).$type<unknown>().notNull(),
+    // JSON array of server IDs that contributed to this cached result.
+    server_ids_json: text({ mode: "json" }).$type<string[]>().notNull(),
+    // Only `full` results are ever written (partial/empty are skipped on
+    // the write path), but the column is kept for forward-compat so a
+    // future policy can relax that rule without a migration.
+    completeness: text().$type<LspCacheCompleteness>().notNull(),
+    hit_count: integer().notNull().default(0),
+    // Absolute epoch ms at which this row becomes stale. Reads past this
+    // time are treated as misses. TTL is 24h by default, enforced by
+    // probabilistic pruneExpired() on writes.
+    expires_at: integer().notNull(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("code_intel_lsp_cache_project_idx").on(table.project_id),
+    // UNIQUE on the content-addressable key. insert-or-replace on hit
+    // semantics lean on this constraint.
+    uniqueIndex("code_intel_lsp_cache_key_idx").on(
+      table.project_id,
+      table.operation,
+      table.file_path,
+      table.content_hash,
+      table.line,
+      table.character,
+    ),
+    // Cheap scan for pruneExpired().
+    index("code_intel_lsp_cache_expires_idx").on(table.expires_at),
+  ],
+)

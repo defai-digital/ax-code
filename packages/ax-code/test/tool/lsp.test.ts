@@ -20,45 +20,57 @@ const ctx = {
   ask: async () => {},
 }
 
-let workspaceSymbolSpy: ReturnType<typeof spyOn> | undefined
+let envelopeSpy: ReturnType<typeof spyOn> | undefined
 let hasClientsSpy: ReturnType<typeof spyOn> | undefined
 let touchFileSpy: ReturnType<typeof spyOn> | undefined
 
 afterEach(() => {
-  workspaceSymbolSpy?.mockRestore()
+  envelopeSpy?.mockRestore()
   hasClientsSpy?.mockRestore()
   touchFileSpy?.mockRestore()
-  workspaceSymbolSpy = undefined
+  envelopeSpy = undefined
   hasClientsSpy = undefined
   touchFileSpy = undefined
 })
 
 describe("tool.lsp", () => {
-  test("workspaceSymbol accepts query without file coordinates", async () => {
+  test("workspaceSymbol returns envelope with provenance", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        workspaceSymbolSpy = spyOn(LSP, "workspaceSymbol").mockResolvedValue([
-          {
-            name: "DemoSymbol",
-            kind: 12,
-            location: {
-              uri: "file:///workspace/demo.ts",
-              range: {
-                start: { line: 0, character: 0 },
-                end: { line: 0, character: 10 },
+        envelopeSpy = spyOn(LSP, "workspaceSymbolEnvelope").mockResolvedValue({
+          symbols: [
+            {
+              name: "DemoSymbol",
+              kind: 12,
+              location: {
+                uri: "file:///workspace/demo.ts",
+                range: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 10 },
+                },
               },
             },
-          },
-        ] as any)
+          ],
+          source: "lsp",
+          completeness: "full",
+          timestamp: 1_700_000_000_000,
+          serverIDs: ["fake"],
+        } as any)
 
         const tool = await LspTool.init()
         const result = await tool.execute({ operation: "workspaceSymbol", query: "DemoSymbol" }, ctx)
 
-        expect(workspaceSymbolSpy).toHaveBeenCalledWith("DemoSymbol")
+        expect(envelopeSpy).toHaveBeenCalledWith("DemoSymbol")
         expect(result.title).toBe("workspaceSymbol DemoSymbol")
         expect(result.output).toContain("DemoSymbol")
+        expect(result.output).toContain("\"source\"")
+        expect(result.output).toContain("\"completeness\"")
+        expect(result.output).toContain("\"timestamp\"")
+        const meta = result.metadata as { envelope: { source: string; completeness: string } }
+        expect(meta.envelope.source).toBe("lsp")
+        expect(meta.envelope.completeness).toBe("full")
       },
     })
   })

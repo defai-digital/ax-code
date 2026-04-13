@@ -42,12 +42,18 @@ export const LspTool = Tool.define("lsp", {
         metadata: {},
       })
 
-      const result = await LSP.workspaceSymbol(args.query)
-      const output = result.length === 0 ? `No results found for workspaceSymbol` : JSON.stringify(result, null, 2)
+      const envelope = await LSP.workspaceSymbolEnvelope(args.query)
+      // AI consumers read the envelope shape. We stringify the full envelope
+      // (not just `symbols`) so provenance is visible in tool output.
+      const output =
+        envelope.symbols.length === 0
+          ? `No results found for workspaceSymbol (completeness=${envelope.completeness})`
+          : JSON.stringify(envelope, null, 2)
 
+      const metadata: Record<string, unknown> = { envelope }
       return {
         title: `workspaceSymbol ${args.query}`,
-        metadata: { result },
+        metadata,
         output,
       }
     }
@@ -124,9 +130,10 @@ export const LspTool = Tool.define("lsp", {
       return JSON.stringify(result, null, 2)
     })()
 
+    const metadata: Record<string, unknown> = { result }
     return {
       title,
-      metadata: { result },
+      metadata,
       output,
     }
   },

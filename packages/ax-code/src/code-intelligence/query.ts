@@ -4,9 +4,13 @@ import {
   CodeEdgeTable,
   CodeFileTable,
   CodeIndexCursorTable,
+  LspCacheTable,
   type CodeNodeKind,
   type CodeEdgeKind,
+  type LspCacheOperation,
+  type LspCacheCompleteness,
 } from "./schema.sql"
+import { LspCacheID } from "./id"
 import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import type { ProjectID } from "../project/schema"
 import { Flag } from "../flag/flag"
@@ -491,6 +495,139 @@ export namespace CodeGraphQuery {
       db.run(sql`ANALYZE code_node`)
       db.run(sql`ANALYZE code_edge`)
       db.run(sql`ANALYZE code_file`)
+    })
+  }
+
+  // ─── LSP response cache (S2) ────────────────────────────────────────
+  //
+  // Content-addressable cache for `references` and `documentSymbol`.
+  // Key semantics live in LspCacheTable; this layer just wraps the
+  // drizzle reads/writes so src/lsp/index.ts does not take a direct
+  // dependency on the schema module.
+  //
+  // Not routed through NativeStore: the native IndexStore does not
+  // implement cache ops. If a native path is added later, it should
+  // mirror insertNode/getNode — same signature, opt-in via useNative.
+
+  export type LspCacheRow = typeof LspCacheTable.$inferSelect
+
+  export type LspCacheLookup = {
+    projectID: ProjectID
+    operation: LspCacheOperation
+    filePath: string
+    contentHash: string
+    line: number
+    character: number
+    now: number
+  }
+
+  // Returns the cached row if present and not expired. Does not update
+  // hit_count (caller decides whether to increment — e.g., lookup-only
+  // perf probes should not inflate hit counts).
+  export function getLspCache(lookup: LspCacheLookup): LspCacheRow | undefined {
+    return Database.use((db) =>
+      db
+        .select()
+        .from(LspCacheTable)
+        .where(
+          and(
+            eq(LspCacheTable.project_id, lookup.projectID),
+            eq(LspCacheTable.operation, lookup.operation),
+            eq(LspCacheTable.file_path, lookup.filePath),
+            eq(LspCacheTable.content_hash, lookup.contentHash),
+            eq(LspCacheTable.line, lookup.line),
+            eq(LspCacheTable.character, lookup.character),
+            gte(LspCacheTable.expires_at, lookup.now),
+          ),
+        )
+        .limit(1)
+        .all(),
+    )[0]
+  }
+
+  export function incrementLspCacheHit(id: LspCacheID): void {
+    Database.use((db) =>
+      db
+        .update(LspCacheTable)
+        .set({ hit_count: sql`${LspCacheTable.hit_count} + 1` })
+        .where(eq(LspCacheTable.id, id))
+        .run(),
+    )
+  }
+
+  export type LspCacheInsert = {
+    projectID: ProjectID
+    operation: LspCacheOperation
+    filePath: string
+    contentHash: string
+    line: number
+    character: number
+    payload: unknown
+    serverIDs: string[]
+    completeness: LspCacheCompleteness
+    expiresAt: number
+  }
+
+  // Upsert on the unique key. When a fresh LSP call produces a new
+  // result for the same (project, op, file, hash, line, char), we
+  // overwrite rather than keep both — the content hash already
+  // guarantees the payload is semantically equivalent. The overwrite
+  // protects against stale `expires_at` from an older write.
+  export function upsertLspCache(row: LspCacheInsert): LspCacheID {
+    const id = LspCacheID.ascending()
+    Database.use((db) =>
+      db
+        .insert(LspCacheTable)
+        .values({
+          id,
+          project_id: row.projectID,
+          operation: row.operation,
+          file_path: row.filePath,
+          content_hash: row.contentHash,
+          line: row.line,
+          character: row.character,
+          payload_json: row.payload,
+          server_ids_json: row.serverIDs,
+          completeness: row.completeness,
+          expires_at: row.expiresAt,
+          hit_count: 0,
+        })
+        .onConflictDoUpdate({
+          target: [
+            LspCacheTable.project_id,
+            LspCacheTable.operation,
+            LspCacheTable.file_path,
+            LspCacheTable.content_hash,
+            LspCacheTable.line,
+            LspCacheTable.character,
+          ],
+          set: {
+            payload_json: row.payload,
+            server_ids_json: row.serverIDs,
+            completeness: row.completeness,
+            expires_at: row.expiresAt,
+          },
+        })
+        .run(),
+    )
+    return id
+  }
+
+  // Probabilistic TTL sweep. Called by the cache write path with 1%
+  // probability to amortize cleanup without a background worker.
+  // Returns the number of rows deleted, for observability. Counts via
+  // an explicit SELECT first because the bun-sqlite drizzle binding
+  // does not expose a changes/affectedRows field on .run().
+  export function pruneExpiredLspCache(now: number): number {
+    return Database.use((db) => {
+      const ids = db
+        .select({ id: LspCacheTable.id })
+        .from(LspCacheTable)
+        .where(lt(LspCacheTable.expires_at, now))
+        .all()
+      if (ids.length === 0) return 0
+      db.delete(LspCacheTable).where(lt(LspCacheTable.expires_at, now)).run()
+      return ids.length
     })
   }
 }

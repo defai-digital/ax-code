@@ -87,6 +87,7 @@ type Report = {
   }
   probe?: Probe
   native?: NativePerfSnapshot
+  lspPerf?: Record<string, LSP.PerfRow>
 }
 
 function zero(): CodeGraphBuilder.IndexFilesResult {
@@ -140,6 +141,7 @@ export function buildIndexReport(input: {
   elapsedMs: number
   probeResult?: Probe
   native?: NativePerfSnapshot
+  lspPerf?: Record<string, LSP.PerfRow>
 }): Report {
   return {
     projectID: input.projectID,
@@ -174,6 +176,7 @@ export function buildIndexReport(input: {
     },
     probe: input.probeResult,
     native: input.native,
+    lspPerf: input.lspPerf,
   }
 }
 

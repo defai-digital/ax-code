@@ -16,6 +16,7 @@ export namespace Identifier {
     code_node: "cnd",
     code_edge: "ced",
     code_file: "cfi",
+    code_intel_lsp_cache: "lsc",
     refactor_plan: "rpl",
     embedding_cache: "ebc",
   } as const
