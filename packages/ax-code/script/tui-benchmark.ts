@@ -466,8 +466,8 @@ function createTranscriptFixture(count: number) {
         type: "text",
         text:
           role === "user"
-            ? `Measure transcript behavior ${idx} 專案 workspace line wraps across terminals.\nLongToken_${"x".repeat(96)}`
-            : `Assistant response ${idx}\n\n\u001b[32mANSI green ${idx}\u001b[0m\n\n\`\`\`diff\n+ added line ${idx}\n- removed line ${idx}\n\`\`\`\n\n| column | value |\n| --- | --- |\n| cjk | 測試寬字元 ${idx} |`,
+            ? `Measure transcript behavior ${idx} project workspace line wraps across terminals.\nLongToken_${"x".repeat(96)}`
+            : `Assistant response ${idx}\n\n\u001b[32mANSI green ${idx}\u001b[0m\n\n\`\`\`diff\n+ added line ${idx}\n- removed line ${idx}\n\`\`\`\n\n| column | value |\n| --- | --- |\n| wide | wide text sample ${idx} |`,
       },
     ]
     if (role === "assistant" && idx % 10 === 1) {

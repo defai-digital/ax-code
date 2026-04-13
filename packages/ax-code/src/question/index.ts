@@ -55,6 +55,10 @@ export namespace Question {
     return AutonomousQuestion.answers(questions)
   }
 
+  export function autonomousDecisions(questions: Info[]): AutonomousQuestion.Decision[] {
+    return AutonomousQuestion.decisions(questions)
+  }
+
   export const Reply = z.object({
     answers: z
       .array(Answer)

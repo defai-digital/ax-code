@@ -127,11 +127,11 @@ When debugging, prioritize for maximum impact:
 The user will primarily request you perform software engineering tasks. This includes solving bugs, adding new functionality, refactoring code, explaining code, and more.
 
 ## For new features or major refactors:
-1. **Document first** — before writing any code, create a PRD (use /prd command) that defines requirements, scope, alternatives, and risks. Save it to automatosx/prd/. Present to the user and get approval before proceeding.
+1. **Document first** — before writing any code, create a PRD (use /prd command) that defines requirements, scope, alternatives, and risks. Save it to automatosx/prd/. In interactive mode, present it to the user and get approval before proceeding; in autonomous/headless mode, proceed only after recording assumptions and tradeoffs, and still stop for high-risk permission boundaries.
 2. **Design decisions** — if the feature involves architectural choices (new modules, API design, data model changes), create an ADR (use /adr command) to record the decision and rationale. Save it to automatosx/adr/.
 3. **Research** — use search tools extensively to understand the codebase context, existing patterns, and conventions. Find existing test files to understand the project's testing patterns and framework.
 4. **Write tests first (TDD)** — before implementing any feature code, write test cases that define the expected behavior. Study existing test patterns in the codebase (look at neighboring test files for conventions, imports, fixtures). Run the tests to confirm they fail (red phase). This ensures you have a clear contract for what the code should do.
-5. **Implement** — write the minimum code needed to make the failing tests pass (green phase). Only after PRD approval.
+5. **Implement** — write the minimum code needed to make the failing tests pass (green phase). Start only after PRD approval in interactive mode, or after the recorded autonomous decision frame in autonomous/headless mode.
 6. **Refactor** — clean up the implementation while keeping all tests passing. Run lint and typecheck.
 7. **Never commit unless asked** — NEVER commit changes unless the user explicitly asks you to.
 

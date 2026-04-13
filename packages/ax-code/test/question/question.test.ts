@@ -459,6 +459,37 @@ test("ask - autonomous mode treats avoid over-engineering as a positive signal",
   }
 })
 
+test("ask - autonomous mode uses question context to prefer low-scope options", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const original = process.env.AX_CODE_AUTONOMOUS
+  process.env.AX_CODE_AUTONOMOUS = "true"
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const answers = await Question.ask({
+          sessionID: SessionID.make("ses_auto_context_low_scope"),
+          questions: [
+            {
+              question: "Which approach best avoids over-engineering?",
+              header: "Approach",
+              options: [
+                { label: "New architecture layer", description: "Framework layer for future extension" },
+                { label: "Patch existing function", description: "Small targeted change" },
+              ],
+            },
+          ],
+        })
+
+        expect(answers).toEqual([["Patch existing function"]])
+      },
+    })
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = original
+  }
+})
+
 // list tests
 
 test("list - returns all pending requests", async () => {

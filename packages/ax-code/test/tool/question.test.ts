@@ -90,6 +90,8 @@ describe("tool.question", () => {
           header: "Approach",
           multiple: false,
           selected: ["Minimal fix"],
+          confidence: "high",
+          rationale: "Selected the strongest best-practice/default signal (high confidence).",
           selectedOptions: [{ label: "Minimal fix", description: "Simple common best practice" }],
           optionCount: 1,
         },
@@ -144,6 +146,7 @@ describe("tool.question", () => {
       expect(decision.question.length).toBeLessThanOrEqual(503)
       expect(decision.header.length).toBeLessThanOrEqual(503)
       expect(decision.selected[0].length).toBeLessThanOrEqual(503)
+      expect(decision.rationale.length).toBeLessThanOrEqual(503)
       expect(decision.selectedOptions[0].description.length).toBeLessThanOrEqual(503)
       expect(decision.question).toEndWith("...")
       expect(decision.selectedOptions[0].description).not.toContain("\n")

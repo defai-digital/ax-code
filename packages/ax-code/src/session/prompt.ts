@@ -1748,6 +1748,17 @@ export namespace SessionPrompt {
     // Shallow-copy to avoid mutating cached message parts
     const userMessage = { ...userMsg, parts: [...userMsg.parts] }
     const messages = input.messages.map((m) => (m === userMsg ? userMessage : m))
+    const autonomousDecisionLedger = process.env["AX_CODE_AUTONOMOUS"] === "true" ? autonomousDecisionLedgerReminder(input.messages) : undefined
+    if (autonomousDecisionLedger) {
+      userMessage.parts.push({
+        id: PartID.ascending(),
+        messageID: userMessage.info.id,
+        sessionID: userMessage.info.sessionID,
+        type: "text",
+        text: autonomousDecisionLedger,
+        synthetic: true,
+      })
+    }
 
     // Original logic when experimental plan mode is disabled
     if (!Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE) {
@@ -1882,7 +1893,57 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       userMessage.parts.push(part)
       return messages
     }
-    return input.messages
+    return messages
+  }
+
+  function safeDecisionText(value: unknown, max = 240) {
+    if (typeof value !== "string") return ""
+    const escaped = value
+      .replace(/\s+/g, " ")
+      .trim()
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+    return escaped.length <= max ? escaped : `${escaped.slice(0, max)}...`
+  }
+
+  /** @internal Exported for regression tests. */
+  export function autonomousDecisionLedgerReminder(messages: MessageV2.WithParts[]) {
+    const lines: string[] = []
+    for (const message of messages) {
+      for (const part of message.parts) {
+        if (part.type !== "tool") continue
+        if (part.tool !== "question") continue
+        if (part.state.status !== "completed") continue
+        const metadata = part.state.metadata as Record<string, unknown>
+        const decisions = metadata["autonomousDecisions"]
+        if (!Array.isArray(decisions)) continue
+        for (const decision of decisions) {
+          if (!decision || typeof decision !== "object") continue
+          const value = decision as Record<string, unknown>
+          const selected = Array.isArray(value["selected"]) ? value["selected"].map((item) => safeDecisionText(item, 120)).filter(Boolean).join(", ") : ""
+          const header = safeDecisionText(value["header"], 80)
+          const question = safeDecisionText(value["question"], 180)
+          const confidence = safeDecisionText(value["confidence"], 32)
+          const rationale = safeDecisionText(value["rationale"], 240)
+          lines.push(
+            `- ${header ? `[${header}] ` : ""}${question || "Question"} -> ${selected || "Unanswered"}${
+              confidence ? ` (${confidence} confidence)` : ""
+            }${rationale ? `; ${rationale}` : ""}`,
+          )
+          if (lines.length >= 12) break
+        }
+        if (lines.length >= 12) break
+      }
+      if (lines.length >= 12) break
+    }
+    if (lines.length === 0) return
+    return [
+      "<autonomous_decision_ledger>",
+      "Autonomous mode made these user-visible choices earlier in this session. Use this ledger when preparing the final response.",
+      ...lines,
+      "</autonomous_decision_ledger>",
+    ].join("\n")
   }
 
   export const ShellInput = z.object({

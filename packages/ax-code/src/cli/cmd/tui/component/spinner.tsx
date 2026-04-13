@@ -5,7 +5,7 @@ import type { JSX } from "@opentui/solid"
 import type { RGBA } from "@opentui/core"
 import "opentui-spinner/solid"
 
-const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+const frames = ["|", "/", "-", "\\"]
 
 export function Spinner(props: { children?: JSX.Element; color?: RGBA }) {
   const { theme } = useTheme()

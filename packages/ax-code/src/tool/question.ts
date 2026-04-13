@@ -49,14 +49,23 @@ export const QuestionTool = Tool.define("question", {
     const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
     const actor = autonomous ? "Autonomous mode selected answers for" : "User has answered"
     const reminder = autonomous ? " Record these autonomous decisions in your final response." : ""
+    const recommendedDecisions = autonomous ? Question.autonomousDecisions(params.questions) : []
     const autonomousDecisions = autonomous
       ? params.questions.map((question, index) => {
           const selected = answers[index] ?? []
+          const recommended = recommendedDecisions[index]
+          const matchesRecommended = selected.join("\0") === (recommended?.answer ?? []).join("\0")
+          const fallbackRationale =
+            "Selected answer came from the question flow but did not match the current autonomous recommendation."
           return {
             question: clipPromptText(question.question),
             header: clipPromptText(question.header),
             multiple: question.multiple === true,
             selected: selected.map(clipPromptText),
+            confidence: matchesRecommended ? (recommended?.confidence ?? "low") : "low",
+            rationale: clipPromptText(
+              matchesRecommended ? (recommended?.rationale ?? fallbackRationale) : fallbackRationale,
+            ),
             selectedOptions: selected.map((label) => {
               const option = question.options.find((item) => item.label === label)
               return {
