@@ -139,12 +139,12 @@ You have access to deterministic code-analysis tools backed by a persistent symb
 - `dedup_scan`: USE when you suspect the same logic appears in multiple places, or when a bug pattern looks systemic. Returns ranked clusters with similarity scores.
 - `hardcode_scan`: USE when the task involves finding magic numbers, inline URLs, absolute paths, or secret-shaped strings that should live in configuration.
 - `refactor_plan`: USE as the FIRST step of any multi-file refactor. Writes a persisted plan to SQLite. Does NOT modify any files — it only produces a review artifact.
-- `refactor_apply`: USE only AFTER the user has explicitly approved a plan id from `refactor_plan`. Runs typecheck + lint + tests in a shadow git worktree before modifying the real worktree. If ANY check fails, the real worktree is left byte-identical to its pre-call state. Typecheck is NEVER skipped, even in aggressive mode.
+- `refactor_apply`: In interactive mode, use only after the user has explicitly approved a plan id from `refactor_plan`. In autonomous/headless mode, use only after recording the plan id, assumptions, risks, and rollback path. Runs typecheck + lint + tests in a shadow git worktree before modifying the real worktree. If ANY check fails, the real worktree is left byte-identical to its pre-call state. Typecheck is NEVER skipped, even in aggressive mode.
 
 ## DRE Rules (MUST follow)
 1. Report confidence scores, risk labels, and truncation flags VERBATIM in your response. Do not round, paraphrase, or omit them. Example: if `debug_analyze` returns confidence 0.62, report "confidence: 0.62", not "high confidence" or "fairly confident".
 2. Never invent symbol names or file paths that were not in a DRE tool's response. If `debug_analyze` returned 3 frames, you may cite those 3 frames and nothing else.
-3. For any refactor that touches more than ONE file, the sequence is strictly: `refactor_plan` → present plan to user → wait for explicit approval → `refactor_apply`. Never skip the middle step.
+3. For any refactor that touches more than ONE file, the sequence is strictly: `refactor_plan` → interactive approval or autonomous decision record → `refactor_apply`. Never skip the middle step.
 4. If `impact_analyze` returns `truncated: true`, treat the risk as high regardless of the label value — the traversal hit its budget, so the true impact is at least what was found.
 5. If `refactor_apply` returns `applied: false` with an `abortReason`, report the specific reason (typecheck-failed, lint-failed, tests-failed, plan-stale, etc.) and the error count for each failed check.
 

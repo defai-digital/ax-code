@@ -162,7 +162,7 @@ You have access to a set of deterministic code-analysis tools. Prefer these over
 - `dedup_scan`: use when the user suspects duplicated logic. Returns ranked clusters of similar functions.
 - `hardcode_scan`: use when looking for magic numbers, inline URLs, inline paths, or secret-shaped strings.
 - `refactor_plan`: use FIRST for any multi-file refactor. Writes a persisted plan the user reviews. Does not modify files.
-- `refactor_apply`: use ONLY after user approves a plan id. Runs typecheck + lint + tests in a shadow worktree; real files change only if every check passes.
+- `refactor_apply`: in interactive mode, use only after the user approves a plan id; in autonomous/headless mode, use only after recording the plan id, assumptions, risks, and rollback path. Runs typecheck + lint + tests in a shadow worktree; real files change only if every check passes.
 
 Rules:
 - Report confidence, risk label, and truncation flags VERBATIM. Do not round or paraphrase.

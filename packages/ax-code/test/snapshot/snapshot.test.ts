@@ -310,7 +310,7 @@ test("revert non-existent file", async () => {
   })
 })
 
-test("English fixture filenames", async () => {
+test("escaped non-ASCII filenames", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,
@@ -319,10 +319,10 @@ test("English fixture filenames", async () => {
       expect(before).toBeTruthy()
 
       const fixtureFiles = [
-        { path: fwd(tmp.path, "unicode-file.txt"), content: "unicode content" },
-        { path: fwd(tmp.path, "rocket-file.txt"), content: "rocket content" },
-        { path: fwd(tmp.path, "cafe.txt"), content: "cafe content" },
-        { path: fwd(tmp.path, "script-file.txt"), content: "script content" },
+        { path: fwd(tmp.path, "\u6587\u4ef6.txt"), content: "cjk content" },
+        { path: fwd(tmp.path, "\u{1F680}rocket.txt"), content: "emoji content" },
+        { path: fwd(tmp.path, "caf\u00e9.txt"), content: "accented content" },
+        { path: fwd(tmp.path, "\u0444\u0430\u0439\u043b.txt"), content: "cyrillic content" },
       ]
 
       for (const file of fixtureFiles) {
@@ -350,36 +350,36 @@ test("English fixture filenames", async () => {
   })
 })
 
-test.skip("English fixture filenames modification and restore", async () => {
+test.skip("escaped non-ASCII filenames modification and restore", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const unicodeFile = fwd(tmp.path, "unicode-file.txt")
-      const scriptFile = fwd(tmp.path, "script-file.txt")
+      const cjkFile = fwd(tmp.path, "\u6587\u4ef6.txt")
+      const cyrillicFile = fwd(tmp.path, "\u0444\u0430\u0439\u043b.txt")
 
-      await Filesystem.write(unicodeFile, "original unicode")
-      await Filesystem.write(scriptFile, "original script")
+      await Filesystem.write(cjkFile, "original cjk")
+      await Filesystem.write(cyrillicFile, "original cyrillic")
 
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await Filesystem.write(unicodeFile, "modified unicode")
-      await Filesystem.write(scriptFile, "modified script")
+      await Filesystem.write(cjkFile, "modified cjk")
+      await Filesystem.write(cyrillicFile, "modified cyrillic")
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(unicodeFile)
-      expect(patch.files).toContain(scriptFile)
+      expect(patch.files).toContain(cjkFile)
+      expect(patch.files).toContain(cyrillicFile)
 
       await Snapshot.revert([patch])
 
-      expect(await fs.readFile(unicodeFile, "utf-8")).toBe("original unicode")
-      expect(await fs.readFile(scriptFile, "utf-8")).toBe("original script")
+      expect(await fs.readFile(cjkFile, "utf-8")).toBe("original cjk")
+      expect(await fs.readFile(cyrillicFile, "utf-8")).toBe("original cyrillic")
     },
   })
 })
 
-test("English fixture filenames in subdirectories", async () => {
+test("escaped non-ASCII filenames in subdirectories", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,
@@ -387,8 +387,10 @@ test("English fixture filenames in subdirectories", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await $`mkdir -p "${tmp.path}/unicode-dir/script-subdir"`.quiet()
-      const deepFile = fwd(tmp.path, "unicode-dir", "script-subdir", "unicode-file.txt")
+      const cjkDir = "\u76ee\u5f55"
+      const cyrillicDir = "\u043f\u043e\u0434\u043a\u0430\u0442\u0430\u043b\u043e\u0433"
+      await $`mkdir -p "${tmp.path}/${cjkDir}/${cyrillicDir}"`.quiet()
+      const deepFile = fwd(tmp.path, cjkDir, cyrillicDir, "\u6587\u4ef6.txt")
       await Filesystem.write(deepFile, "deep unicode content")
 
       const patch = await Snapshot.patch(before!)

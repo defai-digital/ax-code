@@ -1915,7 +1915,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         if (part.type !== "tool") continue
         if (part.tool !== "question") continue
         if (part.state.status !== "completed") continue
-        const metadata = part.state.metadata as Record<string, unknown>
+        const metadata = part.state.metadata
+        if (!metadata || typeof metadata !== "object") continue
         const decisions = metadata["autonomousDecisions"]
         if (!Array.isArray(decisions)) continue
         for (const decision of decisions) {
