@@ -380,13 +380,20 @@ async function checkReleaseNotes(ctx: CheckContext): Promise<CheckResult> {
 
 async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
   const [r, durationMs] = await timed(async () => {
-    const srcDir = path.join(ctx.repoRoot, AX_CODE_PKG, "src")
-    // Scope 1: pick source files to scan — only under src/.
-    // Scope 2: resolve imports against *every* tracked file in the package
-    //   (not just src/), because source code legitimately imports files at
-    //   the package root (e.g. parsers-config.ts) and under assets/,
-    //   migration/, etc. Restricting the tracked set to src/ produced
-    //   false-positive phantom reports for any cross-directory import.
+    // Scan: both src/ AND script/. The v2.21.2 failure — build.ts importing
+    // an uncommitted ./models-snapshot — lived in script/, not src/. Scoping
+    // scan to src/ alone would miss the exact bug class this check was
+    // designed to catch. These two directories are the release-critical
+    // TS surface; tests and benchmarks are excluded.
+    const scanDirs = [
+      path.join(ctx.repoRoot, AX_CODE_PKG, "src") + path.sep,
+      path.join(ctx.repoRoot, AX_CODE_PKG, "script") + path.sep,
+    ]
+    // Resolve imports against *every* tracked file in the package (not just
+    // src/ or script/), because source code legitimately imports files at
+    // the package root (e.g. parsers-config.ts) and under assets/,
+    // migration/, etc. Restricting the tracked set produced false-positive
+    // phantom reports for any cross-directory import.
     const lsRes = await git(["ls-files", "--", `${AX_CODE_PKG}/`], { cwd: ctx.repoRoot })
     if (lsRes.exitCode !== 0) {
       return mkResult(
@@ -407,7 +414,7 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
         .map((rel) => path.join(ctx.repoRoot, rel)),
     )
     const sourceFiles = [...tracked].filter(
-      (p) => p.startsWith(srcDir + path.sep) && /\.(ts|tsx)$/.test(p),
+      (p) => scanDirs.some((d) => p.startsWith(d)) && /\.(ts|tsx)$/.test(p),
     )
     const phantoms: { file: string; importPath: string; resolved: string }[] = []
     const importRe = /(?:^|\s)(?:import|export)\s+(?:[^'"`;]+?\s+from\s+)?['"](\.\.?\/[^'"`]+)['"]/g
@@ -615,6 +622,10 @@ const ALL_CHECKS: {
   { id: "workflow-changes", run: checkWorkflowChanges },
 ]
 
+/** Valid ids accepted by `--skip`. Exported so tests and external scripts
+ * can validate user input before invoking the runner. */
+export const CHECK_IDS: readonly string[] = ALL_CHECKS.map((c) => c.id)
+
 export async function runChecks(ctx: CheckContext): Promise<CheckResult[]> {
   const results: CheckResult[] = []
   for (const check of ALL_CHECKS) {
@@ -721,12 +732,17 @@ export const ReleaseCheckCommand = cmd({
     try {
       const repoRoot = await findRepoRoot()
       const version = (args.version as string | undefined) ?? (await readPackageVersion(repoRoot))
-      const skip = new Set(
-        ((args.skip as string | undefined) ?? "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0),
-      )
+      const skipList = ((args.skip as string | undefined) ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+      const unknownSkips = skipList.filter((id) => !CHECK_IDS.includes(id))
+      if (unknownSkips.length > 0) {
+        throw new Error(
+          `Unknown --skip id(s): ${unknownSkips.join(", ")}. Known ids: ${CHECK_IDS.join(", ")}`,
+        )
+      }
+      const skip = new Set(skipList)
       const ctx: CheckContext = {
         repoRoot,
         version,

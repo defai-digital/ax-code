@@ -6,6 +6,7 @@ import { Process } from "../../src/util/process"
 import {
   releaseReadinessChecks,
   runChecks,
+  CHECK_IDS,
   type CheckContext,
   type CheckResult,
 } from "../../src/cli/cmd/release/check"
@@ -203,5 +204,37 @@ describe("release check (full checks)", () => {
     // NOT actually run the deterministic suite.
     const tests = results.find((r) => r.id === "tests")
     expect(tests?.status).toBe("skip")
+  })
+
+  test("phantom import in script/ is detected (v2.21.2 regression)", async () => {
+    // v2.21.2 failed because packages/ax-code/script/build.ts imported
+    // ./models-snapshot (untracked). The first Phase 1 implementation
+    // only scanned src/, missing this exact case. Now we scan script/
+    // too — verify.
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const scriptPath = path.join(repo, "packages", "ax-code", "script")
+    await mkdir(scriptPath, { recursive: true })
+    await writeFile(path.join(scriptPath, "helper.ts"), "export const h = 1\n") // untracked
+    await writeFile(
+      path.join(scriptPath, "build.ts"),
+      'import { h } from "./helper"\nexport const build = h\n',
+    )
+    await run("git", ["add", "packages/ax-code/script/build.ts"], repo)
+    await run("git", ["commit", "-qm", "phantom in script"], repo)
+
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "phantom-imports").status).toBe("fail")
+    expect(find(results, "phantom-imports").detail).toContain("helper")
+  })
+
+  test("CHECK_IDS includes expected ids", () => {
+    // Guard: if a new check is added without exporting its id, --skip
+    // validation would reject legitimate uses. This test ensures the
+    // public id list stays in sync with the runner's internal list.
+    expect(CHECK_IDS).toContain("phantom-imports")
+    expect(CHECK_IDS).toContain("typecheck")
+    expect(CHECK_IDS).toContain("tests")
+    expect(CHECK_IDS.length).toBeGreaterThanOrEqual(10)
   })
 })
