@@ -11,6 +11,9 @@ import { mkdtemp, readFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
+const PACKAGE_ROOT = path.resolve(import.meta.dir, "../..")
+const WORKSPACE_ROOT = path.resolve(PACKAGE_ROOT, "../..")
+
 describe("script.tui-benchmark", () => {
   test("creates a benchmark plan from the TUI criteria", () => {
     const plan = createTuiBenchmarkPlan({ command: ["bun", "run", "src/index.ts"], repeat: 2, timeoutMs: 1234 })
@@ -93,6 +96,12 @@ describe("script.tui-benchmark", () => {
 
   test("rejects benchmark reports in product documentation paths", () => {
     expect(() => assertTuiBenchmarkOutputPath(path.resolve(process.cwd(), "docs", "tui-benchmark.json"))).toThrow(
+      "TUI benchmark reports must be written to temp or CI artifact paths",
+    )
+    expect(() => assertTuiBenchmarkOutputPath(path.join(WORKSPACE_ROOT, "docs", "tui-benchmark.json"))).toThrow(
+      "TUI benchmark reports must be written to temp or CI artifact paths",
+    )
+    expect(() => assertTuiBenchmarkOutputPath(path.join(PACKAGE_ROOT, "TODOS", "tui-benchmark.json"))).toThrow(
       "TUI benchmark reports must be written to temp or CI artifact paths",
     )
   })

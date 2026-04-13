@@ -2,6 +2,7 @@ import { performance } from "node:perf_hooks"
 import path from "node:path"
 import os from "node:os"
 import { mkdir, writeFile } from "node:fs/promises"
+import { fileURLToPath } from "node:url"
 import {
   TUI_PERFORMANCE_CRITERIA,
   TUI_PERFORMANCE_CRITERIA_VERSION,
@@ -86,6 +87,8 @@ const DEFAULT_REPEAT = 3
 const INPUT_ECHO_SEQUENCE = "axbench"
 const PASTE_ECHO_SEQUENCE = "axpaste"
 const SCROLL_REPLAY_ITERATIONS = 120
+const PACKAGE_ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)))
+const WORKSPACE_ROOT = path.resolve(PACKAGE_ROOT, "../..")
 
 function criterion(id: string): TuiPerformanceCriterion {
   const item = TUI_PERFORMANCE_CRITERIA.find((entry) => entry.id === id)
@@ -251,7 +254,15 @@ async function readPackageJSON(): Promise<{ dependencies?: Record<string, string
 
 export function assertTuiBenchmarkOutputPath(outputPath: string) {
   const resolved = path.resolve(outputPath)
-  const blocked = ["docs", "automatosx", "TODOS"].map((entry) => path.resolve(process.cwd(), entry))
+  const blocked = [
+    ...new Set(
+      ["docs", "automatosx", "TODOS"].flatMap((entry) => [
+        path.resolve(process.cwd(), entry),
+        path.join(PACKAGE_ROOT, entry),
+        path.join(WORKSPACE_ROOT, entry),
+      ]),
+    ),
+  ]
   const blockedRoot = blocked.find((root) => resolved === root || resolved.startsWith(root + path.sep))
   if (blockedRoot) {
     throw new Error(`TUI benchmark reports must be written to temp or CI artifact paths, not ${blockedRoot}`)
