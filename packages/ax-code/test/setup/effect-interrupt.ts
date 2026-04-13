@@ -12,3 +12,8 @@ process.prependListener("unhandledRejection", (reason) => {
     throw reason instanceof Error ? reason : new Error(String(reason))
   })
 })
+
+process.prependListener("uncaughtException", (error) => {
+  if (isHarmlessEffectInterrupt(error)) return
+  throw error
+})
