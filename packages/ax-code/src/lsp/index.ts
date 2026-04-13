@@ -926,6 +926,7 @@ export namespace LSP {
       }
 
       let failures = 0
+      const participatingServerIDs: string[] = []
       const result = await Promise.all(
         clients.map((client) =>
           withTimeout(
@@ -934,10 +935,19 @@ export namespace LSP {
             }),
             RPC_TIMEOUT_LONG_MS,
           )
-            .then((result) => (result as LSP.Symbol[]).filter((x: LSP.Symbol) => kinds.includes(x.kind)))
+            .then((result) => {
+              participatingServerIDs.push(client.serverID)
+              return (result as LSP.Symbol[]).filter((x: LSP.Symbol) => kinds.includes(x.kind))
+            })
             .catch((err) => {
-              failures++
-              log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
+              // A linter LSP attached to the same file type may not
+              // implement workspace/symbol — treat MethodNotFound as
+              // "not participating", not as a partial-completeness
+              // downgrade.
+              if (!isMethodNotFound(err)) {
+                failures++
+                log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
+              }
               return [] as LSP.Symbol[]
             }),
         ),
@@ -963,12 +973,15 @@ export namespace LSP {
         })
         .slice(0, 10)
 
+      const completeness: "full" | "partial" | "empty" =
+        participatingServerIDs.length === 0 ? "empty" : failures === 0 ? "full" : "partial"
+
       return {
         symbols,
         source: "lsp",
-        completeness: failures === 0 ? "full" : "partial",
+        completeness,
         timestamp: Date.now(),
-        serverIDs: clients.map((c) => c.serverID),
+        serverIDs: participatingServerIDs,
       }
     })
   }
@@ -1201,6 +1214,21 @@ export namespace LSP {
   // failed, "empty" if no client was matched). Callers reduce the
   // successful per-client results into a single payload and hand the
   // reduction back via `reduce`.
+  // JSON-RPC method-not-found. A polyglot project may have multiple
+  // LSP servers attached to the same file (e.g. typescript + eslint);
+  // linters typically don't implement semantic methods like
+  // textDocument/references. MethodNotFound on one server does NOT
+  // mean the result is partial — the server in question simply
+  // doesn't participate in this method. Treat it as a skip, not a
+  // failure.
+  const LSP_ERROR_METHOD_NOT_FOUND = -32601
+
+  function isMethodNotFound(err: unknown): boolean {
+    if (typeof err !== "object" || err === null) return false
+    const code = (err as { code?: unknown }).code
+    return code === LSP_ERROR_METHOD_NOT_FOUND
+  }
+
   async function runWithEnvelope<TClient, TPayload>(
     file: string,
     call: (client: LSPClient.Info) => Promise<TClient>,
@@ -1219,11 +1247,21 @@ export namespace LSP {
     }
 
     let failures = 0
+    const participatingServerIDs: string[] = []
     const perClient = await Promise.all(
       clients.map(async (c) => {
         try {
-          return await call(c)
+          const result = await call(c)
+          participatingServerIDs.push(c.serverID)
+          return result
         } catch (err) {
+          if (isMethodNotFound(err)) {
+            // Server doesn't implement this method — not a failure,
+            // just not participating. Don't count against completeness
+            // and don't attribute to serverIDs (provenance is about
+            // who actually contributed data).
+            return undefined
+          }
           failures++
           log.warn("LSP client failed in runWithEnvelope", { serverID: c.serverID, err })
           return undefined
@@ -1232,12 +1270,22 @@ export namespace LSP {
     )
 
     const successful = perClient.filter((r): r is Awaited<TClient> => r !== undefined) as TClient[]
+    // If every server that could have contributed failed, the result
+    // is empty, not partial. This preserves the semantic difference
+    // between "no one had anything to say" (empty) and "some subset
+    // answered, others errored" (partial).
+    const completeness: "full" | "partial" | "empty" =
+      participatingServerIDs.length === 0
+        ? "empty"
+        : failures === 0
+          ? "full"
+          : "partial"
     return {
       data: reduce(successful),
       source: "lsp",
-      completeness: failures === 0 ? "full" : "partial",
+      completeness,
       timestamp: Date.now(),
-      serverIDs: clients.map((c) => c.serverID),
+      serverIDs: participatingServerIDs,
     }
   }
 
