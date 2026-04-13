@@ -20,6 +20,8 @@ import { ExportCommand } from "./cmd/export"
 import { GenerateCommand } from "./cmd/generate"
 import { GithubCommand } from "./cmd/github"
 import { GraphCommand } from "./cmd/graph"
+import { RiskCommand } from "./cmd/risk"
+import { DreGraphCommand } from "./cmd/dre-graph"
 import { ImportCommand } from "./cmd/import"
 import { IndexCommand } from "./cmd/index-graph"
 import { InitCommand } from "./cmd/init"
@@ -75,6 +77,8 @@ const cmds = [
   IndexCommand,
   GithubCommand,
   GraphCommand,
+  RiskCommand,
+  DreGraphCommand,
   PrCommand,
   InitCommand,
   ReleaseCommand,
