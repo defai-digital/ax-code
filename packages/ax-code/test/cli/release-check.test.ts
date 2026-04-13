@@ -237,4 +237,60 @@ describe("release check (full checks)", () => {
     expect(CHECK_IDS).toContain("tests")
     expect(CHECK_IDS.length).toBeGreaterThanOrEqual(10)
   })
+
+  // ── coverage for previously-untested checks ────────────────────
+
+  test("remote-tag warns when origin is unreachable (no origin configured)", async () => {
+    // tmp repo has no `origin` remote — git ls-remote must fail gracefully.
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const ctx = mkCtx(repo, "2.21.5", {
+      skip: new Set(["typecheck", "tests", "branch-sync", "workflow-changes"]),
+    })
+    const results = await runChecks(ctx)
+    expect(find(results, "remote-tag").status).toBe("warn")
+  })
+
+  test("branch-sync warns when origin/main ref is absent (no origin)", async () => {
+    // Same reasoning — rev-list origin/main fails without origin.
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const ctx = mkCtx(repo, "2.21.5", {
+      skip: new Set(["typecheck", "tests", "remote-tag", "workflow-changes"]),
+    })
+    const results = await runChecks(ctx)
+    expect(find(results, "branch-sync").status).toBe("warn")
+  })
+
+  test("typecheck is skipped by id from the runner", async () => {
+    // Full typecheck requires a real ax-code tree; exercise the skip path so
+    // the runner wiring is covered without spawning bun.
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const ctx = mkCtx(repo, "2.21.5")
+    const results = await runChecks(ctx)
+    expect(find(results, "typecheck").status).toBe("skip")
+  })
+
+  test("tests check defaults to skip without --with-tests", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const ctx = mkCtx(repo, "2.21.5")
+    const results = await runChecks(ctx)
+    expect(find(results, "tests").status).toBe("skip")
+  })
+
+  test("workflow-changes reports changes in .github/workflows/", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    // After the v2.21.4 tag was created by makeRepo, add a workflow file
+    // so git diff v2.21.4..HEAD shows it.
+    const wfPath = path.join(repo, ".github", "workflows")
+    await mkdir(wfPath, { recursive: true })
+    await writeFile(path.join(wfPath, "ci.yml"), "name: ci\n")
+    await run("git", ["add", "."], repo)
+    await run("git", ["commit", "-qm", "add workflow"], repo)
+
+    const ctx = mkCtx(repo, "2.21.5", {
+      skip: new Set(["typecheck", "tests", "remote-tag", "branch-sync"]),
+    })
+    const results = await runChecks(ctx)
+    expect(find(results, "workflow-changes").status).toBe("warn")
+    expect(find(results, "workflow-changes").detail).toContain(".github/workflows/ci.yml")
+  })
 })

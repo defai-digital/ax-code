@@ -227,11 +227,29 @@ async function checkVersion(ctx: CheckContext): Promise<CheckResult> {
   return { ...r, durationMs }
 }
 
+/** Seconds to wait for a single network-bound git subprocess before giving up
+ * with a warning. Long enough for slow networks, short enough to keep the
+ * overall check under the PRD's 60s target. */
+const NETWORK_TIMEOUT_MS = 10_000
+
+async function gitWithTimeout(args: string[], cwd: string) {
+  return Process.run(["git", ...args], {
+    cwd,
+    stdin: "ignore",
+    nothrow: true,
+    timeout: NETWORK_TIMEOUT_MS,
+  }).catch((err: unknown) => ({
+    code: 124, // conventional "timeout" exit code
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.from(err instanceof Error ? err.message : String(err)),
+  }))
+}
+
 async function checkRemoteTag(ctx: CheckContext): Promise<CheckResult> {
   const [r, durationMs] = await timed(async () => {
     const tag = `v${ctx.version}`
-    const res = await git(["ls-remote", "--tags", "origin", tag], { cwd: ctx.repoRoot })
-    if (res.exitCode !== 0) {
+    const res = await gitWithTimeout(["ls-remote", "--tags", "origin", tag], ctx.repoRoot)
+    if (res.code !== 0) {
       return mkResult(
         "Remote tag",
         "remote-tag",
@@ -241,7 +259,7 @@ async function checkRemoteTag(ctx: CheckContext): Promise<CheckResult> {
         "Check network/auth. Not blocking, but re-run before pushing.",
       )
     }
-    if (res.text().includes(`refs/tags/${tag}`)) {
+    if (res.stdout.toString().includes(`refs/tags/${tag}`)) {
       return mkResult(
         "Remote tag",
         "remote-tag",
@@ -290,8 +308,8 @@ async function checkBranchSync(ctx: CheckContext): Promise<CheckResult> {
     if (ctx.fetch) {
       // Side-effectful: updates origin/main ref. Gated behind --fetch per PRD
       // "validate, don't mutate" contract.
-      const fetchRes = await git(["fetch", "origin", "main", "--depth=10"], { cwd: ctx.repoRoot })
-      if (fetchRes.exitCode !== 0) {
+      const fetchRes = await gitWithTimeout(["fetch", "origin", "main", "--depth=10"], ctx.repoRoot)
+      if (fetchRes.code !== 0) {
         return mkResult(
           "Branch sync",
           "branch-sync",
@@ -608,18 +626,19 @@ async function checkWorkflowChanges(ctx: CheckContext): Promise<CheckResult> {
 
 const ALL_CHECKS: {
   id: string
+  name: string
   run: (ctx: CheckContext) => Promise<CheckResult>
 }[] = [
-  { id: "version", run: checkVersion },
-  { id: "remote-tag", run: checkRemoteTag },
-  { id: "working-tree", run: checkWorkingTree },
-  { id: "branch-sync", run: checkBranchSync },
-  { id: "release-notes", run: checkReleaseNotes },
-  { id: "phantom-imports", run: checkPhantomImports },
-  { id: "typecheck", run: checkTypecheck },
-  { id: "tests", run: checkTests },
-  { id: "commits", run: checkCommitsSinceRelease },
-  { id: "workflow-changes", run: checkWorkflowChanges },
+  { id: "version", name: "Version format", run: checkVersion },
+  { id: "remote-tag", name: "Remote tag", run: checkRemoteTag },
+  { id: "working-tree", name: "Working tree", run: checkWorkingTree },
+  { id: "branch-sync", name: "Branch sync", run: checkBranchSync },
+  { id: "release-notes", name: "Release notes", run: checkReleaseNotes },
+  { id: "phantom-imports", name: "Phantom imports", run: checkPhantomImports },
+  { id: "typecheck", name: "Typecheck", run: checkTypecheck },
+  { id: "tests", name: "Tests", run: checkTests },
+  { id: "commits", name: "Commits since last release", run: checkCommitsSinceRelease },
+  { id: "workflow-changes", name: "Workflow changes", run: checkWorkflowChanges },
 ]
 
 /** Valid ids accepted by `--skip`. Exported so tests and external scripts
@@ -631,7 +650,7 @@ export async function runChecks(ctx: CheckContext): Promise<CheckResult[]> {
   for (const check of ALL_CHECKS) {
     if (ctx.skip.has(check.id)) {
       results.push({
-        name: check.id,
+        name: check.name,
         id: check.id,
         status: "skip",
         detail: `skipped via --skip ${check.id}`,
@@ -700,7 +719,10 @@ export const ReleaseCheckCommand = cmd({
   describe: "validate release-critical conditions before tagging",
   builder: (y) =>
     y
-      .option("version", {
+      // Disable yargs's built-in --version on this subcommand so our
+      // --for-version option doesn't print a "reserved word" warning.
+      .version(false)
+      .option("for-version", {
         type: "string",
         describe: "Override the version being checked (default: packages/ax-code/package.json)",
       })
@@ -731,7 +753,7 @@ export const ReleaseCheckCommand = cmd({
   async handler(args) {
     try {
       const repoRoot = await findRepoRoot()
-      const version = (args.version as string | undefined) ?? (await readPackageVersion(repoRoot))
+      const version = (args["for-version"] as string | undefined) ?? (await readPackageVersion(repoRoot))
       const skipList = ((args.skip as string | undefined) ?? "")
         .split(",")
         .map((s) => s.trim())
