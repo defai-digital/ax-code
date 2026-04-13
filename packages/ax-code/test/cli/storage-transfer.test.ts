@@ -54,7 +54,10 @@ describe("storage transfer", () => {
           events,
         })
 
-        expect(data.events?.some((item) => item.event.type === "agent.route")).toBe(true)
+        const exportedRoute = data.events?.map((item) => item.event).findLast((event) => event.type === "agent.route")
+        if (!exportedRoute || exportedRoute.type !== "agent.route") {
+          throw new Error("expected exported agent.route")
+        }
 
         await Session.remove(session.id)
         writeTransfer(data)
@@ -63,7 +66,7 @@ describe("storage transfer", () => {
         if (!imported || imported.type !== "agent.route") throw new Error("expected agent.route")
         expect(imported.messageID).toBeDefined()
         expect(imported.toAgent).toBe("perf")
-        expect(imported.routeMode).toBe("delegate")
+        expect(imported.routeMode).toBe(exportedRoute.routeMode)
 
         EventQuery.deleteBySession(session.id)
         await Session.remove(session.id)

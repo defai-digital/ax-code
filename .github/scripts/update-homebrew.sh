@@ -25,22 +25,24 @@ echo "" >> /tmp/ax-code.rb
 
 # macOS block
 echo "  on_macos do" >> /tmp/ax-code.rb
-for arch in arm64 x64; do
-  f="/tmp/assets/ax-code-darwin-${arch}.zip"
-  if [ -f "$f" ]; then
-    SHA=$(sha256sum "$f" | cut -d' ' -f1)
-    if [ "$arch" = "arm64" ]; then CPU="arm?"; else CPU="intel?"; fi
-    cat >> /tmp/ax-code.rb << EOF
-    if Hardware::CPU.${CPU}
-      url "https://github.com/defai-digital/ax-code/releases/download/${TAG}/ax-code-darwin-${arch}.zip"
+cat >> /tmp/ax-code.rb << 'EOF'
+    if Hardware::CPU.intel?
+      odie "macOS Intel is not supported. ax-code supports macOS arm64 only."
+    end
+EOF
+f="/tmp/assets/ax-code-darwin-arm64.zip"
+if [ -f "$f" ]; then
+  SHA=$(sha256sum "$f" | cut -d' ' -f1)
+  cat >> /tmp/ax-code.rb << EOF
+    if Hardware::CPU.arm?
+      url "https://github.com/defai-digital/ax-code/releases/download/${TAG}/ax-code-darwin-arm64.zip"
       sha256 "${SHA}"
       def install
         bin.install "ax-code"
       end
     end
 EOF
-  fi
-done
+fi
 echo "  end" >> /tmp/ax-code.rb
 echo "" >> /tmp/ax-code.rb
 

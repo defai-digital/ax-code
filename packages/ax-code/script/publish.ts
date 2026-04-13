@@ -84,9 +84,8 @@ if (!Script.preview) {
   const sha = async (file: string) => $`sha256sum ${file} | cut -d' ' -f1`.text().then((x) => x.trim())
   const arm64Sha = await sha("./dist/ax-code-linux-arm64.tar.gz").catch(() => "")
   const x64Sha = await sha("./dist/ax-code-linux-x64.tar.gz").catch(() => "")
-  const macX64Sha = await sha("./dist/ax-code-darwin-x64.zip").catch(() => "")
   const macArm64Sha = await sha("./dist/ax-code-darwin-arm64.zip").catch(() => "")
-  if (!arm64Sha || !x64Sha || !macX64Sha || !macArm64Sha) {
+  if (!arm64Sha || !x64Sha || !macArm64Sha) {
     console.warn("skipping AUR/Homebrew — not all platform archives present")
   } else {
 
@@ -155,12 +154,7 @@ if (!Script.preview) {
     "",
     "  on_macos do",
     "    if Hardware::CPU.intel?",
-    `      url "https://github.com/defai-digital/ax-code/releases/download/v${Script.version}/ax-code-darwin-x64.zip"`,
-    `      sha256 "${macX64Sha}"`,
-    "",
-    "      def install",
-    '        bin.install "ax-code"',
-    "      end",
+    `      odie "macOS Intel is not supported. ax-code supports macOS arm64 only."`,
     "    end",
     "    if Hardware::CPU.arm?",
     `      url "https://github.com/defai-digital/ax-code/releases/download/v${Script.version}/ax-code-darwin-arm64.zip"`,
