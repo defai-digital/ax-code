@@ -68,6 +68,7 @@ console.log(`Loaded ${migrations.length} migrations`)
 
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
+const includeAbiFlag = process.argv.includes("--include-abi")
 const skipInstall = process.argv.includes("--skip-install")
 
 const allTargets: {
@@ -110,15 +111,6 @@ const allTargets: {
     arch: "arm64",
   },
   {
-    os: "darwin",
-    arch: "x64",
-  },
-  {
-    os: "darwin",
-    arch: "x64",
-    avx2: false,
-  },
-  {
     os: "win32",
     arch: "arm64",
   },
@@ -139,20 +131,24 @@ const targets = singleFlag
         return false
       }
 
+      // ABI-specific variants are opt-in even for the native OS/CPU.
+      if (item.abi !== undefined && !includeAbiFlag) {
+        return false
+      }
+
       // When building for the current platform, prefer a single native binary by default.
       // Baseline binaries require additional Bun artifacts and can be flaky to download.
       if (item.avx2 === false) {
         return baselineFlag
       }
 
-      // also skip abi-specific builds for the same reason
-      if (item.abi !== undefined) {
-        return false
-      }
-
       return true
     })
   : allTargets
+
+if (targets.length === 0) {
+  throw new Error("No build targets selected")
+}
 
 await $`rm -rf dist`
 

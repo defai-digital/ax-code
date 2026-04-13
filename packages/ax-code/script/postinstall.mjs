@@ -9,92 +9,22 @@ import { createRequire } from "module"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 
-function detectPlatformAndArch() {
-  // Map platform names
-  let platform
-  switch (os.platform()) {
-    case "darwin":
-      platform = "darwin"
-      break
-    case "linux":
-      platform = "linux"
-      break
-    case "win32":
-      platform = "windows"
-      break
-    default:
-      platform = os.platform()
-      break
-  }
-
-  // Map architecture names
-  let arch
-  switch (os.arch()) {
-    case "x64":
-      arch = "x64"
-      break
-    case "arm64":
-      arch = "arm64"
-      break
-    case "arm":
-      arch = "arm"
-      break
-    default:
-      arch = os.arch()
-      break
-  }
-
-  return { platform, arch }
-}
-
 function findBinary() {
-  const { platform, arch } = detectPlatformAndArch()
-  const packageName = `ax-code-${platform}-${arch}`
-  const binaryName = platform === "windows" ? "ax-code.exe" : "ax-code"
+  const helperPath = [
+    path.join(__dirname, "bin", "binary-selection.cjs"),
+    path.join(__dirname, "..", "bin", "binary-selection.cjs"),
+  ].find((candidate) => fs.existsSync(candidate))
+  if (!helperPath) throw new Error("Could not find binary-selection.cjs")
 
-  try {
-    // Use require.resolve to find the package
-    const packageJsonPath = require.resolve(`${packageName}/package.json`)
-    const packageDir = path.dirname(packageJsonPath)
-    const binaryPath = path.join(packageDir, "bin", binaryName)
-
-    if (!fs.existsSync(binaryPath)) {
-      throw new Error(`Binary not found at ${binaryPath}`)
-    }
-
-    return { binaryPath, binaryName }
-  } catch (error) {
-    throw new Error(`Could not find package ${packageName}: ${error.message}`)
-  }
-}
-
-function prepareBinDirectory(binaryName) {
-  const binDir = path.join(__dirname, "bin")
-  const targetPath = path.join(binDir, binaryName)
-
-  // Ensure bin directory exists
-  if (!fs.existsSync(binDir)) {
-    fs.mkdirSync(binDir, { recursive: true })
+  const { candidatePackageNames, findBinary: findInstalledBinary } = require(helperPath)
+  const selection = candidatePackageNames()
+  const binaryPath = findInstalledBinary(__dirname)
+  if (!binaryPath) {
+    if (selection.unsupported) throw new Error(selection.unsupported)
+    throw new Error(`Could not find a supported binary package. Tried ${selection.names.join(", ")}`)
   }
 
-  // Remove existing binary/symlink if it exists
-  if (fs.existsSync(targetPath)) {
-    fs.unlinkSync(targetPath)
-  }
-
-  return { binDir, targetPath }
-}
-
-function symlinkBinary(sourcePath, binaryName) {
-  const { targetPath } = prepareBinDirectory(binaryName)
-
-  fs.symlinkSync(sourcePath, targetPath)
-  console.log(`ax-code binary symlinked: ${targetPath} -> ${sourcePath}`)
-
-  // Verify the file exists after operation
-  if (!fs.existsSync(targetPath)) {
-    throw new Error(`Failed to symlink binary to ${targetPath}`)
-  }
+  return { binaryPath, binaryName: selection.binary }
 }
 
 async function main() {

@@ -55,11 +55,20 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            targets: linux
+            targets: linux-x64
+            build-args: --single --baseline --include-abi --skip-install
+          - os: ubuntu-24.04-arm
+            targets: linux-arm64
+            build-args: --single --include-abi --skip-install
           - os: macos-latest
-            targets: darwin
+            targets: darwin-arm64
+            build-args: --single --skip-install
           - os: windows-latest
-            targets: win32
+            targets: win32-x64
+            build-args: --single --baseline --skip-install
+          - os: windows-11-arm
+            targets: win32-arm64
+            build-args: --single --skip-install
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -82,7 +91,7 @@ jobs:
 
       - name: Build
         working-directory: packages/ax-code
-        run: bun run script/build.ts --single --skip-install
+        run: bun run script/build.ts ${{ matrix.build-args }}
         env:
           AX_CODE_VERSION: ${{ github.ref_name }}
           AX_CODE_CHANNEL: latest
