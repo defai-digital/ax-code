@@ -206,6 +206,34 @@ describe("release check (full checks)", () => {
     expect(tests?.status).toBe("skip")
   })
 
+  test("commented-out import to untracked file does NOT trigger phantom report", async () => {
+    // Regression for a latent bug in the first phantom-imports regex that
+    // matched import statements inside line and block comments. A file with
+    // `// import { X } from "./deleted"` where "./deleted" is untracked
+    // (or even absent) would false-positive as a phantom.
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const srcPath = path.join(repo, "packages", "ax-code", "src")
+
+    // Untracked file that a comment references.
+    await writeFile(path.join(srcPath, "deleted.ts"), "// leftover\n")
+    // Tracked source file with only COMMENTED imports of the untracked one.
+    await writeFile(
+      path.join(srcPath, "entry.ts"),
+      [
+        '// import { a } from "./deleted"',
+        '/* import { b } from "./deleted" */',
+        'export const x = 1',
+      ].join("\n") + "\n",
+    )
+    // Only commit entry.ts; deleted.ts stays untracked.
+    await run("git", ["add", "packages/ax-code/src/entry.ts"], repo)
+    await run("git", ["commit", "-qm", "comments only"], repo)
+
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "phantom-imports").status).toBe("ok")
+  })
+
   test("phantom import in script/ is detected (v2.21.2 regression)", async () => {
     // v2.21.2 failed because packages/ax-code/script/build.ts imported
     // ./models-snapshot (untracked). The first Phase 1 implementation
@@ -270,10 +298,19 @@ describe("release check (full checks)", () => {
   })
 
   test("tests check defaults to skip without --with-tests", async () => {
+    // Remove `tests` from the default skip set so the skip status comes
+    // from the `withTests: false` gate inside checkTests, not from the
+    // runner's skip-set branch. Otherwise this test would pass trivially
+    // even if the withTests flag were ignored.
     const repo = await makeRepo("2.21.5", "v2.21.4")
-    const ctx = mkCtx(repo, "2.21.5")
+    const ctx = mkCtx(repo, "2.21.5", {
+      withTests: false,
+      skip: new Set(["typecheck", "remote-tag", "branch-sync", "workflow-changes"]),
+    })
     const results = await runChecks(ctx)
-    expect(find(results, "tests").status).toBe("skip")
+    const tests = find(results, "tests")
+    expect(tests.status).toBe("skip")
+    expect(tests.detail).toContain("pass --with-tests to run")
   })
 
   test("workflow-changes reports changes in .github/workflows/", async () => {

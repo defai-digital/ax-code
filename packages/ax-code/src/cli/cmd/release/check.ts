@@ -444,8 +444,19 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
     const importRe = /(?:^|\s)(?:import|export)\s+(?:[^'"`;]+?\s+from\s+)?['"](\.\.?\/[^'"`]+)['"]/g
 
     for (const file of sourceFiles) {
-      const content = await readFile(file, "utf8").catch(() => "")
-      if (!content) continue
+      const raw = await readFile(file, "utf8").catch(() => "")
+      if (!raw) continue
+      // Strip // line comments and /* block comments */ before scanning for
+      // imports. Without this, a commented-out `// import { X } from "./foo"`
+      // where `./foo` is untracked would report as a phantom. Shortcomings
+      // of a naive strip (e.g. // inside a string literal) are acceptable
+      // for a release-gate regex — we trade tiny false-negative risk for
+      // a large false-positive reduction.
+      const content = raw
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .split("\n")
+        .map((line) => line.replace(/(^|[^:])\/\/.*$/, "$1"))
+        .join("\n")
       const dir = path.dirname(file)
       let match: RegExpExecArray | null
       importRe.lastIndex = 0
