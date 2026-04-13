@@ -19,6 +19,7 @@ export namespace Identifier {
     code_intel_lsp_cache: "lsc",
     refactor_plan: "rpl",
     embedding_cache: "ebc",
+    audit_semantic_call: "asc",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

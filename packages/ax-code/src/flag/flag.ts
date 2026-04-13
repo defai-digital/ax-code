@@ -63,6 +63,14 @@ export namespace Flag {
   // result. Correctness is content-addressable (see schema comment).
   export const AX_CODE_LSP_CACHE = truthy("AX_CODE_LSP_CACHE")
 
+  // Semantic audit write mode (Semantic Trust Layer PRD §S3).
+  // Off (default): queue-by-default. AI tool calls never block on
+  //   audit write. Queue is flushed on tick boundary and on session
+  //   teardown; last ~50ms of rows may be lost on a hard crash.
+  // On (=1 / true): synchronous write. Blocks tool completion until
+  //   the row is durable. Compliance mode only.
+  export const AX_CODE_AUDIT_SYNC = truthy("AX_CODE_AUDIT_SYNC")
+
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")
   export const AX_CODE_EXPERIMENTAL_FILEWATCHER = Config.boolean("AX_CODE_EXPERIMENTAL_FILEWATCHER").pipe(

@@ -7,6 +7,26 @@ import { Instance } from "../project/instance"
 import { pathToFileURL } from "url"
 import { assertExternalDirectory } from "./external-directory"
 import { Filesystem } from "../util/filesystem"
+import { AuditSemanticCall } from "../audit/semantic-call"
+
+// Synthesize a minimal envelope for operations that don't yet have an
+// envelope-returning LSP variant. Lets us audit every tool call
+// uniformly until S1 is extended to cover the remaining operations.
+function syntheticEnvelope(data: unknown[]): {
+  data: unknown[]
+  source: "lsp"
+  completeness: "full" | "empty"
+  timestamp: number
+  serverIDs: string[]
+} {
+  return {
+    data,
+    source: "lsp",
+    completeness: data.length === 0 ? "empty" : "full",
+    timestamp: Date.now(),
+    serverIDs: [],
+  }
+}
 
 const operations = [
   "goToDefinition",
@@ -30,8 +50,42 @@ export const LspTool = Tool.define("lsp", {
     character: z.number().int().min(1).optional().describe("The character offset (1-based, as shown in editors)"),
   }),
   execute: async (args, ctx) => {
+    // Audit helper bound to this tool invocation. On success or
+    // failure we write one row — audit is load-bearing, not opt-in.
+    // In queue mode this is ~zero-cost (array push). In sync mode
+    // the caller absorbs the DB write latency.
+    const audit = (input: {
+      operation: string
+      args: unknown
+      envelope: unknown
+      errorCode?: string
+    }) => {
+      try {
+        AuditSemanticCall.record({
+          sessionID: ctx.sessionID,
+          messageID: ctx.messageID,
+          tool: "lsp",
+          operation: input.operation,
+          args: input.args,
+          envelope: input.envelope,
+          errorCode: input.errorCode,
+        })
+      } catch (err) {
+        // Audit write failure must not break the tool call. Queue
+        // mode's flush errors are logged at the writer level; this
+        // try/catch only fires if sync mode's insert rejects.
+        // Caller still gets the real result.
+      }
+    }
+
     if (args.operation === "workspaceSymbol") {
       if (!args.query?.trim()) {
+        audit({
+          operation: "workspaceSymbol",
+          args,
+          envelope: { data: [], source: "lsp", completeness: "empty", timestamp: Date.now(), serverIDs: [] },
+          errorCode: "MissingQuery",
+        })
         throw new Error("workspaceSymbol requires `query`")
       }
 
@@ -43,6 +97,8 @@ export const LspTool = Tool.define("lsp", {
       })
 
       const envelope = await LSP.workspaceSymbolEnvelope(args.query)
+      audit({ operation: "workspaceSymbol", args, envelope })
+
       // AI consumers read the envelope shape. We stringify the full envelope
       // (not just `symbols`) so provenance is visible in tool output.
       const output =
@@ -58,9 +114,23 @@ export const LspTool = Tool.define("lsp", {
       }
     }
 
-    if (!args.filePath) throw new Error(`${args.operation} requires \`filePath\``)
-    if (args.line === undefined) throw new Error(`${args.operation} requires \`line\``)
-    if (args.character === undefined) throw new Error(`${args.operation} requires \`character\``)
+    if (!args.filePath) {
+      audit({
+        operation: args.operation,
+        args,
+        envelope: syntheticEnvelope([]),
+        errorCode: "MissingFilePath",
+      })
+      throw new Error(`${args.operation} requires \`filePath\``)
+    }
+    if (args.line === undefined) {
+      audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "MissingLine" })
+      throw new Error(`${args.operation} requires \`line\``)
+    }
+    if (args.character === undefined) {
+      audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "MissingCharacter" })
+      throw new Error(`${args.operation} requires \`character\``)
+    }
 
     const file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
     await assertExternalDirectory(ctx, file)
@@ -73,11 +143,13 @@ export const LspTool = Tool.define("lsp", {
     // a permission prompt.
     const exists = await Filesystem.exists(file)
     if (!exists) {
+      audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "FileNotFound" })
       throw new Error(`File not found: ${file}`)
     }
 
     const available = await LSP.hasClients(file)
     if (!available) {
+      audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "NoServerAvailable" })
       throw new Error("No LSP server available for this file type.")
     }
 
@@ -99,38 +171,50 @@ export const LspTool = Tool.define("lsp", {
 
     const opened = await LSP.touchFile(file, true)
     if (opened === 0) {
+      audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "ServerStartFailed" })
       throw new Error("LSP server matched this file type but could not be started or did not accept the file.")
     }
 
-    const result: unknown[] = await (async () => {
+    // For operations with an envelope-returning LSP variant, use it
+    // so we audit real provenance. For the rest, wrap the bare
+    // result in a synthetic envelope — honest about the gap; future
+    // work extends S1 to cover them.
+    const envelope: unknown = await (async () => {
       switch (args.operation) {
         case "goToDefinition":
-          return LSP.definition(position)
+          return LSP.definitionEnvelope(position)
         case "findReferences":
-          return LSP.references(position)
+          return LSP.referencesEnvelope(position)
         case "hover":
-          return LSP.hover(position)
+          return LSP.hoverEnvelope(position)
         case "documentSymbol":
-          return LSP.documentSymbol(uri)
+          return LSP.documentSymbolEnvelope(uri)
         case "goToImplementation":
-          return LSP.implementation(position)
+          return syntheticEnvelope(await LSP.implementation(position))
         case "prepareCallHierarchy":
-          return LSP.prepareCallHierarchy(position)
+          return syntheticEnvelope(await LSP.prepareCallHierarchy(position))
         case "incomingCalls":
-          return LSP.incomingCalls(position)
+          return syntheticEnvelope(await LSP.incomingCalls(position))
         case "outgoingCalls":
-          return LSP.outgoingCalls(position)
+          return syntheticEnvelope(await LSP.outgoingCalls(position))
         default:
-          return []
+          return syntheticEnvelope([])
       }
     })()
+
+    audit({ operation: args.operation, args, envelope })
+
+    // Unwrap the envelope's data for the tool output shape (bare
+    // array). Existing AI consumers of the file-ops path still see
+    // the same shape they did before S3.
+    const result: unknown[] = ((envelope as { data: unknown[] }).data ?? []) as unknown[]
 
     const output = (() => {
       if (result.length === 0) return `No results found for ${args.operation}`
       return JSON.stringify(result, null, 2)
     })()
 
-    const metadata: Record<string, unknown> = { result }
+    const metadata: Record<string, unknown> = { result, envelope }
     return {
       title,
       metadata,
