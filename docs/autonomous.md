@@ -128,7 +128,7 @@ Even with autonomous mode on:
 1. **Sandbox still enforces boundaries** — writes outside workspace are blocked regardless of autonomous mode
 2. **Isolation escalation always prompts** — the agent cannot silently override sandbox restrictions
 3. **Deny rules are enforced** — explicit `"deny"` permission rules still block tool calls
-4. **Autonomous choices are recorded** — question tool output includes the selected answers so the agent can report them later
+4. **Autonomous choices are recorded** — question tool metadata includes a structured `autonomousDecisions` ledger, and tool output includes the selected answers so the agent can report them later
 5. **Avoid over-engineering** — autonomous continuation reminds the agent to prefer the simplest common-practice change and avoid abstractions without 3+ concrete use cases
 6. **Session snapshots are recorded** — every tool call is logged for audit/replay
 7. **Abort always works** — pressing Esc (interrupt) stops the agent immediately

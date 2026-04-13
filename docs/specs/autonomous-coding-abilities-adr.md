@@ -51,6 +51,6 @@ Negative:
 
 ## Follow-Up
 
-- Add a structured autonomous-decision ledger in session metadata.
+- Add a structured autonomous-decision ledger to question tool metadata first; promote it to session metadata only after dashboard/replay use cases need cross-tool aggregation.
 - Add configurable autonomous policy profiles such as `balanced`, `fast`, and `strict`.
 - Add evaluation fixtures for autonomous question choices and over-engineering avoidance.

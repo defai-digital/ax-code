@@ -91,9 +91,32 @@ This PRD's first implementation batch covers foundational fixes:
 
 ## Phase 2 Proposal
 
+Phase 2 should improve auditability before adding broader autonomy. The safest next step is a structured decision ledger, because it makes existing autonomous choices reviewable without expanding what autonomous mode can do.
+
+Tradeoffs:
+
+- Pros: better final summaries, easier debugging, safer headless sessions, and a concrete audit trail for user-visible choices.
+- Cons: more metadata surface area, possible duplication with text output, and no guarantee that a model will summarize every decision unless the output also reminds it.
+
+Best-practice direction:
+
+- Record autonomous decisions at the tool boundary that made the choice.
+- Keep the ledger small and local to the tool result before adding a larger session database or dashboard.
+- Store structured fields that are useful for review: question, header, selected labels, selected option descriptions, whether it was multi-select, and total option count.
+- Bound and escape ledger text fields so malicious or malformed question payloads cannot inflate session metadata or become unsafe if replayed into model context.
+- Escape user/model-provided question text and normalize control whitespace before echoing it back into the model prompt.
+- Do not increase autonomous permission scope as part of the ledger work.
+
+Phase 2 implementation batch:
+
+- Add a structured `autonomousDecisions` ledger to question tool metadata.
+- Keep the existing final-response reminder so the model can report the decisions to the user.
+- Escape and normalize question output before returning it to the model.
+
+Remaining Phase 2 proposals:
+
 - Add an autonomous policy profile, for example `balanced`, `fast`, and `strict`.
 - Add edit-size limits for autonomous write/edit/apply_patch approval.
-- Add a structured autonomous-decision ledger in session metadata so the final answer can reliably summarize choices without relying on the model to remember tool output.
 - Make agent read-only presets terminal unless explicitly overridden per agent.
 - Add routing validation so read-only specialist agents do not receive modification tasks.
 
