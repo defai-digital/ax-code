@@ -13,6 +13,11 @@ function run(target) {
     console.error(result.error.message)
     process.exit(1)
   }
+  if (result.signal) {
+    const signals = os.constants.signals || {}
+    const signalCode = signals[result.signal]
+    process.exit(typeof signalCode === "number" ? 128 + signalCode : 1)
+  }
   const code = typeof result.status === "number" ? result.status : 0
   process.exit(code)
 }

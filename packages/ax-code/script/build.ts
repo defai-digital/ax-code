@@ -211,9 +211,20 @@ for (const item of targets) {
     },
   })
 
+  const binaryPath = `dist/${name}/bin/ax-code`
+
+  if (item.os === "darwin" && process.platform === "darwin") {
+    try {
+      await $`codesign --remove-signature ${binaryPath}`
+    } catch {
+      // Some Bun outputs have no signature to remove.
+    }
+    await $`codesign --force --sign - ${binaryPath}`
+    await $`codesign --verify --verbose=4 ${binaryPath}`
+  }
+
   // Smoke test: only run if binary is for current platform
   if (item.os === process.platform && item.arch === process.arch && !item.abi) {
-    const binaryPath = `dist/${name}/bin/ax-code`
     console.log(`Running smoke test: ${binaryPath} --version`)
     try {
       const versionOutput = await $`${binaryPath} --version`.text()
