@@ -51,8 +51,21 @@ async function parse(file: string) {
 
 async function run(group: string, files: string[], dir: string, run: number) {
   const file = path.join(dir, `${group}-${run}.xml`)
+  const setup = path.join(root, "test/setup/effect-interrupt.ts")
   const proc = Bun.spawn(
-    [process.execPath, "test", "--timeout", "30000", "--reporter", "junit", "--reporter-outfile", file, ...files],
+    [
+      process.execPath,
+      "test",
+      "--timeout",
+      "30000",
+      "--preload",
+      setup,
+      "--reporter",
+      "junit",
+      "--reporter-outfile",
+      file,
+      ...files,
+    ],
     {
       cwd: root,
       stdin: "inherit",
