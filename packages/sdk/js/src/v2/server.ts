@@ -90,18 +90,24 @@ export async function createAxCodeServer(options?: ServerOptions) {
       reject(error)
     })
     if (options.signal) {
-      options.signal.addEventListener("abort", () => {
-        clearTimeout(id)
-        cleanup()
-        reject(new Error("Aborted"))
-      }, { once: true })
+      options.signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(id)
+          cleanup()
+          reject(new Error("Aborted"))
+        },
+        { once: true },
+      )
     }
   })
 
   return {
     url,
     close() {
-      try { proc.kill() } catch {}
+      try {
+        proc.kill()
+      } catch {}
     },
   }
 }

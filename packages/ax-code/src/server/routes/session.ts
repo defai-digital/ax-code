@@ -10,6 +10,13 @@ import { SessionCompaction } from "../../session/compaction"
 import { SessionRevert } from "../../session/revert"
 import { SessionStatus } from "@/session/status"
 import { SessionSummary } from "@/session/summary"
+import { SessionBranchRank } from "../../session/branch"
+import { SessionCompare } from "../../session/compare"
+import { SessionDre } from "../../session/dre"
+import { SessionGraph } from "../../session/graph"
+import { SessionRisk } from "../../session/risk"
+import { SessionRollback } from "../../session/rollback"
+import { SessionSemanticDiff } from "../../session/semantic-diff"
 import { Todo } from "../../session/todo"
 import { Agent } from "../../agent/agent"
 import { Snapshot } from "@/snapshot"
@@ -154,6 +161,215 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const session = await Session.children(sessionID)
         return c.json(session)
+      },
+    )
+    .get(
+      "/:sessionID/branch/rank",
+      describeRoute({
+        summary: "Rank session branches",
+        tags: ["Session"],
+        description:
+          "Compare the root session and its forks, then recommend the strongest branch based on risk and decision signals.",
+        operationId: "session.branch_rank",
+        responses: {
+          200: {
+            description: "Branch ranking for the session family",
+            content: {
+              "application/json": {
+                schema: resolver(SessionBranchRank.Family),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator(
+        "query",
+        z.object({
+          deep: z.coerce.boolean().optional().default(false).meta({ description: "Include replay divergence signals in branch ranking" }),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const query = c.req.valid("query")
+        const ranked = await SessionBranchRank.family(sessionID, { deep: query.deep })
+        return c.json(ranked)
+      },
+    )
+    .get(
+      "/:sessionID/dre",
+      describeRoute({
+        summary: "Get session DRE detail",
+        tags: ["Session"],
+        description:
+          "Return the session decision summary, explainable risk detail, and execution timeline for DRE-aware clients.",
+        operationId: "session.dre",
+        responses: {
+          200: {
+            description: "DRE detail and timeline for the session",
+            content: {
+              "application/json": {
+                schema: resolver(SessionDre.Snapshot),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: SessionID.zod })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await Session.get(sessionID)
+        return c.json(await SessionDre.snapshot(sessionID))
+      },
+    )
+    .get(
+      "/:sessionID/graph",
+      describeRoute({
+        summary: "Get session graph snapshot",
+        tags: ["Session"],
+        description: "Return the execution graph and structured topology view for a session.",
+        operationId: "session.graph",
+        responses: {
+          200: {
+            description: "Execution graph snapshot for the session",
+            content: {
+              "application/json": {
+                schema: resolver(SessionGraph.Snapshot),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: SessionID.zod })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await Session.get(sessionID)
+        return c.json(SessionGraph.snapshot(sessionID))
+      },
+    )
+    .get(
+      "/:sessionID/risk",
+      describeRoute({
+        summary: "Get session risk detail",
+        tags: ["Session"],
+        description: "Return the explainable risk assessment, breakdown, and semantic change summary for a session.",
+        operationId: "session.risk",
+        responses: {
+          200: {
+            description: "Explainable risk detail for the session",
+            content: {
+              "application/json": {
+                schema: resolver(SessionRisk.Detail),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: SessionID.zod })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        return c.json(await SessionRisk.load(sessionID))
+      },
+    )
+    .get(
+      "/:sessionID/diff/semantic",
+      describeRoute({
+        summary: "Get semantic diff summary",
+        tags: ["Session"],
+        description: "Return a semantic classification of the recorded file changes for a session.",
+        operationId: "session.semantic_diff",
+        responses: {
+          200: {
+            description: "Semantic diff summary for the session",
+            content: {
+              "application/json": {
+                schema: resolver(SessionSemanticDiff.Summary.nullable()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: SessionID.zod })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await Session.get(sessionID)
+        return c.json((await SessionSemanticDiff.load(sessionID)) ?? null)
+      },
+    )
+    .get(
+      "/:sessionID/compare/:otherSessionID",
+      describeRoute({
+        summary: "Compare session executions",
+        tags: ["Session"],
+        description:
+          "Compare two sessions by risk, decision score, event flow, and optional replay divergence signals.",
+        operationId: "session.compare",
+        responses: {
+          200: {
+            description: "Execution comparison for the two sessions",
+            content: {
+              "application/json": {
+                schema: resolver(SessionCompare.Result),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: SessionID.zod, otherSessionID: SessionID.zod })),
+      validator(
+        "query",
+        z.object({
+          deep: z.coerce.boolean().optional().default(false).meta({ description: "Include replay divergence signals in session comparison" }),
+        }),
+      ),
+      async (c) => {
+        const params = c.req.valid("param")
+        const query = c.req.valid("query")
+        const result = await SessionCompare.compare({
+          sessionID: params.sessionID,
+          otherSessionID: params.otherSessionID,
+          deep: query.deep,
+        })
+        return c.json(result)
+      },
+    )
+    .get(
+      "/:sessionID/rollback",
+      describeRoute({
+        summary: "List rollback points",
+        tags: ["Session"],
+        description: "Return the step-level rollback points available for a session, including tool and token context.",
+        operationId: "session.rollback_points",
+        responses: {
+          200: {
+            description: "Rollback points for the session",
+            content: {
+              "application/json": {
+                schema: resolver(SessionRollback.Point.array()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator(
+        "query",
+        z.object({
+          tool: z.string().optional().meta({ description: "Only return rollback points whose step used this tool" }),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const query = c.req.valid("query")
+        await Session.get(sessionID)
+        return c.json(SessionRollback.filter(await SessionRollback.points(sessionID), query.tool))
       },
     )
     .get(

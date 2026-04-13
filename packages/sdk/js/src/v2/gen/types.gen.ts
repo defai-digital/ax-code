@@ -615,6 +615,8 @@ export type SessionStatus =
     }
   | {
       type: "busy"
+      step?: number
+      maxSteps?: number
     }
 
 export type EventSessionStatus = {
@@ -1099,6 +1101,10 @@ export type AgentConfig = {
    * Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)
    */
   hidden?: boolean
+  /**
+   * Agent visibility tier: core (always shown in picker), specialist (expandable/auto-routed), internal (hidden)
+   */
+  tier?: "core" | "specialist" | "internal"
   options?: {
     [key: string]: unknown
   }
@@ -1127,6 +1133,9 @@ export type AgentConfig = {
     | "subagent"
     | "primary"
     | "all"
+    | "core"
+    | "specialist"
+    | "internal"
     | {
         [key: string]: unknown
       }
@@ -1474,6 +1483,10 @@ export type Config = {
   instructions?: Array<string>
   layout?: LayoutConfig
   permission?: PermissionConfig
+  /**
+   * Enable autonomous mode (default: true)
+   */
+  autonomous?: boolean
   isolation?: IsolationConfig
   tools?: {
     [key: string]: boolean
@@ -1483,6 +1496,44 @@ export type Config = {
      * Enterprise URL
      */
     url?: string
+  }
+  /**
+   * Session lifecycle management
+   */
+  session?: {
+    /**
+     * Auto-prune sessions older than this many days (default: 30)
+     */
+    ttl_days?: number
+    /**
+     * Automatically prune expired sessions on startup (default: true)
+     */
+    auto_prune?: boolean
+    /**
+     * Maximum agentic steps per session turn before stopping (default: 200)
+     */
+    max_steps?: number
+    /**
+     * In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)
+     */
+    max_continuations?: number
+  }
+  /**
+   * Agent routing configuration
+   */
+  routing?: {
+    /**
+     * How specialist routing behaves: off disables auto-routing, delegate creates a specialist subtask, switch changes the primary agent (default: switch)
+     */
+    mode?: "off" | "delegate" | "switch"
+    /**
+     * @deprecated Legacy alias for routing.mode='switch' when true
+     */
+    auto_switch?: boolean
+    /**
+     * Enable LLM-based agent classification as fallback when keyword routing has low confidence (default: false)
+     */
+    llm?: boolean
   }
   compaction?: {
     /**
@@ -1641,6 +1692,14 @@ export type IsolationState = {
   network: boolean
 }
 
+export type AutonomousState = {
+  enabled: boolean
+}
+
+export type SmartLlmState = {
+  enabled: boolean
+}
+
 export type ToolIds = Array<string>
 
 export type ToolListItem = {
@@ -1720,6 +1779,362 @@ export type McpResource = {
   client: string
 }
 
+export type SessionSemanticDiffKind =
+  | "bug_fix"
+  | "refactor"
+  | "optimization"
+  | "test"
+  | "documentation"
+  | "configuration"
+  | "dependency"
+  | "rewrite"
+
+export type SessionBranchRisk = {
+  level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  score: number
+  confidence: number
+  readiness: "ready" | "needs_validation" | "needs_review" | "blocked"
+  signals: {
+    filesChanged: number
+    linesChanged: number
+    testCoverage: number
+    apiEndpointsAffected: number
+    crossModule: boolean
+    securityRelated: boolean
+    validationPassed?: boolean
+    validationState: "not_run" | "passed" | "failed" | "partial"
+    validationCount: number
+    validationFailures: number
+    validationCommands: Array<string>
+    toolFailures: number
+    totalTools: number
+    diffState: "recorded" | "derived" | "missing"
+    semanticRisk: "low" | "medium" | "high" | null
+    primaryChange: SessionSemanticDiffKind | null
+  }
+  summary: string
+  breakdown: Array<{
+    kind: "files" | "lines" | "tests" | "api" | "module" | "security" | "validation" | "tools" | "semantic"
+    label: string
+    points: number
+    detail: string
+  }>
+  evidence: Array<string>
+  unknowns: Array<string>
+  mitigations: Array<string>
+}
+
+export type SessionBranchView = {
+  tools: Array<string>
+  routes: Array<{
+    from: string
+    to: string
+    confidence: number
+  }>
+  counts: {
+    [key: string]: number
+  }
+  plan: string
+  notes: Array<string>
+}
+
+export type SessionBranchScorecard = {
+  total: number
+  breakdown: Array<{
+    key: "correctness" | "safety" | "simplicity" | "validation"
+    label: string
+    value: number
+    detail: string
+  }>
+}
+
+export type SessionSemanticDiffRisk = "low" | "medium" | "high"
+
+export type SessionSemanticDiffCount = {
+  kind: SessionSemanticDiffKind
+  count: number
+}
+
+export type SessionSemanticDiffChange = {
+  file: string
+  status?: "added" | "deleted" | "modified" | null
+  kind: SessionSemanticDiffKind
+  risk: SessionSemanticDiffRisk
+  summary: string
+  additions: number
+  deletions: number
+  signals: Array<string>
+}
+
+export type SessionSemanticDiffSummary = {
+  headline: string
+  risk: SessionSemanticDiffRisk
+  primary: SessionSemanticDiffKind
+  files: number
+  additions: number
+  deletions: number
+  counts: Array<SessionSemanticDiffCount>
+  signals: Array<string>
+  changes: Array<SessionSemanticDiffChange>
+}
+
+export type SessionBranchItem = {
+  id: string
+  title: string
+  risk: SessionBranchRisk
+  view: SessionBranchView
+  decision: SessionBranchScorecard
+  headline: string
+  semantic: SessionSemanticDiffSummary | null
+  current: boolean
+  recommended: boolean
+}
+
+export type SessionBranchFamily = {
+  currentID: string
+  recommendedID: string
+  confidence: number
+  reasons: Array<string>
+  items: Array<SessionBranchItem>
+  root: Session
+  current: Session
+  recommended: SessionBranchItem
+}
+
+export type SessionDreDetail = {
+  level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  score: number
+  confidence: number
+  readiness: "ready" | "needs_validation" | "needs_review" | "blocked"
+  summary: string
+  stats: string
+  decision: string
+  plan: string
+  notes: Array<string>
+  drivers: Array<string>
+  scorecard: SessionBranchScorecard
+  breakdown: Array<{
+    kind: "files" | "lines" | "tests" | "api" | "module" | "security" | "validation" | "tools" | "semantic"
+    label: string
+    points: number
+    detail: string
+  }>
+  evidence: Array<string>
+  unknowns: Array<string>
+  mitigations: Array<string>
+  duration: number
+  tokens: {
+    input: number
+    output: number
+  }
+  routes: Array<{
+    from: string
+    to: string
+    confidence: number
+  }>
+  tools: Array<string>
+  counts: Array<{
+    type: string
+    count: number
+  }>
+  semantic: SessionSemanticDiffSummary | null
+}
+
+export type SessionDreTimelineLine = {
+  kind: "heading" | "meta" | "step" | "route" | "tool" | "llm" | "error"
+  text: string
+}
+
+export type SessionDreSnapshot = {
+  detail: SessionDreDetail | null
+  timeline: Array<SessionDreTimelineLine>
+}
+
+export type ExecutionGraphTokens = {
+  input: number
+  output: number
+}
+
+export type ExecutionGraphNode = {
+  id: string
+  type: "session" | "step" | "tool_call" | "tool_result" | "agent_route" | "llm" | "error"
+  label: string
+  timestamp: number
+  duration?: number
+  status?: "ok" | "error" | "pending"
+  stepIndex?: number
+  callID?: string
+  tool?: string
+  agent?: string
+  confidence?: number
+  tokens?: ExecutionGraphTokens
+}
+
+export type ExecutionGraphEdge = {
+  from: string
+  to: string
+  type: "sequence" | "call_result" | "step_contains"
+}
+
+export type ExecutionGraphRisk = {
+  level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  score: number
+  summary: string
+}
+
+export type ExecutionGraphMetadata = {
+  duration: number
+  tokens: ExecutionGraphTokens
+  risk: ExecutionGraphRisk
+  agents: Array<string>
+  tools: Array<string>
+  steps: number
+  errors: number
+}
+
+export type ExecutionGraph = {
+  sessionID: string
+  nodes: Array<ExecutionGraphNode>
+  edges: Array<ExecutionGraphEdge>
+  metadata: ExecutionGraphMetadata
+}
+
+export type ExecutionGraphTopologyHeading = {
+  kind: "heading"
+  text: string
+}
+
+export type ExecutionGraphTopologyPath = {
+  kind: "path"
+  text: string
+  nodes: Array<string>
+}
+
+export type ExecutionGraphTopologyStep = {
+  kind: "step"
+  text: string
+  stepIndex: number
+  nodes: Array<string>
+}
+
+export type ExecutionGraphTopologyPair = {
+  kind: "pair"
+  text: string
+  call: string
+  result: string
+}
+
+export type ExecutionGraphTopologyLine =
+  | ExecutionGraphTopologyHeading
+  | ExecutionGraphTopologyPath
+  | ExecutionGraphTopologyStep
+  | ExecutionGraphTopologyPair
+
+export type SessionGraphSnapshot = {
+  graph: ExecutionGraph
+  topology: Array<ExecutionGraphTopologyLine>
+}
+
+export type SessionRiskDetail = {
+  id: string
+  title: string
+  assessment: SessionBranchRisk
+  drivers: Array<string>
+  semantic: SessionSemanticDiffSummary | null
+}
+
+export type SessionCompareSummary = {
+  id: string
+  title: string
+  risk: SessionBranchRisk
+  decision: SessionBranchScorecard
+  events: number
+  plan: string
+  headline: string
+  semantic: SessionSemanticDiffSummary | null
+}
+
+export type SessionCompareDifferences = {
+  toolChainDiffers: boolean
+  routeDiffers: boolean
+  eventCountDelta: number
+}
+
+export type SessionCompareAdvisory = {
+  winner: "A" | "B" | "tie"
+  confidence: number
+  reasons: Array<string>
+}
+
+export type SessionCompareDecisionSession = {
+  title: string
+  plan: string
+  headline: string
+  change: string | null
+  validation: string
+}
+
+export type SessionCompareDecision = {
+  winner: "A" | "B" | "tie"
+  confidence: number
+  recommendation: string
+  reasons: Array<string>
+  differences: Array<string>
+  session1: SessionCompareDecisionSession
+  session2: SessionCompareDecisionSession
+}
+
+export type SessionCompareAnalysis = {
+  tools: Array<string>
+  routes: Array<{
+    from: string
+    to: string
+    confidence: number
+  }>
+  counts: {
+    [key: string]: number
+  }
+  plan: string
+  notes: Array<string>
+  decision: SessionBranchScorecard
+  headline: string
+}
+
+export type SessionCompareReplay = {
+  stepsCompared: number
+  divergences: number
+  reasons: Array<string>
+}
+
+export type SessionCompareResult = {
+  session1: SessionCompareSummary
+  session2: SessionCompareSummary
+  differences: SessionCompareDifferences
+  advisory: SessionCompareAdvisory
+  decision: SessionCompareDecision
+  analysis: {
+    session1: SessionCompareAnalysis
+    session2: SessionCompareAnalysis
+  }
+  replay?: {
+    session1: SessionCompareReplay
+    session2: SessionCompareReplay
+  }
+}
+
+export type SessionRollbackPoint = {
+  step: number
+  messageID: string
+  partID: string
+  duration?: number
+  tokens?: {
+    input: number
+    output: number
+  }
+  tools: Array<string>
+  kinds: Array<string>
+}
+
 export type TextPartInput = {
   id?: string
   type: "text"
@@ -1766,6 +2181,14 @@ export type SubtaskPartInput = {
     modelID: string
   }
   command?: string
+}
+
+export type ExecutionGraphTopologyResponse = {
+  data: Array<ExecutionGraphTopologyLine>
+}
+
+export type ExecutionGraphResponse = {
+  data: ExecutionGraph
 }
 
 export type ProviderAuthMethod = {
@@ -1911,6 +2334,7 @@ export type Agent = {
   mode: "subagent" | "primary" | "all"
   native?: boolean
   hidden?: boolean
+  tier?: "core" | "specialist" | "internal" | "subagent"
   topP?: number
   temperature?: number
   color?: string
@@ -2503,6 +2927,82 @@ export type IsolationSetResponses = {
 
 export type IsolationSetResponse = IsolationSetResponses[keyof IsolationSetResponses]
 
+export type AutonomousGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/autonomous"
+}
+
+export type AutonomousGetResponses = {
+  /**
+   * Autonomous mode state
+   */
+  200: AutonomousState
+}
+
+export type AutonomousGetResponse = AutonomousGetResponses[keyof AutonomousGetResponses]
+
+export type AutonomousSetData = {
+  body?: {
+    enabled: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/autonomous"
+}
+
+export type AutonomousSetResponses = {
+  /**
+   * Updated autonomous state
+   */
+  200: AutonomousState
+}
+
+export type AutonomousSetResponse = AutonomousSetResponses[keyof AutonomousSetResponses]
+
+export type SmartLlmGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/smart-llm"
+}
+
+export type SmartLlmGetResponses = {
+  /**
+   * Smart LLM routing state
+   */
+  200: SmartLlmState
+}
+
+export type SmartLlmGetResponse = SmartLlmGetResponses[keyof SmartLlmGetResponses]
+
+export type SmartLlmSetData = {
+  body?: {
+    enabled: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/smart-llm"
+}
+
+export type SmartLlmSetResponses = {
+  /**
+   * Updated smart LLM routing state
+   */
+  200: SmartLlmState
+}
+
+export type SmartLlmSetResponse = SmartLlmSetResponses[keyof SmartLlmSetResponses]
+
 export type ToolIdsData = {
   body?: never
   path?: never
@@ -2745,7 +3245,7 @@ export type SessionListData = {
      */
     search?: string
     /**
-     * Maximum number of sessions to return
+     * Maximum number of sessions to return (1-1000)
      */
     limit?: number
   }
@@ -2957,6 +3457,250 @@ export type SessionChildrenResponses = {
 }
 
 export type SessionChildrenResponse = SessionChildrenResponses[keyof SessionChildrenResponses]
+
+export type SessionBranchRankData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    /**
+     * Include replay divergence signals in branch ranking
+     */
+    deep?: boolean
+  }
+  url: "/session/{sessionID}/branch/rank"
+}
+
+export type SessionBranchRankErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionBranchRankError = SessionBranchRankErrors[keyof SessionBranchRankErrors]
+
+export type SessionBranchRankResponses = {
+  /**
+   * Branch ranking for the session family
+   */
+  200: SessionBranchFamily
+}
+
+export type SessionBranchRankResponse = SessionBranchRankResponses[keyof SessionBranchRankResponses]
+
+export type SessionDreData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/dre"
+}
+
+export type SessionDreErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionDreError = SessionDreErrors[keyof SessionDreErrors]
+
+export type SessionDreResponses = {
+  /**
+   * DRE detail and timeline for the session
+   */
+  200: SessionDreSnapshot
+}
+
+export type SessionDreResponse = SessionDreResponses[keyof SessionDreResponses]
+
+export type SessionGraphData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/graph"
+}
+
+export type SessionGraphErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionGraphError = SessionGraphErrors[keyof SessionGraphErrors]
+
+export type SessionGraphResponses = {
+  /**
+   * Execution graph snapshot for the session
+   */
+  200: SessionGraphSnapshot
+}
+
+export type SessionGraphResponse = SessionGraphResponses[keyof SessionGraphResponses]
+
+export type SessionRiskData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/risk"
+}
+
+export type SessionRiskErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRiskError = SessionRiskErrors[keyof SessionRiskErrors]
+
+export type SessionRiskResponses = {
+  /**
+   * Explainable risk detail for the session
+   */
+  200: SessionRiskDetail
+}
+
+export type SessionRiskResponse = SessionRiskResponses[keyof SessionRiskResponses]
+
+export type SessionSemanticDiffData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/diff/semantic"
+}
+
+export type SessionSemanticDiffErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionSemanticDiffError = SessionSemanticDiffErrors[keyof SessionSemanticDiffErrors]
+
+export type SessionSemanticDiffResponses = {
+  /**
+   * Semantic diff summary for the session
+   */
+  200: SessionSemanticDiffSummary | null
+}
+
+export type SessionSemanticDiffResponse = SessionSemanticDiffResponses[keyof SessionSemanticDiffResponses]
+
+export type SessionCompareData = {
+  body?: never
+  path: {
+    sessionID: string
+    otherSessionID: string
+  }
+  query?: {
+    directory?: string
+    /**
+     * Include replay divergence signals in session comparison
+     */
+    deep?: boolean
+  }
+  url: "/session/{sessionID}/compare/{otherSessionID}"
+}
+
+export type SessionCompareErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionCompareError = SessionCompareErrors[keyof SessionCompareErrors]
+
+export type SessionCompareResponses = {
+  /**
+   * Execution comparison for the two sessions
+   */
+  200: SessionCompareResult
+}
+
+export type SessionCompareResponse = SessionCompareResponses[keyof SessionCompareResponses]
+
+export type SessionRollbackPointsData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    /**
+     * Only return rollback points whose step used this tool
+     */
+    tool?: string
+  }
+  url: "/session/{sessionID}/rollback"
+}
+
+export type SessionRollbackPointsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRollbackPointsError = SessionRollbackPointsErrors[keyof SessionRollbackPointsErrors]
+
+export type SessionRollbackPointsResponses = {
+  /**
+   * Rollback points for the session
+   */
+  200: Array<SessionRollbackPoint>
+}
+
+export type SessionRollbackPointsResponse = SessionRollbackPointsResponses[keyof SessionRollbackPointsResponses]
 
 export type SessionTodoData = {
   body?: never
@@ -3215,9 +3959,12 @@ export type SessionMessagesData = {
   query?: {
     directory?: string
     /**
-     * Maximum number of messages to return
+     * Maximum number of messages to return (0-500)
      */
     limit?: number
+    /**
+     * Opaque cursor for loading older messages
+     */
     before?: string
   }
   url: "/session/{sessionID}/message"
@@ -3256,6 +4003,7 @@ export type SessionPromptData = {
       modelID: string
     }
     agent?: string
+    userSelectedAgent?: boolean
     noReply?: boolean
     /**
      * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
@@ -3451,6 +4199,7 @@ export type SessionPromptAsyncData = {
       modelID: string
     }
     agent?: string
+    userSelectedAgent?: boolean
     noReply?: boolean
     /**
      * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
@@ -3765,7 +4514,15 @@ export type AuditExportAllData = {
   path?: never
   query?: {
     directory?: string
-    since?: string
+    since?: number
+    /**
+     * Filter sessions by minimum risk level
+     */
+    risk?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+    /**
+     * Filter by event type (e.g. tool.call, agent.route)
+     */
+    type?: string
   }
   url: "/audit/export"
 }
@@ -3793,6 +4550,103 @@ export type AuditReplayResponses = {
   /**
    * Reconstructed replay steps
    */
+  200: unknown
+}
+
+export type GraphTopologyData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/graph/{sessionID}/topology"
+}
+
+export type GraphTopologyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type GraphTopologyError = GraphTopologyErrors[keyof GraphTopologyErrors]
+
+export type GraphTopologyResponses = {
+  /**
+   * Execution graph topology
+   */
+  200: ExecutionGraphTopologyResponse
+}
+
+export type GraphTopologyResponse = GraphTopologyResponses[keyof GraphTopologyResponses]
+
+export type GraphGetData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    format?: "ascii" | "json" | "mermaid" | "markdown" | "timeline" | "topology"
+  }
+  url: "/graph/{sessionID}"
+}
+
+export type GraphGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type GraphGetError = GraphGetErrors[keyof GraphGetErrors]
+
+export type GraphGetResponses = {
+  /**
+   * Execution graph
+   */
+  200: ExecutionGraphResponse
+}
+
+export type GraphGetResponse = GraphGetResponses[keyof GraphGetResponses]
+
+export type GetDreGraphSessionSessionIdData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/dre-graph/session/{sessionID}"
+}
+
+export type GetDreGraphSessionSessionIdResponses = {
+  200: unknown
+}
+
+export type GetDreGraphSessionSessionIdFingerprintData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/dre-graph/session/{sessionID}/fingerprint"
+}
+
+export type GetDreGraphSessionSessionIdFingerprintResponses = {
   200: unknown
 }
 
@@ -5042,6 +5896,7 @@ export type AppSkillsResponses = {
     description: string
     location: string
     content: string
+    paths?: Array<string>
   }>
 }
 
@@ -5121,33 +5976,3 @@ export type FormatterStatusResponses = {
 }
 
 export type FormatterStatusResponse = FormatterStatusResponses[keyof FormatterStatusResponses]
-
-// --- v3.1.0 visual layer types ---
-
-export type SessionSemanticDiffKind = "bug_fix" | "refactor" | "optimization" | "test" | "documentation" | "configuration" | "dependency" | "rewrite"
-export type SessionSemanticDiffRisk = "low" | "medium" | "high"
-export type SessionSemanticDiffCount = { kind: SessionSemanticDiffKind; count: number }
-export type SessionSemanticDiffChange = { file: string; status?: "added" | "deleted" | "modified" | null; kind: SessionSemanticDiffKind; risk: SessionSemanticDiffRisk; summary: string; additions: number; deletions: number; signals: Array<string> }
-export type SessionSemanticDiffSummary = { headline: string; risk: SessionSemanticDiffRisk; primary: SessionSemanticDiffKind; files: number; additions: number; deletions: number; counts: Array<SessionSemanticDiffCount>; signals: Array<string>; changes: Array<SessionSemanticDiffChange> }
-export type SessionBranchRisk = { level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; score: number; confidence: number; readiness: "ready" | "needs_validation" | "needs_review" | "blocked"; signals: { filesChanged: number; linesChanged: number; testCoverage: number; apiEndpointsAffected: number; crossModule: boolean; securityRelated: boolean; validationPassed?: boolean; validationState: "not_run" | "passed" | "failed" | "partial"; validationCount: number; validationFailures: number; validationCommands: Array<string>; toolFailures: number; totalTools: number; diffState: "recorded" | "derived" | "missing"; semanticRisk: "low" | "medium" | "high" | null; primaryChange: SessionSemanticDiffKind | null }; summary: string; breakdown: Array<{ kind: string; label: string; points: number; detail: string }>; evidence: Array<string>; unknowns: Array<string>; mitigations: Array<string> }
-export type SessionBranchScorecard = { total: number; breakdown: Array<{ key: "correctness" | "safety" | "simplicity" | "validation"; label: string; value: number; detail: string }> }
-export type SessionBranchItem = { id: string; title: string; risk: SessionBranchRisk; view: { tools: Array<string>; routes: Array<{ from: string; to: string; confidence: number }>; counts: { [key: string]: number }; plan: string; notes: Array<string> }; decision: SessionBranchScorecard; headline: string; semantic: SessionSemanticDiffSummary | null; current: boolean; recommended: boolean }
-export type SessionDreSummary = { level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; score: number; confidence: number; readiness: "ready" | "needs_validation" | "needs_review" | "blocked"; summary: string; stats: string; decision: string; plan: string; notes: Array<string>; drivers: Array<string> }
-export type SessionDreDetail = SessionDreSummary & { scorecard: SessionBranchScorecard; breakdown: Array<{ kind: string; label: string; points: number; detail: string }>; evidence: Array<string>; unknowns: Array<string>; mitigations: Array<string>; duration: number; tokens: { input: number; output: number }; routes: Array<{ from: string; to: string; confidence: number }>; tools: Array<string>; counts: Array<{ type: string; count: number }>; semantic: SessionSemanticDiffSummary | null }
-export type SessionDreTimelineLine = { kind: "heading" | "meta" | "step" | "route" | "tool" | "llm" | "error"; text: string }
-export type SessionDreSnapshot = { detail: SessionDreDetail | null; timeline: Array<SessionDreTimelineLine> }
-export type ExecutionGraphTokens = { input: number; output: number }
-export type ExecutionGraphNode = { id: string; type: "session" | "step" | "tool_call" | "tool_result" | "agent_route" | "llm" | "error"; label: string; timestamp: number; duration?: number; status?: "ok" | "error" | "pending"; stepIndex?: number; callID?: string; tool?: string; agent?: string; confidence?: number; tokens?: ExecutionGraphTokens }
-export type ExecutionGraphEdge = { from: string; to: string; type: "sequence" | "call_result" | "step_contains" }
-export type ExecutionGraphMetadata = { duration: number; tokens: ExecutionGraphTokens; risk: { level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; score: number; summary: string }; agents: Array<string>; tools: Array<string>; steps: number; errors: number }
-export type ExecutionGraph = { sessionID: string; nodes: Array<ExecutionGraphNode>; edges: Array<ExecutionGraphEdge>; metadata: ExecutionGraphMetadata }
-export type ExecutionGraphTopologyHeading = { kind: "heading"; text: string }
-export type ExecutionGraphTopologyPath = { kind: "path"; text: string; nodes: Array<string> }
-export type ExecutionGraphTopologyStep = { kind: "step"; text: string; stepIndex: number; nodes: Array<string> }
-export type ExecutionGraphTopologyPair = { kind: "pair"; text: string; call: string; result: string }
-export type ExecutionGraphTopologyLine = ExecutionGraphTopologyHeading | ExecutionGraphTopologyPath | ExecutionGraphTopologyStep | ExecutionGraphTopologyPair
-export type ExecutionGraphTopologyResponse = { data: Array<ExecutionGraphTopologyLine> }
-export type ExecutionGraphResponse = { data: ExecutionGraph }
-export type SessionCompareSummary = { id: string; title: string; risk: SessionBranchRisk; decision: SessionBranchScorecard; events: number; plan: string; headline: string; semantic: SessionSemanticDiffSummary | null }
-export type SessionCompareResult = { session1: SessionCompareSummary; session2: SessionCompareSummary; differences: { toolChainDiffers: boolean; routeDiffers: boolean; eventCountDelta: number }; advisory: { winner: "A" | "B" | "tie"; confidence: number; reasons: Array<string> }; decision: { winner: "A" | "B" | "tie"; confidence: number; recommendation: string; reasons: Array<string>; differences: Array<string>; session1: { title: string; plan: string; headline: string; change: string | null; validation: string }; session2: { title: string; plan: string; headline: string; change: string | null; validation: string } }; analysis: { session1: { tools: Array<string>; routes: Array<{ from: string; to: string; confidence: number }>; counts: { [key: string]: number }; plan: string; notes: Array<string>; decision: SessionBranchScorecard; headline: string }; session2: { tools: Array<string>; routes: Array<{ from: string; to: string; confidence: number }>; counts: { [key: string]: number }; plan: string; notes: Array<string>; decision: SessionBranchScorecard; headline: string } }; replay?: { session1: { stepsCompared: number; divergences: number; reasons: Array<string> }; session2: { stepsCompared: number; divergences: number; reasons: Array<string> } } }
-export type SessionRollbackPoint = { step: number; messageID: string; partID: string; duration?: number; tokens?: { input: number; output: number }; tools: Array<string>; kinds: Array<string> }
