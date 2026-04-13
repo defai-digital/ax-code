@@ -16,6 +16,7 @@ import { withTimeout } from "../util/timeout"
 import { Ripgrep } from "../file/ripgrep"
 import { CodeGraphQuery } from "../code-intelligence/query"
 import type { LspCacheOperation } from "../code-intelligence/schema.sql"
+import { LspScheduler } from "./scheduler"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -1006,9 +1007,13 @@ export namespace LSP {
   ): Promise<SemanticEnvelope<(LSP.DocumentSymbol | LSP.Symbol)[]>> {
     const file = fileURLToPath(uri)
     return metered("documentSymbol", { file }, async () => {
-      const contentHash = Flag.AX_CODE_LSP_CACHE ? await hashFile(file) : undefined
+      // Hash the file once per call; used by both the cache (when
+      // enabled) and the in-flight dedup (always). A few hundred μs
+      // per call is a flat cost that's recouped many times over the
+      // moment two concurrent calls collapse into one LSP RPC.
+      const contentHash = await hashFile(file)
 
-      if (contentHash) {
+      if (contentHash && Flag.AX_CODE_LSP_CACHE) {
         const hit = cacheLookup<(LSP.DocumentSymbol | LSP.Symbol)[]>(
           "documentSymbol",
           file,
@@ -1017,14 +1022,12 @@ export namespace LSP {
           -1,
         )
         if (hit) {
-          // Record the hit as a separate sub-op so perf:index can
-          // compute hit rate via documentSymbol.cached.count /
-          // documentSymbol.count.
           recordPerf("documentSymbol.cached", 0, true)
           return hit
         }
       }
 
+      const dedupKey = contentHash ? `documentSymbol:${file}:${contentHash}` : undefined
       const envelope = await runWithEnvelope(
         file,
         (client) =>
@@ -1036,10 +1039,11 @@ export namespace LSP {
           ) as Promise<(LSP.DocumentSymbol | LSP.Symbol)[]>,
         (results) => results.flat().filter(Boolean) as (LSP.DocumentSymbol | LSP.Symbol)[],
         [] as (LSP.DocumentSymbol | LSP.Symbol)[],
+        dedupKey,
       )
 
       recordPerf("documentSymbol.live", 0, true)
-      if (contentHash) {
+      if (contentHash && Flag.AX_CODE_LSP_CACHE) {
         cacheWrite("documentSymbol", file, contentHash, -1, -1, envelope)
       }
       return envelope
@@ -1084,15 +1088,19 @@ export namespace LSP {
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
     return metered("references", { file: input.file }, async () => {
-      const contentHash = Flag.AX_CODE_LSP_CACHE ? await hashFile(input.file) : undefined
+      const contentHash = await hashFile(input.file)
 
-      if (contentHash) {
+      if (contentHash && Flag.AX_CODE_LSP_CACHE) {
         const hit = cacheLookup<unknown[]>("references", input.file, contentHash, input.line, input.character)
         if (hit) {
           recordPerf("references.cached", 0, true)
           return hit
         }
       }
+
+      const dedupKey = contentHash
+        ? `references:${input.file}:${contentHash}:${input.line}:${input.character}`
+        : undefined
 
       const envelope = await runWithEnvelope(
         input.file,
@@ -1107,10 +1115,11 @@ export namespace LSP {
           ) as Promise<unknown>,
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
+        dedupKey,
       )
 
       recordPerf("references.live", 0, true)
-      if (contentHash) {
+      if (contentHash && Flag.AX_CODE_LSP_CACHE) {
         cacheWrite("references", input.file, contentHash, input.line, input.character, envelope)
       }
       return envelope
@@ -1234,6 +1243,28 @@ export namespace LSP {
     call: (client: LSPClient.Info) => Promise<TClient>,
     reduce: (results: TClient[]) => TPayload,
     empty: TPayload,
+    dedupKey?: string,
+  ): Promise<SemanticEnvelope<TPayload>> {
+    // Duplicate-request collapse (Semantic Trust v2 §S1). When dedupKey
+    // is supplied and matches an in-flight call, return the same
+    // promise — second caller gets identical envelope, identical
+    // cacheKey, no extra RPC. Callers that can't cheaply compute the
+    // key (e.g. hover/definition which don't content-hash the file)
+    // pass undefined and skip dedup. That's acceptable because hover/
+    // definition calls are rare compared to references/documentSymbol.
+    if (dedupKey) {
+      return LspScheduler.Inflight.run(dedupKey, () =>
+        runWithEnvelopeUncollapsed(file, call, reduce, empty),
+      )
+    }
+    return runWithEnvelopeUncollapsed(file, call, reduce, empty)
+  }
+
+  async function runWithEnvelopeUncollapsed<TClient, TPayload>(
+    file: string,
+    call: (client: LSPClient.Info) => Promise<TClient>,
+    reduce: (results: TClient[]) => TPayload,
+    empty: TPayload,
   ): Promise<SemanticEnvelope<TPayload>> {
     const clients = await getClients(file)
     if (clients.length === 0) {
@@ -1250,6 +1281,22 @@ export namespace LSP {
     const participatingServerIDs: string[] = []
     const perClient = await Promise.all(
       clients.map(async (c) => {
+        // Per-server concurrency budget (§S2). Blocks if the server
+        // is at cap; caller sees normal queued latency, never more
+        // than ACQUIRE_TIMEOUT_MS of wait before converting to a
+        // one-client failure. Release is in finally so crashes don't
+        // leak slots.
+        let release: () => void
+        try {
+          release = await LspScheduler.Budget.acquire(c.serverID)
+        } catch (err) {
+          failures++
+          log.warn("LSP budget acquire failed in runWithEnvelope", {
+            serverID: c.serverID,
+            err: err instanceof Error ? err.message : String(err),
+          })
+          return undefined
+        }
         try {
           const result = await call(c)
           participatingServerIDs.push(c.serverID)
@@ -1265,6 +1312,8 @@ export namespace LSP {
           failures++
           log.warn("LSP client failed in runWithEnvelope", { serverID: c.serverID, err })
           return undefined
+        } finally {
+          release()
         }
       }),
     )
