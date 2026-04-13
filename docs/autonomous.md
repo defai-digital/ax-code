@@ -1,6 +1,6 @@
 # Autonomous Mode
 
-Autonomous mode lets ax-code complete tasks without waiting for human confirmation at each step. When enabled, permission prompts and question dialogs are auto-approved, so the agent runs continuously until the task is done.
+Autonomous mode lets ax-code complete tasks without waiting for human confirmation at each low-risk step. When enabled, permission prompts are auto-approved unless they are explicitly blocked, and question dialogs are auto-answered with a best-practice heuristic that favors recommended, default, common, simple, and minimal choices while avoiding risky or over-engineered options.
 
 By default, autonomous mode is **on**. If you've previously toggled it off, that preference is saved and restored on next launch.
 
@@ -21,12 +21,13 @@ The setting persists across sessions in `ax-code.json`.
 
 ## What Changes
 
-| Behavior | Autonomous Off | Autonomous On |
-|---|---|---|
-| Tool permissions (read, edit, bash, etc.) | Prompts user for approval | **Auto-approved** |
-| Question dialogs (plan selection, etc.) | Waits for user to pick an option | **Picks first option** |
-| Session loop on rejection | Stops and waits | **Continues running** |
-| `isolation_escalation` prompts | Always prompts | **Always prompts** (never auto-approved) |
+| Behavior                                  | Autonomous Off                   | Autonomous On                                                             |
+| ----------------------------------------- | -------------------------------- | ------------------------------------------------------------------------- |
+| Tool permissions (read, edit, bash, etc.) | Prompts user for approval        | **Auto-approved**                                                         |
+| Question dialogs                          | Waits for user to pick an option | **Picks the best-practice/default option and records it**                 |
+| Planning                                  | Follows normal agent prompt      | **Uses a lightweight PRD/ADR-style decision frame before implementation** |
+| Session loop on rejection                 | Stops and waits                  | **Continues running**                                                     |
+| `isolation_escalation` prompts            | Always prompts                   | **Always prompts** (never auto-approved)                                  |
 
 ## How It Works
 
@@ -40,22 +41,26 @@ When a tool calls `ctx.ask()` for permission, the Permission module checks `AX_C
 
 ### 2. Question Auto-Answer (Server-Side)
 
-When a tool asks the user a question (e.g., plan selection, confirmation), the Question module picks the first available option and returns immediately.
+When a tool asks the user a question, the Question module picks an answer immediately. It prefers options marked as recommended, default, safe, standard, common, conventional, best practice, simple, or minimal. It avoids options marked experimental, risky, dangerous, destructive, advanced, complex, rewrite, or over-engineered. If no option has a signal, it picks the first option because the question tool instructs agents to put the recommended option first.
 
 ### 3. Processor Loop (Session-Level)
 
 If a permission is somehow rejected (e.g., by an explicit deny rule), the processor loop does not stop — it continues to the next step instead of halting the session.
 
+### 4. PRD/ADR-Style Decision Frame
+
+Autonomous mode adds a lightweight workflow reminder to the system prompt. Before implementation, the agent should frame the work with the problem, constraints, decision, tradeoffs, plan, and validation. For substantial multi-file, architectural, or product-visible changes, it may create or update a repository document when that matches the repo's documentation pattern. For trivial changes, it should keep this frame lightweight in the plan to avoid over-engineering.
+
 ## Autonomous + Sandbox
 
 Autonomous mode and sandbox mode are **independent**. You can use both simultaneously:
 
-| Combination | Behavior |
-|---|---|
-| Autonomous ON + Sandbox ON | Agent runs freely but is confined to workspace. **Recommended default.** |
-| Autonomous ON + Sandbox OFF | Agent runs freely with full system access. Use for trusted projects. |
-| Autonomous OFF + Sandbox ON | Agent asks for permission on each action, confined to workspace. Maximum control. |
-| Autonomous OFF + Sandbox OFF | Agent asks for permission on each action, full system access. |
+| Combination                  | Behavior                                                                          |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| Autonomous ON + Sandbox ON   | Agent runs freely but is confined to workspace. **Recommended default.**          |
+| Autonomous ON + Sandbox OFF  | Agent runs freely with full system access. Use for trusted projects.              |
+| Autonomous OFF + Sandbox ON  | Agent asks for permission on each action, confined to workspace. Maximum control. |
+| Autonomous OFF + Sandbox OFF | Agent asks for permission on each action, full system access.                     |
 
 The recommended setup is **both on** — the agent works efficiently without interruptions, while sandbox ensures it can't accidentally modify files outside your project or access the network.
 
@@ -100,7 +105,7 @@ Environment variable > config file > default (on)
 ## When to Keep Autonomous On
 
 - **Routine tasks** — refactoring, bug fixes, migrations where you trust the agent
-- **CI/CD pipelines** — headless execution where no human is available
+- **CI/CD pipelines** — headless execution where the task is already constrained by policy
 - **SDK usage** — programmatic agent execution via `createAgent()`
 - **Large tasks** — multi-file changes where stopping at each permission would take hours
 
@@ -123,5 +128,7 @@ Even with autonomous mode on:
 1. **Sandbox still enforces boundaries** — writes outside workspace are blocked regardless of autonomous mode
 2. **Isolation escalation always prompts** — the agent cannot silently override sandbox restrictions
 3. **Deny rules are enforced** — explicit `"deny"` permission rules still block tool calls
-4. **Session snapshots are recorded** — every tool call is logged for audit/replay
-5. **Abort always works** — pressing Esc (interrupt) stops the agent immediately
+4. **Autonomous choices are recorded** — question tool output includes the selected answers so the agent can report them later
+5. **Avoid over-engineering** — autonomous continuation reminds the agent to prefer the simplest common-practice change and avoid abstractions without 3+ concrete use cases
+6. **Session snapshots are recorded** — every tool call is logged for audit/replay
+7. **Abort always works** — pressing Esc (interrupt) stops the agent immediately

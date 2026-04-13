@@ -272,6 +272,129 @@ test("ask - handles multiple questions", async () => {
   })
 })
 
+test("ask - autonomous mode answers single-option questions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const original = process.env.AX_CODE_AUTONOMOUS
+  process.env.AX_CODE_AUTONOMOUS = "true"
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const answers = await Question.ask({
+          sessionID: SessionID.make("ses_auto_single"),
+          questions: [
+            {
+              question: "Only option?",
+              header: "Only",
+              options: [{ label: "Continue", description: "Continue automatically" }],
+            },
+          ],
+        })
+
+        expect(answers).toEqual([["Continue"]])
+        expect(await Question.list()).toEqual([])
+      },
+    })
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = original
+  }
+})
+
+test("ask - autonomous mode decides multi-option questions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const original = process.env.AX_CODE_AUTONOMOUS
+  process.env.AX_CODE_AUTONOMOUS = "true"
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const answers = await Question.ask({
+          sessionID: SessionID.make("ses_auto_multi"),
+          questions: [
+            {
+              question: "Pick one?",
+              header: "Pick",
+              options: [
+                { label: "A", description: "First option" },
+                { label: "B", description: "Second option (recommended)" },
+              ],
+            },
+          ],
+        })
+
+        expect(answers).toEqual([["B"]])
+        expect(await Question.list()).toEqual([])
+      },
+    })
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = original
+  }
+})
+
+test("ask - autonomous mode avoids over-engineered options", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const original = process.env.AX_CODE_AUTONOMOUS
+  process.env.AX_CODE_AUTONOMOUS = "true"
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const answers = await Question.ask({
+          sessionID: SessionID.make("ses_auto_pragmatic"),
+          questions: [
+            {
+              question: "Which approach?",
+              header: "Approach",
+              options: [
+                { label: "Rewrite", description: "Large refactor with a complex new abstraction" },
+                { label: "Minimal fix", description: "Simple common best practice" },
+              ],
+            },
+          ],
+        })
+
+        expect(answers).toEqual([["Minimal fix"]])
+      },
+    })
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = original
+  }
+})
+
+test("ask - autonomous mode treats over-engineering risk as stronger than recommended label", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const original = process.env.AX_CODE_AUTONOMOUS
+  process.env.AX_CODE_AUTONOMOUS = "true"
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const answers = await Question.ask({
+          sessionID: SessionID.make("ses_auto_recommended_but_complex"),
+          questions: [
+            {
+              question: "Which approach?",
+              header: "Approach",
+              options: [
+                { label: "Rewrite (Recommended)", description: "Complex large refactor" },
+                { label: "Small patch", description: "Targeted fix only" },
+              ],
+            },
+          ],
+        })
+
+        expect(answers).toEqual([["Small patch"]])
+      },
+    })
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = original
+  }
+})
+
 // list tests
 
 test("list - returns all pending requests", async () => {

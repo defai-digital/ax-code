@@ -1,15 +1,18 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test"
+import { describe, test, expect, beforeAll, afterAll, spyOn } from "bun:test"
 import { Effect } from "effect"
 import { Discovery } from "../../src/skill/discovery"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
 import { rm } from "fs/promises"
 import path from "path"
+import dns from "dns/promises"
 
 let CLOUDFLARE_SKILLS_URL: string
 let downloadCount = 0
-const origin = "http://127.0.0.1"
+let externalFetchCount = 0
+const origin = "http://example.com"
 const originalFetch = globalThis.fetch
+let lookupSpy: ReturnType<typeof spyOn>
 
 const fixturePath = path.join(import.meta.dir, "../fixture/skills")
 const cacheDir = path.join(Global.Path.cache, "skills")
@@ -17,9 +20,32 @@ const cacheDir = path.join(Global.Path.cache, "skills")
 beforeAll(async () => {
   await rm(cacheDir, { recursive: true, force: true })
 
-  globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       const req = new Request(input, init)
       const url = new URL(req.url)
+      const host = req.headers.get("Host")
+
+      if (host === "attacker.example" || url.pathname === "/payload.md") {
+        externalFetchCount++
+        return new Response("External fetch should be rejected", { status: 500 })
+      }
+
+      if (url.pathname === "/unsafe-skills/index.json") {
+        return Response.json({
+          skills: [{ name: "../evil", files: ["SKILL.md"] }],
+        })
+      }
+
+      if (url.pathname === "/external-file/index.json") {
+        return Response.json({
+          skills: [{ name: "safe-skill", files: ["SKILL.md", "https://attacker.example/payload.md"] }],
+        })
+      }
+
+      if (url.pathname === "/external-file/safe-skill/SKILL.md") {
+        return new Response(`# Safe Skill`)
+      }
 
       // route /.well-known/skills/* to the fixture directory
       if (url.pathname.startsWith("/.well-known/skills/")) {
@@ -35,13 +61,17 @@ beforeAll(async () => {
       }
 
       return new Response("Not Found", { status: 404 })
-  }, { preconnect: originalFetch.preconnect }) as typeof fetch
+    },
+    { preconnect: originalFetch.preconnect },
+  ) as typeof fetch
 
+  lookupSpy = spyOn(dns, "lookup").mockImplementation(async () => [{ address: "93.184.216.34", family: 4 }] as any)
   CLOUDFLARE_SKILLS_URL = `${origin}/.well-known/skills/`
 })
 
 afterAll(async () => {
   globalThis.fetch = originalFetch
+  lookupSpy.mockRestore()
   await rm(cacheDir, { recursive: true, force: true })
 })
 
@@ -77,6 +107,25 @@ describe("Discovery.pull", () => {
     // any url not explicitly handled in server returns 404 text "Not Found"
     const dirs = await pull(`${origin}/some-other-path/`)
     expect(dirs).toEqual([])
+  })
+
+  test("rejects private skill discovery urls", async () => {
+    const dirs = await pull("http://127.0.0.1/.well-known/skills/")
+    expect(dirs).toEqual([])
+  })
+
+  test("rejects unsafe remote skill names before cache writes", async () => {
+    await rm(path.join(cacheDir, "..", "evil"), { recursive: true, force: true })
+    const dirs = await pull(`${origin}/unsafe-skills/`)
+    expect(dirs).toEqual([])
+    expect(await Filesystem.exists(path.join(cacheDir, "..", "evil", "SKILL.md"))).toBe(false)
+  })
+
+  test("rejects external file references from remote skill index", async () => {
+    externalFetchCount = 0
+    const dirs = await pull(`${origin}/external-file/`)
+    expect(dirs.length).toBe(1)
+    expect(externalFetchCount).toBe(0)
   })
 
   test("downloads reference files alongside SKILL.md", async () => {

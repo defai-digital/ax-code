@@ -6,6 +6,7 @@ import { makeRunPromise } from "@/effect/run-service"
 import { SessionID, MessageID } from "@/session/schema"
 import { Log } from "@/util/log"
 import z from "zod"
+import { AutonomousQuestion } from "./autonomous"
 import { QuestionID } from "./schema"
 
 export namespace Question {
@@ -49,6 +50,10 @@ export namespace Question {
 
   export const Answer = z.array(z.string()).meta({ ref: "QuestionAnswer" })
   export type Answer = z.infer<typeof Answer>
+
+  export function autonomousAnswers(questions: Info[]): Answer[] {
+    return AutonomousQuestion.answers(questions)
+  }
 
   export const Reply = z.object({
     answers: z
@@ -133,10 +138,16 @@ export namespace Question {
         questions: Info[]
         tool?: { messageID: MessageID; callID: string }
       }) {
-        // Autonomous mode: auto-answer by picking the first option for each question
+        // Autonomous mode makes the decision first so headless and
+        // long-running sessions do not block. Prefer options marked as
+        // recommended/default/safe/common/best-practice/simple and avoid
+        // risky/complex/over-engineered options; otherwise use the first
+        // option because the question tool asks callers to put their
+        // recommended option first.
         if (process.env["AX_CODE_AUTONOMOUS"] === "true") {
-          log.info("autonomous auto-answer", { questions: input.questions.length })
-          return input.questions.map((q) => (q.options.length > 0 ? [q.options[0].label] : []))
+          const answers = autonomousAnswers(input.questions)
+          log.info("autonomous auto-answer", { questions: input.questions.length, answers })
+          return answers
         }
 
         const pending = (yield* InstanceState.get(state)).pending

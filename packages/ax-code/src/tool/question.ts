@@ -21,12 +21,16 @@ export const QuestionTool = Tool.define("question", {
     }
 
     const formatted = params.questions.map((q, i) => `"${q.question}"="${format(answers[i])}"`).join(", ")
+    const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
+    const actor = autonomous ? "Autonomous mode selected answers for" : "User has answered"
+    const reminder = autonomous ? " Record these autonomous decisions in your final response." : ""
 
     return {
       title: `Asked ${params.questions.length} question${params.questions.length > 1 ? "s" : ""}`,
-      output: `User has answered your questions: ${formatted}. You can now continue with the user's answers in mind.`,
+      output: `${actor} your questions: ${formatted}. You can now continue with these answers in mind.${reminder}`,
       metadata: {
         answers,
+        autonomous,
       },
     }
   },

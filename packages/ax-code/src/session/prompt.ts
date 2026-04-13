@@ -541,7 +541,7 @@ export namespace SessionPrompt {
           const lastUserInfo = lastMsgs.filter((m) => m.info.role === "user").pop()?.info as MessageV2.User | undefined
           await createUserMessage({
             sessionID,
-            parts: [{ type: "text", text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations}/${maxContinuations}. Prioritize completing the most important remaining work.` }],
+            parts: [{ type: "text", text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations}/${maxContinuations}. Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, and verify before expanding scope.` }],
             agent: lastUserInfo?.agent,
             model: lastUserInfo?.model,
           })

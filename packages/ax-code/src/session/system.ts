@@ -27,6 +27,19 @@ export namespace SystemPrompt {
 
   export async function environment(model: Provider.Model) {
     const project = Instance.project
+    const autonomousWorkflow =
+      process.env["AX_CODE_AUTONOMOUS"] === "true"
+        ? [
+            `<autonomous_workflow>`,
+            `  Autonomous mode is enabled.`,
+            `  Before implementation, create a concise PRD/ADR-style decision frame: problem, constraints, decision, tradeoffs, plan, and validation.`,
+            `  For substantial multi-file, architectural, or product-visible changes, create or update a repo document when that matches the repository's documentation pattern.`,
+            `  For trivial changes, keep the PRD/ADR frame lightweight in the plan instead of creating permanent docs.`,
+            `  Prefer industry/common best practices and avoid over-engineering: choose the simplest change that solves the task, avoid new abstractions without 3+ concrete use cases, and verify before expanding scope.`,
+            `  When autonomous mode makes choices for the user, record those choices in the final response.`,
+            `</autonomous_workflow>`,
+          ]
+        : []
     return [
       [
         `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
@@ -48,6 +61,7 @@ export namespace SystemPrompt {
             : ""
         }`,
         `</directories>`,
+        ...autonomousWorkflow,
       ].join("\n"),
     ]
   }

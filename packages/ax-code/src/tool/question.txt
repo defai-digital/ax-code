@@ -8,3 +8,4 @@ Usage notes:
 - When `custom` is enabled (default), a "Type your own answer" option is added automatically; don't include "Other" or catch-all options
 - Answers are returned as arrays of labels; set `multiple: true` to allow selecting more than one
 - If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label
+- In autonomous mode, ax-code will choose for the user. Prefer options that represent industry/common best practice and avoid over-engineering; label those options with terms like "Recommended", "Default", "Best practice", "Common", "Simple", or "Minimal" so autonomous selection can make the same choice a senior engineer would make.

@@ -65,6 +65,31 @@ describe("tool.question", () => {
     expect(result.output).toContain(`"What is your favorite animal?"="Dog"`)
   })
 
+  test("marks autonomous answers in output metadata", async () => {
+    const original = process.env.AX_CODE_AUTONOMOUS
+    process.env.AX_CODE_AUTONOMOUS = "true"
+    try {
+      const tool = await QuestionTool.init()
+      const questions = [
+        {
+          question: "Which approach?",
+          header: "Approach",
+          options: [{ label: "Minimal fix", description: "Simple common best practice" }],
+        },
+      ]
+
+      askSpy.mockResolvedValueOnce([["Minimal fix"]])
+
+      const result = await tool.execute({ questions }, ctx)
+      expect(result.output).toContain("Autonomous mode selected answers")
+      expect(result.output).toContain("Record these autonomous decisions")
+      expect(result.metadata.autonomous).toBe(true)
+    } finally {
+      if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+      else process.env.AX_CODE_AUTONOMOUS = original
+    }
+  })
+
   // intentionally removed the zod validation due to tool call errors, hoping prompting is gonna be good enough
   //   test("should throw an Error for header exceeding 30 characters", async () => {
   //     const tool = await QuestionTool.init()

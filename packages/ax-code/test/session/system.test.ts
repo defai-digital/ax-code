@@ -67,6 +67,30 @@ describe("session.system", () => {
     })
   })
 
+  test("environment includes autonomous PRD/ADR workflow when enabled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const original = process.env.AX_CODE_AUTONOMOUS
+    process.env.AX_CODE_AUTONOMOUS = "true"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await SystemPrompt.environment({
+            api: { id: "test-model" },
+            providerID: "test-provider",
+          } as any)
+
+          expect(result.join("\n")).toContain("<autonomous_workflow>")
+          expect(result.join("\n")).toContain("PRD/ADR-style")
+          expect(result.join("\n")).toContain("avoid over-engineering")
+        },
+      })
+    } finally {
+      if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+      else process.env.AX_CODE_AUTONOMOUS = original
+    }
+  })
+
   test("skills output includes recommendations when messages match skill paths", async () => {
     await using tmp = await tmpdir({
       git: true,

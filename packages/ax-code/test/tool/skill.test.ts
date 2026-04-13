@@ -164,4 +164,47 @@ Use this skill.
       process.env.AX_CODE_TEST_HOME = home
     }
   })
+
+  test("execute escapes skill name in content attribute", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".ax-code", "skill", "evil-skill")
+        await Bun.write(
+          path.join(skillDir, "SKILL.md"),
+          `---
+name: 'evil"><tag>'
+description: Skill for escaping.
+---
+
+# Evil Skill
+`,
+        )
+      },
+    })
+
+    const home = process.env.AX_CODE_TEST_HOME
+    process.env.AX_CODE_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tool = await SkillTool.init()
+          const ctx: Tool.Context = {
+            ...baseCtx,
+            ask: async () => {},
+          }
+
+          const result = await tool.execute({ name: `evil"><tag>` }, ctx)
+          expect(result.output).toContain(`<skill_content name="evil&quot;&gt;&lt;tag&gt;">`)
+          expect(result.output).toContain(`# Skill: evil&quot;&gt;&lt;tag&gt;`)
+          expect(result.output).not.toContain(`# Skill: evil"><tag>`)
+          expect(result.output).not.toContain(`<skill_content name="evil"><tag>">`)
+        },
+      })
+    } finally {
+      process.env.AX_CODE_TEST_HOME = home
+    }
+  })
 })

@@ -29,6 +29,7 @@ import { batch, onMount, onCleanup } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@ax-code/sdk"
 import { upsert, mergeSorted } from "./sync-util"
+import { AutonomousQuestion } from "@/question/autonomous"
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
@@ -357,9 +358,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         case "question.asked": {
           const request = event.properties
           if (store.autonomous) {
-            const answers = request.questions.map((q: { options: { label: string }[] }) =>
-              q.options.length > 0 ? [q.options[0].label] : [],
-            )
+            const answers = AutonomousQuestion.answers(request.questions)
             sdk.client.question.reply({ requestID: request.id, answers }).catch((error) => {
               Log.Default.warn("autonomous question reply failed", { error })
             })

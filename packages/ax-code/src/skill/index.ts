@@ -214,6 +214,17 @@ export namespace Skill {
 
   export const defaultLayer: Layer.Layer<Service> = layer.pipe(Layer.provide(Discovery.defaultLayer))
 
+  function escapeMetadata(value: string) {
+    return value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;")
+      .replace(/\s+/g, " ")
+      .trim()
+  }
+
   export function fmt(list: Info[], opts: { verbose: boolean; recommended?: Set<string> }) {
     if (list.length === 0) return "No skills are currently available."
 
@@ -224,8 +235,8 @@ export namespace Skill {
           const auto = opts.recommended?.has(skill.name)
           return [
             auto ? `  <skill auto_activated="true">` : "  <skill>",
-            `    <name>${skill.name}</name>`,
-            `    <description>${skill.description}</description>`,
+            `    <name>${escapeMetadata(skill.name)}</name>`,
+            `    <description>${escapeMetadata(skill.description)}</description>`,
             `    <location>${pathToFileURL(skill.location).href}</location>`,
             ...(auto ? [`    <note>This skill matches files in the current context. Consider loading it.</note>`] : []),
             "  </skill>",
@@ -239,7 +250,7 @@ export namespace Skill {
       "## Available Skills",
       ...list.map((skill) => {
         const marker = opts.recommended?.has(skill.name) ? " (recommended - matches current files)" : ""
-        return `- **${skill.name}**: ${skill.description}${marker}`
+        return `- **${escapeMetadata(skill.name)}**: ${escapeMetadata(skill.description)}${marker}`
       }),
     ].join("\n")
   }

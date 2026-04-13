@@ -6,6 +6,19 @@ import { Skill } from "../skill"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
 
+function escapeXmlAttribute(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+}
+
+function escapePromptMetadata(value: string) {
+  return escapeXmlAttribute(value).replace(/\s+/g, " ").trim()
+}
+
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const list = await Skill.available(ctx?.agent)
 
@@ -81,8 +94,8 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
       return {
         title: `Loaded skill: ${skill.name}`,
         output: [
-          `<skill_content name="${skill.name}">`,
-          `# Skill: ${skill.name}`,
+          `<skill_content name="${escapeXmlAttribute(skill.name)}">`,
+          `# Skill: ${escapePromptMetadata(skill.name)}`,
           "",
           skill.content.trim(),
           "",
