@@ -48,7 +48,8 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
   const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
 
   const sessions = createMemo(() => {
-    if (searchResults()) return searchResults()!
+    const results = searchResults()
+    if (results) return results
     if (props.workspaceID) return listed() ?? []
     if (props.localOnly) return sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory))
     return sync.data.session

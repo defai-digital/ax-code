@@ -26,22 +26,27 @@ export function DialogMessage(props: {
     const sid = props.sessionID as Parameters<typeof EventQuery.bySessionWithTimestamp>[0]
     return messageRoute(msg, sync.data.part[msg.id] ?? [], EventQuery.bySessionWithTimestamp(sid), sync.data.agent)
   })
+  const routeOptions = createMemo(() => {
+    const info = routeInfo()
+    if (!info) return []
+    return [
+      {
+        title: info.title,
+        value: "message.route",
+        description: info.description,
+        footer: info.footer,
+        category: "Routing",
+        onSelect: () => {},
+      },
+    ]
+  })
   const route = useRoute()
 
   return (
     <DialogSelect
       title="Message Actions"
       options={[
-        ...(routeInfo()
-          ? [{
-              title: routeInfo()!.title,
-              value: "message.route",
-              description: routeInfo()!.description,
-              footer: routeInfo()!.footer,
-              category: "Routing",
-              onSelect: () => {},
-            }]
-          : []),
+        ...routeOptions(),
         {
           title: "Revert",
           value: "session.revert",

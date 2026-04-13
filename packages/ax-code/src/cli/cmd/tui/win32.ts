@@ -30,14 +30,16 @@ export function win32DisableProcessedInput() {
   if (process.platform !== "win32") return
   if (!process.stdin.isTTY) return
   if (!load()) return
+  const api = k32
+  if (!api) return
 
-  const handle = k32!.symbols.GetStdHandle(STD_INPUT_HANDLE)
+  const handle = api.symbols.GetStdHandle(STD_INPUT_HANDLE)
   const buf = new Uint32Array(1)
-  if (k32!.symbols.GetConsoleMode(handle, ptr(buf)) === 0) return
+  if (api.symbols.GetConsoleMode(handle, ptr(buf)) === 0) return
 
-  const mode = buf[0]!
+  const mode = buf[0] ?? 0
   if ((mode & ENABLE_PROCESSED_INPUT) === 0) return
-  k32!.symbols.SetConsoleMode(handle, mode & ~ENABLE_PROCESSED_INPUT)
+  api.symbols.SetConsoleMode(handle, mode & ~ENABLE_PROCESSED_INPUT)
 }
 
 /**
@@ -47,9 +49,11 @@ export function win32FlushInputBuffer() {
   if (process.platform !== "win32") return
   if (!process.stdin.isTTY) return
   if (!load()) return
+  const api = k32
+  if (!api) return
 
-  const handle = k32!.symbols.GetStdHandle(STD_INPUT_HANDLE)
-  k32!.symbols.FlushConsoleInputBuffer(handle)
+  const handle = api.symbols.GetStdHandle(STD_INPUT_HANDLE)
+  api.symbols.FlushConsoleInputBuffer(handle)
 }
 
 let unhook: (() => void) | undefined
@@ -69,22 +73,24 @@ export function win32InstallCtrlCGuard() {
   if (process.platform !== "win32") return
   if (!process.stdin.isTTY) return
   if (!load()) return
+  const api = k32
+  if (!api) return
   if (unhook) return unhook
 
   const stdin = process.stdin as any
   const original = stdin.setRawMode
 
-  const handle = k32!.symbols.GetStdHandle(STD_INPUT_HANDLE)
+  const handle = api.symbols.GetStdHandle(STD_INPUT_HANDLE)
   const buf = new Uint32Array(1)
 
-  if (k32!.symbols.GetConsoleMode(handle, ptr(buf)) === 0) return
-  const initial = buf[0]!
+  if (api.symbols.GetConsoleMode(handle, ptr(buf)) === 0) return
+  const initial = buf[0] ?? 0
 
   const enforce = () => {
-    if (k32!.symbols.GetConsoleMode(handle, ptr(buf)) === 0) return
-    const mode = buf[0]!
+    if (api.symbols.GetConsoleMode(handle, ptr(buf)) === 0) return
+    const mode = buf[0] ?? 0
     if ((mode & ENABLE_PROCESSED_INPUT) === 0) return
-    k32!.symbols.SetConsoleMode(handle, mode & ~ENABLE_PROCESSED_INPUT)
+    api.symbols.SetConsoleMode(handle, mode & ~ENABLE_PROCESSED_INPUT)
   }
 
   // Some runtimes can re-apply console modes on the next tick; enforce twice.
@@ -121,7 +127,7 @@ export function win32InstallCtrlCGuard() {
       stdin.setRawMode = original
     }
 
-    k32!.symbols.SetConsoleMode(handle, initial)
+    api.symbols.SetConsoleMode(handle, initial)
     unhook = undefined
   }
 

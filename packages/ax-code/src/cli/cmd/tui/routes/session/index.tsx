@@ -738,7 +738,9 @@ export function Session() {
                 {(message, index) => (
                   <Switch>
                     <Match when={message.id === revert()?.messageID}>
-                      <RevertNotice count={revert()!.reverted.length} files={revert()!.diffFiles} />
+                      <Show when={revert()}>
+                        {(state) => <RevertNotice count={state().reverted.length} files={state().diffFiles} />}
+                      </Show>
                     </Match>
                     <Match when={revert()?.messageID && hiddenIDs().has(message.id)}>
                       <></>
@@ -1498,7 +1500,7 @@ function Write(props: ToolProps<typeof WriteTool>) {
   return (
     <Switch>
       <Match when={props.metadata.diagnostics !== undefined}>
-        <BlockTool title={"# Wrote " + normalize(props.input.filePath!)} part={props.part}>
+        <BlockTool title={"# Wrote " + normalize(props.input.filePath)} part={props.part}>
           <line_number fg={theme.textMuted} minWidth={3} paddingRight={1}>
             <SessionCodeRenderer
               display={display()}
@@ -1512,7 +1514,7 @@ function Write(props: ToolProps<typeof WriteTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="←" pending="Preparing write..." complete={props.input.filePath} part={props.part}>
-          Write {normalize(props.input.filePath!)}
+          Write {normalize(props.input.filePath)}
         </InlineTool>
       </Match>
     </Switch>
@@ -1549,7 +1551,7 @@ function Read(props: ToolProps<typeof ReadTool>) {
         spinner={isRunning()}
         part={props.part}
       >
-        Read {normalize(props.input.filePath!)} {detail(props.input, ["filePath"])}
+        Read {normalize(props.input.filePath)} {detail(props.input, ["filePath"])}
       </InlineTool>
       <For each={loaded()}>
         {(filepath) => (
@@ -1660,7 +1662,8 @@ function Task(props: ToolProps<typeof TaskTool>) {
 
     if (isRunning() && tools().length > 0) {
       // content[0] += ` · ${tools().length} toolcalls`
-      if (current()) content.push(`↳ ${Locale.titlecase(current()!.tool)} ${(current()!.state as any).title}`)
+      const active = current()
+      if (active) content.push(`↳ ${Locale.titlecase(active.tool)} ${(active.state as any).title}`)
       else content.push(`↳ ${tools().length} toolcalls`)
     }
 
@@ -1707,7 +1710,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
   return (
     <Switch>
       <Match when={props.metadata.diff !== undefined}>
-        <BlockTool title={"← Edit " + normalize(props.input.filePath!)} part={props.part}>
+        <BlockTool title={"← Edit " + normalize(props.input.filePath)} part={props.part}>
           <box paddingLeft={1}>
             <SessionDiffRenderer
               diff={diffContent()}
@@ -1732,7 +1735,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="←" pending="Preparing edit..." complete={props.input.filePath} part={props.part}>
-          Edit {normalize(props.input.filePath!)} {detail({ replaceAll: props.input.replaceAll })}
+          Edit {normalize(props.input.filePath)} {detail({ replaceAll: props.input.replaceAll })}
         </InlineTool>
       </Match>
     </Switch>

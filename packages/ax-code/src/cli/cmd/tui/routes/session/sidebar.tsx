@@ -265,16 +265,17 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
 
   return (
     <Show when={session()}>
-      <box
-        backgroundColor={theme.backgroundPanel}
-        width={42}
-        height="100%"
-        paddingTop={1}
-        paddingBottom={1}
-        paddingLeft={2}
-        paddingRight={2}
-        position={props.overlay ? "absolute" : "relative"}
-      >
+      {(session) => (
+        <box
+          backgroundColor={theme.backgroundPanel}
+          width={42}
+          height="100%"
+          paddingTop={1}
+          paddingBottom={1}
+          paddingLeft={2}
+          paddingRight={2}
+          position={props.overlay ? "absolute" : "relative"}
+        >
         <scrollbox
           flexGrow={1}
           verticalScrollbarOptions={{
@@ -287,10 +288,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
           <box flexShrink={0} gap={1} paddingRight={1}>
             <box paddingRight={1}>
               <text fg={theme.text}>
-                <b>{session()!.title}</b>
+                <b>{session().title}</b>
               </text>
-              <Show when={session()!.share?.url}>
-                <text fg={theme.textMuted}>{session()!.share!.url}</text>
+              <Show when={session().share?.url}>
+                {(url) => <text fg={theme.textMuted}>{url()}</text>}
               </Show>
             </box>
             <box>
@@ -306,30 +307,34 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   </>
                 }
               >
-                <box flexDirection="row" gap={1}>
-                  <text width={18} fg={theme.textMuted}>
-                    {context()?.tokens ?? 0} tokens
-                  </text>
-                  <text width={18} fg={theme.textMuted}>
-                    Elapsed {elapsed()}
-                  </text>
-                </box>
-                <box flexDirection="row" gap={1}>
-                  <text width={18} fg={usageBarColor()}>
-                    {usageBarHalf()}
-                  </text>
-                  <text width={18} fg={etaBarColor()}>
-                    {etaBarHalf()}
-                  </text>
-                </box>
-                <box flexDirection="row" gap={1}>
-                  <text width={18} fg={usageBarColor()}>
-                    📊 {context()?.percentage ?? 0}% used
-                  </text>
-                  <text width={18} fg={etaBarColor()}>
-                    ⏳ {eta()!.label}
-                  </text>
-                </box>
+                {(etaValue) => (
+                  <>
+                    <box flexDirection="row" gap={1}>
+                      <text width={18} fg={theme.textMuted}>
+                        {context()?.tokens ?? 0} tokens
+                      </text>
+                      <text width={18} fg={theme.textMuted}>
+                        Elapsed {elapsed()}
+                      </text>
+                    </box>
+                    <box flexDirection="row" gap={1}>
+                      <text width={18} fg={usageBarColor()}>
+                        {usageBarHalf()}
+                      </text>
+                      <text width={18} fg={etaBarColor()}>
+                        {etaBarHalf()}
+                      </text>
+                    </box>
+                    <box flexDirection="row" gap={1}>
+                      <text width={18} fg={usageBarColor()}>
+                        📊 {context()?.percentage ?? 0}% used
+                      </text>
+                      <text width={18} fg={etaBarColor()}>
+                        ⏳ {etaValue().label}
+                      </text>
+                    </box>
+                  </>
+                )}
               </Show>
               <Show when={(context()?.percentage ?? 0) >= 80}>
                 <text fg={(context()?.percentage ?? 0) >= 95 ? theme.error : theme.warning}>
@@ -729,7 +734,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             <span>v{Installation.VERSION}</span>
           </text>
         </box>
-      </box>
+        </box>
+      )}
     </Show>
   )
 }

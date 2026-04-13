@@ -48,9 +48,9 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
 
       if (defs[c] != null) {
         return resolveColor(defs[c])
-      } else if (theme.theme[c as keyof ThemeColors] !== undefined) {
-        return resolveColor(theme.theme[c as keyof ThemeColors]!)
       } else {
+        const referenced = theme.theme[c as keyof ThemeColors]
+        if (referenced !== undefined) return resolveColor(referenced)
         throw new Error(`Color reference "${c}" not found in defs or theme`)
       }
     }
@@ -69,9 +69,9 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
   ) as Partial<ThemeColors>
 
   // Handle selectedListItemText separately since it's optional
-  const hasSelectedListItemText = theme.theme.selectedListItemText !== undefined
-  if (hasSelectedListItemText) {
-    resolved.selectedListItemText = resolveColor(theme.theme.selectedListItemText!)
+  const selectedListItemText = theme.theme.selectedListItemText
+  if (selectedListItemText !== undefined) {
+    resolved.selectedListItemText = resolveColor(selectedListItemText)
   } else {
     // Backward compatibility: if selectedListItemText is not defined, use background color
     // This preserves the current behavior for all existing themes
@@ -90,7 +90,7 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
 
   return {
     ...resolved,
-    _hasSelectedListItemText: hasSelectedListItemText,
+    _hasSelectedListItemText: selectedListItemText !== undefined,
     thinkingOpacity,
   } as Theme
 }
@@ -330,8 +330,8 @@ export function tint(base: RGBA, overlay: RGBA, alpha: number): RGBA {
 }
 
 function generateSystem(colors: TerminalColors, mode: "dark" | "light"): ThemeJson {
-  const bg = RGBA.fromHex(colors.defaultBackground ?? colors.palette[0]!)
-  const fg = RGBA.fromHex(colors.defaultForeground ?? colors.palette[7]!)
+  const bg = RGBA.fromHex(colors.defaultBackground ?? colors.palette[0] ?? (mode === "dark" ? "#000000" : "#ffffff"))
+  const fg = RGBA.fromHex(colors.defaultForeground ?? colors.palette[7] ?? (mode === "dark" ? "#ffffff" : "#000000"))
   const transparent = RGBA.fromValues(bg.r, bg.g, bg.b, 0)
   const isDark = mode == "dark"
 

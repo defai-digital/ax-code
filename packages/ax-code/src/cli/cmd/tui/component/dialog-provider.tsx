@@ -215,14 +215,23 @@ export function createDialogProviderOptions() {
               dialog.clear()
               return
             }
-            if (result.data?.method === "code") {
+            const authorization = result.data
+            if (!authorization) {
+              toast.show({
+                variant: "error",
+                message: "Provider authorization returned no data",
+              })
+              dialog.clear()
+              return
+            }
+            if (authorization.method === "code") {
               dialog.replace(() => (
-                <CodeMethod providerID={provider.id} title={method.label} index={index} authorization={result.data!} />
+                <CodeMethod providerID={provider.id} title={method.label} index={index} authorization={authorization} />
               ))
             }
-            if (result.data?.method === "auto") {
+            if (authorization.method === "auto") {
               dialog.replace(() => (
-                <AutoMethod providerID={provider.id} title={method.label} index={index} authorization={result.data!} />
+                <AutoMethod providerID={provider.id} title={method.label} index={index} authorization={authorization} />
               ))
             }
           }

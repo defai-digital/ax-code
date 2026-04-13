@@ -61,7 +61,8 @@ export function dialogSelectRows(groups: [string, unknown[]][]) {
 }
 
 export function dialogSelectVisibleHeight(rows: number, terminalHeight: number) {
-  return Math.min(rows, Math.floor(terminalHeight / 2) - 6)
+  if (rows <= 0) return 0
+  return Math.max(1, Math.min(rows, Math.floor(terminalHeight / 2) - 6))
 }
 
 export function dialogSelectMoveIndex(current: number, direction: number, count: number) {
@@ -70,4 +71,11 @@ export function dialogSelectMoveIndex(current: number, direction: number, count:
   if (next < 0) next = count - 1
   if (next >= count) next = 0
   return next
+}
+
+export function dialogSelectClampIndex(current: number, count: number) {
+  if (count <= 0) return 0
+  if (current < 0) return 0
+  if (current >= count) return count - 1
+  return current
 }

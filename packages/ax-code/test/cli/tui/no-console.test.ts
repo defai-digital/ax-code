@@ -9,6 +9,10 @@ const PROMPT_SRC = path.join(TUI_SRC, "component/prompt/index.tsx")
 const SESSION_HEADER_SRC = path.join(TUI_SRC, "routes/session/header.tsx")
 const SESSION_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-message.tsx")
 const TIMELINE_FORK_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-fork-from-timeline.tsx")
+const PROVIDER_DIALOG_SRC = path.join(TUI_SRC, "component/dialog-provider.tsx")
+const SYNC_SRC = path.join(TUI_SRC, "context/sync.tsx")
+const WORKSPACE_SESSION_LIST_SRC = path.join(TUI_SRC, "component/workspace/dialog-session-list.tsx")
+const THEME_SRC = path.join(TUI_SRC, "context/theme.tsx")
 const CONSOLE_RE = /\bconsole\.(?:log|error|warn|debug)\b/
 
 async function files(dir: string): Promise<string[]> {
@@ -65,8 +69,36 @@ describe("tui console hygiene", () => {
   test("does not assume fork responses contain session data", async () => {
     const messageDialog = await fs.readFile(SESSION_DIALOG_SRC, "utf8")
     const timelineDialog = await fs.readFile(TIMELINE_FORK_DIALOG_SRC, "utf8")
+    const providerDialog = await fs.readFile(PROVIDER_DIALOG_SRC, "utf8")
 
     expect(messageDialog).not.toContain("result.data!")
     expect(timelineDialog).not.toContain("forked.data!")
+    expect(providerDialog).not.toContain("result.data!")
+  })
+
+  test("does not assume non-blocking sync responses contain data", async () => {
+    const sync = await fs.readFile(SYNC_SRC, "utf8")
+
+    expect(sync).not.toContain("sdk.client.lsp.status().then((x) => setStore(\"lsp\", reconcile(x.data!)))")
+    expect(sync).not.toContain("sdk.client.mcp.status().then((x) => setStore(\"mcp\", reconcile(x.data!)))")
+    expect(sync).not.toContain("sdk.client.formatter.status().then((x) => setStore(\"formatter\", reconcile(x.data!)))")
+    expect(sync).not.toContain("setStore(\"session_status\", reconcile(x.data!))")
+    expect(sync).not.toContain("sdk.client.path.get().then((x) => setStore(\"path\", reconcile(x.data!)))")
+    expect(sync).not.toContain("providersPromise.then((x) => x.data!)")
+    expect(sync).not.toContain("providerListPromise.then((x) => x.data!)")
+    expect(sync).not.toContain("configPromise.then((x) => x.data!)")
+  })
+
+  test("does not double-read optional workspace search resources", async () => {
+    const workspaceSessionList = await fs.readFile(WORKSPACE_SESSION_LIST_SRC, "utf8")
+
+    expect(workspaceSessionList).not.toContain("if (searchResults()) return searchResults()!")
+  })
+
+  test("keeps system theme generation tolerant of missing palette entries", async () => {
+    const theme = await fs.readFile(THEME_SRC, "utf8")
+
+    expect(theme).not.toContain("colors.palette[0]!")
+    expect(theme).not.toContain("colors.palette[7]!")
   })
 })

@@ -9,6 +9,7 @@ import { useKeybind } from "@tui/context/keybind"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
 import {
+  dialogSelectClampIndex,
   dialogSelectFlatOptions,
   dialogSelectGroupedOptions,
   dialogSelectMoveIndex,
@@ -99,6 +100,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   createEffect(() => {
     grouped()
     setStore("input", "keyboard")
+  })
+
+  createEffect(() => {
+    const next = dialogSelectClampIndex(store.selected, flat().length)
+    if (next !== store.selected) setStore("selected", next)
   })
 
   const rows = createMemo(() => dialogSelectRows(grouped()))

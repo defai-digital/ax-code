@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  dialogSelectClampIndex,
   dialogSelectFlatOptions,
   dialogSelectGroupedOptions,
   dialogSelectMoveIndex,
@@ -35,7 +36,11 @@ describe("tui dialog select view model", () => {
 
     expect(dialogSelectRows(grouped)).toBe(5)
     expect(dialogSelectVisibleHeight(20, 40)).toBe(14)
+    expect(dialogSelectVisibleHeight(20, 8)).toBe(1)
     expect(dialogSelectMoveIndex(0, -1, 2)).toBe(1)
     expect(dialogSelectMoveIndex(1, 1, 2)).toBe(0)
+    expect(dialogSelectClampIndex(5, 2)).toBe(1)
+    expect(dialogSelectClampIndex(-1, 2)).toBe(0)
+    expect(dialogSelectClampIndex(5, 0)).toBe(0)
   })
 })

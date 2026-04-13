@@ -163,10 +163,12 @@ export function DialogProvider(props: ParentProps) {
           !Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? () => Selection.copy(renderer, toast) : undefined
         }
       >
-        <Show when={value.stack.length}>
-          <Dialog onClose={() => value.clear()} size={value.size}>
-            {value.stack.at(-1)!.element}
-          </Dialog>
+        <Show when={value.stack.at(-1)}>
+          {(item) => (
+            <Dialog onClose={() => value.clear()} size={value.size}>
+              {item().element}
+            </Dialog>
+          )}
         </Show>
       </box>
     </ctx.Provider>
