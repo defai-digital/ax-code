@@ -692,6 +692,152 @@ export namespace LSP {
     return results
   }
 
+  // ─── Aggregated diagnostics (Semantic Trust v2 §S3) ────────────────
+  //
+  // AI-facing diagnostics surface. The raw `diagnostics()` above
+  // exposes unmerged per-server publishes; a polyglot project with
+  // (typescript + eslint) on the same file will return duplicate
+  // entries where the servers agree. Consumers then have to normalize
+  // severity (a numeric 1..4 in VSCode protocol) and dedup by
+  // (range, message) themselves.
+  //
+  // `diagnosticsAggregated` does both. Per-file iteration uses the
+  // per-client diagnostic Map that each LSPClient maintains via its
+  // publishDiagnostics notification handler (see client.ts) — no new
+  // subscription layer needed, the state is already kept by the
+  // client layer.
+  //
+  // Returns an envelope so AI consumers can see provenance (which
+  // servers contributed, timestamp, completeness, degraded) — same
+  // contract as every other v1/v2 AI-facing semantic API.
+
+  export type NormalizedSeverity = "error" | "warning" | "info" | "hint"
+
+  export type NormalizedDiagnostic = {
+    path: string
+    range: { start: { line: number; character: number }; end: { line: number; character: number } }
+    severity: NormalizedSeverity
+    message: string
+    source?: string
+    code?: string | number
+    // Servers that published this diagnostic. Usually one; >1 when
+    // multiple servers report the same (location, message) pair.
+    serverIDs: string[]
+  }
+
+  function normalizeSeverity(s: number | undefined): NormalizedSeverity {
+    // VSCode protocol: 1=error, 2=warning, 3=info, 4=hint. Omitted
+    // severity is client-interpretable per spec; we default to `info`
+    // on the grounds that an unclassified diagnostic shouldn't be
+    // silently upgraded to `error` nor downgraded to `hint`.
+    if (s === 1) return "error"
+    if (s === 2) return "warning"
+    if (s === 3) return "info"
+    if (s === 4) return "hint"
+    return "info"
+  }
+
+  function dedupKeyOf(path: string, d: LSPClient.Diagnostic): string {
+    const r = d.range
+    return [
+      path,
+      r.start.line,
+      r.start.character,
+      r.end.line,
+      r.end.character,
+      d.message,
+    ].join("\u0000")
+  }
+
+  // Pure aggregation kernel, exported for unit tests. Real call site
+  // is `diagnosticsAggregated` below, which just plumbs live clients
+  // and a timestamp into this function. Separating the pure logic
+  // from the Instance-bound state lookup makes aggregation semantics
+  // testable without standing up real LSP clients.
+  export type DiagnosticsAggregateInput = {
+    serverID: string
+    diagnostics: Map<string, LSPClient.Diagnostic[]>
+  }
+  export function aggregateDiagnosticsForTest(
+    inputs: DiagnosticsAggregateInput[],
+    opts: { file?: string; now: number },
+  ): SemanticEnvelope<NormalizedDiagnostic[]> {
+    if (inputs.length === 0) {
+      return {
+        data: [],
+        source: "lsp",
+        completeness: "empty",
+        timestamp: opts.now,
+        serverIDs: [],
+        degraded: false,
+      }
+    }
+
+    const byKey = new Map<string, { d: LSPClient.Diagnostic; path: string; serverIDs: string[] }>()
+    const participatingServerIDs = new Set<string>()
+
+    for (const { serverID, diagnostics: map } of inputs) {
+      let contributed = false
+      const entries = opts.file
+        ? map.has(opts.file)
+          ? [[opts.file, map.get(opts.file)!] as const]
+          : []
+        : [...map.entries()]
+      for (const [path, diags] of entries) {
+        for (const d of diags) {
+          const key = dedupKeyOf(path, d)
+          const existing = byKey.get(key)
+          if (existing) {
+            if (!existing.serverIDs.includes(serverID)) existing.serverIDs.push(serverID)
+          } else {
+            byKey.set(key, { d, path, serverIDs: [serverID] })
+          }
+          contributed = true
+        }
+      }
+      if (contributed) participatingServerIDs.add(serverID)
+    }
+
+    const data: NormalizedDiagnostic[] = [...byKey.values()].map(({ d, path, serverIDs }) => ({
+      path,
+      range: d.range,
+      severity: normalizeSeverity(d.severity),
+      message: d.message,
+      source: d.source,
+      code: d.code,
+      serverIDs,
+    }))
+
+    data.sort((a, b) => {
+      if (a.path !== b.path) return a.path < b.path ? -1 : 1
+      if (a.range.start.line !== b.range.start.line) return a.range.start.line - b.range.start.line
+      if (a.range.start.character !== b.range.start.character)
+        return a.range.start.character - b.range.start.character
+      return a.message < b.message ? -1 : a.message > b.message ? 1 : 0
+    })
+
+    return {
+      data,
+      source: "lsp",
+      completeness: "full",
+      timestamp: opts.now,
+      serverIDs: [...participatingServerIDs],
+      degraded: false,
+    }
+  }
+
+  // Aggregate diagnostics across all connected clients. Pass `file`
+  // to limit to a single file; omit to get everything.
+  export async function diagnosticsAggregated(file?: string): Promise<SemanticEnvelope<NormalizedDiagnostic[]>> {
+    return metered("diagnosticsAggregated", file ? { file } : {}, async () => {
+      const s = await state()
+      return aggregateDiagnosticsForTest(
+        s.clients.map((c) => ({ serverID: c.serverID, diagnostics: c.diagnostics })),
+        { file, now: Date.now() },
+      )
+    })
+  }
+
   export async function hoverEnvelope(input: {
     file: string
     line: number
@@ -785,17 +931,42 @@ export namespace LSP {
     timestamp: number
     serverIDs: string[]
     cacheKey?: string
+    // True when any participating server errored with a non-
+    // MethodNotFound failure, OR when the result is empty despite a
+    // matching file type that should have had a server. Set at write
+    // time. Downstream consumers use this as a single-bit warning
+    // without parsing completeness semantics.
+    degraded?: boolean
+  }
+
+  // Read-time freshness classification. Not stored on the envelope —
+  // consumers that care about "how old is this hit" call this helper
+  // with the envelope's timestamp. Thresholds chosen to match the
+  // cache TTL (24h) so a cached row, at the extreme end of its life,
+  // reads as `warm` rather than misleadingly `fresh`.
+  export type Freshness = "fresh" | "warm" | "stale"
+  const FRESH_THRESHOLD_MS = 60 * 1000
+  const WARM_THRESHOLD_MS = 24 * 60 * 60 * 1000
+
+  export function envelopeFreshness(envelope: { timestamp: number }, now: number = Date.now()): Freshness {
+    const age = now - envelope.timestamp
+    if (age < FRESH_THRESHOLD_MS) return "fresh"
+    if (age < WARM_THRESHOLD_MS) return "warm"
+    return "stale"
   }
 
   // Back-compat alias for the original workspaceSymbol-specific shape.
   // Existing tests and tool code read `envelope.symbols` via this alias;
-  // the generic shape above is preferred for new surfaces.
+  // the generic shape above is preferred for new surfaces. `degraded`
+  // is optional to preserve back-compat for consumers reading the
+  // original v1 shape.
   export type SymbolEnvelope = {
     symbols: LSP.Symbol[]
     source: "lsp"
     completeness: "full" | "partial" | "empty"
     timestamp: number
     serverIDs: string[]
+    degraded?: boolean
   }
 
   // ─── LSP response cache integration (S2) ────────────────────────────
@@ -864,6 +1035,11 @@ export namespace LSP {
       timestamp: row.time_created,
       serverIDs: row.server_ids_json,
       cacheKey: row.id,
+      // Cache only stores full-completeness rows (see cacheWrite
+      // guard). A cache hit therefore was not degraded at write time.
+      // Freshness is computed read-time via envelopeFreshness(), not
+      // written into this field.
+      degraded: false,
     }
   }
 
@@ -923,6 +1099,7 @@ export namespace LSP {
           completeness: "empty",
           timestamp: Date.now(),
           serverIDs: [],
+          degraded: false,
         }
       }
 
@@ -976,6 +1153,7 @@ export namespace LSP {
 
       const completeness: "full" | "partial" | "empty" =
         participatingServerIDs.length === 0 ? "empty" : failures === 0 ? "full" : "partial"
+      const degraded = failures > 0 || participatingServerIDs.length === 0
 
       return {
         symbols,
@@ -983,6 +1161,7 @@ export namespace LSP {
         completeness,
         timestamp: Date.now(),
         serverIDs: participatingServerIDs,
+        degraded,
       }
     })
   }
@@ -1274,6 +1453,7 @@ export namespace LSP {
         completeness: "empty",
         timestamp: Date.now(),
         serverIDs: [],
+        degraded: false,
       }
     }
 
@@ -1329,12 +1509,20 @@ export namespace LSP {
         : failures === 0
           ? "full"
           : "partial"
+    // degraded = any non-MethodNotFound failure, OR no server
+    // participated when the file type matched at least one server
+    // (the clients.length check above already short-circuits the
+    // "no matching server" case to plain empty; here, if we still
+    // got to zero participants, it means every matched server
+    // errored or returned MethodNotFound — a degraded state).
+    const degraded = failures > 0 || participatingServerIDs.length === 0
     return {
       data: reduce(successful),
       source: "lsp",
       completeness,
       timestamp: Date.now(),
       serverIDs: participatingServerIDs,
+      degraded,
     }
   }
 
