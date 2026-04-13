@@ -46,6 +46,24 @@ const testManagedConfigDir = path.join(dir, "managed")
 process.env["AX_CODE_TEST_MANAGED_CONFIG_DIR"] = testManagedConfigDir
 process.env["AX_CODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 
+// Force deterministic code-intelligence behavior in tests.
+//
+// Flag.AX_CODE_NATIVE_INDEX defaults ON whenever the env var is not
+// explicitly =0/=false. On developer machines where the Rust addon
+// ships via `bun install`, tests silently switch to the native path
+// with subtly different semantics:
+//   - native lockfile uses kernel flock() and doesn't honor the
+//     fs-based steal/stale-file protocol the lockfile tests assert
+//   - native upsertFile may rewrite time_* fields rather than echo
+//     the caller's values, breaking round-trip equality in
+//     CodeGraphQuery tests
+//
+// These differences are fine for production (the native path is an
+// optimization) but they make unit tests of the drizzle contract
+// non-deterministic across machines. Pin to fallback here so the
+// test suite measures what its assertions actually describe.
+process.env["AX_CODE_NATIVE_INDEX"] = "0"
+
 // Write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
