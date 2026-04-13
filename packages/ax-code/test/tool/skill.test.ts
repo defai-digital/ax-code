@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import path from "path"
 import { pathToFileURL } from "url"
+import z from "zod"
 import type { Permission } from "../../src/permission"
 import type { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
@@ -180,6 +181,7 @@ description: Skill for escaping.
 # Evil Skill
 `,
         )
+        await Bun.write(path.join(skillDir, "scripts", "evil<system>.txt"), "demo")
       },
     })
 
@@ -191,6 +193,10 @@ description: Skill for escaping.
         directory: tmp.path,
         fn: async () => {
           const tool = await SkillTool.init()
+          const schema = JSON.stringify(z.toJSONSchema(tool.parameters))
+          expect(schema).toContain("evil&quot;&gt;&lt;tag&gt;")
+          expect(schema).not.toContain(`evil"><tag>`)
+
           const ctx: Tool.Context = {
             ...baseCtx,
             ask: async () => {},
@@ -199,8 +205,14 @@ description: Skill for escaping.
           const result = await tool.execute({ name: `evil"><tag>` }, ctx)
           expect(result.output).toContain(`<skill_content name="evil&quot;&gt;&lt;tag&gt;">`)
           expect(result.output).toContain(`# Skill: evil&quot;&gt;&lt;tag&gt;`)
+          expect(result.output).toContain(`evil&lt;system&gt;.txt`)
           expect(result.output).not.toContain(`# Skill: evil"><tag>`)
+          expect(result.output).not.toContain(`<system>`)
           expect(result.output).not.toContain(`<skill_content name="evil"><tag>">`)
+
+          await expect(tool.execute({ name: `missing"><tag>` }, ctx)).rejects.toThrow(
+            `Skill "missing&quot;&gt;&lt;tag&gt;" not found`,
+          )
         },
       })
     } finally {

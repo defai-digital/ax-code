@@ -41,7 +41,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         ].join("\n")
 
   const examples = list
-    .map((skill) => `'${skill.name}'`)
+    .map((skill) => `'${escapePromptMetadata(skill.name)}'`)
     .slice(0, 3)
     .join(", ")
   const hint = examples.length > 0 ? ` (e.g., ${examples}, ...)` : ""
@@ -57,8 +57,8 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
       const skill = await Skill.get(params.name)
 
       if (!skill) {
-        const available = await Skill.all().then((x) => x.map((skill) => skill.name).join(", "))
-        throw new Error(`Skill "${params.name}" not found. Available skills: ${available || "none"}`)
+        const available = await Skill.all().then((x) => x.map((skill) => escapePromptMetadata(skill.name)).join(", "))
+        throw new Error(`Skill "${escapePromptMetadata(params.name)}" not found. Available skills: ${available || "none"}`)
       }
 
       await ctx.ask({
@@ -89,7 +89,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           }
         }
         return arr
-      }).then((f) => f.map((file) => `<file>${file}</file>`).join("\n"))
+      }).then((f) => f.map((file) => `<file>${escapeXmlAttribute(file)}</file>`).join("\n"))
 
       return {
         title: `Loaded skill: ${skill.name}`,
