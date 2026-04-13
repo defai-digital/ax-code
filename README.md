@@ -530,17 +530,24 @@ ax-code release check --skip typecheck   # comma-separated ids to skip (validate
 
 Exit codes: `0` (ok or warnings only), `1` (one or more failures), `2` (invocation error).
 
-**Opt-in pre-push hook.** If you want the check to run automatically when pushing a `release:` commit, add this to `.husky/pre-push`:
+**Opt-in pre-push hook.** If you want the check to run automatically when pushing a `release:` commit, add this to `.husky/pre-push` (and `chmod +x`):
 
 ```sh
 #!/usr/bin/env sh
 # Only gate on release commits — ordinary pushes are unaffected.
-if git log -1 --pretty=%s | grep -qE '^release: v[0-9]'; then
-  ax-code release check || exit 1
+if ! git log -1 --pretty=%s | grep -qE '^release: v[0-9]'; then
+  exit 0
 fi
+# Skip silently if ax-code isn't on PATH (contributors who haven't
+# installed the CLI globally should not be blocked from pushing).
+if ! command -v ax-code >/dev/null 2>&1; then
+  echo "pre-push: ax-code not on PATH, skipping release check" >&2
+  exit 0
+fi
+ax-code release check || exit 1
 ```
 
-Hook is **not installed by default** — releases should remain an explicit, reviewed action.
+Hook is **not installed by default** — releases should remain an explicit, reviewed action, and contributors without ax-code installed must not be blocked.
 
 ---
 

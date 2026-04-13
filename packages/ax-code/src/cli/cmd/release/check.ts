@@ -143,7 +143,13 @@ function mkResult(
 }
 
 async function findRepoRoot(): Promise<string> {
-  const result = await git(["rev-parse", "--show-toplevel"], { cwd: process.cwd() })
+  // Resolve from the user's actual shell cwd, not the CLI shim's internal cwd.
+  // The ax-code bin launcher forces --cwd into packages/ax-code/ for bun
+  // module resolution, so process.cwd() lies. callerCwd() reads
+  // AX_CODE_ORIGINAL_CWD which the launcher sets before exec'ing bun run.
+  // Fallback to process.cwd() when the env var isn't present (tests, SDK).
+  const startCwd = Filesystem.callerCwd()
+  const result = await git(["rev-parse", "--show-toplevel"], { cwd: startCwd })
   if (result.exitCode !== 0) {
     throw new Error("Not a git repository. Run `ax-code release check` from within ax-code.")
   }
