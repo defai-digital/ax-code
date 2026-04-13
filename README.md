@@ -516,6 +516,34 @@ Outputs are gitignored and rebuilt per machine; no CI/publishing setup is requir
 
 ---
 
+## Before You Release
+
+`ax-code release check` validates the conditions most likely to fail CI before you push a tag. It surfaces phantom imports, stale working trees, missing release notes, typecheck failures, and version regressions in one pass — each with a concrete remediation line.
+
+```bash
+ax-code release check                    # quick scan (~3s on this repo)
+ax-code release check --with-tests       # also runs the deterministic test group (~3 min)
+ax-code release check --fetch            # refresh origin/main before branch-sync check
+ax-code release check --json             # machine-readable output for scripts/hooks
+ax-code release check --skip typecheck   # comma-separated ids to skip (validated)
+```
+
+Exit codes: `0` (ok or warnings only), `1` (one or more failures), `2` (invocation error).
+
+**Opt-in pre-push hook.** If you want the check to run automatically when pushing a `release:` commit, add this to `.husky/pre-push`:
+
+```sh
+#!/usr/bin/env sh
+# Only gate on release commits — ordinary pushes are unaffected.
+if git log -1 --pretty=%s | grep -qE '^release: v[0-9]'; then
+  ax-code release check || exit 1
+fi
+```
+
+Hook is **not installed by default** — releases should remain an explicit, reviewed action.
+
+---
+
 ## Best Practices
 
 - **Always initialize context**: Run `ax-code init` (or `--depth full`) first in new projects to generate AGENTS.md for better agent understanding.
