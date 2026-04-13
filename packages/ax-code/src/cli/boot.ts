@@ -27,6 +27,7 @@ import { McpCommand } from "./cmd/mcp"
 import { MemoryCommand } from "./cmd/memory"
 import { ModelsCommand } from "./cmd/models"
 import { PrCommand } from "./cmd/pr"
+import { ReleaseCommand } from "./cmd/release"
 import { ProvidersCommand } from "./cmd/providers"
 import { RestartCommand } from "./cmd/restart"
 import { RunCommand } from "./cmd/run"
@@ -76,6 +77,7 @@ const cmds = [
   GraphCommand,
   PrCommand,
   InitCommand,
+  ReleaseCommand,
   SessionCommand,
   DbCommand,
   MemoryCommand,

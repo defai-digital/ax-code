@@ -1,0 +1,184 @@
+import { describe, expect, test } from "bun:test"
+import { mkdtemp, writeFile, mkdir } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import { Process } from "../../src/util/process"
+import {
+  releaseReadinessChecks,
+  runChecks,
+  type CheckContext,
+  type CheckResult,
+} from "../../src/cli/cmd/release/check"
+
+// ───── helpers ─────────────────────────────────────────────────────
+
+async function run(cmd: string, args: string[], cwd: string): Promise<number> {
+  const res = await Process.run([cmd, ...args], {
+    cwd,
+    stdin: "ignore",
+    nothrow: true,
+  }).catch(() => ({ code: 1 }))
+  return res.code
+}
+
+async function makeRepo(version: string, initialTag?: string) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ax-code-release-check-"))
+  // Emulate the repo layout runChecks expects: packages/ax-code/package.json
+  // and packages/ax-code/src/ with at least one file.
+  const axPath = path.join(dir, "packages", "ax-code")
+  const srcPath = path.join(axPath, "src")
+  await mkdir(srcPath, { recursive: true })
+  await writeFile(path.join(axPath, "package.json"), JSON.stringify({ name: "ax-code", version }))
+  await writeFile(path.join(srcPath, "entry.ts"), "export const x = 1\n")
+
+  await run("git", ["init", "-q", "-b", "main"], dir)
+  await run("git", ["config", "user.email", "t@t.t"], dir)
+  await run("git", ["config", "user.name", "t"], dir)
+  await run("git", ["add", "."], dir)
+  await run("git", ["commit", "-qm", "init"], dir)
+  if (initialTag) {
+    await run("git", ["tag", initialTag], dir)
+  }
+  return dir
+}
+
+function mkCtx(repoRoot: string, version: string, overrides: Partial<CheckContext> = {}): CheckContext {
+  return {
+    repoRoot,
+    version,
+    withTests: false,
+    // Skip the slow/network-heavy checks by default in unit tests.
+    skip: new Set(["typecheck", "tests", "remote-tag", "branch-sync", "workflow-changes"]),
+    ...overrides,
+  }
+}
+
+function find(results: CheckResult[], id: string): CheckResult {
+  const r = results.find((x) => x.id === id)
+  if (!r) throw new Error(`Missing result for ${id}: ${JSON.stringify(results.map((r) => r.id))}`)
+  return r
+}
+
+// ───── legacy surface (back-compat) ───────────────────────────────
+
+describe("release check command (legacy surface)", () => {
+  test("passes for the ax-code package", async () => {
+    const checks = await releaseReadinessChecks(path.resolve(import.meta.dir, "../.."))
+
+    expect(checks).toContainEqual({ name: "package name", status: "pass", details: "ax-code" })
+    expect(checks.find((check) => check.name === "package version")?.status).toBe("pass")
+  })
+
+  test("fails invalid semantic package versions", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ax-code-release-check-"))
+    await writeFile(path.join(dir, "package.json"), JSON.stringify({ name: "ax-code", version: "next" }))
+
+    const checks = await releaseReadinessChecks(dir)
+
+    expect(checks).toContainEqual({ name: "package version", status: "fail", details: "next" })
+  })
+})
+
+// ───── full check runner ──────────────────────────────────────────
+
+describe("release check (full checks)", () => {
+  test("clean repo with valid version and prior tag passes version check", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "version").status).toBe("ok")
+    expect(find(results, "working-tree").status).toBe("ok")
+    expect(find(results, "phantom-imports").status).toBe("ok")
+  })
+
+  test("version less than or equal to latest tag fails", async () => {
+    const repo = await makeRepo("2.21.3", "v2.21.4")
+    const results = await runChecks(mkCtx(repo, "2.21.3"))
+
+    expect(find(results, "version").status).toBe("fail")
+    expect(find(results, "version").detail).toContain("not greater than")
+  })
+
+  test("malformed version fails", async () => {
+    const repo = await makeRepo("2.21.4")
+    const results = await runChecks(mkCtx(repo, "not-a-version"))
+
+    expect(find(results, "version").status).toBe("fail")
+    expect(find(results, "version").detail).toContain("not valid semver")
+  })
+
+  test("no prior tag is ok", async () => {
+    const repo = await makeRepo("2.21.5")
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "version").status).toBe("ok")
+    expect(find(results, "commits").status).toBe("ok")
+  })
+
+  test("phantom import is detected", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    // Create an untracked file and have a tracked file reference it.
+    const srcPath = path.join(repo, "packages", "ax-code", "src")
+    await writeFile(path.join(srcPath, "untracked.ts"), "export const phantom = 1\n")
+    // Modify tracked file to import the untracked one, then commit only the import.
+    await writeFile(path.join(srcPath, "entry.ts"), 'import { phantom } from "./untracked"\nexport const x = phantom\n')
+    await run("git", ["add", "packages/ax-code/src/entry.ts"], repo)
+    await run("git", ["commit", "-qm", "phantom import"], repo)
+
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "phantom-imports").status).toBe("fail")
+    expect(find(results, "phantom-imports").detail).toContain("untracked")
+  })
+
+  test("dirty working tree in packages/ax-code fails", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const srcPath = path.join(repo, "packages", "ax-code", "src")
+    // Leave an uncommitted change.
+    await writeFile(path.join(srcPath, "entry.ts"), "export const x = 2\n")
+
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "working-tree").status).toBe("fail")
+    expect(find(results, "working-tree").detail).toContain("uncommitted")
+  })
+
+  test("missing release notes file warns", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "release-notes").status).toBe("warn")
+    expect(find(results, "release-notes").detail).toContain("no file at")
+  })
+
+  test("skip option omits a check", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const ctx = mkCtx(repo, "2.21.5", {
+      skip: new Set([
+        "typecheck",
+        "tests",
+        "remote-tag",
+        "branch-sync",
+        "workflow-changes",
+        "phantom-imports",
+      ]),
+    })
+    const results = await runChecks(ctx)
+
+    expect(find(results, "phantom-imports").status).toBe("skip")
+  })
+
+  test("tests check respects withTests=false", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const ctx = mkCtx(repo, "2.21.5", { withTests: false, skip: new Set(["typecheck"]) })
+    const results = await runChecks(ctx)
+
+    // `tests` is not in the skip set, but withTests=false should still skip it
+    // without spawning bun. Depending on where in the skip Set it lives, the
+    // runner returns either "skip" (from skip set) or the check returns "skip"
+    // itself (from withTests gate). Accept either: the key property is it did
+    // NOT actually run the deterministic suite.
+    const tests = results.find((r) => r.id === "tests")
+    expect(tests?.status).toBe("skip")
+  })
+})
