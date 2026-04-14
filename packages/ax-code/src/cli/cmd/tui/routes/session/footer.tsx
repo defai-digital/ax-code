@@ -99,7 +99,7 @@ export function Footer() {
                         (nodeCount > 0) so the chip never appears
                         while `ax-code index` is still required — the
                         sidebar owns that onboarding hint. */}
-                    <span style={{ fg: theme.success }}>◆</span> DRE ready
+                    <span style={{ fg: theme.success }}>◆</span> Trust ready
                   </Match>
                 </Switch>
               </text>

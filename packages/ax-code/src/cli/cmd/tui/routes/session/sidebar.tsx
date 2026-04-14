@@ -109,8 +109,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     mcp: true,
     diff: true,
     todo: true,
-    // DRE section defaults to expanded so users see the pending-plan
-    // list (or the "DRE is active" placeholder) immediately after
+    // Trust section defaults to expanded so users see readiness,
+    // risk signals, and pending plans immediately after
     // enabling the experimental flag. Collapses if the plan list
     // grows beyond 2 entries, same rule as Todo.
     dre: true,
@@ -449,22 +449,22 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       <text fg={theme.text}>{expanded.dre ? "▼" : "▶"}</text>
                     </Show>
                     <text fg={theme.text}>
-                      <b>DRE</b>
+                      <b>Trust</b>
                       <Show when={dre()}>
                         <span
                           style={{
                             fg:
-                              dre()!.level === "CRITICAL"
+                              dre()!.readiness === "blocked"
                                 ? theme.error
-                                : dre()!.level === "HIGH"
-                                  ? theme.warning
-                                  : dre()!.level === "MEDIUM"
+                                : dre()!.readiness === "needs_review"
+                                  ? theme.error
+                                  : dre()!.readiness === "needs_validation"
                                     ? theme.warning
                                     : theme.success,
                           }}
                         >
                           {" "}
-                          {dre()!.level.toLowerCase()} ({dre()!.score}/100)
+                          {dre()!.readiness.replaceAll("_", " ")}
                         </span>
                       </Show>
                     </text>
@@ -507,21 +507,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                             : "not indexed · run ax-code index"}
                     </text>
                   </box>
-                  {/* Session analysis — risk, decision, changes */}
+                  {/* Session trust signals — readiness, confidence, changes */}
                   <Show when={dre()}>
                     {(item) => (
                       <box flexDirection="column" gap={0}>
-                        <text fg={theme.textMuted}>
-                          {item().stats}
-                        </text>
-                        <text fg={theme.text} wrapMode="word">
-                          {item().decision}
-                        </text>
-                        <Show when={item().plan !== item().decision}>
-                          <text fg={theme.textMuted} wrapMode="word">
-                            {item().plan}
+                        <box flexDirection="row" gap={1}>
+                          <text fg={theme.textMuted}>
+                            risk {item().level.toLowerCase()} ({item().score}/100) · confidence {Math.round(item().confidence * 100)}%
                           </text>
-                        </Show>
+                        </box>
                         <Show when={semantic()}>
                           <box flexDirection="row" gap={1} marginTop={0}>
                             <text
@@ -541,6 +535,14 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                               {semantic()!.headline} · {semantic()!.risk} risk
                             </text>
                           </box>
+                        </Show>
+                        <text fg={theme.text} wrapMode="word">
+                          {item().decision}
+                        </text>
+                        <Show when={item().plan !== item().decision}>
+                          <text fg={theme.textMuted} wrapMode="word">
+                            {item().plan}
+                          </text>
                         </Show>
                         <Show when={item().drivers.length > 0}>
                           <For each={item().drivers}>
