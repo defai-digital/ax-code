@@ -84,6 +84,11 @@ export namespace Database {
     const db = init(Path)
 
     db.run("PRAGMA journal_mode = WAL")
+    // NORMAL (not FULL): ~10-20% faster writes. Trade-off: on an OS crash or
+    // power loss (not app crash), the most recently committed transaction may
+    // be silently rolled back. Acceptable for a local dev tool where the
+    // database remains consistent (no corruption) and only the last action
+    // is lost. Use FULL if write durability becomes critical.
     db.run("PRAGMA synchronous = NORMAL")
     db.run("PRAGMA busy_timeout = 15000")
     db.run("PRAGMA cache_size = -64000")
@@ -123,6 +128,22 @@ export namespace Database {
     effects: (() => void | Promise<void>)[]
   }>("database")
 
+  function runEffects(effects: (() => void | Promise<void>)[]) {
+    const errors: { index: number; error: unknown }[] = []
+    for (let i = 0; i < effects.length; i++) {
+      try { effects[i]() } catch (e) {
+        errors.push({ index: i, error: e })
+      }
+    }
+    if (errors.length > 0) {
+      log.warn("post-commit effects failed", {
+        failed: errors.length,
+        total: effects.length,
+        indices: errors.map((e) => e.index),
+      })
+    }
+  }
+
   export function use<T>(callback: (trx: TxOrDb) => T): T {
     try {
       return callback(ctx.use().tx)
@@ -130,11 +151,7 @@ export namespace Database {
       if (err instanceof Context.NotFound) {
         const effects: (() => void | Promise<void>)[] = []
         const result = ctx.provide({ effects, tx: Client() }, () => callback(Client()))
-        for (const effect of effects) {
-          try { effect() } catch (e) {
-            log.error("transactional effect failed after commit", { error: e })
-          }
-        }
+        runEffects(effects)
         return result
       }
       throw err
@@ -166,11 +183,7 @@ export namespace Database {
         const result = (Client().transaction as any)((tx: TxOrDb) => {
           return ctx.provide({ tx, effects }, () => callback(tx))
         })
-        for (const effect of effects) {
-          try { effect() } catch (e) {
-            log.error("transactional effect failed after commit", { error: e })
-          }
-        }
+        runEffects(effects)
         return result
       }
       throw err

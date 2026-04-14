@@ -133,6 +133,88 @@ export const BashTool = Tool.define("bash", async () => {
           command.push(child.text)
         }
 
+        // Commands that wrap or delegate to other commands.
+        // For shell invocations with -c, and eval, we parse the inner
+        // command string to extract paths. For source/., we resolve
+        // the script path. Arguments containing command substitution
+        // ($(...), `...`, ${...}) are opaque — flag the whole command.
+        if (["eval", "bash", "sh", "zsh", "source", "."].includes(command[0])) {
+          const isShellWithC =
+            ["bash", "sh", "zsh"].includes(command[0]) && command.includes("-c")
+          const isEval = command[0] === "eval"
+
+          // Collect the inner command string for eval / shell -c
+          let innerCmd: string | undefined
+          if (isShellWithC) {
+            const cIdx = command.indexOf("-c")
+            if (cIdx >= 0 && cIdx + 1 < command.length) {
+              // Strip surrounding quotes that tree-sitter may preserve
+              innerCmd = command[cIdx + 1].replace(/^["']|["']$/g, "")
+            }
+          } else if (isEval) {
+            // eval concatenates all its arguments into a single command
+            const evalArgs = command.slice(1).map((a) => a.replace(/^["']|["']$/g, ""))
+            if (evalArgs.length > 0) innerCmd = evalArgs.join(" ")
+          }
+
+          if (innerCmd) {
+            // Parse the inner command string to extract paths from
+            // known commands (rm, cat, etc.). Individual args that
+            // contain command substitution ($(...), `...`, ${...})
+            // are skipped since they can't be statically resolved —
+            // the outer bash permission prompt still fires as a
+            // safety net for those cases.
+            const p = await parser()
+            const innerTree = p.parse(innerCmd)
+            if (innerTree) {
+              for (const innerNode of innerTree.rootNode.descendantsOfType("command")) {
+                const innerParts: string[] = []
+                for (let j = 0; j < innerNode.childCount; j++) {
+                  const c = innerNode.child(j)
+                  if (!c) continue
+                  if (["command_name", "word", "string", "raw_string", "concatenation"].includes(c.type)) {
+                    innerParts.push(c.text)
+                  }
+                }
+                if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(innerParts[0])) {
+                  for (const innerArg of innerParts.slice(1)) {
+                    if (innerArg.startsWith("-") || (innerParts[0] === "chmod" && innerArg.startsWith("+"))) continue
+                    // Skip args with command substitution — can't resolve
+                    if (/\$\(|\$\{|`/.test(innerArg)) continue
+                    const resolved = await fs.realpath(path.resolve(cwd, innerArg)).catch(() => path.resolve(cwd, innerArg))
+                    if (resolved) {
+                      const normalized =
+                        process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
+                      resolvedPaths.add(normalized)
+                      if (!Instance.containsPath(normalized)) {
+                        const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
+                        directories.add(dir)
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // For source/. (not eval or shell -c), resolve args as file paths
+          if (!isShellWithC && !isEval) {
+            for (const arg of command.slice(1)) {
+              if (arg.startsWith("-")) continue
+              const resolved = await fs.realpath(path.resolve(cwd, arg)).catch(() => path.resolve(cwd, arg))
+              if (resolved) {
+                const normalized =
+                  process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
+                resolvedPaths.add(normalized)
+                if (!Instance.containsPath(normalized)) {
+                  const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
+                  directories.add(dir)
+                }
+              }
+            }
+          }
+        }
+
         // not an exhaustive list, but covers most common cases
         if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
           for (const arg of command.slice(1)) {

@@ -25,6 +25,11 @@ import { Database } from "@/storage/db"
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
   const log = Log.create({ service: "session.processor" })
+
+  /** Strip XML tags that could escape a <system-reminder> wrapper and inject arbitrary LLM instructions. */
+  function sanitizeForXmlTag(input: string): string {
+    return input.replace(/<\/?system-reminder\b[^>]*>/gi, "[tag-stripped]")
+  }
   const DELTA_BATCH_MS = 16
 
   /** Batches delta events by time window to reduce event fan-out */
@@ -72,6 +77,11 @@ export namespace SessionProcessor {
       return "{" + Object.keys(obj as Record<string, unknown>).sort().map((k) => JSON.stringify(k) + ":" + canonicalize((obj as Record<string, unknown>)[k])).join(",") + "}"
     }
     const recentToolRing: { tool: string; input: string }[] = []
+    // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
+    // Prevents runaway agent loops from exhausting resources or burning LLM quota.
+    const RATE_LIMIT_WINDOW_MS = 10_000
+    const RATE_LIMIT_MAX_CALLS = 30
+    const toolCallTimestamps: number[] = []
     const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
     const partBase = () => ({
       id: PartID.ascending(),
@@ -190,6 +200,24 @@ export namespace SessionProcessor {
 
                 case "tool-call": {
                   usedTools = true
+                  // Rate limit: prune timestamps outside the window, then check
+                  const now = Date.now()
+                  while (toolCallTimestamps.length > 0 && toolCallTimestamps[0]! < now - RATE_LIMIT_WINDOW_MS) {
+                    toolCallTimestamps.shift()
+                  }
+                  if (toolCallTimestamps.length >= RATE_LIMIT_MAX_CALLS) {
+                    log.warn("tool call rate limit exceeded", {
+                      sessionID: input.sessionID,
+                      tool: value.toolName,
+                      callsInWindow: toolCallTimestamps.length,
+                    })
+                    throw new Error(
+                      `Tool call rate limit exceeded: ${RATE_LIMIT_MAX_CALLS} calls in ${RATE_LIMIT_WINDOW_MS / 1000}s. ` +
+                      "This may indicate a runaway agent loop.",
+                    )
+                  }
+                  toolCallTimestamps.push(now)
+
                   stepParts.push({ type: "tool_call", callID: value.toolCallId, tool: value.toolName, input: value.input as Record<string, unknown> })
                   Recorder.emit({
                     type: "tool.call",
@@ -335,7 +363,9 @@ export namespace SessionProcessor {
                           strategy: correction.signal.strategy,
                           attempt: correction.signal.attempt,
                         })
-                        annotatedError = `${errorMsg}\n\n<system-reminder>\n${correction.prompt}\n</system-reminder>`
+                        // Sanitize error message to prevent prompt injection via
+                        // tool output containing closing/opening system-reminder tags.
+                        annotatedError = `${sanitizeForXmlTag(errorMsg)}\n\n<system-reminder>\n${correction.prompt}\n</system-reminder>`
                       }
                     }
 

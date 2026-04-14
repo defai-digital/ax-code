@@ -94,11 +94,18 @@ export namespace Session {
       },
     })
     if (next.success) return next.data
-    log.warn("invalid session row", {
+    log.error("invalid session row — session will not appear in list views", {
       sessionID: row.id,
-      issue: next.error.issues.length,
+      issues: next.error.issues.map((i) => ({
+        path: i.path.join("."),
+        code: i.code,
+        message: i.message,
+      })),
     })
   }
+
+  /** Count of sessions skipped due to schema validation failures in the most recent list call. */
+  export let lastSkippedCount = 0
 
   export function fromRow(row: SessionRow): Info {
     const next = parseRow(row)
@@ -553,9 +560,15 @@ export namespace Session {
         .limit(limit)
         .all(),
     )
+    let skipped = 0
     for (const row of rows) {
       const next = parseRow(row)
       if (next) yield next
+      else skipped++
+    }
+    lastSkippedCount = skipped
+    if (skipped > 0) {
+      log.warn("sessions skipped due to schema validation failure", { skipped })
     }
   }
 
@@ -622,11 +635,19 @@ export namespace Session {
       }
     }
 
+    let skipped = 0
     for (const row of rows) {
       const next = parseRow(row)
-      if (!next) continue
+      if (!next) {
+        skipped++
+        continue
+      }
       const project = projects.get(row.project_id) ?? null
       yield { ...next, project }
+    }
+    lastSkippedCount = skipped
+    if (skipped > 0) {
+      log.warn("sessions skipped due to schema validation failure", { skipped })
     }
   }
 

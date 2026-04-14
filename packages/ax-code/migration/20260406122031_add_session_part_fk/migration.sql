@@ -1,4 +1,9 @@
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
+-- Pre-clean orphaned rows: PRAGMA foreign_keys=OFF is a no-op inside
+-- drizzle's transaction wrapper, so FK enforcement stays ON.  Delete
+-- orphaned rows first so the INSERT into the FK-constrained table succeeds.
+DELETE FROM `session` WHERE `project_id` NOT IN (SELECT `id` FROM `project`);--> statement-breakpoint
+UPDATE `session` SET `workspace_id` = NULL WHERE `workspace_id` IS NOT NULL AND `workspace_id` NOT IN (SELECT `id` FROM `workspace`);--> statement-breakpoint
 CREATE TABLE `__new_session` (
 	`id` text PRIMARY KEY,
 	`project_id` text NOT NULL,
@@ -31,6 +36,7 @@ CREATE INDEX `session_parent_idx` ON `session` (`parent_id`);--> statement-break
 CREATE INDEX `session_workspace_idx` ON `session` (`workspace_id`);--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
+DELETE FROM `workspace` WHERE `project_id` NOT IN (SELECT `id` FROM `project`);--> statement-breakpoint
 CREATE TABLE `__new_workspace` (
 	`id` text PRIMARY KEY,
 	`branch` text,
@@ -47,6 +53,8 @@ DROP TABLE `workspace`;--> statement-breakpoint
 ALTER TABLE `__new_workspace` RENAME TO `workspace`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
+DELETE FROM `part` WHERE `message_id` NOT IN (SELECT `id` FROM `message`);--> statement-breakpoint
+DELETE FROM `part` WHERE `session_id` NOT IN (SELECT `id` FROM `session`);--> statement-breakpoint
 CREATE TABLE `__new_part` (
 	`id` text PRIMARY KEY,
 	`message_id` text NOT NULL,

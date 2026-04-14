@@ -1,4 +1,9 @@
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
+-- Pre-clean orphaned rows: PRAGMA foreign_keys=OFF is a no-op inside
+-- drizzle's transaction wrapper, so FK enforcement stays ON.
+UPDATE `session` SET `parent_id` = NULL WHERE `parent_id` IS NOT NULL AND `parent_id` NOT IN (SELECT `id` FROM `session`);--> statement-breakpoint
+DELETE FROM `session` WHERE `project_id` NOT IN (SELECT `id` FROM `project`);--> statement-breakpoint
+UPDATE `session` SET `workspace_id` = NULL WHERE `workspace_id` IS NOT NULL AND `workspace_id` NOT IN (SELECT `id` FROM `workspace`);--> statement-breakpoint
 CREATE TABLE `__new_session` (
 	`id` text PRIMARY KEY,
 	`project_id` text NOT NULL,
@@ -30,4 +35,5 @@ ALTER TABLE `__new_session` RENAME TO `session`;--> statement-breakpoint
 CREATE INDEX `session_project_idx` ON `session` (`project_id`);--> statement-breakpoint
 CREATE INDEX `session_parent_idx` ON `session` (`parent_id`);--> statement-breakpoint
 CREATE INDEX `session_workspace_idx` ON `session` (`workspace_id`);--> statement-breakpoint
-CREATE INDEX `session_time_updated_idx` ON `session` (`time_updated`);
+CREATE INDEX `session_time_updated_idx` ON `session` (`time_updated`);--> statement-breakpoint
+PRAGMA foreign_keys=ON;
