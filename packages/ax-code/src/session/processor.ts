@@ -292,6 +292,7 @@ export namespace SessionProcessor {
                       callID: value.toolCallId,
                       status: "completed",
                       output: typeof value.output.output === "string" ? value.output.output.slice(0, 1000) : undefined,
+                      metadata: value.output.metadata,
                       durationMs: toolEndTime - match.state.time.start,
                       stepIndex: attempt,
                       deterministic: false,

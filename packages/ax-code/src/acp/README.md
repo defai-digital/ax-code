@@ -1,6 +1,11 @@
 # ACP (Agent Client Protocol) Implementation
 
-This directory contains a clean, protocol-compliant implementation of the [Agent Client Protocol](https://agentclientprotocol.com/) for ax-code.
+Status: Experimental / partial protocol surface
+Scope: current implementation notes, not a full compliance claim
+Last reviewed: 2026-04-13
+Owner: ax-code runtime
+
+This directory contains ax-code's current [Agent Client Protocol](https://agentclientprotocol.com/) integration surface. It implements the core session/prompt flow and selected client capabilities, but some protocol areas remain stubs or partial implementations.
 
 ## Architecture
 
@@ -12,12 +17,12 @@ The implementation follows a clean separation of concerns:
   - Handles initialization and capability negotiation
   - Manages session lifecycle (`session/new`, `session/load`)
   - Processes prompts and returns responses
-  - Properly implements ACP protocol v1
+  - Implements the ACP v1 request/response flow used today
 
 - **`client.ts`** - Implements the `Client` interface for client-side capabilities
   - File operations (`readTextFile`, `writeTextFile`)
   - Permission requests (auto-approves for now)
-  - Terminal support (stub implementation)
+  - Terminal capability placeholder (no full terminal bridge yet)
 
 - **`session.ts`** - Session state management
   - Creates and tracks ACP sessions
@@ -77,15 +82,15 @@ Add to your Zed configuration (`~/.config/zed/settings.json`):
 }
 ```
 
-## Protocol Compliance
+## Implemented Protocol Surface
 
-This implementation follows the ACP specification v1:
+This implementation follows the ACP specification v1 for the features listed below. Items marked as stubs are advertised for forward compatibility but are not full end-user features yet.
 
 ✅ **Initialization**
 
 - Proper `initialize` request/response with protocol version negotiation
 - Capability advertisement (`agentCapabilities`)
-- Authentication support (stub)
+- Authentication field present, but no real auth flow yet
 
 ✅ **Session Management**
 
@@ -104,7 +109,7 @@ This implementation follows the ACP specification v1:
 
 - File read/write operations
 - Permission requests
-- Terminal support (stub for future)
+- Terminal capability placeholder only
 
 ## Current Limitations
 
@@ -114,7 +119,7 @@ This implementation follows the ACP specification v1:
 2. **Tool Call Reporting** - Doesn't report tool execution progress
 3. **Session Modes** - No mode switching support yet
 4. **Authentication** - No actual auth implementation
-5. **Terminal Support** - Placeholder only
+5. **Terminal Support** - Placeholder only, not a full ACP terminal bridge
 6. **Session Persistence** - `session/load` doesn't restore actual conversation history
 
 ### Future Enhancements
@@ -142,7 +147,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 We use `@agentclientprotocol/sdk` instead of implementing JSON-RPC ourselves because:
 
-- Ensures protocol compliance
+- Keeps wire-format handling aligned with the protocol SDK
 - Handles edge cases and future protocol versions
 - Reduces maintenance burden
 - Works with other ACP clients automatically

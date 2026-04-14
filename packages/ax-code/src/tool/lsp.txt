@@ -1,4 +1,4 @@
-Interact with Language Server Protocol (LSP) servers to get code intelligence features.
+Interact with live Language Server Protocol (LSP) servers for fresh semantic answers. This is the live side of AX Code's semantic layer; the indexed graph side is exposed separately through `code_intelligence`.
 
 Supported operations:
 - goToDefinition: Find where a symbol is defined
@@ -6,6 +6,7 @@ Supported operations:
 - hover: Get hover information (documentation, type info) for a symbol
 - documentSymbol: Get all symbols (functions, classes, variables) in a document
 - workspaceSymbol: Search for symbols across the entire workspace
+- diagnosticsAggregated: Get the current deduplicated, severity-normalized diagnostics across connected LSP servers
 - goToImplementation: Find implementations of an interface or abstract method
 - prepareCallHierarchy: Get call hierarchy item at a position (functions/methods)
 - incomingCalls: Find all functions/methods that call the function at a position
@@ -18,5 +19,9 @@ Most operations require:
 
 workspaceSymbol requires:
 - query: The workspace symbol search string
+
+diagnosticsAggregated requires:
+- no line/character
+- optional filePath to limit the result to one file
 
 Note: LSP servers must be configured for the file type. If no server is available, an error will be returned.

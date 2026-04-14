@@ -34,6 +34,7 @@ const operations = [
   "hover",
   "documentSymbol",
   "workspaceSymbol",
+  "diagnosticsAggregated",
   "goToImplementation",
   "prepareCallHierarchy",
   "incomingCalls",
@@ -133,6 +134,61 @@ export const LspTool = Tool.define("lsp", {
         metadata,
         output,
       }
+      }
+
+    if (args.operation === "diagnosticsAggregated") {
+      await ctx.ask({
+        permission: "lsp",
+        patterns: ["*"],
+        always: ["*"],
+        metadata: {},
+      })
+
+      let file: string | undefined
+      if (args.filePath) {
+        file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
+        await assertExternalDirectory(ctx, file)
+        const exists = await Filesystem.exists(file)
+        if (!exists) {
+          audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "FileNotFound" })
+          throw new Error(`File not found: ${file}`)
+        }
+
+        const available = await LSP.hasClients(file)
+        if (!available) {
+          audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "NoServerAvailable" })
+          throw new Error("No LSP server available for this file type.")
+        }
+
+        const opened = await LSP.touchFile(file, true)
+        if (opened === 0) {
+          audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "ServerStartFailed" })
+          throw new Error("LSP server matched this file type but could not be started or did not accept the file.")
+        }
+      }
+
+      let envelope: Awaited<ReturnType<typeof LSP.diagnosticsAggregated>>
+      try {
+        envelope = await LSP.diagnosticsAggregated(file)
+      } catch (err) {
+        audit({
+          operation: "diagnosticsAggregated",
+          args,
+          envelope: syntheticEnvelope([]),
+          errorCode: err instanceof Error ? err.name : "UnknownError",
+        })
+        throw err
+      }
+      audit({ operation: "diagnosticsAggregated", args, envelope })
+      const output =
+        envelope.data.length === 0
+          ? `No aggregated diagnostics found${file ? ` for ${path.relative(Instance.worktree, file)}` : ""}`
+          : JSON.stringify(envelope, null, 2)
+      return {
+        title: file ? `diagnosticsAggregated ${path.relative(Instance.worktree, file)}` : "diagnosticsAggregated",
+        metadata: { envelope },
+        output,
+      }
     }
 
     if (!args.filePath) {
@@ -216,13 +272,13 @@ export const LspTool = Tool.define("lsp", {
           case "documentSymbol":
             return LSP.documentSymbolEnvelope(uri)
           case "goToImplementation":
-            return syntheticEnvelope(await LSP.implementation(position))
+            return LSP.implementationEnvelope(position)
           case "prepareCallHierarchy":
-            return syntheticEnvelope(await LSP.prepareCallHierarchy(position))
+            return LSP.prepareCallHierarchyEnvelope(position)
           case "incomingCalls":
-            return syntheticEnvelope(await LSP.incomingCalls(position))
+            return LSP.incomingCallsEnvelope(position)
           case "outgoingCalls":
-            return syntheticEnvelope(await LSP.outgoingCalls(position))
+            return LSP.outgoingCallsEnvelope(position)
           default:
             return syntheticEnvelope([])
         }

@@ -12,6 +12,7 @@ export const AuditRecord = z.object({
   action: z.string().optional(),
   target: z.string().optional(),
   result: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   duration_ms: z.number().optional(),
   token_usage: z
     .object({

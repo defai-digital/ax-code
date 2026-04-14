@@ -135,6 +135,7 @@ export namespace Replay {
           status: event.status,
           output: event.output,
           error: event.error,
+          metadata: event.metadata,
         })
       }
       if (event.type === "step.finish") {
@@ -160,6 +161,7 @@ export namespace Replay {
       status: "completed" | "error"
       output?: string
       error?: string
+      metadata?: Record<string, unknown>
     }>
     finishReason: string
     usage: { inputTokens: number, outputTokens: number }
@@ -198,7 +200,7 @@ export namespace Replay {
                 type: "tool-result",
                 toolCallId: part.callID,
                 input: part.input,
-                output: { output: result.output ?? "", title: part.tool, metadata: {}, attachments: [] },
+                output: { output: result.output ?? "", title: part.tool, metadata: result.metadata ?? {}, attachments: [] },
               }
             } else {
               yield {

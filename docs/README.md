@@ -1,12 +1,14 @@
 # AX Code Documentation
 
-This folder holds **product-facing** documentation: user guides, architecture policies, specs, and reference material. Development-stage planning (PRDs, ADRs, research) lives in `automatosx/` at the repo root.
+This folder holds **product-facing** documentation: user guides, architecture policies, specs, and reference material. Development-stage planning documents live outside the public docs surface and should not be referenced as shipped product documentation.
 
 ## Architecture
 
 | Document                                               | Summary                                                                          |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| [Semantic Layer](architecture/semantic-layer.md)       | Current semantic contract: LSP vs graph surfaces, provenance, and audit/replay boundaries |
 | [Repository Structure](architecture/repo-structure.md) | Canonical repo layout, dependency rules, hotspot folders, and placement guidance |
+| [Documentation Policy](architecture/documentation-policy.md) | Status model, source-of-truth rules, and drift-prevention checklist for docs |
 | [Testing Policy](architecture/testing-policy.md)       | Default test layout by package type and when tests are required                  |
 
 ## Guides
@@ -33,10 +35,6 @@ Machine-readable policy examples live in [`policies/`](policies/).
 
 ## Development-Stage Documents
 
-PRDs, ADRs, and temporary reports are in `automatosx/` (gitignored, not shipped):
+PRDs, ADRs, and temporary reports belong to the internal planning workspace, not the public documentation surface.
 
-- `automatosx/prd/` — Product requirement documents
-- `automatosx/adr/` — Architecture decision records
-- `automatosx/tmp/` — Temporary reports and research
-
-Use `/prd` and `/adr` slash commands to create new documents — they write to the correct location automatically.
+Important rule: proposal and historical documents should still carry explicit status labels such as `Draft`, `Implemented`, or `Superseded` so internal planning text is not mistaken for current product behavior.

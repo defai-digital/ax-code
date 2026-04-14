@@ -70,9 +70,33 @@ async function rerun(args: RecordedArgs): Promise<RecordedEnvelope> {
       const uri = pathToFileURL(args.filePath!).href
       return (await LSP.documentSymbolEnvelope(uri)) as unknown as RecordedEnvelope
     }
+    case "goToImplementation":
+      return (await LSP.implementationEnvelope({
+        file: args.filePath!,
+        line: (args.line ?? 1) - 1,
+        character: (args.character ?? 1) - 1,
+      })) as unknown as RecordedEnvelope
+    case "prepareCallHierarchy":
+      return (await LSP.prepareCallHierarchyEnvelope({
+        file: args.filePath!,
+        line: (args.line ?? 1) - 1,
+        character: (args.character ?? 1) - 1,
+      })) as unknown as RecordedEnvelope
+    case "incomingCalls":
+      return (await LSP.incomingCallsEnvelope({
+        file: args.filePath!,
+        line: (args.line ?? 1) - 1,
+        character: (args.character ?? 1) - 1,
+      })) as unknown as RecordedEnvelope
+    case "outgoingCalls":
+      return (await LSP.outgoingCallsEnvelope({
+        file: args.filePath!,
+        line: (args.line ?? 1) - 1,
+        character: (args.character ?? 1) - 1,
+      })) as unknown as RecordedEnvelope
     default:
       throw new Error(
-        `replay not yet supported for operation "${args.operation}". Envelope-returning variants only cover references/documentSymbol/hover/definition/workspaceSymbol in S1.`,
+        `replay not yet supported for operation "${args.operation}". Envelope-returning variants only cover the operations exposed by the semantic LSP surface.`,
       )
   }
 }

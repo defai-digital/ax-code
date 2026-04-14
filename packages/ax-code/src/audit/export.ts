@@ -59,6 +59,7 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
           : event.output
           ? summarizeText(event.output, 500)
           : event.status,
+        metadata: event.metadata,
         duration_ms: event.durationMs,
       }
     case "step.start":

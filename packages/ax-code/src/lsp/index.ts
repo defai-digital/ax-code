@@ -1328,61 +1328,117 @@ export namespace LSP {
   }
 
   export async function implementation(input: { file: string; line: number; character: number }) {
-    return run(input.file, (client) =>
-      withTimeout(
-        client.connection.sendRequest("textDocument/implementation", {
-          textDocument: { uri: pathToFileURL(input.file).href },
-          position: { line: input.line, character: input.character },
-        }),
-        RPC_TIMEOUT_MS,
-      ).catch(() => null),
-    ).then((result) => result.flat().filter(Boolean))
+    const envelope = await implementationEnvelope(input)
+    return envelope.data
+  }
+
+  export async function implementationEnvelope(input: {
+    file: string
+    line: number
+    character: number
+  }): Promise<SemanticEnvelope<unknown[]>> {
+    return metered("implementation", { file: input.file }, async () =>
+      runWithEnvelope(
+        input.file,
+        (client) =>
+          withTimeout(
+            client.connection.sendRequest("textDocument/implementation", {
+              textDocument: { uri: pathToFileURL(input.file).href },
+              position: { line: input.line, character: input.character },
+            }),
+            RPC_TIMEOUT_MS,
+          ) as Promise<unknown>,
+        (results) => (results as unknown[]).flat().filter(Boolean),
+        [] as unknown[],
+      ),
+    )
   }
 
   export async function prepareCallHierarchy(input: { file: string; line: number; character: number }) {
-    return run(input.file, (client) =>
-      withTimeout(
-        client.connection.sendRequest("textDocument/prepareCallHierarchy", {
-          textDocument: { uri: pathToFileURL(input.file).href },
-          position: { line: input.line, character: input.character },
-        }),
-        RPC_TIMEOUT_MS,
-      ).catch(() => []),
-    ).then((result) => result.flat().filter(Boolean))
+    const envelope = await prepareCallHierarchyEnvelope(input)
+    return envelope.data
+  }
+
+  export async function prepareCallHierarchyEnvelope(input: {
+    file: string
+    line: number
+    character: number
+  }): Promise<SemanticEnvelope<unknown[]>> {
+    return metered("prepareCallHierarchy", { file: input.file }, async () =>
+      runWithEnvelope(
+        input.file,
+        (client) =>
+          withTimeout(
+            client.connection.sendRequest("textDocument/prepareCallHierarchy", {
+              textDocument: { uri: pathToFileURL(input.file).href },
+              position: { line: input.line, character: input.character },
+            }),
+            RPC_TIMEOUT_MS,
+          ) as Promise<unknown>,
+        (results) => (results as unknown[]).flat().filter(Boolean),
+        [] as unknown[],
+      ),
+    )
   }
 
   export async function incomingCalls(input: { file: string; line: number; character: number }) {
-    return run(input.file, async (client) => {
-      const items = (await withTimeout(
-        client.connection.sendRequest("textDocument/prepareCallHierarchy", {
-          textDocument: { uri: pathToFileURL(input.file).href },
-          position: { line: input.line, character: input.character },
-        }),
-        RPC_TIMEOUT_MS,
-      ).catch(() => [])) as unknown[]
-      if (!items?.length) return []
-      return withTimeout(
-        client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }),
-        RPC_TIMEOUT_MS,
-      ).catch(() => [])
-    }).then((result) => result.flat().filter(Boolean))
+    const envelope = await incomingCallsEnvelope(input)
+    return envelope.data
+  }
+
+  export async function incomingCallsEnvelope(input: {
+    file: string
+    line: number
+    character: number
+  }): Promise<SemanticEnvelope<unknown[]>> {
+    return metered("incomingCalls", { file: input.file }, async () =>
+      runWithEnvelope(
+        input.file,
+        async (client) => {
+          const items = (await withTimeout(
+            client.connection.sendRequest("textDocument/prepareCallHierarchy", {
+              textDocument: { uri: pathToFileURL(input.file).href },
+              position: { line: input.line, character: input.character },
+            }),
+            RPC_TIMEOUT_MS,
+          )) as unknown[]
+          if (!items?.length) return []
+          return withTimeout(client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }), RPC_TIMEOUT_MS)
+        },
+        (results) => (results as unknown[]).flat().filter(Boolean),
+        [] as unknown[],
+      ),
+    )
   }
 
   export async function outgoingCalls(input: { file: string; line: number; character: number }) {
-    return run(input.file, async (client) => {
-      const items = (await withTimeout(
-        client.connection.sendRequest("textDocument/prepareCallHierarchy", {
-          textDocument: { uri: pathToFileURL(input.file).href },
-          position: { line: input.line, character: input.character },
-        }),
-        RPC_TIMEOUT_MS,
-      ).catch(() => [])) as unknown[]
-      if (!items?.length) return []
-      return withTimeout(
-        client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }),
-        RPC_TIMEOUT_MS,
-      ).catch(() => [])
-    }).then((result) => result.flat().filter(Boolean))
+    const envelope = await outgoingCallsEnvelope(input)
+    return envelope.data
+  }
+
+  export async function outgoingCallsEnvelope(input: {
+    file: string
+    line: number
+    character: number
+  }): Promise<SemanticEnvelope<unknown[]>> {
+    return metered("outgoingCalls", { file: input.file }, async () =>
+      runWithEnvelope(
+        input.file,
+        async (client) => {
+          const items = (await withTimeout(
+            client.connection.sendRequest("textDocument/prepareCallHierarchy", {
+              textDocument: { uri: pathToFileURL(input.file).href },
+              position: { line: input.line, character: input.character },
+            }),
+            RPC_TIMEOUT_MS,
+          )) as unknown[]
+          if (!items?.length) return []
+          return withTimeout(client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }), RPC_TIMEOUT_MS)
+        },
+        (results) => (results as unknown[]).flat().filter(Boolean),
+        [] as unknown[],
+      ),
+    )
   }
 
   // Per-client catch so one failing LSP client (e.g. gopls crashed

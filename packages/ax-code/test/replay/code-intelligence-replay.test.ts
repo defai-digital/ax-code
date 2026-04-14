@@ -130,6 +130,15 @@ describe("replay with code intelligence queries", () => {
           callID: "call_ci_1",
           status: "completed",
           output: "[function] handleRequest (/tmp/server.ts:1:1)",
+          metadata: {
+            envelope: {
+              source: "graph",
+              completeness: "full",
+              timestamp: now,
+              serverIDs: [],
+              degraded: false,
+            },
+          },
           durationMs: 3,
         })
 
@@ -195,6 +204,15 @@ describe("replay with code intelligence queries", () => {
         expect(steps[0].toolResults.length).toBe(1)
         expect(steps[0].toolResults[0].callID).toBe("call_ci_1")
         expect(steps[0].toolResults[0].output).toContain("handleRequest")
+        expect(steps[0].toolResults[0].metadata).toEqual({
+          envelope: {
+            source: "graph",
+            completeness: "full",
+            timestamp: now,
+            serverIDs: [],
+            degraded: false,
+          },
+        })
         expect(steps[0].finishReason).toBe("tool-calls")
 
         // ── Assertion 3: summary mentions the graph snapshot ──────
@@ -228,6 +246,15 @@ describe("replay with code intelligence queries", () => {
         expect(toolResultRecord).toBeDefined()
         expect(toolResultRecord.action).toBe("result")
         expect(toolResultRecord.result).toContain("handleRequest")
+        expect(toolResultRecord.metadata).toEqual({
+          envelope: {
+            source: "graph",
+            completeness: "full",
+            timestamp: now,
+            serverIDs: [],
+            degraded: false,
+          },
+        })
 
         CodeIntelligence.__clearProject(projectID)
       },

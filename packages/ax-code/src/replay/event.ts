@@ -96,6 +96,7 @@ export const ToolResultEvent = Base.extend({
   status: z.enum(["completed", "error"]),
   output: z.string().optional(),
   error: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   durationMs: z.number(),
 })
 

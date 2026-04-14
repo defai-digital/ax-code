@@ -11,3 +11,5 @@ src/provider/models-snapshot.ts
 session-*.md
 ax-code-log/
 *.heapsnapshot
+debug-312/
+debug-log/
