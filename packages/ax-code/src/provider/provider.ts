@@ -569,7 +569,6 @@ export namespace Provider {
       log.warn("provider init completed with failures", {
         command: "provider.init",
         status: "partial",
-        durationMs: 0,
         providers: providerCount,
         failures: initFailures.map((f) => `${f.source}: ${f.error instanceof Error ? f.error.message : String(f.error)}`),
       })
@@ -577,7 +576,6 @@ export namespace Provider {
       log.info("provider init completed", {
         command: "provider.init",
         status: "ok",
-        durationMs: 0,
         providers: providerCount,
       })
     }
@@ -692,13 +690,8 @@ export namespace Provider {
 
           if (opts.signal) signals.push(opts.signal)
           if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
-          // Apply provider-configured timeout, or default to 60s so
-          // provider HTTP calls always have a deadline. Without this,
-          // a down provider hangs fetch() indefinitely.
-          const fetchTimeout = options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false
-            ? options["timeout"]
-            : 60_000
-          signals.push(AbortSignal.timeout(fetchTimeout))
+          if (options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false)
+            signals.push(AbortSignal.timeout(options["timeout"]))
 
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined

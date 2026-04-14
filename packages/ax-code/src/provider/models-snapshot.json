@@ -1861,7 +1861,7 @@
     ],
     "npm": "@ai-sdk/openai-compatible",
     "api": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-    "name": "Alibaba",
+    "name": "Alibaba (Standard API)",
     "doc": "https://www.alibabacloud.com/help/en/model-studio/models",
     "models": {
       "qwen3.6-plus": {
@@ -30169,7 +30169,7 @@
     ],
     "npm": "@ai-sdk/openai-compatible",
     "api": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "name": "Alibaba (China)",
+    "name": "Alibaba (Standard API, China)",
     "doc": "https://www.alibabacloud.com/help/en/model-studio/models",
     "models": {
       "qwen3.6-plus": {
@@ -59114,7 +59114,7 @@
     ],
     "npm": "@ai-sdk/openai-compatible",
     "api": "https://api.z.ai/api/paas/v4",
-    "name": "Z.AI",
+    "name": "Z.AI (Standard API)",
     "doc": "https://docs.z.ai/guides/overview/pricing",
     "models": {
       "glm-5v-turbo": {
