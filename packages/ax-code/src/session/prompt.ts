@@ -490,6 +490,9 @@ export namespace SessionPrompt {
       Recorder.end(sessionID)
     })
     Recorder.begin(sessionID)
+    // Idempotent — primary warmup happens in InstanceBootstrap so providers
+    // load in the background while the UI renders. This is a fallback in
+    // case the prompt loop is entered without a full bootstrap.
     Provider.warmup()
 
     // Structured output state

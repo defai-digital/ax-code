@@ -23,6 +23,7 @@ import { Flag } from "@/flag/flag"
 import { Permission } from "@/permission"
 import { Isolation } from "@/isolation"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { withTimeout } from "@/util/timeout"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -59,11 +60,15 @@ export namespace LLM {
       modelID: input.model.id,
       providerID: input.model.providerID,
     })
-    const [language, cfg, provider] = await Promise.all([
-      Provider.getLanguage(input.model),
-      input.config ?? Config.get(),
-      Provider.getProvider(input.model.providerID),
-    ])
+    const [language, cfg, provider] = await withTimeout(
+      Promise.all([
+        Provider.getLanguage(input.model),
+        input.config ?? Config.get(),
+        Provider.getProvider(input.model.providerID),
+      ]),
+      30_000,
+      `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
+    )
 
     const system: string[] = []
     const joined = [

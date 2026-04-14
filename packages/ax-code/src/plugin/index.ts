@@ -13,6 +13,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
 import { Env } from "@/util/env"
 import { fileURLToPath } from "url"
+import { withTimeout } from "@/util/timeout"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Global } from "@/global"
@@ -130,7 +131,7 @@ export namespace Plugin {
               // Prevent duplicate initialization when plugins export the same function
               // as both a named export and default export (e.g., `export const X` and `export default X`).
               // Object.entries(mod) would return both entries pointing to the same function reference.
-              await import(plugin)
+              await withTimeout(import(plugin), 15_000, `loading plugin timed out: ${plugin}`)
                 .then(async (mod) => {
                   const seen = new Set<PluginInstance>()
                   for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {

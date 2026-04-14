@@ -18,6 +18,7 @@ import { iife } from "@/util/iife"
 import { Global } from "../global"
 import path from "path"
 import { Filesystem } from "../util/filesystem"
+import { withTimeout } from "../util/timeout"
 
 // Direct imports for bundled providers
 import { createGroq } from "@ai-sdk/groq"
@@ -266,8 +267,9 @@ export namespace Provider {
 
   const state = Instance.state(async () => {
     using _ = log.time("state")
-    const config = await Config.get()
-    const modelsDev = await ModelsDev.get()
+    // Parallelize independent init calls — Config, ModelsDev, and Auth
+    // have no cross-dependencies and each may involve network I/O.
+    const [config, modelsDev, authEntries] = await Promise.all([Config.get(), ModelsDev.get(), Auth.all()])
     const database = mapValues(modelsDev, fromModelsDevProvider)
 
     const disabled = new Set(config.disabled_providers ?? [])
@@ -294,6 +296,7 @@ export namespace Provider {
     const sdkPending = new Map<string, Promise<SDK>>()
 
     log.info("provider init started", { command: "provider.init", status: "started" })
+    const initFailures: { source: string; error: unknown }[] = []
 
     const configProviders = Object.entries(config.provider ?? {})
 
@@ -421,7 +424,7 @@ export namespace Provider {
     }
 
     // load apikeys
-    for (const [id, provider] of Object.entries(await Auth.all())) {
+    for (const [id, provider] of Object.entries(authEntries)) {
       const providerID = ProviderID.make(id)
       if (disabled.has(providerID)) continue
       if (provider.type === "api") {
@@ -449,11 +452,16 @@ export namespace Provider {
           const auth = await Auth.get(providerID)
           if (!auth) continue
           if (!plugin.auth!.loader) continue
-          const options = await plugin.auth!.loader(() => Auth.get(providerID) as any, database[plugin.auth!.provider])
+          const options = await withTimeout(
+            plugin.auth!.loader(() => Auth.get(providerID) as any, database[plugin.auth!.provider]),
+            10_000,
+            `plugin auth loader timed out for ${plugin.auth!.provider}`,
+          )
           const opts = options ?? {}
           const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
           mergeProvider(providerID, patch)
         } catch (err) {
+          initFailures.push({ source: `plugin-auth:${plugin.auth!.provider}`, error: err })
           log.warn("plugin auth loader failed", { provider: plugin.auth!.provider, error: err })
         }
       }
@@ -473,7 +481,7 @@ export namespace Provider {
             models: {},
           }
           if (!database[providerID]) database[providerID] = data
-          const result = await fn(data)
+          const result = await withTimeout(fn(data), 15_000, `custom loader '${id}' timed out`)
           if (result && (result.autoload || providers[providerID])) {
             if (result.getModel) modelLoaders[providerID] = result.getModel
             if (result.vars) varsLoaders[providerID] = result.vars
@@ -483,6 +491,7 @@ export namespace Provider {
             mergeProvider(providerID, patch)
           }
         } catch (err) {
+          initFailures.push({ source: `loader:${id}`, error: err })
           log.warn("custom provider loader failed", { provider: id, error: err })
         }
       }),
@@ -544,13 +553,34 @@ export namespace Provider {
         const providerID = ProviderID.make(id)
         if (!providers[providerID]) return
         await (async () => {
-          const discovered = await loader()
+          const discovered = await withTimeout(loader(), 10_000, `discovery loader '${id}' timed out`)
           for (const [modelID, model] of Object.entries(discovered)) {
             providers[providerID].models[modelID] = model
           }
-        })().catch((e) => log.warn("state discovery error", { id, error: e }))
+        })().catch((e) => {
+          initFailures.push({ source: `discovery:${id}`, error: e })
+          log.warn("state discovery error", { id, error: e })
+        })
       }),
     )
+
+    const providerCount = Object.keys(providers).length
+    if (initFailures.length > 0) {
+      log.warn("provider init completed with failures", {
+        command: "provider.init",
+        status: "partial",
+        durationMs: 0,
+        providers: providerCount,
+        failures: initFailures.map((f) => `${f.source}: ${f.error instanceof Error ? f.error.message : String(f.error)}`),
+      })
+    } else {
+      log.info("provider init completed", {
+        command: "provider.init",
+        status: "ok",
+        durationMs: 0,
+        providers: providerCount,
+      })
+    }
 
     return {
       models: languages,
@@ -662,8 +692,13 @@ export namespace Provider {
 
           if (opts.signal) signals.push(opts.signal)
           if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
-          if (options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false)
-            signals.push(AbortSignal.timeout(options["timeout"]))
+          // Apply provider-configured timeout, or default to 60s so
+          // provider HTTP calls always have a deadline. Without this,
+          // a down provider hangs fetch() indefinitely.
+          const fetchTimeout = options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false
+            ? options["timeout"]
+            : 60_000
+          signals.push(AbortSignal.timeout(fetchTimeout))
 
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined
@@ -735,7 +770,11 @@ export namespace Provider {
           installedPath = model.api.npm
         }
 
-        const mod = await import(installedPath)
+        const mod = await withTimeout(
+          import(installedPath),
+          15_000,
+          `loading provider module timed out: ${model.api.npm}`,
+        )
 
         const createKey = Object.keys(mod).find((key) => key.startsWith("create"))
         if (!createKey)
@@ -879,6 +918,9 @@ export namespace Provider {
       }
       if (providerID === ProviderID.xai) {
         priority = ["grok-4-fast", "grok-4"]
+      }
+      if (providerID.startsWith("alibaba")) {
+        priority = ["qwen3.5-flash", "qwen-flash", "qwen-turbo"]
       }
       for (const item of priority) {
         for (const model of Object.keys(provider.models)) {

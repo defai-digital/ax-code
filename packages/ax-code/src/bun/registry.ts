@@ -18,6 +18,7 @@ export namespace PackageRegistry {
         BUN_BE_BUN: "1",
       },
       nothrow: true,
+      abort: AbortSignal.timeout(10_000),
     })
 
     if (code !== 0) {

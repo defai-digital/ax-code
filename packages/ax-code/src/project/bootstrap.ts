@@ -13,12 +13,18 @@ import { Log } from "@/util/log"
 import { ShareNext } from "@/share/share-next"
 import { Config } from "../config/config"
 import { Session } from "../session"
+import { Provider } from "../provider/provider"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
   ShareNext.init()
   Format.init()
   await Promise.all([Plugin.init(), LSP.init()])
+  // Start provider loading in the background so it's ready by the time
+  // the user sends their first prompt. Previously warmup was called
+  // inside the prompt loop — after the user already typed — causing a
+  // visible hang on the first message.
+  Provider.warmup()
   File.init()
   FileWatcher.init()
   Vcs.init()

@@ -1,5 +1,6 @@
 import dns from "dns/promises"
 import net from "net"
+import { withTimeout } from "./timeout"
 
 // SSRF guard. Resolves a URL's hostname and rejects if any resolved
 // address lives in a private, reserved, loopback, link-local, or
@@ -89,7 +90,11 @@ export namespace Ssrf {
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
       return
     }
-    const addresses = await dns.lookup(hostname, { all: true }).catch(() => [])
+    const addresses = await withTimeout(
+      dns.lookup(hostname, { all: true }),
+      5_000,
+      `DNS lookup timed out after 5s: ${hostname}`,
+    ).catch(() => [])
     if (addresses.length === 0) {
       throw new Error(`${label}: could not resolve hostname: ${hostname}`)
     }
@@ -127,7 +132,11 @@ export namespace Ssrf {
     }
 
     // Resolve DNS once
-    const addresses = await dns.lookup(hostname, { all: true }).catch(() => [])
+    const addresses = await withTimeout(
+      dns.lookup(hostname, { all: true }),
+      5_000,
+      `DNS lookup timed out after 5s: ${hostname}`,
+    ).catch(() => [])
     if (addresses.length === 0) {
       throw new Error(`${label}: could not resolve hostname: ${hostname}`)
     }

@@ -38,6 +38,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Ssrf } from "@/util/ssrf"
 import { Process } from "@/util/process"
 import { Lock } from "@/util/lock"
+import { withTimeout } from "@/util/timeout"
 import * as ConfigSchema from "./schema"
 
 // Single source of truth for the public config schema URL. Written
@@ -374,7 +375,11 @@ export namespace Config {
 
   export async function waitForDependencies() {
     const deps = await state().then((x) => x.deps)
-    await Promise.all(deps)
+    await withTimeout(
+      Promise.all(deps),
+      60_000,
+      "config dependency installation timed out after 60s",
+    )
   }
 
   export async function installDependencies(dir: string) {

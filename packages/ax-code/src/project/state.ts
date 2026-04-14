@@ -40,6 +40,19 @@ export namespace State {
         state,
         dispose,
       })
+      // If `state` is a Promise that rejects, remove it from the cache
+      // so the next call retries initialization instead of returning the
+      // same stuck rejection forever. This is the safety net for transient
+      // failures in provider init (DNS timeout, expired key, network error).
+      Promise.resolve(state).catch(() => {
+        // Only remove if the entry still points to this exact value —
+        // a concurrent invalidate() + re-init should not be clobbered.
+        const current = entries.get(init)
+        if (current && current.state === state) {
+          entries.delete(init)
+          log.info("auto-invalidated failed state", { key })
+        }
+      })
       return state
     }) as Getter<S>
     get.invalidate = async () => {

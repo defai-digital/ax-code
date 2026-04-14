@@ -1,4 +1,4 @@
-export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms: number, message?: string): Promise<T> {
   // Manual race implementation so that a post-timeout rejection from
   // `promise` does not become an unhandled rejection. The previous
   // Promise.race pattern left the original promise unhandled once the
@@ -11,7 +11,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      reject(new Error(`Operation timed out after ${ms}ms`))
+      reject(new Error(message ?? `Operation timed out after ${ms}ms`))
     }, ms)
     promise.then(
       (value) => {
