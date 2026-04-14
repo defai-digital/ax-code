@@ -422,10 +422,7 @@ The terminal UI features a customizable theme system (GitHub default), context s
 
 ### VS Code Extension
 
-Use ax-code directly inside VS Code:
-
-1. `Ctrl+Shift+P` -> **"Install from VSIX"** -> select `packages/integration-vscode/ax-code-1.4.0.vsix`
-2. Open the sidebar panel with `Ctrl+Shift+A`
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=defai-digital.ax-code), then open the sidebar panel with `Ctrl+Shift+A`.
 
 **Features:** chat panel, explain/review/fix via right-click, code selection actions, integrated terminal.
 
