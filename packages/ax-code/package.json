@@ -83,6 +83,7 @@
     "@ax-code/fs": "workspace:*",
     "@ax-code/index-core": "workspace:*",
     "@ax-code/parser": "workspace:*",
+    "@ax-code/terminal": "workspace:*",
     "@clack/prompts": "1.0.0-alpha.1",
     "@effect/platform-node": "catalog:",
     "@hono/standard-validator": "0.1.5",

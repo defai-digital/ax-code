@@ -1,4 +1,4 @@
-import { RGBA } from "@opentui/core"
+import { RGBA } from "@tui/renderer-adapter/opentui"
 import aura from "./theme/aura.json" with { type: "json" }
 import ayu from "./theme/ayu.json" with { type: "json" }
 import catppuccin from "./theme/catppuccin.json" with { type: "json" }

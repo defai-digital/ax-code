@@ -1,9 +1,9 @@
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@tui/renderer-adapter/opentui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { For } from "solid-js"
-import { useKeyboard } from "@opentui/solid"
+import { useKeyboard } from "@tui/renderer-adapter/opentui"
 import { Locale } from "@/util/locale"
 
 export type DialogConfirmProps = {

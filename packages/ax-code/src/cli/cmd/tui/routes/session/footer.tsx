@@ -7,34 +7,27 @@ import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
+import { footerMcpView, footerPermissionLabel, footerSandboxView, footerTrustChip } from "./footer-view-model"
 
 export function Footer() {
   const { theme } = useTheme()
   const sync = useSync()
   const route = useRoute()
-  const mcp = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
-  const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
   const isolationMode = createMemo(() => sync.data.isolation.mode)
-  // DRE footer chip state (v2.3.8). The chip has three visible states:
-  //   1. Pending plans exist    → "◆ N Plans"    (warning-colored)
-  //   2. Graph indexed, no plans → "◆ DRE ready" (success-colored)
-  //   3. Otherwise               → hidden
-  // State 1 is the original v2.3.1 behavior. State 2 is new in v2.3.8
-  // and answers "is DRE actually usable right now?" at a glance from
-  // the footer, mirroring the sidebar DRE section's visibility rule
-  // from v2.3.6. State 3 covers flag-off AND flag-on-but-graph-empty:
-  // in the empty-graph case the sidebar already tells the user to run
-  // `ax-code index`, and a second "DRE" chip in the footer without
-  // that context would be actively misleading.
-  const drePending = createMemo(() => sync.data.debugEngine.pendingPlans)
-  const dreGraphIndexed = createMemo(
-    () => Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE && sync.data.debugEngine.graph.nodeCount > 0,
+  const mcp = createMemo(() => footerMcpView(Object.values(sync.data.mcp).map((item) => item.status)))
+  const trustChip = createMemo(() =>
+    footerTrustChip({
+      experimentalDebugEngine: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      pendingPlans: sync.data.debugEngine.pendingPlans,
+      graphNodeCount: sync.data.debugEngine.graph.nodeCount,
+    }),
   )
-  const dreChipVisible = createMemo(() => drePending() > 0 || dreGraphIndexed())
   const permissions = createMemo(() => {
     if (route.data.type !== "session") return []
     return sync.data.permission[route.data.sessionID] ?? []
   })
+  const permissionLabel = createMemo(() => footerPermissionLabel(permissions().length))
+  const sandbox = createMemo(() => footerSandboxView(isolationMode()))
   const directory = useDirectory()
   const connected = useConnected()
 
@@ -77,52 +70,40 @@ export function Footer() {
             </text>
           </Match>
           <Match when={connected()}>
-            <Show when={permissions().length > 0}>
+            <Show when={permissionLabel()}>
               <text fg={theme.warning}>
-                <span style={{ fg: theme.warning }}>△</span> {permissions().length} Permission
-                {permissions().length > 1 ? "s" : ""}
+                <span style={{ fg: theme.warning }}>△</span> {permissionLabel()}
               </text>
             </Show>
-            <Show when={dreChipVisible()}>
+            <Show when={trustChip()}>
               <text fg={theme.text}>
                 <Switch>
-                  <Match when={drePending() > 0}>
-                    {/* Pending-plan state: warning color + count. This
-                        is the original v2.3.1 behavior, preserved so
-                        users with active refactor work see the same
-                        chip they already know. */}
-                    <span style={{ fg: theme.warning }}>◆</span> {drePending()} Plan{drePending() !== 1 ? "s" : ""}
+                  <Match when={trustChip()?.type === "plans"}>
+                    <span style={{ fg: theme.warning }}>◆</span> {trustChip()?.label}
                   </Match>
                   <Match when={true}>
-                    {/* Ready state: success color + static label. New
-                        in v2.3.8. Fires only when the graph is indexed
-                        (nodeCount > 0) so the chip never appears
-                        while `ax-code index` is still required — the
-                        sidebar owns that onboarding hint. */}
-                    <span style={{ fg: theme.success }}>◆</span> Trust ready
+                    <span style={{ fg: theme.success }}>◆</span> {trustChip()?.label}
                   </Match>
                 </Switch>
               </text>
             </Show>
-            <Show when={mcp()}>
+            <Show when={mcp().connected}>
               <text fg={theme.text}>
                 <Switch>
-                  <Match when={mcpError()}>
+                  <Match when={mcp().hasError}>
                     <span style={{ fg: theme.error }}>⊙ </span>
                   </Match>
                   <Match when={true}>
                     <span style={{ fg: theme.success }}>⊙ </span>
                   </Match>
                 </Switch>
-                {mcp()} MCP
+                {mcp().connected} MCP
               </text>
             </Show>
             <text fg={theme.textMuted}>/status</text>
           </Match>
         </Switch>
-        <text fg={isolationMode() === "full-access" ? theme.error : theme.success}>
-          {isolationMode() === "full-access" ? "sandbox off" : "sandbox on"}
-        </text>
+        <text fg={sandbox().risk === "danger" ? theme.error : theme.success}>{sandbox().label}</text>
         <text fg={theme.textMuted}>v{Installation.VERSION}</text>
       </box>
     </box>

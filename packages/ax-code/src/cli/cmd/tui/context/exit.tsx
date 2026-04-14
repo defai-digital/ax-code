@@ -1,4 +1,4 @@
-import { useRenderer } from "@opentui/solid"
+import { useRenderer } from "@tui/renderer-adapter/opentui"
 import { createSimpleContext } from "./helper"
 import { FormatError, FormatUnknownError } from "@/cli/error"
 import { win32FlushInputBuffer } from "../win32"

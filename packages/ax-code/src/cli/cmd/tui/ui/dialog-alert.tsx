@@ -1,7 +1,7 @@
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@tui/renderer-adapter/opentui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
-import { useKeyboard } from "@opentui/solid"
+import { useKeyboard } from "@tui/renderer-adapter/opentui"
 
 export type DialogAlertProps = {
   title: string

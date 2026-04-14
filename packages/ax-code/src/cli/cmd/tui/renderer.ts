@@ -1,4 +1,4 @@
-import { render, type JSX } from "@opentui/solid"
+import { render, type JSX } from "@tui/renderer-adapter/opentui"
 import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 

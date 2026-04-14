@@ -1,4 +1,4 @@
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@tui/renderer-adapter/opentui"
 import { useTheme } from "@tui/context/theme"
 import { createMemo, For, onMount, Show } from "solid-js"
 import { useDialog } from "../../ui/dialog"

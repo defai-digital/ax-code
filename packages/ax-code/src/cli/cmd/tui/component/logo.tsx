@@ -1,4 +1,4 @@
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@tui/renderer-adapter/opentui"
 import { For } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { logo } from "@/cli/logo"

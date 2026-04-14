@@ -5,7 +5,7 @@ import { map, pipe, entries, sortBy } from "remeda"
 import { DialogSelect, type DialogSelectRef, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useTheme } from "../context/theme"
 import { Keybind } from "@/util/keybind"
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@tui/renderer-adapter/opentui"
 import { useSDK } from "@tui/context/sdk"
 import { Log } from "@/util/log"
 

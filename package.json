@@ -50,6 +50,7 @@
     "@ax-code/diff",
     "@ax-code/fs",
     "@ax-code/index-core",
+    "@ax-code/terminal",
     "@ax-code/parser",
     "esbuild",
     "protobufjs",

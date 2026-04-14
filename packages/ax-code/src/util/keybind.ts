@@ -1,5 +1,5 @@
 import { isDeepEqual } from "remeda"
-import type { ParsedKey } from "@opentui/core"
+import type { ParsedKey } from "@tui/renderer-adapter/opentui"
 
 export namespace Keybind {
   /**

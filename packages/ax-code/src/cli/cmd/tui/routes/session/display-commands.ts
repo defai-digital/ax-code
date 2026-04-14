@@ -1,6 +1,6 @@
 import { batch, type Accessor, type Setter } from "solid-js"
 import path from "path"
-import type { CliRenderer, ScrollBoxRenderable } from "@opentui/core"
+import type { CliRenderer, ScrollBoxRenderable } from "@tui/renderer-adapter/opentui"
 import type { Part } from "@ax-code/sdk/v2"
 import open from "open"
 import type { DialogContext } from "@tui/ui/dialog"

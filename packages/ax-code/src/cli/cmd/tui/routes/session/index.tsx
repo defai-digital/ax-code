@@ -26,7 +26,7 @@ import {
   type ScrollAcceleration,
   TextAttributes,
   RGBA,
-} from "@opentui/core"
+} from "@tui/renderer-adapter/opentui"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@ax-code/sdk/v2"
 import { useLocal } from "@tui/context/local"
@@ -49,7 +49,7 @@ import type { RefactorPlanTool } from "@/tool/refactor_plan"
 import type { RefactorApplyTool } from "@/tool/refactor_apply"
 import type { ImpactAnalyzeTool } from "@/tool/impact_analyze"
 import type { DedupScanTool } from "@/tool/dedup_scan"
-import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@tui/renderer-adapter/opentui"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
