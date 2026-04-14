@@ -73,7 +73,7 @@ export function evaluateTuiRendererParity(input: TuiRendererParityInput): TuiRen
     rendererCheck(input.renderer),
     fallbackCheck(input.opentuiFallbackRetained),
     benchmarkReportCheck(input.benchmarkReport),
-    benchmarkDuplicateCriteriaCheck(input.benchmarkReport),
+    ...benchmarkIntegrityChecks(input.benchmarkReport),
     ...benchmarkCriteriaChecks(input.benchmarkReport),
     ...contractChecks(input.contract),
   ]
@@ -199,21 +199,52 @@ function benchmarkReportCheck(report: TuiRendererParityBenchmarkReport | undefin
   return { id: "benchmark.report", status: "passed" }
 }
 
-function benchmarkDuplicateCriteriaCheck(report: TuiRendererParityBenchmarkReport | undefined): TuiRendererParityCheck {
+function benchmarkIntegrityChecks(report: TuiRendererParityBenchmarkReport | undefined): TuiRendererParityCheck[] {
   if (!report)
-    return { id: "benchmark.duplicate-criteria", status: "missing", reason: "No benchmark report was provided." }
-  const seen = new Set<string>()
-  const duplicates = new Set<string>()
+    return [
+      { id: "benchmark.duplicate-criteria", status: "missing", reason: "No benchmark report was provided." },
+      { id: "benchmark.duplicate-results", status: "missing", reason: "No benchmark report was provided." },
+      { id: "benchmark.unknown-criteria", status: "missing", reason: "No benchmark report was provided." },
+    ]
+  const knownCriteria = new Set(TUI_PERFORMANCE_CRITERIA.map((item) => item.id))
+  const seenCriteria = new Set<string>()
+  const duplicateCriteria = new Set<string>()
+  const seenResults = new Set<string>()
+  const duplicateResults = new Set<string>()
+  const unknownCriteria = new Set<string>()
   for (const result of report.results) {
-    if (seen.has(result.criterionID)) duplicates.add(result.criterionID)
-    seen.add(result.criterionID)
+    if (seenCriteria.has(result.criterionID)) duplicateCriteria.add(result.criterionID)
+    seenCriteria.add(result.criterionID)
+    if (seenResults.has(result.id)) duplicateResults.add(result.id)
+    seenResults.add(result.id)
+    if (!knownCriteria.has(result.criterionID)) unknownCriteria.add(result.criterionID)
   }
-  if (duplicates.size === 0) return { id: "benchmark.duplicate-criteria", status: "passed" }
-  return {
-    id: "benchmark.duplicate-criteria",
-    status: "failed",
-    reason: `Duplicate benchmark criteria: ${[...duplicates].sort().join(", ")}`,
-  }
+  return [
+    {
+      id: "benchmark.duplicate-criteria",
+      status: duplicateCriteria.size === 0 ? "passed" : "failed",
+      reason:
+        duplicateCriteria.size === 0
+          ? undefined
+          : `Duplicate benchmark criteria: ${[...duplicateCriteria].sort().join(", ")}`,
+    },
+    {
+      id: "benchmark.duplicate-results",
+      status: duplicateResults.size === 0 ? "passed" : "failed",
+      reason:
+        duplicateResults.size === 0
+          ? undefined
+          : `Duplicate benchmark result ids: ${[...duplicateResults].sort().join(", ")}`,
+    },
+    {
+      id: "benchmark.unknown-criteria",
+      status: unknownCriteria.size === 0 ? "passed" : "failed",
+      reason:
+        unknownCriteria.size === 0
+          ? undefined
+          : `Unknown benchmark criteria: ${[...unknownCriteria].sort().join(", ")}`,
+    },
+  ]
 }
 
 function benchmarkCriteriaChecks(report: TuiRendererParityBenchmarkReport | undefined): TuiRendererParityCheck[] {

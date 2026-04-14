@@ -121,8 +121,8 @@ Implemented surface:
 - The Phase 5 gate always evaluates `native` with OpenTUI fallback retained, writes a decision plus manifest, and
   rejects generated artifact paths under product documentation directories.
 - Benchmark plans reject invalid repeat and timeout values so empty plans cannot produce passing reports.
-- Passed contract gates require evidence entries, duplicate/unknown contract IDs fail the gate, and duplicate benchmark
-  criteria fail the gate to avoid masked parity results.
+- Passed contract gates require evidence entries, duplicate/unknown contract IDs fail the gate, and duplicate/unknown
+  benchmark criteria or result IDs fail the gate to avoid masked parity results.
 - The parity gate rechecks benchmark metric kinds and thresholds directly instead of trusting a report marked `ok`.
 
 ### Phase 6: OpenTUI Removal

@@ -134,6 +134,25 @@ describe("tui renderer parity", () => {
     expect(decision.checks).toContainEqual(expect.objectContaining({ id: "contract.unknown-ids", status: "failed" }))
   })
 
+  test("fails parity on unknown benchmark criteria and duplicate result ids", () => {
+    const base = report()
+    const decision = evaluateTuiRendererParity({
+      renderer: "native",
+      benchmarkReport: report({
+        results: [
+          ...base.results,
+          { id: base.results[0]!.id, criterionID: "layout.unknown", metric: "p95Ms", value: 1 },
+        ],
+      }),
+      contract,
+      opentuiFallbackRetained: true,
+    })
+
+    expect(decision.action).toBe("keep-native-flagged")
+    expect(decision.checks).toContainEqual(expect.objectContaining({ id: "benchmark.duplicate-results", status: "failed" }))
+    expect(decision.checks).toContainEqual(expect.objectContaining({ id: "benchmark.unknown-criteria", status: "failed" }))
+  })
+
   test("rechecks benchmark metric and threshold even when report verdict says ok", () => {
     const decision = evaluateTuiRendererParity({
       renderer: "native",
