@@ -34,7 +34,7 @@ const existing = await Bun.file(snapshotPath)
   .catch(() => ({}))
 
 // Preserve local-only provider entries that models.dev doesn't include
-const localProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-studio"]
+const localProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-serving"]
 for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = existing[id]
 }

@@ -114,7 +114,7 @@ Within AutomatosX, `ax-code` is the developer-facing execution layer. `AX Engine
 
 | Component      | Repository                                                              | Role                                                                    |
 | -------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| **AX Studio**  | [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio)   | General GenAI workspace — enterprise knowledge + agentic workflows      |
+| **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Local model serving — run models locally with Ollama-compatible API     |
 | **AX Code**    | [defai-digital/ax-code](https://github.com/defai-digital/ax-code)       | AI coding & automation — developer-optimized entrypoint                 |
 | **AX Trust**   | —                                                                       | Deterministic AI pipeline — contract-based execution, guardrails, audit |
 | **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Enterprise orchestration — multi-node routing, heterogeneous compute    |
@@ -179,7 +179,6 @@ Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.11+
 # Set any provider key (pick one)
 export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Gemini
 export XAI_API_KEY="your-key"                     # Grok
-export GROQ_API_KEY="your-key"                    # Groq (free tier)
 
 # Launch
 ax-code
@@ -198,10 +197,8 @@ ax-code
 | **Google**         | Gemini 3.0, 3.1                 | `GOOGLE_GENERATIVE_AI_API_KEY` |
 | **xAI**            | Grok-2, Grok-3, Grok-4          | `XAI_API_KEY`                  |
 | **DeepSeek**       | Chat, Reasoner                  | `DEEPSEEK_API_KEY`             |
-| **Groq**           | Llama, Qwen, Gemma, DeepSeek    | `GROQ_API_KEY` (free)          |
 | **GitHub Copilot** | Claude, GPT, Gemini via Copilot | `ax-code providers login`      |
-| **Alibaba Cloud**  | Qwen3, Qwen3-Coder              | `DASHSCOPE_API_KEY`            |
-| **Azure**          | GPT, Claude, Llama, Phi         | `AZURE_API_KEY`                |
+| **Alibaba Cloud**  | Qwen3.6-Plus, Qwen3.5-Flash     | `DASHSCOPE_API_KEY`            |
 | **Perplexity**     | Sonar, Sonar Pro, Deep Research | `PERPLEXITY_API_KEY`           |
 | **Z.AI**           | GLM-4.5, GLM-4.7, GLM-5         | `ax-code providers login`      |
 
@@ -210,7 +207,7 @@ ax-code
 | Provider      | Setup                                                                                                                          |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | **AX Engine** | Apple Silicon optimized inference — [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine)                      |
-| **AX Studio** | Auto-detected at `localhost:11434` or `AX_STUDIO_HOST` — [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio) |
+| **AX Serving** | Auto-detected at `localhost:11434` or `AX_SERVING_HOST` — [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) |
 | **Ollama**    | Auto-detected at `localhost:11434` or `OLLAMA_HOST`                                                                            |
 | **LM Studio** | Configure in `ax-code.json`                                                                                                    |
 
@@ -506,7 +503,8 @@ Config is hierarchical: remote org defaults -> global -> custom path -> project 
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini                                                 |
 | `XAI_API_KEY`                  | Grok                                                   |
 | `DEEPSEEK_API_KEY`             | DeepSeek                                               |
-| `GROQ_API_KEY`                 | Groq (free)                                            |
+| `DASHSCOPE_API_KEY`            | Alibaba Cloud (Standard API)                           |
+| `ALIBABA_CODING_PLAN_API_KEY`  | Alibaba Cloud (Coding Plan)                            |
 | `AX_CODE_ISOLATION_MODE`       | Sandbox: `read-only`, `workspace-write`, `full-access` |
 | `AX_CODE_SERVER_PASSWORD`      | Required for network-bound server                      |
 
@@ -575,7 +573,7 @@ Hook is **not installed by default** — releases should remain an explicit, rev
 - **Persist & audit**: Use sessions (`session list/export`), review permissions, enable MCP only for trusted servers.
 - **SDK usage**: Always `dispose()` agents; prefer typed hooks; handle `ToolError`/`PermissionError`.
 - **Config & isolation**: Use project `ax-code.json` + `.ax-code/` for custom agents/tools/plugins; set permissions per-agent.
-- **Providers**: Prefer local (Ollama/AX Engine) for sensitive work; test with Groq for speed.
+- **Providers**: Prefer local (Ollama/AX Serving) for sensitive work.
 
 ## CLI Reference
 
@@ -589,7 +587,7 @@ ax-code --sandbox read-only          # Read-only mode
 # Providers & Models
 ax-code providers list               # List providers
 ax-code providers login              # Add credential
-ax-code providers login groq         # Quick setup
+ax-code providers login xai          # Quick setup
 ax-code models                       # List models
 
 # Project Context

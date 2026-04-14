@@ -119,7 +119,6 @@ const ENV_VAR_MAP: Record<string, string> = {
   GEMINI_API_KEY: "google",
   GOOGLE_GENERATIVE_AI_API_KEY: "google",
   GOOGLE_API_KEY: "google",
-  GROQ_API_KEY: "groq",
 }
 
 const autoDetectLog = Log.create({ service: "sdk.auto-detect-auth" })

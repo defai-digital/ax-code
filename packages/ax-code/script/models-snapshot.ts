@@ -1,4 +1,4 @@
-export const LOCAL_PROVIDER_IDS = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-studio"] as const
+export const LOCAL_PROVIDER_IDS = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-serving"] as const
 
 export type ModelsSnapshot = Record<string, unknown>
 

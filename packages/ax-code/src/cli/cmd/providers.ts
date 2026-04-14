@@ -373,7 +373,6 @@ export const ProvidersLoginCommand = cmd({
         // Only show providers with bundled SDK support (+ any user-enabled via config)
         const SUPPORTED_PROVIDERS = new Set([
           "ax-code",
-          "groq",
           "xai",
           "zai",
           "zai-coding-plan",
