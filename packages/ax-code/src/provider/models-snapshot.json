@@ -115684,14 +115684,14 @@
     "name": "Ollama",
     "models": {}
   },
-  "ax-studio": {
-    "id": "ax-studio",
+  "ax-serving": {
+    "id": "ax-serving",
     "env": [
-      "AX_STUDIO_HOST"
+      "AX_SERVING_HOST"
     ],
     "npm": "@ai-sdk/openai-compatible",
     "api": "http://localhost:11434/v1",
-    "name": "AX Studio",
+    "name": "AX Serving",
     "models": {}
   }
 }

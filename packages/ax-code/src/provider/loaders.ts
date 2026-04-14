@@ -182,7 +182,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     }
   },
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
-  "ax-studio": ollamaCompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:11434"),
+  "ax-serving": ollamaCompatibleLoader("ax-serving", "AX_SERVING_HOST", "http://localhost:11434"),
   "claude-code": cliLoader({
     providerID: "claude-code",
     binary: "claude",

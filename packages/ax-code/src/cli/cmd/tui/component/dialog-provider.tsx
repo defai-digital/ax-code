@@ -7,10 +7,10 @@ import { useSDK } from "../context/sdk"
 import { DialogPrompt } from "../ui/dialog-prompt"
 import { Link } from "../ui/link"
 import { useTheme } from "../context/theme"
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@tui/renderer-adapter/opentui"
 import type { ProviderAuthAuthorization, ProviderAuthMethod } from "@ax-code/sdk/v2"
 import { DialogModel } from "./dialog-model"
-import { useKeyboard } from "@opentui/solid"
+import { useKeyboard } from "@tui/renderer-adapter/opentui"
 import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
 import { resolveCliModel } from "@/provider/cli/resolve"
@@ -22,7 +22,7 @@ const CLI_BINARIES: Record<string, string> = {
   "codex-cli": "codex",
 }
 
-const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama", "lmstudio"])
+const OFFLINE_PROVIDERS = new Set(["ax-serving", "ollama", "lmstudio"])
 const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "alibaba"])
 

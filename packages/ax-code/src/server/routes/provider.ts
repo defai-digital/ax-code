@@ -16,12 +16,10 @@ const log = Log.create({ service: "server" })
 // Natively supported providers — shown by default when enabled_providers is not configured.
 // Users can expand this list via enabled_providers in ax-code.json.
 const NATIVE_PROVIDERS = new Set([
-  "ax-studio",
+  "ax-serving",
   "ollama",
   "lmstudio",
   "google",
-  "groq",
-  "azure",
   "alibaba",
   "alibaba-coding-plan",
   "github-copilot",
@@ -67,7 +65,7 @@ export const ProviderRoutes = lazy(() =>
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
         // Offline providers are always shown — they're local services that
         // should be discoverable regardless of enabled_providers config.
-        const ALWAYS_SHOW = new Set(["ollama", "lmstudio", "ax-studio"])
+        const ALWAYS_SHOW = new Set(["ollama", "lmstudio", "ax-serving"])
         for (const [key, value] of Object.entries(allProviders)) {
           if (disabled.has(key)) continue
           if (ALWAYS_SHOW.has(key) || (enabled ? enabled.has(key) : NATIVE_PROVIDERS.has(key))) {
