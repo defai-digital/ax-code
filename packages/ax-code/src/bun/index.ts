@@ -95,7 +95,19 @@ export namespace BunProc {
     ]
   }
 
+  // Validate npm package name to prevent path traversal. Packages are
+  // either bare names (`lodash`) or scoped (`@scope/name`). Anything
+  // containing `..`, starting with `/`, or not matching the npm naming
+  // convention is rejected before it reaches `path.join`. This is the
+  // primary defense for callers that pass user-controlled config values
+  // (e.g. plugin loading from `ax-code.json`).
+  const VALID_NPM_PKG = /^(@[\w][\w.-]*\/)?[\w][\w.-]*$/
+
   export async function install(pkg: string, version = "latest") {
+    if (!VALID_NPM_PKG.test(pkg) || pkg.includes("..")) {
+      throw new Error(`Invalid package name: ${pkg}`)
+    }
+
     // Use lock to ensure only one install at a time
     using _ = await Lock.write("bun-install")
 

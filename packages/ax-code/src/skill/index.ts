@@ -165,12 +165,21 @@ export namespace Skill {
           for (const item of cfg.skills?.paths ?? []) {
             const expanded = item.startsWith("~/") ? path.join(os.homedir(), item.slice(2)) : item
             const dir = path.isAbsolute(expanded) ? expanded : path.join(ctx.directory, expanded)
-            const exists = yield* Effect.promise(() => Filesystem.isDir(dir))
-            if (!exists) {
-              log.warn("skill path not found", { path: dir })
+            // Resolve symlinks and normalize before the containment check
+            // so `../../etc` can't escape via relative path segments.
+            const resolved = path.resolve(dir)
+            const home = os.homedir()
+            const workspace = path.resolve(ctx.directory)
+            if (!resolved.startsWith(workspace + path.sep) && !resolved.startsWith(home + path.sep) && resolved !== workspace && resolved !== home) {
+              log.warn("skill path outside workspace and home; skipping", { path: dir, resolved })
               continue
             }
-            yield* scanDir(s, dir, SKILL_PATTERN)
+            const exists = yield* Effect.promise(() => Filesystem.isDir(resolved))
+            if (!exists) {
+              log.warn("skill path not found", { path: resolved })
+              continue
+            }
+            yield* scanDir(s, resolved, SKILL_PATTERN)
           }
 
           for (const url of cfg.skills?.urls ?? []) {
