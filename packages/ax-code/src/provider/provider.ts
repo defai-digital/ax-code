@@ -21,7 +21,6 @@ import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
 
 // Direct imports for bundled providers
-import { createGroq } from "@ai-sdk/groq"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
@@ -117,7 +116,6 @@ export namespace Provider {
   }
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
-    "@ai-sdk/groq": createGroq,
     "@ai-sdk/google": createGoogleGenerativeAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
