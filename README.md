@@ -78,18 +78,13 @@ This is the product runtime itself, independent of the broader ecosystem:
 
 Source: [docs/ax-code-runtime.mmd](docs/ax-code-runtime.mmd)
 
-The important distinction is that `ax-code` is not just a chat UI. It is a runtime that coordinates:
+The important distinction is that `ax-code` is not just a chat UI. It is a runtime built around a **Semantic Trust Layer** that ensures every AI-consumed answer is traceable, cacheable, and replayable:
 
-- interfaces such as CLI, TUI, SDK, ACP, headless server mode, and the **DRE Dashboard** (v3.1 — browser-based execution visualization)
-- agent routing, planning, and dependency-ordered execution
-- tool execution, MCP integrations, a semantic layer with explicit LSP-vs-graph provenance, content-addressable LSP cache, audit/replay metadata, and a persistent code graph backed by language servers
-- the **Debugging & Refactoring Engine** (DRE, v2.3+) — deterministic-first root-cause analysis, proactive scanners (race conditions, resource leaks, security patterns, hardcoded values), change-impact analysis, and shadow-worktree-validated refactors
-- **semantic change analysis** (v3.1) — deterministic classification of file changes (bug fix, refactor, optimization, rewrite, etc.) with per-change risk scoring
-- **session analysis layer** (v3.1) — risk scoring with confidence/readiness, 4-dimension decision scorecard (correctness/safety/simplicity/validation), session comparison with advisory, branch family ranking, step-level rollback points, and execution graph topology
-- **incremental indexing** (v2.4) — content-hash skip on unchanged files, orphan purge on deleted files, per-file progress reporting
-- session, memory, and storage state with replay, audit, and snapshot trails
-- sandbox, permission, and policy boundaries
-- provider abstraction across hosted and local inference
+- **Semantic Trust Layer** — LSP integration (multi-server, scheduler, concurrency budget), persistent code graph (symbols, edges, call hierarchy), content-addressable response cache, and provenance envelopes that stamp every result with `source`, `completeness`, and `degraded` status
+- **Deterministic Intelligence** — the DRE (Debugging & Refactoring Engine) with 9 scanners (race conditions, resource leaks, security patterns, hardcoded values, duplicates, impact analysis), shadow-worktree-validated refactoring with cite-or-drop invariant, and semantic change classification (bug fix, refactor, optimization, rewrite, etc.) with per-change risk scoring
+- **Session Analysis** (v3.1) — risk scoring with confidence and readiness, 4-dimension decision scorecard (correctness / safety / simplicity / validation), session comparison with advisory, branch family ranking, step-level rollback points, execution graph with topology and timeline, and the DRE Dashboard for browser-based visualization
+- **Execution** — 11 specialized agents with auto-routing, 70+ tools, MCP integrations, plugin system, 10+ cloud and local providers
+- **Control Plane** — session persistence with replay and audit trails, sandbox and permission boundaries, encrypted storage, snapshot-based rollback
 
 ## High-Value Use Cases
 
