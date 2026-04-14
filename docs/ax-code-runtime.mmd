@@ -9,72 +9,52 @@
     "secondaryColor": "#e2e8f0",
     "secondaryTextColor": "#0f172a",
     "secondaryBorderColor": "#334155",
-    "tertiaryColor": "#dbeafe",
-    "tertiaryTextColor": "#0f172a",
-    "tertiaryBorderColor": "#2563eb",
     "fontFamily": "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif",
     "fontSize": "16px"
   },
   "flowchart": {
     "curve": "basis",
     "htmlLabels": true,
-    "nodeSpacing": 50,
-    "rankSpacing": 55,
-    "padding": 16
+    "nodeSpacing": 60,
+    "rankSpacing": 50,
+    "padding": 18
   }
 }}%%
 
 flowchart TB
-  CLI["CLI · TUI · DRE Dashboard"] --> R
-  SDK["SDK · Server · ACP"] --> R
-  VSC["VS Code"] --> R
+  A["<b>Interfaces</b><br/>CLI · TUI · SDK · Server · VS Code · DRE Dashboard"]
 
-  R(["<b>ax-code runtime</b><br/>11 agents · auto-routing · planning · 70+ tools · MCP"])
+  R(["<b>Runtime</b><br/>11 agents · auto-routing · 70+ tools · MCP · plugins"])
 
-  R --> S
+  STL["<b>Semantic Trust Layer</b><br/>LSP · Code Graph · Response Cache · Provenance Envelope"]
+
+  DI["<b>Deterministic Intelligence</b><br/>DRE — 9 scanners · safe refactor · semantic diff"]
+
+  SA["<b>Session Analysis</b><br/>risk scoring · execution graph · compare · branch rank · rollback"]
+
+  CP["<b>Control Plane</b><br/>session · permissions · replay · audit · snapshot"]
+
+  PV["<b>Providers</b><br/>10+ cloud · local · AX Engine"]
+
+  A --> R
+  R --> STL
+  STL --> DI
+  DI --> SA
   R --> CP
-
-  subgraph S["Semantic Trust Layer"]
-    direction TB
-    STL["LSP · Code Graph · Response Cache<br/><i>multi-server · provenance envelope · content-addressable</i>"]
-    STL --> DI
-
-    subgraph DI["Deterministic Intelligence"]
-      direction LR
-      DRE["DRE — 9 Scanners<br/><i>race · lifecycle · security · impact</i>"]
-      SEM["Semantic Diff · Safe Refactor<br/><i>classify changes · shadow worktree</i>"]
-    end
-
-    DI --> SA
-
-    subgraph SA["Session Analysis"]
-      direction LR
-      RISK["Risk Scoring · Execution Graph<br/><i>confidence · readiness · topology</i>"]
-      CMP["Compare · Branch Rank · Rollback<br/><i>4-dim scorecard · advisory · recovery</i>"]
-    end
-  end
-
-  subgraph CP["Control Plane"]
-    direction LR
-    SESS["Session · Memory<br/>Storage · Snapshot"]
-    PERM["Sandbox · Permissions<br/>Replay · Audit"]
-  end
-
-  PV["Providers — 10+ cloud · local · AX Engine"]
   R --> PV
 
+  classDef iface fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
   classDef runtime fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#0f172a
-  classDef surface fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-  classDef stl fill:#ede9fe,stroke:#7c3aed,stroke-width:2.5px,color:#0f172a
+  classDef semantic fill:#ede9fe,stroke:#7c3aed,stroke-width:2.5px,color:#0f172a
   classDef determ fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#0f172a
   classDef analysis fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
-  classDef control fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-  classDef provider fill:#f6f8fa,stroke:#475569,stroke-width:1.5px,color:#0f172a
+  classDef control fill:#f1f5f9,stroke:#334155,stroke-width:1.5px,color:#0f172a
+  classDef provider fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#0f172a
 
+  class A iface
   class R runtime
-  class CLI,SDK,VSC surface
-  class STL stl
-  class DRE,SEM determ
-  class RISK,CMP analysis
-  class SESS,PERM control
+  class STL semantic
+  class DI determ
+  class SA analysis
+  class CP control
   class PV provider
