@@ -247,34 +247,12 @@ export namespace ProviderTransform {
   }): Record<string, any> {
     const result: Record<string, any> = {}
 
-    // z.ai thinking/reasoning support.
-    //
-    // v3.1.0 unconditionally sent `thinking: { type: "enabled" }` to
-    // all zai models. The AI SDK also adds `reasoning_effort` to the
-    // request body for @ai-sdk/openai-compatible providers. Together
-    // these caused z.ai to route requests to a reasoning-tier resource
-    // package that coding-plan accounts typically don't have →
-    // 429 "Insufficient balance".
-    //
-    // Fix: for z.ai, only enable thinking when the user explicitly
-    // selected a `:thinking` model variant. Standard model IDs like
-    // "glm-5.1" get neither `thinking` nor `reasoningEffort`, matching
-    // v2.x behavior exactly.
-    if (input.model.providerID.startsWith("zai") && input.model.api.npm === "@ai-sdk/openai-compatible") {
-      if (input.model.id.includes(":thinking")) {
-        result["thinking"] = {
-          type: "enabled",
-          clear_thinking: false,
-        }
-      } else {
-        // Explicitly suppress reasoning_effort that the SDK would
-        // otherwise include. Without this, the SDK's openai-compatible
-        // adapter sends `reasoning_effort: undefined` which some
-        // providers interpret as an opt-in. Setting to undefined in
-        // our providerOptions ensures the SDK omits it from the body.
-        result["reasoningEffort"] = undefined
-      }
-    }
+    // z.ai: no special provider options. v3.1.0 added a `thinking`
+    // parameter that was reverted through v3.1.1 and v3.1.2. The
+    // lesson: don't add provider-specific options without a concrete
+    // user-facing need. The v2.x behavior (no thinking, no
+    // reasoningEffort) works correctly and should not be changed
+    // unless z.ai publishes a documented opt-in mechanism.
 
     if (input.providerOptions?.setCacheKey) {
       result["promptCacheKey"] = input.sessionID
