@@ -524,19 +524,25 @@ function createTranscriptFixture(count: number) {
   return { messages, parts }
 }
 
-function value(name: string, argv = process.argv.slice(2)) {
-  const idx = argv.indexOf(name)
+export function tuiBenchmarkScriptArgs(argv = process.argv.slice(2)) {
+  const idx = argv.indexOf("--")
+  return idx < 0 ? argv : argv.slice(0, idx)
+}
+
+export function tuiBenchmarkValue(name: string, argv = process.argv.slice(2)) {
+  const args = tuiBenchmarkScriptArgs(argv)
+  const idx = args.indexOf(name)
   if (idx < 0) return
-  const next = argv[idx + 1]
+  const next = args[idx + 1]
   if (!next || next.startsWith("--")) throw new Error(`Missing value for ${name}`)
   return next
 }
 
-function flag(name: string, argv = process.argv.slice(2)) {
-  return argv.includes(name)
+export function tuiBenchmarkFlag(name: string, argv = process.argv.slice(2)) {
+  return tuiBenchmarkScriptArgs(argv).includes(name)
 }
 
-function command(argv = process.argv.slice(2)) {
+export function tuiBenchmarkCommand(argv = process.argv.slice(2)) {
   const idx = argv.indexOf("--")
   if (idx < 0) return
   const out = argv.slice(idx + 1)
@@ -545,22 +551,25 @@ function command(argv = process.argv.slice(2)) {
 }
 
 async function main() {
-  const repeat = Number(value("--repeat") ?? DEFAULT_REPEAT)
-  const timeoutMs = Number(value("--timeout-ms") ?? DEFAULT_TIMEOUT_MS)
-  const renderer = parseTuiRendererName(value("--renderer") ?? process.env["AX_CODE_TUI_RENDERER"], "opentui")
+  const repeat = Number(tuiBenchmarkValue("--repeat") ?? DEFAULT_REPEAT)
+  const timeoutMs = Number(tuiBenchmarkValue("--timeout-ms") ?? DEFAULT_TIMEOUT_MS)
+  const renderer = parseTuiRendererName(
+    tuiBenchmarkValue("--renderer") ?? process.env["AX_CODE_TUI_RENDERER"],
+    "opentui",
+  )
   const plan = createTuiBenchmarkPlan({
-    command: flag("--run") ? command() : undefined,
+    command: tuiBenchmarkFlag("--run") ? tuiBenchmarkCommand() : undefined,
     renderer,
     repeat,
     timeoutMs,
   })
 
-  if (flag("--list")) {
+  if (tuiBenchmarkFlag("--list")) {
     console.log(JSON.stringify({ version: TUI_PERFORMANCE_CRITERIA_VERSION, plan }, null, 2))
     return
   }
 
-  const resultsPath = value("--results")
+  const resultsPath = tuiBenchmarkValue("--results")
   const results = resultsPath
     ? (JSON.parse(await Bun.file(resultsPath).text()) as TuiBenchmarkResult[])
     : await runTuiBenchmarkPlan(plan)
@@ -568,10 +577,10 @@ async function main() {
   const report = await createTuiBenchmarkReport({
     results,
     verdict,
-    command: flag("--run") ? command() : undefined,
+    command: tuiBenchmarkFlag("--run") ? tuiBenchmarkCommand() : undefined,
     renderer,
   })
-  const output = value("--output")
+  const output = tuiBenchmarkValue("--output")
   if (output) await writeTuiBenchmarkReport(output, report)
   console.log(JSON.stringify(report, null, 2))
   if (!verdict.ok) process.exitCode = 1

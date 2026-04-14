@@ -4,6 +4,9 @@ import {
   createTuiBenchmarkReport,
   createTuiBenchmarkPlan,
   evaluateTuiBenchmarkResults,
+  tuiBenchmarkCommand,
+  tuiBenchmarkFlag,
+  tuiBenchmarkValue,
   type TuiBenchmarkResult,
   writeTuiBenchmarkReport,
 } from "../../script/tui-benchmark"
@@ -60,6 +63,25 @@ describe("script.tui-benchmark", () => {
   test("rejects empty benchmark plans from invalid repeat or timeout values", () => {
     expect(() => createTuiBenchmarkPlan({ repeat: 0 })).toThrow("repeat must be a positive integer")
     expect(() => createTuiBenchmarkPlan({ timeoutMs: Number.NaN })).toThrow("timeoutMs must be a positive integer")
+  })
+
+  test("does not parse benchmark flags from the command after --", () => {
+    const argv = [
+      "--renderer",
+      "native",
+      "--run",
+      "--",
+      "ax-code",
+      "--renderer",
+      "opentui",
+      "--output",
+      "/tmp/wrong.json",
+    ]
+
+    expect(tuiBenchmarkValue("--renderer", argv)).toBe("native")
+    expect(tuiBenchmarkValue("--output", argv)).toBeUndefined()
+    expect(tuiBenchmarkFlag("--run", argv)).toBe(true)
+    expect(tuiBenchmarkCommand(argv)).toEqual(["ax-code", "--renderer", "opentui", "--output", "/tmp/wrong.json"])
   })
 
   test("evaluates p95 and fps thresholds", () => {

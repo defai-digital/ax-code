@@ -163,7 +163,7 @@ bun run tui:renderer:evidence -- --issues ../../tmp/tui-issues.json
 Include benchmark failures:
 
 ```bash
-bun run script/tui-benchmark.ts --run -- bun run src/index.ts --output /tmp/tui-benchmark.json
+bun run perf:tui -- --run --output /tmp/tui-benchmark.json -- bun run src/index.ts
 bun run tui:renderer:evidence -- --issues ../../tmp/tui-issues.json --benchmark-report /tmp/tui-benchmark.json
 ```
 
