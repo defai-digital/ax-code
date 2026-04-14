@@ -49,7 +49,7 @@ Teams adopt `ax-code` when they need AI coding to behave like an execution syste
 | ------------------------------------------------ | -------------------------------------- | ------------------------------------------------------------------ |
 | Multi-provider without workflow changes          | Mostly vendor-tied (one primary model) | Provider-agnostic (10+ cloud + local/AX Engine/Ollama)             |
 | Controlled/safe tool execution                   | Often implicit or broad permissions    | Explicit tools, sandbox modes, permission rules, bash analysis     |
-| **Semantic provenance & replay**                 | —                                      | **Every AI-consumed semantic answer carries source / completeness / timestamp, is cached content-addressably, and is recorded in a replayable audit trail** |
+| **Semantic provenance & replay**                 | —                                      | **LSP-backed and graph-backed semantic surfaces carry explicit source / completeness / timestamp metadata and preserve replayable decision context** |
 | Reusable across surfaces (CLI, IDE, SDK, CI)     | UI-bound or chat-only                  | Same runtime powers TUI, VS Code, headless server, full SDK        |
 | Local-first / air-gapped / enterprise governance | Heavy cloud reliance                   | Local defaults, encrypted keys, session audit, deterministic DRE   |
 | Extensibility & integration                      | Limited plugins                        | SDK, MCP servers, plugins, semantic trust layer, deterministic refactor tools |
@@ -80,10 +80,12 @@ Source: [docs/ax-code-runtime.mmd](docs/ax-code-runtime.mmd)
 
 The important distinction is that `ax-code` is not just a chat UI. It is a runtime that coordinates:
 
-- interfaces such as CLI, TUI, SDK, ACP, and headless server mode
+- interfaces such as CLI, TUI, SDK, ACP, headless server mode, and the **DRE Dashboard** (v3.1 — browser-based execution visualization)
 - agent routing, planning, and dependency-ordered execution
-- tool execution, MCP integrations, a semantic trust layer (v2.22) with provenance envelopes + content-addressable cache + audit/replay, and a persistent code graph (Code Intelligence, v2.2) backed by language servers
+- tool execution, MCP integrations, a semantic layer with explicit LSP-vs-graph provenance, content-addressable LSP cache, audit/replay metadata, and a persistent code graph backed by language servers
 - the **Debugging & Refactoring Engine** (DRE, v2.3+) — deterministic-first root-cause analysis, proactive scanners (race conditions, resource leaks, security patterns, hardcoded values), change-impact analysis, and shadow-worktree-validated refactors
+- **semantic change analysis** (v3.1) — deterministic classification of file changes (bug fix, refactor, optimization, rewrite, etc.) with per-change risk scoring
+- **session analysis layer** (v3.1) — risk scoring with confidence/readiness, 4-dimension decision scorecard (correctness/safety/simplicity/validation), session comparison with advisory, branch family ranking, step-level rollback points, and execution graph topology
 - **incremental indexing** (v2.4) — content-hash skip on unchanged files, orphan purge on deleted files, per-file progress reporting
 - session, memory, and storage state with replay, audit, and snapshot trails
 - sandbox, permission, and policy boundaries
@@ -225,7 +227,7 @@ Local providers auto-discover running models — no API key needed. Your code ne
 
 ### Specialized AI Agents
 
-AX Code uses **10 purpose-built agents** with enterprise-focused roles (structured workflows, TDD/PRD/ADR enforcement, DRE tools for safe deterministic changes, prioritization, and high-value patterns). This differentiates us from general AI coders by supporting real business environments — governed processes, infra/DevOps, auditable refactoring, and quality gates instead of unstructured chat.
+AX Code ships with multiple purpose-built agents covering general coding, review, planning, debugging, performance, DevOps, testing, and subagent delegation. This differentiates it from general AI coders by supporting governed workflows, infrastructure work, auditable refactoring, and quality gates instead of unstructured chat alone.
 
 | Agent          | What It Does                                                            | Auto-routes When You Say...                        |
 | -------------- | ----------------------------------------------------------------------- | -------------------------------------------------- |
@@ -235,33 +237,37 @@ AX Code uses **10 purpose-built agents** with enterprise-focused roles (structur
 | **Debugger**   | Root cause analysis, reproduction, systematic fixes (plan + DRE)        | "debug", "why is it crashing", "fix bug"           |
 | **Perf**       | Bottlenecks, profiling, optimization (web-enabled + DRE)                | "slow", "optimize", "performance"                  |
 | **DevOps**     | Infra, CI/CD, Docker, K8s, Terraform, deployments (write-enabled + DRE) | "deploy", "docker", "kubernetes", "ci/cd", "infra" |
+| **Tester**     | Tests, coverage, failure analysis, and test infrastructure               | "test", "coverage", "failing test", "add tests"     |
 | **Planner**    | Task decomposition and planning (read-only)                             | _(manual via Tab)_                                 |
 | **Reasoner**   | Structured ReAct reasoning for complex tasks                            | _(manual via Tab)_                                 |
 | **Assistant**  | Parallel multi-step execution (subagent)                                | _(subagent)_                                       |
 | **Researcher** | Fast codebase exploration and search (subagent)                         | _(subagent)_                                       |
 
-**Auto-routing** selects based on keywords/patterns with confidence scoring. Switch manually with **Tab**. All agents enforce enterprise best practices (TDD, PRD/ADR before features, DRE tools, prioritization). See `src/agent/agent.ts` for details.
+**Auto-routing** selects based on keywords/patterns with confidence scoring. Switch manually with **Tab**. All agents enforce enterprise best practices (TDD, PRD/ADR before features, DRE tools, prioritization). The exact visible set can expand through config and hidden internal agents are omitted here; see `packages/ax-code/src/agent/agent.ts` for the source of truth.
 
 ### Semantic Trust Layer
 
-AX Code treats every AI-consumed semantic answer — "what does this symbol refer to", "where is it used", "what calls this function" — as something that must be **traceable, reusable, and replayable**. Not just "correct today"; traceable **to a specific source**, at a **specific point in time**, with explicit **completeness**.
+AX Code treats semantic answers — "what does this symbol refer to", "where is it used", "what calls this function" — as something that must be **traceable, reusable, and replayable**. Not just "correct today"; traceable **to a specific source**, at a **specific point in time**, with explicit **completeness**.
 
 This is the control plane that backs AI coding workflows that teams can operationalize, not just observe.
 
-**Provenance envelope.** Every AI-facing semantic result carries:
-- `source` — `lsp` (freshly fetched) or `cache` (served from the response cache)
-- `completeness` — `full` (every server participated), `partial` (some failed), or `empty` (no server matched)
-- `timestamp` — when the underlying query was resolved
-- `serverIDs` — which language servers contributed
-- `cacheKey` — stable reference to the cached row when applicable
+Current-state contract: [docs/architecture/semantic-layer.md](docs/architecture/semantic-layer.md)
 
-AI consumers no longer see "a list of symbols". They see **a list of symbols plus why the runtime trusts them**.
+**Provenance envelope.** Semantic surfaces use an explicit dual-source contract:
+- `source` — `graph` (indexed code graph), `lsp` (fresh live query), or `cache` (served from the LSP response cache)
+- `completeness` — `full`, `partial`, or `empty`
+- `timestamp` — when the graph snapshot or underlying live query was resolved
+- `serverIDs` — which language servers contributed on LSP-backed answers
+- `cacheKey` — stable reference to the cached row when applicable
+- `degraded` — whether the result should be treated cautiously due to missing cursor state or LSP-side failures
+
+The important point is that AX Code does **not** silently route graph queries into LSP or vice versa. Consumers can tell which semantic source answered, and decide how fresh they need it to be.
 
 **Content-addressable response cache.** `references` and `documentSymbol` queries are cached against a SHA of the file content. A cache row is only reachable while the file bytes still match — stale rows are **unreachable by construction**, not expired by a watcher. In the reference benchmark this dropped `lsp.references` wall-clock by **~49%** and cut the sum of per-call RPC time by **~48%**. Feature-flagged behind `AX_CODE_LSP_CACHE=1` while the mechanism settles.
 
-**Replayable audit trail.** Every semantic call routed through the `lsp` tool writes one row to `audit_semantic_call`: tool, operation, args, the returned envelope, and an error code on failure. Default writer is queue-by-default (tick-boundary flush + process-exit drain); `AX_CODE_AUDIT_SYNC=1` opts into synchronous writes for compliance scenarios. `ax-code debug replay <audit_id>` re-executes a recorded call and diffs the decision-path fields (`source`, `completeness`, `cacheKey`) against the recorded envelope — decision-path equivalence, not semantic-output determinism (external language servers are not deterministic, and the trust layer honestly scopes its claims there).
+**Replayable decision trail.** Live LSP semantic calls routed through the `lsp` tool write one row to `audit_semantic_call`: tool, operation, args, the returned envelope, and an error code on failure. Graph-backed semantic results preserve their envelope through normal tool replay/audit export metadata. `AX_CODE_AUDIT_SYNC=1` opts LSP audit writes into synchronous mode for compliance scenarios. `ax-code debug replay <audit_id>` re-executes a recorded live semantic call and diffs the decision-path fields (`source`, `completeness`, `cacheKey`) against the recorded envelope — decision-path equivalence, not semantic-output determinism.
 
-**Backed by real language servers.** TypeScript, Python (Pyright), Go (gopls), Rust (rust-analyzer), Ruby (Solargraph), C/C++ (clangd), and more — the same ones your IDE uses — surface through the envelope variants `LSP.referencesEnvelope`, `LSP.documentSymbolEnvelope`, `LSP.hoverEnvelope`, `LSP.definitionEnvelope`, `LSP.workspaceSymbolEnvelope`. Bare-array wrappers remain for back-compat.
+**Backed by real language servers and a persistent graph.** TypeScript, Python (Pyright), Go (gopls), Rust (rust-analyzer), Ruby (Solargraph), C/C++ (clangd), and more — the same ones your IDE uses — surface through live envelope variants such as `LSP.referencesEnvelope`, `LSP.documentSymbolEnvelope`, `LSP.hoverEnvelope`, `LSP.definitionEnvelope`, `LSP.workspaceSymbolEnvelope`, aggregated diagnostics, and call-hierarchy envelopes. The persistent code graph exposes the indexed side of the same semantic layer through `code_intelligence`. The `lsp` tool is the live-LSP surface and is still treated as an explicit/advanced interface rather than a hidden fallback behind graph queries.
 
 ### Code Intelligence Graph
 
@@ -274,23 +280,29 @@ ax-code index --concurrency 8  # Parallel indexing for large projects
 
 **Incremental by default (v2.4).** Second runs skip unchanged files via content-hash matching — only modified files re-index. Deleted files are automatically purged from the graph. Progress shows per-file completion in real time.
 
-The graph powers tools like `code-intelligence` (symbol lookup, callers, callees), `impact_analyze` (change impact estimation), and `refactor_plan` (dependency-aware refactoring).
+The graph powers tools like `code_intelligence` (symbol lookup, callers, callees), `impact_analyze` (change impact estimation), and `refactor_plan` (dependency-aware refactoring).
 
-### 38+ Built-in Tools
+### Built-in and Optional Tools
 
 | Category              | Tools                                                               |
 | --------------------- | ------------------------------------------------------------------- |
-| **File operations**   | read, write, edit, glob, ls, multiedit, apply_patch                 |
-| **Code search**       | grep (regex), codesearch (web), websearch                           |
-| **Shell execution**   | bash (with timeout and sandboxing)                                  |
-| **Semantic queries**  | definition, references, hover, symbols, call hierarchy, diagnostics (all envelope-wrapped) |
-| **Code intelligence** | code-intelligence (graph queries, symbol lookup, call graphs)       |
-| **DRE analysis**      | debug_analyze, dedup_scan, hardcode_scan, impact_analyze            |
-| **DRE scanners**      | race_scan, lifecycle_scan, security_scan (proactive, incremental)   |
-| **DRE refactoring**   | refactor_plan, refactor_apply (shadow-worktree-validated)           |
-| **Planning**          | task, todo, plan enter/exit, skill                                  |
-| **Web**               | webfetch (URL to markdown), websearch, exa-fetch                    |
-| **Batch**             | Parallel tool execution                                             |
+| **File operations**   | `read`, `write`, `edit`, `glob`, `list`, `multiedit`, `apply_patch` |
+| **Code search**       | `grep`, `codesearch`, `websearch`                                   |
+| **Shell execution**   | `bash`                                                               |
+| **Semantic queries**  | `lsp` operations for definition, references, hover, document/workspace symbols, implementations, call hierarchy, and aggregated diagnostics |
+| **Code intelligence** | `code_intelligence` for graph queries, symbol lookup, and call graphs |
+| **DRE analysis**      | `debug_analyze`, `dedup_scan`, `hardcode_scan`, `impact_analyze`     |
+| **DRE scanners**      | `race_scan`, `lifecycle_scan`, `security_scan`                       |
+| **DRE refactoring**   | `refactor_plan`, `refactor_apply`                                    |
+| **Planning**          | `task`, `todo`, `plan_enter`, `plan_exit`, `skill`                   |
+| **Web**               | `webfetch`, `websearch`                                              |
+| **Batch**             | `batch`                                                              |
+
+Some surfaces are conditional:
+
+- `code_intelligence` and the DRE tools are enabled by default but can be disabled with feature flags.
+- `lsp` remains an explicit live-semantic tool surface and currently requires the experimental LSP tool flag.
+- The exact tool list also varies by provider, client surface, and plugin/tool registration.
 
 ### Session Persistence
 

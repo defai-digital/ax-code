@@ -30,6 +30,7 @@ flowchart TB
     CLI["CLI · TUI"]
     SDK["SDK · Server · ACP"]
     VSC["VS Code"]
+    DASH["DRE Dashboard<br/><i>v3.1</i>"]
   end
 
   R(["ax-code runtime<br/><i>agent routing · planning · execution</i>"])
@@ -37,26 +38,45 @@ flowchart TB
   subgraph X["Execution Layer"]
     direction LR
     TL["Tools · MCP"]
-    LS["LSP · Code Graph<br/><i>v2.2</i>"]
-    DRE["DRE<br/><i>v2.3 · debug · refactor</i>"]
+    LS["LSP · Code Graph<br/><i>Semantic Trust Layer</i>"]
+    DRE["DRE<br/><i>debug · refactor · scan</i>"]
     PV["Providers<br/><i>cloud · local</i>"]
+  end
+
+  subgraph V["Analysis Layer <i>v3.1</i>"]
+    direction LR
+    SEM["Semantic Diff<br/><i>change classification · risk</i>"]
+    RISK["Risk Scoring<br/><i>confidence · readiness</i>"]
+    CMP["Compare · Branch Rank<br/><i>scorecard · advisory</i>"]
+    EG["Execution Graph<br/><i>topology · timeline</i>"]
   end
 
   subgraph C["Control Plane"]
     direction LR
     ST["Session · Memory · Storage"]
     SG["Sandbox · Permissions · Policy"]
-    OB["Replay · Audit · Snapshot"]
+    OB["Replay · Audit · Snapshot<br/><i>rollback points</i>"]
   end
 
   CLI --> R
   SDK --> R
   VSC --> R
+  DASH --> SDK
 
   R --> TL
   R --> LS
   R --> DRE
   R --> PV
+
+  R --> SEM
+  R --> RISK
+  R --> CMP
+  R --> EG
+
+  SEM --> LS
+  RISK --> SEM
+  CMP --> RISK
+  EG --> OB
 
   R --> ST
   R --> SG
@@ -66,8 +86,10 @@ flowchart TB
   classDef surface fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
   classDef exec fill:#f6f8fa,stroke:#475569,stroke-width:1.5px,color:#0f172a
   classDef power fill:#fef3c7,stroke:#b45309,stroke-width:2.5px,color:#0f172a
+  classDef analysis fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
 
   class R runtime
-  class CLI,SDK,VSC,ST,SG,OB surface
+  class CLI,SDK,VSC,DASH,ST,SG,OB surface
   class TL,LS,PV exec
   class DRE power
+  class SEM,RISK,CMP,EG analysis
