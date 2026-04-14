@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { resolveTuiRendererName } from "../../../src/cli/cmd/tui/renderer-choice"
+import { parseTuiRendererName, resolveTuiRendererName } from "../../../src/cli/cmd/tui/renderer-choice"
 import {
   applyNativePromptAction,
   loadNativeTranscript,
@@ -14,7 +14,9 @@ describe("tui native vertical slice", () => {
     expect(resolveTuiRendererName(undefined)).toBe("opentui")
     expect(resolveTuiRendererName("opentui")).toBe("opentui")
     expect(resolveTuiRendererName("native")).toBe("native")
-    expect(resolveTuiRendererName("invalid")).toBe("opentui")
+    expect(() => resolveTuiRendererName("invalid")).toThrow("Invalid TUI renderer")
+    expect(parseTuiRendererName("native")).toBe("native")
+    expect(() => parseTuiRendererName("invalid")).toThrow("Invalid TUI renderer")
   })
 
   test("projects static transcript text without renderer state", () => {
@@ -64,6 +66,26 @@ describe("tui native vertical slice", () => {
     )
   })
 
+  test("does not render beyond tiny terminal dimensions", () => {
+    const lines = nativeFrameLines({
+      viewport: { width: 10, height: 3 },
+      transcript: [{ role: "assistant", text: "this line is longer than the viewport" }],
+      prompt: "abcdefghi",
+    })
+
+    expect(lines).toHaveLength(3)
+    expect(lines.every((line) => Array.from(line).length <= 10)).toBe(true)
+    expect(lines.at(-1)).toBe("> abcdefgh")
+
+    const zeroSizedLines = nativeFrameLines({
+      viewport: { width: 0, height: 0 },
+      transcript: [{ role: "assistant", text: "ready" }],
+      prompt: "x",
+    })
+    expect(zeroSizedLines).toHaveLength(1)
+    expect(Array.from(zeroSizedLines[0] ?? "")).toHaveLength(1)
+  })
+
   test("parses fallback prompt input and applies editable echo", () => {
     const actions = parseNativeInputActions("abc\u007f\r\u0003")
     expect(actions).toEqual([
@@ -77,5 +99,22 @@ describe("tui native vertical slice", () => {
     prompt = applyNativePromptAction(prompt, actions[0]!)
     prompt = applyNativePromptAction(prompt, actions[1]!)
     expect(prompt).toBe("ab")
+  })
+
+  test("maps tagged native core input events", () => {
+    const core = {
+      parseInputJson: () =>
+        JSON.stringify([
+          { type: "text", text: "a" },
+          { type: "paste", text: "bc" },
+          { type: "key", name: "left", ctrl: true, alt: true, shift: false },
+        ]),
+    }
+
+    expect(parseNativeInputActions("ignored", core)).toEqual([
+      { type: "text", text: "a" },
+      { type: "text", text: "bc" },
+      { type: "key", name: "left", ctrl: true, meta: true, shift: false },
+    ])
   })
 })

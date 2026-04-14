@@ -12,8 +12,11 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from "crypto"
+import { readFileSync, writeFileSync, mkdirSync } from "fs"
+import path from "path"
 import os from "os"
 import { Log } from "../util/log"
+import { Global } from "../global"
 
 const log = Log.create({ service: "auth/encryption" })
 
@@ -39,12 +42,51 @@ export interface EncryptedValue {
   version: number
 }
 
-function machineId(): string {
+/**
+ * Returns a per-install secret. On first call, generates a 32-byte random
+ * hex string and persists it to disk. Subsequent calls read the stored value.
+ * Falls back to empty string if the data directory is unavailable (e.g. during
+ * tests), preserving backward compatibility with the hostname-only password.
+ */
+let installSecret: string | undefined
+function getInstallSecret(): string {
+  if (installSecret !== undefined) return installSecret
+  try {
+    const secretPath = path.join(Global.Path.data, ".install-secret")
+    try {
+      installSecret = readFileSync(secretPath, "utf-8").trim()
+    } catch {
+      // First run — generate and persist
+      installSecret = randomBytes(32).toString("hex")
+      mkdirSync(path.dirname(secretPath), { recursive: true })
+      writeFileSync(secretPath, installSecret, { mode: 0o600 })
+      log.info("generated install secret for encryption key derivation")
+    }
+  } catch {
+    // Data directory not available (e.g. unit tests) — fall back gracefully
+    installSecret = ""
+  }
+  return installSecret
+}
+
+/** Legacy machine ID (hostname-platform-arch only) — used as fallback for decryption. */
+function legacyMachineId(): string {
   return `${os.hostname()}-${os.platform()}-${os.arch()}`
+}
+
+/** Machine ID with per-install secret for stronger key derivation. */
+function machineId(): string {
+  const secret = getInstallSecret()
+  if (!secret) return legacyMachineId()
+  return `${os.hostname()}-${os.platform()}-${os.arch()}-${secret}`
 }
 
 function deriveKey(salt: Buffer, iterations: number): Buffer {
   return pbkdf2Sync(machineId(), salt, iterations, KEY_LENGTH, "sha256")
+}
+
+function deriveKeyWithPassword(password: string, salt: Buffer, iterations: number): Buffer {
+  return pbkdf2Sync(password, salt, iterations, KEY_LENGTH, "sha256")
 }
 
 /**
@@ -90,19 +132,53 @@ export function decrypt(value: EncryptedValue): string {
   // legacy entries to a proper 32-byte random salt.
   const salt = value.salt ? Buffer.from(value.salt, "base64") : iv.subarray(0, SALT_LENGTH)
 
-  // Try current iterations first
+  // Try current machineId (with install secret) + current iterations
   try {
     return decryptWith(encrypted, iv, salt, tag, PBKDF2_ITERATIONS)
   } catch {
-    // Fall back to legacy iterations. If this also fails, the original
-    // legacy error propagates to the caller (no swallow).
-    log.debug("current iterations failed, retrying with legacy")
-    return decryptWith(encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
+    log.debug("current key+iterations failed, trying fallbacks")
   }
+
+  // Try current machineId + legacy iterations
+  try {
+    return decryptWith(encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
+  } catch {
+    log.debug("current key+legacy iterations failed")
+  }
+
+  // Try legacy machineId (without install secret) + current iterations
+  const legacy = legacyMachineId()
+  if (legacy !== machineId()) {
+    try {
+      return decryptWithPassword(legacy, encrypted, iv, salt, tag, PBKDF2_ITERATIONS)
+    } catch {
+      log.debug("legacy key+current iterations failed")
+    }
+
+    // Try legacy machineId + legacy iterations (last resort)
+    return decryptWithPassword(legacy, encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
+  }
+
+  // No install secret means machineId === legacyMachineId, all attempts exhausted
+  throw new Error("decryption failed — all key derivation attempts exhausted")
 }
 
 function decryptWith(encrypted: Buffer, iv: Buffer, salt: Buffer, tag: Buffer, iterations: number): string {
   const key = deriveKey(salt, iterations)
+  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH })
+  decipher.setAuthTag(tag)
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8")
+}
+
+function decryptWithPassword(
+  password: string,
+  encrypted: Buffer,
+  iv: Buffer,
+  salt: Buffer,
+  tag: Buffer,
+  iterations: number,
+): string {
+  const key = deriveKeyWithPassword(password, salt, iterations)
   const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH })
   decipher.setAuthTag(tag)
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8")

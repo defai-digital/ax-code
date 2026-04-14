@@ -185,12 +185,16 @@ export function nativeFrameLines(input: {
   transcript: NativeTranscriptEntry[]
   prompt: string
 }) {
-  const width = clamp(Math.floor(input.viewport.width || 80), 20, 240)
-  const height = clamp(Math.floor(input.viewport.height || 24), 6, 200)
-  const bodyHeight = Math.max(1, height - 4)
+  const width = viewportDimension(input.viewport.width, 80, 1, 240)
+  const height = viewportDimension(input.viewport.height, 24, 1, 200)
   const header = fitLine(`AX Code native renderer (${width}x${height})`, width)
   const divider = "-".repeat(width)
   const prompt = fitLine(`> ${input.prompt}`, width)
+  if (height === 1) return [prompt]
+  if (height === 2) return [header, prompt]
+  if (height === 3) return [header, divider, prompt]
+
+  const bodyHeight = height - 4
   const body = input.transcript.flatMap((entry) => wrapNativeLine(`${label(entry.role)}: ${entry.text}`, width))
   const visible = body.slice(-bodyHeight)
 
@@ -244,17 +248,43 @@ function parseWithNativeCore(input: string, core?: NativeTerminalCore): NativeIn
 
 function mapNativeInputEvent(event: unknown): NativeInputAction[] {
   if (!event || typeof event !== "object") return []
+  if ("type" in event && typeof event.type === "string") {
+    const tagged = event as {
+      type: string
+      name?: unknown
+      text?: unknown
+      ctrl?: unknown
+      alt?: unknown
+      meta?: unknown
+      shift?: unknown
+    }
+    if ((tagged.type === "text" || tagged.type === "paste") && typeof tagged.text === "string") {
+      return [{ type: "text", text: tagged.text }]
+    }
+    if (tagged.type === "key" && typeof tagged.name === "string") {
+      return [
+        {
+          type: "key",
+          name: tagged.name,
+          ctrl: Boolean(tagged.ctrl),
+          meta: Boolean(tagged.meta ?? tagged.alt),
+          shift: Boolean(tagged.shift),
+        },
+      ]
+    }
+    return []
+  }
   if ("Text" in event && typeof event.Text === "string") return [{ type: "text", text: event.Text }]
   if ("Paste" in event && typeof event.Paste === "string") return [{ type: "text", text: event.Paste }]
   if ("Key" in event && event.Key && typeof event.Key === "object") {
-    const key = event.Key as { name?: unknown; ctrl?: unknown; meta?: unknown; shift?: unknown }
+    const key = event.Key as { name?: unknown; ctrl?: unknown; alt?: unknown; meta?: unknown; shift?: unknown }
     if (typeof key.name !== "string") return []
     return [
       {
         type: "key",
         name: key.name,
         ctrl: Boolean(key.ctrl),
-        meta: Boolean(key.meta),
+        meta: Boolean(key.meta ?? key.alt),
         shift: Boolean(key.shift),
       },
     ]
@@ -338,4 +368,8 @@ function label(role: NativeTranscriptEntry["role"]) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
+}
+
+function viewportDimension(value: number, fallback: number, min: number, max: number) {
+  return clamp(Number.isFinite(value) ? Math.floor(value) : fallback, min, max)
 }

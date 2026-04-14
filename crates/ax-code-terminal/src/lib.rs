@@ -143,6 +143,7 @@ pub fn parse_input(input: &str) -> Vec<InputEvent> {
         let ch = rest.chars().next().expect("idx is within input bounds");
         match ch {
             '\x03' => out.push(key("c", true, false, false)),
+            '\x04' => out.push(key("d", true, false, false)),
             '\x1b' => out.push(key("escape", false, false, false)),
             '\r' | '\n' => out.push(key("enter", false, false, false)),
             '\t' => out.push(key("tab", false, false, false)),
@@ -586,6 +587,11 @@ mod tests {
                 InputEvent::Text { text: "b".into() },
             ]
         );
+    }
+
+    #[test]
+    fn parses_ctrl_d_as_shutdown_key() {
+        assert_eq!(parse_input("\x04"), vec![key("d", true, false, false)]);
     }
 
     #[test]

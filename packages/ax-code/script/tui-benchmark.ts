@@ -8,6 +8,8 @@ import {
   TUI_PERFORMANCE_CRITERIA_VERSION,
   type TuiPerformanceCriterion,
 } from "../src/cli/cmd/tui/performance-criteria"
+import { parseTuiRendererName, resolveTuiRendererName } from "../src/cli/cmd/tui/renderer-choice"
+import type { TuiRendererName } from "../src/cli/cmd/tui/renderer-adapter/types"
 import { lastAssistantText, transcriptItems } from "../src/cli/cmd/tui/routes/session/display"
 import { messageScroll, nextVisibleMessage } from "../src/cli/cmd/tui/routes/session/navigation"
 import { sessionTaskSummary } from "../src/cli/cmd/tui/routes/session/view-model"
@@ -32,6 +34,7 @@ export type TuiBenchmarkPlanItem = {
   timeoutMs: number
   repeat: number
   command?: string[]
+  renderer?: TuiRendererName
   inputSequence?: string
   workload: string
   measurement: string
@@ -69,7 +72,7 @@ export type TuiBenchmarkReportMetadata = {
     termProgram?: string
   }
   renderer: {
-    name: "opentui"
+    name: TuiRendererName
     coreVersion?: string
     solidVersion?: string
   }
@@ -99,12 +102,13 @@ function criterion(id: string): TuiPerformanceCriterion {
 export function createTuiBenchmarkPlan(
   input: {
     command?: string[]
+    renderer?: TuiRendererName
     repeat?: number
     timeoutMs?: number
   } = {},
 ): TuiBenchmarkPlanItem[] {
-  const repeat = input.repeat ?? DEFAULT_REPEAT
-  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const repeat = positiveInteger(input.repeat ?? DEFAULT_REPEAT, "repeat")
+  const timeoutMs = positiveInteger(input.timeoutMs ?? DEFAULT_TIMEOUT_MS, "timeoutMs")
 
   return [
     planItem(criterion("startup.first-frame"), {
@@ -113,6 +117,7 @@ export function createTuiBenchmarkPlan(
       repeat,
       timeoutMs,
       command: input.command,
+      renderer: input.renderer,
     }),
     planItem(criterion("input.keypress-echo"), {
       probe: "pty-input-echo",
@@ -120,6 +125,7 @@ export function createTuiBenchmarkPlan(
       repeat,
       timeoutMs,
       command: input.command,
+      renderer: input.renderer,
       inputSequence: INPUT_ECHO_SEQUENCE,
     }),
     planItem(criterion("input.paste-echo"), {
@@ -128,6 +134,7 @@ export function createTuiBenchmarkPlan(
       repeat,
       timeoutMs,
       command: input.command,
+      renderer: input.renderer,
       inputSequence: PASTE_ECHO_SEQUENCE,
     }),
     planItem(criterion("terminal.resize-stability"), {
@@ -136,6 +143,7 @@ export function createTuiBenchmarkPlan(
       repeat,
       timeoutMs,
       command: input.command,
+      renderer: input.renderer,
     }),
     planItem(criterion("mouse.click-release"), {
       probe: "pty-mouse-click-release",
@@ -143,6 +151,7 @@ export function createTuiBenchmarkPlan(
       repeat,
       timeoutMs,
       command: input.command,
+      renderer: input.renderer,
     }),
     planItem(criterion("selection.drag-stability"), {
       probe: "pty-selection-drag-stability",
@@ -150,18 +159,21 @@ export function createTuiBenchmarkPlan(
       repeat,
       timeoutMs,
       command: input.command,
+      renderer: input.renderer,
     }),
     planItem(criterion("transcript.large-append"), {
       probe: "fixture-replay",
       metric: "p95Ms",
       repeat,
       timeoutMs,
+      renderer: input.renderer,
     }),
     planItem(criterion("scroll.long-cjk-wrapped"), {
       probe: "scroll-replay",
       metric: "minFps",
       repeat,
       timeoutMs,
+      renderer: input.renderer,
     }),
   ]
 }
@@ -169,7 +181,7 @@ export function createTuiBenchmarkPlan(
 function planItem(
   criterion: TuiPerformanceCriterion,
   input: Pick<TuiBenchmarkPlanItem, "probe" | "metric" | "repeat" | "timeoutMs"> &
-    Partial<Pick<TuiBenchmarkPlanItem, "command" | "inputSequence">>,
+    Partial<Pick<TuiBenchmarkPlanItem, "command" | "inputSequence" | "renderer">>,
 ): TuiBenchmarkPlanItem {
   return {
     id: `${criterion.id}:${input.probe}`,
@@ -180,6 +192,7 @@ function planItem(
     repeat: input.repeat,
     timeoutMs: input.timeoutMs,
     command: input.command,
+    renderer: input.renderer,
     inputSequence: input.inputSequence,
     workload: criterion.workload,
     measurement: criterion.measurement,
@@ -215,9 +228,11 @@ export async function createTuiBenchmarkReport(input: {
   results: TuiBenchmarkResult[]
   verdict: TuiBenchmarkVerdict
   command?: string[]
+  renderer?: TuiRendererName
   generatedAt?: string
 }): Promise<TuiBenchmarkReport> {
   const packageJSON = await readPackageJSON()
+  const renderer = input.renderer ?? resolveTuiRendererName()
 
   return {
     version: TUI_PERFORMANCE_CRITERIA_VERSION,
@@ -237,11 +252,7 @@ export async function createTuiBenchmarkReport(input: {
         term: process.env["TERM"],
         termProgram: process.env["TERM_PROGRAM"],
       },
-      renderer: {
-        name: "opentui",
-        coreVersion: packageJSON.dependencies?.["@opentui/core"],
-        solidVersion: packageJSON.dependencies?.["@opentui/solid"],
-      },
+      renderer: rendererMetadata(renderer, packageJSON.dependencies),
     },
     results: input.results,
     verdict: input.verdict,
@@ -250,6 +261,20 @@ export async function createTuiBenchmarkReport(input: {
 
 async function readPackageJSON(): Promise<{ dependencies?: Record<string, string> }> {
   return JSON.parse(await Bun.file(new URL("../package.json", import.meta.url)).text())
+}
+
+function rendererMetadata(name: TuiRendererName, dependencies: Record<string, string> | undefined) {
+  if (name === "native") {
+    return {
+      name,
+      coreVersion: dependencies?.["@ax-code/terminal"],
+    }
+  }
+  return {
+    name,
+    coreVersion: dependencies?.["@opentui/core"],
+    solidVersion: dependencies?.["@opentui/solid"],
+  }
 }
 
 export function assertTuiBenchmarkOutputPath(outputPath: string) {
@@ -320,6 +345,11 @@ function p95(values: number[]) {
   return sorted[Math.ceil(sorted.length * 0.95) - 1] ?? sorted.at(-1) ?? 0
 }
 
+function positiveInteger(value: number, label: string) {
+  if (!Number.isInteger(value) || value < 1) throw new Error(`${label} must be a positive integer`)
+  return value
+}
+
 function stripControls(value: string) {
   return value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, "")
 }
@@ -338,6 +368,7 @@ async function runPtySample(item: TuiBenchmarkPlanItem) {
         ...process.env,
         TERM: "xterm-256color",
         AX_CODE_TUI_BENCHMARK: "1",
+        AX_CODE_TUI_RENDERER: item.renderer ?? resolveTuiRendererName(),
       },
     })
     let done = false
@@ -516,8 +547,10 @@ function command(argv = process.argv.slice(2)) {
 async function main() {
   const repeat = Number(value("--repeat") ?? DEFAULT_REPEAT)
   const timeoutMs = Number(value("--timeout-ms") ?? DEFAULT_TIMEOUT_MS)
+  const renderer = parseTuiRendererName(value("--renderer") ?? process.env["AX_CODE_TUI_RENDERER"], "opentui")
   const plan = createTuiBenchmarkPlan({
     command: flag("--run") ? command() : undefined,
+    renderer,
     repeat,
     timeoutMs,
   })
@@ -532,7 +565,12 @@ async function main() {
     ? (JSON.parse(await Bun.file(resultsPath).text()) as TuiBenchmarkResult[])
     : await runTuiBenchmarkPlan(plan)
   const verdict = evaluateTuiBenchmarkResults(results)
-  const report = await createTuiBenchmarkReport({ results, verdict, command: flag("--run") ? command() : undefined })
+  const report = await createTuiBenchmarkReport({
+    results,
+    verdict,
+    command: flag("--run") ? command() : undefined,
+    renderer,
+  })
   const output = value("--output")
   if (output) await writeTuiBenchmarkReport(output, report)
   console.log(JSON.stringify(report, null, 2))

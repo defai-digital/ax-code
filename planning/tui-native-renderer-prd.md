@@ -103,9 +103,27 @@ Implemented surface:
 
 ### Phase 5: Parity and Default Decision
 
+Status: Started. Native default promotion now has a dedicated parity gate; native remains opt-in.
+
 Native can become default only after passing the renderer contract and benchmark targets for first frame, keypress
 echo, paste echo, resize, mouse, selection, transcript projection, and scroll replay. Keep OpenTUI fallback for at
 least one release cycle.
+
+Implemented surface:
+
+- Parity evaluator: `packages/ax-code/src/cli/cmd/tui/renderer-parity.ts`
+- CLI gate: `packages/ax-code/script/tui-renderer-parity.ts`
+- Phase 5 artifact gate: `packages/ax-code/script/tui-renderer-phase5-gate.ts`
+- Benchmark metadata supports `--renderer native` and records `AX_CODE_TUI_RENDERER` for PTY probes.
+- Contract reports are versioned and fail closed from `--contract-template`; invalid `--renderer` values are rejected
+  by scripts instead of silently falling back, including invalid `AX_CODE_TUI_RENDERER` values.
+- The parity CLI can write both contract templates and decisions to artifact paths with `--output`.
+- The Phase 5 gate always evaluates `native` with OpenTUI fallback retained, writes a decision plus manifest, and
+  rejects generated artifact paths under product documentation directories.
+- Benchmark plans reject invalid repeat and timeout values so empty plans cannot produce passing reports.
+- Passed contract gates require evidence entries, duplicate/unknown contract IDs fail the gate, and duplicate benchmark
+  criteria fail the gate to avoid masked parity results.
+- The parity gate rechecks benchmark metric kinds and thresholds directly instead of trusting a report marked `ok`.
 
 ### Phase 6: OpenTUI Removal
 
@@ -147,4 +165,28 @@ Include benchmark failures:
 ```bash
 bun run script/tui-benchmark.ts --run -- bun run src/index.ts --output /tmp/tui-benchmark.json
 bun run tui:renderer:evidence -- --issues ../../tmp/tui-issues.json --benchmark-report /tmp/tui-benchmark.json
+```
+
+## Phase 5 Usage
+
+Create a fail-closed contract report, then fill every passed item with evidence:
+
+```bash
+cd packages/ax-code
+bun run tui:renderer:parity -- --contract-template --output /tmp/tui-contract.json
+```
+
+Generate native benchmark evidence:
+
+```bash
+bun run perf:tui -- --renderer native --run --output /tmp/tui-benchmark.json -- bun run src/index.ts
+```
+
+Run the release gate and preserve the generated artifacts:
+
+```bash
+bun run tui:renderer:phase5 -- \
+  --benchmark-report /tmp/tui-benchmark.json \
+  --contract /tmp/tui-contract.json \
+  --artifacts-dir /tmp/tui-phase5
 ```

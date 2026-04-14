@@ -42,6 +42,26 @@ describe("script.tui-benchmark", () => {
     expect(plan[5]).toMatchObject({ probe: "pty-selection-drag-stability" })
   })
 
+  test("records native renderer metadata in benchmark plans and reports", async () => {
+    const plan = createTuiBenchmarkPlan({ renderer: "native" })
+    const report = await createTuiBenchmarkReport({
+      generatedAt: "2026-04-13T00:00:00.000Z",
+      renderer: "native",
+      results: [],
+      verdict: { ok: true, failures: [], notes: [] },
+    })
+
+    expect(plan.every((item) => item.renderer === "native")).toBe(true)
+    expect(report.metadata.renderer.name).toBe("native")
+    expect(report.metadata.renderer.coreVersion).toBe("workspace:*")
+    expect(report.metadata.renderer.solidVersion).toBeUndefined()
+  })
+
+  test("rejects empty benchmark plans from invalid repeat or timeout values", () => {
+    expect(() => createTuiBenchmarkPlan({ repeat: 0 })).toThrow("repeat must be a positive integer")
+    expect(() => createTuiBenchmarkPlan({ timeoutMs: Number.NaN })).toThrow("timeoutMs must be a positive integer")
+  })
+
   test("evaluates p95 and fps thresholds", () => {
     const results: TuiBenchmarkResult[] = [
       { id: "startup", criterionID: "startup.first-frame", metric: "p95Ms", value: 1201 },
