@@ -5,7 +5,7 @@
     "primaryColor": "#f8fafc",
     "primaryTextColor": "#0f172a",
     "primaryBorderColor": "#0f172a",
-    "lineColor": "#64748b",
+    "lineColor": "#475569",
     "secondaryColor": "#e2e8f0",
     "secondaryTextColor": "#0f172a",
     "secondaryBorderColor": "#334155",
@@ -13,101 +13,68 @@
     "tertiaryTextColor": "#0f172a",
     "tertiaryBorderColor": "#2563eb",
     "fontFamily": "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif",
-    "fontSize": "17px"
+    "fontSize": "16px"
   },
   "flowchart": {
-    "curve": "linear",
+    "curve": "basis",
     "htmlLabels": true,
-    "nodeSpacing": 40,
+    "nodeSpacing": 50,
     "rankSpacing": 55,
-    "padding": 18
+    "padding": 16
   }
 }}%%
 
 flowchart TB
-  subgraph A["Interfaces"]
-    direction LR
-    CLI["CLI · TUI"]
-    SDK["SDK · Server · ACP"]
-    VSC["VS Code"]
-    DASH["DRE Dashboard"]
-  end
+  CLI["CLI · TUI · DRE Dashboard"] --> R
+  SDK["SDK · Server · ACP"] --> R
+  VSC["VS Code"] --> R
 
-  R(["ax-code runtime<br/><i>11 agents · auto-routing · planning · execution</i>"])
-
-  subgraph S["Semantic Trust Layer"]
-    direction LR
-    LSP["LSP Integration<br/><i>multi-server · scheduler</i>"]
-    CG["Code Graph<br/><i>symbols · edges · files</i>"]
-    CACHE["Response Cache<br/><i>content-addressable</i>"]
-    ENV["Provenance Envelope<br/><i>source · completeness · degraded</i>"]
-  end
-
-  subgraph D["Deterministic Intelligence"]
-    direction LR
-    DRE["DRE — 9 Scanners<br/><i>race · lifecycle · security<br/>duplicate · hardcode · impact</i>"]
-    REF["Safe Refactor<br/><i>shadow worktree · cite-or-drop</i>"]
-    SEM["Semantic Diff<br/><i>classify · risk · signals</i>"]
-  end
-
-  subgraph V["Session Analysis"]
-    direction LR
-    RISK["Risk Scoring<br/><i>confidence · readiness · factors</i>"]
-    CMP["Compare · Branch Rank<br/><i>4-dim scorecard · advisory</i>"]
-    EG["Execution Graph<br/><i>topology · timeline · rollback</i>"]
-  end
-
-  subgraph T["Tools · Providers"]
-    direction LR
-    TL["70+ Tools · MCP · Plugins"]
-    PV["Providers<br/><i>10+ cloud · local · AX Engine</i>"]
-  end
-
-  subgraph C["Control Plane"]
-    direction LR
-    ST["Session · Memory · Storage"]
-    SG["Sandbox · Permissions · Policy"]
-    OB["Replay · Audit · Snapshot"]
-  end
-
-  CLI --> R
-  SDK --> R
-  VSC --> R
-  DASH -.-> SDK
+  R(["<b>ax-code runtime</b><br/>11 agents · auto-routing · planning · 70+ tools · MCP"])
 
   R --> S
-  R --> T
-  R --> C
+  R --> CP
 
-  LSP --> ENV
-  CG --> ENV
-  CACHE --> ENV
-  LSP --> CACHE
+  subgraph S["Semantic Trust Layer"]
+    direction TB
+    STL["LSP · Code Graph · Response Cache<br/><i>multi-server · provenance envelope · content-addressable</i>"]
+    STL --> DI
 
-  S --> D
-  DRE --> REF
-  S --> SEM
+    subgraph DI["Deterministic Intelligence"]
+      direction LR
+      DRE["DRE — 9 Scanners<br/><i>race · lifecycle · security · impact</i>"]
+      SEM["Semantic Diff · Safe Refactor<br/><i>classify changes · shadow worktree</i>"]
+    end
 
-  D --> V
-  OB --> EG
-  SEM --> RISK
-  RISK --> CMP
-  EG --> CMP
+    DI --> SA
 
+    subgraph SA["Session Analysis"]
+      direction LR
+      RISK["Risk Scoring · Execution Graph<br/><i>confidence · readiness · topology</i>"]
+      CMP["Compare · Branch Rank · Rollback<br/><i>4-dim scorecard · advisory · recovery</i>"]
+    end
+  end
+
+  subgraph CP["Control Plane"]
+    direction LR
+    SESS["Session · Memory<br/>Storage · Snapshot"]
+    PERM["Sandbox · Permissions<br/>Replay · Audit"]
+  end
+
+  PV["Providers — 10+ cloud · local · AX Engine"]
   R --> PV
 
   classDef runtime fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#0f172a
   classDef surface fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-  classDef semantic fill:#ede9fe,stroke:#7c3aed,stroke-width:2.5px,color:#0f172a
-  classDef determ fill:#fef3c7,stroke:#b45309,stroke-width:2.5px,color:#0f172a
+  classDef stl fill:#ede9fe,stroke:#7c3aed,stroke-width:2.5px,color:#0f172a
+  classDef determ fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#0f172a
   classDef analysis fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
-  classDef tools fill:#f6f8fa,stroke:#475569,stroke-width:1.5px,color:#0f172a
   classDef control fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+  classDef provider fill:#f6f8fa,stroke:#475569,stroke-width:1.5px,color:#0f172a
 
   class R runtime
-  class CLI,SDK,VSC,DASH surface
-  class LSP,CG,CACHE,ENV semantic
-  class DRE,REF,SEM determ
-  class RISK,CMP,EG analysis
-  class TL,PV tools
-  class ST,SG,OB control
+  class CLI,SDK,VSC surface
+  class STL stl
+  class DRE,SEM determ
+  class RISK,CMP analysis
+  class SESS,PERM control
+  class PV provider
