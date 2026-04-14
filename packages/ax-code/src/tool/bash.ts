@@ -168,6 +168,7 @@ export const BashTool = Tool.define("bash", async () => {
             const innerTree = p.parse(innerCmd)
             if (innerTree) {
               for (const innerNode of innerTree.rootNode.descendantsOfType("command")) {
+                if (!innerNode) continue
                 const innerParts: string[] = []
                 for (let j = 0; j < innerNode.childCount; j++) {
                   const c = innerNode.child(j)
