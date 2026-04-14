@@ -39,6 +39,53 @@ for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = existing[id]
 }
 
+// Remove providers we don't support
+for (const id of ["groq", "azure", "azure-cognitive-services"]) {
+  delete fetched[id]
+}
+
+// Trim alibaba providers to supported models only
+const alibabaModels = ["qwen3.6-plus", "qwen3.5-flash"]
+for (const id of ["alibaba", "alibaba-cn", "alibaba-coding-plan", "alibaba-coding-plan-cn"]) {
+  if (!fetched[id]) continue
+  const models = fetched[id].models ?? {}
+  const kept: Record<string, unknown> = {}
+  for (const mid of alibabaModels) {
+    if (models[mid]) kept[mid] = models[mid]
+  }
+  // If models.dev doesn't have a model for this region, copy from alibaba-cn
+  if (!kept["qwen3.5-flash"] && fetched["alibaba-cn"]?.models?.["qwen3.5-flash"]) {
+    kept["qwen3.5-flash"] = JSON.parse(JSON.stringify(fetched["alibaba-cn"].models["qwen3.5-flash"]))
+  }
+  // Zero cost for coding plan
+  if (id.includes("coding-plan")) {
+    for (const m of Object.values(kept) as any[]) {
+      m.cost = { input: 0, output: 0, cache_read: 0, cache_write: 0 }
+    }
+  }
+  fetched[id].models = kept
+}
+
+// Apply display name overrides
+const nameOverrides: Record<string, string> = {
+  alibaba: "Alibaba (Standard API)",
+  "alibaba-cn": "Alibaba (Standard API, China)",
+  zai: "Z.AI (Standard API)",
+}
+for (const [id, name] of Object.entries(nameOverrides)) {
+  if (fetched[id]) fetched[id].name = name
+}
+
+// Rename ax-studio -> ax-serving if models.dev still uses old name
+if (fetched["ax-studio"]) {
+  const entry = fetched["ax-studio"]
+  delete fetched["ax-studio"]
+  entry.id = "ax-serving"
+  entry.name = "AX Serving"
+  entry.env = ["AX_SERVING_HOST"]
+  fetched["ax-serving"] = entry
+}
+
 const prev = JSON.stringify(existing)
 const next = JSON.stringify(fetched, null, 2) + "\n"
 
