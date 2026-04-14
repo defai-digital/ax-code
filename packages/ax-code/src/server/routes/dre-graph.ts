@@ -300,6 +300,102 @@ function summary(input: {
   ].join("")
 }
 
+// ── Section 1b: Verdict — "should I accept this?" ─────────────────
+function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionRisk.Detail }) {
+  const detail = input.dre.detail
+  if (!detail) return ""
+  const sig = input.risk.assessment.signals
+  const ready = input.risk.assessment.readiness
+  const readyTone = readinessTone(ready)
+  const headlines: Record<string, string> = {
+    ready: "Ready to accept",
+    needs_validation: "Needs validation before accepting",
+    needs_review: "Needs manual review",
+    blocked: "Blocked \u2014 do not accept",
+  }
+  const validationLabel = sig.validationCommands.length > 0
+    ? `${validation(sig)} (${sig.validationCommands.slice(0, 3).map((c) => esc(c.split(" ").slice(0, 3).join(" "))).join(", ")})`
+    : validation(sig)
+
+  return [
+    `<section class="verdict" id="verdict">`,
+    `<div class="verdict-inner ${readyTone}">`,
+    `<div class="verdict-headline ${readyTone}">${esc(headlines[ready] ?? readiness(ready))}</div>`,
+    `<div class="verdict-grid">`,
+    stat({ label: "Confidence", value: `${Math.round(input.risk.assessment.confidence * 100)}%`, kind: confidenceTone(input.risk.assessment.confidence) }),
+    stat({ label: "Risk", value: `${input.risk.assessment.score}/100`, kind: tone(input.risk.assessment.level) }),
+    stat({ label: "Validation", value: validationLabel, kind: sig.validationState === "passed" ? "low" : sig.validationState === "failed" ? "high" : "neutral" }),
+    stat({ label: "Decision", value: detail.scorecard.total.toFixed(2), kind: detail.scorecard.total >= 0.7 ? "low" : detail.scorecard.total >= 0.4 ? "medium" : "high" }),
+    `</div>`,
+    detail.semantic ? `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">${esc(detail.semantic.headline)} \u00b7 ${chip({ label: detail.semantic.risk, kind: tone(detail.semantic.risk) })} \u00b7 ${detail.semantic.files} file${detail.semantic.files === 1 ? "" : "s"} \u00b7 <span class="diff-add">+${detail.semantic.additions}</span> <span class="diff-del">-${detail.semantic.deletions}</span></div>` : "",
+    input.risk.assessment.unknowns.length > 0
+      ? `<div class="verdict-callout"><span class="verdict-callout-icon" style="color:var(--warn)">?</span> ${esc(input.risk.assessment.unknowns[0])}</div>`
+      : "",
+    input.risk.assessment.mitigations.length > 0
+      ? `<div class="verdict-callout"><span class="verdict-callout-icon" style="color:var(--low)">\u2192</span> ${esc(input.risk.assessment.mitigations[0])}</div>`
+      : "",
+    `</div>`,
+    `</section>`,
+  ].join("")
+}
+
+// ── Section 1c: Changes — "what files changed and how risky?" ─────
+function changesSection(input: { dre: SessionDre.Snapshot }) {
+  const changes = input.dre.detail?.semantic?.changes
+  if (!changes || changes.length === 0) return ""
+  const kindLabel = (k: string) => k.replace(/_/g, " ")
+  return [
+    `<section class="band" id="changes">`,
+    `<div class="wrap">`,
+    `<div class="section-head"><h2>Changes</h2><p>${changes.length} file${changes.length === 1 ? "" : "s"} changed</p></div>`,
+    `<div class="panel">`,
+    changes
+      .map((c) =>
+        [
+          `<div class="changes-row">`,
+          `<span class="risk-dot ${esc(c.risk)}"></span>`,
+          `<span class="file-path" title="${esc(c.file)}">${esc(c.file)}</span>`,
+          chip({ label: kindLabel(c.kind), kind: tone(c.risk) }),
+          `<span class="diff-stat"><span class="diff-add">+${c.additions}</span> <span class="diff-del">-${c.deletions}</span></span>`,
+          c.signals[0] ? `<span class="change-signal" title="${esc(c.signals.join(" \u00b7 "))}">${esc(c.signals[0])}</span>` : `<span class="change-signal"></span>`,
+          `</div>`,
+        ].join(""),
+      )
+      .join(""),
+    `</div>`,
+    `</div>`,
+    `</section>`,
+  ].join("")
+}
+
+// ── Section 1d: Validation — "what was validated?" ────────────────
+function validationSection(input: { risk: SessionRisk.Detail }) {
+  const sig = input.risk.assessment.signals
+  if (sig.validationCount === 0 && sig.validationCommands.length === 0) return ""
+  return [
+    `<section class="band" id="validation">`,
+    `<div class="wrap">`,
+    `<div class="section-head"><h2>Validation</h2><p>${validation(sig)}</p></div>`,
+    `<div class="panel">`,
+    `<div class="validation-list">`,
+    sig.validationCommands.length > 0
+      ? sig.validationCommands
+          .map(
+            (cmd) =>
+              `<div class="validation-item"><span class="validation-icon">${sig.validationState === "failed" ? "\u2717" : "\u2713"}</span><span class="validation-cmd">${esc(cmd)}</span><span class="validation-status">${chip({ label: sig.validationState === "failed" ? "failed" : "passed", kind: sig.validationState === "failed" ? "high" : "low" })}</span></div>`,
+          )
+          .join("")
+      : `<div class="validation-item"><span class="validation-icon" style="color:var(--muted)">\u2014</span><span class="validation-cmd" style="color:var(--muted)">No validation commands recorded</span></div>`,
+    sig.validationState === "not_run" && sig.filesChanged > 0
+      ? `<div class="validation-item"><span class="validation-icon" style="color:var(--warn)">!</span><span class="validation-cmd" style="color:var(--warn)">Code changed but no tests were run</span></div>`
+      : "",
+    `</div>`,
+    `</div>`,
+    `</div>`,
+    `</section>`,
+  ].join("")
+}
+
 // ── Section 2: Risk Analysis ───────────────────────────────────────
 function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
   const detail = dre.detail
@@ -625,6 +721,11 @@ function branchSection(input?: SessionBranchRank.Family) {
           `<span>${esc(item.headline)}</span>`,
           `<span class="muted">${esc(item.view.plan)}</span>`,
           item.semantic ? `<span class="muted">${esc(item.semantic.headline)}</span>` : "",
+          `<div class="branch-scorecard">${item.decision.breakdown.map((part) => {
+            const pct = Math.round(part.value * 100)
+            const color = part.value >= 0.7 ? "var(--low)" : part.value >= 0.4 ? "var(--warn)" : "var(--high)"
+            return `<div class="branch-score-row"><span class="branch-score-label">${esc(part.label)}</span><div class="branch-score-track"><div class="branch-score-fill" style="width:${pct}%;background:${color}"></div></div><span class="branch-score-val">${part.value.toFixed(2)}</span></div>`
+          }).join("")}</div>`,
           `</div>`,
         ].join(""),
       )
@@ -1490,6 +1591,50 @@ function style() {
     .donut-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .donut-item strong { margin-left: auto; font-family: ui-monospace, SFMono-Regular, monospace; color: var(--text); }
 
+    /* ── Verdict ── */
+    .verdict { padding: 20px 24px; }
+    .verdict-inner { max-width: 1200px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line-subtle); border-radius: var(--radius); padding: 24px 28px; box-shadow: var(--shadow-md); }
+    .verdict-inner.low { border-left: 4px solid var(--low); }
+    .verdict-inner.medium { border-left: 4px solid var(--warn); }
+    .verdict-inner.high { border-left: 4px solid var(--high); }
+    .verdict-inner.critical { border-left: 4px solid var(--critical); }
+    .verdict-headline { font-size: 20px; font-weight: 700; margin-bottom: 14px; letter-spacing: -0.02em; }
+    .verdict-headline.low { color: var(--low); }
+    .verdict-headline.medium { color: var(--warn); }
+    .verdict-headline.high { color: var(--high); }
+    .verdict-headline.critical { color: var(--critical); }
+    .verdict-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+    .verdict-callout { display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface); font-size: 13px; margin-top: 6px; color: var(--text-secondary); }
+    .verdict-callout-icon { flex-shrink: 0; font-size: 14px; }
+
+    /* ── Changes table ── */
+    .changes-row { display: grid; grid-template-columns: 12px 1fr auto auto auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-subtle); font-size: 13px; }
+    .changes-row:last-child { border-bottom: none; }
+    .risk-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .risk-dot.low { background: var(--low); }
+    .risk-dot.medium { background: var(--warn); }
+    .risk-dot.high { background: var(--high); }
+    .file-path { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .diff-stat { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; white-space: nowrap; }
+    .diff-add { color: var(--low); }
+    .diff-del { color: var(--high); }
+    .change-signal { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+
+    /* ── Validation ── */
+    .validation-list { display: grid; gap: 6px; }
+    .validation-item { display: flex; gap: 10px; align-items: center; padding: 8px 14px; background: var(--surface); border-radius: var(--radius-xs); font-size: 13px; }
+    .validation-icon { flex-shrink: 0; font-size: 14px; }
+    .validation-cmd { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: var(--text-secondary); flex: 1; }
+    .validation-status { font-size: 12px; flex-shrink: 0; }
+
+    /* ── Branch scorecard ── */
+    .branch-scorecard { margin-top: 10px; display: grid; gap: 4px; }
+    .branch-score-row { display: grid; grid-template-columns: 76px 1fr 36px; gap: 6px; align-items: center; font-size: 11px; }
+    .branch-score-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .branch-score-track { height: 4px; background: var(--surface); border-radius: 2px; overflow: hidden; }
+    .branch-score-fill { height: 100%; border-radius: 2px; min-width: 2px; }
+    .branch-score-val { text-align: right; font-family: ui-monospace, SFMono-Regular, monospace; color: var(--text-secondary); }
+
     @media (max-width: 900px) {
       .grid, .step-grid { grid-template-columns: 1fr; }
       .summary-grid { flex-direction: column; align-items: center; text-align: center; }
@@ -1500,6 +1645,9 @@ function style() {
       .bar-row { grid-template-columns: 100px 1fr 40px; }
       .hero-title { font-size: 22px; }
       .nav-inner { gap: 2px; }
+      .verdict-grid { grid-template-columns: repeat(2, 1fr); }
+      .changes-row { grid-template-columns: 12px 1fr auto auto; }
+      .change-signal { display: none; }
     }
   `
 }
@@ -1601,7 +1749,10 @@ function page(input: {
     `<span class="nav-brand">AX Code DRE</span>`,
     `<div class="nav-sep"></div>`,
     `<a class="nav-link" href="#summary">Summary</a>`,
+    `<a class="nav-link" href="#verdict">Verdict</a>`,
+    `<a class="nav-link" href="#changes">Changes</a>`,
     `<a class="nav-link" href="#risk">Risk</a>`,
+    `<a class="nav-link" href="#validation">Validation</a>`,
     `<a class="nav-link" href="#graph">Execution</a>`,
     `<a class="nav-link" href="#branches">Branches</a>`,
     `<a class="nav-link" href="#timeline">Timeline</a>`,
@@ -1627,13 +1778,19 @@ function page(input: {
     `</header>`,
     // ── 1. Summary: "what happened and should I care?" ──
     summary({ dre: input.dre, risk: input.risk, graph: input.graph }),
-    // ── 2. Risk: "why is the risk what it is?" ──
+    // ── 2. Verdict: "should I accept this?" ──
+    verdictSection({ dre: input.dre, risk: input.risk }),
+    // ── 3. Changes: "what files changed and how risky?" ──
+    changesSection({ dre: input.dre }),
+    // ── 4. Risk: "why is the risk what it is?" ──
     riskSection(input.risk, input.dre),
-    // ── 3. Execution: "what did the agent do?" ──
+    // ── 5. Validation: "what was validated?" ──
+    validationSection({ risk: input.risk }),
+    // ── 6. Execution: "what did the agent do?" ──
     graphSection(input.graph, input.dre),
-    // ── 4. Branches: "which path is best?" ──
+    // ── 7. Branches: "which path is best?" ──
     branchSection(input.rank),
-    // ── 5. Timeline + Rollback ──
+    // ── 8. Timeline + Rollback ──
     timelineSection(input.dre, input.rollback, input.dre.detail),
     // ── Footer ──
     `<footer class="footer">AX Code DRE · Debugging & Refactoring Engine</footer>`,
