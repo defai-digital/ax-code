@@ -60,11 +60,35 @@ export namespace SessionRetry {
     return Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS)
   }
 
+  // Patterns that indicate the error is permanent — retrying the same
+  // request won't fix it. The AI SDK marks all 429s as isRetryable, but
+  // some 429s are billing/quota exhaustion, not rate limits. Retrying
+  // those wastes ~60s of backoff before the user sees the real error.
+  const NON_RETRYABLE_PATTERNS = [
+    "insufficient balance",
+    "no resource package",
+    "quota exceeded",
+    "billing",
+    "payment required",
+    "account suspended",
+    "subscription",
+  ]
+
+  function isPermanentError(message: string): boolean {
+    const lower = message.toLowerCase()
+    return NON_RETRYABLE_PATTERNS.some((p) => lower.includes(p))
+  }
+
   export function retryable(error: ReturnType<NamedError["toObject"]>) {
     // context overflow errors should not be retried
     if (MessageV2.ContextOverflowError.isInstance(error)) return undefined
     if (MessageV2.APIError.isInstance(error)) {
       if (!error.data.isRetryable) return undefined
+      // Billing / quota exhaustion — retrying won't change the account
+      // balance. Surface the error immediately instead of burning 60s
+      // of exponential backoff. This overrides the AI SDK's blanket
+      // `isRetryable: true` on all 429 responses.
+      if (isPermanentError(error.data.message)) return undefined
       if (error.data.responseBody?.includes("FreeUsageLimitError"))
         return `Free usage exceeded, add credits https://github.com/defai-digital/ax-code`
       return error.data.message.includes("Overloaded") ? "Provider is overloaded" : error.data.message
