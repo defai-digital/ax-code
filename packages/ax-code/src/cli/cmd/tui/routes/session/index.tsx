@@ -387,7 +387,7 @@ export function Session() {
                 })
                 .then(() => {
                   const messageID = SessionRollback.promptID(messagesWithParts(), point)
-                  if (messageID) prompt.set(promptState(sync.data.part[messageID]))
+                  if (messageID) prompt.set(promptState(sync.data.part[messageID] ?? []))
                   toBottom()
                 })
                 .catch((error) => {
@@ -643,7 +643,7 @@ export function Session() {
           .then(() => {
             toBottom()
           })
-        prompt.set(promptState(sync.data.part[messageID]))
+        prompt.set(promptState(sync.data.part[messageID] ?? []))
         dialog.clear()
       },
     },

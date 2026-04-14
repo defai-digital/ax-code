@@ -598,7 +598,8 @@ function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
 }
 
 // ── Section 4: Branches ────────────────────────────────────────────
-function branchSection(input: SessionBranchRank.Family) {
+function branchSection(input?: SessionBranchRank.Family) {
+  if (!input) return ""
   return [
     `<section class="band" id="branches">`,
     `<div class="wrap">`,
@@ -838,7 +839,7 @@ function sessionFingerprint(input: {
   graph: SessionGraph.Snapshot
   dre: SessionDre.Snapshot
   risk: SessionRisk.Detail
-  rank: SessionBranchRank.Family
+  rank?: SessionBranchRank.Family
   rollback: SessionRollback.Point[]
 }) {
   return {
@@ -879,15 +880,17 @@ function sessionFingerprint(input: {
       unknowns: input.risk.assessment.unknowns.length,
       mitigations: input.risk.assessment.mitigations.length,
     },
-    rank: {
-      confidence: input.rank.confidence,
-      recommended: input.rank.recommended.id,
-      items: input.rank.items.map((item) => ({
-        id: item.id,
-        score: item.decision.total,
-        risk: item.risk.score,
-      })),
-    },
+    rank: input.rank
+      ? {
+          confidence: input.rank.confidence,
+          recommended: input.rank.recommended.id,
+          items: input.rank.items.map((item) => ({
+            id: item.id,
+            score: item.decision.total,
+            risk: item.risk.score,
+          })),
+        }
+      : null,
     rollback: input.rollback.length,
   }
 }
@@ -1568,7 +1571,7 @@ function page(input: {
   graph: SessionGraph.Snapshot
   dre: SessionDre.Snapshot
   risk: SessionRisk.Detail
-  rank: SessionBranchRank.Family
+  rank?: SessionBranchRank.Family
   rollback: SessionRollback.Point[]
   search: string
 }) {
@@ -1644,15 +1647,17 @@ export const DreGraphRoutes = lazy(() =>
   new Hono()
     .get("/", async (c) => {
       const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
+      const directory = c.req.query("directory") ?? undefined
       const list = [] as Session.Info[]
-      for await (const item of Session.list({ limit: 50 })) list.push(item)
+      for await (const item of Session.list({ limit: 50, directory })) list.push(item)
       c.header("cache-control", "no-store")
       c.header("content-type", "text/html; charset=utf-8")
       return c.body(index({ list, search }))
     })
     .get("/fingerprint", async (c) => {
+      const directory = c.req.query("directory") ?? undefined
       const list = [] as Session.Info[]
-      for await (const item of Session.list({ limit: 50 })) list.push(item)
+      for await (const item of Session.list({ limit: 50, directory })) list.push(item)
       c.header("cache-control", "no-store")
       return c.json(indexFingerprint(list))
     })
@@ -1672,7 +1677,7 @@ export const DreGraphRoutes = lazy(() =>
           Promise.resolve(SessionGraph.snapshot(sid)),
           SessionDre.snapshot(sid),
           SessionRisk.load(sid),
-          SessionBranchRank.family(sid),
+          SessionBranchRank.family(sid).catch(() => undefined),
           SessionRollback.points(sid),
         ])
 
@@ -1706,7 +1711,7 @@ export const DreGraphRoutes = lazy(() =>
           Promise.resolve(SessionGraph.snapshot(sid)),
           SessionDre.snapshot(sid),
           SessionRisk.load(sid),
-          SessionBranchRank.family(sid),
+          SessionBranchRank.family(sid).catch(() => undefined),
           SessionRollback.points(sid),
         ])
 
