@@ -247,22 +247,32 @@ export namespace ProviderTransform {
   }): Record<string, any> {
     const result: Record<string, any> = {}
 
-    // Only enable thinking for z.ai models that actually support it.
-    // Previously this fired for ALL zai models, including non-thinking
-    // variants like `glm-5.1`. That caused z.ai to route the request
-    // to a reasoning-tier resource package the account may not have,
-    // returning 429 "Insufficient balance" even though the standard
-    // tier has quota. Gate on `capabilities.reasoning` so only models
-    // explicitly marked as reasoning-capable (e.g. `glm-5.1:thinking`)
-    // get the provider option.
-    if (
-      input.model.providerID.startsWith("zai") &&
-      input.model.api.npm === "@ai-sdk/openai-compatible" &&
-      input.model.capabilities.reasoning
-    ) {
-      result["thinking"] = {
-        type: "enabled",
-        clear_thinking: false,
+    // z.ai thinking/reasoning support.
+    //
+    // v3.1.0 unconditionally sent `thinking: { type: "enabled" }` to
+    // all zai models. The AI SDK also adds `reasoning_effort` to the
+    // request body for @ai-sdk/openai-compatible providers. Together
+    // these caused z.ai to route requests to a reasoning-tier resource
+    // package that coding-plan accounts typically don't have →
+    // 429 "Insufficient balance".
+    //
+    // Fix: for z.ai, only enable thinking when the user explicitly
+    // selected a `:thinking` model variant. Standard model IDs like
+    // "glm-5.1" get neither `thinking` nor `reasoningEffort`, matching
+    // v2.x behavior exactly.
+    if (input.model.providerID.startsWith("zai") && input.model.api.npm === "@ai-sdk/openai-compatible") {
+      if (input.model.id.includes(":thinking")) {
+        result["thinking"] = {
+          type: "enabled",
+          clear_thinking: false,
+        }
+      } else {
+        // Explicitly suppress reasoning_effort that the SDK would
+        // otherwise include. Without this, the SDK's openai-compatible
+        // adapter sends `reasoning_effort: undefined` which some
+        // providers interpret as an opt-in. Setting to undefined in
+        // our providerOptions ensures the SDK omits it from the body.
+        result["reasoningEffort"] = undefined
       }
     }
 
