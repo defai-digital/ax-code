@@ -247,9 +247,18 @@ export namespace ProviderTransform {
   }): Record<string, any> {
     const result: Record<string, any> = {}
 
+    // Only enable thinking for z.ai models that actually support it.
+    // Previously this fired for ALL zai models, including non-thinking
+    // variants like `glm-5.1`. That caused z.ai to route the request
+    // to a reasoning-tier resource package the account may not have,
+    // returning 429 "Insufficient balance" even though the standard
+    // tier has quota. Gate on `capabilities.reasoning` so only models
+    // explicitly marked as reasoning-capable (e.g. `glm-5.1:thinking`)
+    // get the provider option.
     if (
       input.model.providerID.startsWith("zai") &&
-      input.model.api.npm === "@ai-sdk/openai-compatible"
+      input.model.api.npm === "@ai-sdk/openai-compatible" &&
+      input.model.capabilities.reasoning
     ) {
       result["thinking"] = {
         type: "enabled",
