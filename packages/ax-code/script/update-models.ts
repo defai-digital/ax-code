@@ -57,10 +57,14 @@ for (const id of ["alibaba", "alibaba-cn", "alibaba-coding-plan", "alibaba-codin
   if (!kept["qwen3.5-flash"] && fetched["alibaba-cn"]?.models?.["qwen3.5-flash"]) {
     kept["qwen3.5-flash"] = JSON.parse(JSON.stringify(fetched["alibaba-cn"].models["qwen3.5-flash"]))
   }
-  // Zero cost for coding plan
+  // Zero all cost fields for coding plan (flat-rate subscription)
   if (id.includes("coding-plan")) {
     for (const m of Object.values(kept) as any[]) {
-      m.cost = { input: 0, output: 0, cache_read: 0, cache_write: 0 }
+      if (m.cost && typeof m.cost === "object") {
+        for (const key of Object.keys(m.cost)) m.cost[key] = 0
+      }
+      // Ensure required fields exist
+      m.cost = { input: 0, output: 0, cache_read: 0, cache_write: 0, ...m.cost }
     }
   }
   fetched[id].models = kept

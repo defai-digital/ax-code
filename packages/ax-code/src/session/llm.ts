@@ -60,13 +60,16 @@ export namespace LLM {
       modelID: input.model.id,
       providerID: input.model.providerID,
     })
+    // 90s timeout: getLanguage() may call getSDK() → BunProc.install() which
+    // has its own 60s timeout. A 30s outer timeout would kill a legitimate
+    // first-run SDK install on a slow network.
     const [language, cfg, provider] = await withTimeout(
       Promise.all([
         Provider.getLanguage(input.model),
         input.config ?? Config.get(),
         Provider.getProvider(input.model.providerID),
       ]),
-      30_000,
+      90_000,
       `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
     )
 

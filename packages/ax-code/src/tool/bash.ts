@@ -149,11 +149,11 @@ export const BashTool = Tool.define("bash", async () => {
             const cIdx = command.indexOf("-c")
             if (cIdx >= 0 && cIdx + 1 < command.length) {
               // Strip surrounding quotes that tree-sitter may preserve
-              innerCmd = command[cIdx + 1].replace(/^["']|["']$/g, "")
+              innerCmd = command[cIdx + 1].replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
             }
           } else if (isEval) {
             // eval concatenates all its arguments into a single command
-            const evalArgs = command.slice(1).map((a) => a.replace(/^["']|["']$/g, ""))
+            const evalArgs = command.slice(1).map((a) => a.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2"))
             if (evalArgs.length > 0) innerCmd = evalArgs.join(" ")
           }
 

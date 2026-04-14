@@ -93,8 +93,13 @@ export namespace Ssrf {
     const addresses = await withTimeout(
       dns.lookup(hostname, { all: true }),
       5_000,
-      `DNS lookup timed out after 5s: ${hostname}`,
-    ).catch(() => [])
+      `${label}: DNS lookup timed out after 5s: ${hostname}`,
+    ).catch((err) => {
+      // Propagate timeout errors directly so callers can distinguish
+      // "DNS timed out" from "hostname does not exist".
+      if (err instanceof Error && err.message.includes("timed out")) throw err
+      return [] as dns.LookupAddress[]
+    })
     if (addresses.length === 0) {
       throw new Error(`${label}: could not resolve hostname: ${hostname}`)
     }
@@ -135,8 +140,11 @@ export namespace Ssrf {
     const addresses = await withTimeout(
       dns.lookup(hostname, { all: true }),
       5_000,
-      `DNS lookup timed out after 5s: ${hostname}`,
-    ).catch(() => [])
+      `${label}: DNS lookup timed out after 5s: ${hostname}`,
+    ).catch((err) => {
+      if (err instanceof Error && err.message.includes("timed out")) throw err
+      return [] as dns.LookupAddress[]
+    })
     if (addresses.length === 0) {
       throw new Error(`${label}: could not resolve hostname: ${hostname}`)
     }
