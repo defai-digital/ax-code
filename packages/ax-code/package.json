@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "3.1.4",
+  "version": "2.23.1",
   "name": "ax-code",
   "type": "module",
   "license": "MIT",
@@ -16,6 +16,7 @@
     "test:live": "bun run script/test-groups.ts live",
     "test:ci": "bun run script/test-ci.ts",
     "test:risk": "bun run script/test-risk.ts",
+    "tui:renderer:evidence": "bun run script/tui-renderer-evidence.ts",
     "perf:index": "bun run script/perf-index.ts",
     "perf:report": "bun run script/perf-report.ts",
     "perf:tui": "bun run script/tui-benchmark.ts",
