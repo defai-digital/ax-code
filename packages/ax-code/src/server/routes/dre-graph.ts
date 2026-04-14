@@ -342,7 +342,14 @@ function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionRisk.Det
 // ── Section 1c: Changes — "what files changed and how risky?" ─────
 function changesSection(input: { dre: SessionDre.Snapshot }) {
   const changes = input.dre.detail?.semantic?.changes
-  if (!changes || changes.length === 0) return ""
+  if (!changes || changes.length === 0)
+    return [
+      `<section class="band" id="changes">`,
+      `<div class="wrap">`,
+      `<div class="section-head"><h2>Changes</h2><p>No semantic diff recorded</p></div>`,
+      `</div>`,
+      `</section>`,
+    ].join("")
   const kindLabel = (k: string) => k.replace(/_/g, " ")
   return [
     `<section class="band" id="changes">`,
@@ -371,7 +378,14 @@ function changesSection(input: { dre: SessionDre.Snapshot }) {
 // ── Section 1d: Validation — "what was validated?" ────────────────
 function validationSection(input: { risk: SessionRisk.Detail }) {
   const sig = input.risk.assessment.signals
-  if (sig.validationCount === 0 && sig.validationCommands.length === 0) return ""
+  if (sig.validationCount === 0 && sig.validationCommands.length === 0)
+    return [
+      `<section class="band" id="validation">`,
+      `<div class="wrap">`,
+      `<div class="section-head"><h2>Validation</h2><p>No validation commands recorded</p></div>`,
+      `</div>`,
+      `</section>`,
+    ].join("")
   return [
     `<section class="band" id="validation">`,
     `<div class="wrap">`,
