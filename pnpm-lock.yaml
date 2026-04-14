@@ -223,9 +223,6 @@ importers:
       '@ai-sdk/google':
         specifier: 3.0.57
         version: 3.0.57(zod@4.3.6)
-      '@ai-sdk/groq':
-        specifier: 3.0.33
-        version: 3.0.33(zod@4.3.6)
       '@ai-sdk/openai':
         specifier: ^3.0.50
         version: 3.0.50(zod@4.3.6)
@@ -262,6 +259,9 @@ importers:
       '@ax-code/sdk':
         specifier: workspace:*
         version: link:../sdk/js
+      '@ax-code/terminal':
+        specifier: workspace:*
+        version: link:../ax-code-terminal-native
       '@ax-code/util':
         specifier: workspace:*
         version: link:../util
@@ -544,6 +544,12 @@ importers:
         version: 3.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.5.1)(emnapi@1.9.2(node-addon-api@8.7.0))
 
   packages/ax-code-parser-native:
+    devDependencies:
+      '@napi-rs/cli':
+        specifier: 'catalog:'
+        version: 3.0.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@25.5.1)(emnapi@1.9.2(node-addon-api@8.7.0))
+
+  packages/ax-code-terminal-native:
     devDependencies:
       '@napi-rs/cli':
         specifier: 'catalog:'
@@ -7268,6 +7274,7 @@ snapshots:
       '@ai-sdk/provider': 3.0.8
       '@ai-sdk/provider-utils': 4.0.22(zod@4.3.6)
       zod: 4.3.6
+    optional: true
 
   '@ai-sdk/mistral@3.0.28(zod@4.3.6)':
     dependencies:
