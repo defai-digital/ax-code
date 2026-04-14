@@ -14,7 +14,6 @@ The following dependencies are licensed under the Apache License, Version 2.0:
 - @ai-sdk/openai - Copyright Vercel, Inc.
 - @ai-sdk/openai-compatible - Copyright Vercel, Inc.
 - @ai-sdk/xai - Copyright Vercel, Inc.
-- @ai-sdk/groq - Copyright Vercel, Inc.
 - @ai-sdk/provider - Copyright Vercel, Inc.
 - @ai-sdk/provider-utils - Copyright Vercel, Inc.
 - drizzle-orm - Copyright Drizzle Team
