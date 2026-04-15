@@ -25,6 +25,7 @@ import { withTimeout } from "./timeout"
 
 export namespace Ssrf {
   type PinnedFetchInit = RequestInit & { label?: string }
+  type ResolvedAddress = { address: string; family: number }
   const MAX_REDIRECTS = 10
 
   function isPrivateIPv4(addr: string): boolean {
@@ -90,7 +91,7 @@ export namespace Ssrf {
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
       return
     }
-    const emptyAddresses: Awaited<ReturnType<typeof dns.lookup<{ all: true }>>> = []
+    const emptyAddresses: ResolvedAddress[] = []
     const addresses = await withTimeout(
       dns.lookup(hostname, { all: true }),
       5_000,
@@ -138,7 +139,7 @@ export namespace Ssrf {
     }
 
     // Resolve DNS once
-    const emptyAddresses: Awaited<ReturnType<typeof dns.lookup<{ all: true }>>> = []
+    const emptyAddresses: ResolvedAddress[] = []
     const addresses = await withTimeout(
       dns.lookup(hostname, { all: true }),
       5_000,
