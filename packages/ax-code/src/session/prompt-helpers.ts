@@ -621,7 +621,9 @@ export async function ensureTitle(input: {
     model,
     abort: input.abort ?? new AbortController().signal,
     sessionID: input.session.id,
-    retries: 2,
+    // No AI SDK retries for title generation — billing/quota 429s should
+    // not burn 3 attempts. The prompt loop has its own retry logic.
+    retries: 0,
     messages: [
       {
         role: "user",
