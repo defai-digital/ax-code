@@ -925,25 +925,5 @@ describe("ProviderTransform.variants", () => {
     })
   })
 
-  describe("@ai-sdk/groq", () => {
-    test("returns none and WIDELY_SUPPORTED_EFFORTS with thinkingLevel", () => {
-      const model = createMockModel({
-        id: "groq/llama-4",
-        providerID: "groq",
-        api: {
-          id: "llama-4-sc",
-          url: "https://api.groq.com",
-          npm: "@ai-sdk/groq",
-        },
-      })
-      const result = ProviderTransform.variants(model)
-      expect(Object.keys(result)).toEqual(["none", "low", "medium", "high"])
-      expect(result.none).toEqual({
-        reasoningEffort: "none",
-      })
-      expect(result.low).toEqual({
-        reasoningEffort: "low",
-      })
-    })
-  })
+  // @ai-sdk/groq provider was removed in v2.23.3
 })
