@@ -1,9 +1,9 @@
 import { Effect, ScopedCache, Scope } from "effect"
 import { Instance, type Shape } from "@/project/instance"
 import { registerDisposer } from "./instance-registry"
+import { isHarmlessEffectInterrupt } from "./interrupt"
 
 const TypeId = "~ax-code/InstanceState"
-const INTERRUPTED_WITHOUT_ERROR = "All fibers interrupted without error"
 
 export interface InstanceState<A, E = never, R = never> {
   readonly [TypeId]: typeof TypeId
@@ -22,8 +22,7 @@ export namespace InstanceState {
 
       const off = registerDisposer((directory) =>
         Effect.runPromise(ScopedCache.invalidate(cache, directory)).catch((err) => {
-          const message = err instanceof Error ? err.message : String(err)
-          if (message === INTERRUPTED_WITHOUT_ERROR) return
+          if (isHarmlessEffectInterrupt(err)) return
 
           // eslint-disable-next-line no-console
           console.error("InstanceState disposer: cache invalidate failed", { directory, err })

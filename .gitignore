@@ -35,6 +35,7 @@ packages/integration-vscode/out/
 
 .scripts
 .direnv/
+debug-log/
 
 # Temp files
 ~$*

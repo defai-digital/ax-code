@@ -1,6 +1,6 @@
 import { Log } from "../util/log"
 import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler } from "hono-openapi"
-import { Hono } from "hono"
+import { Hono, type Context } from "hono"
 import { cors } from "hono/cors"
 import { basicAuth } from "hono/basic-auth"
 import path from "path"
@@ -435,6 +435,41 @@ export namespace Server {
 
   export const Default = lazy(() => createApp({}))
 
+  function requestDirectory(c: Context): string | Response {
+    const raw =
+      c.req.query("directory") ||
+      c.req.header("x-ax-code-directory") ||
+      c.req.header("x-opencode-directory") ||
+      process.cwd()
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(raw)
+      } catch {
+        return raw
+      }
+    })()
+    const directory = path.resolve(decoded)
+    if (decoded === process.cwd()) return directory
+    if (!path.isAbsolute(decoded)) return c.json({ error: "directory must be absolute" }, 400)
+    const stat = (() => {
+      try {
+        return statSync(directory)
+      } catch {
+        return undefined
+      }
+    })()
+    if (!stat?.isDirectory()) return c.json({ error: "directory does not exist or is not a directory" }, 400)
+    return directory
+  }
+
+  async function invalidateProviderState(directory: string) {
+    await Instance.provide({
+      directory,
+      init: InstanceBootstrap,
+      fn: () => Provider.invalidate(),
+    })
+  }
+
   export const createApp = (opts: { port?: number, cors?: string[] }): Hono => {
     const app = new Hono()
     return app
@@ -561,11 +596,13 @@ export namespace Server {
         async (c) => {
           const providerID = c.req.valid("param").providerID
           const info = c.req.valid("json")
+          const directory = requestDirectory(c)
+          if (directory instanceof Response) return directory
           await Auth.set(providerID, info)
           // Invalidate the per-directory provider cache so the next
           // `Provider.list()` re-reads auth and shows the new key
           // without requiring a process restart. See issue #13.
-          await Provider.invalidate()
+          await invalidateProviderState(directory)
           return c.json(true)
         },
       )
@@ -595,28 +632,18 @@ export namespace Server {
         ),
         async (c) => {
           const providerID = c.req.valid("param").providerID
+          const directory = requestDirectory(c)
+          if (directory instanceof Response) return directory
           await Auth.remove(providerID)
           // Same rationale as the PUT handler — a removed key must
           // also disappear from the provider list without a restart.
           // See issue #13.
-          await Provider.invalidate()
+          await invalidateProviderState(directory)
           return c.json(true)
         },
       )
       .use(async (c, next) => {
         if (c.req.path === "/log") return next()
-        const raw =
-          c.req.query("directory") ||
-          c.req.header("x-ax-code-directory") ||
-          c.req.header("x-opencode-directory") ||
-          process.cwd()
-        const decoded = (() => {
-          try {
-            return decodeURIComponent(raw)
-          } catch {
-            return raw
-          }
-        })()
         // Validate the directory before it becomes Instance.directory
         // — the containment root that every file tool measures
         // symlink escapes against. Without this, a request with
@@ -626,22 +653,8 @@ export namespace Server {
         // non-absolute paths, non-existent paths, and non-directory
         // paths with a 400. Defaulted `process.cwd()` values are
         // always trusted (no user input involved).
-        const directory = path.resolve(decoded)
-        if (decoded !== process.cwd()) {
-          if (!path.isAbsolute(decoded)) {
-            return c.json({ error: "directory must be absolute" }, 400)
-          }
-          const stat = (() => {
-            try {
-              return statSync(directory)
-            } catch {
-              return undefined
-            }
-          })()
-          if (!stat?.isDirectory()) {
-            return c.json({ error: "directory does not exist or is not a directory" }, 400)
-          }
-        }
+        const directory = requestDirectory(c)
+        if (directory instanceof Response) return directory
         return Instance.provide({
           directory,
           init: InstanceBootstrap,

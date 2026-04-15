@@ -1,5 +1,6 @@
 import { GlobalBus } from "@/bus/global"
 import { disposeInstance } from "@/effect/instance-registry"
+import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
 import { Filesystem } from "@/util/filesystem"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
@@ -153,9 +154,14 @@ export const Instance = {
 
         if (cache.get(key) !== value) continue
 
-        await context.provide(ctx, async () => {
-          await Instance.dispose()
-        })
+        await context
+          .provide(ctx, async () => {
+            await Instance.dispose()
+          })
+          .catch((error) => {
+            if (isHarmlessEffectInterrupt(error)) return
+            throw error
+          })
       }
     }).finally(() => {
       disposal.all = undefined

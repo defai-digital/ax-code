@@ -13,7 +13,15 @@ describe("tui native vertical slice", () => {
   test("keeps OpenTUI as the default renderer and enables native only by flag", () => {
     expect(resolveTuiRendererName(undefined)).toBe("opentui")
     expect(resolveTuiRendererName("opentui")).toBe("opentui")
-    expect(resolveTuiRendererName("native")).toBe("native")
+    expect(resolveTuiRendererName("native")).toBe("opentui")
+    const nativeEnabled = process.env["AX_CODE_TUI_NATIVE_ENABLED"]
+    process.env["AX_CODE_TUI_NATIVE_ENABLED"] = "1"
+    try {
+      expect(resolveTuiRendererName("native")).toBe("native")
+    } finally {
+      if (nativeEnabled === undefined) delete process.env["AX_CODE_TUI_NATIVE_ENABLED"]
+      else process.env["AX_CODE_TUI_NATIVE_ENABLED"] = nativeEnabled
+    }
     expect(() => resolveTuiRendererName("invalid")).toThrow("Invalid TUI renderer")
     expect(parseTuiRendererName("native")).toBe("native")
     expect(() => parseTuiRendererName("invalid")).toThrow("Invalid TUI renderer")

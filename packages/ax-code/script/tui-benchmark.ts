@@ -360,6 +360,10 @@ function isPtyProbe(probe: TuiBenchmarkProbe) {
   return probe.startsWith("pty-")
 }
 
+function stringEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+}
+
 function p95(values: number[]) {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
@@ -379,18 +383,21 @@ async function runPtySample(item: TuiBenchmarkPlanItem) {
   const { spawn } = await import("bun-pty")
   const [command, ...args] = item.command ?? []
   if (!command) throw new Error(`Missing command for ${item.id}`)
+  const renderer = item.renderer ?? resolveTuiRendererName()
+  const env: Record<string, string> = {
+    ...stringEnv(process.env),
+    TERM: "xterm-256color",
+    AX_CODE_TUI_BENCHMARK: "1",
+    AX_CODE_TUI_RENDERER: renderer,
+  }
+  if (renderer === "native") env.AX_CODE_TUI_NATIVE_ENABLED = "1"
 
   return await new Promise<number>((resolve, reject) => {
     const start = performance.now()
     const proc = spawn(command, args, {
       name: "xterm-256color",
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        TERM: "xterm-256color",
-        AX_CODE_TUI_BENCHMARK: "1",
-        AX_CODE_TUI_RENDERER: item.renderer ?? resolveTuiRendererName(),
-      },
+      env,
     })
     let done = false
     let buffer = ""

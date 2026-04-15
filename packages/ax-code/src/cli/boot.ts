@@ -47,6 +47,7 @@ import { UI } from "./ui"
 import { Installation } from "../installation"
 import { Log } from "../util/log"
 import { DiagnosticLog } from "../debug/diagnostic-log"
+import { isHarmlessEffectInterrupt } from "../effect/interrupt"
 
 const cmds = [
   AcpCommand,
@@ -88,13 +89,6 @@ const cmds = [
   DesignCheckCommand,
   ContextCommand,
 ]
-
-const INTERRUPTED_WITHOUT_ERROR = "All fibers interrupted without error"
-
-function isHarmlessEffectInterrupt(reason: unknown) {
-  const message = reason instanceof Error ? reason.message : String(reason)
-  return message === INTERRUPTED_WITHOUT_ERROR
-}
 
 export function hooks() {
   process.on("unhandledRejection", (err) => {
