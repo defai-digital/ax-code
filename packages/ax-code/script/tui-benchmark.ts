@@ -47,6 +47,7 @@ export type TuiBenchmarkResult = {
   value?: number
   samples?: number[]
   skipped?: string
+  error?: string
 }
 
 export type TuiBenchmarkVerdict = {
@@ -209,6 +210,10 @@ export function evaluateTuiBenchmarkResults(results: TuiBenchmarkResult[]): TuiB
       notes.push(`${result.id}: skipped: ${result.skipped}`)
       continue
     }
+    if (result.error) {
+      failures.push(`${result.id}: ${result.error}`)
+      continue
+    }
     if (result.value === undefined) {
       failures.push(`${result.id}: missing ${result.metric}`)
       continue
@@ -308,8 +313,24 @@ export async function runTuiBenchmarkPlan(plan: TuiBenchmarkPlanItem[]): Promise
     }
 
     const samples: number[] = []
+    let error: string | undefined
     for (let i = 0; i < item.repeat; i++) {
-      samples.push(await runSample(item))
+      try {
+        samples.push(await runSample(item))
+      } catch (cause) {
+        error = cause instanceof Error ? cause.message : String(cause)
+        break
+      }
+    }
+    if (error) {
+      results.push({
+        id: item.id,
+        criterionID: item.criterionID,
+        metric: item.metric,
+        samples,
+        error,
+      })
+      continue
     }
     results.push({
       id: item.id,

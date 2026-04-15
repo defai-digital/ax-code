@@ -89,8 +89,16 @@ const cmds = [
   ContextCommand,
 ]
 
+const INTERRUPTED_WITHOUT_ERROR = "All fibers interrupted without error"
+
+function isHarmlessEffectInterrupt(reason: unknown) {
+  const message = reason instanceof Error ? reason.message : String(reason)
+  return message === INTERRUPTED_WITHOUT_ERROR
+}
+
 export function hooks() {
   process.on("unhandledRejection", (err) => {
+    if (isHarmlessEffectInterrupt(err)) return
     DiagnosticLog.recordProcess("cli.unhandledRejection", { error: err })
     Log.Default.error("rejection", {
       e: err instanceof Error ? err.message : err,
@@ -99,6 +107,7 @@ export function hooks() {
   })
 
   process.on("uncaughtException", (err) => {
+    if (isHarmlessEffectInterrupt(err)) return
     DiagnosticLog.recordProcess("cli.uncaughtException", { error: err })
     Log.Default.error("exception", {
       e: err instanceof Error ? err.message : err,

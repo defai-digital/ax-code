@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import path from "path"
+import { pathToFileURL } from "url"
 import stripAnsi from "strip-ansi"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
@@ -107,6 +108,43 @@ describe("cli smoke", () => {
     const text = out.stdout.toString().trim()
     expect(out.code).toBe(0)
     expect(text).toBe(path.join(Global.Path.data, "ax-code-local.db"))
+  }, 20000)
+
+  test("isolates global data paths under AX_CODE_TEST_HOME in fresh processes", async () => {
+    await using tmp = await tmpdir()
+    const testHome = path.join(tmp.path, "home")
+    const globalURL = pathToFileURL(path.join(ROOT, "src", "global", "index.ts")).href
+    const env: NodeJS.ProcessEnv = { ...process.env, AX_CODE_TEST_HOME: testHome }
+    delete env.XDG_DATA_HOME
+    delete env.XDG_CACHE_HOME
+    delete env.XDG_CONFIG_HOME
+    delete env.XDG_STATE_HOME
+    const code = `
+      const { Global } = await import(${JSON.stringify(globalURL)})
+      process.stdout.write(JSON.stringify({
+        home: Global.Path.home,
+        data: Global.Path.data,
+        cache: Global.Path.cache,
+        config: Global.Path.config,
+        state: Global.Path.state,
+        log: Global.Path.log,
+        bin: Global.Path.bin
+      }))
+    `
+
+    const out = await Process.run([process.execPath, "-e", code], {
+      cwd: ROOT,
+      env,
+    })
+    const paths = JSON.parse(out.stdout.toString()) as Record<string, string>
+
+    expect(paths.home).toBe(testHome)
+    expect(paths.data).toBe(path.join(testHome, ".local", "share", "ax-code"))
+    expect(paths.cache).toBe(path.join(testHome, ".cache", "ax-code"))
+    expect(paths.config).toBe(path.join(testHome, ".config", "ax-code"))
+    expect(paths.state).toBe(path.join(testHome, ".local", "state", "ax-code"))
+    expect(paths.log).toBe(path.join(paths.data, "log"))
+    expect(paths.bin).toBe(path.join(paths.cache, "bin"))
   }, 20000)
 
   test("prints subcommand help", async () => {

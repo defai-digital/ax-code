@@ -185,6 +185,25 @@ describe("tui renderer parity", () => {
     )
   })
 
+  test("keeps native flagged when benchmark results capture probe errors", () => {
+    const decision = evaluateTuiRendererParity({
+      renderer: "native",
+      benchmarkReport: report({
+        results: report().results.map((item) =>
+          item.criterionID === "input.paste-echo" ? { ...item, value: undefined, error: "pty exited" } : item,
+        ),
+        verdict: { ok: false, failures: ["input.paste-echo:probe: pty exited"] },
+      }),
+      contract,
+      opentuiFallbackRetained: true,
+    })
+
+    expect(decision.action).toBe("keep-native-flagged")
+    expect(decision.checks).toContainEqual(
+      expect.objectContaining({ id: "benchmark.input.paste-echo", status: "failed" }),
+    )
+  })
+
   test("requires evidence for passed contract gates", () => {
     const decision = evaluateTuiRendererParity({
       renderer: "native",

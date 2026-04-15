@@ -34,6 +34,7 @@ export type TuiRendererParityBenchmarkReport = {
     metric: TuiRendererParityBenchmarkMetric
     value?: number
     skipped?: string
+    error?: string
   }>
   verdict: {
     ok: boolean
@@ -137,12 +138,16 @@ export function validateTuiRendererParityBenchmarkReport(value: unknown): TuiRen
       if (result.skipped !== undefined && typeof result.skipped !== "string") {
         throw new Error(`benchmark results[${index}].skipped must be a string`)
       }
+      if (result.error !== undefined && typeof result.error !== "string") {
+        throw new Error(`benchmark results[${index}].error must be a string`)
+      }
       return {
         id: result.id,
         criterionID: result.criterionID,
         metric: result.metric as TuiRendererParityBenchmarkMetric,
         value: result.value as number | undefined,
         skipped: result.skipped as string | undefined,
+        error: result.error as string | undefined,
       }
     }),
     verdict: {
@@ -253,6 +258,9 @@ function benchmarkCriteriaChecks(report: TuiRendererParityBenchmarkReport | unde
     if (!result) return { id: `benchmark.${criterionID}`, status: "missing", reason: "Missing benchmark result." }
     if (result.skipped) {
       return { id: `benchmark.${criterionID}`, status: "failed", reason: `Benchmark skipped: ${result.skipped}` }
+    }
+    if (result.error) {
+      return { id: `benchmark.${criterionID}`, status: "failed", reason: `Benchmark failed: ${result.error}` }
     }
     const failure = report?.verdict.failures.find((item) => item.startsWith(`${result.id}:`))
     if (failure) return { id: `benchmark.${criterionID}`, status: "failed", reason: failure }

@@ -90,12 +90,17 @@ describe("script.tui-benchmark", () => {
       { id: "input", criterionID: "input.keypress-echo", metric: "p95Ms", value: 50 },
       { id: "scroll", criterionID: "scroll.long-cjk-wrapped", metric: "minFps", value: 44 },
       { id: "transcript", criterionID: "transcript.large-append", metric: "p95Ms", skipped: "manual fixture" },
+      { id: "paste", criterionID: "input.paste-echo", metric: "p95Ms", error: "pty exited before completion" },
     ]
 
     const verdict = evaluateTuiBenchmarkResults(results)
 
     expect(verdict.ok).toBe(false)
-    expect(verdict.failures).toEqual(["startup: p95 1201.0ms exceeds 1200ms", "scroll: 44.0fps is below 45fps"])
+    expect(verdict.failures).toEqual([
+      "startup: p95 1201.0ms exceeds 1200ms",
+      "scroll: 44.0fps is below 45fps",
+      "paste: pty exited before completion",
+    ])
     expect(verdict.notes).toEqual(["transcript: skipped: manual fixture"])
   })
 
