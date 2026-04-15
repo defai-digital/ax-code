@@ -631,6 +631,15 @@ export namespace Provider {
         options["includeUsage"] = true
       }
 
+      // Disable provider-level retries — ax-code handles retries via
+      // SessionRetry with smarter logic (permanent error detection,
+      // provider fallback, abort signal checks). The AI SDK default
+      // (maxRetries: 2) burns ~7s retrying billing/quota 429 errors
+      // that will never succeed.
+      if (options["maxRetries"] === undefined) {
+        options["maxRetries"] = 0
+      }
+
       const baseURL = iife(() => {
         let url =
           typeof options["baseURL"] === "string" && options["baseURL"] !== "" ? options["baseURL"] : model.api.url
