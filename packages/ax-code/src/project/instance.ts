@@ -163,9 +163,14 @@ export const Instance = {
             throw error
           })
       }
-    }).finally(() => {
-      disposal.all = undefined
     })
+      .catch((error) => {
+        if (isHarmlessEffectInterrupt(error)) return
+        throw error
+      })
+      .finally(() => {
+        disposal.all = undefined
+      })
 
     return disposal.all
   },
