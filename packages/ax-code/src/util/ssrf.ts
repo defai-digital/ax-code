@@ -90,6 +90,7 @@ export namespace Ssrf {
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
       return
     }
+    const emptyAddresses: Awaited<ReturnType<typeof dns.lookup<{ all: true }>>> = []
     const addresses = await withTimeout(
       dns.lookup(hostname, { all: true }),
       5_000,
@@ -98,7 +99,7 @@ export namespace Ssrf {
       // Propagate timeout errors directly so callers can distinguish
       // "DNS timed out" from "hostname does not exist".
       if (err instanceof Error && err.message.includes("timed out")) throw err
-      return []
+      return emptyAddresses
     })
     if (addresses.length === 0) {
       throw new Error(`${label}: could not resolve hostname: ${hostname}`)
@@ -137,13 +138,14 @@ export namespace Ssrf {
     }
 
     // Resolve DNS once
+    const emptyAddresses: Awaited<ReturnType<typeof dns.lookup<{ all: true }>>> = []
     const addresses = await withTimeout(
       dns.lookup(hostname, { all: true }),
       5_000,
       `${label}: DNS lookup timed out after 5s: ${hostname}`,
     ).catch((err) => {
       if (err instanceof Error && err.message.includes("timed out")) throw err
-      return []
+      return emptyAddresses
     })
     if (addresses.length === 0) {
       throw new Error(`${label}: could not resolve hostname: ${hostname}`)
