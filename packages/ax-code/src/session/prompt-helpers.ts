@@ -560,6 +560,25 @@ export async function lastModel(sessionID: SessionID) {
   return Provider.defaultModel()
 }
 
+/**
+ * Find a fallback model from a different provider when the current one fails.
+ * Skips the failed provider and returns the best model from the next available one.
+ */
+export async function findFallbackModel(
+  failedProviderID: string,
+  failedModelID: string,
+): Promise<{ providerID: ProviderID; modelID: ModelID } | undefined> {
+  const providers = await Provider.list()
+  for (const [id, provider] of Object.entries(providers)) {
+    if (id === failedProviderID) continue
+    const models = Provider.sort(Object.values(provider.models))
+    if (models.length > 0) {
+      return { providerID: ProviderID.make(id), modelID: models[0].id }
+    }
+  }
+  return undefined
+}
+
 export async function ensureTitle(input: {
   session: Session.Info
   history: MessageV2.WithParts[]

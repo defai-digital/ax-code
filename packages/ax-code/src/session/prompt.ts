@@ -71,6 +71,7 @@ import {
   systemPrompt as getSystemPrompt,
   createStructuredOutputTool as _createStructuredOutputTool,
   lastModel as _lastModel,
+  findFallbackModel,
   ensureTitle as _ensureTitle,
 } from "./prompt-helpers"
 
@@ -913,6 +914,38 @@ export namespace SessionPrompt {
       // Track consecutive errors — break if agent is stuck
       if (processor.message.error) {
         consecutiveErrors++
+
+        // Provider fallback: if the error is a provider API failure (rate limit,
+        // no credit, auth error), try switching to another available provider
+        // instead of retrying the same broken one.
+        const err = processor.message.error
+        if (
+          consecutiveErrors >= 2 &&
+          err.name === "APIError" &&
+          err.data?.statusCode &&
+          [401, 402, 403, 429].includes(err.data.statusCode)
+        ) {
+          const fallback = await findFallbackModel(lastUser.model.providerID, lastUser.model.modelID).catch(() => null)
+          if (fallback) {
+            log.warn("switching to fallback provider", {
+              command: "session.prompt.loop",
+              from: `${lastUser.model.providerID}/${lastUser.model.modelID}`,
+              to: `${fallback.providerID}/${fallback.modelID}`,
+              reason: err.data?.message,
+            })
+            Bus.publish(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({
+                message: `Provider ${lastUser.model.providerID} failed: ${err.data?.message ?? "unknown error"}. Switching to ${fallback.providerID}/${fallback.modelID}.`,
+              }).toObject(),
+            })
+            lastUser.model = fallback
+            cachedModel = undefined
+            consecutiveErrors = 0
+            continue
+          }
+        }
+
         log.warn("consecutive error", {
           command: "session.prompt.loop",
           status: "error",

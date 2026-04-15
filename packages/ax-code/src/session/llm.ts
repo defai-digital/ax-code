@@ -60,6 +60,12 @@ export namespace LLM {
       modelID: input.model.id,
       providerID: input.model.providerID,
     })
+    // Early abort check — if the signal was already fired (e.g. user pressed
+    // Ctrl-C during retry sleep), bail out before starting the expensive
+    // getLanguage/getSDK/streamText pipeline.
+    if (input.abort?.aborted) {
+      throw new DOMException("Aborted", "AbortError")
+    }
     // 90s timeout: getLanguage() may call getSDK() → BunProc.install() which
     // has its own 60s timeout. A 30s outer timeout would kill a legitimate
     // first-run SDK install on a slow network.
