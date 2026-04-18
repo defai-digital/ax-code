@@ -1,5 +1,12 @@
+import { unwrap } from "solid-js/store"
 import type { PromptInfo } from "../component/prompt/model"
 import { promptSubmissionView } from "../component/prompt/view-model"
+
+// Callers pass SolidJS store proxies (from prompt/index.tsx, history store, etc.).
+// `structuredClone` throws DataCloneError on Solid proxies, so unwrap first.
+function cloneValue<T>(value: T): T {
+  return structuredClone(unwrap(value))
+}
 
 export type PromptMode = "normal" | "shell"
 
@@ -84,9 +91,9 @@ export function createPromptEditorState(input: Partial<PromptEditorState> = {}):
     input: input.input ?? "",
     mode: input.mode ?? "normal",
     parts: input.parts ? [...input.parts] : [],
-    history: input.history ? input.history.map((entry) => structuredClone(entry)) : [],
+    history: input.history ? input.history.map((entry) => cloneValue(entry)) : [],
     historyCursor: input.historyCursor ?? 0,
-    historyDraft: input.historyDraft ? structuredClone(input.historyDraft) : undefined,
+    historyDraft: input.historyDraft ? cloneValue(input.historyDraft) : undefined,
     interrupt: input.interrupt ?? 0,
   }
 }
@@ -221,7 +228,7 @@ function currentPromptEntry(state: PromptEditorState): PromptInfo {
   return {
     input: state.input,
     mode: state.mode,
-    parts: structuredClone(state.parts),
+    parts: cloneValue(state.parts),
   }
 }
 
@@ -235,7 +242,7 @@ function restoreHistoryEntry(state: PromptEditorState, entry: PromptInfo, cursor
     ...state,
     input: entry.input,
     mode: entry.mode ?? "normal",
-    parts: structuredClone(entry.parts),
+    parts: cloneValue(entry.parts),
     historyCursor: cursor,
     interrupt: 0,
   }
@@ -263,7 +270,7 @@ function withHistoryCursor(state: PromptEditorState, direction: -1 | 1): PromptE
       ...state,
       input: draft.input,
       mode: draft.mode ?? "normal",
-      parts: structuredClone(draft.parts),
+      parts: cloneValue(draft.parts),
       historyCursor: 0,
       historyDraft: undefined,
       interrupt: 0,
@@ -310,7 +317,7 @@ export function reducePromptEditor(state: PromptEditorState, action: PromptEdito
     case "history.loaded":
       return {
         ...state,
-        history: action.entries.map((entry) => structuredClone(entry)),
+        history: action.entries.map((entry) => cloneValue(entry)),
         historyCursor: 0,
         historyDraft: undefined,
       }
