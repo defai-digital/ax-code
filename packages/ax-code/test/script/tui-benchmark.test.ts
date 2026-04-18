@@ -129,6 +129,7 @@ describe("script.tui-benchmark", () => {
     const report = await createTuiBenchmarkReport({
       generatedAt: "2026-04-13T00:00:00.000Z",
       command: ["ax-code", "--debug"],
+      renderer: "opentui",
       results: [],
       verdict: { ok: true, failures: [], notes: [] },
     })

@@ -74,7 +74,7 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const dir = Instance.directory
         const prev = Instance.project
-        if (prev.vcs === "git" && prev.worktree === dir) return c.json(prev)
+        if (prev.vcs === "git") return c.json(prev)
 
         const next = await Project.initGit({
           directory: dir,

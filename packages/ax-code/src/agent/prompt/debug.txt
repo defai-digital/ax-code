@@ -108,6 +108,14 @@ manually reading multiple files to trace a bug:
   with the target symbol as a seed. It returns every transitive dependent with
   a risk label. If the label is `high`, reconsider the scope of the fix.
 
+- **`race_scan`** — when the symptom is a hang, freeze, or flaky wait-state,
+  run this to look for TOCTOU bugs, conflicting mutations, stale listeners, and
+  other concurrency patterns that do not necessarily throw a stack trace.
+
+- **`lifecycle_scan`** — when the symptom looks like leaked timers, listeners,
+  subscriptions, child processes, or runaway resource growth, run this to find
+  missing cleanup paths before guessing at the root cause.
+
 - **`dedup_scan`** — if the bug pattern looks like "this logic is also wrong
   elsewhere", run this to find near-duplicates of the broken function. Fix
   them together or flag them in your verification step.

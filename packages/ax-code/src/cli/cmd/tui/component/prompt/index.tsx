@@ -31,7 +31,6 @@ import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@ax-code/sdk/v2"
 import { TuiEvent } from "../../event"
-import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
 import { createColors, createFrames } from "../../ui/spinner.ts"
@@ -42,7 +41,14 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
-import { isPromptExitCommand, promptSubmissionView } from "./view-model"
+import { isPromptExitCommand, resolvePromptSlashDispatch } from "./view-model"
+import {
+  createPromptEditorState,
+  promptEditorSubmission,
+  reducePromptEditor,
+  type PromptEditorAction,
+} from "../../input/prompt-editor"
+import { blocksPromptInput, resolveFocusOwner } from "../../input/focus-manager"
 
 const log = Log.create({ service: "tui.prompt" })
 
@@ -117,7 +123,7 @@ export function Prompt(props: PromptProps) {
       import("../dialog-provider")
         .then(({ DialogProvider }) => {
           if (dialog.stack.at(-1) !== marker) return
-          dialog.replace(() => <DialogProvider />)
+          dialog.replaceWithKind("provider", () => <DialogProvider />)
         })
         .catch((error) => {
           log.warn("failed to load provider dialog", { error })
@@ -178,6 +184,8 @@ export function Prompt(props: PromptProps) {
     mode: "normal" | "shell"
     extmarkToPartIndex: Map<number, number>
     interrupt: number
+    historyCursor: number
+    historyDraft?: PromptInfo
     placeholder: number
   }>({
     placeholder: Math.floor(Math.random() * PLACEHOLDERS.length),
@@ -188,7 +196,68 @@ export function Prompt(props: PromptProps) {
     mode: "normal",
     extmarkToPartIndex: new Map(),
     interrupt: 0,
+    historyCursor: 0,
+    historyDraft: undefined,
   })
+
+  function currentPromptInfo(): PromptInfo {
+    return {
+      ...store.prompt,
+      mode: store.mode,
+    }
+  }
+
+  function restorePrompt(prompt: PromptInfo) {
+    setStore("prompt", {
+      input: prompt.input,
+      parts: prompt.parts,
+    })
+    setStore("mode", prompt.mode ?? "normal")
+    setStore("historyCursor", 0)
+    setStore("historyDraft", undefined)
+  }
+
+  function currentPromptEditorState() {
+    return createPromptEditorState({
+      input: store.prompt.input,
+      mode: store.mode,
+      parts: store.prompt.parts,
+      history: history.entries(),
+      historyCursor: store.historyCursor,
+      historyDraft: store.historyDraft,
+      interrupt: store.interrupt,
+    })
+  }
+
+  function applyPromptEditorState(next: ReturnType<typeof createPromptEditorState>, inputValue = next.input) {
+    setStore("prompt", {
+      input: inputValue,
+      parts: next.parts,
+    })
+    setStore("mode", next.mode)
+    setStore("interrupt", next.interrupt)
+    setStore("historyCursor", next.historyCursor)
+    setStore("historyDraft", next.historyDraft)
+  }
+
+  function applyPromptEditorAction(action: PromptEditorAction) {
+    const next = reducePromptEditor(currentPromptEditorState(), action)
+    applyPromptEditorState(next)
+  }
+
+  function clearPromptInput() {
+    input.extmarks.clear()
+    input.clear()
+    setStore("extmarkToPartIndex", new Map())
+    applyPromptEditorAction({ type: "prompt.cleared" })
+  }
+
+  function commitPromptSubmission() {
+    applyPromptEditorAction({ type: "submission.committed" })
+    input.extmarks.clear()
+    setStore("extmarkToPartIndex", new Map())
+    input.clear()
+  }
 
   createEffect(
     on(
@@ -198,6 +267,16 @@ export function Prompt(props: PromptProps) {
       },
       { defer: true },
     ),
+  )
+
+  const inputOwner = createMemo(() =>
+    resolveFocusOwner({
+      prompt: {
+        visible: props.visible !== false,
+        disabled: props.disabled,
+      },
+      dialog: dialog.kind,
+    }),
   )
 
   // Initialize agent/model/variant from last user message when session changes.
@@ -237,17 +316,18 @@ export function Prompt(props: PromptProps) {
       {
         title: "Clear prompt",
         value: "prompt.clear",
+        owners: ["prompt"],
         category: "Prompt",
         hidden: true,
         onSelect: (dialog) => {
-          input.extmarks.clear()
-          input.clear()
+          clearPromptInput()
           dialog.clear()
         },
       },
       {
         title: "Submit prompt",
         value: "prompt.submit",
+        owners: ["prompt"],
         keybind: "input_submit",
         category: "Prompt",
         hidden: true,
@@ -260,6 +340,7 @@ export function Prompt(props: PromptProps) {
       {
         title: "Paste",
         value: "prompt.paste",
+        owners: ["prompt"],
         keybind: "input_paste",
         category: "Prompt",
         hidden: true,
@@ -277,6 +358,7 @@ export function Prompt(props: PromptProps) {
       {
         title: "Exit shell mode",
         value: "shell.exit",
+        owners: ["prompt"],
         keybind: "session_interrupt",
         category: "Session",
         hidden: true,
@@ -284,13 +366,14 @@ export function Prompt(props: PromptProps) {
         onSelect: (dialog) => {
           if (autocomplete.visible) return
           if (!input.focused) return
-          setStore("mode", "normal")
+          applyPromptEditorAction({ type: "prompt.cancelled" })
           dialog.clear()
         },
       },
       {
         title: "Interrupt session",
         value: "session.interrupt",
+        owners: ["prompt"],
         keybind: "session_interrupt",
         category: "Session",
         hidden: true,
@@ -300,17 +383,19 @@ export function Prompt(props: PromptProps) {
           if (!input.focused) return
           if (!props.sessionID) return
 
-          setStore("interrupt", store.interrupt + 1)
+          const nextInterrupt = store.interrupt + 1
+          applyPromptEditorAction({ type: "interrupt.incremented" })
 
-          setTimeout(() => {
-            setStore("interrupt", 0)
+          const resetInterrupt = setTimeout(() => {
+            applyPromptEditorAction({ type: "interrupt.reset" })
           }, 5000)
 
-          if (store.interrupt >= 2) {
+          if (nextInterrupt >= 2) {
+            clearTimeout(resetInterrupt)
             sdk.client.session.abort({
               sessionID: props.sessionID,
             })
-            setStore("interrupt", 0)
+            applyPromptEditorAction({ type: "interrupt.reset" })
           }
           dialog.clear()
         },
@@ -320,6 +405,7 @@ export function Prompt(props: PromptProps) {
         category: "Session",
         keybind: "editor_open",
         value: "prompt.editor",
+        owners: ["prompt"],
         slash: {
           name: "editor",
         },
@@ -405,6 +491,7 @@ export function Prompt(props: PromptProps) {
       {
         title: "Skills",
         value: "prompt.skills",
+        owners: ["prompt"],
         category: "Prompt",
         slash: {
           name: "skills",
@@ -418,8 +505,9 @@ export function Prompt(props: PromptProps) {
                 <DialogSkill
                   onSelect={(skill) => {
                     input.setText(`/${skill} `)
-                    setStore("prompt", {
+                    restorePrompt({
                       input: `/${skill} `,
+                      mode: "normal",
                       parts: [],
                     })
                     input.gotoBufferEnd()
@@ -441,7 +529,7 @@ export function Prompt(props: PromptProps) {
       return input.focused
     },
     get current() {
-      return store.prompt
+      return currentPromptInfo()
     },
     focus() {
       input.focus()
@@ -451,18 +539,12 @@ export function Prompt(props: PromptProps) {
     },
     set(prompt) {
       input.setText(prompt.input)
-      setStore("prompt", prompt)
+      restorePrompt(prompt)
       restoreExtmarksFromParts(prompt.parts)
       input.gotoBufferEnd()
     },
     reset() {
-      input.clear()
-      input.extmarks.clear()
-      setStore("prompt", {
-        input: "",
-        parts: [],
-      })
-      setStore("extmarkToPartIndex", new Map())
+      clearPromptInput()
     },
     submit() {
       submit()
@@ -556,31 +638,27 @@ export function Prompt(props: PromptProps) {
     {
       title: "Stash prompt",
       value: "prompt.stash",
+      owners: ["prompt"],
       category: "Prompt",
       enabled: !!store.prompt.input,
       onSelect: (dialog) => {
         if (!store.prompt.input) return
-        stash.push({
-          input: store.prompt.input,
-          parts: store.prompt.parts,
-        })
-        input.extmarks.clear()
-        input.clear()
-        setStore("prompt", { input: "", parts: [] })
-        setStore("extmarkToPartIndex", new Map())
+        stash.push(currentPromptInfo())
+        clearPromptInput()
         dialog.clear()
       },
     },
     {
       title: "Stash pop",
       value: "prompt.stash.pop",
+      owners: ["prompt"],
       category: "Prompt",
       enabled: stash.list().length > 0,
       onSelect: (dialog) => {
         const entry = stash.pop()
         if (entry) {
           input.setText(entry.input)
-          setStore("prompt", { input: entry.input, parts: entry.parts })
+          restorePrompt(entry)
           restoreExtmarksFromParts(entry.parts)
           input.gotoBufferEnd()
         }
@@ -590,6 +668,7 @@ export function Prompt(props: PromptProps) {
     {
       title: "Stash list",
       value: "prompt.stash.list",
+      owners: ["prompt"],
       category: "Prompt",
       enabled: stash.list().length > 0,
       onSelect: (dialog) => {
@@ -601,7 +680,7 @@ export function Prompt(props: PromptProps) {
               <DialogStash
                 onSelect={(entry) => {
                   input.setText(entry.input)
-                  setStore("prompt", { input: entry.input, parts: entry.parts })
+                  restorePrompt(entry)
                   restoreExtmarksFromParts(entry.parts)
                   input.gotoBufferEnd()
                 }}
@@ -624,6 +703,33 @@ export function Prompt(props: PromptProps) {
       exit()
       return
     }
+    syncExtmarksWithPromptParts()
+    const submission = promptEditorSubmission(currentPromptEditorState())
+    const inputText = submission.text
+    const nonTextParts = submission.parts
+
+    // Capture mode before it gets reset
+    const currentPrompt = currentPromptInfo()
+    const slashDispatch =
+      store.mode === "shell"
+        ? { type: "none" as const }
+        : resolvePromptSlashDispatch({
+            text: inputText,
+            localSlashes: command.slashes().map((slash) => ({
+              name: slash.display.slice(1),
+              aliases: slash.aliases?.map((alias) => alias.slice(1)),
+            })),
+            remoteCommands: sync.data.command.map((item) => item.name),
+          })
+
+    if (slashDispatch.type === "local") {
+      command.trySlash(slashDispatch.name)
+      history.append(currentPrompt)
+      commitPromptSubmission()
+      props.onSubmit?.()
+      return
+    }
+
     const selectedModel = local.model.current()
     if (!selectedModel) {
       promptModelWarning()
@@ -652,17 +758,6 @@ export function Prompt(props: PromptProps) {
     }
 
     const messageID = MessageID.ascending()
-    const submission = promptSubmissionView({
-      text: store.prompt.input,
-      parts: store.prompt.parts,
-      extmarks: input.extmarks.getAllForTypeId(promptPartTypeId),
-      extmarkToPartIndex: store.extmarkToPartIndex,
-    })
-    const inputText = submission.text
-    const nonTextParts = submission.parts
-
-    // Capture mode before it gets reset
-    const currentMode = store.mode
     const variant = local.model.variant.current()
 
     try {
@@ -681,35 +776,13 @@ export function Prompt(props: PromptProps) {
             if (res.error) reportSubmitFailure("Shell command submission", res.error)
           })
           .catch((error: unknown) => reportSubmitFailure("Shell command submission", error))
-        setStore("mode", "normal")
-      } else if (
-        inputText.startsWith("/") &&
-        iife(() => {
-          const name = inputText.split("\n")[0].split(" ")[0].slice(1)
-          return command.trySlash(name)
-        })
-      ) {
-        // Client-side slash command handled by trySlash.
-      } else if (
-        inputText.startsWith("/") &&
-        iife(() => {
-          const firstLine = inputText.split("\n")[0]
-          const command = firstLine.split(" ")[0].slice(1)
-          return sync.data.command.some((x) => x.name === command)
-        })
-      ) {
-        // Parse command from first line, preserve multi-line content in arguments
-        const firstLineEnd = inputText.indexOf("\n")
-        const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
-        const [command, ...firstLineArgs] = firstLine.split(" ")
-        const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
-        const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
-
+        applyPromptEditorAction({ type: "prompt.cancelled" })
+      } else if (slashDispatch.type === "remote") {
         void sdk.client.session
           .command({
             sessionID,
-            command: command.slice(1),
-            arguments: args,
+            command: slashDispatch.name,
+            arguments: slashDispatch.arguments,
             agent: local.agent.current().name,
             model: `${selectedModel.providerID}/${selectedModel.modelID}`,
             messageID,
@@ -753,16 +826,8 @@ export function Prompt(props: PromptProps) {
       return
     }
 
-    history.append({
-      ...store.prompt,
-      mode: currentMode,
-    })
-    input.extmarks.clear()
-    setStore("prompt", {
-      input: "",
-      parts: [],
-    })
-    setStore("extmarkToPartIndex", new Map())
+    history.append(currentPrompt)
+    commitPromptSubmission()
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent
@@ -773,7 +838,6 @@ export function Prompt(props: PromptProps) {
           sessionID,
         })
       }, 50)
-    input.clear()
   }
   const exit = useExit()
 
@@ -792,23 +856,21 @@ export function Prompt(props: PromptProps) {
       typeId: promptPartTypeId,
     })
 
-    setStore(
-      produce((draft) => {
-        const partIndex = draft.prompt.parts.length
-        draft.prompt.parts.push({
-          type: "text" as const,
-          text,
-          source: {
-            text: {
-              start: extmarkStart,
-              end: extmarkEnd,
-              value: virtualText,
-            },
-          },
-        })
-        draft.extmarkToPartIndex.set(extmarkId, partIndex)
-      }),
-    )
+    const next = reducePromptEditor(currentPromptEditorState(), {
+      type: "paste.text",
+      text,
+      label: virtualText,
+      range: {
+        start: extmarkStart,
+        end: extmarkStart,
+      },
+    })
+    applyPromptEditorState(next, input.plainText)
+    setStore("extmarkToPartIndex", (map: Map<number, number>) => {
+      const newMap = new Map(map)
+      newMap.set(extmarkId, next.parts.length - 1)
+      return newMap
+    })
   }
 
   async function pasteImage(file: { filename?: string; content: string; mime: string }) {
@@ -844,13 +906,21 @@ export function Prompt(props: PromptProps) {
         },
       },
     }
-    setStore(
-      produce((draft) => {
-        const partIndex = draft.prompt.parts.length
-        draft.prompt.parts.push(part)
-        draft.extmarkToPartIndex.set(extmarkId, partIndex)
-      }),
-    )
+    const next = reducePromptEditor(currentPromptEditorState(), {
+      type: "paste.file",
+      file: part,
+      label: virtualText,
+      range: {
+        start: extmarkStart,
+        end: extmarkStart,
+      },
+    })
+    applyPromptEditorState(next, input.plainText)
+    setStore("extmarkToPartIndex", (map: Map<number, number>) => {
+      const newMap = new Map(map)
+      newMap.set(extmarkId, next.parts.length - 1)
+      return newMap
+    })
     return
   }
 
@@ -958,13 +1028,20 @@ export function Prompt(props: PromptProps) {
               maxHeight={6}
               onContentChange={() => {
                 const value = input.plainText
-                setStore("prompt", "input", value)
-                autocomplete.onInput(value)
                 syncExtmarksWithPromptParts()
+                applyPromptEditorAction({
+                  type: "input.changed",
+                  value,
+                })
+                autocomplete.onInput(value)
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e) => {
                 if (props.disabled) {
+                  e.preventDefault()
+                  return
+                }
+                if (blocksPromptInput(inputOwner())) {
                   e.preventDefault()
                   return
                 }
@@ -986,13 +1063,7 @@ export function Prompt(props: PromptProps) {
                   // If no image, let the default paste behavior continue
                 }
                 if (keybind.match("input_clear", e) && store.prompt.input !== "") {
-                  input.clear()
-                  input.extmarks.clear()
-                  setStore("prompt", {
-                    input: "",
-                    parts: [],
-                  })
-                  setStore("extmarkToPartIndex", new Map())
+                  clearPromptInput()
                   return
                 }
                 if (keybind.match("app_exit", e)) {
@@ -1005,13 +1076,13 @@ export function Prompt(props: PromptProps) {
                 }
                 if (e.name === "!" && input.visualCursor.offset === 0) {
                   setStore("placeholder", Math.floor(Math.random() * SHELL_PLACEHOLDERS.length))
-                  setStore("mode", "shell")
+                  applyPromptEditorAction({ type: "mode.set", mode: "shell" })
                   e.preventDefault()
                   return
                 }
                 if (store.mode === "shell") {
                   if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
-                    setStore("mode", "normal")
+                    applyPromptEditorAction({ type: "prompt.cancelled" })
                     e.preventDefault()
                     return
                   }
@@ -1022,17 +1093,18 @@ export function Prompt(props: PromptProps) {
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
                     (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
                   ) {
-                    const direction = keybind.match("history_previous", e) ? -1 : 1
-                    const item = history.move(direction, input.plainText)
+                    const current = currentPromptEditorState()
+                    const next = reducePromptEditor(current, {
+                      type: keybind.match("history_previous", e) ? "history.previous" : "history.next",
+                    })
 
-                    if (item) {
-                      input.setText(item.input)
-                      setStore("prompt", item)
-                      setStore("mode", item.mode ?? "normal")
-                      restoreExtmarksFromParts(item.parts)
+                    if (next !== current) {
+                      input.setText(next.input)
+                      applyPromptEditorState(next)
+                      restoreExtmarksFromParts(next.parts)
                       e.preventDefault()
-                      if (direction === -1) input.cursorOffset = 0
-                      if (direction === 1) input.cursorOffset = input.plainText.length
+                      if (next.historyCursor > current.historyCursor) input.cursorOffset = 0
+                      if (next.historyCursor < current.historyCursor) input.cursorOffset = input.plainText.length
                     }
                     return
                   }

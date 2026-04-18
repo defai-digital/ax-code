@@ -93,6 +93,27 @@ export namespace SessionProcessor {
     let blocked = false
     let attempt = 0
     let needsCompaction = false
+    const setBusyStatus = async (
+      patch: Partial<Extract<SessionStatus.Info, { type: "busy" }>> = {},
+    ) => {
+      const now = Date.now()
+      const current = await SessionStatus.get(input.sessionID)
+      const base: Extract<SessionStatus.Info, { type: "busy" }> =
+        current.type === "busy"
+          ? current
+          : {
+              type: "busy",
+              startedAt: now,
+              lastActivityAt: now,
+            }
+      await SessionStatus.set(input.sessionID, {
+        ...base,
+        ...patch,
+        type: "busy",
+        startedAt: patch.startedAt ?? base.startedAt ?? now,
+        lastActivityAt: patch.lastActivityAt ?? now,
+      })
+    }
 
     const result = {
       get message() {
@@ -128,7 +149,12 @@ export namespace SessionProcessor {
               input.abort.throwIfAborted()
               switch (value.type) {
                 case "start":
-                  await SessionStatus.set(input.sessionID, { type: "busy" })
+                  await setBusyStatus({
+                    step: attempt,
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
                   break
 
                 case "reasoning-start":
@@ -176,6 +202,11 @@ export namespace SessionProcessor {
 
                 case "tool-input-start":
                   usedTools = true
+                  await setBusyStatus({
+                    waitState: "tool",
+                    activeTool: value.toolName,
+                    toolCallID: value.id,
+                  })
                   const base = partBase()
                   const part = await Session.updatePart.force({
                     ...base,
@@ -200,6 +231,11 @@ export namespace SessionProcessor {
 
                 case "tool-call": {
                   usedTools = true
+                  await setBusyStatus({
+                    waitState: "tool",
+                    activeTool: value.toolName,
+                    toolCallID: value.toolCallId,
+                  })
                   // Rate limit: prune timestamps outside the window, then check
                   const now = Date.now()
                   while (toolCallTimestamps.length > 0 && toolCallTimestamps[0]! < now - RATE_LIMIT_WINDOW_MS) {
@@ -294,6 +330,11 @@ export namespace SessionProcessor {
                 }
                 case "tool-result": {
                   usedTools = true
+                  await setBusyStatus({
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const toolEndTime = Date.now()
@@ -339,6 +380,11 @@ export namespace SessionProcessor {
 
                 case "tool-error": {
                   usedTools = true
+                  await setBusyStatus({
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const errorMsg = value.error instanceof Error ? value.error.message : String(value.error)
@@ -415,6 +461,13 @@ export namespace SessionProcessor {
                   snapshot = undefined
                   stepStartTime = Date.now()
                   stepParts = []
+                  await setBusyStatus({
+                    step: attempt,
+                    startedAt: stepStartTime,
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
                   Recorder.emit({
                     type: "step.start",
                     sessionID: input.sessionID,
@@ -429,6 +482,12 @@ export namespace SessionProcessor {
                   break
 
                 case "finish-step":
+                  await setBusyStatus({
+                    step: attempt,
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
                   if (!value.usage || ((value.usage.inputTokens ?? 0) === 0 && (value.usage.outputTokens ?? 0) === 0))
                     log.warn("provider returned no usage data", { provider: input.model.providerID, model: input.model.id })
                   const usage = Session.getUsage({

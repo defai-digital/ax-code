@@ -4,7 +4,6 @@ import fs from "fs/promises"
 import path from "path"
 import { Deferred, Effect, Option } from "effect"
 import { tmpdir } from "../fixture/fixture"
-import { watcherConfigLayer, withServices } from "../fixture/instance"
 import { Bus } from "../../src/bus"
 import { FileWatcher } from "../../src/file/watcher"
 import { Instance } from "../../src/project/instance"
@@ -20,16 +19,18 @@ type WatcherEvent = { file: string; event: "add" | "change" | "unlink" }
 
 /** Run `body` with a live FileWatcher service. */
 function withWatcher<E>(directory: string, body: Effect.Effect<void, E>) {
-  return withServices(
+  return Instance.provide({
     directory,
-    FileWatcher.layer,
-    async (rt) => {
-      await rt.runPromise(FileWatcher.Service.use((s) => s.init()))
-      await Effect.runPromise(ready(directory))
-      await Effect.runPromise(body)
+    fn: async () => {
+      try {
+        await FileWatcher.init({ enabled: true, disabled: false })
+        await Effect.runPromise(ready(directory))
+        await Effect.runPromise(body)
+      } finally {
+        await Instance.dispose()
+      }
     },
-    { provide: [watcherConfigLayer] },
-  )
+  })
 }
 
 function listen(directory: string, check: (evt: WatcherEvent) => boolean, hit: (evt: WatcherEvent) => void) {
@@ -187,6 +188,34 @@ describeWatcher("FileWatcher", () => {
             Effect.promise(() => fs.writeFile(file, "gone")),
           ),
         ),
+      })
+  })
+
+  test("rebuilds watcher when init options change", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "reconfigured.txt")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        try {
+          await FileWatcher.init({ enabled: false, disabled: true })
+          await FileWatcher.init({ enabled: true, disabled: false })
+          await Effect.runPromise(ready(tmp.path))
+
+          const evt = await Effect.runPromise(
+            nextUpdate(
+              tmp.path,
+              (e) => e.file === file && e.event === "add",
+              Effect.promise(() => fs.writeFile(file, "live")),
+            ),
+          )
+
+          expect(evt).toEqual({ file, event: "add" })
+        } finally {
+          await Instance.dispose()
+        }
+      },
     })
   })
 

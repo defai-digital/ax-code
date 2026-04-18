@@ -1,12 +1,15 @@
 import { isDeepEqual } from "remeda"
-import type { ParsedKey } from "@tui/renderer-adapter/opentui"
 
 export namespace Keybind {
-  /**
-   * Keybind info derived from OpenTUI's ParsedKey with our custom `leader` field.
-   * This ensures type compatibility and catches missing fields at compile time.
-   */
-  export type Info = Pick<ParsedKey, "name" | "ctrl" | "meta" | "shift" | "super"> & {
+  export type Input = {
+    name: string
+    ctrl: boolean
+    meta: boolean
+    shift: boolean
+    super?: boolean
+  }
+
+  export type Info = Input & {
     leader: boolean // our custom field
   }
 
@@ -17,11 +20,7 @@ export namespace Keybind {
     return isDeepEqual(normalizedA, normalizedB)
   }
 
-  /**
-   * Convert OpenTUI's ParsedKey to our Keybind.Info format.
-   * This helper ensures all required fields are present and avoids manual object creation.
-   */
-  export function fromParsedKey(key: ParsedKey, leader = false): Info {
+  export function fromParsedKey(key: Input, leader = false): Info {
     return {
       name: key.name === " " ? "space" : key.name,
       ctrl: key.ctrl,
@@ -31,6 +30,8 @@ export namespace Keybind {
       leader,
     }
   }
+
+  export const fromEvent = fromParsedKey
 
   export function toString(info: Info | undefined): string {
     if (!info) return ""
@@ -66,8 +67,12 @@ export namespace Keybind {
 
     return key.split(",").map((combo) => {
       // Handle <leader> syntax by replacing with leader+
-      const normalized = combo.replace(/<leader>/g, "leader+")
-      const parts = normalized.toLowerCase().split("+")
+      const normalized = combo.trim().replace(/<leader>/g, "leader+")
+      const parts = normalized
+        .toLowerCase()
+        .split("+")
+        .map((part) => part.trim())
+        .filter(Boolean)
       const info: Info = {
         ctrl: false,
         meta: false,

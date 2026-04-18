@@ -62,12 +62,16 @@ let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 
 const eventStream = {
   abort: undefined as AbortController | undefined,
+  directory: process.cwd(),
 }
 
 const startEventStream = (input: { directory?: string }) => {
+  const directory = input.directory ?? process.cwd()
   if (eventStream.abort) eventStream.abort.abort()
   const abort = new AbortController()
   eventStream.abort = abort
+  eventStream.directory = directory
+  DiagnosticLog.recordProcess("worker.eventStreamStarted", { directory })
   const signal = abort.signal
 
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -79,7 +83,7 @@ const startEventStream = (input: { directory?: string }) => {
 
   const sdk = createOpencodeClient({
     baseUrl: "http://opencode.internal",
-    directory: input.directory ?? process.cwd(),
+    directory,
     fetch: fetchFn,
     signal,
   })
@@ -147,6 +151,11 @@ export const rpc = {
     requireAuthForNetwork(input.hostname)
     if (server) await server.stop(true)
     server = await Server.listen(input)
+    DiagnosticLog.recordProcess("worker.serverStarted", {
+      hostname: input.hostname,
+      port: input.port,
+      mdns: input.mdns,
+    })
     return { url: server.url.toString() }
   },
   async checkUpgrade(input: { directory: string }) {
@@ -163,7 +172,18 @@ export const rpc = {
     await Instance.disposeAll()
   },
   async setWorkspace(input: { workspaceID?: string }) {
-    startEventStream({ directory: input.workspaceID ?? process.cwd() })
+    const nextDirectory = input.workspaceID ?? process.cwd()
+    const previousDirectory = eventStream.directory
+    if (nextDirectory === previousDirectory) return
+    Instance.runtimeSnapshot({
+      trigger: "workspace_switch",
+      directory: nextDirectory,
+    })
+    DiagnosticLog.recordProcess("runtime.workspaceSwitch", {
+      from: previousDirectory,
+      to: nextDirectory,
+    })
+    startEventStream({ directory: nextDirectory })
   },
   async shutdown() {
     Log.Default.info("worker shutting down")

@@ -1,8 +1,7 @@
-import { Deferred, Effect, Layer, Schema, ServiceMap } from "effect"
+import { Effect, Layer, Schema, ServiceMap } from "effect"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
-import { InstanceState } from "@/effect/instance-state"
-import { makeRunPromise } from "@/effect/run-service"
+import { Instance } from "@/project/instance"
 import { SessionID, MessageID } from "@/session/schema"
 import { Log } from "@/util/log"
 import z from "zod"
@@ -91,23 +90,119 @@ export namespace Question {
     }
   }
 
+  interface PromiseDeferred<T> {
+    promise: Promise<T>
+    resolve(value: T): void
+    reject(reason: unknown): void
+  }
+
   interface PendingEntry {
     info: Request
-    deferred: Deferred.Deferred<Answer[], RejectedError>
+    deferred: PromiseDeferred<Answer[]>
   }
 
   interface State {
     pending: Map<QuestionID, PendingEntry>
   }
 
+  interface AskInput {
+    sessionID: SessionID
+    questions: Info[]
+    tool?: { messageID: MessageID; callID: string }
+  }
+
+  const state = Instance.state(
+    () => ({
+      pending: new Map<QuestionID, PendingEntry>(),
+    }),
+    async (state) => {
+      for (const item of state.pending.values()) {
+        item.deferred.reject(new RejectedError())
+      }
+      state.pending.clear()
+    },
+  )
+
+  function createDeferred<T>(): PromiseDeferred<T> {
+    let resolve!: (value: T) => void
+    let reject!: (reason: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  async function askPromise(input: AskInput): Promise<Answer[]> {
+    if (process.env["AX_CODE_AUTONOMOUS"] === "true") {
+      const answers = autonomousAnswers(input.questions)
+      log.info("autonomous auto-answer", { questions: input.questions.length, answers })
+      return answers
+    }
+
+    const current = await state()
+    const id = QuestionID.ascending()
+    log.info("asking", { id, questions: input.questions.length })
+
+    const deferred = createDeferred<Answer[]>()
+    const info: Request = {
+      id,
+      sessionID: input.sessionID,
+      questions: input.questions,
+      tool: input.tool,
+    }
+    current.pending.set(id, { info, deferred })
+    void Bus.publish(Event.Asked, info)
+
+    try {
+      return await deferred.promise
+    } finally {
+      current.pending.delete(id)
+    }
+  }
+
+  async function replyPromise(input: { requestID: QuestionID; answers: Answer[] }) {
+    const pending = (await state()).pending
+    const existing = pending.get(input.requestID)
+    if (!existing) {
+      log.warn("reply for unknown request", { requestID: input.requestID })
+      return
+    }
+    pending.delete(input.requestID)
+    log.info("replied", { requestID: input.requestID, answers: input.answers })
+    void Bus.publish(Event.Replied, {
+      sessionID: existing.info.sessionID,
+      requestID: existing.info.id,
+      answers: input.answers,
+    })
+    existing.deferred.resolve(input.answers)
+  }
+
+  async function rejectPromise(requestID: QuestionID) {
+    const pending = (await state()).pending
+    const existing = pending.get(requestID)
+    if (!existing) {
+      log.warn("reject for unknown request", { requestID })
+      return
+    }
+    pending.delete(requestID)
+    log.info("rejected", { requestID })
+    void Bus.publish(Event.Rejected, {
+      sessionID: existing.info.sessionID,
+      requestID: existing.info.id,
+    })
+    existing.deferred.reject(new RejectedError())
+  }
+
+  async function listPromise() {
+    const pending = (await state()).pending
+    return Array.from(pending.values(), (x) => x.info)
+  }
+
   // Service
 
   export interface Interface {
-    readonly ask: (input: {
-      sessionID: SessionID
-      questions: Info[]
-      tool?: { messageID: MessageID; callID: string }
-    }) => Effect.Effect<Answer[], RejectedError>
+    readonly ask: (input: AskInput) => Effect.Effect<Answer[], RejectedError>
     readonly reply: (input: { requestID: QuestionID; answers: Answer[] }) => Effect.Effect<void>
     readonly reject: (requestID: QuestionID) => Effect.Effect<void>
     readonly list: () => Effect.Effect<Request[]>
@@ -117,126 +212,39 @@ export namespace Question {
 
   export const layer = Layer.effect(
     Service,
-    Effect.gen(function* () {
-      const state = yield* InstanceState.make<State>(
-        Effect.fn("Question.state")(function* () {
-          const state = {
-            pending: new Map<QuestionID, PendingEntry>(),
-          }
-
-          yield* Effect.addFinalizer(() =>
-            Effect.gen(function* () {
-              for (const item of state.pending.values()) {
-                yield* Deferred.fail(item.deferred, new RejectedError())
-              }
-              state.pending.clear()
-            }),
-          )
-
-          return state
+    Effect.sync(() => {
+      const ask = Effect.fn("Question.ask")((input: AskInput) =>
+        Effect.tryPromise({
+          try: () => askPromise(input),
+          catch: (error) => error as RejectedError,
         }),
       )
 
-      const ask = Effect.fn("Question.ask")(function* (input: {
-        sessionID: SessionID
-        questions: Info[]
-        tool?: { messageID: MessageID; callID: string }
-      }) {
-        // Autonomous mode makes the decision first so headless and
-        // long-running sessions do not block. Prefer options marked as
-        // recommended/default/safe/common/best-practice/simple and avoid
-        // risky/complex/over-engineered options; otherwise use the first
-        // option because the question tool asks callers to put their
-        // recommended option first.
-        if (process.env["AX_CODE_AUTONOMOUS"] === "true") {
-          const answers = autonomousAnswers(input.questions)
-          log.info("autonomous auto-answer", { questions: input.questions.length, answers })
-          return answers
-        }
+      const reply = Effect.fn("Question.reply")((input: { requestID: QuestionID; answers: Answer[] }) =>
+        Effect.promise(() => replyPromise(input)),
+      )
 
-        const pending = (yield* InstanceState.get(state)).pending
-        const id = QuestionID.ascending()
-        log.info("asking", { id, questions: input.questions.length })
+      const reject = Effect.fn("Question.reject")((requestID: QuestionID) => Effect.promise(() => rejectPromise(requestID)))
 
-        const deferred = yield* Deferred.make<Answer[], RejectedError>()
-        const info: Request = {
-          id,
-          sessionID: input.sessionID,
-          questions: input.questions,
-          tool: input.tool,
-        }
-        pending.set(id, { info, deferred })
-        Bus.publish(Event.Asked, info)
-
-        return yield* Effect.ensuring(
-          Deferred.await(deferred),
-          Effect.sync(() => {
-            pending.delete(id)
-          }),
-        )
-      })
-
-      const reply = Effect.fn("Question.reply")(function* (input: { requestID: QuestionID; answers: Answer[] }) {
-        const pending = (yield* InstanceState.get(state)).pending
-        const existing = pending.get(input.requestID)
-        if (!existing) {
-          log.warn("reply for unknown request", { requestID: input.requestID })
-          return
-        }
-        pending.delete(input.requestID)
-        log.info("replied", { requestID: input.requestID, answers: input.answers })
-        Bus.publish(Event.Replied, {
-          sessionID: existing.info.sessionID,
-          requestID: existing.info.id,
-          answers: input.answers,
-        })
-        yield* Deferred.succeed(existing.deferred, input.answers)
-      })
-
-      const reject = Effect.fn("Question.reject")(function* (requestID: QuestionID) {
-        const pending = (yield* InstanceState.get(state)).pending
-        const existing = pending.get(requestID)
-        if (!existing) {
-          log.warn("reject for unknown request", { requestID })
-          return
-        }
-        pending.delete(requestID)
-        log.info("rejected", { requestID })
-        Bus.publish(Event.Rejected, {
-          sessionID: existing.info.sessionID,
-          requestID: existing.info.id,
-        })
-        yield* Deferred.fail(existing.deferred, new RejectedError())
-      })
-
-      const list = Effect.fn("Question.list")(function* () {
-        const pending = (yield* InstanceState.get(state)).pending
-        return Array.from(pending.values(), (x) => x.info)
-      })
+      const list = Effect.fn("Question.list")(() => Effect.promise(() => listPromise()))
 
       return Service.of({ ask, reply, reject, list })
     }),
   )
 
-  const runPromise = makeRunPromise(Service, layer)
-
-  export async function ask(input: {
-    sessionID: SessionID
-    questions: Info[]
-    tool?: { messageID: MessageID; callID: string }
-  }): Promise<Answer[]> {
-    return runPromise((s) => s.ask(input))
+  export async function ask(input: AskInput): Promise<Answer[]> {
+    return askPromise(input)
   }
 
   export async function reply(input: { requestID: QuestionID; answers: Answer[] }) {
-    return runPromise((s) => s.reply(input))
+    return replyPromise(input)
   }
 
   export async function reject(requestID: QuestionID) {
-    return runPromise((s) => s.reject(requestID))
+    return rejectPromise(requestID)
   }
 
   export async function list() {
-    return runPromise((s) => s.list())
+    return listPromise()
   }
 }

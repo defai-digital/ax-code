@@ -207,7 +207,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogProvider: ProviderDialog } = await import("@tui/component/dialog-provider")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <ProviderDialog />)
+      dialog.replaceWithKind("provider", () => <ProviderDialog />)
     } catch (error) {
       Log.Default.warn("failed to load provider dialog", { error })
       toast.show({ message: "Failed to open provider dialog", variant: "error" })
@@ -219,7 +219,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogModel: ModelDialog } = await import("@tui/component/dialog-model")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <ModelDialog />)
+      dialog.replaceWithKind("model", () => <ModelDialog />)
     } catch (error) {
       Log.Default.warn("failed to load model dialog", { error })
       toast.show({ message: "Failed to open model dialog", variant: "error" })
@@ -231,7 +231,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogSessionList } = await import("@tui/component/dialog-session-list")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogSessionList />)
+      dialog.replaceWithKind("session", () => <DialogSessionList />)
     } catch (error) {
       Log.Default.warn("failed to load session list dialog", { error })
       toast.show({ message: "Failed to open session list", variant: "error" })
@@ -243,7 +243,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogWorkspaceList } = await import("@tui/component/dialog-workspace-list")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogWorkspaceList />)
+      dialog.replaceWithKind("workspace", () => <DialogWorkspaceList />)
     } catch (error) {
       Log.Default.warn("failed to load workspace list dialog", { error })
       toast.show({ message: "Failed to open workspace list", variant: "error" })
@@ -255,7 +255,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogAgent } = await import("@tui/component/dialog-agent")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogAgent />)
+      dialog.replaceWithKind("agent", () => <DialogAgent />)
     } catch (error) {
       Log.Default.warn("failed to load agent dialog", { error })
       toast.show({ message: "Failed to open agent list", variant: "error" })

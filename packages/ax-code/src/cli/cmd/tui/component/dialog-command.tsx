@@ -9,8 +9,13 @@ import {
   type Accessor,
   type ParentProps,
 } from "solid-js"
-import { useKeyboard } from "@tui/renderer-adapter/opentui"
+import { useKeyboard, useRenderer } from "@tui/renderer-adapter/opentui"
 import { type KeybindKey, useKeybind } from "@tui/context/keybind"
+import { useRoute } from "@tui/context/route"
+import { useSync } from "@tui/context/sync"
+import type { CommandDispatchOwner } from "../input/command-dispatch"
+import { resolveCommandKeyDispatch } from "../input/command-dispatch"
+import { resolveFocusOwner } from "../input/focus-manager"
 
 type Context = ReturnType<typeof init>
 const ctx = createContext<Context>()
@@ -26,6 +31,7 @@ export type CommandOption = DialogSelectOption<string> & {
   slash?: Slash
   hidden?: boolean
   enabled?: boolean
+  owners?: readonly CommandDispatchOwner[]
 }
 
 function init() {
@@ -33,6 +39,9 @@ function init() {
   const [suspendCount, setSuspendCount] = createSignal(0)
   const dialog = useDialog()
   const keybind = useKeybind()
+  const route = useRoute()
+  const sync = useSync()
+  const renderer = useRenderer()
 
   const entries = createMemo(() => {
     const all = registrations().flatMap((x) => x())
@@ -56,17 +65,54 @@ function init() {
       })),
   )
   const suspended = () => suspendCount() > 0
+  function currentFocusOwner() {
+    const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+    const session = sessionID ? sync.session.get(sessionID) : undefined
+    const permissionSessionID = sessionID && (sync.data.permission[sessionID]?.length ?? 0) > 0 ? sessionID : undefined
+    const questionSessionID = sessionID && (sync.data.question[sessionID]?.length ?? 0) > 0 ? sessionID : undefined
+
+    return resolveFocusOwner({
+      prompt: {
+        visible: route.data.type === "session" && !session?.parentID,
+        disabled: !!permissionSessionID || !!questionSessionID,
+      },
+      selection: renderer.getSelection()?.getSelectedText() ? "transcript" : undefined,
+      dialog: dialog.kind,
+      permissionSessionID,
+      questionSessionID,
+    })
+  }
 
   useKeyboard((evt) => {
     if (suspended()) return
-    if (dialog.stack.length > 0) return
-    for (const option of entries()) {
-      if (!isEnabled(option)) continue
-      if (option.keybind && keybind.match(option.keybind, evt)) {
-        evt.preventDefault()
-        option.onSelect?.(dialog)
-        return
-      }
+    if (evt.defaultPrevented) return
+
+    const decision = resolveCommandKeyDispatch({
+      owner: currentFocusOwner(),
+      event: evt,
+      keymap: keybind.all,
+      leader: keybind.leader,
+      entries: entries().map((option) => ({
+        value: option.value,
+        keybind: option.keybind,
+        enabled: option.enabled,
+        hidden: option.hidden,
+        owners: option.owners,
+      })),
+    })
+
+    if (decision.type === "palette") {
+      evt.preventDefault()
+      result.show()
+      return
+    }
+
+    if (decision.type === "command") {
+      const option = entries().find((item) => item.value === decision.value)
+      if (!option || !isEnabled(option)) return
+      evt.preventDefault()
+      option.onSelect?.(dialog)
+      return
     }
   })
 
@@ -108,7 +154,9 @@ function init() {
     },
     suspended,
     show() {
-      dialog.replace(() => <DialogCommand options={visibleOptions()} suggestedOptions={suggestedOptions()} />)
+      dialog.replaceWithKind("command", () => (
+        <DialogCommand options={visibleOptions()} suggestedOptions={suggestedOptions()} />
+      ))
     },
     register(cb: () => CommandOption[]) {
       const results = createMemo(cb)
@@ -131,20 +179,6 @@ export function useCommandDialog() {
 
 export function CommandProvider(props: ParentProps) {
   const value = init()
-  const dialog = useDialog()
-  const keybind = useKeybind()
-
-  useKeyboard((evt) => {
-    if (value.suspended()) return
-    if (dialog.stack.length > 0) return
-    if (evt.defaultPrevented) return
-    if (keybind.match("command_list", evt)) {
-      evt.preventDefault()
-      value.show()
-      return
-    }
-  })
-
   return <ctx.Provider value={value}>{props.children}</ctx.Provider>
 }
 

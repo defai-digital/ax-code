@@ -118,4 +118,41 @@ describe("project.initGit endpoint", () => {
       GlobalBus.off("event", fn)
     }
   })
+
+  test("does not initialize a nested repo when called from a git subdirectory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const subdir = path.join(tmp.path, "packages", "app")
+    await Filesystem.write(path.join(subdir, "index.ts"), "export const nested = false\n")
+    const app = Server.Default()
+    const seen: { directory?: string; payload: { type: string } }[] = []
+    const fn = (evt: { directory?: string; payload: { type: string } }) => {
+      seen.push(evt)
+    }
+    const reload = Instance.reload
+    const reloadSpy = spyOn(Instance, "reload").mockImplementation((input) => reload(input))
+    GlobalBus.on("event", fn)
+
+    try {
+      const init = await app.request("/project/git/init", {
+        method: "POST",
+        headers: {
+          "x-opencode-directory": subdir,
+        },
+      })
+      expect(init.status).toBe(200)
+      expect(await init.json()).toMatchObject({
+        vcs: "git",
+        worktree: tmp.path,
+      })
+      expect(reloadSpy).toHaveBeenCalledTimes(0)
+      expect(seen.filter((evt) => evt.directory === subdir && evt.payload.type === "server.instance.disposed").length).toBe(
+        0,
+      )
+      expect(await Filesystem.exists(path.join(subdir, ".git"))).toBe(false)
+    } finally {
+      await Instance.disposeAll()
+      reloadSpy.mockRestore()
+      GlobalBus.off("event", fn)
+    }
+  })
 })

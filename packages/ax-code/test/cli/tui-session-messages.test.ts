@@ -49,17 +49,23 @@ describe("tui session message helpers", () => {
     ).toBe("c")
   })
 
-  test("reconstructs prompt state from text and file parts", () => {
+  test("reconstructs prompt state from text, file, and agent parts", () => {
     expect(
       promptState([
         { type: "text", text: "hello " },
         { type: "text", text: "hidden", synthetic: true },
+        { type: "text", text: "ignored", ignored: true },
         { type: "file", filename: "a.ts", url: "file:///a.ts", mime: "text/plain" },
+        {
+          type: "agent",
+          name: "reviewer",
+          source: { start: 6, end: 15, value: "@reviewer" },
+        },
         { type: "text", text: "world" },
       ]),
     ).toMatchObject({
       input: "hello world",
-      parts: [{ type: "file", filename: "a.ts" }],
+      parts: [{ type: "file", filename: "a.ts" }, { type: "agent", name: "reviewer" }],
     })
   })
 })

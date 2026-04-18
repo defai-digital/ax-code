@@ -2,7 +2,6 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
 import { Recorder } from "@/replay/recorder"
-import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
 import { ProjectID } from "@/project/schema"
 import { Instance } from "@/project/instance"
@@ -11,7 +10,7 @@ import { PermissionTable } from "@/session/session.sql"
 import { Database, eq } from "@/storage/db"
 import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
-import { Deferred, Effect, Layer, Schema, ServiceMap } from "effect"
+import { Effect, Layer, Schema, ServiceMap } from "effect"
 import os from "os"
 import path from "path"
 import z from "zod"
@@ -126,9 +125,15 @@ export namespace Permission {
     readonly list: () => Effect.Effect<Request[]>
   }
 
+  interface PromiseDeferred<T> {
+    promise: Promise<T>
+    resolve(value: T): void
+    reject(reason: unknown): void
+  }
+
   interface PendingEntry {
     info: Request
-    deferred: Deferred.Deferred<void, RejectedError | CorrectedError>
+    deferred: PromiseDeferred<void>
   }
 
   interface State {
@@ -142,6 +147,215 @@ export namespace Permission {
     projectID: ProjectID
   }
 
+  const state = Instance.state(
+    async () => {
+      const row = Database.use((db) =>
+        db.select().from(PermissionTable).where(eq(PermissionTable.project_id, Instance.project.id)).get(),
+      )
+      return {
+        pending: new Map<PermissionID, PendingEntry>(),
+        approved: row?.data ?? [],
+        projectID: Instance.project.id,
+      } satisfies State
+    },
+    async (state) => {
+      for (const item of state.pending.values()) {
+        item.deferred.reject(new RejectedError())
+      }
+      state.pending.clear()
+    },
+  )
+
+  // Permissions that must always require interactive user confirmation
+  // and cannot be auto-approved by wildcard rules. This prevents agent
+  // default rules like {permission:"*",action:"allow",pattern:"*"} from
+  // silently bypassing critical safety checks.
+  const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation"])
+
+  function createDeferred<T>(): PromiseDeferred<T> {
+    let resolve!: (value: T) => void
+    let reject!: (reason: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  function abortError(signal: AbortSignal): globalThis.Error {
+    if (signal.reason instanceof globalThis.Error) return signal.reason
+    const error = new globalThis.Error("The operation was aborted")
+    error.name = "AbortError"
+    return error
+  }
+
+  async function askPromise(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }): Promise<void> {
+    const { approved, pending } = await state()
+    const { ruleset, ...request } = input
+    let needsAsk = false
+
+    for (const pattern of request.patterns) {
+      const rule = evaluate(request.permission, pattern, ruleset, approved)
+      log.info("evaluated", { permission: request.permission, pattern, action: rule })
+      if (rule.action === "deny") {
+        throw new DeniedError({
+          ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
+          agent: input.agent,
+        })
+      }
+      if (rule.action === "allow" && !INTERACTIVE_ONLY.has(request.permission)) continue
+      needsAsk = true
+    }
+
+    if (!needsAsk) return
+
+    // Autonomous mode: auto-approve all non-interactive permissions
+    // without creating a pending request or waiting for TUI reply.
+    if (process.env["AX_CODE_AUTONOMOUS"] === "true" && !INTERACTIVE_ONLY.has(request.permission)) {
+      log.info("autonomous auto-approve", { permission: request.permission, patterns: request.patterns })
+      return
+    }
+
+    const signal = options?.signal
+    if (signal?.aborted) throw abortError(signal)
+
+    const id = request.id ?? PermissionID.ascending()
+    const info: Request = {
+      id,
+      ...request,
+    }
+    log.info("asking", { id, permission: info.permission, patterns: info.patterns })
+
+    const deferred = createDeferred<void>()
+    pending.set(id, { info, deferred })
+
+    const onAbort = () => {
+      if (!pending.delete(id)) return
+      if (signal) deferred.reject(abortError(signal))
+    }
+    signal?.addEventListener("abort", onAbort, { once: true })
+    if (signal?.aborted) onAbort()
+
+    void Bus.publish(Event.Asked, info)
+    if (Recorder.active(info.sessionID)) {
+      Recorder.emit({
+        type: "permission.ask",
+        sessionID: info.sessionID,
+        permission: info.permission,
+        patterns: info.patterns,
+        tool: typeof info.metadata?.tool === "string" ? info.metadata.tool : undefined,
+      })
+    }
+
+    try {
+      return await deferred.promise
+    } finally {
+      signal?.removeEventListener("abort", onAbort)
+      pending.delete(id)
+    }
+  }
+
+  async function replyPromise(input: z.infer<typeof ReplyInput>) {
+    const { approved, pending, projectID } = await state()
+    const existing = pending.get(input.requestID)
+    if (!existing) return
+
+    pending.delete(input.requestID)
+    void Bus.publish(Event.Replied, {
+      sessionID: existing.info.sessionID,
+      requestID: existing.info.id,
+      reply: input.reply,
+    })
+    if (Recorder.active(existing.info.sessionID)) {
+      Recorder.emit({
+        type: "permission.reply",
+        sessionID: existing.info.sessionID,
+        permission: existing.info.permission,
+        reply: input.reply,
+      })
+    }
+
+    if (input.reply === "reject") {
+      existing.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
+
+      for (const [id, item] of pending.entries()) {
+        if (item.info.sessionID !== existing.info.sessionID) continue
+        pending.delete(id)
+        void Bus.publish(Event.Replied, {
+          sessionID: item.info.sessionID,
+          requestID: item.info.id,
+          reply: "reject",
+        })
+        if (Recorder.active(item.info.sessionID)) {
+          Recorder.emit({
+            type: "permission.reply",
+            sessionID: item.info.sessionID,
+            permission: item.info.permission,
+            reply: "reject",
+          })
+        }
+        item.deferred.reject(new RejectedError())
+      }
+      return
+    }
+
+    existing.deferred.resolve(undefined)
+    if (input.reply === "once") return
+
+    for (const pattern of existing.info.always) {
+      approved.push({
+        permission: existing.info.permission,
+        pattern,
+        action: "allow",
+      })
+    }
+
+    Database.use((db) =>
+      db
+        .insert(PermissionTable)
+        .values({
+          project_id: projectID,
+          data: approved,
+          time_created: Date.now(),
+          time_updated: Date.now(),
+        })
+        .onConflictDoUpdate({
+          target: PermissionTable.project_id,
+          set: {
+            data: approved,
+            time_updated: Date.now(),
+          },
+        })
+        .run(),
+    )
+
+    for (const [id, item] of pending.entries()) {
+      if (item.info.sessionID !== existing.info.sessionID) continue
+      const ok = item.info.patterns.every((pattern) => evaluate(item.info.permission, pattern, approved).action === "allow")
+      if (!ok) continue
+      pending.delete(id)
+      void Bus.publish(Event.Replied, {
+        sessionID: item.info.sessionID,
+        requestID: item.info.id,
+        reply: "always",
+      })
+      if (Recorder.active(item.info.sessionID)) {
+        Recorder.emit({
+          type: "permission.reply",
+          sessionID: item.info.sessionID,
+          permission: item.info.permission,
+          reply: "always",
+        })
+      }
+      item.deferred.resolve(undefined)
+    }
+  }
+
+  async function listPromise() {
+    const pending = (await state()).pending
+    return Array.from(pending.values(), (item) => item.info)
+  }
+
   export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
     log.debug("evaluate", { permission, pattern, ruleCount: rulesets.reduce((s, r) => s + r.length, 0) })
     return evalRule(permission, pattern, ...rulesets)
@@ -151,204 +365,19 @@ export namespace Permission {
 
   export const layer = Layer.effect(
     Service,
-    Effect.gen(function* () {
-      const state = yield* InstanceState.make<State>(
-        Effect.fn("Permission.state")(function* (ctx) {
-          const row = Database.use((db) =>
-            db.select().from(PermissionTable).where(eq(PermissionTable.project_id, ctx.project.id)).get(),
-          )
-          const state: State = {
-            pending: new Map<PermissionID, PendingEntry>(),
-            approved: row?.data ?? [],
-            projectID: ctx.project.id,
-          }
-
-          yield* Effect.addFinalizer(() =>
-            Effect.gen(function* () {
-              for (const item of state.pending.values()) {
-                yield* Deferred.fail(item.deferred, new RejectedError())
-              }
-              state.pending.clear()
-            }),
-          )
-
-          return state
+    Effect.sync(() => {
+      const ask = Effect.fn("Permission.ask")((input: z.infer<typeof AskInput>) =>
+        Effect.tryPromise({
+          try: (signal) => askPromise(input, { signal }),
+          catch: (error) => error as Error,
         }),
       )
 
-      // Permissions that must always require interactive user confirmation
-      // and cannot be auto-approved by wildcard rules. This prevents agent
-      // default rules like {permission:"*",action:"allow",pattern:"*"} from
-      // silently bypassing critical safety checks.
-      const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation"])
+      const reply = Effect.fn("Permission.reply")((input: z.infer<typeof ReplyInput>) =>
+        Effect.promise(() => replyPromise(input)),
+      )
 
-      const ask = Effect.fn("Permission.ask")(function* (input: z.infer<typeof AskInput>) {
-        const { approved, pending } = yield* InstanceState.get(state)
-        const { ruleset, ...request } = input
-        let needsAsk = false
-
-        for (const pattern of request.patterns) {
-          const rule = evaluate(request.permission, pattern, ruleset, approved)
-          log.info("evaluated", { permission: request.permission, pattern, action: rule })
-          if (rule.action === "deny") {
-            return yield* new DeniedError({
-              ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
-              agent: input.agent,
-            })
-          }
-          if (rule.action === "allow" && !INTERACTIVE_ONLY.has(request.permission)) continue
-          needsAsk = true
-        }
-
-        if (!needsAsk) return
-
-        // Autonomous mode: auto-approve all non-interactive permissions
-        // without creating a Deferred or waiting for TUI reply.
-        // INTERACTIVE_ONLY permissions (isolation_escalation) are never
-        // auto-approved — they always require human confirmation.
-        if (process.env["AX_CODE_AUTONOMOUS"] === "true" && !INTERACTIVE_ONLY.has(request.permission)) {
-          log.info("autonomous auto-approve", { permission: request.permission, patterns: request.patterns })
-          return
-        }
-
-        const id = request.id ?? PermissionID.ascending()
-        const info: Request = {
-          id,
-          ...request,
-        }
-        log.info("asking", { id, permission: info.permission, patterns: info.patterns })
-
-        const deferred = yield* Deferred.make<void, RejectedError | CorrectedError>()
-        pending.set(id, { info, deferred })
-        void Bus.publish(Event.Asked, info)
-        if (Recorder.active(info.sessionID)) {
-          Recorder.emit({
-            type: "permission.ask",
-            sessionID: info.sessionID,
-            permission: info.permission,
-            patterns: info.patterns,
-            tool: typeof info.metadata?.tool === "string" ? info.metadata.tool : undefined,
-          })
-        }
-        return yield* Effect.ensuring(
-          Deferred.await(deferred),
-          Effect.sync(() => {
-            pending.delete(id)
-          }),
-        )
-      })
-
-      const reply = Effect.fn("Permission.reply")(function* (input: z.infer<typeof ReplyInput>) {
-        const { approved, pending, projectID } = yield* InstanceState.get(state)
-        const existing = pending.get(input.requestID)
-        if (!existing) return
-
-        pending.delete(input.requestID)
-        void Bus.publish(Event.Replied, {
-          sessionID: existing.info.sessionID,
-          requestID: existing.info.id,
-          reply: input.reply,
-        })
-        if (Recorder.active(existing.info.sessionID)) {
-          Recorder.emit({
-            type: "permission.reply",
-            sessionID: existing.info.sessionID,
-            permission: existing.info.permission,
-            reply: input.reply,
-          })
-        }
-
-        if (input.reply === "reject") {
-          yield* Deferred.fail(
-            existing.deferred,
-            input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError(),
-          )
-
-          for (const [id, item] of pending.entries()) {
-            if (item.info.sessionID !== existing.info.sessionID) continue
-            pending.delete(id)
-            void Bus.publish(Event.Replied, {
-              sessionID: item.info.sessionID,
-              requestID: item.info.id,
-              reply: "reject",
-            })
-            if (Recorder.active(item.info.sessionID)) {
-              Recorder.emit({
-                type: "permission.reply",
-                sessionID: item.info.sessionID,
-                permission: item.info.permission,
-                reply: "reject",
-              })
-            }
-            yield* Deferred.fail(item.deferred, new RejectedError())
-          }
-          return
-        }
-
-        yield* Deferred.succeed(existing.deferred, undefined)
-        if (input.reply === "once") return
-
-        for (const pattern of existing.info.always) {
-          approved.push({
-            permission: existing.info.permission,
-            pattern,
-            action: "allow",
-          })
-        }
-
-        // Persist the updated approved ruleset to the database.
-        // Without this, "always allow" approvals live only in the
-        // in-memory state and are lost on process restart — users had
-        // to re-approve the same permissions every session. Upsert is
-        // used so the row is created on first approval even if the
-        // session started with no prior permissions persisted.
-        Database.use((db) =>
-          db
-            .insert(PermissionTable)
-            .values({
-              project_id: projectID,
-              data: approved,
-              time_created: Date.now(),
-              time_updated: Date.now(),
-            })
-            .onConflictDoUpdate({
-              target: PermissionTable.project_id,
-              set: {
-                data: approved,
-                time_updated: Date.now(),
-              },
-            })
-            .run(),
-        )
-
-        for (const [id, item] of pending.entries()) {
-          if (item.info.sessionID !== existing.info.sessionID) continue
-          const ok = item.info.patterns.every(
-            (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
-          )
-          if (!ok) continue
-          pending.delete(id)
-          void Bus.publish(Event.Replied, {
-            sessionID: item.info.sessionID,
-            requestID: item.info.id,
-            reply: "always",
-          })
-          if (Recorder.active(item.info.sessionID)) {
-            Recorder.emit({
-              type: "permission.reply",
-              sessionID: item.info.sessionID,
-              permission: item.info.permission,
-              reply: "always",
-            })
-          }
-          yield* Deferred.succeed(item.deferred, undefined)
-        }
-      })
-
-      const list = Effect.fn("Permission.list")(function* () {
-        const pending = (yield* InstanceState.get(state)).pending
-        return Array.from(pending.values(), (item) => item.info)
-      })
+      const list = Effect.fn("Permission.list")(() => Effect.promise(() => listPromise()))
 
       return Service.of({ ask, reply, list })
     }),
@@ -450,14 +479,14 @@ export namespace Permission {
   export const runPromise = makeRunPromise(Service, layer)
 
   export async function ask(input: z.infer<typeof AskInput>) {
-    return runPromise((s) => s.ask(input))
+    return askPromise(input)
   }
 
   export async function reply(input: z.infer<typeof ReplyInput>) {
-    return runPromise((s) => s.reply(input))
+    return replyPromise(input)
   }
 
   export async function list() {
-    return runPromise((s) => s.list())
+    return listPromise()
   }
 }

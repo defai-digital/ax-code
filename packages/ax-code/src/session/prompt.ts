@@ -123,7 +123,13 @@ export namespace SessionPrompt {
 
   async function executeSubtask(task: MessageV2.SubtaskPart, ctx: SubtaskContext) {
     const { sessionID, lastUser, abort, msgs, session } = ctx
-    await SessionStatus.set(sessionID, { type: "busy" })
+    const now = Date.now()
+    await SessionStatus.set(sessionID, {
+      type: "busy",
+      startedAt: now,
+      lastActivityAt: now,
+      waitState: "llm",
+    })
     const taskTool = await TaskTool.init()
     const taskModel = task.model ? await Provider.getModel(task.model.providerID, task.model.modelID) : ctx.model
     const assistantMessage = (await Session.updateMessage({
@@ -530,7 +536,15 @@ export namespace SessionPrompt {
       // populated via the onSuccess callback only when the current step
       // is actually using structured output mode.
       structuredOutput = undefined
-      await SessionStatus.set(sessionID, { type: "busy", step, maxSteps: GLOBAL_STEP_LIMIT })
+      const now = Date.now()
+      await SessionStatus.set(sessionID, {
+        type: "busy",
+        step,
+        maxSteps: GLOBAL_STEP_LIMIT,
+        startedAt: now,
+        lastActivityAt: now,
+        waitState: "llm",
+      })
       log.info("loop", { command: "session.prompt.loop", status: "started", step, sessionID, consecutiveErrors })
       if (step > 0 && step % 10 === 0) {
         log.warn("long-running task", {

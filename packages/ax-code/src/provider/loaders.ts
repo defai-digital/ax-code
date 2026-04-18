@@ -2,10 +2,11 @@ import type { Provider } from "./provider"
 import { ProviderID, ModelID } from "./schema"
 import { which } from "../util/which"
 import { Ssrf } from "../util/ssrf"
-import { Env } from "../util/env"
 import { CliLanguageModel } from "./cli/cli-language-model"
-import { claudeCodeParser, geminiCliParser, codexCliParser, type CliOutputParser } from "./cli/parser"
+import type { CliOutputParser } from "./cli/parser"
 import { resolveCliModel } from "./cli/resolve"
+import { getCliProviderDefinition } from "./cli/config"
+import { checkCliProviderAuth } from "./cli/connect"
 import { URL } from "url"
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
@@ -114,45 +115,18 @@ interface CliLoaderOpts {
   parser: CliOutputParser
   promptMode: "stdin" | "arg"
   promptFlag?: string
-  authCheck?: (binary: string) => Promise<boolean>
-}
-
-async function checkClaudeAuth(binary: string): Promise<boolean> {
-  try {
-    const proc = Bun.spawn([binary, "--print", "--output-format", "stream-json", "ping"], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-      env: { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" },
-    })
-    const timer = setTimeout(() => proc.kill(), 5000)
-    const stdout = await new Response(proc.stdout).text().catch(() => "")
-    clearTimeout(timer)
-    for (const line of stdout.split("\n")) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed[0] !== "{") continue
-      try {
-        const event = JSON.parse(trimmed)
-        if (event.type === "system" && event.apiKeySource === "none") return false
-        if (event.type === "error" && event.error === "authentication_failed") return false
-      } catch {}
-    }
-    return true
-  } catch {
-    return true // if probe fails, let the actual request surface the error
-  }
 }
 
 function cliLoader(opts: CliLoaderOpts): CustomLoader {
   return async (provider) => {
     const path = which(opts.binary)
     const info = await resolveCliModel(opts.providerID)
-    const authenticated = path && opts.authCheck ? await opts.authCheck(path) : true
+    const authError = path ? await checkCliProviderAuth(opts.providerID, path) : undefined
     return {
       autoload: false,
       async getModel(_sdk: any, modelID: string) {
         if (!path) throw new Error(`${opts.binary} CLI not found in PATH`)
-        if (!authenticated) throw new Error(`${opts.binary} CLI is not logged in — run \`${opts.binary} login\` first`)
+        if (authError) throw new Error(authError)
         return new CliLanguageModel({
           providerID: opts.providerID,
           modelID,
@@ -164,12 +138,16 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         })
       },
       async discoverModels() {
-        if (!path || !authenticated) return {}
+        if (!path || authError) return {}
         return cliModels(opts.providerID, provider, info.model)
       },
     }
   }
 }
+
+const claudeCode = getCliProviderDefinition("claude-code")!
+const geminiCli = getCliProviderDefinition("gemini-cli")!
+const codexCli = getCliProviderDefinition("codex-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   xai: async () => {
@@ -185,25 +163,26 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   "ax-serving": ollamaCompatibleLoader("ax-serving", "AX_SERVING_HOST", "http://localhost:11434"),
   "claude-code": cliLoader({
     providerID: "claude-code",
-    binary: "claude",
-    args: ["--print", "--verbose", "--output-format", "stream-json"],
-    parser: claudeCodeParser,
-    promptMode: "stdin",
-    authCheck: checkClaudeAuth,
+    binary: claudeCode.binary,
+    args: claudeCode.args,
+    parser: claudeCode.parser,
+    promptMode: claudeCode.promptMode,
+    promptFlag: claudeCode.promptFlag,
   }),
   "gemini-cli": cliLoader({
     providerID: "gemini-cli",
-    binary: "gemini",
-    args: ["--output-format", "stream-json"],
-    parser: geminiCliParser,
-    promptMode: "arg",
-    promptFlag: "-p",
+    binary: geminiCli.binary,
+    args: geminiCli.args,
+    parser: geminiCli.parser,
+    promptMode: geminiCli.promptMode,
+    promptFlag: geminiCli.promptFlag,
   }),
   "codex-cli": cliLoader({
     providerID: "codex-cli",
-    binary: "codex",
-    args: ["exec", "--json", "--skip-git-repo-check"],
-    parser: codexCliParser,
-    promptMode: "stdin",
+    binary: codexCli.binary,
+    args: codexCli.args,
+    parser: codexCli.parser,
+    promptMode: codexCli.promptMode,
+    promptFlag: codexCli.promptFlag,
   }),
 }

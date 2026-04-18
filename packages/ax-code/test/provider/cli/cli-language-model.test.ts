@@ -113,6 +113,55 @@ describe("CliLanguageModel", () => {
     ).rejects.toThrow(/CLI exited with code/)
   })
 
+  test("doGenerate throws on non-zero exit even when stdout is present", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", "process.stdout.write('partial output'); process.exit(7)"],
+      parser: {
+        parseComplete: () => ({ text: "unexpected success" }),
+        parseStreamLine: () => null,
+      },
+      promptMode: "stdin",
+    })
+
+    await expect(
+      model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      }),
+    ).rejects.toThrow(/CLI exited with code 7: partial output/)
+  })
+
+  test("doStream surfaces process failure after stdout and does not finish", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", "process.stdout.write('partial output'); process.exit(9)"],
+      parser: {
+        parseComplete: () => ({ text: "" }),
+        parseStreamLine: (line: string) => line.trim() || null,
+      },
+      promptMode: "stdin",
+    })
+
+    const { stream } = await model.doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    })
+
+    const parts: any[] = []
+    const reader = stream.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+    }
+
+    expect(parts.find((part) => part.type === "finish")).toBeUndefined()
+    expect(parts.find((part) => part.type === "text-end")).toBeUndefined()
+
+    const error = parts.find((part) => part.type === "error")
+    expect(error).toBeDefined()
+    expect(String(error.error)).toContain("CLI exited with code 9: partial output")
+  })
+
   test("doStream handles abort signal", async () => {
     const controller = new AbortController()
     const model = makeModel({

@@ -313,16 +313,41 @@ export const BashTool = Tool.define("bash", async () => {
       // signal rather than silently truncating forever.
       const OUTPUT_HARD_CAP = 10 * 1024 * 1024
       let truncated = false
+      let timedOut = false
+      let aborted = false
+      let exited = false
+      let outputBytes = 0
+      let lastOutputAt: number | undefined
+      let killStartedAt: number | undefined
+      let killCompletedAt: number | undefined
+
+      const hangMetadata = () => ({
+        processId: proc.pid ?? null,
+        signal: proc.signalCode ?? null,
+        timeoutMs: timeout,
+        timedOut,
+        aborted,
+        outputBytes,
+        outputTruncated: truncated,
+        lastOutputAt: lastOutputAt ?? null,
+        killStartedAt: killStartedAt ?? null,
+        killCompletedAt: killCompletedAt ?? null,
+        killDurationMs:
+          killStartedAt !== undefined && killCompletedAt !== undefined ? killCompletedAt - killStartedAt : null,
+      })
 
       // Initialize metadata with empty output
       ctx.metadata({
         metadata: {
           output: "",
           description: params.description,
+          hang: hangMetadata(),
         },
       })
 
       const append = (chunk: Buffer) => {
+        outputBytes += chunk.byteLength
+        lastOutputAt = Date.now()
         if (output.length < OUTPUT_HARD_CAP) {
           const remaining = OUTPUT_HARD_CAP - output.length
           const text = chunk.toString()
@@ -338,6 +363,7 @@ export const BashTool = Tool.define("bash", async () => {
             // truncate the metadata snapshot separately (smaller cap).
             output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
             description: params.description,
+            hang: hangMetadata(),
           },
         })
       }
@@ -346,11 +372,12 @@ export const BashTool = Tool.define("bash", async () => {
       proc.stdout?.on("data", append)
       proc.stderr?.on("data", append)
 
-      let timedOut = false
-      let aborted = false
-      let exited = false
-
-      const kill = () => Shell.killTree(proc, { exited: () => exited })
+      const kill = async () => {
+        if (killStartedAt !== undefined) return
+        killStartedAt = Date.now()
+        await Shell.killTree(proc, { exited: () => exited })
+        killCompletedAt = Date.now()
+      }
 
       const abortHandler = () => {
         aborted = true
@@ -409,6 +436,7 @@ export const BashTool = Tool.define("bash", async () => {
           output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
           exit: proc.exitCode,
           description: params.description,
+          hang: hangMetadata(),
         },
         output,
       }

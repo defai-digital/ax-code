@@ -15,6 +15,15 @@ export interface CliLanguageModelConfig {
   promptFlag?: string
 }
 
+function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
+  const err = stderr.toString().trim()
+  const out = stdout.toString().trim()
+  const detail = err || out
+  return detail
+    ? `CLI exited with code ${code}: ${detail.slice(0, 500)}`
+    : `CLI exited with code ${code}`
+}
+
 function cliEnv() {
   return { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" }
 }
@@ -84,8 +93,8 @@ export class CliLanguageModel implements LanguageModelV3 {
     result.catch(() => {})
     const [code, stdout, stderr] = await Promise.race([result, timeout])
     clearTimeout(timeoutTimer!)
-    if (code !== 0 && stdout.length === 0) {
-      throw new Error(`CLI exited with code ${code}: ${stderr.toString().slice(0, 500)}`)
+    if (code !== 0) {
+      throw new Error(formatCliFailure(code, stdout, stderr))
     }
 
     const parsed = this.config.parser.parseComplete(stdout.toString())
@@ -140,8 +149,36 @@ export class CliLanguageModel implements LanguageModelV3 {
 
         let remainder = ""
         let emitted = false
+        let stdoutEnded = false
+        let exitCode: number | undefined
         const raw: string[] = []
-        proc.stderr!.resume()
+        const stderrRaw: Buffer[] = []
+        const flushOutput = () => {
+          if (remainder.trim()) {
+            const delta = parser.parseStreamLine(remainder)
+            if (delta) {
+              emitted = true
+              controller.enqueue({ type: "text-delta", id: textId, delta })
+            }
+          }
+          if (!emitted) {
+            const fallback = raw.join("").trim()
+            if (fallback) controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
+          }
+        }
+        const finishSuccess = () => {
+          if (!stdoutEnded || exitCode === undefined || exitCode !== 0 || closed()) return
+          controller.enqueue({ type: "text-end", id: textId })
+          controller.enqueue({
+            type: "finish",
+            usage: EMPTY_USAGE,
+            finishReason: { unified: "stop", raw: undefined },
+          })
+          safeClose()
+        }
+        proc.stderr!.on("data", (chunk: Buffer) => {
+          stderrRaw.push(chunk)
+        })
         proc.stdout!.on("data", (chunk: Buffer) => {
           if (closed()) return
           const text = remainder + chunk.toString()
@@ -161,25 +198,9 @@ export class CliLanguageModel implements LanguageModelV3 {
         proc.stdout!.on("end", () => {
           clearTimeout(timer)
           if (closed()) return
-          if (remainder.trim()) {
-            const delta = parser.parseStreamLine(remainder)
-            if (delta) {
-              emitted = true
-              controller.enqueue({ type: "text-delta", id: textId, delta })
-            }
-          }
-          // Plain-text fallback: if no JSON events were parsed, emit raw output
-          if (!emitted) {
-            const fallback = raw.join("").trim()
-            if (fallback) controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
-          }
-          controller.enqueue({ type: "text-end", id: textId })
-          controller.enqueue({
-            type: "finish",
-            usage: EMPTY_USAGE,
-            finishReason: { unified: "stop", raw: undefined },
-          })
-          safeClose()
+          stdoutEnded = true
+          flushOutput()
+          finishSuccess()
         })
 
         proc.stdout!.on("error", (err: Error) => {
@@ -193,10 +214,16 @@ export class CliLanguageModel implements LanguageModelV3 {
         proc.exited.then((code) => {
           clearTimeout(timer)
           if (closed()) return
+          exitCode = code
           if (code !== 0) {
-            controller.enqueue({ type: "error", error: new Error(`CLI exited with code ${code}`) })
+            controller.enqueue({
+              type: "error",
+              error: new Error(formatCliFailure(code, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))),
+            })
             safeClose()
+            return
           }
+          finishSuccess()
         }).catch((err) => {
           clearTimeout(timer)
           if (closed()) return

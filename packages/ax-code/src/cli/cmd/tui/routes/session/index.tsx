@@ -202,10 +202,6 @@ export function Session() {
     return new CustomSpeedScroll(3)
   })
 
-  createEffect(() => {
-    sdk.setWorkspace(session()?.directory)
-  })
-
   createEffect(async () => {
     await sync.session
       .sync(route.sessionID)
@@ -522,6 +518,25 @@ export function Session() {
       },
     },
     {
+      title: "Investigate a hang (DRE)",
+      value: "debug.hang",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      slash: {
+        name: "hang",
+      },
+      onSelect: (dialog) => {
+        promptRef.current?.set({
+          input:
+            "Investigate this hang. Summarize the current wait state, inspect any bash timeout metadata, and run race_scan plus lifecycle_scan on the affected area before proposing a fix.",
+          parts: [],
+        })
+        promptRef.current?.focus()
+        dialog.clear()
+      },
+    },
+    {
       title: "Scan for hardcoded values (DRE)",
       value: "debug.hardcode",
       category: "Debugging",
@@ -534,6 +549,44 @@ export function Session() {
         promptRef.current?.set({
           input:
             "Run hardcode_scan and list findings grouped by severity. Focus on inline_secret_shape and inline_url first.",
+          parts: [],
+        })
+        promptRef.current?.focus()
+        dialog.clear()
+      },
+    },
+    {
+      title: "Scan for race conditions (DRE)",
+      value: "debug.race",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      slash: {
+        name: "race",
+      },
+      onSelect: (dialog) => {
+        promptRef.current?.set({
+          input:
+            "Run race_scan and report the highest-severity findings first. Focus on stale_listener and conflicting_mutation if this looks like a hang or flaky wait-state.",
+          parts: [],
+        })
+        promptRef.current?.focus()
+        dialog.clear()
+      },
+    },
+    {
+      title: "Scan lifecycle leaks (DRE)",
+      value: "debug.lifecycle",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      slash: {
+        name: "lifecycle",
+      },
+      onSelect: (dialog) => {
+        promptRef.current?.set({
+          input:
+            "Run lifecycle_scan and report the highest-severity findings first. Focus on timers, child_process, subscriptions, and event_listener cleanup paths.",
           parts: [],
         })
         promptRef.current?.focus()

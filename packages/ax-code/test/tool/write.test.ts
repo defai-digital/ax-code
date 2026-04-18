@@ -298,33 +298,42 @@ describe("tool.write", () => {
   })
 
   describe("error handling", () => {
-    test.skipIf(process.getuid?.() === 0 || !!process.env.CI)("throws error when OS denies write access", async () => {
+    test.skipIf(process.platform === "win32" || process.getuid?.() === 0 || !!process.env.CI)(
+      "throws error when OS denies write access",
+      async () => {
       await using tmp = await tmpdir()
       const readonlyPath = path.join(tmp.path, "readonly.txt")
 
-      // Create a read-only file
+      // Write uses an atomic temp-file + rename flow, so the reliable
+      // denial point is the parent directory's write bit, not the
+      // target file mode.
       await fs.writeFile(readonlyPath, "test", "utf-8")
-      await fs.chmod(readonlyPath, 0o444)
+      await fs.chmod(tmp.path, 0o555)
 
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const { FileTime } = await import("../../src/file/time")
-          await FileTime.read(ctx.sessionID, readonlyPath)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const { FileTime } = await import("../../src/file/time")
+            await FileTime.read(ctx.sessionID, readonlyPath)
 
-          const write = await WriteTool.init()
-          await expect(
-            write.execute(
-              {
-                filePath: readonlyPath,
-                content: "new content",
-              },
-              ctx,
-            ),
-          ).rejects.toThrow()
-        },
-      })
-    })
+            const write = await WriteTool.init()
+            await expect(
+              write.execute(
+                {
+                  filePath: readonlyPath,
+                  content: "new content",
+                },
+                ctx,
+              ),
+            ).rejects.toThrow()
+          },
+        })
+      } finally {
+        await fs.chmod(tmp.path, 0o755)
+      }
+      },
+    )
   })
 
   describe("title generation", () => {

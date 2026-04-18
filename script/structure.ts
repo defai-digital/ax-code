@@ -2,6 +2,7 @@
 
 import fs from "fs"
 import path from "path"
+import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-in-v4"
 
 const root = path.resolve(import.meta.dir, "..")
 
@@ -66,12 +67,16 @@ const keep = [
   ".pnpm-store",
   ".turbo",
   "automatosx",
+  "crates",
+  "debug-log",
   "docs",
+  "planning",
   "nix",
   "node_modules",
   "packages",
   "patches",
   "script",
+  "tools",
 ]
 
 function rel(file: string) {
@@ -239,6 +244,7 @@ async function main() {
   const miss = await docs()
   const hit = await deps()
   const raw = await deep()
+  const v4 = await V4Guardrails.check(path.join(root, "packages/ax-code"))
   const all = await size()
   const top10 = all.slice(0, 10)
   const big = all.filter((item) => item.lines >= 800)
@@ -264,6 +270,13 @@ async function main() {
     for (const row of raw) out.push(`- ${row.file} imports ${row.spec}`)
   } else {
     out.push("- ok: no raw src imports across package boundaries found")
+  }
+  out.push("")
+  out.push("## V4 Guardrails")
+  if (v4.length) {
+    for (const row of v4) out.push(`- ${V4Guardrails.format(row)}`)
+  } else {
+    out.push("- ok: no Effect, Solid, or OpenTUI imports found in v4 guarded directories")
   }
   out.push("")
   out.push("## Hotspots")
@@ -300,7 +313,7 @@ async function main() {
     await Bun.write(file, `${prev}${text}\n`)
   }
 
-  if (miss.length || hit.length || raw.length || stale.length || drift.length) process.exit(1)
+  if (miss.length || hit.length || raw.length || v4.length || stale.length || drift.length) process.exit(1)
 }
 
 await main()

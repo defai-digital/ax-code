@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { isPromptExitCommand, promptSubmissionView } from "../../../src/cli/cmd/tui/component/prompt/view-model"
+import {
+  isPromptExitCommand,
+  promptSubmissionView,
+  resolvePromptSlashDispatch,
+} from "../../../src/cli/cmd/tui/component/prompt/view-model"
 
 describe("tui prompt view model", () => {
   test("recognizes prompt exit commands after trimming", () => {
@@ -46,5 +50,53 @@ describe("tui prompt view model", () => {
         source: { text: { start: 22, end: 27, value: "@file" } },
       },
     ] as any)
+  })
+
+  test("prefers local slash commands before remote commands and preserves aliases", () => {
+    expect(
+      resolvePromptSlashDispatch({
+        text: "/skills",
+        localSlashes: [{ name: "skills" }, { name: "editor", aliases: ["edit"] }],
+        remoteCommands: ["skills", "share"],
+      }),
+    ).toEqual({
+      type: "local",
+      name: "skills",
+    })
+
+    expect(
+      resolvePromptSlashDispatch({
+        text: "/edit",
+        localSlashes: [{ name: "skills" }, { name: "editor", aliases: ["edit"] }],
+        remoteCommands: ["edit"],
+      }),
+    ).toEqual({
+      type: "local",
+      name: "editor",
+    })
+  })
+
+  test("parses remote slash command arguments across multiple lines", () => {
+    expect(
+      resolvePromptSlashDispatch({
+        text: "/share public\nwith notes",
+        localSlashes: [{ name: "skills" }],
+        remoteCommands: ["share"],
+      }),
+    ).toEqual({
+      type: "remote",
+      name: "share",
+      arguments: "public\nwith notes",
+    })
+
+    expect(
+      resolvePromptSlashDispatch({
+        text: "plain prompt",
+        localSlashes: [{ name: "skills" }],
+        remoteCommands: ["share"],
+      }),
+    ).toEqual({
+      type: "none",
+    })
   })
 })

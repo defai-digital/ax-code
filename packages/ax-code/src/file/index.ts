@@ -1,8 +1,5 @@
 import { BusEvent } from "@/bus/bus-event"
-import { InstanceState } from "@/effect/instance-state"
-import { makeRunPromise } from "@/effect/run-service"
 import { git } from "@/util/git"
-import { Effect, Fiber, Layer, Scope, ServiceMap } from "effect"
 import { formatPatch, structuredPatch } from "diff"
 import fs from "fs"
 import fuzzysort from "fuzzysort"
@@ -323,431 +320,347 @@ export namespace File {
 
   interface State {
     cache: Entry
-    fiber: Fiber.Fiber<void> | undefined
+    scan: Promise<void> | undefined
   }
 
-  export interface Interface {
-    readonly init: () => Effect.Effect<void>
-    readonly status: () => Effect.Effect<File.Info[]>
-    readonly read: (file: string) => Effect.Effect<File.Content>
-    readonly list: (dir?: string) => Effect.Effect<File.Node[]>
-    readonly search: (input: {
-      query: string
-      limit?: number
-      dirs?: boolean
-      type?: "file" | "directory"
-    }) => Effect.Effect<string[]>
+  const state = Instance.state(() => {
+    log.info("init")
+    return {
+      cache: { files: [], dirs: [] } as Entry,
+      scan: undefined as Promise<void> | undefined,
+    }
+  })
+
+  async function scan() {
+    if (Instance.directory === path.parse(Instance.directory).root) return
+    const isGlobalHome = Instance.directory === Global.Path.home && Instance.project.id === "global"
+    const next: Entry = { files: [], dirs: [] }
+
+    if (isGlobalHome) {
+      const dirs = new Set<string>()
+      const protectedNames = Protected.names()
+      const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
+      const shouldIgnoreName = (name: string) => name.startsWith(".") || protectedNames.has(name)
+      const shouldIgnoreNested = (name: string) => name.startsWith(".") || ignoreNested.has(name)
+      const top = await fs.promises.readdir(Instance.directory, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
+
+      for (const entry of top) {
+        if (!entry.isDirectory()) continue
+        if (shouldIgnoreName(entry.name)) continue
+        dirs.add(entry.name + "/")
+
+        const base = path.join(Instance.directory, entry.name)
+        const children = await fs.promises.readdir(base, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
+        for (const child of children) {
+          if (!child.isDirectory()) continue
+          if (shouldIgnoreNested(child.name)) continue
+          dirs.add(entry.name + "/" + child.name + "/")
+        }
+      }
+
+      next.dirs = Array.from(dirs).toSorted()
+    } else {
+      const seen = new Set<string>()
+      for await (const file of Ripgrep.files({ cwd: Instance.directory })) {
+        next.files.push(file)
+        let current = file
+        while (true) {
+          const dir = path.dirname(current)
+          if (dir === ".") break
+          if (dir === current) break
+          current = dir
+          if (seen.has(dir)) continue
+          seen.add(dir)
+          next.dirs.push(dir + "/")
+        }
+      }
+    }
+
+    ;(await state()).cache = next
   }
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/File") {}
-
-  export const layer = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const state = yield* InstanceState.make<State>(
-        Effect.fn("File.state")(() =>
-          Effect.succeed({
-            cache: { files: [], dirs: [] } as Entry,
-            fiber: undefined as Fiber.Fiber<void> | undefined,
-          }),
-        ),
-      )
-
-      const scan = Effect.fn("File.scan")(function* () {
-        if (Instance.directory === path.parse(Instance.directory).root) return
-        const isGlobalHome = Instance.directory === Global.Path.home && Instance.project.id === "global"
-        const next: Entry = { files: [], dirs: [] }
-
-        yield* Effect.promise(async () => {
-          if (isGlobalHome) {
-            const dirs = new Set<string>()
-            const protectedNames = Protected.names()
-            const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
-            const shouldIgnoreName = (name: string) => name.startsWith(".") || protectedNames.has(name)
-            const shouldIgnoreNested = (name: string) => name.startsWith(".") || ignoreNested.has(name)
-            const top = await fs.promises
-              .readdir(Instance.directory, { withFileTypes: true })
-              .catch(() => [] as fs.Dirent[])
-
-            for (const entry of top) {
-              if (!entry.isDirectory()) continue
-              if (shouldIgnoreName(entry.name)) continue
-              dirs.add(entry.name + "/")
-
-              const base = path.join(Instance.directory, entry.name)
-              const children = await fs.promises.readdir(base, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
-              for (const child of children) {
-                if (!child.isDirectory()) continue
-                if (shouldIgnoreNested(child.name)) continue
-                dirs.add(entry.name + "/" + child.name + "/")
-              }
-            }
-
-            next.dirs = Array.from(dirs).toSorted()
-          } else {
-            const seen = new Set<string>()
-            for await (const file of Ripgrep.files({ cwd: Instance.directory })) {
-              next.files.push(file)
-              let current = file
-              while (true) {
-                const dir = path.dirname(current)
-                if (dir === ".") break
-                if (dir === current) break
-                current = dir
-                if (seen.has(dir)) continue
-                seen.add(dir)
-                next.dirs.push(dir + "/")
-              }
-            }
-          }
+  async function ensure() {
+    const current = await state()
+    if (!current.scan) {
+      current.scan = scan()
+        .catch(() => undefined)
+        .finally(() => {
+          current.scan = undefined
         })
+    }
+    await current.scan
+  }
 
-        const s = yield* InstanceState.get(state)
-        s.cache = next
-      })
-
-      const scope = yield* Scope.Scope
-
-      const ensure = Effect.fn("File.ensure")(function* () {
-        const s = yield* InstanceState.get(state)
-        if (!s.fiber)
-          s.fiber = yield* scan().pipe(
-            Effect.catchCause(() => Effect.void),
-            Effect.ensuring(
-              Effect.sync(() => {
-                s.fiber = undefined
-              }),
-            ),
-            Effect.forkIn(scope),
-          )
-        yield* Fiber.join(s.fiber)
-      })
-
-      const init = Effect.fn("File.init")(function* () {
-        yield* ensure()
-      })
-
-      const status = Effect.fn("File.status")(function* () {
-        if (Instance.project.vcs !== "git") return []
-
-        return yield* Effect.promise(async () => {
-          const diffOutput = (
-            await git(["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD"], {
-              cwd: Instance.directory,
-            })
-          ).text()
-
-          const changed: File.Info[] = []
-
-          if (diffOutput.trim()) {
-            for (const line of diffOutput.trim().split("\n")) {
-              const [added, removed, file] = line.split("\t")
-              // Skip malformed numstat lines (anything missing the
-              // three tab-separated fields). Previously a line without
-              // two tabs yielded `file === undefined` and pushed a row
-              // with a nullish path, leading to confusing downstream
-              // errors.
-              if (!file || added === undefined || removed === undefined) continue
-              changed.push({
-                path: file,
-                added: added === "-" ? 0 : parseInt(added, 10),
-                removed: removed === "-" ? 0 : parseInt(removed, 10),
-                status: "modified",
-              })
-            }
-          }
-
-          const untrackedOutput = (
-            await git(
-              [
-                "-c",
-                "core.fsmonitor=false",
-                "-c",
-                "core.quotepath=false",
-                "ls-files",
-                "--others",
-                "--exclude-standard",
-              ],
-              {
-                cwd: Instance.directory,
-              },
-            )
-          ).text()
-
-          if (untrackedOutput.trim()) {
-            const untrackedFiles = untrackedOutput
-              .trim()
-              .split("\n")
-              .map((f) => f.trim())
-              .filter(Boolean)
-            const untrackedResults = await Promise.all(
-              untrackedFiles.map(async (file) => {
-                try {
-                  const content = await Filesystem.readText(path.join(Instance.directory, file))
-                  const lines = content.split("\n")
-                  return { path: file, added: content.endsWith("\n") ? lines.length - 1 : lines.length, removed: 0, status: "added" } as File.Info
-                } catch {
-                  return null
-                }
-              }),
-            )
-            for (const result of untrackedResults) {
-              if (result) changed.push(result)
-            }
-          }
-
-          const deletedOutput = (
-            await git(
-              [
-                "-c",
-                "core.fsmonitor=false",
-                "-c",
-                "core.quotepath=false",
-                "diff",
-                "--name-only",
-                "--diff-filter=D",
-                "HEAD",
-              ],
-              {
-                cwd: Instance.directory,
-              },
-            )
-          ).text()
-
-          if (deletedOutput.trim()) {
-            for (const file of deletedOutput.trim().split("\n").map((f) => f.trim()).filter(Boolean)) {
-              const removed = parseInt(
-                (await git(["diff", "--numstat", "HEAD", "--", file], { cwd: Instance.directory }))
-                  .text()
-                  .split("\t")[1] ?? "0",
-                10,
-              ) || 0
-              changed.push({ path: file, added: 0, removed, status: "deleted" })
-            }
-          }
-
-          return changed.map((item) => {
-            const full = path.isAbsolute(item.path) ? item.path : path.join(Instance.directory, item.path)
-            return {
-              ...item,
-              path: path.relative(Instance.directory, full),
-            }
-          })
-        })
-      })
-
-      const read = Effect.fn("File.read")(function* (file: string) {
-        return yield* Effect.promise(async (): Promise<File.Content> => {
-          using _ = log.time("read", { file })
-          const full = path.join(Instance.directory, file)
-
-          if (!Filesystem.contains(Instance.directory, full)) {
-            throw new Error("Access denied: path escapes project directory")
-          }
-
-          // Resolve symlinks and re-check containment so a symlink
-          // inside the project pointing to `/etc/passwd` cannot be used
-          // to read arbitrary files. If the file doesn't exist yet,
-          // realpath throws ENOENT and we skip the check — the
-          // subsequent read will return empty content anyway.
-          const realFull = await fs.promises.realpath(full).catch((e: NodeJS.ErrnoException) =>
-            e.code === "ENOENT" ? null : Promise.reject(e),
-          )
-          if (realFull && !Filesystem.contains(Instance.directory, realFull)) {
-            throw new Error("Access denied: symlink target escapes project directory")
-          }
-
-          if (isImageByExtension(file)) {
-            if (await Filesystem.exists(full)) {
-              // Let read errors propagate instead of silently returning
-              // an empty buffer. The previous `.catch(() => Buffer.from([]))`
-              // made a failed read look like a successful read of an
-              // empty image to the LLM, producing confidently wrong
-              // analysis on unreadable files.
-              const buffer = await Filesystem.readBytes(full)
-              return {
-                type: "text",
-                content: buffer.toString("base64"),
-                mimeType: getImageMimeType(file),
-                encoding: "base64",
-              }
-            }
-            return { type: "text", content: "" }
-          }
-
-          const knownText = isTextByExtension(file) || isTextByName(file)
-
-          if (isBinaryByExtension(file) && !knownText) {
-            return { type: "binary", content: "" }
-          }
-
-          if (!(await Filesystem.exists(full))) {
-            return { type: "text", content: "" }
-          }
-
-          const mimeType = Filesystem.mimeType(full)
-          const encode = knownText ? false : shouldEncode(mimeType)
-
-          if (encode && !isImage(mimeType)) {
-            return { type: "binary", content: "", mimeType }
-          }
-
-          if (encode) {
-            // Propagate read errors instead of silently returning an
-            // empty base64 blob — the caller should know the file
-            // couldn't be read rather than seeing a valid-looking
-            // zero-byte image / binary.
-            const buffer = await Filesystem.readBytes(full)
-            return {
-              type: "text",
-              content: buffer.toString("base64"),
-              mimeType,
-              encoding: "base64",
-            }
-          }
-
-          const content = await Filesystem.readText(full).catch(() => "")
-
-          if (Instance.project.vcs === "git") {
-            let diff = (
-              await git(["-c", "core.fsmonitor=false", "diff", "--", file], { cwd: Instance.directory })
-            ).text()
-            if (!diff.trim()) {
-              diff = (
-                await git(["-c", "core.fsmonitor=false", "diff", "--staged", "--", file], {
-                  cwd: Instance.directory,
-                })
-              ).text()
-            }
-            if (diff.trim()) {
-              const original = (await git(["show", `HEAD:${file}`], { cwd: Instance.directory })).text()
-              const patch = structuredPatch(file, file, original, content, "old", "new", {
-                context: Infinity,
-                ignoreWhitespace: true,
-              })
-              return {
-                type: "text",
-                content,
-                patch,
-                diff: formatPatch(patch),
-              }
-            }
-          }
-
-          return { type: "text", content }
-        })
-      })
-
-      const list = Effect.fn("File.list")(function* (dir?: string) {
-        return yield* Effect.promise(async () => {
-          const exclude = [".git", ".DS_Store"]
-          let ignored = (_: string) => false
-          if (Instance.project.vcs === "git") {
-            const ig = ignore()
-            const gitignore = path.join(Instance.project.worktree, ".gitignore")
-            if (await Filesystem.exists(gitignore)) {
-              ig.add(await Filesystem.readText(gitignore))
-            }
-            const ignoreFile = path.join(Instance.project.worktree, ".ignore")
-            if (await Filesystem.exists(ignoreFile)) {
-              ig.add(await Filesystem.readText(ignoreFile))
-            }
-            ignored = ig.ignores.bind(ig)
-          }
-
-          const resolved = dir ? path.join(Instance.directory, dir) : Instance.directory
-          if (!Filesystem.contains(Instance.directory, resolved)) {
-            throw new Error("Access denied: path escapes project directory")
-          }
-
-          // Resolve symlinks before reading the directory so a symlink
-          // inside the project pointing to `/etc` cannot be listed.
-          const realResolved = await fs.promises.realpath(resolved).catch(() => null)
-          if (realResolved && !Filesystem.contains(Instance.directory, realResolved)) {
-            throw new Error("Access denied: symlink target escapes project directory")
-          }
-
-          const nodes: File.Node[] = []
-          for (const entry of await fs.promises.readdir(resolved, { withFileTypes: true }).catch(() => [])) {
-            if (exclude.includes(entry.name)) continue
-            const absolute = path.join(resolved, entry.name)
-            const file = path.relative(Instance.directory, absolute)
-            const type = entry.isDirectory() ? "directory" : "file"
-            nodes.push({
-              name: entry.name,
-              path: file,
-              absolute,
-              type,
-              ignored: ignored(type === "directory" ? file + "/" : file),
-            })
-          }
-
-          return nodes.sort((a, b) => {
-            if (a.type !== b.type) return a.type === "directory" ? -1 : 1
-            return a.name.localeCompare(b.name)
-          })
-        })
-      })
-
-      const search = Effect.fn("File.search")(function* (input: {
-        query: string
-        limit?: number
-        dirs?: boolean
-        type?: "file" | "directory"
-      }) {
-        yield* ensure()
-        const { cache } = yield* InstanceState.get(state)
-
-        return yield* Effect.promise(async () => {
-          const query = input.query.trim()
-          const limit = input.limit ?? 100
-          const kind = input.type ?? (input.dirs === false ? "file" : "all")
-          log.info("search", { query, kind })
-
-          const result = cache
-          const preferHidden = query.startsWith(".") || query.includes("/.")
-
-          if (!query) {
-            if (kind === "file") return result.files.slice(0, limit)
-            return sortHiddenLast(result.dirs.toSorted(), preferHidden).slice(0, limit)
-          }
-
-          const items =
-            kind === "file" ? result.files : kind === "directory" ? result.dirs : [...result.files, ...result.dirs]
-
-          const searchLimit = kind === "directory" && !preferHidden ? limit * 20 : limit
-          const sorted = fuzzysort.go(query, items, { limit: searchLimit }).map((item) => item.target)
-          const output = kind === "directory" ? sortHiddenLast(sorted, preferHidden).slice(0, limit) : sorted
-
-          log.info("search", { query, kind, results: output.length })
-          return output
-        })
-      })
-
-      log.info("init")
-      return Service.of({ init, status, read, list, search })
-    }),
-  )
-
-  const runPromise = makeRunPromise(Service, layer)
-
-  export function init() {
-    return runPromise((svc) => svc.init())
+  export async function init() {
+    await ensure()
   }
 
   export async function status() {
-    return runPromise((svc) => svc.status())
+    if (Instance.project.vcs !== "git") return []
+
+    const diffOutput = (
+      await git(["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD"], {
+        cwd: Instance.directory,
+      })
+    ).text()
+
+    const changed: File.Info[] = []
+
+    if (diffOutput.trim()) {
+      for (const line of diffOutput.trim().split("\n")) {
+        const [added, removed, file] = line.split("\t")
+        if (!file || added === undefined || removed === undefined) continue
+        changed.push({
+          path: file,
+          added: added === "-" ? 0 : parseInt(added, 10),
+          removed: removed === "-" ? 0 : parseInt(removed, 10),
+          status: "modified",
+        })
+      }
+    }
+
+    const untrackedOutput = (
+      await git(
+        [
+          "-c",
+          "core.fsmonitor=false",
+          "-c",
+          "core.quotepath=false",
+          "ls-files",
+          "--others",
+          "--exclude-standard",
+        ],
+        {
+          cwd: Instance.directory,
+        },
+      )
+    ).text()
+
+    if (untrackedOutput.trim()) {
+      const untrackedFiles = untrackedOutput
+        .trim()
+        .split("\n")
+        .map((file) => file.trim())
+        .filter(Boolean)
+      const untrackedResults = await Promise.all(
+        untrackedFiles.map(async (file) => {
+          try {
+            const content = await Filesystem.readText(path.join(Instance.directory, file))
+            const lines = content.split("\n")
+            return {
+              path: file,
+              added: content.endsWith("\n") ? lines.length - 1 : lines.length,
+              removed: 0,
+              status: "added",
+            } as File.Info
+          } catch {
+            return null
+          }
+        }),
+      )
+      for (const result of untrackedResults) {
+        if (result) changed.push(result)
+      }
+    }
+
+    const deletedOutput = (
+      await git(
+        [
+          "-c",
+          "core.fsmonitor=false",
+          "-c",
+          "core.quotepath=false",
+          "diff",
+          "--name-only",
+          "--diff-filter=D",
+          "HEAD",
+        ],
+        {
+          cwd: Instance.directory,
+        },
+      )
+    ).text()
+
+    if (deletedOutput.trim()) {
+      for (const file of deletedOutput.trim().split("\n").map((item) => item.trim()).filter(Boolean)) {
+        const removed =
+          parseInt(
+            (await git(["diff", "--numstat", "HEAD", "--", file], { cwd: Instance.directory })).text().split("\t")[1] ??
+              "0",
+            10,
+          ) || 0
+        changed.push({ path: file, added: 0, removed, status: "deleted" })
+      }
+    }
+
+    return changed.map((item) => {
+      const full = path.isAbsolute(item.path) ? item.path : path.join(Instance.directory, item.path)
+      return {
+        ...item,
+        path: path.relative(Instance.directory, full),
+      }
+    })
   }
 
   export async function read(file: string): Promise<Content> {
-    return runPromise((svc) => svc.read(file))
+    using _ = log.time("read", { file })
+    const full = path.join(Instance.directory, file)
+
+    if (!Filesystem.contains(Instance.directory, full)) {
+      throw new Error("Access denied: path escapes project directory")
+    }
+
+    const realFull = await fs.promises.realpath(full).catch((error: NodeJS.ErrnoException) =>
+      error.code === "ENOENT" ? null : Promise.reject(error),
+    )
+    if (realFull && !Filesystem.contains(Instance.directory, realFull)) {
+      throw new Error("Access denied: symlink target escapes project directory")
+    }
+
+    if (isImageByExtension(file)) {
+      if (await Filesystem.exists(full)) {
+        const buffer = await Filesystem.readBytes(full)
+        return {
+          type: "text",
+          content: buffer.toString("base64"),
+          mimeType: getImageMimeType(file),
+          encoding: "base64",
+        }
+      }
+      return { type: "text", content: "" }
+    }
+
+    const knownText = isTextByExtension(file) || isTextByName(file)
+
+    if (isBinaryByExtension(file) && !knownText) {
+      return { type: "binary", content: "" }
+    }
+
+    if (!(await Filesystem.exists(full))) {
+      return { type: "text", content: "" }
+    }
+
+    const mimeType = Filesystem.mimeType(full)
+    const encode = knownText ? false : shouldEncode(mimeType)
+
+    if (encode && !isImage(mimeType)) {
+      return { type: "binary", content: "", mimeType }
+    }
+
+    if (encode) {
+      const buffer = await Filesystem.readBytes(full)
+      return {
+        type: "text",
+        content: buffer.toString("base64"),
+        mimeType,
+        encoding: "base64",
+      }
+    }
+
+    const content = await Filesystem.readText(full).catch(() => "")
+
+    if (Instance.project.vcs === "git") {
+      let diff = (await git(["-c", "core.fsmonitor=false", "diff", "--", file], { cwd: Instance.directory })).text()
+      if (!diff.trim()) {
+        diff = (
+          await git(["-c", "core.fsmonitor=false", "diff", "--staged", "--", file], {
+            cwd: Instance.directory,
+          })
+        ).text()
+      }
+      if (diff.trim()) {
+        const original = (await git(["show", `HEAD:${file}`], { cwd: Instance.directory })).text()
+        const patch = structuredPatch(file, file, original, content, "old", "new", {
+          context: Infinity,
+          ignoreWhitespace: true,
+        })
+        return {
+          type: "text",
+          content,
+          patch,
+          diff: formatPatch(patch),
+        }
+      }
+    }
+
+    return { type: "text", content }
   }
 
   export async function list(dir?: string) {
-    return runPromise((svc) => svc.list(dir))
+    const exclude = [".git", ".DS_Store"]
+    let ignored = (_: string) => false
+    if (Instance.project.vcs === "git") {
+      const ig = ignore()
+      const gitignore = path.join(Instance.project.worktree, ".gitignore")
+      if (await Filesystem.exists(gitignore)) {
+        ig.add(await Filesystem.readText(gitignore))
+      }
+      const ignoreFile = path.join(Instance.project.worktree, ".ignore")
+      if (await Filesystem.exists(ignoreFile)) {
+        ig.add(await Filesystem.readText(ignoreFile))
+      }
+      ignored = ig.ignores.bind(ig)
+    }
+
+    const resolved = dir ? path.join(Instance.directory, dir) : Instance.directory
+    if (!Filesystem.contains(Instance.directory, resolved)) {
+      throw new Error("Access denied: path escapes project directory")
+    }
+
+    const realResolved = await fs.promises.realpath(resolved).catch(() => null)
+    if (realResolved && !Filesystem.contains(Instance.directory, realResolved)) {
+      throw new Error("Access denied: symlink target escapes project directory")
+    }
+
+    const nodes: File.Node[] = []
+    for (const entry of await fs.promises.readdir(resolved, { withFileTypes: true }).catch(() => [])) {
+      if (exclude.includes(entry.name)) continue
+      const absolute = path.join(resolved, entry.name)
+      const file = path.relative(Instance.directory, absolute)
+      const type = entry.isDirectory() ? "directory" : "file"
+      nodes.push({
+        name: entry.name,
+        path: file,
+        absolute,
+        type,
+        ignored: ignored(type === "directory" ? file + "/" : file),
+      })
+    }
+
+    return nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "directory" ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
   }
 
-  export async function search(input: { query: string; limit?: number; dirs?: boolean; type?: "file" | "directory" }) {
-    return runPromise((svc) => svc.search(input))
+  export async function search(input: {
+    query: string
+    limit?: number
+    dirs?: boolean
+    type?: "file" | "directory"
+  }) {
+    await ensure()
+    const { cache } = await state()
+
+    const query = input.query.trim()
+    const limit = input.limit ?? 100
+    const kind = input.type ?? (input.dirs === false ? "file" : "all")
+    log.info("search", { query, kind })
+
+    const preferHidden = query.startsWith(".") || query.includes("/.")
+
+    if (!query) {
+      if (kind === "file") return cache.files.slice(0, limit)
+      return sortHiddenLast(cache.dirs.toSorted(), preferHidden).slice(0, limit)
+    }
+
+    const items = kind === "file" ? cache.files : kind === "directory" ? cache.dirs : [...cache.files, ...cache.dirs]
+
+    const searchLimit = kind === "directory" && !preferHidden ? limit * 20 : limit
+    const sorted = fuzzysort.go(query, items, { limit: searchLimit }).map((item) => item.target)
+    const output = kind === "directory" ? sortHiddenLast(sorted, preferHidden).slice(0, limit) : sorted
+
+    log.info("search", { query, kind, results: output.length })
+    return output
   }
 }

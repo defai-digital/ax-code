@@ -1,3 +1,5 @@
+import type { FocusOwner } from "../input/focus-manager"
+
 export type TuiRendererName = "opentui" | "native"
 
 export type TuiKeyEvent = {
@@ -38,5 +40,4 @@ export type TuiViewport = {
   height: number
 }
 
-export type TuiFocusOwner = "app" | "prompt" | "dialog" | "permission" | "console"
-
+export type TuiFocusOwner = FocusOwner["type"] | "console"

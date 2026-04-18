@@ -1,8 +1,5 @@
-import { Effect, Layer, ServiceMap } from "effect"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
-import { InstanceState } from "@/effect/instance-state"
-import { makeRunPromise } from "@/effect/run-service"
 import { FileWatcher } from "@/file/watcher"
 import { Log } from "@/util/log"
 import { git } from "@/util/git"
@@ -30,82 +27,55 @@ export namespace Vcs {
     })
   export type Info = z.infer<typeof Info>
 
-  export interface Interface {
-    readonly init: () => Effect.Effect<void>
-    readonly branch: () => Effect.Effect<string | undefined>
-  }
-
   interface State {
     current: string | undefined
+    unsubscribe?: () => void
   }
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Vcs") {}
+  const state = Instance.state(
+    async () => {
+      if (Instance.project.vcs !== "git") {
+        return { current: undefined } satisfies State
+      }
 
-  export const layer = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const state = yield* InstanceState.make<State>(
-        Effect.fn("Vcs.state")((ctx) =>
-          Effect.gen(function* () {
-            if (ctx.project.vcs !== "git") {
-              return { current: undefined }
-            }
+      const getCurrentBranch = async () => {
+        const result = await git(["rev-parse", "--abbrev-ref", "HEAD"], {
+          cwd: Instance.worktree,
+        })
+        if (result.exitCode !== 0) return undefined
+        const text = result.text().trim()
+        return text || undefined
+      }
 
-            const getCurrentBranch = async () => {
-              const result = await git(["rev-parse", "--abbrev-ref", "HEAD"], {
-                cwd: ctx.worktree,
-              })
-              if (result.exitCode !== 0) return undefined
-              const text = result.text().trim()
-              return text || undefined
-            }
+      const value: State = {
+        current: await getCurrentBranch(),
+      }
+      log.info("initialized", { branch: value.current })
 
-            const value = {
-              current: yield* Effect.promise(() => getCurrentBranch()),
-            }
-            log.info("initialized", { branch: value.current })
-
-            yield* Effect.acquireRelease(
-              Effect.sync(() =>
-                Bus.subscribe(
-                  FileWatcher.Event.Updated,
-                  Instance.bind(async (evt) => {
-                    if (!evt.properties.file.endsWith("HEAD")) return
-                    const next = await getCurrentBranch()
-                    if (next !== value.current) {
-                      log.info("branch changed", { from: value.current, to: next })
-                      value.current = next
-                      Bus.publish(Event.BranchUpdated, { branch: next })
-                    }
-                  }),
-                ),
-              ),
-              (unsubscribe) => Effect.sync(unsubscribe),
-            )
-
-            return value
-          }),
-        ),
+      value.unsubscribe = Bus.subscribe(
+        FileWatcher.Event.Updated,
+        Instance.bind(async (evt) => {
+          if (!evt.properties.file.endsWith("HEAD")) return
+          const next = await getCurrentBranch()
+          if (next === value.current) return
+          log.info("branch changed", { from: value.current, to: next })
+          value.current = next
+          await Bus.publish(Event.BranchUpdated, { branch: next })
+        }),
       )
 
-      return Service.of({
-        init: Effect.fn("Vcs.init")(function* () {
-          yield* InstanceState.get(state)
-        }),
-        branch: Effect.fn("Vcs.branch")(function* () {
-          return yield* InstanceState.use(state, (x) => x.current)
-        }),
-      })
-    }),
+      return value
+    },
+    async (entry) => {
+      entry.unsubscribe?.()
+    },
   )
 
-  const runPromise = makeRunPromise(Service, layer)
-
   export function init() {
-    return runPromise((svc) => svc.init())
+    return state().then(() => undefined)
   }
 
   export function branch() {
-    return runPromise((svc) => svc.branch())
+    return state().then((entry) => entry.current)
   }
 }

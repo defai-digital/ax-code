@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
-import {
-  TUI_RENDERER_CONTRACT,
-  TUI_RENDERER_CONTRACT_REQUIRED_AREAS,
-} from "../../../src/cli/cmd/tui/renderer-contract"
+import { TUI_RENDERER_CONTRACT, TUI_RENDERER_CONTRACT_REQUIRED_AREAS } from "../../../src/cli/cmd/tui/renderer-contract"
 import { TUI_PERFORMANCE_CRITERIA } from "../../../src/cli/cmd/tui/performance-criteria"
 
 const SRC_ROOT = path.resolve(import.meta.dir, "../../../src")
@@ -17,6 +14,17 @@ const PURE_TUI_FILES = [
   "performance-criteria.ts",
   "renderer-contract.ts",
   "renderer-decision.ts",
+  "input/focus-manager.ts",
+  "input/keymap.ts",
+  "input/command-dispatch.ts",
+  "input/prompt-editor.ts",
+  "state/actions.ts",
+  "state/app-state.ts",
+  "state/event-map.ts",
+  "state/event-queue.ts",
+  "state/reducer.ts",
+  "state/selectors.ts",
+  "state/store.ts",
   "routes/session/footer-view-model.ts",
   "routes/session/header-view-model.ts",
   "routes/session/display.ts",
@@ -36,7 +44,7 @@ async function files(dir: string): Promise<string[]> {
   for (const entry of entries) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      result.push(...await files(full))
+      result.push(...(await files(full)))
     } else if (/\.[cm]?[tj]sx?$/.test(entry.name)) {
       result.push(full)
     }

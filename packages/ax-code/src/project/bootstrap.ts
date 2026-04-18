@@ -16,10 +16,14 @@ import { Session } from "../session"
 import { Provider } from "../provider/provider"
 import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
 
-function background(label: string, task: () => Promise<unknown> | unknown) {
+const BOOTSTRAP_TIMEOUT_MS = 30_000
+
+function fireAndForget(label: string, task: () => Promise<unknown> | unknown) {
   const handle = (err: unknown) => {
     if (isHarmlessEffectInterrupt(err)) return
-    Log.Default.warn(`${label} failed`, { err })
+    Log.Default.warn(`${label} failed`, {
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
   try {
     Promise.resolve(task()).catch(handle)
@@ -28,24 +32,89 @@ function background(label: string, task: () => Promise<unknown> | unknown) {
   }
 }
 
+function runtimeTask(input: {
+  service: string
+  label: string
+  timeoutMs?: number
+  task: (signal: AbortSignal) => Promise<unknown> | unknown
+}) {
+  return Instance.runtime().track({
+    service: input.service,
+    label: input.label,
+    timeoutMs: input.timeoutMs ?? BOOTSTRAP_TIMEOUT_MS,
+    task: input.task,
+    onFailure: Instance.bind(() => {
+      Instance.runtimeSnapshot({
+        trigger: "service_failure",
+        failureClass: "service_bootstrap",
+      })
+    }),
+    onTimeout: Instance.bind(() => {
+      Instance.runtimeSnapshot({
+        trigger: "timeout",
+        failureClass: "service_bootstrap",
+      })
+    }),
+  })
+}
+
+function background(input: { service: string; label: string; timeoutMs?: number; task: () => Promise<unknown> | unknown }) {
+  fireAndForget(input.label, () => runtimeTask({ ...input, task: () => input.task() }))
+}
+
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
   ShareNext.init()
-  background("format init", () => Format.init())
-  await Promise.all([Plugin.init(), LSP.init()])
+  background({
+    service: "Format.init",
+    label: "format init",
+    task: () => Format.init(),
+  })
+  await Promise.all([
+    runtimeTask({
+      service: "Plugin.init",
+      label: "plugin init",
+      task: () => Plugin.init(),
+    }),
+    runtimeTask({
+      service: "LSP.init",
+      label: "lsp init",
+      task: () => LSP.init(),
+    }),
+  ])
   // Start provider loading in the background so it's ready by the time
   // the user sends their first prompt. Previously warmup was called
   // inside the prompt loop — after the user already typed — causing a
   // visible hang on the first message.
-  Provider.warmup()
-  background("file init", () => File.init())
-  background("file watcher init", () => FileWatcher.init())
-  background("vcs init", () => Vcs.init())
-  background("snapshot init", () => Snapshot.init())
+  background({
+    service: "Provider.warmup",
+    label: "provider warmup",
+    task: () => Provider.warmup({ swallow: false }),
+  })
+  background({
+    service: "File.init",
+    label: "file init",
+    task: () => File.init(),
+  })
+  background({
+    service: "FileWatcher.init",
+    label: "file watcher init",
+    task: () => FileWatcher.init(),
+  })
+  background({
+    service: "Vcs.init",
+    label: "vcs init",
+    task: () => Vcs.init(),
+  })
+  background({
+    service: "Snapshot.init",
+    label: "snapshot init",
+    task: () => Snapshot.init(),
+  })
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {
-      background("project set initialized", () => Project.setInitialized(Instance.project.id))
+      fireAndForget("project set initialized", () => Project.setInitialized(Instance.project.id))
     }
   })
 
@@ -55,6 +124,10 @@ export async function InstanceBootstrap() {
   const autoPrune = cfg.session?.auto_prune ?? true
   const ttlDays = cfg.session?.ttl_days ?? 30
   if (autoPrune) {
-    background("session auto-prune", () => Session.pruneExpired(ttlDays))
+    background({
+      service: "Session.pruneExpired",
+      label: "session auto-prune",
+      task: () => Session.pruneExpired(ttlDays),
+    })
   }
 }

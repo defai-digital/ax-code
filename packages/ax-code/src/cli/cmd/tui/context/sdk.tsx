@@ -1,7 +1,7 @@
 import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
 import { createSimpleContext } from "./helper"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
-import { batch, onCleanup, onMount } from "solid-js"
+import { batch, createSignal, onCleanup, onMount } from "solid-js"
 
 export type EventSource = {
   on: (handler: (event: Event) => void) => () => void
@@ -18,14 +18,14 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     events?: EventSource
   }) => {
     const abort = new AbortController()
-    let workspaceID: string | undefined
+    const [workspaceID, setWorkspaceID] = createSignal<string | undefined>()
     let sse: AbortController | undefined
 
     function createSDK() {
       return createOpencodeClient({
         baseUrl: props.url,
         signal: abort.signal,
-        directory: workspaceID ?? props.directory,
+        directory: workspaceID() ?? props.directory,
         fetch: props.fetch,
         headers: props.headers,
       })
@@ -112,12 +112,15 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       get client() {
         return sdk
       },
-      directory: props.directory,
+      baseDirectory: props.directory,
+      get directory() {
+        return workspaceID() ?? props.directory
+      },
       event: emitter,
       fetch: props.fetch ?? fetch,
       setWorkspace(next?: string) {
-        if (workspaceID === next) return
-        workspaceID = next
+        if (workspaceID() === next) return
+        setWorkspaceID(next)
         sdk = createSDK()
         props.events?.setWorkspace?.(next)
         if (!props.events) startSSE()

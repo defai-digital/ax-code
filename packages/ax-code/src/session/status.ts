@@ -1,9 +1,7 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
-import { InstanceState } from "@/effect/instance-state"
-import { makeRunPromise } from "@/effect/run-service"
+import { Instance } from "@/project/instance"
 import { SessionID } from "./schema"
-import { Effect, Layer, ServiceMap } from "effect"
 import z from "zod"
 
 export namespace SessionStatus {
@@ -22,6 +20,11 @@ export namespace SessionStatus {
         type: z.literal("busy"),
         step: z.number().optional(),
         maxSteps: z.number().optional(),
+        startedAt: z.number().optional(),
+        lastActivityAt: z.number().optional(),
+        activeTool: z.string().optional(),
+        toolCallID: z.string().optional(),
+        waitState: z.enum(["llm", "tool"]).optional(),
       }),
     ])
     .meta({
@@ -46,58 +49,28 @@ export namespace SessionStatus {
     ),
   }
 
-  export interface Interface {
-    readonly get: (sessionID: SessionID) => Effect.Effect<Info>
-    readonly list: () => Effect.Effect<Map<SessionID, Info>>
-    readonly set: (sessionID: SessionID, status: Info) => Effect.Effect<void>
-  }
-
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/SessionStatus") {}
-
-  export const layer = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const state = yield* InstanceState.make(
-        Effect.fn("SessionStatus.state")(() => Effect.succeed(new Map<SessionID, Info>())),
-      )
-
-      const get = Effect.fn("SessionStatus.get")(function* (sessionID: SessionID) {
-        const data = yield* InstanceState.get(state)
-        return data.get(sessionID) ?? { type: "idle" as const }
-      })
-
-      const list = Effect.fn("SessionStatus.list")(function* () {
-        return new Map(yield* InstanceState.get(state))
-      })
-
-      const set = Effect.fn("SessionStatus.set")(function* (sessionID: SessionID, status: Info) {
-        const data = yield* InstanceState.get(state)
-        // Update state before publishing events so subscribers see current state
-        if (status.type === "idle") {
-          data.delete(sessionID)
-          yield* Effect.promise(() => Bus.publish(Event.Status, { sessionID, status }))
-          yield* Effect.promise(() => Bus.publish(Event.Idle, { sessionID }))
-          return
-        }
-        data.set(sessionID, status)
-        yield* Effect.promise(() => Bus.publish(Event.Status, { sessionID, status }))
-      })
-
-      return Service.of({ get, list, set })
-    }),
-  )
-
-  const runPromise = makeRunPromise(Service, layer)
+  const state = Instance.state(() => new Map<SessionID, Info>())
 
   export async function get(sessionID: SessionID) {
-    return runPromise((svc) => svc.get(sessionID))
+    return state().get(sessionID) ?? { type: "idle" as const }
   }
 
   export async function list() {
-    return runPromise((svc) => svc.list())
+    return new Map(state())
   }
 
   export async function set(sessionID: SessionID, status: Info) {
-    return runPromise((svc) => svc.set(sessionID, status))
+    const data = state()
+
+    // Update state before publishing events so subscribers see current state.
+    if (status.type === "idle") {
+      data.delete(sessionID)
+      await Bus.publish(Event.Status, { sessionID, status })
+      await Bus.publish(Event.Idle, { sessionID })
+      return
+    }
+
+    data.set(sessionID, status)
+    await Bus.publish(Event.Status, { sessionID, status })
   }
 }

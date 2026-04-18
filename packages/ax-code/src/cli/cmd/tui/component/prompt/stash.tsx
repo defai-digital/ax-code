@@ -10,6 +10,7 @@ import { Log } from "@/util/log"
 
 export type StashEntry = {
   input: string
+  mode?: PromptInfo["mode"]
   parts: PromptInfo["parts"]
   timestamp: number
 }

@@ -73,7 +73,8 @@ export function DialogConfirm(props: DialogConfirmProps) {
 
 DialogConfirm.show = (dialog: DialogContext, title: string, message: string, label?: string) => {
   return new Promise<DialogConfirmResult>((resolve) => {
-    dialog.replace(
+    dialog.replaceWithKind(
+      "confirm",
       () => (
         <DialogConfirm
           title={title}

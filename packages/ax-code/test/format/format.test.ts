@@ -1,7 +1,5 @@
-import { Effect } from "effect"
 import { afterEach, describe, expect, test } from "bun:test"
 import { tmpdir } from "../fixture/fixture"
-import { withServices } from "../fixture/instance"
 import { Bus } from "../../src/bus"
 import { File } from "../../src/file"
 import { Format } from "../../src/format"
@@ -16,20 +14,23 @@ describe("Format", () => {
   test("status() returns built-in formatters when no config overrides", async () => {
     await using tmp = await tmpdir()
 
-    await withServices(tmp.path, Format.layer, async (rt) => {
-      const statuses = await rt.runPromise(Format.Service.use((s) => s.status()))
-      expect(Array.isArray(statuses)).toBe(true)
-      expect(statuses.length).toBeGreaterThan(0)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const statuses = await Format.status()
+        expect(Array.isArray(statuses)).toBe(true)
+        expect(statuses.length).toBeGreaterThan(0)
 
-      for (const s of statuses) {
-        expect(typeof s.name).toBe("string")
-        expect(Array.isArray(s.extensions)).toBe(true)
-        expect(typeof s.enabled).toBe("boolean")
-      }
+        for (const status of statuses) {
+          expect(typeof status.name).toBe("string")
+          expect(Array.isArray(status.extensions)).toBe(true)
+          expect(typeof status.enabled).toBe("boolean")
+        }
 
-      const gofmt = statuses.find((s) => s.name === "gofmt")
-      expect(gofmt).toBeDefined()
-      expect(gofmt!.extensions).toContain(".go")
+        const gofmt = statuses.find((status) => status.name === "gofmt")
+        expect(gofmt).toBeDefined()
+        expect(gofmt!.extensions).toContain(".go")
+      },
     })
   })
 
@@ -38,9 +39,11 @@ describe("Format", () => {
       config: { formatter: false },
     })
 
-    await withServices(tmp.path, Format.layer, async (rt) => {
-      const statuses = await rt.runPromise(Format.Service.use((s) => s.status()))
-      expect(statuses).toEqual([])
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Format.status()).toEqual([])
+      },
     })
   })
 
@@ -53,18 +56,24 @@ describe("Format", () => {
       },
     })
 
-    await withServices(tmp.path, Format.layer, async (rt) => {
-      const statuses = await rt.runPromise(Format.Service.use((s) => s.status()))
-      const gofmt = statuses.find((s) => s.name === "gofmt")
-      expect(gofmt).toBeUndefined()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const statuses = await Format.status()
+        const gofmt = statuses.find((status) => status.name === "gofmt")
+        expect(gofmt).toBeUndefined()
+      },
     })
   })
 
   test("service initializes without error", async () => {
     await using tmp = await tmpdir()
 
-    await withServices(tmp.path, Format.layer, async (rt) => {
-      await rt.runPromise(Format.Service.use(() => Effect.void))
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Format.init()
+      },
     })
   })
 
@@ -127,9 +136,12 @@ describe("Format", () => {
     }
 
     try {
-      await withServices(tmp.path, Format.layer, async (rt) => {
-        await rt.runPromise(Format.Service.use((s) => s.init()))
-        await Bus.publish(File.Event.Edited, { file })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await Format.init()
+          await Bus.publish(File.Event.Edited, { file })
+        },
       })
     } finally {
       Formatter.gofmt.extensions = one.extensions
@@ -162,9 +174,12 @@ describe("Format", () => {
     const file = `${tmp.path}/test.seq`
     await Bun.write(file, "x")
 
-    await withServices(tmp.path, Format.layer, async (rt) => {
-      await rt.runPromise(Format.Service.use((s) => s.init()))
-      await Bus.publish(File.Event.Edited, { file })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Format.init()
+        await Bus.publish(File.Event.Edited, { file })
+      },
     })
 
     expect(await Bun.file(file).text()).toBe("xAB")

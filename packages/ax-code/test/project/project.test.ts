@@ -14,6 +14,7 @@ import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { eq } from "drizzle-orm"
+import { Filesystem } from "../../src/util/filesystem"
 
 Log.init({ print: false })
 
@@ -102,6 +103,23 @@ describe("Project.fromDirectory", () => {
     const { project: a } = await Project.fromDirectory(tmp.path)
     const { project: b } = await Project.fromDirectory(tmp.path)
     expect(b.id).toBe(a.id)
+  })
+
+  test("initGit is a no-op inside an existing git subdirectory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const subdir = path.join(tmp.path, "packages", "app")
+    await Filesystem.write(path.join(subdir, "index.ts"), "export const ok = true\n")
+
+    const { project } = await Project.fromDirectory(subdir)
+    const next = await Project.initGit({
+      directory: subdir,
+      project,
+    })
+
+    expect(next.id).toBe(project.id)
+    expect(next.vcs).toBe("git")
+    expect(next.worktree).toBe(tmp.path)
+    expect(await Filesystem.exists(path.join(subdir, ".git"))).toBe(false)
   })
 })
 

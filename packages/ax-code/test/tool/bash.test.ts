@@ -40,6 +40,30 @@ describe("tool.bash", () => {
       },
     })
   })
+
+  test("returns structured hang metadata on timeout", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const command = `"${process.execPath}" -e "setTimeout(() => {}, 1000)"`
+        const result = await bash.execute(
+          {
+            command,
+            timeout: 50,
+            description: "Wait past timeout",
+          },
+          ctx,
+        )
+        const hang = result.metadata.hang as Record<string, unknown>
+        expect(hang["timedOut"]).toBe(true)
+        expect(hang["timeoutMs"]).toBe(50)
+        expect(hang["processId"]).toBeNumber()
+        expect(hang["killStartedAt"]).toBeNumber()
+        expect(result.output).toContain("bash tool terminated command after exceeding timeout 50 ms")
+      },
+    })
+  })
 })
 
 describe("tool.bash permissions", () => {

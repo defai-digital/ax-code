@@ -7,13 +7,16 @@ import { Flag } from "@/flag/flag"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
 import { which } from "../util/which"
+import { Filesystem } from "../util/filesystem"
+import { Glob } from "../util/glob"
+import { git as runGit } from "../util/git"
 import { ProjectID } from "./schema"
 import { Effect, Layer, Path, Scope, ServiceMap, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { NodeFileSystem, NodePath } from "@effect/platform-node"
-import { makeRunPromise } from "@/effect/run-service"
 import { AppFileSystem } from "@/filesystem"
 import * as CrossSpawnSpawner from "@/effect/cross-spawn-spawner"
+import path from "path"
 
 export namespace Project {
   const log = Log.create({ service: "project" })
@@ -418,7 +421,7 @@ export namespace Project {
       })
 
       const initGit = Effect.fn("Project.initGit")(function* (input: { directory: string; project: Info }) {
-        if (input.project.vcs === "git" && input.project.worktree === input.directory) return input.project
+        if (input.project.vcs === "git") return input.project
         if (!(yield* Effect.sync(() => which("git")))) throw new Error("Git is not installed")
         const result = yield* git(["init", "--quiet"], { cwd: input.directory })
         if (result.code !== 0) {
@@ -504,18 +507,285 @@ export namespace Project {
     Layer.provide(NodeFileSystem.layer),
     Layer.provide(NodePath.layer),
   )
-  const runPromise = makeRunPromise(Service, defaultLayer)
 
   // ---------------------------------------------------------------------------
-  // Promise-based API (delegates to Effect service via runPromise)
+  // Promise-based API
   // ---------------------------------------------------------------------------
+
+  const fakeVcs = Info.shape.vcs.parse(Flag.AX_CODE_FAKE_VCS)
+
+  function emitUpdated(data: Info) {
+    GlobalBus.emit("event", {
+      payload: { type: Event.Updated.type, properties: data },
+    })
+  }
+
+  function resolveGitPath(cwd: string, name: string) {
+    if (!name) return cwd
+    const trimmed = name.replace(/[\r\n]+$/, "")
+    if (!trimmed) return cwd
+    const normalized = Filesystem.windowsPath(trimmed)
+    if (path.isAbsolute(normalized)) return path.normalize(normalized)
+    return path.resolve(cwd, normalized)
+  }
+
+  async function readCachedProjectId(dir: string) {
+    return Filesystem.readText(path.join(dir, "ax-code"))
+      .then((text) => ProjectID.make(text.trim()))
+      .catch(() => undefined)
+  }
+
+  async function fromDirectoryPromise(directory: string) {
+    log.info("fromDirectory", { directory })
+
+    type DiscoveryResult = { id: ProjectID; worktree: string; sandbox: string; vcs: Info["vcs"] }
+
+    const data: DiscoveryResult = await (async () => {
+      let dotgit: string | undefined
+      for await (const match of Filesystem.up({ targets: [".git"], start: directory })) {
+        dotgit = match
+        break
+      }
+
+      if (!dotgit) {
+        return {
+          id: ProjectID.global,
+          worktree: "/",
+          sandbox: "/",
+          vcs: fakeVcs,
+        } satisfies DiscoveryResult
+      }
+
+      let sandbox = path.dirname(dotgit)
+      const gitBinary = which("git")
+      let id = await readCachedProjectId(dotgit)
+
+      if (!gitBinary) {
+        return {
+          id: id ?? ProjectID.global,
+          worktree: sandbox,
+          sandbox,
+          vcs: fakeVcs,
+        } satisfies DiscoveryResult
+      }
+
+      const commonDir = await runGit(["rev-parse", "--git-common-dir"], { cwd: sandbox })
+      if (commonDir.exitCode !== 0) {
+        return {
+          id: id ?? ProjectID.global,
+          worktree: sandbox,
+          sandbox,
+          vcs: fakeVcs,
+        } satisfies DiscoveryResult
+      }
+
+      const worktree = (() => {
+        const common = resolveGitPath(sandbox, commonDir.text().trim())
+        return common === sandbox ? sandbox : path.dirname(common)
+      })()
+
+      if (id == null) {
+        id = await readCachedProjectId(path.join(worktree, ".git"))
+      }
+
+      if (!id) {
+        const revList = await runGit(["rev-list", "--max-parents=0", "HEAD"], { cwd: sandbox })
+        const roots = revList
+          .text()
+          .split("\n")
+          .filter(Boolean)
+          .map((x) => x.trim())
+          .toSorted()
+
+        id = roots[0] ? ProjectID.make(roots[0]) : undefined
+        if (id) {
+          await Filesystem.write(path.join(worktree, ".git", "ax-code"), id).catch(() => undefined)
+        }
+      }
+
+      if (!id) {
+        return { id: ProjectID.global, worktree: sandbox, sandbox, vcs: "git" as const }
+      }
+
+      const topLevel = await runGit(["rev-parse", "--show-toplevel"], { cwd: sandbox })
+      if (topLevel.exitCode !== 0) {
+        return {
+          id,
+          worktree: sandbox,
+          sandbox,
+          vcs: fakeVcs,
+        } satisfies DiscoveryResult
+      }
+      sandbox = resolveGitPath(sandbox, topLevel.text().trim())
+
+      return { id, sandbox, worktree, vcs: "git" as const } satisfies DiscoveryResult
+    })()
+
+    const row = Database.use((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())
+    const existing = row ? safe(row) : undefined
+    const prev =
+      existing ?? {
+        id: data.id,
+        worktree: data.worktree,
+        vcs: data.vcs,
+        sandboxes: [] as string[],
+        time: { created: Date.now(), updated: Date.now() },
+      }
+
+    if (Flag.AX_CODE_EXPERIMENTAL_ICON_DISCOVERY) {
+      void discover(prev).catch(() => undefined)
+    }
+
+    const result: Info = {
+      ...prev,
+      worktree: data.worktree,
+      vcs: data.vcs,
+      time: { ...prev.time, updated: Date.now() },
+    }
+    if (data.sandbox !== result.worktree && !result.sandboxes.includes(data.sandbox)) {
+      result.sandboxes.push(data.sandbox)
+    }
+    result.sandboxes = (
+      await Promise.all(result.sandboxes.map(async (sandbox) => ((await Filesystem.exists(sandbox)) ? sandbox : undefined)))
+    ).filter((sandbox): sandbox is string => sandbox !== undefined)
+
+    Database.use((d) =>
+      d
+        .insert(ProjectTable)
+        .values({
+          id: result.id,
+          worktree: result.worktree,
+          vcs: result.vcs ?? null,
+          name: result.name,
+          icon_url: result.icon?.url,
+          icon_color: result.icon?.color,
+          time_created: result.time.created,
+          time_updated: result.time.updated,
+          time_initialized: result.time.initialized,
+          sandboxes: result.sandboxes,
+          commands: result.commands,
+        })
+        .onConflictDoUpdate({
+          target: ProjectTable.id,
+          set: {
+            worktree: result.worktree,
+            vcs: result.vcs ?? null,
+            name: result.name,
+            icon_url: result.icon?.url,
+            icon_color: result.icon?.color,
+            time_updated: result.time.updated,
+            time_initialized: result.time.initialized,
+            sandboxes: result.sandboxes,
+            commands: result.commands,
+          },
+        })
+        .run(),
+    )
+
+    if (data.id !== ProjectID.global) {
+      Database.use((d) =>
+        d
+          .update(SessionTable)
+          .set({ project_id: data.id })
+          .where(and(eq(SessionTable.project_id, ProjectID.global), eq(SessionTable.directory, data.worktree)))
+          .run(),
+      )
+    }
+
+    emitUpdated(result)
+    return { project: result, sandbox: data.sandbox }
+  }
+
+  async function discoverPromise(input: Info) {
+    if (input.vcs !== "git") return
+    if (input.icon?.override) return
+    if (input.icon?.url) return
+
+    const matches = await Glob.scan("**/favicon.{ico,png,svg,jpg,jpeg,webp}", {
+      cwd: input.worktree,
+      absolute: true,
+      include: "file",
+    })
+    const shortest = matches.sort((a, b) => a.length - b.length)[0]
+    if (!shortest) return
+
+    const buffer = await Filesystem.readBytes(shortest)
+    const base64 = Buffer.from(buffer).toString("base64")
+    const mime = Filesystem.mimeType(shortest)
+    const url = `data:${mime};base64,${base64}`
+    await updatePromise({ projectID: input.id, icon: { url } })
+  }
+
+  async function updatePromise(input: UpdateInput) {
+    const result = Database.use((d) =>
+      d
+        .update(ProjectTable)
+        .set({
+          name: input.name,
+          icon_url: input.icon?.url,
+          icon_color: input.icon?.color,
+          commands: input.commands,
+          time_updated: Date.now(),
+        })
+        .where(eq(ProjectTable.id, input.projectID))
+        .returning()
+        .get(),
+    )
+    if (!result) throw new Error(`Project not found: ${input.projectID}`)
+    const data = fromRow(result)
+    emitUpdated(data)
+    return data
+  }
+
+  async function sandboxesPromise(id: ProjectID) {
+    const row = Database.use((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
+    if (!row) return []
+    const data = safe(row)
+    if (!data) return []
+    return (
+      await Promise.all(data.sandboxes.map(async (directory) => ((await Filesystem.isDir(directory)) ? directory : undefined)))
+    ).filter((directory): directory is string => directory !== undefined)
+  }
+
+  async function addSandboxPromise(id: ProjectID, directory: string) {
+    const row = Database.use((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
+    if (!row) throw new Error(`Project not found: ${id}`)
+    const sandboxes = [...(safe(row)?.sandboxes ?? [])]
+    if (!sandboxes.includes(directory)) sandboxes.push(directory)
+    const result = Database.use((d) =>
+      d
+        .update(ProjectTable)
+        .set({ sandboxes, time_updated: Date.now() })
+        .where(eq(ProjectTable.id, id))
+        .returning()
+        .get(),
+    )
+    if (!result) throw new Error(`Project not found: ${id}`)
+    emitUpdated(fromRow(result))
+  }
+
+  async function removeSandboxPromise(id: ProjectID, directory: string) {
+    const row = Database.use((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
+    if (!row) throw new Error(`Project not found: ${id}`)
+    const sandboxes = (safe(row)?.sandboxes ?? []).filter((sandbox) => sandbox !== directory)
+    const result = Database.use((d) =>
+      d
+        .update(ProjectTable)
+        .set({ sandboxes, time_updated: Date.now() })
+        .where(eq(ProjectTable.id, id))
+        .returning()
+        .get(),
+    )
+    if (!result) throw new Error(`Project not found: ${id}`)
+    emitUpdated(fromRow(result))
+  }
 
   export function fromDirectory(directory: string) {
-    return runPromise((svc) => svc.fromDirectory(directory))
+    return fromDirectoryPromise(directory)
   }
 
   export function discover(input: Info) {
-    return runPromise((svc) => svc.discover(input))
+    return discoverPromise(input)
   }
 
   export function list() {
@@ -544,22 +814,30 @@ export namespace Project {
   }
 
   export function initGit(input: { directory: string; project: Info }) {
-    return runPromise((svc) => svc.initGit(input))
+    if (input.project.vcs === "git") return Promise.resolve(input.project)
+    if (!which("git")) return Promise.reject(new Error("Git is not installed"))
+    return runGit(["init", "--quiet"], { cwd: input.directory }).then(async (result) => {
+      if (result.exitCode !== 0) {
+        throw new Error(result.stderr.toString().trim() || result.text().trim() || "Failed to initialize git repository")
+      }
+      const { project } = await fromDirectoryPromise(input.directory)
+      return project
+    })
   }
 
   export function update(input: UpdateInput) {
-    return runPromise((svc) => svc.update(input))
+    return updatePromise(input)
   }
 
   export function sandboxes(id: ProjectID) {
-    return runPromise((svc) => svc.sandboxes(id))
+    return sandboxesPromise(id)
   }
 
   export function addSandbox(id: ProjectID, directory: string) {
-    return runPromise((svc) => svc.addSandbox(id, directory))
+    return addSandboxPromise(id, directory)
   }
 
   export function removeSandbox(id: ProjectID, directory: string) {
-    return runPromise((svc) => svc.removeSandbox(id, directory))
+    return removeSandboxPromise(id, directory)
   }
 }

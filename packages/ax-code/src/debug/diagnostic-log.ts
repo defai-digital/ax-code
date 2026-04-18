@@ -207,6 +207,7 @@ export namespace DiagnosticLog {
           ...base,
           output: redactText(event.output),
           error: redactText(event.error),
+          metadata: redactLogValue(event.metadata),
         }
       case "permission.ask":
         return {

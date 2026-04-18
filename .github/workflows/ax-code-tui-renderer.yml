@@ -1,0 +1,95 @@
+name: ax-code-tui-renderer
+
+on:
+  workflow_dispatch:
+    inputs:
+      repeat:
+        description: Benchmark samples
+        required: false
+        type: string
+        default: "3"
+      timeout_ms:
+        description: Probe timeout in milliseconds
+        required: false
+        type: string
+        default: "15000"
+      contract:
+        description: Optional contract report path relative to packages/ax-code
+        required: false
+        type: string
+        default: ""
+      run_pty:
+        description: Run PTY probes against the native renderer
+        required: false
+        type: boolean
+        default: true
+      require_ready:
+        description: Fail the workflow when the phase5 decision is not ready
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  native-renderer:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+      TUI_RENDERER_ARTIFACT_DIR: .tmp/tui-renderer-phase5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Evaluate native renderer phase5 gate
+        id: evaluate
+        continue-on-error: ${{ !inputs.require_ready }}
+        shell: bash
+        working-directory: packages/ax-code
+        run: |
+          set -euo pipefail
+
+          cmd=(
+            pnpm
+            run
+            tui:renderer:evaluate
+            --
+            --artifacts-dir
+            "${TUI_RENDERER_ARTIFACT_DIR}"
+            --repeat
+            "${{ inputs.repeat }}"
+            --timeout-ms
+            "${{ inputs.timeout_ms }}"
+          )
+
+          if [ -n "${{ inputs.contract }}" ]; then
+            cmd+=(--contract "${{ inputs.contract }}")
+          fi
+
+          if [ "${{ inputs.run_pty }}" = "true" ]; then
+            cmd+=(--run -- bun run src/index.ts)
+          fi
+
+          "${cmd[@]}"
+
+      - name: Upload native renderer artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-tui-renderer-phase5
+          path: packages/ax-code/.tmp/tui-renderer-phase5/
+          if-no-files-found: ignore

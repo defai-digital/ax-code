@@ -7,12 +7,16 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "automatosx/**"
+      - "crates/**"
       - "script/**"
       - "scripts/**"
       - "docs/**"
       - "github/**"
       - "packages/**"
       - "sdks/**"
+      - "planning/**"
+      - "tools/**"
   push:
     branches:
       - dev
@@ -21,12 +25,16 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "automatosx/**"
+      - "crates/**"
       - "script/**"
       - "scripts/**"
       - "docs/**"
       - "github/**"
       - "packages/**"
       - "sdks/**"
+      - "planning/**"
+      - "tools/**"
 
 jobs:
   audit:
