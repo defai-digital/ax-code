@@ -27,6 +27,10 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   deterministic:
     runs-on: ubuntu-latest
@@ -63,8 +67,61 @@ jobs:
       - name: Typecheck ax-code
         run: pnpm --dir packages/ax-code run typecheck
 
+      - name: Download coverage baseline
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dest="packages/ax-code/.tmp/coverage-baseline"
+          mkdir -p "$dest"
+
+          run_id="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ax-code-ci.yml/runs?branch=dev&event=push&status=completed&per_page=50" \
+              --jq '.workflow_runs[] | select(.conclusion=="success") | .id' \
+              | head -n1
+          )"
+
+          if [ -z "$run_id" ]; then
+            echo "No successful dev coverage baseline found."
+            exit 0
+          fi
+
+          gh run download "$run_id" -n ax-code-coverage-baseline-summary -D "$dest" || true
+          find "$dest" -maxdepth 2 -type f -print || true
+
       - name: Run deterministic ax-code tests
-        run: pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 1
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmd=(
+            pnpm
+            --dir
+            packages/ax-code
+            run
+            test:ci
+            --
+            deterministic
+            --rerun-on-fail
+            1
+            --coverage
+            --coverage-dir
+            .tmp/coverage
+            --coverage-summary-out
+            .tmp/coverage-summary.json
+            --coverage-report-out
+            .tmp/coverage-report.md
+          )
+
+          baseline="$(find packages/ax-code/.tmp/coverage-baseline -name '*.json' | head -n1 || true)"
+          if [ -n "$baseline" ]; then
+            cmd+=(--coverage-baseline "${baseline#packages/ax-code/}")
+          fi
+
+          "${cmd[@]}"
 
       - name: Summarize ax-code risk map
         if: always()
@@ -78,6 +135,25 @@ jobs:
           path: |
             packages/ax-code/.tmp/test-report/*.xml
             packages/ax-code/.tmp/test-risk.md
+          if-no-files-found: ignore
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-coverage-report
+          path: |
+            packages/ax-code/.tmp/coverage/lcov.info
+            packages/ax-code/.tmp/coverage-summary.json
+            packages/ax-code/.tmp/coverage-report.md
+          if-no-files-found: ignore
+
+      - name: Upload coverage baseline summary
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-coverage-baseline-summary
+          path: packages/ax-code/.tmp/coverage-summary.json
           if-no-files-found: ignore
 
   live:

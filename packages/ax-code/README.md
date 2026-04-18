@@ -35,6 +35,7 @@ bun run test:e2e
 bun run test:deterministic
 bun run test:live
 bun run test:risk
+bun run test:ci -- deterministic --coverage --coverage-summary-out .tmp/coverage-summary.json --coverage-report-out .tmp/coverage-report.md
 bun run perf:index --config perf-index.jsonc
 ```
 
@@ -46,6 +47,7 @@ bun run perf:index --config perf-index.jsonc
 - `test:deterministic` runs the non-live CI lane.
 - `test:live` is reserved for provider-backed live tests.
 - `test:risk` writes the current risk-family summary used by CI.
+- `test:ci -- deterministic --coverage` writes LCOV plus machine-readable and markdown coverage summaries under `.tmp/`.
 
 ## Performance
 
@@ -85,7 +87,9 @@ Artifacts:
 
 GitHub Actions runs the `ax-code` workflow on `packages/ax-code/**` changes.
 
-- PRs and pushes to `dev` run the deterministic lane: typecheck, grouped deterministic tests, and risk summary artifact upload.
+- PRs and pushes to `dev` run the deterministic lane: typecheck, grouped deterministic tests, risk summary artifact upload, and coverage artifact upload.
+- The deterministic lane writes `packages/ax-code/.tmp/coverage/lcov.info`, `packages/ax-code/.tmp/coverage-summary.json`, and `packages/ax-code/.tmp/coverage-report.md`.
+- PR workflows try to download the latest successful `dev` coverage summary and include line/function trend deltas in the step summary. Branch trend is reported as unavailable until the Bun LCOV reporter emits branch counters.
 - `workflow_dispatch` can optionally run the live lane.
 - `ax-code-perf` is a separate manual workflow for perf sampling, optional regression gating, machine-readable summary upload, markdown report upload, and optional baseline promotion. It uploads the raw report, the verdict JSON, the markdown report, and optionally a promoted baseline artifact plus baseline summary artifact.
 

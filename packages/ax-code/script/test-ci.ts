@@ -1,11 +1,13 @@
 import path from "path"
 import fs from "fs/promises"
 import { check, list, pick, root } from "./test-group"
+import { writeCoverageArtifacts } from "./test-coverage"
 
 type Result = {
   code: number
   file: string
   ignored: number
+  coverageDir?: string
   stats: {
     tests: number
     failures: number
@@ -20,6 +22,16 @@ function arg(name: string) {
   const idx = process.argv.indexOf(name)
   if (idx === -1) return
   return process.argv[idx + 1]
+}
+
+function flag(name: string) {
+  return process.argv.includes(name)
+}
+
+export function resolveTestCIGroup(argv = process.argv.slice(2)) {
+  const group = argv[0]
+  if (!group || group.startsWith("-")) return "deterministic"
+  return group
 }
 
 function num(name: string, fallback = 0) {
@@ -47,9 +59,7 @@ async function parse(file: string, output = "") {
   const failureCount = Number.parseInt(data.failures ?? "") || (text.match(/<failure\b/g)?.length ?? 0)
   const errorCount = Number.parseInt(data.errors ?? "") || errorTags.length
   const failures = failureCount + errorCount
-  const skipped =
-    Number.parseInt(data.skipped ?? "") ||
-    (text.match(/<skipped\b/g)?.length ?? 0)
+  const skipped = Number.parseInt(data.skipped ?? "") || (text.match(/<skipped\b/g)?.length ?? 0)
   const time = Number.parseFloat(data.time ?? "") || 0
   const ignored =
     failureCount === 0 &&
@@ -83,27 +93,29 @@ async function tee(stream: ReadableStream<Uint8Array> | null, writer: NodeJS.Wri
 async function run(group: string, files: string[], dir: string, run: number) {
   const file = path.join(dir, `${group}-${run}.xml`)
   const setup = path.join(root, "test/setup/effect-interrupt.ts")
-  const proc = Bun.spawn(
-    [
-      process.execPath,
-      "test",
-      "--timeout",
-      "30000",
-      "--preload",
-      setup,
-      "--reporter",
-      "junit",
-      "--reporter-outfile",
-      file,
-      ...files,
-    ],
-    {
-      cwd: root,
-      stdin: "inherit",
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  )
+  const coverageDir = flag("--coverage") ? path.join(root, arg("--coverage-dir") ?? ".tmp/coverage") : undefined
+  const command = [
+    process.execPath,
+    "test",
+    "--timeout",
+    "30000",
+    "--preload",
+    setup,
+    "--reporter",
+    "junit",
+    "--reporter-outfile",
+    file,
+    ...files,
+  ]
+  if (coverageDir) {
+    command.push("--coverage", "--coverage-reporter=text", "--coverage-reporter=lcov", "--coverage-dir", coverageDir)
+  }
+  const proc = Bun.spawn(command, {
+    cwd: root,
+    stdin: "inherit",
+    stdout: "pipe",
+    stderr: "pipe",
+  })
   const [stdout, stderr, code] = await Promise.all([
     tee(proc.stdout, process.stdout),
     tee(proc.stderr, process.stderr),
@@ -114,6 +126,7 @@ async function run(group: string, files: string[], dir: string, run: number) {
     code: code !== 0 && stats.failures === 0 && stats.ignored > 0 ? 0 : code,
     file,
     ignored: stats.ignored,
+    coverageDir,
     stats,
   } satisfies Result
 }
@@ -155,13 +168,17 @@ async function summary(group: string, runs: Result[]) {
   console.log(text)
   const file = process.env["GITHUB_STEP_SUMMARY"]
   if (file) {
-    await Bun.write(file, `${await Bun.file(file).text().catch(() => "")}${text}\n`)
+    await Bun.write(
+      file,
+      `${await Bun.file(file)
+        .text()
+        .catch(() => "")}${text}\n`,
+    )
   }
 }
 
 async function main() {
-  const group = process.argv[2]
-  if (!group) throw new Error("Missing test group")
+  const group = resolveTestCIGroup()
 
   const all = await list()
   check(all)
@@ -184,7 +201,22 @@ async function main() {
   }
 
   await summary(group, runs)
+  if (flag("--coverage")) {
+    const coverageDir = runs[runs.length - 1]?.coverageDir
+    const lcovFile = coverageDir ? path.join(coverageDir, "lcov.info") : undefined
+    if (lcovFile && (await Bun.file(lcovFile).exists())) {
+      await writeCoverageArtifacts({
+        group,
+        lcovFile,
+        summaryFile: path.join(root, arg("--coverage-summary-out") ?? ".tmp/coverage-summary.json"),
+        reportFile: path.join(root, arg("--coverage-report-out") ?? ".tmp/coverage-report.md"),
+        baselineFile: arg("--coverage-baseline") ? path.join(root, arg("--coverage-baseline")!) : undefined,
+      })
+    }
+  }
   if (runs.some((run) => run.code !== 0)) process.exit(1)
 }
 
-await main()
+if (import.meta.main) {
+  await main()
+}
