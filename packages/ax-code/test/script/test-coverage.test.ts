@@ -37,6 +37,8 @@ describe("script.test-coverage", () => {
   test("creates summaries with baseline trend comparisons and branch-unavailable notes", async () => {
     await using tmp = await tmpdir()
     const cwd = process.cwd()
+    const savedWorkspace = process.env["GITHUB_WORKSPACE"]
+    delete process.env["GITHUB_WORKSPACE"]
     process.chdir(tmp.path)
 
     try {
@@ -139,12 +141,15 @@ describe("script.test-coverage", () => {
       process.chdir(cwd)
       delete process.env.GITHUB_REF_NAME
       delete process.env.GITHUB_SHA
+      if (savedWorkspace !== undefined) process.env["GITHUB_WORKSPACE"] = savedWorkspace
     }
   })
 
   test("excludes lcov entries outside the repository root", async () => {
     await using tmp = await tmpdir()
     const cwd = process.cwd()
+    const savedWorkspace = process.env["GITHUB_WORKSPACE"]
+    delete process.env["GITHUB_WORKSPACE"]
     process.chdir(tmp.path)
 
     try {
@@ -185,6 +190,7 @@ describe("script.test-coverage", () => {
       ).toBeTrue()
     } finally {
       process.chdir(cwd)
+      if (savedWorkspace !== undefined) process.env["GITHUB_WORKSPACE"] = savedWorkspace
     }
   })
 
