@@ -517,6 +517,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   const sessionErrors: ProcessDebugRecord[] = []
   const runtimeErrors: ProcessDebugRecord[] = []
   const httpFailures: ProcessDebugRecord[] = []
+  const stateBursts: ProcessDebugRecord[] = []
 
   let threadStartedAt: number | undefined
   let nativeStartedAt: number | undefined
@@ -525,6 +526,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   let stoppedAt: number | undefined
   let transportMode: string | undefined
   let lastPromptSubmittedAt: number | undefined
+  let lastHeartbeatMs: number | undefined
 
   for (const record of records) {
     const timeMs = Date.parse(record.time)
@@ -578,6 +580,13 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       case "uncaughtException":
       case "unhandledRejection":
         runtimeErrors.push(record)
+        break
+      case "tui.state.heartbeat":
+      case "tui.state.final":
+        if (Number.isFinite(timeMs)) lastHeartbeatMs = timeMs
+        break
+      case "tui.state.burstDetected":
+        stateBursts.push(record)
         break
     }
   }
@@ -727,6 +736,44 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       suggestedFix:
         "Inspect the `tui.native.promptSubmitted` event together with nearby `tui.native.http*`, `session.status`, and replay events to see whether the stall happened before or after the backend accepted the prompt.",
       riskLevel: "medium",
+      occurrences: 1,
+    })
+  }
+
+  if (stateBursts.length > 0) {
+    const latest = stateBursts[stateBursts.length - 1]
+    const data = latest?.data ?? {}
+    const action = asString(data.topAction) ?? "unknown"
+    const commits = asNumber(data.topCount) ?? asNumber(data.commits) ?? 0
+    const windowMs = asNumber(data.windowMs) ?? 500
+    issues.push({
+      severity: "critical",
+      category: "TUI",
+      title: "TUI reducer is cycling on a single action",
+      rootCause: `The state store recorded ${stateBursts.length} burst event${stateBursts.length === 1 ? "" : "s"}; the latest shows action \`${action}\` committed ${commits} times in ${windowMs}ms. That rate is only reachable from a reactive-loop (an effect dispatches the same action that triggered it).`,
+      impact:
+        "The main thread spins in a synchronous reducer→listener→dispatch loop. The UI appears frozen even after the backend session has finished, because the event loop never yields.",
+      suggestedFix: `Look at the \`tui.state.heartbeat\` record immediately before the first burst — its \`entries\` ring buffer shows the last ~500 actions and whether each actually changed state. If the burst action keeps producing \`changed: true\` but the payload is structurally identical, stabilize the reducer branch for \`${action}\` so it returns the prior reference when nothing meaningful changed.`,
+      riskLevel: "high",
+      occurrences: stateBursts.length,
+    })
+  }
+
+  if (
+    lastHeartbeatMs !== undefined &&
+    !stoppedAt &&
+    now - lastHeartbeatMs >= HANG_STALL_THRESHOLD_MS
+  ) {
+    issues.push({
+      severity: "critical",
+      category: "TUI",
+      title: "TUI state heartbeat stopped",
+      rootCause: `The state store heartbeat last landed ${formatDuration(now - lastHeartbeatMs)} ago. Heartbeats run on a 1s interval timer; a missing heartbeat means the TUI event loop is blocked.`,
+      impact:
+        "The TUI is unresponsive to input, rendering, and IPC. Either the main thread is in a sync JS loop or it has crashed without emitting an exit record.",
+      suggestedFix:
+        "Correlate with nearby `tui.state.burstDetected` records to name the guilty action. If no burst record exists, the loop bypasses the store (likely an unhooked SolidJS effect) — sample the process and compare the frame-pattern to the store's reducer path.",
+      riskLevel: "high",
       occurrences: 1,
     })
   }

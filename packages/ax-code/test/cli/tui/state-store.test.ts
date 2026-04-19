@@ -252,6 +252,66 @@ describe("tui headless state store", () => {
     expect(sessionsForWorkspace(state).map((item) => item.id)).toEqual(["ses_2"])
   })
 
+  test("debug snapshot is empty when debug is disabled", () => {
+    const store = createTuiStateStore()
+    store.dispatch({ type: "workspace.selected", workspaceID: "/repo" })
+    const snap = store.getDebugSnapshot()
+    expect(snap.entries).toEqual([])
+    expect(snap.counters).toEqual({ dispatches: 0, commits: 0, bursts: 0 })
+  })
+
+  test("debug ring buffer records dispatch and commit entries in order", () => {
+    const store = createTuiStateStore({ debug: {} })
+    store.dispatch({ type: "workspace.selected", workspaceID: "/repo" })
+    store.dispatch({ type: "workspace.selected", workspaceID: "/repo-two" })
+    const snap = store.getDebugSnapshot()
+    const kinds = snap.entries.map((entry) => entry.kind)
+    expect(kinds).toEqual(["dispatch", "commit", "dispatch", "commit"])
+    const commits = snap.entries.filter((entry) => entry.kind === "commit") as Extract<
+      (typeof snap.entries)[number],
+      { kind: "commit" }
+    >[]
+    // Reducer returns a new object, so both commits report changed: true.
+    // The important assertion is that change-detection is wired up and
+    // produces a boolean.
+    expect(typeof commits[0]?.changed).toBe("boolean")
+    expect(commits[0]?.action).toBe("workspace.selected")
+    expect(snap.counters).toEqual({ dispatches: 2, commits: 2, bursts: 0 })
+  })
+
+  test("debug burst detector fires when a single action cycles >= threshold in 500ms", () => {
+    const infos: Array<{ topAction: string; topCount: number }> = []
+    const store = createTuiStateStore({
+      debug: {
+        onBurst(info) {
+          infos.push({ topAction: info.topAction, topCount: info.topCount })
+        },
+      },
+    })
+    // 60 consecutive same-action commits — well above the threshold and
+    // fast enough to stay inside one 500ms window.
+    for (let i = 0; i < 60; i++) {
+      store.dispatch({ type: "workspace.selected", workspaceID: `/repo-${i}` })
+    }
+    expect(infos.length).toBeGreaterThanOrEqual(1)
+    expect(infos[0]?.topAction).toBe("workspace.selected")
+    expect(infos[0]?.topCount).toBeGreaterThanOrEqual(50)
+    const snap = store.getDebugSnapshot()
+    expect(snap.counters.bursts).toBe(infos.length)
+    expect(snap.entries.some((entry) => entry.kind === "burst")).toBe(true)
+  })
+
+  test("debug ring buffer is bounded to the configured size", () => {
+    const store = createTuiStateStore({ debug: { ringBufferSize: 8 } })
+    for (let i = 0; i < 20; i++) {
+      store.dispatch({ type: "workspace.selected", workspaceID: `/repo-${i}` })
+    }
+    const snap = store.getDebugSnapshot()
+    expect(snap.entries.length).toBe(8)
+    // Latest entry should be the final commit of the final dispatch.
+    expect(snap.entries[snap.entries.length - 1]?.kind).toBe("commit")
+  })
+
   test("removes transcript state when a session is deleted", () => {
     const store = createTuiStateStore({
       initial: {

@@ -28,6 +28,7 @@ import { useExit } from "./exit"
 import { useArgs } from "./args"
 import { batch, createEffect, onMount, onCleanup } from "solid-js"
 import { Log } from "@/util/log"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
 import type { AppStateBootstrap } from "@/cli/cmd/tui/state/actions"
 import { createTuiStateStore } from "@/cli/cmd/tui/state/store"
 import { mergeSorted } from "./sync-util"
@@ -191,11 +192,34 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       path: { home: "", state: "", config: "", worktree: "", directory: "" },
       workspaceList: [],
     })
+    const debugEnabled = DiagnosticLog.enabled()
     const tuiState = createTuiStateStore({
       initial: {
         path: { home: "", state: "", config: "", worktree: "", directory: "" },
       },
+      debug: debugEnabled
+        ? {
+            onBurst(info) {
+              DiagnosticLog.recordProcess("tui.state.burstDetected", info)
+            },
+          }
+        : undefined,
     })
+
+    if (debugEnabled) {
+      // Heartbeat — if the main thread jams in a sync reactive loop,
+      // setInterval stops firing. The last heartbeat in process.jsonl plus
+      // its embedded ring buffer tells you what was being dispatched right
+      // before the stall.
+      const heartbeat = setInterval(() => {
+        DiagnosticLog.recordProcess("tui.state.heartbeat", tuiState.getDebugSnapshot())
+      }, 1_000)
+      heartbeat.unref?.()
+      onCleanup(() => {
+        clearInterval(heartbeat)
+        DiagnosticLog.recordProcess("tui.state.final", tuiState.getDebugSnapshot())
+      })
+    }
 
     function applyTuiStateSnapshot() {
       const snapshot = tuiState.getSnapshot()

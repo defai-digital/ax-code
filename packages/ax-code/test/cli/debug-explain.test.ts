@@ -152,4 +152,96 @@ describe("debug explain replay hang analysis", () => {
     expect(issues.some((issue) => issue.title.includes("TUI backend requests failed"))).toBeTrue()
     expect(issues.some((issue) => issue.title.includes("never painted a first frame"))).toBeTrue()
   })
+
+  test("classifies tui state burst events as a reducer loop", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.threadStarted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:01.000Z",
+        eventType: "tui.state.heartbeat",
+        data: { counters: { dispatches: 4, commits: 4, bursts: 0 } },
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:02.000Z",
+        eventType: "tui.state.burstDetected",
+        data: { topAction: "queue.measured", topCount: 61, commits: 61, windowMs: 500 },
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:07.000Z",
+        eventType: "tui.state.burstDetected",
+        data: { topAction: "queue.measured", topCount: 74, commits: 74, windowMs: 500 },
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:10.000Z"))
+
+    const burstIssue = issues.find((issue) => issue.title.includes("cycling on a single action"))
+    expect(burstIssue).toBeTruthy()
+    expect(burstIssue?.severity).toBe("critical")
+    expect(burstIssue?.occurrences).toBe(2)
+    expect(burstIssue?.rootCause).toContain("queue.measured")
+    expect(burstIssue?.rootCause).toContain("74")
+  })
+
+  test("flags a stopped heartbeat as a stalled main thread", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.threadStarted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:01.000Z",
+        eventType: "tui.state.heartbeat",
+        data: { counters: { dispatches: 2, commits: 2, bursts: 0 } },
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    // Now is 40s after the last heartbeat — well past the 30s stall threshold.
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:41.000Z"))
+
+    const stallIssue = issues.find((issue) => issue.title.includes("heartbeat stopped"))
+    expect(stallIssue).toBeTruthy()
+    expect(stallIssue?.severity).toBe("critical")
+    expect(stallIssue?.rootCause).toContain("40s")
+  })
+
+  test("does not flag heartbeat stall when tui stopped normally", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.threadStarted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:01.000Z",
+        eventType: "tui.state.heartbeat",
+        data: { counters: { dispatches: 2, commits: 2, bursts: 0 } },
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:02.000Z",
+        eventType: "tui.native.stopped",
+        data: {},
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:41.000Z"))
+    expect(issues.some((issue) => issue.title.includes("heartbeat stopped"))).toBeFalse()
+  })
 })
