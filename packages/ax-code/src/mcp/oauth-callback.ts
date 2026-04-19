@@ -156,8 +156,9 @@ export namespace McpOAuthCallback {
         },
       })
 
-      setCallbackPort(server.port)
-      log.info("oauth callback server started", { port: server.port })
+      const boundPort = server.port ?? OAUTH_CALLBACK_PORT
+      setCallbackPort(boundPort)
+      log.info("oauth callback server started", { port: boundPort })
     })().finally(() => {
       initPromise = undefined
     })
