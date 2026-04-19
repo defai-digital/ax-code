@@ -4,7 +4,7 @@ name: npm dist-tag
 # platform-binary subpackages in one shot. Use this to retag a published
 # version as `latest` (stable) or `beta` without republishing.
 #
-# Channel policy lives in `.github/workflows/release.yml`: the v2.23.x
+# Channel policy lives in `.github/workflows/release.yml`: the v2.25.x
 # series is the stable line; everything else ships as beta. This workflow
 # is the lever that enforces that policy on the npm registry side.
 
