@@ -1059,14 +1059,15 @@ function UserMessage(props: {
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
                   {(file) => {
-                    const bg = createMemo(() => {
-                      if (file.mime.startsWith("image/")) return theme.accent
-                      if (file.mime === "application/pdf") return theme.primary
-                      return theme.secondary
-                    })
+                    const bg =
+                      file.mime.startsWith("image/")
+                        ? theme.accent
+                        : file.mime === "application/pdf"
+                          ? theme.primary
+                          : theme.secondary
                     return (
                       <text fg={theme.text}>
-                        <span style={{ bg: bg(), fg: theme.background }}> {MIME_BADGE[file.mime] ?? file.mime} </span>
+                        <span style={{ bg, fg: theme.background }}> {MIME_BADGE[file.mime] ?? file.mime} </span>
                         <span style={{ bg: theme.backgroundElement, fg: theme.textMuted }}> {file.filename} </span>
                       </text>
                     )
@@ -1083,11 +1084,11 @@ function UserMessage(props: {
                 </Show>
                 <For each={route().delegated}>
                   {(item) => {
-                    const bg = createMemo(() => local.agent.color(item.name))
-                    const fg = createMemo(() => selectedForeground(theme, bg()))
+                    const bg = local.agent.color(item.name)
+                    const fg = selectedForeground(theme, bg)
                     return (
                       <text fg={theme.textMuted}>
-                        <span style={{ bg: bg(), fg: fg(), bold: true }}> DELEGATED {item.label} </span>
+                        <span style={{ bg, fg, bold: true }}> DELEGATED {item.label} </span>
                       </text>
                     )
                   }}
@@ -1158,12 +1159,12 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
       </Show>
       <For each={props.parts}>
         {(part, index) => {
-          const component = createMemo(() => PART_MAPPING[part.type as keyof typeof PART_MAPPING])
+          const component = PART_MAPPING[part.type as keyof typeof PART_MAPPING]
           return (
-            <Show when={component()}>
+            <Show when={component}>
               <Dynamic
                 last={index() === props.parts.length - 1}
-                component={component()}
+                component={component}
                 part={part as any}
                 message={props.message}
               />

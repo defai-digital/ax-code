@@ -268,8 +268,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                 </Show>
                 <For each={options}>
                   {(option) => {
-                    const active = createMemo(() => isDeepEqual(option.value, selected()?.value))
-                    const current = createMemo(() => isDeepEqual(option.value, props.current))
+                    const active = () => isDeepEqual(option.value, selected()?.value)
+                    const current = () => isDeepEqual(option.value, props.current)
                     return (
                       <box
                         id={JSON.stringify(option.value)}
