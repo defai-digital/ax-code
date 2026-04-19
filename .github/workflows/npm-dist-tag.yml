@@ -1,0 +1,85 @@
+name: npm dist-tag
+
+# Flips npm dist-tags for @defai.digital/ax-code and all of its
+# platform-binary subpackages in one shot. Use this to retag a published
+# version as `latest` (stable) or `beta` without republishing.
+#
+# Channel policy lives in `.github/workflows/release.yml`: the v2.23.x
+# series is the stable line; everything else ships as beta. This workflow
+# is the lever that enforces that policy on the npm registry side.
+
+on:
+  workflow_dispatch:
+    inputs:
+      latest_version:
+        description: "Version to assign to the `latest` dist-tag (e.g. 2.23.0)"
+        required: true
+      beta_version:
+        description: "Version to assign to the `beta` dist-tag (e.g. 2.24.14). Leave blank to skip."
+        required: false
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify NPM auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm whoami
+
+      - name: Apply dist-tags
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          LATEST: ${{ inputs.latest_version }}
+          BETA: ${{ inputs.beta_version }}
+        run: |
+          set -e
+          # Meta package + every platform-binary subpackage. Subpackages must
+          # carry the same dist-tag as the meta package, otherwise the
+          # postinstall optionalDependencies resolution falls back to the
+          # wrong build.
+          PACKAGES=(
+            "@defai.digital/ax-code"
+            "@defai.digital/ax-code-darwin-arm64"
+            "@defai.digital/ax-code-linux-arm64"
+            "@defai.digital/ax-code-linux-arm64-musl"
+            "@defai.digital/ax-code-linux-x64"
+            "@defai.digital/ax-code-linux-x64-musl"
+            "@defai.digital/ax-code-linux-x64-baseline"
+            "@defai.digital/ax-code-linux-x64-baseline-musl"
+            "@defai.digital/ax-code-win32-arm64"
+            "@defai.digital/ax-code-win32-x64"
+          )
+
+          retag() {
+            local pkg="$1" tag="$2" version="$3"
+            if ! npm view "$pkg@$version" version >/dev/null 2>&1; then
+              echo "  skip $pkg@$version (not published)"
+              return
+            fi
+            echo "  $pkg@$version -> $tag"
+            npm dist-tag add "$pkg@$version" "$tag"
+          }
+
+          echo "Retagging latest -> $LATEST"
+          for pkg in "${PACKAGES[@]}"; do
+            retag "$pkg" latest "$LATEST"
+          done
+
+          if [ -n "$BETA" ]; then
+            echo "Retagging beta -> $BETA"
+            for pkg in "${PACKAGES[@]}"; do
+              retag "$pkg" beta "$BETA"
+            done
+          fi
+
+          echo "Final dist-tags:"
+          for pkg in "${PACKAGES[@]}"; do
+            echo "--- $pkg ---"
+            npm view "$pkg" dist-tags || echo "  (not published)"
+          done
