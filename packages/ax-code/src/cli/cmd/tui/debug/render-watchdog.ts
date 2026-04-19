@@ -6,7 +6,6 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 // a hot loop calling requestRender() many times per microtask).
 const RENDER_LOOP_WINDOW_MS = 1_000
 const RENDER_LOOP_THRESHOLD = 200
-const RENDER_LOOP_THROTTLE_MS = 5_000
 
 type RendererLike = {
   requestRender: () => void
@@ -15,31 +14,39 @@ type RendererLike = {
 type WatchdogState = {
   count: number
   windowStartedAt: number
-  lastAlertAt: number
+  alertedThisWindow: boolean
 }
 
 function createState(): WatchdogState {
-  return { count: 0, windowStartedAt: Date.now(), lastAlertAt: 0 }
+  return { count: 0, windowStartedAt: Date.now(), alertedThisWindow: false }
 }
 
-// Roll a 1s window. Returns true if the most recent observation crossed the
-// threshold and we should fire (after throttle check).
+// Roll a 1s window. Returns true at most once per window (when threshold is
+// crossed). The window itself is the rate limiter — no wall-clock throttle.
+//
+// Removing the throttle was deliberate: in v2.24.5 the startup paint legitimately
+// burned the throttle, so the actual hang's render burst (a few seconds later)
+// was suppressed and we lost the freeze-time stack. With one alert per window
+// we get one record per second of sustained looping — the freeze chain is
+// captured even when startup also bursts.
 function observe(state: WatchdogState, now: number): boolean {
   if (now - state.windowStartedAt >= RENDER_LOOP_WINDOW_MS) {
     state.count = 0
     state.windowStartedAt = now
+    state.alertedThisWindow = false
   }
   state.count++
   if (state.count < RENDER_LOOP_THRESHOLD) return false
-  if (now - state.lastAlertAt < RENDER_LOOP_THROTTLE_MS) return false
-  state.lastAlertAt = now
+  if (state.alertedThisWindow) return false
+  state.alertedThisWindow = true
   return true
 }
 
 // Captures the stack of the *current* requestRender call so we can name the
-// caller chain that's spinning. Only invoked when the watchdog actually fires
-// (i.e. inside the throttle window already, so once per 5s max). We strip
-// our own wrapper frames so the first reported frame is the real caller.
+// caller chain that's spinning. Invoked when the watchdog fires — at most once
+// per RENDER_LOOP_WINDOW_MS, so worst case ~1 stack walk per second during a
+// sustained loop. We strip our own wrapper frames so the first reported frame
+// is the real caller.
 function captureCallerStack(maxFrames = 20): string[] {
   const raw = new Error().stack
   if (!raw) return []
@@ -101,5 +108,4 @@ export const __internals = {
   captureCallerStack,
   RENDER_LOOP_WINDOW_MS,
   RENDER_LOOP_THRESHOLD,
-  RENDER_LOOP_THROTTLE_MS,
 }
