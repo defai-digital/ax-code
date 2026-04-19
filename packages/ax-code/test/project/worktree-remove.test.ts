@@ -7,7 +7,7 @@ import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
-const wintest = process.platform === "win32" ? test : test.skip
+const wintest = process.platform !== "linux" ? test : test.skip
 
 describe("Worktree.remove", () => {
   test("continues when git remove exits non-zero after detaching", async () => {

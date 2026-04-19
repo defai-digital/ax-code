@@ -485,7 +485,7 @@ export namespace File {
       for (const file of deletedOutput.trim().split("\n").map((item) => item.trim()).filter(Boolean)) {
         const removed =
           parseInt(
-            (await git(["diff", "--numstat", "HEAD", "--", file], { cwd: Instance.directory })).text().split("\t")[1] ??
+            (await git(["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD", "--", file], { cwd: Instance.directory })).text().split("\t")[1] ??
               "0",
             10,
           ) || 0

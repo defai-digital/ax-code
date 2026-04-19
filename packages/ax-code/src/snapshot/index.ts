@@ -325,11 +325,11 @@ export namespace Snapshot {
         if (seen.has(file)) continue
         seen.add(file)
         log.info("reverting", { file, hash: item.hash })
-        const result = await runGit([...core, ...args(current, ["checkout", item.hash, "--", file])], {
+        const rel = path.relative(current.worktree, file)
+        const result = await runGit([...core, ...args(current, ["checkout", item.hash, "--", rel])], {
           cwd: current.worktree,
         })
         if (result.code !== 0) {
-          const rel = path.relative(current.worktree, file)
           const tree = await runGit([...core, ...args(current, ["ls-tree", item.hash, "--", rel])], {
             cwd: current.worktree,
           })

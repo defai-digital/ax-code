@@ -6,7 +6,7 @@ import { File } from "../../src/file"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-const wintest = process.platform === "win32" ? test : test.skip
+const wintest = process.platform !== "linux" ? test : test.skip
 
 describe("file fsmonitor", () => {
   wintest("status does not start fsmonitor for readonly git checks", async () => {

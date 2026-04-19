@@ -350,7 +350,7 @@ test("escaped non-ASCII filenames", async () => {
   })
 })
 
-test.skip("escaped non-ASCII filenames modification and restore", async () => {
+test("escaped non-ASCII filenames modification and restore", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,
