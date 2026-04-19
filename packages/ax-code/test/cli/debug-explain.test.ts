@@ -218,6 +218,67 @@ describe("debug explain replay hang analysis", () => {
     expect(stallIssue?.rootCause).toContain("40s")
   })
 
+  test("classifies traced effect loops by label", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.threadStarted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:02.000Z",
+        eventType: "tui.effect.loopDetected",
+        data: { label: "sync.routeSession", runs: 132, windowMs: 1000 },
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:07.000Z",
+        eventType: "tui.effect.loopDetected",
+        data: { label: "sync.routeSession", runs: 180, windowMs: 1000 },
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:10.000Z"))
+
+    const issue = issues.find((i) => i.title.includes("reactive effect is cycling"))
+    expect(issue).toBeTruthy()
+    expect(issue?.severity).toBe("critical")
+    expect(issue?.occurrences).toBe(2)
+    expect(issue?.rootCause).toContain("sync.routeSession")
+    expect(issue?.rootCause).toContain("180")
+    expect(issue?.suggestedFix).toContain("tracedEffect")
+  })
+
+  test("classifies worker-side main-thread stall detection", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.threadStarted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:05.000Z",
+        eventType: "tui.worker.mainStalled",
+        data: { gapMs: 4500, lastPingAt: "2026-04-18T12:00:00.500Z", thresholdMs: 2000 },
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:10.000Z"))
+
+    const issue = issues.find((i) => i.title.includes("main thread stalled (worker watchdog)"))
+    expect(issue).toBeTruthy()
+    expect(issue?.severity).toBe("critical")
+    // formatDuration rounds 4500ms to 5s.
+    expect(issue?.rootCause).toContain("5s")
+    expect(issue?.rootCause).toContain("2026-04-18T12:00:00.500Z")
+  })
+
   test("does not flag heartbeat stall when tui stopped normally", () => {
     const lines = [
       JSON.stringify({

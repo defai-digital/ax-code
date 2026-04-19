@@ -298,6 +298,19 @@ export const TuiThreadCommand = cmd({
       }, 1000)
       upgradeTimer.unref?.()
 
+      // Main-thread liveness ping for the worker watchdog. If the renderer
+      // wedges in a synchronous loop, setInterval stops firing here, the
+      // worker's watchdog sees the gap, and writes `tui.worker.mainStalled`.
+      // Only install when diagnostic logging is on — zero overhead otherwise.
+      const mainPingInterval = debugDir
+        ? setInterval(() => {
+            client.call("pingMain", { time: Date.now() }).catch(() => {
+              // The worker may not accept pings while shutting down; drop.
+            })
+          }, 500)
+        : undefined
+      mainPingInterval?.unref?.()
+
       try {
         const tuiInput = {
           url: transport.url,
@@ -323,6 +336,7 @@ export const TuiThreadCommand = cmd({
         await launchTuiThreadRenderer(tuiInput)
       } finally {
         clearTimeout(upgradeTimer)
+        if (mainPingInterval) clearInterval(mainPingInterval)
         await stop()
       }
     } finally {

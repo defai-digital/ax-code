@@ -518,6 +518,8 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   const runtimeErrors: ProcessDebugRecord[] = []
   const httpFailures: ProcessDebugRecord[] = []
   const stateBursts: ProcessDebugRecord[] = []
+  const effectLoops: ProcessDebugRecord[] = []
+  const workerStalls: ProcessDebugRecord[] = []
 
   let threadStartedAt: number | undefined
   let nativeStartedAt: number | undefined
@@ -587,6 +589,12 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         break
       case "tui.state.burstDetected":
         stateBursts.push(record)
+        break
+      case "tui.effect.loopDetected":
+        effectLoops.push(record)
+        break
+      case "tui.worker.mainStalled":
+        workerStalls.push(record)
         break
     }
   }
@@ -756,6 +764,50 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       suggestedFix: `Look at the \`tui.state.heartbeat\` record immediately before the first burst — its \`entries\` ring buffer shows the last ~500 actions and whether each actually changed state. If the burst action keeps producing \`changed: true\` but the payload is structurally identical, stabilize the reducer branch for \`${action}\` so it returns the prior reference when nothing meaningful changed.`,
       riskLevel: "high",
       occurrences: stateBursts.length,
+    })
+  }
+
+  if (effectLoops.length > 0) {
+    const byLabel = new Map<string, { runs: number; count: number }>()
+    for (const record of effectLoops) {
+      const label = asString(record.data.label) ?? "unknown"
+      const runs = asNumber(record.data.runs) ?? 0
+      const entry = byLabel.get(label) ?? { runs: 0, count: 0 }
+      entry.runs = Math.max(entry.runs, runs)
+      entry.count++
+      byLabel.set(label, entry)
+    }
+    const worst = [...byLabel.entries()].sort((a, b) => b[1].runs - a[1].runs)[0]
+    const worstLabel = worst?.[0] ?? "unknown"
+    const worstRuns = worst?.[1].runs ?? 0
+    issues.push({
+      severity: "critical",
+      category: "TUI",
+      title: "TUI reactive effect is cycling",
+      rootCause: `Effect \`${worstLabel}\` ran ${worstRuns} times inside a 1s window. Tracer alerts fired ${effectLoops.length} time${effectLoops.length === 1 ? "" : "s"} across ${byLabel.size} label${byLabel.size === 1 ? "" : "s"}. A reactive effect executing that fast is only reachable from a feedback loop — the effect writes (directly or indirectly) to a signal it reads.`,
+      impact:
+        "The main thread spins in a synchronous Solid effect→signal→effect chain. The event loop never yields, so input, rendering, and IPC are all frozen even while the backend session may be running normally.",
+      suggestedFix: `Open the label \`${worstLabel}\` — it matches a \`tracedEffect(label, fn)\` call site in the TUI source. Audit what the effect writes and which of its reads are derived from those writes. Stabilize the write (skip if value is deep-equal to prior) or narrow the dependency.`,
+      riskLevel: "high",
+      occurrences: effectLoops.length,
+    })
+  }
+
+  if (workerStalls.length > 0) {
+    const latest = workerStalls[workerStalls.length - 1]
+    const gap = asNumber(latest?.data.gapMs) ?? 0
+    const lastPing = asString(latest?.data.lastPingAt)
+    issues.push({
+      severity: "critical",
+      category: "TUI",
+      title: "TUI main thread stalled (worker watchdog)",
+      rootCause: `The worker thread's liveness check missed ${workerStalls.length} main-thread ping${workerStalls.length === 1 ? "" : "s"}; the latest gap was ${formatDuration(gap)}${lastPing ? ` since the last ping at ${lastPing}` : ""}. Worker timers kept firing, so the main thread event loop is the one blocked.`,
+      impact:
+        "The TUI renderer cannot process input, paint frames, or consume backend events. User sees a frozen UI.",
+      suggestedFix:
+        "Correlate the first `tui.worker.mainStalled` record with the preceding `tui.state.heartbeat` ring buffer and any `tui.effect.loopDetected` entries to name the stuck path. If no effect label triggered, the loop is outside the Solid reactive system (likely opentui's render layer).",
+      riskLevel: "high",
+      occurrences: workerStalls.length,
     })
   }
 

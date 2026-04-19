@@ -29,6 +29,7 @@ import { useArgs } from "./args"
 import { batch, createEffect, onMount, onCleanup } from "solid-js"
 import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { tracedEffect } from "@/cli/cmd/tui/debug/effect-tracer"
 import type { AppStateBootstrap } from "@/cli/cmd/tui/state/actions"
 import { createTuiStateStore } from "@/cli/cmd/tui/state/store"
 import { mergeSorted } from "./sync-util"
@@ -747,7 +748,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     })
 
     const fullSyncedSessions = new Set<string>()
-    createEffect(() => {
+    // Route changes dispatch into the store AND kick off an async workspace
+    // activation; the latter eventually writes back to signals this effect
+    // reads. High feedback-loop risk — worth the label.
+    tracedEffect("sync.routeSession", () => {
       const data = route.data
       tuiState.dispatch({
         type: "route.session.selected",

@@ -122,6 +122,42 @@ const startEventStream = (input: { directory?: string }) => {
 
 startEventStream({ directory: process.cwd() })
 
+// Main-thread liveness watchdog. The TUI renderer runs on the main thread; if
+// it wedges in a synchronous reactive loop, its own setInterval stops firing
+// (including the store heartbeat). The worker thread's event loop is
+// independent, so we run the "is main alive?" check here and leave an
+// unambiguous `tui.worker.mainStalled` record in process.jsonl that
+// `debug explain` can surface without relying on inferred heartbeat gaps.
+const MAIN_STALL_THRESHOLD_MS = 2_000
+const MAIN_STALL_ALERT_THROTTLE_MS = 5_000
+let lastMainPingAt = Date.now()
+let lastStallAlertAt = 0
+let mainStalledActive = false
+if (debugDir) {
+  const watchdog = setInterval(() => {
+    const now = Date.now()
+    const gap = now - lastMainPingAt
+    if (gap < MAIN_STALL_THRESHOLD_MS) {
+      if (mainStalledActive) {
+        DiagnosticLog.recordProcess("tui.worker.mainRecovered", {
+          gapMs: gap,
+        })
+        mainStalledActive = false
+      }
+      return
+    }
+    if (now - lastStallAlertAt < MAIN_STALL_ALERT_THROTTLE_MS) return
+    lastStallAlertAt = now
+    mainStalledActive = true
+    DiagnosticLog.recordProcess("tui.worker.mainStalled", {
+      gapMs: gap,
+      lastPingAt: new Date(lastMainPingAt).toISOString(),
+      thresholdMs: MAIN_STALL_THRESHOLD_MS,
+    })
+  }, 500)
+  watchdog.unref?.()
+}
+
 export const rpc = {
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
     const headers = { ...input.headers }
@@ -190,6 +226,13 @@ export const rpc = {
     if (eventStream.abort) eventStream.abort.abort()
     await Instance.disposeAll()
     if (server) await server.stop(true)
+  },
+  pingMain(input: { time: number }) {
+    // Main thread sends this every 500ms while alive. Record the arrival
+    // time; the watchdog above watches the gap. Returns undefined — the
+    // return trip isn't interesting, the gap between calls is.
+    lastMainPingAt = Date.now()
+    return { receivedAt: lastMainPingAt, sentAt: input.time }
   },
 }
 
