@@ -1,12 +1,10 @@
 import {
   BoxRenderable,
   TextareaRenderable,
+  TextAttributes,
   MouseEvent,
   PasteEvent,
   decodePasteBytes,
-  t,
-  dim,
-  fg,
 } from "@tui/renderer-adapter/opentui"
 import {
   batch,
@@ -1281,8 +1279,8 @@ export function Prompt(props: PromptProps) {
                   <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
                   <Show when={showVariant()}>
                     <text fg={theme.textMuted}>·</text>
-                    <text>
-                      <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
+                    <text fg={theme.warning} attributes={TextAttributes.BOLD}>
+                      {local.model.variant.current()}
                     </text>
                   </Show>
                 </box>
@@ -1318,12 +1316,7 @@ export function Prompt(props: PromptProps) {
         </box>
         <box flexDirection="row" justifyContent="space-between">
           <Show when={status().type !== "idle"} fallback={<text />}>
-            <box
-              flexDirection="row"
-              gap={1}
-              flexGrow={1}
-              justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
-            >
+            <box flexDirection="row" gap={1} flexGrow={1}>
               <box flexShrink={0} flexDirection="row" gap={1}>
                 <box marginLeft={1}>
                   <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
@@ -1337,12 +1330,15 @@ export function Prompt(props: PromptProps) {
                   </Show>
                 </box>
               </box>
-              <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
-                esc{" "}
-                <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
+              <Show when={status().type === "retry"}>
+                <box flexGrow={1} />
+              </Show>
+              <box flexDirection="row" gap={0}>
+                <text fg={store.interrupt > 0 ? theme.primary : theme.text}>esc </text>
+                <text fg={store.interrupt > 0 ? theme.primary : theme.textMuted}>
                   {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-                </span>
-              </text>
+                </text>
+              </box>
             </box>
           </Show>
           <Show when={status().type !== "retry"}>
@@ -1378,21 +1374,25 @@ export function Prompt(props: PromptProps) {
               <Switch>
                 <Match when={store.mode === "normal"}>
                   <Show when={local.model.variant.list().length > 0}>
-                    <text fg={theme.text}>
-                      {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
-                    </text>
+                    <box flexDirection="row" gap={0}>
+                      <text fg={theme.text}>{keybind.print("variant_cycle")} </text>
+                      <text fg={theme.textMuted}>variants</text>
+                    </box>
                   </Show>
-                  <text fg={theme.text}>
-                    {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
-                  </text>
-                  <text fg={theme.text}>
-                    {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
-                  </text>
+                  <box flexDirection="row" gap={0}>
+                    <text fg={theme.text}>{keybind.print("agent_cycle")} </text>
+                    <text fg={theme.textMuted}>agents</text>
+                  </box>
+                  <box flexDirection="row" gap={0}>
+                    <text fg={theme.text}>{keybind.print("command_list")} </text>
+                    <text fg={theme.textMuted}>commands</text>
+                  </box>
                 </Match>
                 <Match when={store.mode === "shell"}>
-                  <text fg={theme.text}>
-                    esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                  </text>
+                  <box flexDirection="row" gap={0}>
+                    <text fg={theme.text}>esc </text>
+                    <text fg={theme.textMuted}>exit shell mode</text>
+                  </box>
                 </Match>
               </Switch>
             </box>

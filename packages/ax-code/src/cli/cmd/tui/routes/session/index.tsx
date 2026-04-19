@@ -856,7 +856,10 @@ function SessionView() {
   const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID()))
 
   // snap to bottom when session changes
-  tracedEffect("session.route.scrollToBottom", on(() => route.sessionID, toBottom))
+  tracedEffect(
+    "session.route.scrollToBottom",
+    on(() => route.sessionID, toBottom),
+  )
 
   return (
     <context.Provider
@@ -883,15 +886,17 @@ function SessionView() {
             </Show>
             <Show when={subagentTasks().total > 0}>
               <box flexShrink={0} paddingLeft={1}>
-                <text fg={theme.textMuted}>
-                  {subagentTasks().total} subagent{subagentTasks().total !== 1 ? "s" : ""}
-                  {subagentTasks().running > 0 ? (
-                    <span style={{ fg: theme.primary }}> · {subagentTasks().running} active</span>
-                  ) : null}
-                  {subagentTasks().done > 0 ? (
-                    <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
-                  ) : null}
-                </text>
+                <box flexDirection="row" gap={0}>
+                  <text fg={theme.textMuted}>
+                    {subagentTasks().total} subagent{subagentTasks().total !== 1 ? "s" : ""}
+                  </text>
+                  <Show when={subagentTasks().running > 0}>
+                    <text fg={theme.primary}> · {subagentTasks().running} active</text>
+                  </Show>
+                  <Show when={subagentTasks().done > 0}>
+                    <text fg={theme.success}> · {subagentTasks().done} done</text>
+                  </Show>
+                </box>
               </box>
             </Show>
             <scrollbox
@@ -1059,17 +1064,20 @@ function UserMessage(props: {
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
                   {(file) => {
-                    const bg =
-                      file.mime.startsWith("image/")
-                        ? theme.accent
-                        : file.mime === "application/pdf"
-                          ? theme.primary
-                          : theme.secondary
+                    const bg = file.mime.startsWith("image/")
+                      ? theme.accent
+                      : file.mime === "application/pdf"
+                        ? theme.primary
+                        : theme.secondary
                     return (
-                      <text fg={theme.text}>
-                        <span style={{ bg, fg: theme.background }}> {MIME_BADGE[file.mime] ?? file.mime} </span>
-                        <span style={{ bg: theme.backgroundElement, fg: theme.textMuted }}> {file.filename} </span>
-                      </text>
+                      <box flexDirection="row" gap={0}>
+                        <box backgroundColor={bg} paddingLeft={1} paddingRight={1}>
+                          <text fg={theme.background}>{MIME_BADGE[file.mime] ?? file.mime}</text>
+                        </box>
+                        <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+                          <text fg={theme.textMuted}>{file.filename}</text>
+                        </box>
+                      </box>
                     )
                   }}
                 </For>
@@ -1078,18 +1086,22 @@ function UserMessage(props: {
             <Show when={metadataVisible()}>
               <box flexDirection="row" gap={1} flexWrap="wrap">
                 <Show when={showPrimary()}>
-                  <text fg={theme.textMuted}>
-                    <span style={{ bg: color(), fg: queuedFg(), bold: true }}> {route().primary.label} </span>
-                  </text>
+                  <box backgroundColor={color()} paddingLeft={1} paddingRight={1}>
+                    <text fg={queuedFg()} attributes={TextAttributes.BOLD}>
+                      {route().primary.label}
+                    </text>
+                  </box>
                 </Show>
                 <For each={route().delegated}>
                   {(item) => {
                     const bg = local.agent.color(item.name)
                     const fg = selectedForeground(theme, bg)
                     return (
-                      <text fg={theme.textMuted}>
-                        <span style={{ bg, fg, bold: true }}> DELEGATED {item.label} </span>
-                      </text>
+                      <box backgroundColor={bg} paddingLeft={1} paddingRight={1}>
+                        <text fg={fg} attributes={TextAttributes.BOLD}>
+                          DELEGATED {item.label}
+                        </text>
+                      </box>
                     )
                   }}
                 </For>
@@ -1097,17 +1109,15 @@ function UserMessage(props: {
                   when={queued()}
                   fallback={
                     <Show when={ctx.showTimestamps()}>
-                      <text fg={theme.textMuted}>
-                        <span style={{ fg: theme.textMuted }}>
-                          {Locale.todayTimeOrDateTime(props.message.time.created)}
-                        </span>
-                      </text>
+                      <text fg={theme.textMuted}>{Locale.todayTimeOrDateTime(props.message.time.created)}</text>
                     </Show>
                   }
                 >
-                  <text fg={theme.textMuted}>
-                    <span style={{ bg: color(), fg: queuedFg(), bold: true }}> QUEUED </span>
-                  </text>
+                  <box backgroundColor={color()} paddingLeft={1} paddingRight={1}>
+                    <text fg={queuedFg()} attributes={TextAttributes.BOLD}>
+                      QUEUED
+                    </text>
+                  </box>
                 </Show>
               </box>
             </Show>
@@ -1174,10 +1184,10 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
       </For>
       <Show when={props.parts.some((x) => x.type === "tool" && x.tool === "task")}>
         <box paddingTop={1} paddingLeft={3}>
-          <text fg={theme.text}>
-            {keybind.print("session_child_first")}
-            <span style={{ fg: theme.textMuted }}> view subagents</span>
-          </text>
+          <box flexDirection="row" gap={0}>
+            <text fg={theme.text}>{keybind.print("session_child_first")} </text>
+            <text fg={theme.textMuted}>view subagents</text>
+          </box>
         </box>
       </Show>
       <Show when={props.message.error && props.message.error.name !== "MessageAbortedError"}>
@@ -1197,29 +1207,28 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
       <Switch>
         <Match when={props.last || final() || props.message.error?.name === "MessageAbortedError"}>
           <box paddingLeft={3}>
-            <text marginTop={1}>
-              <span
-                style={{
-                  fg:
-                    props.message.error?.name === "MessageAbortedError"
-                      ? theme.textMuted
-                      : local.agent.color(props.message.agent),
-                }}
+            <box marginTop={1} flexDirection="row" gap={0} flexWrap="wrap">
+              <text
+                fg={
+                  props.message.error?.name === "MessageAbortedError"
+                    ? theme.textMuted
+                    : local.agent.color(props.message.agent)
+                }
               >
-                ▣{" "}
-              </span>{" "}
-              <span style={{ fg: theme.text }}>
+                ▣
+              </text>
+              <text fg={theme.text}>
                 {sync.data.agent.find((a) => a.name === props.message.agent)?.displayName ??
                   Locale.titlecase(props.message.agent)}
-              </span>
-              <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
+              </text>
+              <text fg={theme.textMuted}> · {props.message.modelID}</text>
               <Show when={duration()}>
-                <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
+                <text fg={theme.textMuted}> · {Locale.duration(duration())}</text>
               </Show>
               <Show when={props.message.error?.name === "MessageAbortedError"}>
-                <span style={{ fg: theme.textMuted }}> · interrupted</span>
+                <text fg={theme.textMuted}> · interrupted</text>
               </Show>
-            </text>
+            </box>
           </box>
         </Match>
       </Switch>
@@ -1455,12 +1464,16 @@ function GenericTool(props: ToolProps<any>) {
 
 function ToolTitle(props: { fallback: string; when: any; icon: string; children: JSX.Element }) {
   const { theme } = useTheme()
+  const tone = () => (props.when ? theme.textMuted : theme.text)
   return (
-    <text paddingLeft={3} fg={props.when ? theme.textMuted : theme.text}>
-      <Show fallback={<>~ {props.fallback}</>} when={props.when}>
-        <span style={{ bold: true }}>{props.icon}</span> {props.children}
+    <box paddingLeft={3} flexDirection="row" gap={1}>
+      <Show fallback={<text fg={tone()}>~ {props.fallback}</text>} when={props.when}>
+        <text fg={tone()} attributes={TextAttributes.BOLD}>
+          {props.icon}
+        </text>
+        <text fg={tone()}>{props.children}</text>
       </Show>
-    </text>
+    </box>
   )
 }
 
@@ -1542,11 +1555,16 @@ function InlineTool(props: {
           <Spinner color={fg()} children={props.children} />
         </Match>
         <Match when={true}>
-          <text paddingLeft={3} fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
-            <Show fallback={<>~ {props.pending}</>} when={props.complete}>
-              <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
+          <box paddingLeft={3} flexDirection="row" gap={1}>
+            <Show fallback={<text fg={fg()}>~ {props.pending}</text>} when={props.complete}>
+              <text fg={props.iconColor ?? fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
+                {props.icon}
+              </text>
+              <text fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
+                {props.children}
+              </text>
             </Show>
-          </text>
+          </box>
         </Match>
       </Switch>
       <Show when={error() && !denied()}>
@@ -2301,13 +2319,16 @@ function ImpactAnalyze(props: ToolProps<typeof ImpactAnalyzeTool>) {
                       </text>
                       <For each={expanded() ? entries : entries.slice(0, MAX_INLINE)}>
                         {(entry) => (
-                          <text fg={theme.text}>
-                            {"  ".repeat(distance)}
-                            {entry.symbol.qualifiedName}{" "}
-                            <span style={{ fg: theme.textMuted }}>
+                          <box flexDirection="row" gap={0}>
+                            <text fg={theme.text}>
+                              {"  ".repeat(distance)}
+                              {entry.symbol.qualifiedName}
+                            </text>
+                            <text fg={theme.textMuted}>
+                              {" "}
                               ({normalize(entry.symbol.file)}:{entry.symbol.range.start.line + 1})
-                            </span>
-                          </text>
+                            </text>
+                          </box>
                         )}
                       </For>
                     </box>
@@ -2380,12 +2401,13 @@ function DedupScan(props: ToolProps<typeof DedupScanTool>) {
                   {/* Member list — each row is a file:line target */}
                   <For each={cluster.members.slice(0, MAX_MEMBERS_PER_CLUSTER)}>
                     {(m) => (
-                      <text fg={theme.text}>
-                        {"  " + m.qualifiedName}{" "}
-                        <span style={{ fg: theme.textMuted }}>
+                      <box flexDirection="row" gap={0}>
+                        <text fg={theme.text}>{"  " + m.qualifiedName}</text>
+                        <text fg={theme.textMuted}>
+                          {" "}
                           ({normalize(m.file)}:{m.range.start.line + 1})
-                        </span>
-                      </text>
+                        </text>
+                      </box>
                     )}
                   </For>
                   <Show when={cluster.members.length > MAX_MEMBERS_PER_CLUSTER}>

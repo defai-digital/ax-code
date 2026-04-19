@@ -65,40 +65,48 @@ export function Footer() {
       <box gap={2} flexDirection="row" flexShrink={0}>
         <Switch>
           <Match when={store.welcome}>
-            <text fg={theme.text}>
-              Get started <span style={{ fg: theme.textMuted }}>/connect</span>
-            </text>
+            <box flexDirection="row" gap={0}>
+              <text fg={theme.text}>Get started </text>
+              <text fg={theme.textMuted}>/connect</text>
+            </box>
           </Match>
           <Match when={connected()}>
             <Show when={permissionLabel()}>
-              <text fg={theme.warning}>
-                <span style={{ fg: theme.warning }}>△</span> {permissionLabel()}
-              </text>
+              <box flexDirection="row" gap={0}>
+                <text fg={theme.warning}>△ </text>
+                <text fg={theme.warning}>{permissionLabel()}</text>
+              </box>
             </Show>
             <Show when={trustChip()}>
-              <text fg={theme.text}>
+              <box flexDirection="row" gap={0}>
                 <Switch>
                   <Match when={trustChip()?.type === "plans"}>
-                    <span style={{ fg: theme.warning }}>◆</span> {trustChip()?.label}
+                    <>
+                      <text fg={theme.warning}>◆ </text>
+                      <text fg={theme.text}>{trustChip()?.label}</text>
+                    </>
                   </Match>
                   <Match when={true}>
-                    <span style={{ fg: theme.success }}>◆</span> {trustChip()?.label}
+                    <>
+                      <text fg={theme.success}>◆ </text>
+                      <text fg={theme.text}>{trustChip()?.label}</text>
+                    </>
                   </Match>
                 </Switch>
-              </text>
+              </box>
             </Show>
             <Show when={mcp().connected}>
-              <text fg={theme.text}>
+              <box flexDirection="row" gap={0}>
                 <Switch>
                   <Match when={mcp().hasError}>
-                    <span style={{ fg: theme.error }}>⊙ </span>
+                    <text fg={theme.error}>⊙ </text>
                   </Match>
                   <Match when={true}>
-                    <span style={{ fg: theme.success }}>⊙ </span>
+                    <text fg={theme.success}>⊙ </text>
                   </Match>
                 </Switch>
-                {mcp().connected} MCP
-              </text>
+                <text fg={theme.text}>{mcp().connected} MCP</text>
+              </box>
             </Show>
             <text fg={theme.textMuted}>/status</text>
           </Match>

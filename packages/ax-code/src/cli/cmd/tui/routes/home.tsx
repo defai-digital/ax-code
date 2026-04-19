@@ -56,18 +56,21 @@ export function Home() {
   const Hint = (
     <Show when={connectedMcpCount() > 0}>
       <box flexShrink={0} flexDirection="row" gap={1}>
-        <text fg={theme.text}>
-          <Switch>
-            <Match when={mcpError()}>
-              <span style={{ fg: theme.error }}>•</span> mcp errors{" "}
-              <span style={{ fg: theme.textMuted }}>ctrl+x s</span>
-            </Match>
-            <Match when={true}>
-              <span style={{ fg: theme.success }}>•</span>{" "}
-              {Locale.pluralize(connectedMcpCount(), "{} mcp server", "{} mcp servers")}
-            </Match>
-          </Switch>
-        </text>
+        <Switch>
+          <Match when={mcpError()}>
+            <box flexDirection="row" gap={0}>
+              <text fg={theme.error}>•</text>
+              <text fg={theme.text}> mcp errors </text>
+              <text fg={theme.textMuted}>ctrl+x s</text>
+            </box>
+          </Match>
+          <Match when={true}>
+            <box flexDirection="row" gap={0}>
+              <text fg={theme.success}>•</text>
+              <text fg={theme.text}> {Locale.pluralize(connectedMcpCount(), "{} mcp server", "{} mcp servers")}</text>
+            </box>
+          </Match>
+        </Switch>
       </box>
     </Show>
   )
@@ -134,17 +137,17 @@ export function Home() {
         <text fg={theme.textMuted}>{directory()}</text>
         <box gap={1} flexDirection="row" flexShrink={0}>
           <Show when={mcp()}>
-            <text fg={theme.text}>
+            <box flexDirection="row" gap={0}>
               <Switch>
                 <Match when={mcpError()}>
-                  <span style={{ fg: theme.error }}>⊙ </span>
+                  <text fg={theme.error}>⊙ </text>
                 </Match>
                 <Match when={true}>
-                  <span style={{ fg: connectedMcpCount() > 0 ? theme.success : theme.textMuted }}>⊙ </span>
+                  <text fg={connectedMcpCount() > 0 ? theme.success : theme.textMuted}>⊙ </text>
                 </Match>
               </Switch>
-              {connectedMcpCount()} MCP
-            </text>
+              <text fg={theme.text}>{connectedMcpCount()} MCP</text>
+            </box>
             <text fg={theme.textMuted}>/status</text>
           </Show>
         </box>

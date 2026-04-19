@@ -7,17 +7,21 @@ import type { AssistantMessage, Session } from "@ax-code/sdk/v2"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { Flag } from "@/flag/flag"
-import { useTerminalDimensions } from "@tui/renderer-adapter/opentui"
+import { TextAttributes, useTerminalDimensions } from "@tui/renderer-adapter/opentui"
 import { Usage } from "./usage"
 import { sessionHeaderContextLabel, sessionHeaderLayout, sessionHeaderWorkspaceLabel } from "./header-view-model"
 
 const Title = (props: { session: Accessor<Session | undefined> }) => {
   const { theme } = useTheme()
   return (
-    <text fg={theme.text}>
-      <span style={{ bold: true }}>#</span>{" "}
-      <span style={{ bold: true }}>{props.session()?.title ?? "Loading session..."}</span>
-    </text>
+    <box flexDirection="row" gap={0}>
+      <text fg={theme.text} attributes={TextAttributes.BOLD}>
+        #
+      </text>
+      <text fg={theme.text} attributes={TextAttributes.BOLD}>
+        {props.session()?.title ?? "Loading session..."}
+      </text>
+    </box>
   )
 }
 
@@ -120,12 +124,12 @@ export function Header() {
                   paddingLeft={1}
                   paddingRight={1}
                 >
-                  <text fg={hover() === "parent" ? theme.text : theme.background}>
-                    Back to Parent{" "}
-                    <span style={{ fg: hover() === "parent" ? theme.textMuted : theme.background }}>
+                  <box flexDirection="row" gap={0}>
+                    <text fg={hover() === "parent" ? theme.text : theme.background}>Back to Parent </text>
+                    <text fg={hover() === "parent" ? theme.textMuted : theme.background}>
                       {keybind.print("session_parent")}
-                    </span>
-                  </text>
+                    </text>
+                  </box>
                 </box>
                 <box
                   onMouseOver={() => setHover("prev")}
@@ -133,9 +137,10 @@ export function Header() {
                   onMouseUp={() => command.trigger("session.child.previous")}
                   backgroundColor={hover() === "prev" ? theme.backgroundElement : theme.backgroundPanel}
                 >
-                  <text fg={theme.text}>
-                    Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
-                  </text>
+                  <box flexDirection="row" gap={0}>
+                    <text fg={theme.text}>Prev </text>
+                    <text fg={theme.textMuted}>{keybind.print("session_child_cycle_reverse")}</text>
+                  </box>
                 </box>
                 <box
                   onMouseOver={() => setHover("next")}
@@ -143,9 +148,10 @@ export function Header() {
                   onMouseUp={() => command.trigger("session.child.next")}
                   backgroundColor={hover() === "next" ? theme.backgroundElement : theme.backgroundPanel}
                 >
-                  <text fg={theme.text}>
-                    Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
-                  </text>
+                  <box flexDirection="row" gap={0}>
+                    <text fg={theme.text}>Next </text>
+                    <text fg={theme.textMuted}>{keybind.print("session_child_cycle")}</text>
+                  </box>
                 </box>
               </box>
             </box>

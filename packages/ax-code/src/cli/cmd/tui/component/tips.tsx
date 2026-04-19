@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For } from "solid-js"
+import { For } from "solid-js"
 import { DEFAULT_THEMES, useTheme } from "@tui/context/theme"
 
 const themeCount = Object.keys(DEFAULT_THEMES).length
@@ -36,14 +36,12 @@ export function Tips() {
 
   return (
     <box flexDirection="row" maxWidth="100%">
-      <text flexShrink={0} style={{ fg: theme.warning }}>
-        ● Tip{" "}
+      <text flexShrink={0} fg={theme.warning}>
+        ● Tip
       </text>
-      <text flexShrink={1}>
-        <For each={parts}>
-          {(part) => <span style={{ fg: part.highlight ? theme.text : theme.textMuted }}>{part.text}</span>}
-        </For>
-      </text>
+      <box flexDirection="row" flexShrink={1} flexWrap="wrap">
+        <For each={parts}>{(part) => <text fg={part.highlight ? theme.text : theme.textMuted}>{part.text}</text>}</For>
+      </box>
     </box>
   )
 }
