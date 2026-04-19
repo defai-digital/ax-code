@@ -17,6 +17,8 @@ import {
   dialogSelectVisibleHeight,
 } from "./dialog-select-view-model"
 
+const HIDDEN_SCROLLBAR_OPTIONS = { visible: false } as const
+
 export interface DialogSelectProps<T> {
   title: string
   placeholder?: string
@@ -252,7 +254,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         <scrollbox
           paddingLeft={1}
           paddingRight={1}
-          scrollbarOptions={{ visible: false }}
+          scrollbarOptions={HIDDEN_SCROLLBAR_OPTIONS}
           ref={(r: ScrollBoxRenderable) => (scroll = r)}
           maxHeight={height()}
         >

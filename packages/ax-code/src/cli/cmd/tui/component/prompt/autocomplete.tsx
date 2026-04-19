@@ -22,6 +22,8 @@ import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 import { resolveAutocompleteLayout, type AutocompleteVisibility } from "./autocomplete-layout"
 
+const HIDDEN_SCROLLBAR_OPTIONS = { visible: false } as const
+
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
   return hashIndex !== -1 ? input.substring(0, hashIndex) : input
@@ -647,7 +649,7 @@ export function Autocomplete(props: {
               ref={(r: ScrollBoxRenderable) => (scroll = r)}
               backgroundColor={theme.backgroundMenu}
               height={overlay().height}
-              scrollbarOptions={{ visible: false }}
+              scrollbarOptions={HIDDEN_SCROLLBAR_OPTIONS}
             >
               <Index
                 each={options()}

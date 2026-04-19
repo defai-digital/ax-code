@@ -4,6 +4,8 @@ import { createMemo, For, onMount, Show } from "solid-js"
 import { useDialog } from "../../ui/dialog"
 import { SessionGraph } from "./graph"
 
+const HIDDEN_SCROLLBAR_OPTIONS = { visible: false } as const
+
 export function DialogDreGraph(props: { sessionID: string }) {
   const dialog = useDialog()
   const { theme } = useTheme()
@@ -47,7 +49,7 @@ export function DialogDreGraph(props: { sessionID: string }) {
             Visual
           </text>
         </box>
-        <scrollbox maxHeight={10} paddingLeft={1} scrollbarOptions={{ visible: false }}>
+        <scrollbox maxHeight={10} paddingLeft={1} scrollbarOptions={HIDDEN_SCROLLBAR_OPTIONS}>
           <box flexDirection="column">
             <For each={lines()}>
               {(line, idx) => (
@@ -64,7 +66,7 @@ export function DialogDreGraph(props: { sessionID: string }) {
               Detail
             </text>
           </box>
-          <scrollbox maxHeight={12} paddingLeft={1} paddingRight={1} scrollbarOptions={{ visible: false }}>
+          <scrollbox maxHeight={12} paddingLeft={1} paddingRight={1} scrollbarOptions={HIDDEN_SCROLLBAR_OPTIONS}>
             <box flexDirection="column">
               <For each={items()}>
                 {(item) => (
