@@ -1,4 +1,4 @@
-import { createStore } from "solid-js/store"
+import { createSignal } from "solid-js"
 import { createSimpleContext } from "./helper"
 import type { PromptInfo } from "../component/prompt/history"
 
@@ -16,27 +16,27 @@ export type SessionRoute = {
 
 export type Route = HomeRoute | SessionRoute
 
+function parseInitialRoute(): Route {
+  const raw = process.env["AX_CODE_ROUTE"] || process.env["OPENCODE_ROUTE"]
+  if (!raw) return { type: "home" }
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return { type: "home" }
+  }
+}
+
 export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
   name: "Route",
   init: () => {
-    const [store, setStore] = createStore<Route>(
-      (() => {
-        const raw = process.env["AX_CODE_ROUTE"] || process.env["OPENCODE_ROUTE"]
-        if (!raw) return { type: "home" } as Route
-        try {
-          return JSON.parse(raw)
-        } catch {
-          return { type: "home" } as Route
-        }
-      })(),
-    )
+    const [route, setRoute] = createSignal<Route>(parseInitialRoute())
 
     return {
       get data() {
-        return store
+        return route()
       },
       navigate(route: Route) {
-        setStore(route)
+        setRoute(route)
       },
     }
   },

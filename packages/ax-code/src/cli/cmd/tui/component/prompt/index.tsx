@@ -69,6 +69,8 @@ export type PromptProps = {
   workspaceID?: string
   visible?: boolean
   disabled?: boolean
+  minimalChrome?: boolean
+  onSessionCreated?: (sessionID: string) => void
   onSubmit?: () => void
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
@@ -892,14 +894,18 @@ export function Prompt(props: PromptProps) {
     props.onSubmit?.()
 
     if (createdSession) {
-      setTimeout(() => {
-        // Yield once so the first submission completes before the session
-        // view mounts its heavier tree.
-        route.navigate({
-          type: "session",
-          sessionID,
-        })
-      }, 0)
+      if (props.onSessionCreated) {
+        props.onSessionCreated(sessionID)
+      } else {
+        setTimeout(() => {
+          // Yield once so the first submission completes before the session
+          // view mounts its heavier tree.
+          route.navigate({
+            type: "session",
+            sessionID,
+          })
+        }, 0)
+      }
     }
   }
   const exit = useExit()
@@ -1042,362 +1048,407 @@ export function Prompt(props: PromptProps) {
     const formatted = total >= 1000 ? (total / 1000).toFixed(1) + "K" : String(total)
     return pct !== undefined ? `${formatted} (${pct}%)` : formatted
   })
+  const minimalChrome = props.minimalChrome === true
+
+  function handleContentChange() {
+    const value = input.plainText
+    syncExtmarksWithPromptParts()
+    applyPromptEditorAction({
+      type: "input.changed",
+      value,
+    })
+    autocomplete?.onInput(value)
+  }
+
+  async function handleKeyDown(e: any) {
+    if (props.disabled) {
+      e.preventDefault()
+      return
+    }
+    if (blocksPromptInput(inputOwner())) {
+      e.preventDefault()
+      return
+    }
+    // Handle clipboard paste (Ctrl+V) - check for images first on Windows
+    // This is needed because Windows terminal doesn't properly send image data
+    // through bracketed paste, so we need to intercept the keypress and
+    // directly read from clipboard before the terminal handles it
+    if (keybind.match("input_paste", e)) {
+      const content = await Clipboard.read()
+      if (content?.mime.startsWith("image/")) {
+        e.preventDefault()
+        await pasteImage({
+          filename: "clipboard",
+          mime: content.mime,
+          content: content.data,
+        })
+        return
+      }
+      // If no image, let the default paste behavior continue
+    }
+    if (keybind.match("input_clear", e) && store.prompt.input !== "") {
+      clearPromptInput()
+      return
+    }
+    if (keybind.match("app_exit", e)) {
+      if (store.prompt.input === "") {
+        await exit()
+        // Don't preventDefault - let textarea potentially handle the event
+        e.preventDefault()
+        return
+      }
+    }
+    if (e.name === "!" && input.visualCursor.offset === 0) {
+      setStore("placeholder", Math.floor(Math.random() * SHELL_PLACEHOLDERS.length))
+      applyPromptEditorAction({ type: "mode.set", mode: "shell" })
+      e.preventDefault()
+      return
+    }
+    if (store.mode === "shell") {
+      if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
+        applyPromptEditorAction({ type: "prompt.cancelled" })
+        e.preventDefault()
+        return
+      }
+    }
+    if (store.mode === "normal") autocomplete?.onKeyDown(e)
+    if (!autocomplete?.visible) {
+      if (
+        (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
+        (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
+      ) {
+        const current = currentPromptEditorState()
+        const next = reducePromptEditor(current, {
+          type: keybind.match("history_previous", e) ? "history.previous" : "history.next",
+        })
+
+        if (next !== current) {
+          input.setText(next.input)
+          applyPromptEditorState(next)
+          restoreExtmarksFromParts(next.parts)
+          e.preventDefault()
+          if (next.historyCursor > current.historyCursor) input.cursorOffset = 0
+          if (next.historyCursor < current.historyCursor) input.cursorOffset = input.plainText.length
+        }
+        return
+      }
+
+      if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
+      if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
+        input.cursorOffset = input.plainText.length
+    }
+  }
+
+  async function handlePaste(event: PasteEvent) {
+    if (props.disabled) {
+      event.preventDefault()
+      return
+    }
+
+    // Normalize line endings at the boundary
+    // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
+    // Replace CRLF first, then any remaining CR
+    const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    const pastedContent = normalizedText.trim()
+    if (!pastedContent) {
+      command.trigger("prompt.paste")
+      return
+    }
+
+    // trim ' from the beginning and end of the pasted content. just
+    // ' and nothing else
+    const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
+    const isUrl = /^(https?):\/\//.test(filepath)
+    if (!isUrl) {
+      try {
+        const mime = Filesystem.mimeType(filepath)
+        const filename = path.basename(filepath)
+        // Handle SVG as raw text content, not as base64 image
+        if (mime === "image/svg+xml") {
+          event.preventDefault()
+          const content = await Filesystem.readText(filepath).catch(() => {})
+          if (content) {
+            pasteText(content, `[SVG: ${filename ?? "image"}]`)
+            return
+          }
+        }
+        if (mime.startsWith("image/")) {
+          event.preventDefault()
+          const content = await Filesystem.readArrayBuffer(filepath)
+            .then((buffer) => Buffer.from(buffer).toString("base64"))
+            .catch(() => {})
+          if (content) {
+            await pasteImage({
+              filename,
+              mime,
+              content,
+            })
+            return
+          }
+        }
+      } catch {}
+    }
+
+    const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
+    if ((lineCount >= 3 || pastedContent.length > 150) && !sync.data.config.experimental?.disable_paste_summary) {
+      event.preventDefault()
+      pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+      return
+    }
+
+    // Force layout update and render for the pasted content
+    setTimeout(() => {
+      // setTimeout is a workaround and needs to be addressed properly
+      if (!input || input.isDestroyed) return
+      input.getLayoutNode().markDirty()
+      renderer.requestRender()
+    }, 0)
+  }
+
+  function handleTextareaRef(r: TextareaRenderable) {
+    input = r
+    if (promptPartTypeId === 0) {
+      promptPartTypeId = input.extmarks.registerType("prompt-part")
+    }
+    props.ref?.(ref)
+    setTimeout(() => {
+      // setTimeout is a workaround and needs to be addressed properly
+      if (!input || input.isDestroyed) return
+      input.cursorColor = theme.text
+    }, 0)
+  }
+
+  function renderTextarea() {
+    if (minimalChrome) {
+      return (
+        <textarea
+          placeholder={placeholderText()}
+          textColor={keybind.leader ? theme.textMuted : theme.text}
+          focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
+          onContentChange={handleContentChange}
+          keyBindings={textareaKeybindings()}
+          onKeyDown={handleKeyDown}
+          onSubmit={submit}
+          onPaste={handlePaste}
+          ref={handleTextareaRef}
+          onMouseDown={(r: MouseEvent) => r.target?.focus()}
+          focusedBackgroundColor={theme.backgroundElement}
+          cursorColor={theme.text}
+          syntaxStyle={syntax()}
+        />
+      )
+    }
+
+    return (
+      <textarea
+        placeholder={placeholderText()}
+        textColor={keybind.leader ? theme.textMuted : theme.text}
+        focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
+        minHeight={1}
+        maxHeight={6}
+        onContentChange={handleContentChange}
+        keyBindings={textareaKeybindings()}
+        onKeyDown={handleKeyDown}
+        onSubmit={submit}
+        onPaste={handlePaste}
+        ref={handleTextareaRef}
+        onMouseDown={(r: MouseEvent) => r.target?.focus()}
+        focusedBackgroundColor={theme.backgroundElement}
+        cursorColor={theme.text}
+        syntaxStyle={syntax()}
+      />
+    )
+  }
 
   return (
     <>
-      <Autocomplete
-        sessionID={props.sessionID}
-        ref={(r) => (autocomplete = r)}
-        anchor={() => anchor}
-        input={() => input}
-        setPrompt={(cb) => {
-          setStore("prompt", produce(cb))
-        }}
-        setExtmark={(partIndex, extmarkId) => {
-          setStore("extmarkToPartIndex", (map: Map<number, number>) => {
-            const newMap = new Map(map)
-            newMap.set(extmarkId, partIndex)
-            return newMap
-          })
-        }}
-        value={store.prompt.input}
-        fileStyleId={fileStyleId}
-        agentStyleId={agentStyleId}
-        promptPartTypeId={() => promptPartTypeId}
-      />
+      {!minimalChrome && (
+        <Autocomplete
+          sessionID={props.sessionID}
+          ref={(r) => (autocomplete = r)}
+          anchor={() => anchor}
+          input={() => input}
+          setPrompt={(cb) => {
+            setStore("prompt", produce(cb))
+          }}
+          setExtmark={(partIndex, extmarkId) => {
+            setStore("extmarkToPartIndex", (map: Map<number, number>) => {
+              const newMap = new Map(map)
+              newMap.set(extmarkId, partIndex)
+              return newMap
+            })
+          }}
+          value={store.prompt.input}
+          fileStyleId={fileStyleId}
+          agentStyleId={agentStyleId}
+          promptPartTypeId={() => promptPartTypeId}
+        />
+      )}
       <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
-        <box
-          border={["left"]}
-          borderColor={highlight()}
-          customBorderChars={{
-            ...EmptyBorder,
-            vertical: "┃",
-            bottomLeft: "╹",
-          }}
-        >
-          <box
-            paddingLeft={2}
-            paddingRight={2}
-            paddingTop={1}
-            flexShrink={0}
-            backgroundColor={theme.backgroundElement}
-            flexGrow={1}
-          >
-            <textarea
-              placeholder={placeholderText()}
-              textColor={keybind.leader ? theme.textMuted : theme.text}
-              focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
-              minHeight={1}
-              maxHeight={6}
-              onContentChange={() => {
-                const value = input.plainText
-                syncExtmarksWithPromptParts()
-                applyPromptEditorAction({
-                  type: "input.changed",
-                  value,
-                })
-                autocomplete.onInput(value)
+        <Show
+          when={minimalChrome}
+          fallback={
+            <box
+              border={["left"]}
+              borderColor={highlight()}
+              customBorderChars={{
+                ...EmptyBorder,
+                vertical: "┃",
+                bottomLeft: "╹",
               }}
-              keyBindings={textareaKeybindings()}
-              onKeyDown={async (e) => {
-                if (props.disabled) {
-                  e.preventDefault()
-                  return
-                }
-                if (blocksPromptInput(inputOwner())) {
-                  e.preventDefault()
-                  return
-                }
-                // Handle clipboard paste (Ctrl+V) - check for images first on Windows
-                // This is needed because Windows terminal doesn't properly send image data
-                // through bracketed paste, so we need to intercept the keypress and
-                // directly read from clipboard before the terminal handles it
-                if (keybind.match("input_paste", e)) {
-                  const content = await Clipboard.read()
-                  if (content?.mime.startsWith("image/")) {
-                    e.preventDefault()
-                    await pasteImage({
-                      filename: "clipboard",
-                      mime: content.mime,
-                      content: content.data,
-                    })
-                    return
-                  }
-                  // If no image, let the default paste behavior continue
-                }
-                if (keybind.match("input_clear", e) && store.prompt.input !== "") {
-                  clearPromptInput()
-                  return
-                }
-                if (keybind.match("app_exit", e)) {
-                  if (store.prompt.input === "") {
-                    await exit()
-                    // Don't preventDefault - let textarea potentially handle the event
-                    e.preventDefault()
-                    return
-                  }
-                }
-                if (e.name === "!" && input.visualCursor.offset === 0) {
-                  setStore("placeholder", Math.floor(Math.random() * SHELL_PLACEHOLDERS.length))
-                  applyPromptEditorAction({ type: "mode.set", mode: "shell" })
-                  e.preventDefault()
-                  return
-                }
-                if (store.mode === "shell") {
-                  if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
-                    applyPromptEditorAction({ type: "prompt.cancelled" })
-                    e.preventDefault()
-                    return
-                  }
-                }
-                if (store.mode === "normal") autocomplete.onKeyDown(e)
-                if (!autocomplete.visible) {
-                  if (
-                    (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
-                    (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
-                  ) {
-                    const current = currentPromptEditorState()
-                    const next = reducePromptEditor(current, {
-                      type: keybind.match("history_previous", e) ? "history.previous" : "history.next",
-                    })
-
-                    if (next !== current) {
-                      input.setText(next.input)
-                      applyPromptEditorState(next)
-                      restoreExtmarksFromParts(next.parts)
-                      e.preventDefault()
-                      if (next.historyCursor > current.historyCursor) input.cursorOffset = 0
-                      if (next.historyCursor < current.historyCursor) input.cursorOffset = input.plainText.length
-                    }
-                    return
-                  }
-
-                  if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
-                  if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
-                    input.cursorOffset = input.plainText.length
-                }
-              }}
-              onSubmit={submit}
-              onPaste={async (event: PasteEvent) => {
-                if (props.disabled) {
-                  event.preventDefault()
-                  return
-                }
-
-                // Normalize line endings at the boundary
-                // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
-                // Replace CRLF first, then any remaining CR
-                const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-                const pastedContent = normalizedText.trim()
-                if (!pastedContent) {
-                  command.trigger("prompt.paste")
-                  return
-                }
-
-                // trim ' from the beginning and end of the pasted content. just
-                // ' and nothing else
-                const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
-                const isUrl = /^(https?):\/\//.test(filepath)
-                if (!isUrl) {
-                  try {
-                    const mime = Filesystem.mimeType(filepath)
-                    const filename = path.basename(filepath)
-                    // Handle SVG as raw text content, not as base64 image
-                    if (mime === "image/svg+xml") {
-                      event.preventDefault()
-                      const content = await Filesystem.readText(filepath).catch(() => {})
-                      if (content) {
-                        pasteText(content, `[SVG: ${filename ?? "image"}]`)
-                        return
-                      }
-                    }
-                    if (mime.startsWith("image/")) {
-                      event.preventDefault()
-                      const content = await Filesystem.readArrayBuffer(filepath)
-                        .then((buffer) => Buffer.from(buffer).toString("base64"))
-                        .catch(() => {})
-                      if (content) {
-                        await pasteImage({
-                          filename,
-                          mime,
-                          content,
-                        })
-                        return
-                      }
-                    }
-                  } catch {}
-                }
-
-                const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-                if (
-                  (lineCount >= 3 || pastedContent.length > 150) &&
-                  !sync.data.config.experimental?.disable_paste_summary
-                ) {
-                  event.preventDefault()
-                  pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
-                  return
-                }
-
-                // Force layout update and render for the pasted content
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
-                  input.getLayoutNode().markDirty()
-                  renderer.requestRender()
-                }, 0)
-              }}
-              ref={(r: TextareaRenderable) => {
-                input = r
-                if (promptPartTypeId === 0) {
-                  promptPartTypeId = input.extmarks.registerType("prompt-part")
-                }
-                props.ref?.(ref)
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
-                  input.cursorColor = theme.text
-                }, 0)
-              }}
-              onMouseDown={(r: MouseEvent) => r.target?.focus()}
-              focusedBackgroundColor={theme.backgroundElement}
-              cursorColor={theme.text}
-              syntaxStyle={syntax()}
-            />
-            <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
-              <text fg={highlight()}>
-                {store.mode === "shell"
-                  ? "Shell"
-                  : local.agent.icon(local.agent.current().name) +
-                    " " +
-                    (local.agent.current().displayName ?? Locale.titlecase(local.agent.current().name))}{" "}
-              </text>
-              <Show when={store.mode === "normal"}>
-                <box flexDirection="row" gap={1}>
-                  <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
-                    {local.model.parsed().model}
-                  </text>
-                  <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
-                  <Show when={showVariant()}>
-                    <text fg={theme.textMuted}>·</text>
-                    <text fg={theme.warning} attributes={TextAttributes.BOLD}>
-                      {local.model.variant.current()}
-                    </text>
-                  </Show>
-                </box>
-              </Show>
-            </box>
-          </box>
-        </box>
-        <box
-          height={1}
-          border={["left"]}
-          borderColor={highlight()}
-          customBorderChars={{
-            ...EmptyBorder,
-            vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
-          }}
-        >
-          <box
-            height={1}
-            border={["bottom"]}
-            borderColor={theme.backgroundElement}
-            customBorderChars={
-              theme.backgroundElement.a !== 0
-                ? {
-                    ...EmptyBorder,
-                    horizontal: "▀",
-                  }
-                : {
-                    ...EmptyBorder,
-                    horizontal: " ",
-                  }
-            }
-          />
-        </box>
-        <box flexDirection="row" justifyContent="space-between">
-          <Show when={status().type !== "idle"} fallback={<text />}>
-            <box flexDirection="row" gap={1} flexGrow={1}>
-              <box flexShrink={0} flexDirection="row" gap={1}>
-                <box marginLeft={1}>
-                  <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
-                    <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
-                  </Show>
-                </box>
-                <box flexDirection="row" gap={1} flexShrink={0}>
-                  <RetryStatusView status={status} />
-                  <Show when={status().type !== "retry" && statusLabel()}>
-                    <text fg={theme.textMuted}>{statusLabel()}</text>
-                  </Show>
-                </box>
-              </box>
-              <Show when={status().type === "retry"}>
-                <box flexGrow={1} />
-              </Show>
-              <box flexDirection="row" gap={0}>
-                <text fg={store.interrupt > 0 ? theme.primary : theme.text}>esc </text>
-                <text fg={store.interrupt > 0 ? theme.primary : theme.textMuted}>
-                  {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-                </text>
-              </box>
-            </box>
-          </Show>
-          <Show when={status().type !== "retry"}>
-            <box gap={2} flexDirection="row">
-              <text
-                fg={sync.data.smartLlm ? "magenta" : theme.text}
-                onMouseUp={() => command.trigger("app.toggle.smart_llm")}
+            >
+              <box
+                paddingLeft={2}
+                paddingRight={2}
+                paddingTop={1}
+                flexShrink={0}
+                backgroundColor={theme.backgroundElement}
+                flexGrow={1}
               >
-                {sync.data.smartLlm ? "SmartLLM \u2714" : "SmartLLM \u24E7"}
-              </text>
-              {sync.data.autonomous ? (
-                <box
-                  backgroundColor="yellow"
-                  paddingLeft={1}
-                  paddingRight={1}
-                  onMouseUp={() => command.trigger("app.toggle.autonomous")}
-                >
-                  <text fg="red">
-                    <b>Autonomous {"\u2714"}</b>
+                {renderTextarea()}
+                <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
+                  <text fg={highlight()}>
+                    {store.mode === "shell"
+                      ? "Shell"
+                      : local.agent.icon(local.agent.current().name) +
+                        " " +
+                        (local.agent.current().displayName ?? Locale.titlecase(local.agent.current().name))}{" "}
                   </text>
-                </box>
-              ) : (
-                <text fg={theme.success} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
-                  Autonomous {"\u24E7"}
-                </text>
-              )}
-              <text
-                fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}
-                onMouseUp={() => command.trigger("app.toggle.sandbox")}
-              >
-                {sync.data.isolation.mode === "full-access" ? "Sandbox \u24E7" : "Sandbox \u2714"}
-              </text>
-              <Switch>
-                <Match when={store.mode === "normal"}>
-                  <Show when={local.model.variant.list().length > 0}>
-                    <box flexDirection="row" gap={0}>
-                      <text fg={theme.text}>{keybind.print("variant_cycle")} </text>
-                      <text fg={theme.textMuted}>variants</text>
+                  <Show when={store.mode === "normal"}>
+                    <box flexDirection="row" gap={1}>
+                      <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                        {local.model.parsed().model}
+                      </text>
+                      <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                      <Show when={showVariant()}>
+                        <text fg={theme.textMuted}>·</text>
+                        <text fg={theme.warning} attributes={TextAttributes.BOLD}>
+                          {local.model.variant.current()}
+                        </text>
+                      </Show>
                     </box>
                   </Show>
-                  <box flexDirection="row" gap={0}>
-                    <text fg={theme.text}>{keybind.print("agent_cycle")} </text>
-                    <text fg={theme.textMuted}>agents</text>
-                  </box>
-                  <box flexDirection="row" gap={0}>
-                    <text fg={theme.text}>{keybind.print("command_list")} </text>
-                    <text fg={theme.textMuted}>commands</text>
-                  </box>
-                </Match>
-                <Match when={store.mode === "shell"}>
-                  <box flexDirection="row" gap={0}>
-                    <text fg={theme.text}>esc </text>
-                    <text fg={theme.textMuted}>exit shell mode</text>
-                  </box>
-                </Match>
-              </Switch>
+                </box>
+              </box>
             </box>
-          </Show>
-        </box>
+          }
+        >
+          {renderTextarea()}
+        </Show>
+        {!minimalChrome && (
+          <>
+            <box
+              height={1}
+              border={["left"]}
+              borderColor={highlight()}
+              customBorderChars={{
+                ...EmptyBorder,
+                vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
+              }}
+            >
+              <box
+                height={1}
+                border={["bottom"]}
+                borderColor={theme.backgroundElement}
+                customBorderChars={
+                  theme.backgroundElement.a !== 0
+                    ? {
+                        ...EmptyBorder,
+                        horizontal: "▀",
+                      }
+                    : {
+                        ...EmptyBorder,
+                        horizontal: " ",
+                      }
+                }
+              />
+            </box>
+            <box flexDirection="row" justifyContent="space-between">
+              <Show when={status().type !== "idle"} fallback={<text />}>
+                <box flexDirection="row" gap={1} flexGrow={1}>
+                  <box flexShrink={0} flexDirection="row" gap={1}>
+                    <box marginLeft={1}>
+                      <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
+                        <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                      </Show>
+                    </box>
+                    <box flexDirection="row" gap={1} flexShrink={0}>
+                      <RetryStatusView status={status} />
+                      <Show when={status().type !== "retry" && statusLabel()}>
+                        <text fg={theme.textMuted}>{statusLabel()}</text>
+                      </Show>
+                    </box>
+                  </box>
+                  <Show when={status().type === "retry"}>
+                    <box flexGrow={1} />
+                  </Show>
+                  <box flexDirection="row" gap={0}>
+                    <text fg={store.interrupt > 0 ? theme.primary : theme.text}>esc </text>
+                    <text fg={store.interrupt > 0 ? theme.primary : theme.textMuted}>
+                      {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
+                    </text>
+                  </box>
+                </box>
+              </Show>
+              <Show when={status().type !== "retry"}>
+                <box gap={2} flexDirection="row">
+                  <text
+                    fg={sync.data.smartLlm ? "magenta" : theme.text}
+                    onMouseUp={() => command.trigger("app.toggle.smart_llm")}
+                  >
+                    {sync.data.smartLlm ? "SmartLLM \u2714" : "SmartLLM \u24E7"}
+                  </text>
+                  {sync.data.autonomous ? (
+                    <box
+                      backgroundColor="yellow"
+                      paddingLeft={1}
+                      paddingRight={1}
+                      onMouseUp={() => command.trigger("app.toggle.autonomous")}
+                    >
+                      <text fg="red">
+                        <b>Autonomous {"\u2714"}</b>
+                      </text>
+                    </box>
+                  ) : (
+                    <text fg={theme.success} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
+                      Autonomous {"\u24E7"}
+                    </text>
+                  )}
+                  <text
+                    fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}
+                    onMouseUp={() => command.trigger("app.toggle.sandbox")}
+                  >
+                    {sync.data.isolation.mode === "full-access" ? "Sandbox \u24E7" : "Sandbox \u2714"}
+                  </text>
+                  <Switch>
+                    <Match when={store.mode === "normal"}>
+                      <Show when={local.model.variant.list().length > 0}>
+                        <box flexDirection="row" gap={0}>
+                          <text fg={theme.text}>{keybind.print("variant_cycle")} </text>
+                          <text fg={theme.textMuted}>variants</text>
+                        </box>
+                      </Show>
+                      <box flexDirection="row" gap={0}>
+                        <text fg={theme.text}>{keybind.print("agent_cycle")} </text>
+                        <text fg={theme.textMuted}>agents</text>
+                      </box>
+                      <box flexDirection="row" gap={0}>
+                        <text fg={theme.text}>{keybind.print("command_list")} </text>
+                        <text fg={theme.textMuted}>commands</text>
+                      </box>
+                    </Match>
+                    <Match when={store.mode === "shell"}>
+                      <box flexDirection="row" gap={0}>
+                        <text fg={theme.text}>esc </text>
+                        <text fg={theme.textMuted}>exit shell mode</text>
+                      </box>
+                    </Match>
+                  </Switch>
+                </box>
+              </Show>
+            </box>
+          </>
+        )}
       </box>
     </>
   )

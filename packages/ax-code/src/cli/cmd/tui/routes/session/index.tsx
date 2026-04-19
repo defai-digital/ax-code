@@ -21,7 +21,6 @@ import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { selectedForeground, useTheme } from "@tui/context/theme"
 import {
-  BoxRenderable,
   ScrollBoxRenderable,
   addDefaultParsers,
   MacOSScrollAccel,
@@ -94,8 +93,10 @@ import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
 import { Log } from "@/util/log"
 import { deferSessionMount } from "./deferred-mount"
+import { resolveTuiRendererName } from "../../renderer-choice"
 
 const log = Log.create({ service: "tui.session" })
+const SIMPLE_OPENTUI_SESSION_MESSAGES = resolveTuiRendererName() === "opentui"
 
 addDefaultParsers(parsers.parsers)
 
@@ -129,8 +130,19 @@ function use() {
 }
 
 export function Session() {
+  const route = useRouteData("session")
+  const sync = useSync()
   const { theme } = useTheme()
   const [ready, setReady] = createSignal(false)
+  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+  const latestAssistant = createMemo(() => messages().findLast((message) => message.role === "assistant") as
+    | AssistantMessage
+    | undefined)
+  const sessionSettled = createMemo(() => {
+    const assistant = latestAssistant()
+    if (!assistant) return false
+    return !!assistant.time.completed || !!assistant.error
+  })
 
   onMount(() => {
     // Yield once before mounting the full session tree so the first
@@ -143,15 +155,44 @@ export function Session() {
 
   return (
     <Show
-      when={ready()}
+      when={ready() && sessionSettled()}
       fallback={
-        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2}>
-          <text fg={theme.textMuted}>Loading session...</text>
-        </box>
+        <SessionTransitionView />
       }
     >
       <SessionView />
     </Show>
+  )
+}
+
+function SessionTransitionView() {
+  const route = useRouteData("session")
+  const sync = useSync()
+  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+  const lastUser = createMemo(() => messages().findLast((message) => message.role === "user") as UserMessage | undefined)
+  const lastUserText = createMemo(() => {
+    const message = lastUser()
+    if (!message) return ""
+    const parts = sync.data.part[message.id] ?? []
+    const textPart = parts.find((part): part is TextPart => part.type === "text" && !part.synthetic)
+    return textPart?.text ?? ""
+  })
+
+  return (
+    <box flexGrow={1} flexDirection="row">
+      <box width={2} flexShrink={0} />
+      <box flexGrow={1}>
+        <box height={1} flexShrink={0} />
+        <text>Loading session...</text>
+        <Show when={lastUserText().length > 0}>
+          <box height={1} flexShrink={0} />
+          <text>{lastUserText()}</text>
+        </Show>
+        <box height={1} flexShrink={0} />
+        <text>Waiting for model...</text>
+      </box>
+      <box width={2} flexShrink={0} />
+    </box>
   )
 }
 
@@ -256,20 +297,19 @@ function SessionView() {
     return new CustomSpeedScroll(3)
   })
 
-  const scrollTrackOptions = createMemo(() => ({
+  const scrollTrackOptions = {
     backgroundColor: theme.backgroundElement,
     foregroundColor: theme.border,
-  }))
+  }
 
-  const scrollViewportOptions = createMemo(() => ({
-    paddingRight: showScrollbar() ? 1 : 0,
-  }))
+  const scrollViewportOptions = {
+    paddingRight: 1,
+  }
 
-  const verticalScrollbarOptions = createMemo(() => ({
+  const verticalScrollbarOptions = {
     paddingLeft: 1,
-    visible: showScrollbar(),
-    trackOptions: scrollTrackOptions(),
-  }))
+    trackOptions: scrollTrackOptions,
+  }
 
   tracedEffect("session.route.syncSession", async () => {
     await sync.session
@@ -901,8 +941,8 @@ function SessionView() {
             </Show>
             <scrollbox
               ref={(r) => (scroll = r)}
-              viewportOptions={scrollViewportOptions()}
-              verticalScrollbarOptions={verticalScrollbarOptions()}
+              viewportOptions={showScrollbar() ? scrollViewportOptions : undefined}
+              verticalScrollbarOptions={showScrollbar() ? verticalScrollbarOptions : undefined}
               stickyScroll={true}
               stickyStart="bottom"
               flexGrow={1}
@@ -960,6 +1000,7 @@ function SessionView() {
                   promptRef.set(r)
                 }}
                 disabled={permissions().length > 0 || questions().length > 0}
+                minimalChrome
                 onSubmit={() => {
                   toBottom()
                 }}
@@ -1034,6 +1075,22 @@ function UserMessage(props: {
   )
 
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
+
+  if (SIMPLE_OPENTUI_SESSION_MESSAGES) {
+    return (
+      <>
+        <Show when={text()}>
+          <text>{text()?.text}</text>
+        </Show>
+        <For each={files()}>
+          {(file) => <text>{file.filename}</text>}
+        </For>
+        <Show when={compaction()}>
+          <text>Compaction</text>
+        </Show>
+      </>
+    )
+  }
 
   return (
     <>
@@ -1138,7 +1195,6 @@ function UserMessage(props: {
 }
 
 function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean }) {
-  const local = useLocal()
   const { theme } = useTheme()
   const sync = useSync()
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
@@ -1159,13 +1215,58 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
 
   const hasParts = createMemo(() => props.parts.length > 0)
   const isThinking = createMemo(() => !hasParts() && !final() && props.last)
+  const footerLabel = createMemo(() => {
+    const name =
+      sync.data.agent.find((a) => a.name === props.message.agent)?.displayName ?? Locale.titlecase(props.message.agent)
+    const items = [name, props.message.modelID]
+    if (duration()) items.push(Locale.duration(duration()))
+    if (props.message.error?.name === "MessageAbortedError") items.push("interrupted")
+    return `▣ ${items.join(" · ")}`
+  })
+
+  if (SIMPLE_OPENTUI_SESSION_MESSAGES) {
+    return (
+      <>
+        <Show when={isThinking()}>
+          <text>⋯ Thinking</text>
+        </Show>
+        <For each={props.parts}>
+          {(part, index) => {
+            const component = PART_MAPPING[part.type as keyof typeof PART_MAPPING]
+            return (
+              <Show when={component}>
+                <Dynamic
+                  last={index() === props.parts.length - 1}
+                  component={component}
+                  part={part as any}
+                  message={props.message}
+                />
+              </Show>
+            )
+          }}
+        </For>
+        <Show when={props.parts.some((x) => x.type === "tool" && x.tool === "task")}>
+          <text>{`${keybind.print("session_child_first")} view subagents`}</text>
+        </Show>
+        <Show when={props.message.error && props.message.error.name !== "MessageAbortedError"}>
+          <text>{props.message.error?.data.message}</text>
+        </Show>
+        <Show when={final() || props.message.error?.name === "MessageAbortedError"}>
+          <text>{footerLabel()}</text>
+        </Show>
+      </>
+    )
+  }
 
   return (
     <>
       <Show when={isThinking()}>
-        <box paddingLeft={3} marginTop={1} flexDirection="row" gap={1}>
-          <text fg={theme.textMuted}>⋯ Thinking</text>
-        </box>
+        <>
+          <box height={1} flexShrink={0} />
+          <box paddingLeft={3} flexDirection="row" gap={1}>
+            <text>⋯ Thinking</text>
+          </box>
+        </>
       </Show>
       <For each={props.parts}>
         {(part, index) => {
@@ -1191,45 +1292,29 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
         </box>
       </Show>
       <Show when={props.message.error && props.message.error.name !== "MessageAbortedError"}>
-        <box
-          border={["left"]}
-          paddingTop={1}
-          paddingBottom={1}
-          paddingLeft={2}
-          marginTop={1}
-          backgroundColor={theme.backgroundPanel}
-          customBorderChars={SplitBorder.customBorderChars}
-          borderColor={theme.error}
-        >
-          <text fg={theme.textMuted}>{props.message.error?.data.message}</text>
-        </box>
+        <>
+          <box height={1} flexShrink={0} />
+          <box
+            border={["left"]}
+            paddingTop={1}
+            paddingBottom={1}
+            paddingLeft={2}
+            backgroundColor={theme.backgroundPanel}
+            customBorderChars={SplitBorder.customBorderChars}
+            borderColor={theme.error}
+          >
+            <text fg={theme.textMuted}>{props.message.error?.data.message}</text>
+          </box>
+        </>
       </Show>
       <Switch>
-        <Match when={props.last || final() || props.message.error?.name === "MessageAbortedError"}>
-          <box paddingLeft={3}>
-            <box marginTop={1} flexDirection="row" gap={0} flexWrap="wrap">
-              <text
-                fg={
-                  props.message.error?.name === "MessageAbortedError"
-                    ? theme.textMuted
-                    : local.agent.color(props.message.agent)
-                }
-              >
-                ▣
-              </text>
-              <text fg={theme.text}>
-                {sync.data.agent.find((a) => a.name === props.message.agent)?.displayName ??
-                  Locale.titlecase(props.message.agent)}
-              </text>
-              <text fg={theme.textMuted}> · {props.message.modelID}</text>
-              <Show when={duration()}>
-                <text fg={theme.textMuted}> · {Locale.duration(duration())}</text>
-              </Show>
-              <Show when={props.message.error?.name === "MessageAbortedError"}>
-                <text fg={theme.textMuted}> · interrupted</text>
-              </Show>
+        <Match when={final() || props.message.error?.name === "MessageAbortedError"}>
+          <>
+            <box height={1} flexShrink={0} />
+            <box paddingLeft={3}>
+              <text>{footerLabel()}</text>
             </box>
-          </box>
+          </>
         </Match>
       </Switch>
     </>
@@ -1250,27 +1335,36 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
     // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
     return props.part.text.replace("[REDACTED]", "").trim()
   })
+  if (SIMPLE_OPENTUI_SESSION_MESSAGES) {
+    return (
+      <Show when={content() && ctx.showThinking()}>
+        <text>{`Thinking: ${content()}`}</text>
+      </Show>
+    )
+  }
   return (
     <Show when={content() && ctx.showThinking()}>
-      <box
-        id={"text-" + props.part.id}
-        paddingLeft={2}
-        marginTop={1}
-        flexDirection="column"
-        border={["left"]}
-        customBorderChars={SplitBorder.customBorderChars}
-        borderColor={theme.backgroundElement}
-      >
-        <code
-          filetype="markdown"
-          drawUnstyledText={false}
-          streaming={true}
-          syntaxStyle={subtleSyntax()}
-          content={"_Thinking:_ " + content()}
-          conceal={ctx.conceal()}
-          fg={theme.textMuted}
-        />
-      </box>
+      <>
+        <box height={1} flexShrink={0} />
+        <box
+          id={"text-" + props.part.id}
+          paddingLeft={2}
+          flexDirection="column"
+          border={["left"]}
+          customBorderChars={SplitBorder.customBorderChars}
+          borderColor={theme.backgroundElement}
+        >
+          <code
+            filetype="markdown"
+            drawUnstyledText={false}
+            streaming={true}
+            syntaxStyle={subtleSyntax()}
+            content={"_Thinking:_ " + content()}
+            conceal={ctx.conceal()}
+            fg={theme.textMuted}
+          />
+        </box>
+      </>
     </Show>
   )
 }
@@ -1278,33 +1372,53 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+  const content = createMemo(() => props.part.text.trim())
+  const plainText = createMemo(() => {
+    const value = content()
+    if (!value) return false
+    if (value.includes("\n")) return false
+    return !/[`*_#[\]>-]/.test(value)
+  })
+  if (SIMPLE_OPENTUI_SESSION_MESSAGES) {
+    return (
+      <Show when={content()}>
+        <text>{content()}</text>
+      </Show>
+    )
+  }
   return (
-    <Show when={props.part.text.trim()}>
-      <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
-        <Switch>
-          <Match when={Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
-            <markdown
-              syntaxStyle={syntax()}
-              streaming={true}
-              content={props.part.text.trim()}
-              conceal={ctx.conceal()}
-              fg={theme.markdownText}
-              bg={theme.background}
-            />
-          </Match>
-          <Match when={!Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
-            <code
-              filetype="markdown"
-              drawUnstyledText={false}
-              streaming={true}
-              syntaxStyle={syntax()}
-              content={props.part.text.trim()}
-              conceal={ctx.conceal()}
-              fg={theme.text}
-            />
-          </Match>
-        </Switch>
-      </box>
+    <Show when={content()}>
+      <>
+        <box height={1} flexShrink={0} />
+        <box id={"text-" + props.part.id} paddingLeft={3} flexShrink={0}>
+          <Switch>
+            <Match when={plainText()}>
+              <text>{content()}</text>
+            </Match>
+            <Match when={Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
+              <markdown
+                syntaxStyle={syntax()}
+                streaming={true}
+                content={content()}
+                conceal={ctx.conceal()}
+                fg={theme.markdownText}
+                bg={theme.background}
+              />
+            </Match>
+            <Match when={!Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
+              <code
+                filetype="markdown"
+                drawUnstyledText={false}
+                streaming={true}
+                syntaxStyle={syntax()}
+                content={content()}
+                conceal={ctx.conceal()}
+                fg={theme.text}
+              />
+            </Match>
+          </Switch>
+        </box>
+      </>
     </Show>
   )
 }
@@ -1487,7 +1601,6 @@ function InlineTool(props: {
   part: ToolPart
   onClick?: () => void
 }) {
-  const [margin, setMargin] = createSignal(0)
   const { theme } = useTheme()
   const ctx = use()
   const sync = useSync()
@@ -1519,7 +1632,6 @@ function InlineTool(props: {
 
   return (
     <box
-      marginTop={margin()}
       paddingLeft={3}
       onMouseOver={() => props.onClick && setHover(true)}
       onMouseOut={() => setHover(false)}
@@ -1527,44 +1639,17 @@ function InlineTool(props: {
         if (renderer.getSelection()?.getSelectedText()) return
         props.onClick?.()
       }}
-      renderBefore={function () {
-        const el = this as BoxRenderable
-        const parent = el.parent
-        if (!parent) {
-          return
-        }
-        if (el.height > 1) {
-          setMargin(1)
-          return
-        }
-        const children = parent.getChildren()
-        const index = children.indexOf(el)
-        const previous = children[index - 1]
-        if (!previous) {
-          setMargin(0)
-          return
-        }
-        if (previous.height > 1 || previous.id.startsWith("text-")) {
-          setMargin(1)
-          return
-        }
-      }}
     >
       <Switch>
         <Match when={props.spinner}>
           <Spinner color={fg()} children={props.children} />
         </Match>
         <Match when={true}>
-          <box paddingLeft={3} flexDirection="row" gap={1}>
-            <Show fallback={<text fg={fg()}>~ {props.pending}</text>} when={props.complete}>
-              <text fg={props.iconColor ?? fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
-                {props.icon}
-              </text>
-              <text fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
-                {props.children}
-              </text>
+          <text fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
+            <Show fallback={<>~ {props.pending}</>} when={props.complete}>
+              {props.icon} {props.children}
             </Show>
-          </box>
+          </text>
         </Match>
       </Switch>
       <Show when={error() && !denied()}>

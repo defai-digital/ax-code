@@ -10,6 +10,7 @@ const RENDER_LOOP_COOLDOWN_MS = 16
 
 type RendererLike = {
   requestRender: () => void
+  __axDisposeRenderWatchdog__?: (() => void) | undefined
 }
 
 type WatchdogState = {
@@ -141,10 +142,17 @@ export function installRenderWatchdog(renderer: RendererLike): () => void {
     original()
   }
 
-  return () => {
+  const dispose = () => {
     if (state.flushTimer) clearTimeout(state.flushTimer)
     renderer.requestRender = original
+    if (renderer.__axDisposeRenderWatchdog__ === dispose) renderer.__axDisposeRenderWatchdog__ = undefined
   }
+  renderer.__axDisposeRenderWatchdog__ = dispose
+  return dispose
+}
+
+export function disposeRenderWatchdog(renderer: RendererLike) {
+  renderer.__axDisposeRenderWatchdog__?.()
 }
 
 export const __internals = {

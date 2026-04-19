@@ -56,17 +56,17 @@ function EditBody(props: { request: PermissionRequest }) {
       wrapMode: "word",
     }),
   )
-  const verticalScrollbarOptions = createMemo(() => ({
+  const verticalScrollbarOptions = {
     trackOptions: {
       backgroundColor: theme.background,
       foregroundColor: theme.borderActive,
     },
-  }))
+  }
 
   return (
     <box flexDirection="column" gap={1}>
       <Show when={diff()}>
-        <scrollbox height="100%" verticalScrollbarOptions={verticalScrollbarOptions()}>
+        <scrollbox height="100%" verticalScrollbarOptions={verticalScrollbarOptions}>
           <SessionDiffRenderer
             diff={diff()}
             display={view()}

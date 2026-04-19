@@ -192,7 +192,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
-  renderer.disableStdoutInterception()
   // Guard against runaway requestRender() feedback loops in opentui. With
   // --debug enabled it also records tui.render.loopDetected stacks, but the
   // backpressure itself stays on in normal runs so render bursts cannot wedge

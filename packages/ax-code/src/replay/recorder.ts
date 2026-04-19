@@ -31,14 +31,23 @@ export namespace Recorder {
     const stepId = event.stepIndex?.toString() ?? null
     DiagnosticLog.record(event, { id, sequence: seq })
     queueMicrotask(() => {
-      EventQuery.insert({
-        id,
-        session_id: event.sessionID as SessionID,
-        step_id: stepId,
-        event_type: event.type,
-        event_data: event,
-        sequence: seq,
-      })
+      try {
+        EventQuery.insert({
+          id,
+          session_id: event.sessionID as SessionID,
+          step_id: stepId,
+          event_type: event.type,
+          event_data: event,
+          sequence: seq,
+        })
+      } catch (error) {
+        log.warn("failed to persist replay event", {
+          sessionID: event.sessionID,
+          eventType: event.type,
+          sequence: seq,
+          error,
+        })
+      }
     })
   }
 }

@@ -18,6 +18,7 @@ export function createTuiRenderOptions(
     exitOnCtrlC: false,
     useKittyKeyboard: {},
     autoFocus: false,
+    externalOutputMode: "passthrough",
     openConsoleOnError: false,
     consoleOptions: {
       keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
