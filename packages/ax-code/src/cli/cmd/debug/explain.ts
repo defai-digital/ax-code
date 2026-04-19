@@ -520,6 +520,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   const stateBursts: ProcessDebugRecord[] = []
   const effectLoops: ProcessDebugRecord[] = []
   const workerStalls: ProcessDebugRecord[] = []
+  const renderLoops: ProcessDebugRecord[] = []
 
   let threadStartedAt: number | undefined
   let nativeStartedAt: number | undefined
@@ -595,6 +596,9 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         break
       case "tui.worker.mainStalled":
         workerStalls.push(record)
+        break
+      case "tui.render.loopDetected":
+        renderLoops.push(record)
         break
     }
   }
@@ -790,6 +794,24 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       suggestedFix: `Open the label \`${worstLabel}\` — it matches a \`tracedEffect(label, fn)\` call site in the TUI source. Audit what the effect writes and which of its reads are derived from those writes. Stabilize the write (skip if value is deep-equal to prior) or narrow the dependency.`,
       riskLevel: "high",
       occurrences: effectLoops.length,
+    })
+  }
+
+  if (renderLoops.length > 0) {
+    const latest = renderLoops[renderLoops.length - 1]
+    const renders = asNumber(latest?.data.renders) ?? 0
+    const windowMs = asNumber(latest?.data.windowMs) ?? 1_000
+    issues.push({
+      severity: "critical",
+      category: "TUI",
+      title: "TUI renderer is repainting in a tight loop",
+      rootCause: `opentui's renderer.requestRender() was called ${renders} times in ${windowMs}ms (recorded ${renderLoops.length} time${renderLoops.length === 1 ? "" : "s"}). A render rate that high implies a callback above the renderer is requesting paints synchronously without yielding — likely a SolidJS render-side effect that mutates a signal it depends on, or a hot loop inside opentui's own event pipeline.`,
+      impact:
+        "The main thread spins inside the render→paint→render path. Solid effects, store dispatches, and IPC are all starved.",
+      suggestedFix:
+        "If a `tui.effect.loopDetected` record appears alongside, the labeled effect is the trigger. Otherwise the loop is below SolidJS — sample the process and trace what's calling `requestRender` synchronously, or temporarily wrap more components' render bodies with diagnostic logging.",
+      riskLevel: "high",
+      occurrences: renderLoops.length,
     })
   }
 

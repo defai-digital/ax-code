@@ -279,6 +279,31 @@ describe("debug explain replay hang analysis", () => {
     expect(issue?.rootCause).toContain("2026-04-18T12:00:00.500Z")
   })
 
+  test("classifies opentui render loops", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.threadStarted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:02.000Z",
+        eventType: "tui.render.loopDetected",
+        data: { renders: 412, windowMs: 1000, windowStartedAt: "2026-04-18T12:00:01.000Z" },
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:10.000Z"))
+
+    const issue = issues.find((i) => i.title.includes("renderer is repainting"))
+    expect(issue).toBeTruthy()
+    expect(issue?.severity).toBe("critical")
+    expect(issue?.rootCause).toContain("412")
+  })
+
   test("does not flag heartbeat stall when tui stopped normally", () => {
     const lines = [
       JSON.stringify({

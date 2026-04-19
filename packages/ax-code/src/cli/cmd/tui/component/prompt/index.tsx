@@ -39,7 +39,9 @@ import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
+import { tracedEffect } from "@tui/debug/effect-tracer"
 import { Usage } from "../../routes/session/usage"
+import { createAutoSubmitSessionRoute } from "../../routes/session/initial-prompt"
 import { footerSessionStatusLabel } from "../../routes/session/footer-view-model"
 import { Log } from "@/util/log"
 import { isPromptExitCommand, resolvePromptSlashDispatch } from "./view-model"
@@ -279,7 +281,8 @@ export function Prompt(props: PromptProps) {
     input.clear()
   }
 
-  createEffect(
+  tracedEffect(
+    "prompt.placeholderOnSessionChange",
     on(
       () => props.sessionID,
       () => {
@@ -304,7 +307,7 @@ export function Prompt(props: PromptProps) {
   // user-initiated switches (Tab/dialog) vs auto-routed or default agent.
   let syncedSessionID: string | undefined
   let syncedAgentName: string | undefined = local.agent.current().name
-  createEffect(() => {
+  tracedEffect("prompt.syncAgentModelOnSession", () => {
     const sessionID = props.sessionID
     const msg = lastUserMessage()
 
@@ -775,6 +778,16 @@ export function Prompt(props: PromptProps) {
       }
 
       sessionID = res.data.id
+
+      // Keep the first prompt inside the session route so the initial
+      // submission does not race the home -> session transition.
+      route.navigate(
+        createAutoSubmitSessionRoute({
+          sessionID,
+          initialPrompt: currentPrompt,
+        }),
+      )
+      return
     }
 
     const messageID = MessageID.ascending()
@@ -849,15 +862,6 @@ export function Prompt(props: PromptProps) {
     history.append(currentPrompt)
     commitPromptSubmission()
     props.onSubmit?.()
-
-    // temporary hack to make sure the message is sent
-    if (!props.sessionID)
-      setTimeout(() => {
-        route.navigate({
-          type: "session",
-          sessionID,
-        })
-      }, 50)
   }
   const exit = useExit()
 

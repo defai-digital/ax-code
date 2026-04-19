@@ -16,6 +16,7 @@ import {
 import { Dynamic } from "solid-js/web"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
+import { tracedEffect } from "@tui/debug/effect-tracer"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { selectedForeground, useTheme } from "@tui/context/theme"
@@ -93,6 +94,7 @@ import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
 import { Log } from "@/util/log"
 import { deferSessionMount } from "./deferred-mount"
+import { initialPromptAutoSubmitKey, shouldAutoSubmitInitialPrompt } from "./initial-prompt"
 
 const log = Log.create({ service: "tui.session" })
 
@@ -231,7 +233,7 @@ function SessionView() {
     return new CustomSpeedScroll(3)
   })
 
-  createEffect(async () => {
+  tracedEffect("session.route.syncSession", async () => {
     await sync.session
       .sync(route.sessionID)
       .then(() => {
@@ -270,6 +272,7 @@ function SessionView() {
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
+  const [promptRevision, setPromptRevision] = createSignal(0)
   const keybind = useKeybind()
   const dialog = useDialog()
   const renderer = useRenderer()
@@ -277,7 +280,7 @@ function SessionView() {
   // Allow exit when in child session (prompt is hidden)
   const exit = useExit()
 
-  createEffect(() => {
+  tracedEffect("session.route.exitMessage", () => {
     const title = Locale.truncate(session()?.title ?? "", 50)
     const pad = (text: string) => text.padEnd(10, " ")
     const weak = (text: string) => UI.Style.TEXT_DIM + pad(text) + UI.Style.TEXT_NORMAL
@@ -328,6 +331,56 @@ function SessionView() {
   }
 
   const local = useLocal()
+  let autoSubmittedInitialPromptKey: string | undefined
+
+  tracedEffect(
+    "session.route.restoreInitialPrompt",
+    on(
+      () => [route.sessionID, route.initialPrompt?.input, promptRevision()] as const,
+      () => {
+        if (!route.initialPrompt) return
+        promptRef.current?.set(route.initialPrompt)
+      },
+    ),
+  )
+
+  tracedEffect(
+    "session.route.autoSubmitInitialPrompt",
+    on(
+      () =>
+        [
+          route.sessionID,
+          route.autoSubmit === true,
+          route.initialPrompt?.input,
+          promptRevision(),
+          sync.ready,
+          local.model.ready,
+        ] as const,
+      ([sessionID, autoSubmit, initialPromptInput, _promptRevision, syncReady, modelReady]) => {
+        const currentInput = promptRef.current?.current.input
+        if (
+          !shouldAutoSubmitInitialPrompt({
+            sessionID,
+            autoSubmit,
+            initialPromptInput,
+            currentInput,
+            syncReady,
+            modelReady,
+            submittedKey: autoSubmittedInitialPromptKey,
+          })
+        ) {
+          return
+        }
+
+        autoSubmittedInitialPromptKey = initialPromptAutoSubmitKey({
+          sessionID,
+          autoSubmit,
+          initialPromptInput,
+        })
+        promptRef.current?.submit()
+      },
+    ),
+  )
 
   function moveFirstChild() {
     const next = firstChildID(children())
@@ -816,7 +869,7 @@ function SessionView() {
   const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID()))
 
   // snap to bottom when session changes
-  createEffect(on(() => route.sessionID, toBottom))
+  tracedEffect("session.route.scrollToBottom", on(() => route.sessionID, toBottom))
 
   return (
     <context.Provider
@@ -939,10 +992,7 @@ function SessionView() {
                 ref={(r) => {
                   prompt = r
                   promptRef.set(r)
-                  // Apply initial prompt when prompt component mounts (e.g., from fork)
-                  if (route.initialPrompt) {
-                    r.set(route.initialPrompt)
-                  }
+                  setPromptRevision((value) => value + 1)
                 }}
                 disabled={permissions().length > 0 || questions().length > 0}
                 onSubmit={() => {

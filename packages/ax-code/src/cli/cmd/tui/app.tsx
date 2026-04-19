@@ -17,6 +17,8 @@ import {
   onCleanup,
 } from "solid-js"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
+import { tracedEffect } from "@tui/debug/effect-tracer"
+import { installRenderWatchdog } from "@tui/debug/render-watchdog"
 import { Flag } from "@/flag/flag"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
@@ -191,6 +193,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
   renderer.disableStdoutInterception()
+  // Counts opentui requestRender calls per second; fires
+  // tui.render.loopDetected if a render loop happens outside the SolidJS
+  // reactive system. No-op when --debug is off.
+  const disposeRenderWatchdog = installRenderWatchdog(renderer)
+  onCleanup(disposeRenderWatchdog)
   const dialog = useDialog()
   const local = useLocal()
   const kv = useKV()
@@ -352,7 +359,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
 
   // Update terminal window title based on current route and session
-  createEffect(() => {
+  tracedEffect(() => {
     if (!terminalTitleEnabled() || Flag.AX_CODE_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {
@@ -398,7 +405,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
 
   let continued = false
-  createEffect(() => {
+  tracedEffect("app.continueAutoNavigate", () => {
     // When using -c, session list is loaded in blocking phase, so we can navigate at "partial"
     if (continued || sync.status === "loading" || !args.continue) return
     const match = sync.data.session
@@ -424,7 +431,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // (session list loads in non-blocking phase for --session, so we must wait for "complete"
   // to avoid a race where reconcile overwrites the newly forked session)
   let forked = false
-  createEffect(() => {
+  tracedEffect("app.forkOnSession", () => {
     if (forked || sync.status !== "complete" || !args.sessionID || !args.fork) return
     forked = true
     sdk.client.session
@@ -444,7 +451,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       })
   })
 
-  createEffect(
+  tracedEffect(
+    "app.showProviderOnEmpty",
     on(
       () =>
         sync.status === "complete" &&

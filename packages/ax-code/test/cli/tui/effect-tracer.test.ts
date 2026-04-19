@@ -59,4 +59,24 @@ describe("effect-tracer loop detector", () => {
     observe(state, base + 49 + LOOP_WINDOW_MS + 1)
     expect(state.window.length).toBe(1)
   })
+
+  test("tracedEffect accepts both labeled and unlabeled overloads without throwing", async () => {
+    // Solid's reactive scheduler doesn't run inside `bun test` the same way
+    // it does at runtime (no render context), so this test only verifies the
+    // overload signatures are wired correctly and don't throw on call. The
+    // observe/burst/throttle behavior is covered by the unit tests above.
+    const { tracedEffect, tracedMemo } = await import("../../../src/cli/cmd/tui/debug/effect-tracer")
+    const { createRoot } = await import("solid-js")
+    let dispose: () => void = () => {}
+    expect(() =>
+      createRoot((d) => {
+        dispose = d
+        tracedEffect("test.labeled", () => {})
+        tracedEffect(() => {})
+        tracedMemo("test.labeled.memo", () => 1)
+        tracedMemo(() => 1)
+      }),
+    ).not.toThrow()
+    dispose()
+  })
 })
