@@ -638,52 +638,68 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         .list({ start: start })
         .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
 
-      // Only keep the continue-session lookup on the blocking path. The
-      // home route can render immediately with empty provider/agent/config
-      // state and hydrate those details afterward.
+      // v2.24.11: revert the v2.23.0 non-blocking-provider-load change.
+      // v2.23.0 moved providers/agents/config/command to the non-blocking
+      // path so the home route could render before these finished loading.
+      // In practice, though, each promise resolves at a different moment a
+      // few seconds in, and the independent setStore calls fan out into
+      // overlapping reactive cascades through Prompt, Autocomplete, and the
+      // sidebar. The render-watchdog captured the final cascade's tail —
+      // but the real trigger is the staggered provider/agent/config
+      // arrivals landing on top of whatever user input was in-flight.
+      //
+      // Collect them upfront as blocking (the v2.22 behaviour) and settle
+      // their setStore writes inside one batch so the TUI mounts with
+      // stable provider/agent/config state. The TUI shows its "Loading…"
+      // frame for a beat longer; in exchange the post-mount reactive graph
+      // is quiescent and the first-input cascade has nothing to race with.
       const providersPromise = sdk.client.config.providers({}, { throwOnError: true })
       const providerListPromise = sdk.client.provider.list({}, { throwOnError: true })
       const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
       const configPromise = sdk.client.config.get({}, { throwOnError: true })
       const commandPromise = sdk.client.command.list()
-      const blockingRequests: Promise<unknown>[] = args.continue ? [sessionListPromise] : []
+      const blockingRequests: Promise<unknown>[] = [
+        providersPromise,
+        providerListPromise,
+        agentsPromise,
+        configPromise,
+        commandPromise,
+        ...(args.continue ? [sessionListPromise] : []),
+      ]
 
       await Promise.all(blockingRequests)
-        .then(() => {
+        .then(async () => {
+          const [providers, providerList, agents, config, commands] = await Promise.all([
+            providersPromise.then((x) => x.data ?? { providers: [], default: {} }),
+            providerListPromise.then((x) => x.data ?? store.provider_next),
+            agentsPromise.then((x) => x.data ?? []),
+            configPromise.then((x) => x.data ?? store.config),
+            commandPromise.then((x) => x.data ?? []),
+          ])
+          batch(() => {
+            setStore("provider", reconcile(providers.providers))
+            setStore("provider_default", reconcile(providers.default))
+            setStore("provider_loaded", true)
+            setStore("provider_failed", false)
+            setStore("provider_next", reconcile(providerList))
+            setStore("agent", reconcile(agents))
+            setStore("config", reconcile(config))
+            setStore("command", reconcile(commands))
+          })
           if (args.continue) {
-            return sessionListPromise.then((sessions) => {
-              hydrateTuiState({
-                session: mergeSorted(tuiState.getSnapshot().session, sessions),
-              })
+            const sessions = await sessionListPromise
+            hydrateTuiState({
+              session: mergeSorted(tuiState.getSnapshot().session, sessions),
             })
           }
         })
         .then(() => {
           if (store.status === "loading") setStore("status", "partial")
-          // non-blocking — each call is individually guarded so one failure
-          // doesn't prevent the rest from completing or status from advancing.
+          // non-blocking — remaining per-subsystem fetches. Provider /
+          // agent / config / command are already applied above in one
+          // batch, so nothing here can cause the staggered-arrival
+          // cascade that v2.24.x chased.
           Promise.allSettled([
-            providersPromise
-              .then((x) => x.data ?? { providers: [], default: {} })
-              .then((providers) => {
-                batch(() => {
-                  setStore("provider", reconcile(providers.providers))
-                  setStore("provider_default", reconcile(providers.default))
-                  setStore("provider_loaded", true)
-                  setStore("provider_failed", false)
-                })
-              })
-              .catch((error) => {
-                batch(() => {
-                  setStore("provider_loaded", true)
-                  setStore("provider_failed", true)
-                })
-                throw error
-              }),
-            providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
-            agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
-            configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
-            commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
             ...(args.continue
               ? []
               : [
