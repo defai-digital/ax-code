@@ -217,6 +217,30 @@ function SessionView() {
     if (sidebar() === "auto" && wide()) return true
     return false
   })
+
+  // Subagent task counter — was previously declared inside an inline IIFE in
+  // the JSX body, which caused Solid to create a fresh `createMemo` (and a
+  // fresh child reactive root) on every parent re-render. The v2.24.6
+  // render-watchdog capture showed exactly that pattern wedging the main
+  // thread on the first session navigation:
+  //     createMemo → createRoot → insert3 → _insertNode → requestRender
+  // Hoisting to the top of the component makes the memo a single stable
+  // reactive node, so re-renders reuse it instead of accumulating new roots.
+  const subagentTasks = createMemo(() => {
+    const msgs = sync.data.message[route.sessionID] ?? []
+    let running = 0
+    let done = 0
+    for (const msg of msgs) {
+      const parts = sync.data.part[msg.id] ?? []
+      for (const part of parts) {
+        if (part.type !== "tool" || (part as any).tool !== "task") continue
+        const s = (part as any).state?.status
+        if (s === "running" || s === "pending") running++
+        else if (s === "completed") done++
+      }
+    }
+    return { running, done, total: running + done }
+  })
   const showTimestamps = createMemo(() => timestamps() === "show")
   const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() && wide() ? 42 : 0) - 4)
 
@@ -842,36 +866,19 @@ function SessionView() {
             <Show when={showHeader() && (!sidebarVisible() || !wide())}>
               <Header />
             </Show>
-            {(() => {
-              const tasks = createMemo(() => {
-                const msgs = sync.data.message[route.sessionID] ?? []
-                let running = 0
-                let done = 0
-                for (const msg of msgs) {
-                  const parts = sync.data.part[msg.id] ?? []
-                  for (const part of parts) {
-                    if (part.type !== "tool" || (part as any).tool !== "task") continue
-                    const s = (part as any).state?.status
-                    if (s === "running" || s === "pending") running++
-                    else if (s === "completed") done++
-                  }
-                }
-                return { running, done, total: running + done }
-              })
-              return (
-                <Show when={tasks().total > 0}>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={theme.textMuted}>
-                      {tasks().total} subagent{tasks().total !== 1 ? "s" : ""}
-                      {tasks().running > 0 ? (
-                        <span style={{ fg: theme.primary }}> · {tasks().running} active</span>
-                      ) : null}
-                      {tasks().done > 0 ? <span style={{ fg: theme.success }}> · {tasks().done} done</span> : null}
-                    </text>
-                  </box>
-                </Show>
-              )
-            })()}
+            <Show when={subagentTasks().total > 0}>
+              <box flexShrink={0} paddingLeft={1}>
+                <text fg={theme.textMuted}>
+                  {subagentTasks().total} subagent{subagentTasks().total !== 1 ? "s" : ""}
+                  {subagentTasks().running > 0 ? (
+                    <span style={{ fg: theme.primary }}> · {subagentTasks().running} active</span>
+                  ) : null}
+                  {subagentTasks().done > 0 ? (
+                    <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
+                  ) : null}
+                </text>
+              </box>
+            </Show>
             <scrollbox
               ref={(r) => (scroll = r)}
               viewportOptions={{
