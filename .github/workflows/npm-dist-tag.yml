@@ -56,8 +56,8 @@ jobs:
             "ax-code-linux-x64-musl"
             "ax-code-linux-x64-baseline"
             "ax-code-linux-x64-baseline-musl"
-            "ax-code-win32-arm64"
-            "ax-code-win32-x64"
+            "ax-code-windows-arm64"
+            "ax-code-windows-x64"
           )
 
           retag() {
