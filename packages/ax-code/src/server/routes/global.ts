@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
 import z from "zod"
+import semver from "semver"
 import { Bus } from "../../bus"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
@@ -242,7 +243,11 @@ export const GlobalRoutes = lazy(() =>
         if (method === "unknown") {
           return c.json({ success: false, error: "Unknown installation method" }, 400)
         }
-        const target = c.req.valid("json").target || (await Installation.latest(method))
+        const rawTarget = c.req.valid("json").target || (await Installation.latest(method))
+        const target = semver.valid(semver.coerce(rawTarget))
+        if (!target) {
+          return c.json({ success: false, error: `Invalid version string: ${rawTarget}` }, 400)
+        }
         const result = await Installation.upgrade(method, target)
           .then(() => ({ success: true as const, version: target }))
           .catch((e) => ({ success: false as const, error: e instanceof Error ? e.message : String(e) }))

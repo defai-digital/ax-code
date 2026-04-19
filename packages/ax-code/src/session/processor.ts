@@ -656,6 +656,18 @@ export namespace SessionProcessor {
                   part.text = part.text.trimEnd()
                   if (!part.time?.end) part.time = { start: part.time?.start ?? Date.now(), end: Date.now() }
                 }
+                // Persist finalized in-flight parts so they are not lost when
+                // compaction breaks the loop (the catch path handles errors
+                // separately; the break path previously skipped this).
+                const compactionParts = [
+                  ...(currentText ? [currentText] : []),
+                  ...Object.values(reasoningMap),
+                ]
+                if (compactionParts.length > 0) {
+                  Database.transaction(() => {
+                    for (const p of compactionParts) Session.updatePart.force(p)
+                  })
+                }
                 break
               }
             }

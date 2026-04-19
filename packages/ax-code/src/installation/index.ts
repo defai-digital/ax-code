@@ -164,8 +164,35 @@ export namespace Installation {
 
         const upgradeCurl = Effect.fnUntraced(
           function* (target: string) {
-            const response = yield* httpOk.execute(HttpClientRequest.get("https://raw.githubusercontent.com/defai-digital/ax-code/main/install"))
+            const scriptUrl = "https://raw.githubusercontent.com/defai-digital/ax-code/main/install"
+            const sha256Url = `${scriptUrl}.sha256`
+            const response = yield* httpOk.execute(HttpClientRequest.get(scriptUrl))
             const body = yield* response.text
+            // Verify SHA256 integrity sidecar when available. A hash mismatch
+            // is a hard failure; a missing sidecar file only warns and proceeds
+            // so existing deployments without a .sha256 file keep working.
+            yield* Effect.promise(async () => {
+              try {
+                const sha256Res = await fetch(sha256Url)
+                if (!sha256Res.ok) {
+                  log.warn("install script .sha256 sidecar not found — skipping integrity check")
+                  return
+                }
+                const expected = (await sha256Res.text()).trim().split(/\s+/)[0]
+                if (!expected) return
+                const bytes = new TextEncoder().encode(body)
+                const hashBuffer = await crypto.subtle.digest("SHA-256", bytes)
+                const actual = Array.from(new Uint8Array(hashBuffer))
+                  .map((b) => b.toString(16).padStart(2, "0"))
+                  .join("")
+                if (actual !== expected)
+                  throw new Error(`Install script integrity check failed: expected ${expected}, got ${actual}`)
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e)
+                if (msg.startsWith("Install script integrity check failed")) throw e
+                log.warn("could not verify install script integrity", { error: e })
+              }
+            })
             const bodyBytes = new TextEncoder().encode(body)
             const proc = ChildProcess.make("bash", [], {
               stdin: Stream.make(bodyBytes),

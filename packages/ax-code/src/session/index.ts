@@ -668,8 +668,11 @@ export namespace Session {
 
   export const remove = fn(SessionID.zod, async (sessionID) => {
     const session = await get(sessionID)
+    // Collect descendants and delete them inside the same transaction to
+    // avoid a TOCTOU window where a new child session created between
+    // collection and deletion becomes an orphan.
     const allDescendants: Info[] = []
-    Database.use((db) => {
+    Database.transaction((db) => {
       const ids = [sessionID]
       while (ids.length > 0) {
         const parentID = ids.pop()!
@@ -685,12 +688,6 @@ export namespace Session {
           ids.push(next.id)
         }
       }
-    })
-    const items = [...allDescendants, session]
-    for (const item of items) {
-      await unshare(item.id).catch((e) => log.warn("session unshare failed", { sessionID: item.id, error: e }))
-    }
-    Database.transaction((db) => {
       for (const desc of allDescendants) {
         db.delete(SessionTable).where(eq(SessionTable.id, desc.id)).run()
         Database.effect(() => Bus.publish(Event.Deleted, { info: desc }))
@@ -698,6 +695,10 @@ export namespace Session {
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
       Database.effect(() => Bus.publish(Event.Deleted, { info: session }))
     })
+    const items = [...allDescendants, session]
+    for (const item of items) {
+      await unshare(item.id).catch((e) => log.warn("session unshare failed", { sessionID: item.id, error: e }))
+    }
     for (const desc of allDescendants) {
       SelfCorrection.reset(desc.id)
       await SessionPrompt.cancel(desc.id).catch(() => {})
@@ -886,7 +887,7 @@ export namespace Session {
       // Also, Anthropic's totalTokens excludes cache tokens, so we add them back.
       const adjustedInputTokens = anthropicMeta
         ? safe(inputTokens)
-        : safe(inputTokens - cacheReadInputTokens - cacheWriteInputTokens)
+        : Math.max(0, safe(inputTokens - cacheReadInputTokens - cacheWriteInputTokens))
 
       const rawTotal = anthropicMeta
         ? (input.usage.totalTokens ?? 0) + cacheReadInputTokens + cacheWriteInputTokens

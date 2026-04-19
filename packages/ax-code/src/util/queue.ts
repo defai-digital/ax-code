@@ -27,12 +27,15 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
   async next(): Promise<T> {
     if (this.queue.length > 0) {
       const item = this.queue.shift()!
-      if (item === CLOSED) return new Promise(() => {})
+      if (item === CLOSED) throw new Error("AsyncQueue is closed")
       this.count--
       return item
     }
-    return new Promise<T>((resolve) =>
-      this.resolvers.push((v) => { if (v !== CLOSED) resolve(v as T) }),
+    return new Promise<T>((resolve, reject) =>
+      this.resolvers.push((v) => {
+        if (v === CLOSED) reject(new Error("AsyncQueue is closed"))
+        else resolve(v as T)
+      }),
     )
   }
 

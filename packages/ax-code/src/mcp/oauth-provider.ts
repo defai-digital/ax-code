@@ -13,6 +13,17 @@ const log = Log.create({ service: "mcp.oauth" })
 const OAUTH_CALLBACK_PORT = 19876
 const OAUTH_CALLBACK_PATH = "/mcp/oauth/callback"
 
+// Tracks the port actually bound by the callback server. Starts as the
+// fixed default for the port-probe used by isPortInUse(); updated to
+// the OS-assigned port once Bun.serve() resolves.
+let _actualCallbackPort: number = OAUTH_CALLBACK_PORT
+export function setCallbackPort(port: number) {
+  _actualCallbackPort = port
+}
+export function getCallbackPort(): number {
+  return _actualCallbackPort
+}
+
 export interface McpOAuthConfig {
   clientId?: string
   clientSecret?: string
@@ -32,7 +43,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
   ) {}
 
   get redirectUrl(): string {
-    return `http://127.0.0.1:${OAUTH_CALLBACK_PORT}${OAUTH_CALLBACK_PATH}`
+    return `http://127.0.0.1:${_actualCallbackPort}${OAUTH_CALLBACK_PATH}`
   }
 
   get clientMetadata(): OAuthClientMetadata {

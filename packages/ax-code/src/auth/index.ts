@@ -1,4 +1,5 @@
 import path from "path"
+import fsPromises from "fs/promises"
 import { Effect, Layer, Record, Result, Schema, ServiceMap } from "effect"
 import { makeRunPromise } from "@/effect/run-service"
 import { zod } from "@/util/effect-zod"
@@ -13,6 +14,30 @@ const log = Log.create({ service: "auth" })
 export const OAUTH_DUMMY_KEY = "ax-code-oauth-dummy-key"
 
 const file = path.join(Global.Path.data, "auth.json")
+const lockFile = `${file}.lock`
+
+// Cross-process advisory lock using exclusive file creation.
+// Prevents two concurrent ax-code processes (e.g. CLI + desktop app)
+// from racing on auth.json. Falls back to in-process Lock.write("auth")
+// for same-process mutual exclusion.
+async function acquireFileLock(): Promise<() => void> {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    try {
+      const fd = await fsPromises.open(lockFile, "wx")
+      await fd.close()
+      return () => fsPromises.unlink(lockFile).catch(() => {})
+    } catch (e: any) {
+      if (e.code !== "EEXIST") throw e
+      await new Promise<void>((r) => setTimeout(r, 20))
+    }
+  }
+  // Stale lock: remove and retry once
+  await fsPromises.unlink(lockFile).catch(() => {})
+  const fd = await fsPromises.open(lockFile, "wx")
+  await fd.close()
+  return () => fsPromises.unlink(lockFile).catch(() => {})
+}
 
 const fail = (message: string) => (cause: unknown) => new Auth.AuthError({ message, cause })
 
@@ -143,7 +168,15 @@ export namespace Auth {
                 updated[key] = encryptEntry(info as Info)
               }
               return Effect.tryPromise({
-                try: () => Filesystem.writeJson(file, updated, 0o600),
+                try: async () => {
+                  const releaseFileLock = await acquireFileLock()
+                  try {
+                    using _ = await Lock.write("auth")
+                    await Filesystem.writeJson(file, updated, 0o600)
+                  } finally {
+                    releaseFileLock()
+                  }
+                },
                 catch: fail("Failed to migrate auth entries"),
               }).pipe(Effect.map(() => entries as Record<string, Info>))
             }
@@ -161,12 +194,17 @@ export namespace Auth {
         if (!norm || norm.includes("..")) return yield* new AuthError({ message: "Invalid provider ID" })
         yield* Effect.tryPromise({
           try: async () => {
-            using _ = await Lock.write("auth")
-            const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
-            if (norm !== key) delete data[key]
-            delete data[norm + "/"]
-            if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
-            await Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600)
+            const releaseFileLock = await acquireFileLock()
+            try {
+              using _ = await Lock.write("auth")
+              const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
+              if (norm !== key) delete data[key]
+              delete data[norm + "/"]
+              if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
+              await Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600)
+            } finally {
+              releaseFileLock()
+            }
           },
           catch: fail("Failed to write auth data"),
         })
@@ -176,12 +214,17 @@ export namespace Auth {
         const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
         yield* Effect.tryPromise({
           try: async () => {
-            using _ = await Lock.write("auth")
-            const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
-            delete data[key]
-            delete data[norm]
-            delete data[norm + "/"]
-            await Filesystem.writeJson(file, data, 0o600)
+            const releaseFileLock = await acquireFileLock()
+            try {
+              using _ = await Lock.write("auth")
+              const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
+              delete data[key]
+              delete data[norm]
+              delete data[norm + "/"]
+              await Filesystem.writeJson(file, data, 0o600)
+            } finally {
+              releaseFileLock()
+            }
           },
           catch: fail("Failed to write auth data"),
         })

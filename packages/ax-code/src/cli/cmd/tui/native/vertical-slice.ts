@@ -941,12 +941,17 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
     }
 
     const onSignal = () => close()
+    let resizeDebounce: ReturnType<typeof setTimeout> | undefined
     const onResize = () => {
       recordDiagnostic("tui.native.resized", viewport())
-      paint()
+      if (resizeDebounce) clearTimeout(resizeDebounce)
+      resizeDebounce = setTimeout(() => {
+        resizeDebounce = undefined
+        paint()
+      }, 50)
     }
 
-    stdout.write("\x1b[?1049h\x1b[?25l")
+    if (stdout.isTTY) stdout.write("\x1b[?1049h\x1b[?25l")
     if (stdin?.isTTY) stdin.setRawMode?.(true)
     stdin?.resume?.()
     stdin?.on?.("data", onData)

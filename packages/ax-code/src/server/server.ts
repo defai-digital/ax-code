@@ -459,6 +459,8 @@ export namespace Server {
       }
     })()
     if (!stat?.isDirectory()) return c.json({ error: "directory does not exist or is not a directory" }, 400)
+    const DANGEROUS_ROOTS = new Set(["/", "/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/private/etc"])
+    if (DANGEROUS_ROOTS.has(directory)) return c.json({ error: "directory is not allowed" }, 400)
     return directory
   }
 
@@ -517,9 +519,23 @@ export namespace Server {
             return c.json({ error: "origin mismatch" }, 403)
           }
         }
-        const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "local"
+        // Prefer the socket's remote address (not spoofable) over headers.
+        const socketAddr = (() => {
+          try {
+            const srv = (c.env as any)?.server
+            if (srv?.requestIP) return srv.requestIP(c.req.raw)?.address ?? null
+          } catch {}
+          return null
+        })()
+        const ip = socketAddr ?? "local"
         const key = `${ip}:${c.req.method}:${c.req.path.startsWith("/session/") ? "/session" : c.req.path}`
         const now = Date.now()
+        // Periodically evict expired buckets to prevent unbounded growth.
+        if (rate.size > 5_000) {
+          for (const [k, v] of rate) {
+            if (v.reset <= now) rate.delete(k)
+          }
+        }
         const current = rate.get(key)
         const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)
         const limit = c.req.path.includes("/prompt_async") || c.req.path.endsWith("/shell") ? 30 : mutating ? 120 : 600

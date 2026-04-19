@@ -400,7 +400,12 @@ export namespace Agent {
 
           for (const [key, value] of Object.entries(cfg.agent ?? {})) {
             if (value.disable) {
-              if (agents[key] && resolveTier(agents[key]) === "core")
+              const tier = agents[key] ? resolveTier(agents[key]) : undefined
+              if (tier === "internal") {
+                console.warn(`[agent] cannot disable internal agent "${key}" — it is required for core operations`)
+                continue
+              }
+              if (tier === "core")
                 console.warn(`[agent] disabling core agent "${key}" via config`)
               delete agents[key]
               continue
@@ -532,7 +537,7 @@ export namespace Agent {
               ),
               {
                 role: "user",
-                content: `Create an agent configuration based on this request: \"${input.description}\".\n\nIMPORTANT: The following identifiers already exist and must NOT be used: ${existing.map((i) => i.name).join(", ")}\n  Return ONLY the JSON object, no other text, do not wrap in backticks`,
+                content: `Create an agent configuration based on this request:\n\`\`\`\n${input.description.replace(/`/g, "\\`")}\n\`\`\`\n\nIMPORTANT: The following identifiers already exist and must NOT be used: ${existing.map((i) => i.name).join(", ")}\n  Return ONLY the JSON object, no other text, do not wrap in backticks`,
               },
             ],
             model: language,

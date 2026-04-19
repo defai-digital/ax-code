@@ -1,6 +1,6 @@
 import { createConnection } from "net"
 import { Log } from "../util/log"
-import { OAUTH_CALLBACK_PORT, OAUTH_CALLBACK_PATH } from "./oauth-provider"
+import { OAUTH_CALLBACK_PORT, OAUTH_CALLBACK_PATH, setCallbackPort } from "./oauth-provider"
 
 const log = Log.create({ service: "mcp.oauth-callback" })
 
@@ -83,7 +83,7 @@ export namespace McpOAuthCallback {
       }
       server = Bun.serve({
         hostname: "127.0.0.1",
-        port: OAUTH_CALLBACK_PORT,
+        port: 0,
         fetch(req) {
           const url = new URL(req.url)
 
@@ -156,7 +156,8 @@ export namespace McpOAuthCallback {
         },
       })
 
-      log.info("oauth callback server started", { port: OAUTH_CALLBACK_PORT })
+      setCallbackPort(server.port)
+      log.info("oauth callback server started", { port: server.port })
     })().finally(() => {
       initPromise = undefined
     })

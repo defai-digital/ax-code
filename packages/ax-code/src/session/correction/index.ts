@@ -62,8 +62,12 @@ export namespace SelfCorrection {
   }
 
   function key(tool: string, error: string): string {
-    // Normalize error to group similar failures
-    const normalized = error.replace(/[0-9]+/g, "N").replace(/\/[^\s]+/g, "/PATH").slice(0, 100)
+    // Normalize error: collapse numeric tokens but preserve the filename so
+    // budgets are scoped per file, not shared across all paths.
+    const normalized = error
+      .replace(/[0-9]+/g, "N")
+      .replace(/\/[^\s/]+\//g, "/")
+      .slice(0, 100)
     return `${tool}:${normalized}`
   }
 
