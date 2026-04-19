@@ -1,4 +1,10 @@
-import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable } from "@tui/renderer-adapter/opentui"
+import {
+  Portal,
+  type BoxRenderable,
+  type TextareaRenderable,
+  type KeyEvent,
+  type ScrollBoxRenderable,
+} from "@tui/renderer-adapter/opentui"
 import { pathToFileURL } from "bun"
 import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
@@ -14,6 +20,7 @@ import { Agent } from "@/agent/agent"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
+import { resolveAutocompleteLayout, type AutocompleteVisibility } from "./autocomplete-layout"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -50,7 +57,7 @@ function extractLineRange(input: string) {
 export type AutocompleteRef = {
   onInput: (value: string) => void
   onKeyDown: (e: KeyEvent) => void
-  visible: false | "@" | "/"
+  visible: AutocompleteVisibility
 }
 
 export type AutocompleteOption = {
@@ -108,20 +115,18 @@ export function Autocomplete(props: {
     }
   })
 
-  const position = createMemo(() => {
-    if (!store.visible) return { x: 0, y: 0, width: 0 }
-    const dims = dimensions()
+  const layout = createMemo(() => {
+    if (!store.visible) return
+    void dimensions()
     positionTick()
     const anchor = props.anchor()
-    const parent = anchor.parent
-    const parentX = parent?.x ?? 0
-    const parentY = parent?.y ?? 0
-
-    return {
-      x: anchor.x - parentX,
-      y: anchor.y - parentY,
-      width: anchor.width,
-    }
+    return resolveAutocompleteLayout({
+      visible: store.visible,
+      anchorX: anchor.x,
+      anchorY: anchor.y,
+      anchorWidth: anchor.width,
+      optionCount: options().length,
+    })
   })
 
   const filter = createMemo(() => {
@@ -444,7 +449,7 @@ export function Autocomplete(props: {
   function moveTo(next: number) {
     setStore("selected", next)
     if (!scroll) return
-    const viewportHeight = Math.min(height(), options().length)
+    const viewportHeight = Math.min(layout()?.height ?? 1, options().length)
     const scrollBottom = scroll.scrollTop + viewportHeight
     if (next < scroll.scrollTop) {
       scroll.scrollBy(next - scroll.scrollTop)
@@ -602,71 +607,69 @@ export function Autocomplete(props: {
     })
   })
 
-  const height = createMemo(() => {
-    const count = options().length || 1
-    if (!store.visible) return Math.min(10, count)
-    positionTick()
-    return Math.min(10, count, Math.max(1, props.anchor().y))
-  })
-
   let scroll: ScrollBoxRenderable
 
   return (
-    <box
-      visible={store.visible !== false}
-      position="absolute"
-      top={position().y - height()}
-      left={position().x}
-      width={position().width}
-      zIndex={100}
-      {...SplitBorder}
-      borderColor={theme.border}
-    >
-      <scrollbox
-        ref={(r: ScrollBoxRenderable) => (scroll = r)}
-        backgroundColor={theme.backgroundMenu}
-        height={height()}
-        scrollbarOptions={{ visible: false }}
-      >
-        <Index
-          each={options()}
-          fallback={
-            <box paddingLeft={1} paddingRight={1}>
-              <text fg={theme.textMuted}>No matching items</text>
-            </box>
-          }
-        >
-          {(option, index) => (
-            <box
-              paddingLeft={1}
-              paddingRight={1}
-              backgroundColor={index === store.selected ? theme.primary : undefined}
-              flexDirection="row"
-              onMouseMove={() => {
-                setStore("input", "mouse")
-              }}
-              onMouseOver={() => {
-                if (store.input !== "mouse") return
-                moveTo(index)
-              }}
-              onMouseDown={() => {
-                setStore("input", "mouse")
-                moveTo(index)
-              }}
-              onMouseUp={() => select()}
+    <Show when={layout()}>
+      {(overlay) => (
+        <Portal>
+          <box
+            position="absolute"
+            top={overlay().top}
+            left={overlay().left}
+            width={overlay().width}
+            zIndex={100}
+            {...SplitBorder}
+            borderColor={theme.border}
+          >
+            <scrollbox
+              ref={(r: ScrollBoxRenderable) => (scroll = r)}
+              backgroundColor={theme.backgroundMenu}
+              height={overlay().height}
+              scrollbarOptions={{ visible: false }}
             >
-              <text fg={index === store.selected ? selectedForeground(theme) : theme.text} flexShrink={0}>
-                {option().display}
-              </text>
-              <Show when={option().description}>
-                <text fg={index === store.selected ? selectedForeground(theme) : theme.textMuted} wrapMode="none">
-                  {option().description}
-                </text>
-              </Show>
-            </box>
-          )}
-        </Index>
-      </scrollbox>
-    </box>
+              <Index
+                each={options()}
+                fallback={
+                  <box paddingLeft={1} paddingRight={1}>
+                    <text fg={theme.textMuted}>No matching items</text>
+                  </box>
+                }
+              >
+                {(option, index) => (
+                  <box
+                    paddingLeft={1}
+                    paddingRight={1}
+                    backgroundColor={index === store.selected ? theme.primary : undefined}
+                    flexDirection="row"
+                    onMouseMove={() => {
+                      setStore("input", "mouse")
+                    }}
+                    onMouseOver={() => {
+                      if (store.input !== "mouse") return
+                      moveTo(index)
+                    }}
+                    onMouseDown={() => {
+                      setStore("input", "mouse")
+                      moveTo(index)
+                    }}
+                    onMouseUp={() => select()}
+                  >
+                    <text fg={index === store.selected ? selectedForeground(theme) : theme.text} flexShrink={0}>
+                      {option().display}
+                    </text>
+                    <Show when={option().description}>
+                      <text fg={index === store.selected ? selectedForeground(theme) : theme.textMuted} wrapMode="none">
+                        {option().description}
+                      </text>
+                    </Show>
+                  </box>
+                )}
+              </Index>
+            </scrollbox>
+          </box>
+        </Portal>
+      )}
+    </Show>
   )
 }
