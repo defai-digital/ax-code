@@ -9,6 +9,13 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# Channel policy: only the v2.23.x stable series is promoted to npm "latest"
+# and tagged as the GitHub "Latest" release. Everything else (v2.24+, v3.x,
+# future majors) ships on the "beta" channel until explicitly promoted via
+# the "Promote to Stable" workflow.
+env:
+  AX_CODE_RELEASE_CHANNEL: ${{ startsWith(github.ref_name, 'v2.23.') && 'latest' || 'beta' }}
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
@@ -94,7 +101,7 @@ jobs:
         run: bun run script/build.ts ${{ matrix.build-args }}
         env:
           AX_CODE_VERSION: ${{ github.ref_name }}
-          AX_CODE_CHANNEL: latest
+          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
 
       - name: Upload build artifacts
@@ -145,23 +152,29 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AX_CODE_VERSION: ${{ github.ref_name }}
-          AX_CODE_CHANNEL: latest
+          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
         run: |
           TAG="${{ github.ref_name }}"
           # Idempotent: if the release already exists (e.g. created manually
           # from a release-notes file), skip creation and proceed to upload.
           # Without this step the homebrew job's `gh release download` fails
           # with "release not found" and silently skips the tap update.
+          PRERELEASE_FLAG=""
+          if [ "$CHANNEL" != "latest" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --title "$TAG" \
               --generate-notes \
-              --verify-tag
+              --verify-tag \
+              $PRERELEASE_FLAG
           fi
 
       - name: Upload release assets
@@ -175,6 +188,11 @@ jobs:
 
   homebrew:
     needs: publish
+    # Homebrew tap tracks the stable channel only. Beta tags (anything outside
+    # the v2.23.x series) build and publish to npm but must not update the
+    # tap, otherwise `brew upgrade ax-code` would silently move users off
+    # stable.
+    if: ${{ startsWith(github.ref_name, 'v2.23.') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
