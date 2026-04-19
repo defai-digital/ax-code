@@ -29,7 +29,7 @@ import { useRenderer } from "@tui/renderer-adapter/opentui"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
-import type { FilePart } from "@ax-code/sdk/v2"
+import type { FilePart, SessionStatus } from "@ax-code/sdk/v2"
 import { TuiEvent } from "../../event"
 import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
@@ -1291,62 +1291,7 @@ export function Prompt(props: PromptProps) {
                   </Show>
                 </box>
                 <box flexDirection="row" gap={1} flexShrink={0}>
-                  {(() => {
-                    const retry = createMemo(() => {
-                      const s = status()
-                      if (s.type !== "retry") return
-                      return s
-                    })
-                    const message = createMemo(() => {
-                      const r = retry()
-                      if (!r) return
-                      if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
-                        return "gemini is way too hot right now"
-                      if (r.message.length > 80) return r.message.slice(0, 80) + "..."
-                      return r.message
-                    })
-                    const isTruncated = createMemo(() => {
-                      const r = retry()
-                      if (!r) return false
-                      return r.message.length > 120
-                    })
-                    const [seconds, setSeconds] = createSignal(0)
-                    onMount(() => {
-                      const timer = setInterval(() => {
-                        const next = retry()?.next
-                        if (next) setSeconds(Math.round((next - Date.now()) / 1000))
-                      }, 1000)
-
-                      onCleanup(() => {
-                        clearInterval(timer)
-                      })
-                    })
-                    const handleMessageClick = () => {
-                      const r = retry()
-                      if (!r) return
-                      if (isTruncated()) {
-                        DialogAlert.show(dialog, "Retry Error", r.message)
-                      }
-                    }
-
-                    const retryText = () => {
-                      const r = retry()
-                      if (!r) return ""
-                      const baseMessage = message()
-                      const truncatedHint = isTruncated() ? " (click to expand)" : ""
-                      const duration = formatDuration(seconds())
-                      const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
-                      return baseMessage + truncatedHint + retryInfo
-                    }
-
-                    return (
-                      <Show when={retry()}>
-                        <box onMouseUp={handleMessageClick}>
-                          <text fg={theme.error}>{retryText()}</text>
-                        </box>
-                      </Show>
-                    )
-                  })()}
+                  <RetryStatusView status={status} />
                   <Show when={status().type !== "retry" && statusLabel()}>
                     <text fg={theme.textMuted}>{statusLabel()}</text>
                   </Show>
@@ -1415,5 +1360,77 @@ export function Prompt(props: PromptProps) {
         </box>
       </box>
     </>
+  )
+}
+
+// Retry status view — was previously inlined as an IIFE inside the Prompt
+// component's JSX. The IIFE form created `createMemo`, `createSignal`,
+// `onMount`, and a 1s setInterval *on every parent re-evaluation*, which
+// accumulated reactive primitives whenever session status churned (first
+// input → busy → retry → busy …). The accumulated graph combined with
+// reactive `fg`/`justifyContent`/`paddingRight` bindings elsewhere in the
+// status row drove the opentui render loop the watchdog captured as the
+// "hang after first input" burst (stack frame `fg → setProperty → children →
+// createMemo`). Hoisting to a real component makes the memos/signal/interval
+// be created exactly once per mount — re-renders reuse the same reactive
+// nodes and no setInterval leaks.
+function RetryStatusView(props: { status: () => SessionStatus }) {
+  const { theme } = useTheme()
+  const dialog = useDialog()
+
+  const retry = createMemo(() => {
+    const s = props.status()
+    if (s.type !== "retry") return
+    return s
+  })
+
+  const message = createMemo(() => {
+    const r = retry()
+    if (!r) return
+    if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
+      return "gemini is way too hot right now"
+    if (r.message.length > 80) return r.message.slice(0, 80) + "..."
+    return r.message
+  })
+
+  const isTruncated = createMemo(() => {
+    const r = retry()
+    if (!r) return false
+    return r.message.length > 120
+  })
+
+  const [seconds, setSeconds] = createSignal(0)
+  onMount(() => {
+    const timer = setInterval(() => {
+      const next = retry()?.next
+      if (next) setSeconds(Math.round((next - Date.now()) / 1000))
+    }, 1000)
+    onCleanup(() => clearInterval(timer))
+  })
+
+  const handleMessageClick = () => {
+    const r = retry()
+    if (!r) return
+    if (isTruncated()) {
+      DialogAlert.show(dialog, "Retry Error", r.message)
+    }
+  }
+
+  const retryText = createMemo(() => {
+    const r = retry()
+    if (!r) return ""
+    const baseMessage = message()
+    const truncatedHint = isTruncated() ? " (click to expand)" : ""
+    const duration = formatDuration(seconds())
+    const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
+    return baseMessage + truncatedHint + retryInfo
+  })
+
+  return (
+    <Show when={retry()}>
+      <box onMouseUp={handleMessageClick}>
+        <text fg={theme.error}>{retryText()}</text>
+      </box>
+    </Show>
   )
 }
