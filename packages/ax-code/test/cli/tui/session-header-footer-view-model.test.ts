@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   footerMcpView,
   footerPermissionLabel,
+  footerSessionStatusLabel,
   footerSandboxView,
   footerTrustChip,
 } from "../../../src/cli/cmd/tui/routes/session/footer-view-model"
@@ -71,6 +72,25 @@ describe("tui session header/footer view models", () => {
     expect(footerPermissionLabel(0)).toBeUndefined()
     expect(footerPermissionLabel(1)).toBe("1 Permission")
     expect(footerPermissionLabel(2)).toBe("2 Permissions")
+    expect(footerSessionStatusLabel({ status: { type: "idle" }, now: 10_000 })).toBeUndefined()
+    expect(
+      footerSessionStatusLabel({
+        status: { type: "busy", waitState: "llm", startedAt: 2_000 },
+        now: 10_000,
+      }),
+    ).toBe("Waiting for model · 8s")
+    expect(
+      footerSessionStatusLabel({
+        status: { type: "busy", waitState: "tool", activeTool: "code_intelligence", startedAt: 8_000 },
+        now: 10_000,
+      }),
+    ).toBe("Running Code Intelligence · 2s")
+    expect(
+      footerSessionStatusLabel({
+        status: { type: "retry", attempt: 1, message: "retry", next: 18_000 },
+        now: 10_000,
+      }),
+    ).toBe("Retrying in 8s")
 
     expect(footerTrustChip({ experimentalDebugEngine: false, pendingPlans: 0, graphNodeCount: 10 })).toBeUndefined()
     expect(footerTrustChip({ experimentalDebugEngine: true, pendingPlans: 0, graphNodeCount: 10 })).toEqual({

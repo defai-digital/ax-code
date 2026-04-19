@@ -12,7 +12,11 @@ import {
   dialogSelectFlatOptions,
   dialogSelectGroupedOptions,
 } from "../ui/dialog-select-view-model"
-import { footerPermissionLabel } from "../routes/session/footer-view-model"
+import {
+  footerPermissionLabel,
+  footerSessionStatusLabel,
+  type FooterSessionStatus,
+} from "../routes/session/footer-view-model"
 import { sessionHeaderWorkspaceLabel } from "../routes/session/header-view-model"
 import stripAnsi from "strip-ansi"
 
@@ -222,6 +226,7 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
   let questionState: NativeQuestionPromptState | undefined
   let workspaceState: NativeWorkspacePromptState | undefined
   let dialogState: NativeDialogState | undefined
+  let sessionStatus: FooterSessionStatus = { type: "idle" }
   let currentModel: NativePromptModel | undefined =
     initialModel?.providerID && initialModel?.modelID
       ? { providerID: initialModel.providerID, modelID: initialModel.modelID }
@@ -263,6 +268,7 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
           currentAgent,
           currentModel,
           sessionInfo,
+          sessionStatus,
           localDirectory: input.directory,
           dialogState,
           scrollOffset,
@@ -287,16 +293,18 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
         const nextSessionID = startupSession?.id ?? (await resolveNativeSessionID(runtimeInput))
         const nextSessionInfo =
           startupSession ?? (nextSessionID ? { id: nextSessionID, directory: runtimeInput.directory } : undefined)
-        const [nextTranscript, nextPermission, nextQuestion, resolvedModel] = await Promise.all([
+        const [nextTranscript, nextPermission, nextQuestion, resolvedModel, nextStatus] = await Promise.all([
           loadNativeTranscript(runtimeInput, nextSessionID),
           nextSessionID ? loadNativePermissionRequest(runtimeInput, nextSessionID) : Promise.resolve(undefined),
           nextSessionID ? loadNativeQuestionRequest(runtimeInput, nextSessionID) : Promise.resolve(undefined),
           currentModel ? Promise.resolve(currentModel) : resolveNativePromptModel(runtimeInput),
+          nextSessionID ? loadNativeSessionStatus(runtimeInput, nextSessionID) : Promise.resolve({ type: "idle" as const }),
         ])
         if (closed || generation !== startupGeneration) return
         sessionID = nextSessionID
         sessionInfo = nextSessionInfo
         transcript = nextTranscript
+        sessionStatus = nextStatus
         permissionState = createNativePermissionState(nextPermission)
         questionState = nextSessionID && !permissionState ? createNativeQuestionState(nextQuestion) : undefined
         currentModel = resolvedModel
@@ -343,6 +351,7 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
       sessionID = nextSession?.id
       applyWorkspace(nextSession?.directory)
       transcript = await loadNativeTranscript(runtimeInput, sessionID)
+      sessionStatus = sessionID ? await loadNativeSessionStatus(runtimeInput, sessionID) : { type: "idle" }
       await syncBlockingState(sessionID)
       scrollOffset = 0
       recordDiagnostic("tui.native.sessionActivated", {
@@ -399,6 +408,7 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
         else {
           sessionInfo = undefined
           sessionID = undefined
+          sessionStatus = { type: "idle" }
           transcript = []
           await syncBlockingState(undefined)
         }
@@ -529,10 +539,15 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
       const activeSessionID = sessionID
       refreshInFlight = true
       try {
-        const next = await loadNativeTranscript(runtimeInput, activeSessionID)
+        const [next, nextInfo, nextStatus] = await Promise.all([
+          loadNativeTranscript(runtimeInput, activeSessionID),
+          loadNativeSessionInfo(runtimeInput, activeSessionID),
+          loadNativeSessionStatus(runtimeInput, activeSessionID),
+        ])
         if (sessionID !== activeSessionID) return
         transcript = next
-        sessionInfo = (await loadNativeSessionInfo(runtimeInput, activeSessionID)) ?? sessionInfo
+        sessionInfo = nextInfo ?? sessionInfo
+        sessionStatus = nextStatus
         await syncBlockingState(activeSessionID)
         paint()
       } finally {
@@ -609,6 +624,12 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
           id: sessionID,
           directory: result.directory,
         }
+        sessionStatus = {
+          type: "busy",
+          startedAt: Date.now(),
+          lastActivityAt: Date.now(),
+          waitState: "llm",
+        }
         await syncBlockingState(sessionID)
         scrollOffset = 0
         recordDiagnostic("tui.native.promptAccepted", { sessionID, directory: result.directory })
@@ -683,6 +704,7 @@ export async function runNativeTuiSlice(input: NativeTuiSliceInput, io: NativeTu
 
       if (event.type === "session.status") {
         if (event.properties?.sessionID !== sessionID) return
+        sessionStatus = event.properties?.status ?? { type: "idle" }
         if (event.properties?.status?.type === "idle") stopPolling()
         else startPolling()
         void refreshTranscript()
@@ -1046,6 +1068,17 @@ async function loadNativeLatestRootSession(input: NativeTuiSliceInput): Promise<
   }
 }
 
+async function loadNativeSessionStatus(input: NativeTuiSliceInput, sessionID: string): Promise<FooterSessionStatus> {
+  try {
+    const response = await nativeFetch(input, nativeUrl(input, "/session/status"))
+    if (!response.ok) return { type: "idle" }
+    const data = (await response.json()) as Record<string, FooterSessionStatus | undefined>
+    return data[sessionID] ?? { type: "idle" }
+  } catch {
+    return { type: "idle" }
+  }
+}
+
 export function projectNativeTranscript(messages: NativeMessageLike[]): NativeTranscriptEntry[] {
   return messages.flatMap((message) => {
     const role = nativeRole(message.info?.role)
@@ -1062,6 +1095,7 @@ export function nativeFrameLines(input: {
   currentAgent?: string
   currentModel?: NativePromptModel
   sessionInfo?: NativeSessionInfoLike
+  sessionStatus?: FooterSessionStatus
   localDirectory?: string
   dialogState?: NativeDialogState
   scrollOffset?: number
@@ -1099,6 +1133,7 @@ export function renderNativeFrame(input: {
   currentAgent?: string
   currentModel?: NativePromptModel
   sessionInfo?: NativeSessionInfoLike
+  sessionStatus?: FooterSessionStatus
   localDirectory?: string
   dialogState?: NativeDialogState
   scrollOffset?: number
@@ -1515,6 +1550,7 @@ function nativeFooterLine(input: {
   currentAgent?: string
   currentModel?: NativePromptModel
   sessionInfo?: NativeSessionInfoLike
+  sessionStatus?: FooterSessionStatus
   scrollOffset?: number
   dialogState?: NativeDialogState
   permissionState?: NativePermissionPromptState
@@ -1526,6 +1562,8 @@ function nativeFooterLine(input: {
   if (input.currentModel) parts.push(`Model ${input.currentModel.providerID}/${input.currentModel.modelID}`)
   const permission = footerPermissionLabel(input.permissionState ? 1 : 0)
   if (permission) parts.push(permission)
+  const status = footerSessionStatusLabel({ status: input.sessionStatus, now: Date.now() })
+  if (status) parts.push(status)
   if (input.questionState) parts.push("1 Question")
   if (input.dialogState) parts.push(input.dialogState.title)
   if (input.workspaceState) parts.push("Workspace picker")

@@ -40,6 +40,7 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Usage } from "../../routes/session/usage"
+import { footerSessionStatusLabel } from "../../routes/session/footer-view-model"
 import { Log } from "@/util/log"
 import { isPromptExitCommand, resolvePromptSlashDispatch } from "./view-model"
 import {
@@ -95,6 +96,25 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
+  const [statusTick, setStatusTick] = createSignal(0)
+  const statusLabel = createMemo(() => {
+    statusTick()
+    return footerSessionStatusLabel({
+      status: status(),
+      now: Date.now(),
+    })
+  })
+
+  onMount(() => {
+    const timer = setInterval(() => {
+      if (status().type === "idle") return
+      setStatusTick((value) => value + 1)
+    }, 1000)
+
+    onCleanup(() => {
+      clearInterval(timer)
+    })
+  })
 
   function promptModelWarning() {
     if (!sync.data.provider_loaded) {
@@ -1322,6 +1342,9 @@ export function Prompt(props: PromptProps) {
                       </Show>
                     )
                   })()}
+                  <Show when={status().type !== "retry" && statusLabel()}>
+                    <text fg={theme.textMuted}>{statusLabel()}</text>
+                  </Show>
                 </box>
               </box>
               <text fg={store.interrupt > 0 ? theme.primary : theme.text}>

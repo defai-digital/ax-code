@@ -120,6 +120,22 @@ describe("tui native vertical slice", () => {
     )
   })
 
+  test("renders session busy status in the native footer", () => {
+    const lines = nativeFrameLines({
+      viewport: { width: 64, height: 8 },
+      transcript: [],
+      prompt: "",
+      sessionStatus: {
+        type: "busy",
+        waitState: "tool",
+        activeTool: "bash",
+        startedAt: Date.now() - 12_000,
+      },
+    })
+
+    expect(lines.join("\n")).toContain("Running Bash")
+  })
+
   test("renders blocking permission, question, and workspace overlays above the prompt", () => {
     const permissionLines = nativeFrameLines({
       viewport: { width: 40, height: 8 },
