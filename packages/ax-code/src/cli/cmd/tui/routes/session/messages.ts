@@ -19,9 +19,19 @@ type Part = {
   [key: string]: unknown
 }
 
+function isVisibleTextPart(part: Part) {
+  return part.type === "text" && !part.synthetic && !part.ignored
+}
+
 function hasText(parts: Part[] | undefined) {
   if (!parts || !Array.isArray(parts)) return false
-  return parts.some((part) => part.type === "text" && !part.synthetic && !part.ignored)
+  return parts.some(isVisibleTextPart)
+}
+
+function toPromptPart(part: Part): PromptInfo["parts"][number] | undefined {
+  if (part.type !== "file" && part.type !== "agent") return
+  const { id: _id, messageID: _messageID, sessionID: _sessionID, ...rest } = part
+  return rest as PromptInfo["parts"][number]
 }
 
 export function lastUserMessageID(messages: Message[], parts: Record<string, Part[] | undefined>) {
@@ -48,11 +58,10 @@ export function promptState(parts: Part[] | undefined): PromptInfo {
   }
 
   for (const part of parts ?? []) {
-    if (part.type === "text" && !part.synthetic) state.input += part.text ?? ""
-    if (part.type === "file") {
-      const { id: _id, messageID: _messageID, sessionID: _sessionID, ...rest } = part
-      state.parts.push(rest as PromptInfo["parts"][number])
-    }
+    if (isVisibleTextPart(part)) state.input += part.text ?? ""
+
+    const promptPart = toPromptPart(part)
+    if (promptPart) state.parts.push(promptPart)
   }
 
   return state

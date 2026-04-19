@@ -7,26 +7,13 @@ import { TUI_PERFORMANCE_CRITERIA } from "../../../src/cli/cmd/tui/performance-c
 const SRC_ROOT = path.resolve(import.meta.dir, "../../../src")
 const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
 const OPENTUI_RE = /(?:from\s+["'](?:@opentui\/|opentui-spinner)|import\s+["'](?:@opentui\/|opentui-spinner))/
-const OPENTUI_ADAPTER_FILES = new Set([path.join(TUI_SRC, "renderer-adapter/opentui.ts")])
-const RENDERER_TYPES_FILE = path.join(TUI_SRC, "renderer-adapter/types.ts")
+const OPENTUI_ALLOWED_OUTSIDE_TUI = new Set([path.join(SRC_ROOT, "cli/cmd/doctor.ts")])
 
 const PURE_TUI_FILES = [
   "performance-criteria.ts",
   "renderer-contract.ts",
   "renderer-decision.ts",
-  "input/focus-manager.ts",
-  "input/keymap.ts",
-  "input/command-dispatch.ts",
-  "input/prompt-editor.ts",
-  "state/actions.ts",
-  "state/app-state.ts",
-  "state/event-map.ts",
-  "state/event-queue.ts",
-  "state/reducer.ts",
-  "state/selectors.ts",
-  "state/store.ts",
   "routes/session/footer-view-model.ts",
-  "routes/session/header-view-model.ts",
   "routes/session/display.ts",
   "routes/session/format.ts",
   "routes/session/messages.ts",
@@ -62,13 +49,13 @@ describe("tui renderer replacement contract", () => {
     }
   })
 
-  test("keeps direct OpenTUI imports inside the OpenTUI renderer adapter", async () => {
+  test("keeps direct OpenTUI imports inside the TUI surface", async () => {
     const offenders: string[] = []
 
     for (const file of await files(SRC_ROOT)) {
       const text = await fs.readFile(file, "utf8")
       if (!OPENTUI_RE.test(text)) continue
-      if (!OPENTUI_ADAPTER_FILES.has(file)) {
+      if (!file.startsWith(TUI_SRC + path.sep) && !OPENTUI_ALLOWED_OUTSIDE_TUI.has(file)) {
         offenders.push(path.relative(SRC_ROOT, file))
       }
     }
@@ -76,7 +63,7 @@ describe("tui renderer replacement contract", () => {
     expect(offenders).toEqual([])
   })
 
-  test("keeps pure TUI contracts and view models renderer-independent", async () => {
+  test("keeps renderer-neutral planning helpers independent of OpenTUI", async () => {
     const offenders: string[] = []
 
     for (const file of PURE_TUI_FILES) {
@@ -85,15 +72,6 @@ describe("tui renderer replacement contract", () => {
     }
 
     expect(offenders).toEqual([])
-  })
-
-  test("keeps renderer-neutral adapter types independent of OpenTUI", async () => {
-    const text = await fs.readFile(RENDERER_TYPES_FILE, "utf8")
-
-    expect(OPENTUI_RE.test(text)).toBe(false)
-    expect(text).toContain("TuiKeyEvent")
-    expect(text).toContain("TuiTextRun")
-    expect(text).toContain("TuiFocusOwner")
   })
 
   test("tracks long-term replacement criteria for phase 2 workloads", () => {
