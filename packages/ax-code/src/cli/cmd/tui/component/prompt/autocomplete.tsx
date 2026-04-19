@@ -115,19 +115,40 @@ export function Autocomplete(props: {
     }
   })
 
-  const layout = createMemo(() => {
-    if (!store.visible) return
-    void dimensions()
-    positionTick()
-    const anchor = props.anchor()
-    return resolveAutocompleteLayout({
-      visible: store.visible,
-      anchorX: anchor.x,
-      anchorY: anchor.y,
-      anchorWidth: anchor.width,
-      optionCount: options().length,
-    })
-  })
+  const layout = createMemo(
+    () => {
+      if (!store.visible) return
+      void dimensions()
+      positionTick()
+      const anchor = props.anchor()
+      return resolveAutocompleteLayout({
+        visible: store.visible,
+        anchorX: anchor.x,
+        anchorY: anchor.y,
+        anchorWidth: anchor.width,
+        optionCount: options().length,
+      })
+    },
+    undefined,
+    {
+      // Without an explicit equals, this memo returns a fresh object on every
+      // positionTick (50ms while autocomplete is open), which is structurally
+      // identical to the previous one in the steady state. Solid then sees
+      // "value changed" by reference, fires the JSX render effects for the
+      // overlay's top/left/width/height props, opentui calls setProperty +
+      // updateYogaPosition on each one, the relayout shifts the anchor by a
+      // fraction, the next setInterval tick observes the shift and bumps
+      // positionTick again, and the cycle escalates inside opentui's paint
+      // pipeline until requestRender is called >200×/s and the main thread
+      // freezes. Comparing by content stops the unnecessary fan-out at the
+      // memo boundary so steady-state ticks become no-ops.
+      equals: (a, b) => {
+        if (a === b) return true
+        if (!a || !b) return false
+        return a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height
+      },
+    },
+  )
 
   const filter = createMemo(() => {
     if (!store.visible) return
