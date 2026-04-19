@@ -1590,7 +1590,7 @@ export namespace SessionPrompt {
                   // so 0-indexed line 5 became offset 5 instead of 6. The
                   // Read tool starts one line too early for every symbol.
                   offset = start + 1
-                  if (end) {
+                  if (end !== undefined) {
                     // `limit` counts lines starting from `offset`. For a
                     // symbol spanning 0-indexed lines [start, end], the
                     // number of lines is (end - start + 1), which

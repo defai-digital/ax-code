@@ -680,7 +680,6 @@ export const GithubRunCommand = cmd({
         const mdMatches = prompt.matchAll(/!?\[.*?\]\((https:\/\/github\.com\/user-attachments\/[^)]+)\)/gi)
         const tagMatches = prompt.matchAll(/<img .*?src="(https:\/\/github\.com\/user-attachments\/[^"]+)" \/>/gi)
         const matches = [...mdMatches, ...tagMatches].sort((a, b) => a.index - b.index)
-        console.log("Images", JSON.stringify(matches, null, 2))
 
         let offset = 0
         for (const m of matches) {
@@ -714,7 +713,8 @@ export const GithubRunCommand = cmd({
 
           // Replace img tag with file path, ie. @image.png
           const replacement = `@${filename}`
-          prompt = prompt.slice(0, start + offset) + replacement + prompt.slice(start + offset + tag.length)
+          const startInFinal = start + offset
+          prompt = prompt.slice(0, startInFinal) + replacement + prompt.slice(startInFinal + tag.length)
           offset += replacement.length - tag.length
 
           const contentType = res.headers.get("content-type")
@@ -722,8 +722,8 @@ export const GithubRunCommand = cmd({
             filename,
             mime: contentType?.startsWith("image/") ? contentType : "text/plain",
             content: Buffer.from(await res.arrayBuffer()).toString("base64"),
-            start,
-            end: start + replacement.length,
+            start: startInFinal,
+            end: startInFinal + replacement.length,
             replacement,
           })
         }
