@@ -1,5 +1,5 @@
-import { chmod, mkdir, readFile, rename, writeFile } from "fs/promises"
-import { createWriteStream, existsSync, statSync } from "fs"
+import { access, chmod, mkdir, readFile, rename, stat as statAsync, writeFile } from "fs/promises"
+import { createWriteStream, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
 import { dirname, join, relative, resolve as pathResolve } from "path"
@@ -8,17 +8,12 @@ import { pipeline } from "stream/promises"
 import { Glob } from "./glob"
 
 export namespace Filesystem {
-  // Fast sync version for metadata checks
   export async function exists(p: string): Promise<boolean> {
-    return existsSync(p)
+    return access(p).then(() => true).catch(() => false)
   }
 
   export async function isDir(p: string): Promise<boolean> {
-    try {
-      return statSync(p).isDirectory()
-    } catch {
-      return false
-    }
+    return statAsync(p).then((stat) => stat.isDirectory()).catch(() => false)
   }
 
   export function stat(p: string): ReturnType<typeof statSync> | undefined {

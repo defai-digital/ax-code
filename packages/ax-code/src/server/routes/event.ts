@@ -7,6 +7,7 @@ import { Bus } from "@/bus"
 import { lazy } from "../../util/lazy"
 import { AsyncQueue } from "../../util/queue"
 import { Instance } from "@/project/instance"
+import { pushSseFrame } from "../sse-queue"
 
 const log = Log.create({ service: "server" })
 const HEARTBEAT_INTERVAL_MS = 10_000
@@ -36,43 +37,41 @@ export const EventRoutes = lazy(() =>
       return streamSSE(c, async (stream) => {
         const q = new AsyncQueue<string | null>()
         let done = false
-
-        q.push(
-          JSON.stringify({
-            type: "server.connected",
-            properties: {},
-          }),
-        )
-
-        // Send heartbeat every 10s to prevent stalled proxy streams.
-        const heartbeat = setInterval(() => {
-          q.push(
-            JSON.stringify({
-              type: "server.heartbeat",
-              properties: {},
-            }),
-          )
-        }, HEARTBEAT_INTERVAL_MS)
-
-        const MAX_QUEUE = 1024
-        const HARD_MAX = 4096
-        const unsub = Bus.subscribeAll((event) => {
-          if (q.size > HARD_MAX) { stop(); return }
-          if (q.size > MAX_QUEUE && event.type === "message.part.delta") return
-          q.push(JSON.stringify(event))
-          if (event.type === Bus.InstanceDisposed.type) {
-            stop()
-          }
-        })
+        let heartbeat: ReturnType<typeof setInterval> | undefined
+        let unsub = () => {}
 
         const stop = () => {
           if (done) return
           done = true
-          clearInterval(heartbeat)
+          if (heartbeat) clearInterval(heartbeat)
           unsub()
           q.push(null)
           log.info("event disconnected")
         }
+
+        const push = (payload: unknown) => {
+          const result = pushSseFrame(q, payload)
+          if (result === "overflow") stop()
+          return result
+        }
+
+        push({
+          type: "server.connected",
+          properties: {},
+        })
+
+        // Send heartbeat every 10s to prevent stalled proxy streams.
+        heartbeat = setInterval(() => {
+          push({
+            type: "server.heartbeat",
+            properties: {},
+          })
+        }, HEARTBEAT_INTERVAL_MS)
+
+        unsub = Bus.subscribeAll((event) => {
+          push(event)
+          if (event.type === Bus.InstanceDisposed.type) stop()
+        })
 
         stream.onAbort(stop)
 

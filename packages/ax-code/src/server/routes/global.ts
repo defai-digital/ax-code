@@ -13,6 +13,7 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { errors } from "../error"
+import { pushSseFrame } from "../sse-queue"
 
 const log = Log.create({ service: "server" })
 
@@ -73,15 +74,21 @@ export const GlobalRoutes = lazy(() =>
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
           const q = new AsyncQueue<string | null>()
-          const MAX_QUEUE = 1024
-          const HARD_MAX = 4096
           let done = false
+          let heartbeat: ReturnType<typeof setInterval> | undefined
+
+          const stop = () => {
+            if (done) return
+            done = true
+            if (heartbeat) clearInterval(heartbeat)
+            GlobalBus.off("event", handler)
+            q.push(null)
+            log.info("global event disconnected")
+          }
 
           const push = (event: any) => {
             if (done) return
-            if (q.size > HARD_MAX) { stop(); return }
-            if (q.size > MAX_QUEUE && event.payload?.type === "message.part.delta") return
-            q.push(JSON.stringify(event))
+            if (pushSseFrame(q, event) === "overflow") stop()
           }
 
           push({
@@ -92,7 +99,7 @@ export const GlobalRoutes = lazy(() =>
           })
 
           // Send heartbeat every 10s to prevent stalled proxy streams.
-          const heartbeat = setInterval(() => {
+          heartbeat = setInterval(() => {
             push({
               payload: {
                 type: "server.heartbeat",
@@ -105,15 +112,6 @@ export const GlobalRoutes = lazy(() =>
             push(event)
           }
           GlobalBus.on("event", handler)
-
-          const stop = () => {
-            if (done) return
-            done = true
-            clearInterval(heartbeat)
-            GlobalBus.off("event", handler)
-            q.push(null)
-            log.info("global event disconnected")
-          }
 
           stream.onAbort(stop)
 

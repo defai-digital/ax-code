@@ -10,6 +10,7 @@ import { WorkspaceTable } from "./workspace.sql"
 import { getAdaptor } from "./adaptors"
 import { parseSSE } from "./sse"
 import { Log } from "@/util/log"
+import { waitForAbortOrTimeout } from "./abort"
 
 export namespace Workspace {
   const log = Log.create({ service: "workspace" })
@@ -129,10 +130,7 @@ export namespace Workspace {
               type: item.type,
               err,
             })
-            await new Promise<void>((resolve) => {
-              const timer = setTimeout(resolve, backoff)
-              stop.signal.addEventListener("abort", () => { clearTimeout(timer); resolve() }, { once: true })
-            })
+            await waitForAbortOrTimeout(stop.signal, backoff)
             backoff = Math.min(backoff * 2, 30000)
           }
         }
