@@ -16,6 +16,7 @@ import { NativeStore } from "../../code-intelligence/native-store"
 import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
+import { resolveTuiRendererName } from "./tui/renderer-choice"
 import path from "path"
 import fs from "fs/promises"
 
@@ -161,7 +162,22 @@ export const DoctorCommand: CommandModule = {
       detail: gitExists ? "Found" : "Not a git repository",
     })
 
-    // 9. Native Rust addons — routed through the central NativeAddon registry
+    // 9. TUI renderer + Native Rust addons — keep renderer selection and
+    // addon compatibility visible in one place so preview-only native
+    // paths do not look product-complete in doctor output.
+    const renderer = resolveTuiRendererName()
+    checks.push({
+      name: "TUI renderer",
+      status: renderer === "opentui" ? "ok" : "warn",
+      detail:
+        renderer === "native"
+          ? "native (preview-only explicit opt-in)"
+          : renderer === "hybrid"
+            ? "hybrid (preview-only explicit opt-in, native-first with OpenTUI handoff)"
+            : "opentui (production default full UI)",
+    })
+
+    // 10. Native Rust addons — routed through the central NativeAddon registry
     // so the doctor reflects the exact same load semantics (flag gating +
     // MODULE_NOT_FOUND filtering) as every runtime call site.
     const addons = [
@@ -180,29 +196,143 @@ export const DoctorCommand: CommandModule = {
           : 'None installed — using TypeScript fallbacks (run "pnpm build:native" at the repo root for faster indexing/search)',
     })
 
-    // 10. Recent logs analysis
+    if (Flag.AX_CODE_NATIVE_TUI) {
+      checks.push({
+        name: "Native TUI addon",
+        status: "warn",
+        detail: "enabled (preview-only) — renderer still defaults to opentui unless AX_CODE_TUI_RENDERER=native or AX_CODE_TUI_RENDERER=hybrid is set",
+      })
+    }
+
+    // 11. Stale ax-code processes — multiple instances can block startup,
+    // exhaust the port, or corrupt the shared SQLite database.
+    try {
+      const result = await Bun.spawn(["pgrep", "-a", "-x", "ax-code"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const raw = await new Response(result.stdout).text()
+      const pids = raw.trim().split("\n").filter(Boolean)
+      const others = pids.filter(line => !line.includes(`${process.pid}`))
+      if (others.length > 0) {
+        checks.push({
+          name: "Running instances",
+          status: "warn",
+          detail: `${others.length} other ax-code process(es) found — this may block startup or cause port conflicts. PIDs: ${others.map(l => l.split(/\s+/)[0]).join(", ")}. Run: killall ax-code`,
+        })
+      } else {
+        checks.push({ name: "Running instances", status: "ok", detail: "No other ax-code processes" })
+      }
+    } catch {
+      // pgrep unavailable — skip
+    }
+
+    // 11b. TUI startup — port conflict and server liveness
+    try {
+      const serverRunning = await fetch("http://127.0.0.1:4096/", {
+        signal: AbortSignal.timeout(1500),
+      }).then(() => true).catch(() => false)
+
+      if (serverRunning) {
+        checks.push({
+          name: "TUI server",
+          status: "ok",
+          detail: "ax-code server responding on port 4096 (existing session active)",
+        })
+      } else {
+        // Check if something else owns the port
+        const portBlocked = await Bun.connect({
+          hostname: "127.0.0.1",
+          port: 4096,
+          socket: { open() {}, data() {}, close() {}, error() {} },
+        }).then(s => { s.end(); return true }).catch(() => false)
+
+        checks.push({
+          name: "TUI server",
+          status: portBlocked ? "warn" : "ok",
+          detail: portBlocked
+            ? "Port 4096 is in use by another process — ax-code may fail to start or bind a random port"
+            : "Port 4096 available",
+        })
+      }
+    } catch {
+      checks.push({ name: "TUI server", status: "ok", detail: "Port 4096 available" })
+    }
+
+    // 11b. Bun preload — SolidJS JSX transform required for the TUI renderer
+    try {
+      const preloadPath = Bun.resolveSync("@opentui/solid/preload", import.meta.dir)
+      checks.push({
+        name: "TUI preload",
+        status: "ok",
+        detail: `@opentui/solid/preload resolved (${path.basename(path.dirname(preloadPath))})`,
+      })
+    } catch {
+      checks.push({
+        name: "TUI preload",
+        status: "fail",
+        detail: "@opentui/solid/preload not found — TUI will fail to start. Run: pnpm install",
+      })
+    }
+
+    // 12. Recent logs analysis — scan last 5 log files for TUI crashes / errors
     try {
       const logDir = Global.Path.log
       const logFiles = await fs.readdir(logDir).catch(() => [] as string[])
-      const recentLog = logFiles.filter(f => f.endsWith(".log") && !f.endsWith(".json.log")).sort().pop()
-      if (recentLog) {
-        const content = await fs.readFile(path.join(logDir, recentLog), "utf8").catch(() => "")
+      const plainLogs = logFiles.filter(f => f.endsWith(".log") && !f.endsWith(".json.log")).sort()
+      const recentLogs = plainLogs.slice(-5)
+
+      let totalErrors = 0
+      let totalWarns = 0
+      const tuiErrors: string[] = []
+
+      for (const logFile of recentLogs) {
+        const content = await fs.readFile(path.join(logDir, logFile), "utf8").catch(() => "")
         const lines = content.split("\n").filter(Boolean)
         const errors = lines.filter(l => l.startsWith("ERROR"))
         const warns = lines.filter(l => l.startsWith("WARN"))
-        checks.push({
-          name: "Recent logs",
-          status: errors.length > 10 ? "warn" : "ok",
-          detail: `${recentLog}: ${lines.length} lines, ${errors.length} errors, ${warns.length} warnings`,
-        })
+        totalErrors += errors.length
+        totalWarns += warns.length
 
-        // Show last 3 errors if any
-        if (errors.length > 0) {
-          const recent = errors.slice(-3)
+        // Collect TUI / renderer / worker specific errors
+        for (const e of errors) {
+          const lower = e.toLowerCase()
+          if (
+            lower.includes("tui") ||
+            lower.includes("renderer") ||
+            lower.includes("worker") ||
+            lower.includes("jsx") ||
+            lower.includes("react") ||
+            lower.includes("unhandled") ||
+            lower.includes("crash")
+          ) {
+            tuiErrors.push(`[${logFile}] ${e.slice(0, 160)}`)
+          }
+        }
+      }
+
+      const recentLog = recentLogs.at(-1) ?? "none"
+      checks.push({
+        name: "Recent logs",
+        status: totalErrors > 10 ? "warn" : "ok",
+        detail: `${recentLogs.length} file(s) checked — ${totalErrors} errors, ${totalWarns} warnings`,
+      })
+
+      if (tuiErrors.length > 0) {
+        checks.push({
+          name: "TUI errors in logs",
+          status: "fail",
+          detail: tuiErrors.slice(-3).map(e => e.slice(0, 160)).join(" | "),
+        })
+      } else if (totalErrors > 0) {
+        // Show last 3 non-TUI errors from the most recent log
+        const content = await fs.readFile(path.join(logDir, recentLog), "utf8").catch(() => "")
+        const allErrors = content.split("\n").filter(l => l.startsWith("ERROR"))
+        if (allErrors.length > 0) {
           checks.push({
             name: "Recent errors",
             status: "warn",
-            detail: recent.map(e => e.slice(0, 120)).join(" | "),
+            detail: allErrors.slice(-3).map(e => e.slice(0, 120)).join(" | "),
           })
         }
       }
@@ -210,7 +340,7 @@ export const DoctorCommand: CommandModule = {
       // Log analysis is best-effort
     }
 
-    // 11. Code intelligence index status
+    // 12. Code intelligence index status
     try {
       const indexDb = path.join(Global.Path.data, "ax-code-index.db")
       const indexExists = await Bun.file(indexDb).exists()
@@ -225,7 +355,7 @@ export const DoctorCommand: CommandModule = {
       // Best-effort
     }
 
-    // 12. Feature flags
+    // 13. Feature flags
     const flags: string[] = []
     if (Flag.AX_CODE_DISABLE_MODELS_FETCH) flags.push("DISABLE_MODELS_FETCH")
     if (Flag.AX_CODE_NATIVE_INDEX) flags.push("NATIVE_INDEX=on")

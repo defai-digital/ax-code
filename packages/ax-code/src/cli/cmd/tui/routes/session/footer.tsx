@@ -1,8 +1,9 @@
-import { createMemo, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useSync } from "../../context/sync"
 import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/provider-state"
+import { useSDK } from "../../context/sdk"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
 import { Installation } from "@/installation"
@@ -30,6 +31,35 @@ export function Footer() {
   const sandbox = createMemo(() => footerSandboxView(isolationMode()))
   const directory = useDirectory()
   const connected = useConnected()
+  const sdk = useSDK()
+
+  // Show "reconnecting" badge only after the first successful connection —
+  // avoids a false-alarm flash during initial startup. A 3-second debounce
+  // prevents flicker on fast reconnects (watchdog trip + immediate recovery).
+  const [showReconnecting, setShowReconnecting] = createSignal(false)
+  let everConnected = false
+  let reconnectDebounce: ReturnType<typeof setTimeout> | undefined
+  createEffect(() => {
+    const isConnected = sdk.sseConnected
+    if (isConnected) {
+      everConnected = true
+      if (reconnectDebounce) {
+        clearTimeout(reconnectDebounce)
+        reconnectDebounce = undefined
+      }
+      setShowReconnecting(false)
+      return
+    }
+    if (!everConnected) return
+    if (reconnectDebounce) return
+    reconnectDebounce = setTimeout(() => {
+      reconnectDebounce = undefined
+      if (!sdk.sseConnected) setShowReconnecting(true)
+    }, 3000)
+  })
+  onCleanup(() => {
+    if (reconnectDebounce) clearTimeout(reconnectDebounce)
+  })
 
   const [store, setStore] = createStore({
     welcome: false,
@@ -111,6 +141,9 @@ export function Footer() {
             <text fg={theme.textMuted}>/status</text>
           </Match>
         </Switch>
+        <Show when={showReconnecting()}>
+          <text fg={theme.warning}>reconnecting...</text>
+        </Show>
         <text fg={sandbox().risk === "danger" ? theme.error : theme.success}>{sandbox().label}</text>
         <text fg={theme.textMuted}>v{Installation.VERSION}</text>
       </box>

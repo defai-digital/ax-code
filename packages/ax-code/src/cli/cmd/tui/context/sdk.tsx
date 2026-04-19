@@ -20,6 +20,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     const abort = new AbortController()
     const [workspaceID, setWorkspaceID] = createSignal<string | undefined>()
     let sse: AbortController | undefined
+    // Reactive SSE health: true while the stream is live and receiving events.
+    // External-event-source mode always reports connected (no SSE loop to fail).
+    const [sseConnected, setSseConnected] = createSignal(!props.events)
 
     function createSDK() {
       return createOpencodeClient({
@@ -69,6 +72,11 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       flush()
     }
 
+    // Stale-connection watchdog: if no SSE event arrives within 60s, the
+    // connection is considered hung (half-open TCP, silent proxy drop, etc.)
+    // and we abort the per-connection controller to force an immediate reconnect.
+    const SSE_WATCHDOG_MS = 60_000
+
     function startSSE() {
       sse?.abort()
       const ctrl = new AbortController()
@@ -76,15 +84,39 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       ;(async () => {
         while (true) {
           if (abort.signal.aborted || ctrl.signal.aborted) break
+          // Per-connection controller: aborting this forces reconnect without
+          // stopping the outer while-loop (ctrl remains live).
+          const connCtrl = new AbortController()
+          // Propagate outer abort into inner connection.
+          const onOuterAbort = () => connCtrl.abort()
+          ctrl.signal.addEventListener("abort", onOuterAbort, { once: true })
+          let watchdog: ReturnType<typeof setTimeout> | undefined
+          const resetWatchdog = () => {
+            if (watchdog) clearTimeout(watchdog)
+            watchdog = setTimeout(() => connCtrl.abort(), SSE_WATCHDOG_MS)
+          }
           try {
-            const events = await sdk.event.subscribe({}, { signal: ctrl.signal })
+            const events = await sdk.event.subscribe({}, { signal: connCtrl.signal })
+            setSseConnected(true)
+            resetWatchdog()
             for await (const event of events.stream) {
               if (ctrl.signal.aborted) break
+              resetWatchdog()
               handleEvent(event)
             }
           } catch {
+            setSseConnected(false)
             if (abort.signal.aborted || ctrl.signal.aborted) break
-            await new Promise((r) => setTimeout(r, 2000))
+            // Interruptible reconnect delay — wakes immediately if outer abort fires
+            await new Promise<void>((resolve) => {
+              const id = setTimeout(resolve, 2000)
+              const wake = () => { clearTimeout(id); resolve() }
+              abort.signal.addEventListener("abort", wake, { once: true })
+              ctrl.signal.addEventListener("abort", wake, { once: true })
+            })
+          } finally {
+            if (watchdog) clearTimeout(watchdog)
+            ctrl.signal.removeEventListener("abort", onOuterAbort)
           }
 
           if (timer) clearTimeout(timer)
@@ -111,6 +143,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     return {
       get client() {
         return sdk
+      },
+      get sseConnected() {
+        return sseConnected()
       },
       baseDirectory: props.directory,
       get directory() {

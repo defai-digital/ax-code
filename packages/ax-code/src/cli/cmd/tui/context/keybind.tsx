@@ -1,4 +1,4 @@
-import { createMemo } from "solid-js"
+import { createMemo, onCleanup } from "solid-js"
 import type { Keybind } from "@/util/keybind"
 import type { TuiConfig } from "@/config/tui"
 import type { ParsedKey, Renderable } from "@tui/renderer-adapter/opentui"
@@ -44,28 +44,12 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
       }
 
       if (!active) {
-        if (focus && !renderer.currentFocusedRenderable) {
+        if (focus && !focus.isDestroyed && !renderer.currentFocusedRenderable) {
           focus.focus()
         }
         setStore("leader", false)
       }
     }
-
-    useKeyboard(async (evt) => {
-      if (!store.leader && matchKeymapBinding(keybinds(), "leader", evt, store.leader)) {
-        leader(true)
-        return
-      }
-
-      if (store.leader && evt.name) {
-        setImmediate(() => {
-          if (focus && renderer.currentFocusedRenderable === focus) {
-            focus.focus()
-          }
-          leader(false)
-        })
-      }
-    })
 
     const result = {
       get all() {
@@ -107,6 +91,24 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
         return printKeymapBinding(keybinds(), key)
       },
     }
+
+    onCleanup(() => clearTimeout(timeout))
+
+    useKeyboard(async (evt) => {
+      if (!store.leader && result.match("leader", evt)) {
+        leader(true)
+        return
+      }
+
+      if (store.leader && evt.name) {
+        setImmediate(() => {
+          if (focus && !focus.isDestroyed && renderer.currentFocusedRenderable === focus) {
+            focus.focus()
+          }
+          leader(false)
+        })
+      }
+    })
     return result
   },
 })
