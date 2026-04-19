@@ -14,6 +14,10 @@ const HOT_PATH_INLINE_SPAN_FILES = [
   "routes/session/header.tsx",
   "routes/session/index.tsx",
 ]
+const HOT_PATH_LAYOUT_PATTERNS = [
+  { file: "routes/home.tsx", pattern: "minHeight=" },
+  { file: "routes/home.tsx", pattern: "gap=" },
+]
 
 function walkTSX(dir: string, out: string[] = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -105,6 +109,17 @@ function hotPathInlineSpanFindings(file: string) {
   return findings
 }
 
+function hotPathLayoutFindings(file: string) {
+  const relative = relativeFile(file)
+  const source = fs.readFileSync(file, "utf8")
+  return HOT_PATH_LAYOUT_PATTERNS.flatMap((rule) => {
+    if (rule.file !== relative) return []
+    return source
+      .split("\n")
+      .flatMap((line, index) => (line.includes(rule.pattern) ? [`${relative}:${index + 1}:1 ${rule.pattern}`] : []))
+  })
+}
+
 describe("tui render anti-patterns", () => {
   test("does not create reactive primitives inside JSX callbacks", () => {
     const findings = walkTSX(TUI_ROOT).flatMap((file) => jsxReactivePrimitiveFindings(file))
@@ -118,6 +133,11 @@ describe("tui render anti-patterns", () => {
 
   test("does not use inline spans in startup/session hot paths", () => {
     const findings = walkTSX(TUI_ROOT).flatMap((file) => hotPathInlineSpanFindings(file))
+    expect(findings).toEqual([])
+  })
+
+  test("does not use unstable layout props in the home startup hot path", () => {
+    const findings = walkTSX(TUI_ROOT).flatMap((file) => hotPathLayoutFindings(file))
     expect(findings).toEqual([])
   })
 })

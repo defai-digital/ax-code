@@ -55,17 +55,17 @@ export function Home() {
 
   const Hint = (
     <Show when={connectedMcpCount() > 0}>
-      <box flexShrink={0} flexDirection="row" gap={1}>
+      <box flexShrink={0} flexDirection="row">
         <Switch>
           <Match when={mcpError()}>
-            <box flexDirection="row" gap={0}>
+            <box flexDirection="row">
               <text fg={theme.error}>•</text>
               <text fg={theme.text}> mcp errors </text>
               <text fg={theme.textMuted}>ctrl+x s</text>
             </box>
           </Match>
           <Match when={true}>
-            <box flexDirection="row" gap={0}>
+            <box flexDirection="row">
               <text fg={theme.success}>•</text>
               <text fg={theme.text}> {Locale.pluralize(connectedMcpCount(), "{} mcp server", "{} mcp servers")}</text>
             </box>
@@ -109,12 +109,12 @@ export function Home() {
   return (
     <>
       <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
-        <box flexGrow={1} minHeight={0} />
-        <box height={4} minHeight={0} flexShrink={1} />
+        <box flexGrow={1} />
+        <box height={4} flexShrink={1} />
         <box flexShrink={0}>
           <Logo />
         </box>
-        <box height={1} minHeight={0} flexShrink={1} />
+        <box height={1} flexShrink={1} />
         <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
           <Prompt
             ref={(r) => {
@@ -125,19 +125,19 @@ export function Home() {
             workspaceID={route.workspaceID}
           />
         </box>
-        <box height={4} minHeight={0} width="100%" maxWidth={75} alignItems="center" paddingTop={3} flexShrink={1}>
+        <box height={4} width="100%" maxWidth={75} alignItems="center" paddingTop={3} flexShrink={1}>
           <Show when={showTips()}>
             <Tips />
           </Show>
         </box>
-        <box flexGrow={1} minHeight={0} />
+        <box flexGrow={1} />
         <Toast />
       </box>
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2}>
+      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0}>
         <text fg={theme.textMuted}>{directory()}</text>
-        <box gap={1} flexDirection="row" flexShrink={0}>
+        <box flexDirection="row" flexShrink={0} paddingLeft={2}>
           <Show when={mcp()}>
-            <box flexDirection="row" gap={0}>
+            <box flexDirection="row">
               <Switch>
                 <Match when={mcpError()}>
                   <text fg={theme.error}>⊙ </text>
@@ -148,11 +148,13 @@ export function Home() {
               </Switch>
               <text fg={theme.text}>{connectedMcpCount()} MCP</text>
             </box>
-            <text fg={theme.textMuted}>/status</text>
+            <text fg={theme.textMuted} paddingLeft={1}>
+              /status
+            </text>
           </Show>
         </box>
         <box flexGrow={1} />
-        <box flexShrink={0}>
+        <box flexShrink={0} paddingLeft={2}>
           <text fg={theme.textMuted}>{Installation.VERSION}</text>
         </box>
       </box>
