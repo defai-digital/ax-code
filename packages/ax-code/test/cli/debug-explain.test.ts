@@ -304,6 +304,41 @@ describe("debug explain replay hang analysis", () => {
     expect(issue?.rootCause).toContain("412")
   })
 
+  test("surfaces the caller stack from a render loop record", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.threadStarted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:02.000Z",
+        eventType: "tui.render.loopDetected",
+        data: {
+          renders: 230,
+          windowMs: 1000,
+          windowStartedAt: "2026-04-18T12:00:01.000Z",
+          stack: [
+            "at PromptComponent (component/prompt/index.tsx:142:18)",
+            "at SessionView (routes/session/index.tsx:230:5)",
+            "at runEffect (solid-js/web/dist/index.js:1234:9)",
+          ],
+        },
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:10.000Z"))
+    const issue = issues.find((i) => i.title.includes("renderer is repainting"))
+    expect(issue).toBeTruthy()
+    expect(issue?.rootCause).toContain("Caller stack at first burst")
+    expect(issue?.rootCause).toContain("PromptComponent")
+    expect(issue?.rootCause).toContain("SessionView")
+    expect(issue?.suggestedFix).toContain("topmost user frame")
+  })
+
   test("does not flag heartbeat stall when tui stopped normally", () => {
     const lines = [
       JSON.stringify({

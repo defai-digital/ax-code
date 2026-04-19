@@ -801,15 +801,22 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
     const latest = renderLoops[renderLoops.length - 1]
     const renders = asNumber(latest?.data.renders) ?? 0
     const windowMs = asNumber(latest?.data.windowMs) ?? 1_000
+    const stack = Array.isArray(latest?.data.stack)
+      ? (latest!.data.stack as unknown[]).filter((line): line is string => typeof line === "string").slice(0, 8)
+      : []
+    const stackBlock =
+      stack.length > 0 ? `\n\nCaller stack at first burst:\n${stack.map((line) => `    ${line}`).join("\n")}` : ""
     issues.push({
       severity: "critical",
       category: "TUI",
       title: "TUI renderer is repainting in a tight loop",
-      rootCause: `opentui's renderer.requestRender() was called ${renders} times in ${windowMs}ms (recorded ${renderLoops.length} time${renderLoops.length === 1 ? "" : "s"}). A render rate that high implies a callback above the renderer is requesting paints synchronously without yielding — likely a SolidJS render-side effect that mutates a signal it depends on, or a hot loop inside opentui's own event pipeline.`,
+      rootCause: `opentui's renderer.requestRender() was called ${renders} times in ${windowMs}ms (recorded ${renderLoops.length} time${renderLoops.length === 1 ? "" : "s"}). A render rate that high implies a callback above the renderer is requesting paints synchronously without yielding — likely a SolidJS render-side effect that mutates a signal it depends on, or a hot loop inside opentui's own event pipeline.${stackBlock}`,
       impact:
         "The main thread spins inside the render→paint→render path. Solid effects, store dispatches, and IPC are all starved.",
       suggestedFix:
-        "If a `tui.effect.loopDetected` record appears alongside, the labeled effect is the trigger. Otherwise the loop is below SolidJS — sample the process and trace what's calling `requestRender` synchronously, or temporarily wrap more components' render bodies with diagnostic logging.",
+        stack.length > 0
+          ? "Read the caller stack above — the topmost user frame names the component or render path that's spawning the bursts. Stabilize that callsite (memoize, narrow dependencies, or move work out of render) and re-test."
+          : "If a `tui.effect.loopDetected` record appears alongside, the labeled effect is the trigger. Otherwise the loop is below SolidJS — sample the process and trace what's calling `requestRender` synchronously, or temporarily wrap more components' render bodies with diagnostic logging.",
       riskLevel: "high",
       occurrences: renderLoops.length,
     })

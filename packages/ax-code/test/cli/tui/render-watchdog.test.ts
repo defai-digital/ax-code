@@ -66,4 +66,24 @@ describe("render-watchdog observer", () => {
     observe(state, base + RENDER_LOOP_WINDOW_MS + 1)
     expect(state.count).toBe(1)
   })
+
+  test("captureCallerStack returns the user frames excluding the wrapper", () => {
+    const { captureCallerStack } = __internals
+    function userFrame() {
+      return captureCallerStack(10)
+    }
+    const stack = userFrame()
+    expect(Array.isArray(stack)).toBe(true)
+    // The captured stack must not surface our own wrapper frames.
+    for (const frame of stack) {
+      expect(frame).not.toContain("render-watchdog")
+      expect(frame).not.toContain("captureCallerStack")
+    }
+    // Either we got at least one user frame, or the runtime suppressed
+    // stack lines entirely — both are acceptable, but if there are frames
+    // the test frame itself should appear among them.
+    if (stack.length > 0) {
+      expect(stack.some((frame) => frame.includes("userFrame") || frame.includes("render-watchdog.test"))).toBe(true)
+    }
+  })
 })

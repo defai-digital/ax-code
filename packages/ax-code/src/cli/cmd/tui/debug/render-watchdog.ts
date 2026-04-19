@@ -36,9 +36,31 @@ function observe(state: WatchdogState, now: number): boolean {
   return true
 }
 
+// Captures the stack of the *current* requestRender call so we can name the
+// caller chain that's spinning. Only invoked when the watchdog actually fires
+// (i.e. inside the throttle window already, so once per 5s max). We strip
+// our own wrapper frames so the first reported frame is the real caller.
+function captureCallerStack(maxFrames = 20): string[] {
+  const raw = new Error().stack
+  if (!raw) return []
+  const lines = raw.split("\n")
+  const out: string[] = []
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith("at ")) continue
+    if (trimmed.includes("render-watchdog")) continue
+    if (trimmed.includes("captureCallerStack")) continue
+    out.push(trimmed)
+    if (out.length >= maxFrames) break
+  }
+  return out
+}
+
 // Wraps `renderer.requestRender` to count invocations. When opentui (or any
 // caller above it) enters a loop that synchronously requests renders many
-// times per microtask, this fires `tui.render.loopDetected`.
+// times per microtask, this fires `tui.render.loopDetected` *with a stack
+// trace* of one of the offending calls — that's the cheapest way to point
+// at the component or library frame driving the loop.
 //
 // Catches the case where the hang is *outside* the SolidJS reactive system
 // — the store + tracedEffect signals only cover loops that flow through Solid
@@ -59,6 +81,10 @@ export function installRenderWatchdog(renderer: RendererLike): () => void {
         windowMs: RENDER_LOOP_WINDOW_MS,
         renders: state.count,
         windowStartedAt: new Date(state.windowStartedAt).toISOString(),
+        // Only walked when the watchdog actually fires, so this runs at most
+        // once per RENDER_LOOP_THROTTLE_MS — practically free even when the
+        // main thread is otherwise hot.
+        stack: captureCallerStack(),
       })
     }
     original()
@@ -72,6 +98,7 @@ export function installRenderWatchdog(renderer: RendererLike): () => void {
 export const __internals = {
   createState,
   observe,
+  captureCallerStack,
   RENDER_LOOP_WINDOW_MS,
   RENDER_LOOP_THRESHOLD,
   RENDER_LOOP_THROTTLE_MS,
