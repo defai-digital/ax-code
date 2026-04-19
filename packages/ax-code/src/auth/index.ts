@@ -32,11 +32,17 @@ async function acquireFileLock(): Promise<() => void> {
       await new Promise<void>((r) => setTimeout(r, 20))
     }
   }
-  // Stale lock: remove and retry once
+  // Stale lock: remove and retry once, keeping the EEXIST guard so a
+  // concurrent process that won the unlink-then-open race is detected.
   await fsPromises.unlink(lockFile).catch(() => {})
-  const fd = await fsPromises.open(lockFile, "wx")
-  await fd.close()
-  return () => fsPromises.unlink(lockFile).catch(() => {})
+  try {
+    const fd = await fsPromises.open(lockFile, "wx")
+    await fd.close()
+    return () => fsPromises.unlink(lockFile).catch(() => {})
+  } catch (e: any) {
+    if (e.code !== "EEXIST") throw e
+    throw new Error("Failed to acquire auth lock: still held after stale-lock cleanup")
+  }
 }
 
 const fail = (message: string) => (cause: unknown) => new Auth.AuthError({ message, cause })

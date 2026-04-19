@@ -76,11 +76,6 @@ export namespace McpOAuthCallback {
     if (server) return
     if (initPromise) return initPromise
     initPromise = (async () => {
-      const running = await isPortInUse()
-      if (running) {
-        log.info("oauth callback server already running on another instance", { port: OAUTH_CALLBACK_PORT })
-        return
-      }
       server = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,

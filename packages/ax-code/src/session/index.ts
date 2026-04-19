@@ -690,11 +690,15 @@ export namespace Session {
       }
       for (const desc of allDescendants) {
         db.delete(SessionTable).where(eq(SessionTable.id, desc.id)).run()
-        Database.effect(() => Bus.publish(Event.Deleted, { info: desc }))
       }
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
-      Database.effect(() => Bus.publish(Event.Deleted, { info: session }))
     })
+    // Publish events after the transaction commits so subscribers never
+    // observe a deletion event while the rows are still present.
+    for (const desc of allDescendants) {
+      Database.effect(() => Bus.publish(Event.Deleted, { info: desc }))
+    }
+    Database.effect(() => Bus.publish(Event.Deleted, { info: session }))
     const items = [...allDescendants, session]
     for (const item of items) {
       await unshare(item.id).catch((e) => log.warn("session unshare failed", { sessionID: item.id, error: e }))

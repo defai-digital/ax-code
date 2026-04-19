@@ -168,6 +168,9 @@ export namespace Installation {
             const sha256Url = `${scriptUrl}.sha256`
             const response = yield* httpOk.execute(HttpClientRequest.get(scriptUrl))
             const body = yield* response.text
+            // Encode once; reuse for both the SHA-256 check and the bash stdin
+            // so the hash is computed over exactly the bytes that get executed.
+            const bodyBytes = new TextEncoder().encode(body)
             // Verify SHA256 integrity sidecar when available. A hash mismatch
             // is a hard failure; a missing sidecar file only warns and proceeds
             // so existing deployments without a .sha256 file keep working.
@@ -180,8 +183,7 @@ export namespace Installation {
                 }
                 const expected = (await sha256Res.text()).trim().split(/\s+/)[0]
                 if (!expected) return
-                const bytes = new TextEncoder().encode(body)
-                const hashBuffer = await crypto.subtle.digest("SHA-256", bytes)
+                const hashBuffer = await crypto.subtle.digest("SHA-256", bodyBytes)
                 const actual = Array.from(new Uint8Array(hashBuffer))
                   .map((b) => b.toString(16).padStart(2, "0"))
                   .join("")
@@ -193,7 +195,6 @@ export namespace Installation {
                 log.warn("could not verify install script integrity", { error: e })
               }
             })
-            const bodyBytes = new TextEncoder().encode(body)
             const proc = ChildProcess.make("bash", [], {
               stdin: Stream.make(bodyBytes),
               env: { VERSION: target },
