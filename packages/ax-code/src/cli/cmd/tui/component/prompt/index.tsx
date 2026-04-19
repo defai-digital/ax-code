@@ -41,7 +41,6 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { tracedEffect } from "@tui/debug/effect-tracer"
 import { Usage } from "../../routes/session/usage"
-import { createAutoSubmitSessionRoute } from "../../routes/session/initial-prompt"
 import { footerSessionStatusLabel } from "../../routes/session/footer-view-model"
 import { Log } from "@/util/log"
 import { isPromptExitCommand, resolvePromptSlashDispatch } from "./view-model"
@@ -760,6 +759,7 @@ export function Prompt(props: PromptProps) {
     }
 
     let sessionID = props.sessionID
+    const createdSession = sessionID == null
     if (sessionID == null) {
       const res = await sdk.client.session.create({}).catch((error: unknown) => {
         reportSubmitFailure("Session creation", error)
@@ -778,16 +778,6 @@ export function Prompt(props: PromptProps) {
       }
 
       sessionID = res.data.id
-
-      // Keep the first prompt inside the session route so the initial
-      // submission does not race the home -> session transition.
-      route.navigate(
-        createAutoSubmitSessionRoute({
-          sessionID,
-          initialPrompt: currentPrompt,
-        }),
-      )
-      return
     }
 
     const messageID = MessageID.ascending()
@@ -862,6 +852,17 @@ export function Prompt(props: PromptProps) {
     history.append(currentPrompt)
     commitPromptSubmission()
     props.onSubmit?.()
+
+    if (createdSession) {
+      setTimeout(() => {
+        // Yield once so the first submission completes before the session
+        // view mounts its heavier tree.
+        route.navigate({
+          type: "session",
+          sessionID,
+        })
+      }, 0)
+    }
   }
   const exit = useExit()
 

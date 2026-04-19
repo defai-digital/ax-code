@@ -94,7 +94,6 @@ import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
 import { Log } from "@/util/log"
 import { deferSessionMount } from "./deferred-mount"
-import { initialPromptAutoSubmitKey, shouldAutoSubmitInitialPrompt } from "./initial-prompt"
 
 const log = Log.create({ service: "tui.session" })
 
@@ -272,7 +271,6 @@ function SessionView() {
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
-  const [promptRevision, setPromptRevision] = createSignal(0)
   const keybind = useKeybind()
   const dialog = useDialog()
   const renderer = useRenderer()
@@ -331,56 +329,6 @@ function SessionView() {
   }
 
   const local = useLocal()
-  let autoSubmittedInitialPromptKey: string | undefined
-
-  tracedEffect(
-    "session.route.restoreInitialPrompt",
-    on(
-      () => [route.sessionID, route.initialPrompt?.input, promptRevision()] as const,
-      () => {
-        if (!route.initialPrompt) return
-        promptRef.current?.set(route.initialPrompt)
-      },
-    ),
-  )
-
-  tracedEffect(
-    "session.route.autoSubmitInitialPrompt",
-    on(
-      () =>
-        [
-          route.sessionID,
-          route.autoSubmit === true,
-          route.initialPrompt?.input,
-          promptRevision(),
-          sync.ready,
-          local.model.ready,
-        ] as const,
-      ([sessionID, autoSubmit, initialPromptInput, _promptRevision, syncReady, modelReady]) => {
-        const currentInput = promptRef.current?.current.input
-        if (
-          !shouldAutoSubmitInitialPrompt({
-            sessionID,
-            autoSubmit,
-            initialPromptInput,
-            currentInput,
-            syncReady,
-            modelReady,
-            submittedKey: autoSubmittedInitialPromptKey,
-          })
-        ) {
-          return
-        }
-
-        autoSubmittedInitialPromptKey = initialPromptAutoSubmitKey({
-          sessionID,
-          autoSubmit,
-          initialPromptInput,
-        })
-        promptRef.current?.submit()
-      },
-    ),
-  )
 
   function moveFirstChild() {
     const next = firstChildID(children())
@@ -992,7 +940,6 @@ function SessionView() {
                 ref={(r) => {
                   prompt = r
                   promptRef.set(r)
-                  setPromptRevision((value) => value + 1)
                 }}
                 disabled={permissions().length > 0 || questions().length > 0}
                 onSubmit={() => {
