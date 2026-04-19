@@ -9,12 +9,11 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-# Channel policy: only the v2.25.x stable series is promoted to npm "latest"
-# and tagged as the GitHub "Latest" release. Everything else (v2.24 and below,
-# v2.26+, v3.x, future majors) ships on the "beta" channel until explicitly
-# promoted via the "Promote to Stable" workflow.
+# Channel policy: stable semver tags (for example `v3.1.4`) publish to npm
+# `latest`, are marked as the GitHub "Latest" release, and update Homebrew.
+# Prerelease tags (for example `v3.2.0-beta.1`) stay on the `beta` channel.
 env:
-  AX_CODE_RELEASE_CHANNEL: ${{ startsWith(github.ref_name, 'v2.25.') && 'latest' || 'beta' }}
+  AX_CODE_RELEASE_CHANNEL: ${{ contains(github.ref_name, '-') && 'beta' || 'latest' }}
 
 jobs:
   typecheck:
@@ -188,11 +187,9 @@ jobs:
 
   homebrew:
     needs: publish
-    # Homebrew tap tracks the stable channel only. Beta tags (anything outside
-    # the v2.25.x series) build and publish to npm but must not update the
-    # tap, otherwise `brew upgrade ax-code` would silently move users off
-    # stable.
-    if: ${{ startsWith(github.ref_name, 'v2.25.') }}
+    # Homebrew tracks stable releases only. Prerelease tags still publish to
+    # npm/GitHub, but they must not move brew users off the stable line.
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

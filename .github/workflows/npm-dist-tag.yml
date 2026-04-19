@@ -4,9 +4,9 @@ name: npm dist-tag
 # platform-binary subpackages in one shot. Use this to retag a published
 # version as `latest` (stable) or `beta` without republishing.
 #
-# Channel policy lives in `.github/workflows/release.yml`: the v2.25.x
-# series is the stable line; everything else ships as beta. This workflow
-# is the lever that enforces that policy on the npm registry side.
+# Channel policy lives in `.github/workflows/release.yml`: stable semver tags
+# publish to `latest`, while prerelease tags (for example `-beta.1`, `-rc.1`)
+# publish to `beta`. This workflow is the manual override lever for npm tags.
 
 on:
   workflow_dispatch:
