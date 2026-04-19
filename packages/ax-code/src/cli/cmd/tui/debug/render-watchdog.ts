@@ -6,6 +6,7 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 // a hot loop calling requestRender() many times per microtask).
 const RENDER_LOOP_WINDOW_MS = 1_000
 const RENDER_LOOP_THRESHOLD = 200
+const RENDER_LOOP_COOLDOWN_MS = 16
 
 type RendererLike = {
   requestRender: () => void
@@ -15,10 +16,19 @@ type WatchdogState = {
   count: number
   windowStartedAt: number
   alertedThisWindow: boolean
+  cooldownUntil: number
+  flushPending: boolean
+  flushTimer?: ReturnType<typeof setTimeout>
 }
 
 function createState(): WatchdogState {
-  return { count: 0, windowStartedAt: Date.now(), alertedThisWindow: false }
+  return {
+    count: 0,
+    windowStartedAt: Date.now(),
+    alertedThisWindow: false,
+    cooldownUntil: 0,
+    flushPending: false,
+  }
 }
 
 // Roll a 1s window. Returns true at most once per window (when threshold is
@@ -63,6 +73,16 @@ function captureCallerStack(maxFrames = 20): string[] {
   return out
 }
 
+function armCooldown(state: WatchdogState, now: number) {
+  state.cooldownUntil = Math.max(state.cooldownUntil, now + RENDER_LOOP_COOLDOWN_MS)
+}
+
+function shouldCoalesce(state: WatchdogState, now: number): boolean {
+  if (now >= state.cooldownUntil) return false
+  state.flushPending = true
+  return true
+}
+
 // Wraps `renderer.requestRender` to count invocations. When opentui (or any
 // caller above it) enters a loop that synchronously requests renders many
 // times per microtask, this fires `tui.render.loopDetected` *with a stack
@@ -76,28 +96,53 @@ function captureCallerStack(maxFrames = 20): string[] {
 //
 // Returns a dispose function that restores the original method.
 export function installRenderWatchdog(renderer: RendererLike): () => void {
-  if (!DiagnosticLog.enabled()) return () => {}
   if (!renderer || typeof renderer.requestRender !== "function") return () => {}
 
   const original = renderer.requestRender.bind(renderer)
   const state = createState()
+  const debugEnabled = DiagnosticLog.enabled()
+
+  const scheduleFlush = () => {
+    if (state.flushTimer) return
+    const delay = Math.max(0, state.cooldownUntil - Date.now())
+    state.flushTimer = setTimeout(() => {
+      state.flushTimer = undefined
+      if (!state.flushPending) return
+      if (Date.now() < state.cooldownUntil) {
+        scheduleFlush()
+        return
+      }
+      state.flushPending = false
+      original()
+    }, delay)
+  }
 
   renderer.requestRender = function () {
-    if (observe(state, Date.now())) {
-      DiagnosticLog.recordProcess("tui.render.loopDetected", {
-        windowMs: RENDER_LOOP_WINDOW_MS,
-        renders: state.count,
-        windowStartedAt: new Date(state.windowStartedAt).toISOString(),
-        // Only walked when the watchdog actually fires, so this runs at most
-        // once per RENDER_LOOP_THROTTLE_MS — practically free even when the
-        // main thread is otherwise hot.
-        stack: captureCallerStack(),
-      })
+    const now = Date.now()
+    if (shouldCoalesce(state, now)) {
+      scheduleFlush()
+      return
+    }
+
+    if (observe(state, now)) {
+      armCooldown(state, now)
+      if (debugEnabled) {
+        DiagnosticLog.recordProcess("tui.render.loopDetected", {
+          windowMs: RENDER_LOOP_WINDOW_MS,
+          renders: state.count,
+          windowStartedAt: new Date(state.windowStartedAt).toISOString(),
+          // Only walked when the watchdog actually fires, so this runs at most
+          // once per render-loop window — practically free even when the main
+          // thread is otherwise hot.
+          stack: captureCallerStack(),
+        })
+      }
     }
     original()
   }
 
   return () => {
+    if (state.flushTimer) clearTimeout(state.flushTimer)
     renderer.requestRender = original
   }
 }
@@ -106,6 +151,9 @@ export const __internals = {
   createState,
   observe,
   captureCallerStack,
+  armCooldown,
+  shouldCoalesce,
   RENDER_LOOP_WINDOW_MS,
   RENDER_LOOP_THRESHOLD,
+  RENDER_LOOP_COOLDOWN_MS,
 }

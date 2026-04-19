@@ -256,6 +256,21 @@ function SessionView() {
     return new CustomSpeedScroll(3)
   })
 
+  const scrollTrackOptions = createMemo(() => ({
+    backgroundColor: theme.backgroundElement,
+    foregroundColor: theme.border,
+  }))
+
+  const scrollViewportOptions = createMemo(() => ({
+    paddingRight: showScrollbar() ? 1 : 0,
+  }))
+
+  const verticalScrollbarOptions = createMemo(() => ({
+    paddingLeft: 1,
+    visible: showScrollbar(),
+    trackOptions: scrollTrackOptions(),
+  }))
+
   tracedEffect("session.route.syncSession", async () => {
     await sync.session
       .sync(route.sessionID)
@@ -881,17 +896,8 @@ function SessionView() {
             </Show>
             <scrollbox
               ref={(r) => (scroll = r)}
-              viewportOptions={{
-                paddingRight: showScrollbar() ? 1 : 0,
-              }}
-              verticalScrollbarOptions={{
-                paddingLeft: 1,
-                visible: showScrollbar(),
-                trackOptions: {
-                  backgroundColor: theme.backgroundElement,
-                  foregroundColor: theme.border,
-                },
-              }}
+              viewportOptions={scrollViewportOptions()}
+              verticalScrollbarOptions={verticalScrollbarOptions()}
               stickyScroll={true}
               stickyStart="bottom"
               flexGrow={1}

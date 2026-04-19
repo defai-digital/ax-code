@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { __internals } from "../../../src/cli/cmd/tui/debug/render-watchdog"
 
-const { createState, observe, RENDER_LOOP_WINDOW_MS, RENDER_LOOP_THRESHOLD } = __internals
+const { createState, observe, armCooldown, shouldCoalesce, RENDER_LOOP_WINDOW_MS, RENDER_LOOP_THRESHOLD, RENDER_LOOP_COOLDOWN_MS } =
+  __internals
 
 // createState() seeds windowStartedAt with Date.now(); to use deterministic
 // fake timestamps, the tests reset windowStartedAt to align with `base`.
@@ -96,5 +97,20 @@ describe("render-watchdog observer", () => {
     if (stack.length > 0) {
       expect(stack.some((frame) => frame.includes("userFrame") || frame.includes("render-watchdog.test"))).toBe(true)
     }
+  })
+
+  test("coalesces renders while cooldown is active", () => {
+    const base = 1_700_000_000_000
+    const state = freshState(base)
+    armCooldown(state, base)
+    expect(shouldCoalesce(state, base)).toBe(true)
+    expect(state.flushPending).toBe(true)
+  })
+
+  test("allows renders again after the cooldown window", () => {
+    const base = 1_700_000_000_000
+    const state = freshState(base)
+    armCooldown(state, base)
+    expect(shouldCoalesce(state, base + RENDER_LOOP_COOLDOWN_MS + 1)).toBe(false)
   })
 })

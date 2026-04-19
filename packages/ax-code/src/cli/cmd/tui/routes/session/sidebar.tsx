@@ -300,6 +300,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
 
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
+  const verticalScrollbarOptions = createMemo(() => ({
+    trackOptions: {
+      backgroundColor: theme.background,
+      foregroundColor: theme.borderActive,
+    },
+  }))
 
   return (
     <Show when={session()}>
@@ -315,12 +321,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       >
         <scrollbox
           flexGrow={1}
-          verticalScrollbarOptions={{
-            trackOptions: {
-              backgroundColor: theme.background,
-              foregroundColor: theme.borderActive,
-            },
-          }}
+          verticalScrollbarOptions={verticalScrollbarOptions()}
         >
           <box flexShrink={0} gap={1} paddingRight={1}>
             <box paddingRight={1}>

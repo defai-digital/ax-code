@@ -193,9 +193,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
   renderer.disableStdoutInterception()
-  // Counts opentui requestRender calls per second; fires
-  // tui.render.loopDetected if a render loop happens outside the SolidJS
-  // reactive system. No-op when --debug is off.
+  // Guard against runaway requestRender() feedback loops in opentui. With
+  // --debug enabled it also records tui.render.loopDetected stacks, but the
+  // backpressure itself stays on in normal runs so render bursts cannot wedge
+  // the main thread and starve Ctrl+C / IPC forever.
   const disposeRenderWatchdog = installRenderWatchdog(renderer)
   onCleanup(disposeRenderWatchdog)
   const dialog = useDialog()
