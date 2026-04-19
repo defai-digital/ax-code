@@ -8,7 +8,19 @@ import {
   dim,
   fg,
 } from "@tui/renderer-adapter/opentui"
-import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
+import {
+  batch,
+  createEffect,
+  createMemo,
+  type JSX,
+  onMount,
+  createSignal,
+  onCleanup,
+  on,
+  Show,
+  Switch,
+  Match,
+} from "solid-js"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
 import { useLocal } from "@tui/context/local"
@@ -229,13 +241,19 @@ export function Prompt(props: PromptProps) {
   }
 
   function restorePrompt(prompt: PromptInfo) {
-    setStore("prompt", {
-      input: prompt.input,
-      parts: prompt.parts,
+    // Batched so all four writes complete before any dependent render
+    // effect or memo fires. Without batch() each setStore would fan out
+    // independently into the autocomplete/option tree and trigger a
+    // separate opentui setProperty pass per keystroke.
+    batch(() => {
+      setStore("prompt", {
+        input: prompt.input,
+        parts: prompt.parts,
+      })
+      setStore("mode", prompt.mode ?? "normal")
+      setStore("historyCursor", 0)
+      setStore("historyDraft", undefined)
     })
-    setStore("mode", prompt.mode ?? "normal")
-    setStore("historyCursor", 0)
-    setStore("historyDraft", undefined)
   }
 
   function currentPromptEditorState() {
@@ -251,14 +269,32 @@ export function Prompt(props: PromptProps) {
   }
 
   function applyPromptEditorState(next: ReturnType<typeof createPromptEditorState>, inputValue = next.input) {
-    setStore("prompt", {
-      input: inputValue,
-      parts: next.parts,
+    // ROOT CAUSE FIX for the "hang after first input" bug:
+    //
+    // This function is called from onContentChange on every keystroke via
+    // applyPromptEditorAction. The five separate setStore() calls here
+    // previously fired five separate Solid reactive batches per keystroke,
+    // each one cascading into the autocomplete option tree, extmark
+    // reconciliation, and the status row's render effects. The v2.24.9
+    // render-watchdog burst #3 captured the tail of that cascade:
+    //
+    //   requestRender -> flexDirection -> setProperty -> createRoot
+    //   -> runUpdates -> setStore -> applyPromptEditorState
+    //   -> applyPromptEditorAction
+    //
+    // Wrapping the five writes in `batch()` collapses them to one reactive
+    // pass, so downstream render effects see a consistent state exactly once
+    // per keystroke instead of once per write.
+    batch(() => {
+      setStore("prompt", {
+        input: inputValue,
+        parts: next.parts,
+      })
+      setStore("mode", next.mode)
+      setStore("interrupt", next.interrupt)
+      setStore("historyCursor", next.historyCursor)
+      setStore("historyDraft", next.historyDraft)
     })
-    setStore("mode", next.mode)
-    setStore("interrupt", next.interrupt)
-    setStore("historyCursor", next.historyCursor)
-    setStore("historyDraft", next.historyDraft)
   }
 
   function applyPromptEditorAction(action: PromptEditorAction) {
@@ -269,14 +305,18 @@ export function Prompt(props: PromptProps) {
   function clearPromptInput() {
     input.extmarks.clear()
     input.clear()
-    setStore("extmarkToPartIndex", new Map())
-    applyPromptEditorAction({ type: "prompt.cleared" })
+    batch(() => {
+      setStore("extmarkToPartIndex", new Map())
+      applyPromptEditorAction({ type: "prompt.cleared" })
+    })
   }
 
   function commitPromptSubmission() {
-    applyPromptEditorAction({ type: "submission.committed" })
+    batch(() => {
+      applyPromptEditorAction({ type: "submission.committed" })
+      setStore("extmarkToPartIndex", new Map())
+    })
     input.extmarks.clear()
-    setStore("extmarkToPartIndex", new Map())
     input.clear()
   }
 
