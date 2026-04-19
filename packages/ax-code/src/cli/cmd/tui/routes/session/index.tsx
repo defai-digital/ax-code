@@ -8,6 +8,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Switch,
   useContext,
@@ -91,6 +92,7 @@ import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
 import { Log } from "@/util/log"
+import { deferSessionMount } from "./deferred-mount"
 
 const log = Log.create({ service: "tui.session" })
 
@@ -126,6 +128,33 @@ function use() {
 }
 
 export function Session() {
+  const { theme } = useTheme()
+  const [ready, setReady] = createSignal(false)
+
+  onMount(() => {
+    // Yield once before mounting the full session tree so the first
+    // home -> session transition does not wedge OpenTUI's main thread.
+    const cleanup = deferSessionMount({
+      onReady: () => setReady(true),
+    })
+    onCleanup(cleanup)
+  })
+
+  return (
+    <Show
+      when={ready()}
+      fallback={
+        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2}>
+          <text fg={theme.textMuted}>Loading session...</text>
+        </box>
+      }
+    >
+      <SessionView />
+    </Show>
+  )
+}
+
+function SessionView() {
   const route = useRouteData("session")
   const { navigate } = useRoute()
   const sync = useSync()
