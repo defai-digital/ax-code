@@ -1,12 +1,11 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@tui/renderer-adapter/opentui"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { batch, createContext, onCleanup, Show, useContext, type JSX, type ParentProps } from "solid-js"
 import { useTheme } from "@tui/context/theme"
-import { MouseButton, Renderable, RGBA } from "@tui/renderer-adapter/opentui"
+import { MouseButton, Renderable, RGBA } from "@opentui/core"
 import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
 import { Flag } from "@/flag/flag"
 import { Selection } from "@tui/util/selection"
-import type { FocusDialog } from "../input/focus-manager"
 
 export function Dialog(
   props: ParentProps<{
@@ -61,7 +60,6 @@ function init() {
   const [store, setStore] = createStore({
     stack: [] as {
       element: JSX.Element
-      kind: FocusDialog
       onClose?: () => void
     }[],
     size: "medium" as "medium" | "large",
@@ -105,24 +103,6 @@ function init() {
   }
   onCleanup(() => clearTimeout(refocusTimer))
 
-  function replaceDialog(kind: FocusDialog, input: any, onClose?: () => void) {
-    if (store.stack.length === 0) {
-      focus = renderer.currentFocusedRenderable
-      focus?.blur()
-    }
-    for (const item of store.stack) {
-      if (item.onClose) item.onClose()
-    }
-    setStore("size", "medium")
-    setStore("stack", [
-      {
-        element: input,
-        kind,
-        onClose,
-      },
-    ])
-  }
-
   return {
     clear() {
       for (const item of store.stack) {
@@ -135,16 +115,23 @@ function init() {
       refocus()
     },
     replace(input: any, onClose?: () => void) {
-      replaceDialog("custom", input, onClose)
-    },
-    replaceWithKind(kind: FocusDialog, input: any, onClose?: () => void) {
-      replaceDialog(kind, input, onClose)
+      if (store.stack.length === 0) {
+        focus = renderer.currentFocusedRenderable
+        focus?.blur()
+      }
+      for (const item of store.stack) {
+        if (item.onClose) item.onClose()
+      }
+      setStore("size", "medium")
+      setStore("stack", [
+        {
+          element: input,
+          onClose,
+        },
+      ])
     },
     get stack() {
       return store.stack
-    },
-    get kind() {
-      return store.stack.at(-1)?.kind
     },
     get size() {
       return store.size

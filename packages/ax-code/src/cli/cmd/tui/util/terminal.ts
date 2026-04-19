@@ -1,4 +1,4 @@
-import { RGBA } from "@tui/renderer-adapter/opentui"
+import { RGBA } from "@opentui/core"
 
 export namespace Terminal {
   export type Colors = Awaited<ReturnType<typeof colors>>

@@ -1,7 +1,7 @@
-import { TextAttributes } from "@tui/renderer-adapter/opentui"
+import { TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
-import { useKeyboard } from "@tui/renderer-adapter/opentui"
+import { useKeyboard } from "@opentui/solid"
 
 export type DialogAlertProps = {
   title: string
@@ -51,8 +51,7 @@ export function DialogAlert(props: DialogAlertProps) {
 
 DialogAlert.show = (dialog: DialogContext, title: string, message: string) => {
   return new Promise<void>((resolve) => {
-    dialog.replaceWithKind(
-      "alert",
+    dialog.replace(
       () => <DialogAlert title={title} message={message} onConfirm={() => resolve()} />,
       () => resolve(),
     )

@@ -11,14 +11,11 @@ import { withNetworkOptions, resolveNetworkOptions } from "@/cli/network"
 import { Filesystem } from "@/util/filesystem"
 import type { Event } from "@ax-code/sdk/v2"
 import type { EventSource } from "./context/sdk"
-import type { Args } from "./context/args"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
 import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
 import { writeHeapSnapshot } from "v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
-import { resolveTuiRendererName } from "./renderer-choice"
-import type { TuiRendererName } from "./renderer-adapter/types"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -26,26 +23,7 @@ declare global {
 
 type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
 
-export type TuiThreadInput = {
-  url: string
-  onSnapshot: () => Promise<string[]>
-  config: TuiConfig.Info
-  directory: string
-  fetch?: typeof fetch
-  events?: EventSource
-  args: Args
-}
-
-export function validateTuiThreadArgs(args: { fork?: boolean; continue?: boolean; session?: string }) {
-  if (args.fork && !args.continue && !args.session) return "--fork requires --continue or --session"
-}
-
-export function resolveTuiThreadDirectory(project?: string) {
-  const root = Filesystem.resolve(Filesystem.callerCwd())
-  return project ? Filesystem.resolve(path.isAbsolute(project) ? project : path.join(root, project)) : root
-}
-
-export function createWorkerFetch(client: RpcClient): typeof fetch {
+function createWorkerFetch(client: RpcClient): typeof fetch {
   const fn = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init)
     const body = request.body ? await request.text() : undefined
@@ -63,7 +41,7 @@ export function createWorkerFetch(client: RpcClient): typeof fetch {
   return fn as typeof fetch
 }
 
-export function createEventSource(client: RpcClient): EventSource {
+function createEventSource(client: RpcClient): EventSource {
   return {
     on: (handler) => client.on<Event>("event", handler),
     setWorkspace: (workspaceID) => {
@@ -84,77 +62,6 @@ async function input(value?: string) {
   if (!value) return piped
   if (!piped) return value
   return piped + "\n" + value
-}
-
-export async function createTuiThreadTransport(input: {
-  args: {
-    port?: number
-    hostname?: string
-    mdns?: boolean
-  }
-  client: RpcClient
-  argv?: string[]
-  resolveNetwork?: (args: { port?: number; hostname?: string; mdns?: boolean }) => Promise<{
-    hostname: string
-    port: number
-    mdns: boolean
-  }>
-}) {
-  const resolveNetwork =
-    input.resolveNetwork ??
-    (async (args: { port?: number; hostname?: string; mdns?: boolean }) => {
-      const network = await resolveNetworkOptions(args as Parameters<typeof resolveNetworkOptions>[0])
-      return {
-        hostname: network.hostname,
-        port: network.port,
-        mdns: network.mdns,
-      }
-    })
-  const network = await resolveNetwork(input.args)
-  const argv = input.argv ?? process.argv
-  const external =
-    argv.includes("--port") ||
-    argv.includes("--hostname") ||
-    argv.includes("--mdns") ||
-    network.mdns ||
-    network.port !== 0 ||
-    network.hostname !== "127.0.0.1"
-
-  return external
-    ? {
-        url: (await input.client.call("server", network)).url,
-        fetch: undefined,
-        events: undefined,
-      }
-    : {
-        url: "http://opencode.internal",
-        fetch: createWorkerFetch(input.client),
-        events: createEventSource(input.client),
-      }
-}
-
-export async function launchTuiThreadRenderer(
-  input: TuiThreadInput,
-  dependencies: {
-    rendererName?: TuiRendererName
-    runNativeTuiSlice?: (input: TuiThreadInput) => Promise<unknown>
-    runOpentui?: (input: TuiThreadInput) => Promise<unknown>
-    recordProcess?: (eventType: string, data?: Record<string, unknown>) => void
-  } = {},
-) {
-  const rendererName = dependencies.rendererName ?? resolveTuiRendererName()
-  const recordProcess = dependencies.recordProcess ?? DiagnosticLog.recordProcess
-
-  if (rendererName === "native") {
-    recordProcess("tui.threadLaunchNative", { directory: input.directory })
-    const runNativeTuiSlice =
-      dependencies.runNativeTuiSlice ?? (await import("./native/vertical-slice")).runNativeTuiSlice
-    return runNativeTuiSlice(input)
-  }
-
-  recordProcess("tui.threadLaunchOpentui", { directory: input.directory })
-  const runOpentui = dependencies.runOpentui ?? (await import("./app")).tui
-  return runOpentui(input)
 }
 
 export const TuiThreadCommand = cmd({
@@ -202,14 +109,19 @@ export const TuiThreadCommand = cmd({
       // spawn or async work so the OS cannot kill the process group.
       win32DisableProcessedInput()
 
-      const argError = validateTuiThreadArgs(args)
-      if (argError) {
-        UI.error(argError)
+      if (args.fork && !args.continue && !args.session) {
+        UI.error("--fork requires --continue or --session")
         process.exitCode = 1
         return
       }
 
-      const next = resolveTuiThreadDirectory(args.project)
+      // Resolve relative --project paths from the caller's original cwd, then
+      // use the real cwd after chdir so the thread and worker share the same
+      // directory key. Filesystem.callerCwd() handles the --cwd offset.
+      const root = Filesystem.resolve(Filesystem.callerCwd())
+      const next = args.project
+        ? Filesystem.resolve(path.isAbsolute(args.project) ? args.project : path.join(root, args.project))
+        : root
       const file = await target()
       try {
         process.chdir(next)
@@ -218,21 +130,6 @@ export const TuiThreadCommand = cmd({
         return
       }
       const cwd = Filesystem.resolve(process.cwd())
-      const debugDir = process.env.AX_CODE_DEBUG === "1" ? process.env.AX_CODE_DEBUG_DIR : undefined
-
-      await DiagnosticLog.configure({
-        enabled: Boolean(debugDir),
-        dir: debugDir,
-        includeContent: process.env.AX_CODE_DEBUG_INCLUDE_CONTENT === "1",
-        manifest: {
-          component: "tui-thread",
-          version: process.env["npm_package_version"],
-          argv: process.argv,
-          cwd,
-        },
-      })
-      if (debugDir) DiagnosticLog.installProcessDiagnostics()
-      DiagnosticLog.recordProcess("tui.threadStarted", { directory: cwd })
 
       const sanitized = Env.sanitize()
       const worker = new Worker(file, {
@@ -285,34 +182,35 @@ export const TuiThreadCommand = cmd({
         fn: () => TuiConfig.get(),
       })
 
-      const transport = await createTuiThreadTransport({
-        args,
-        client,
-      })
-      DiagnosticLog.recordProcess("tui.threadTransportSelected", {
-        mode: transport.fetch ? "internal" : "external",
-      })
+      const network = await resolveNetworkOptions(args)
+      const external =
+        process.argv.includes("--port") ||
+        process.argv.includes("--hostname") ||
+        process.argv.includes("--mdns") ||
+        network.mdns ||
+        network.port !== 0 ||
+        network.hostname !== "127.0.0.1"
+
+      const transport = external
+        ? {
+            url: (await client.call("server", network)).url,
+            fetch: undefined,
+            events: undefined,
+          }
+        : {
+            url: "http://opencode.internal",
+            fetch: createWorkerFetch(client),
+            events: createEventSource(client),
+          }
 
       const upgradeTimer = setTimeout(() => {
         client.call("checkUpgrade", { directory: cwd }).catch(() => {})
       }, 1000)
       upgradeTimer.unref?.()
 
-      // Main-thread liveness ping for the worker watchdog. If the renderer
-      // wedges in a synchronous loop, setInterval stops firing here, the
-      // worker's watchdog sees the gap, and writes `tui.worker.mainStalled`.
-      // Only install when diagnostic logging is on — zero overhead otherwise.
-      const mainPingInterval = debugDir
-        ? setInterval(() => {
-            client.call("pingMain", { time: Date.now() }).catch(() => {
-              // The worker may not accept pings while shutting down; drop.
-            })
-          }, 500)
-        : undefined
-      mainPingInterval?.unref?.()
-
       try {
-        const tuiInput = {
+        const { tui } = await import("./app")
+        await tui({
           url: transport.url,
           async onSnapshot() {
             const tui = writeHeapSnapshot("tui.heapsnapshot")
@@ -331,12 +229,9 @@ export const TuiThreadCommand = cmd({
             prompt,
             fork: args.fork,
           },
-        }
-
-        await launchTuiThreadRenderer(tuiInput)
+        })
       } finally {
         clearTimeout(upgradeTimer)
-        if (mainPingInterval) clearInterval(mainPingInterval)
         await stop()
       }
     } finally {

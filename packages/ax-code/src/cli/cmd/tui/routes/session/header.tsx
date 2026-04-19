@@ -7,21 +7,16 @@ import type { AssistantMessage, Session } from "@ax-code/sdk/v2"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { Flag } from "@/flag/flag"
-import { TextAttributes, useTerminalDimensions } from "@tui/renderer-adapter/opentui"
+import { useTerminalDimensions } from "@opentui/solid"
 import { Usage } from "./usage"
-import { sessionHeaderContextLabel, sessionHeaderLayout, sessionHeaderWorkspaceLabel } from "./header-view-model"
 
 const Title = (props: { session: Accessor<Session | undefined> }) => {
   const { theme } = useTheme()
   return (
-    <box flexDirection="row" gap={0}>
-      <text fg={theme.text} attributes={TextAttributes.BOLD}>
-        #
-      </text>
-      <text fg={theme.text} attributes={TextAttributes.BOLD}>
-        {props.session()?.title ?? "Loading session..."}
-      </text>
-    </box>
+    <text fg={theme.text}>
+      <span style={{ bold: true }}>#</span>{" "}
+      <span style={{ bold: true }}>{props.session()?.title ?? "Loading session..."}</span>
+    </text>
   )
 }
 
@@ -58,22 +53,26 @@ export function Header() {
     if (!last) return
     const total = Usage.total(last)
     const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
-    return sessionHeaderContextLabel({
-      totalTokens: total,
-      contextLimit: model?.limit?.context,
-      outputTokens: last.tokens.output,
-      createdAt: last.time.created,
-      completedAt: last.time.completed,
-    })
+    let result = total.toLocaleString()
+    if (model?.limit?.context) {
+      result += "  " + Math.round((total / model.limit.context) * 100) + "%"
+    }
+    if (last.time.completed && last.time.created && last.tokens.output > 0) {
+      const durationSecs = (last.time.completed - last.time.created) / 1000
+      if (durationSecs > 0) {
+        const tps = Math.round(last.tokens.output / durationSecs)
+        result += "  " + tps + " tok/s"
+      }
+    }
+    return result
   })
 
   const workspace = createMemo(() => {
     const id = session()?.directory
-    return sessionHeaderWorkspaceLabel({
-      sessionDirectory: id,
-      localDirectory: sync.data.path.directory,
-      workspaceName: id ? sync.workspace.get(id) : undefined,
-    })
+    if (!id || id === sync.data.path.directory) return "Workspace local"
+    const info = sync.workspace.get(id)
+    if (!info) return `Workspace ${id}`
+    return `Workspace ${info}`
   })
 
   const { theme } = useTheme()
@@ -81,7 +80,10 @@ export function Header() {
   const command = useCommandDialog()
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   const dimensions = useTerminalDimensions()
-  const narrow = createMemo(() => sessionHeaderLayout({ terminalWidth: dimensions().width }).narrow)
+  const narrow = createMemo(() => {
+    const sidebarWidth = dimensions().width > 120 ? 42 : 0
+    return dimensions().width - sidebarWidth < 100
+  })
 
   return (
     <box flexShrink={0}>
@@ -124,12 +126,12 @@ export function Header() {
                   paddingLeft={1}
                   paddingRight={1}
                 >
-                  <box flexDirection="row" gap={0}>
-                    <text fg={hover() === "parent" ? theme.text : theme.background}>Back to Parent </text>
-                    <text fg={hover() === "parent" ? theme.textMuted : theme.background}>
+                  <text fg={hover() === "parent" ? theme.text : theme.background}>
+                    Back to Parent{" "}
+                    <span style={{ fg: hover() === "parent" ? theme.textMuted : theme.background }}>
                       {keybind.print("session_parent")}
-                    </text>
-                  </box>
+                    </span>
+                  </text>
                 </box>
                 <box
                   onMouseOver={() => setHover("prev")}
@@ -137,10 +139,9 @@ export function Header() {
                   onMouseUp={() => command.trigger("session.child.previous")}
                   backgroundColor={hover() === "prev" ? theme.backgroundElement : theme.backgroundPanel}
                 >
-                  <box flexDirection="row" gap={0}>
-                    <text fg={theme.text}>Prev </text>
-                    <text fg={theme.textMuted}>{keybind.print("session_child_cycle_reverse")}</text>
-                  </box>
+                  <text fg={theme.text}>
+                    Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
+                  </text>
                 </box>
                 <box
                   onMouseOver={() => setHover("next")}
@@ -148,10 +149,9 @@ export function Header() {
                   onMouseUp={() => command.trigger("session.child.next")}
                   backgroundColor={hover() === "next" ? theme.backgroundElement : theme.backgroundPanel}
                 >
-                  <box flexDirection="row" gap={0}>
-                    <text fg={theme.text}>Next </text>
-                    <text fg={theme.textMuted}>{keybind.print("session_child_cycle")}</text>
-                  </box>
+                  <text fg={theme.text}>
+                    Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
+                  </text>
                 </box>
               </box>
             </box>

@@ -8,7 +8,6 @@ import { useSDK } from "../context/sdk"
 import { useToast } from "../ui/toast"
 import { useKeybind } from "../context/keybind"
 import { DialogSessionList } from "./workspace/dialog-session-list"
-import { currentWorkspaceSelection, LOCAL_WORKSPACE_ID, localWorkspaceDirectory } from "./workspace/local-workspace"
 import { createOpencodeClient } from "@ax-code/sdk/v2"
 import { setTimeout as sleep } from "node:timers/promises"
 import path from "path"
@@ -23,7 +22,12 @@ async function openWorkspace(input: {
   forceCreate?: boolean
 }) {
   const cacheSession = (session: Session) => {
-    input.sync.session.cache(session)
+    input.sync.set(
+      "session",
+      [...input.sync.data.session.filter((item) => item.id !== session.id), session].toSorted((a, b) =>
+        a.id.localeCompare(b.id),
+      ),
+    )
   }
 
   const client = createOpencodeClient({
@@ -158,7 +162,7 @@ export function DialogWorkspaceList() {
     })
 
   async function selectWorkspace(workspaceID: string) {
-    if (workspaceID === LOCAL_WORKSPACE_ID) {
+    if (workspaceID === "__local__") {
       if (localCount() > 0) {
         dialog.replace(() => <DialogSessionList localOnly={true} />)
         return
@@ -192,24 +196,20 @@ export function DialogWorkspaceList() {
     await open(workspaceID)
   }
 
-  const localDirectory = createMemo(() =>
-    localWorkspaceDirectory({
-      baseDirectory: sdk.baseDirectory,
-      fallbackDirectory: sync.data.path.directory || sdk.directory,
-    }),
-  )
-
   const currentWorkspaceID = createMemo(() => {
-    return currentWorkspaceSelection({
-      routeType: route.data.type,
-      homeWorkspaceID: route.data.type === "home" ? route.data.workspaceID : undefined,
-      sessionDirectory: route.data.type === "session" ? sync.session.get(route.data.sessionID)?.directory : undefined,
-      localDirectory: localDirectory(),
-    })
+    if (route.data.type === "session") {
+      const current = sync.session.get(route.data.sessionID)?.directory
+      const local = sync.data.path.directory || sdk.directory
+      if (!current || current === local) return "__local__"
+      return current
+    }
+    return "__local__"
   })
 
   const localCount = createMemo(
-    () => sync.data.session.filter((session) => session.directory === localDirectory() && !session.parentID).length,
+    () =>
+      sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory) && !session.parentID)
+        .length,
   )
 
   let run = 0
@@ -240,7 +240,7 @@ export function DialogWorkspaceList() {
   const options = createMemo(() => [
     {
       title: "Local",
-      value: LOCAL_WORKSPACE_ID,
+      value: "__local__",
       category: "Workspace",
       description: "Use the local machine",
       footer: `${localCount()} session${localCount() === 1 ? "" : "s"}`,
@@ -249,7 +249,8 @@ export function DialogWorkspaceList() {
       const count = counts()[workspace]
       const name = path.basename(workspace) || workspace
       return {
-        title: toDelete() === workspace ? `Delete ${name}? Press ${keybind.print("session_delete")} again` : name,
+        title:
+          toDelete() === workspace ? `Delete ${name}? Press ${keybind.print("session_delete")} again` : name,
         value: workspace,
         category: "Workspace",
         description: workspace,

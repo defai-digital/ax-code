@@ -16,7 +16,6 @@ import { NativeStore } from "../../code-intelligence/native-store"
 import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
-import { resolveTuiRendererName } from "./tui/renderer-choice"
 import path from "path"
 import fs from "fs/promises"
 
@@ -162,22 +161,7 @@ export const DoctorCommand: CommandModule = {
       detail: gitExists ? "Found" : "Not a git repository",
     })
 
-    // 9. TUI renderer + Native Rust addons — keep renderer selection and
-    // addon compatibility visible in one place so preview-only native
-    // paths do not look product-complete in doctor output.
-    const renderer = resolveTuiRendererName()
-    checks.push({
-      name: "TUI renderer",
-      status: renderer === "opentui" ? "ok" : "warn",
-      detail:
-        renderer === "native"
-          ? "native (preview-only explicit opt-in)"
-          : renderer === "hybrid"
-            ? "hybrid (preview-only explicit opt-in, native-first with OpenTUI handoff)"
-            : "opentui (production default full UI)",
-    })
-
-    // 10. Native Rust addons — routed through the central NativeAddon registry
+    // 9. Native Rust addons — routed through the central NativeAddon registry
     // so the doctor reflects the exact same load semantics (flag gating +
     // MODULE_NOT_FOUND filtering) as every runtime call site.
     const addons = [
@@ -196,15 +180,7 @@ export const DoctorCommand: CommandModule = {
           : 'None installed — using TypeScript fallbacks (run "pnpm build:native" at the repo root for faster indexing/search)',
     })
 
-    if (Flag.AX_CODE_NATIVE_TUI) {
-      checks.push({
-        name: "Native TUI addon",
-        status: "warn",
-        detail: "enabled (preview-only) — renderer still defaults to opentui unless AX_CODE_TUI_RENDERER=native or AX_CODE_TUI_RENDERER=hybrid is set",
-      })
-    }
-
-    // 11. Stale ax-code processes — multiple instances can block startup,
+    // 10. Stale ax-code processes — multiple instances can block startup,
     // exhaust the port, or corrupt the shared SQLite database.
     try {
       const result = await Bun.spawn(["pgrep", "-a", "-x", "ax-code"], {

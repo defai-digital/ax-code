@@ -7,7 +7,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useDialog } from "../../ui/dialog"
 import type { PromptInfo } from "@tui/component/prompt/history"
-import { promptState } from "./messages"
+import { strip } from "@tui/component/prompt/part"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "tui.dialog-fork-from-timeline" })
@@ -45,7 +45,16 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
             return
           }
           const parts = sync.data.part[message.id] ?? []
-          const initialPrompt = promptState(parts)
+          const initialPrompt = parts.reduce(
+            (agg, part) => {
+              if (part.type === "text") {
+                if (!part.synthetic) agg.input += part.text
+              }
+              if (part.type === "file") agg.parts.push(strip(part))
+              return agg
+            },
+            { input: "", parts: [] as PromptInfo["parts"] },
+          )
           route.navigate({
             sessionID: forked.data.id,
             type: "session",

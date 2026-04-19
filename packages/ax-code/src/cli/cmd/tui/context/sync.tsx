@@ -16,7 +16,6 @@ import type {
   SessionStatus,
   ProviderListResponse,
   ProviderAuthMethod,
-  Path,
   VcsInfo,
 } from "@ax-code/sdk/v2"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -26,30 +25,15 @@ import { createSimpleContext } from "./helper"
 import type { Snapshot } from "@/snapshot"
 import { useExit } from "./exit"
 import { useArgs } from "./args"
-import { batch, createEffect, onMount, onCleanup } from "solid-js"
+import { batch, onMount, onCleanup } from "solid-js"
 import { Log } from "@/util/log"
-import { DiagnosticLog } from "@/debug/diagnostic-log"
-import { tracedEffect } from "@/cli/cmd/tui/debug/effect-tracer"
-import type { AppStateBootstrap } from "@/cli/cmd/tui/state/actions"
-import { createTuiStateStore } from "@/cli/cmd/tui/state/store"
-import { mergeSorted } from "./sync-util"
+import type { Path } from "@ax-code/sdk"
+import { upsert, mergeSorted } from "./sync-util"
 import { AutonomousQuestion } from "@/question/autonomous"
-import { useRoute } from "./route"
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
   init: () => {
-    type ManagedTuiKey =
-      | "workspaceList"
-      | "session"
-      | "session_status"
-      | "message"
-      | "part"
-      | "permission"
-      | "question"
-      | "vcs"
-      | "path"
-
     const [store, setStore] = createStore<{
       status: "loading" | "partial" | "complete"
       provider: Provider[]
@@ -190,183 +174,16 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       mcp_resource: {},
       formatter: [],
       vcs: undefined,
-      path: { home: "", state: "", config: "", worktree: "", directory: "" },
+      path: { state: "", config: "", worktree: "", directory: "" },
       workspaceList: [],
     })
-    const debugEnabled = DiagnosticLog.enabled()
-    const tuiState = createTuiStateStore({
-      initial: {
-        path: { home: "", state: "", config: "", worktree: "", directory: "" },
-      },
-      debug: debugEnabled
-        ? {
-            onBurst(info) {
-              DiagnosticLog.recordProcess("tui.state.burstDetected", info)
-            },
-          }
-        : undefined,
-    })
-
-    if (debugEnabled) {
-      // Heartbeat — if the main thread jams in a sync reactive loop,
-      // setInterval stops firing. The last heartbeat in process.jsonl plus
-      // its embedded ring buffer tells you what was being dispatched right
-      // before the stall.
-      const heartbeat = setInterval(() => {
-        DiagnosticLog.recordProcess("tui.state.heartbeat", tuiState.getDebugSnapshot())
-      }, 1_000)
-      heartbeat.unref?.()
-      onCleanup(() => {
-        clearInterval(heartbeat)
-        DiagnosticLog.recordProcess("tui.state.final", tuiState.getDebugSnapshot())
-      })
-    }
-
-    function applyTuiStateSnapshot() {
-      const snapshot = tuiState.getSnapshot()
-      batch(() => {
-        setStore("workspaceList", reconcile(snapshot.workspaceList))
-        setStore("session", reconcile(snapshot.session))
-        setStore("session_status", reconcile(snapshot.sessionStatus))
-        setStore("message", reconcile(snapshot.message))
-        setStore("part", reconcile(snapshot.part))
-        setStore("permission", reconcile(snapshot.permission))
-        setStore("question", reconcile(snapshot.question))
-        setStore("vcs", snapshot.vcs)
-        setStore("path", reconcile(snapshot.path))
-      })
-    }
-
-    const unsubscribeTuiState = tuiState.subscribe(applyTuiStateSnapshot)
-    onCleanup(unsubscribeTuiState)
 
     const sdk = useSDK()
-    const route = useRoute()
-
-    function resolveUpdater<T>(value: T | ((current: T) => T), current: T): T {
-      return typeof value === "function" ? (value as (current: T) => T)(current) : value
-    }
-
-    function hydrateTuiState(data: AppStateBootstrap) {
-      tuiState.dispatch({
-        type: "bootstrap.hydrated",
-        data,
-      })
-    }
-
-    function setManagedTuiField(key: ManagedTuiKey, value: unknown) {
-      const snapshot = tuiState.getSnapshot()
-      switch (key) {
-        case "workspaceList":
-          hydrateTuiState({
-            workspaceList: resolveUpdater(
-              value as string[] | ((current: string[]) => string[]),
-              snapshot.workspaceList,
-            ),
-          })
-          return
-        case "session":
-          hydrateTuiState({
-            session: resolveUpdater(value as Session[] | ((current: Session[]) => Session[]), snapshot.session),
-          })
-          return
-        case "session_status":
-          hydrateTuiState({
-            sessionStatus: resolveUpdater(
-              value as
-                | Record<string, SessionStatus>
-                | ((current: Record<string, SessionStatus>) => Record<string, SessionStatus>),
-              snapshot.sessionStatus,
-            ),
-          })
-          return
-        case "message":
-          hydrateTuiState({
-            message: resolveUpdater(
-              value as Record<string, Message[]> | ((current: Record<string, Message[]>) => Record<string, Message[]>),
-              snapshot.message,
-            ),
-          })
-          return
-        case "part":
-          hydrateTuiState({
-            part: resolveUpdater(
-              value as Record<string, Part[]> | ((current: Record<string, Part[]>) => Record<string, Part[]>),
-              snapshot.part,
-            ),
-          })
-          return
-        case "permission":
-          hydrateTuiState({
-            permission: resolveUpdater(
-              value as
-                | Record<string, PermissionRequest[]>
-                | ((current: Record<string, PermissionRequest[]>) => Record<string, PermissionRequest[]>),
-              snapshot.permission,
-            ),
-          })
-          return
-        case "question":
-          hydrateTuiState({
-            question: resolveUpdater(
-              value as
-                | Record<string, QuestionRequest[]>
-                | ((current: Record<string, QuestionRequest[]>) => Record<string, QuestionRequest[]>),
-              snapshot.question,
-            ),
-          })
-          return
-        case "vcs":
-          hydrateTuiState({
-            vcs: resolveUpdater(
-              value as VcsInfo | undefined | ((current: VcsInfo | undefined) => VcsInfo | undefined),
-              snapshot.vcs,
-            ),
-          })
-          return
-        case "path":
-          hydrateTuiState({
-            path: resolveUpdater(value as Path | ((current: Path) => Path), snapshot.path),
-          })
-          return
-      }
-    }
-
-    let workspaceSyncToken = 0
-    let activeWorkspaceID: string | undefined
-
-    async function activateWorkspace(workspaceID?: string) {
-      if (activeWorkspaceID === workspaceID) return
-      activeWorkspaceID = workspaceID
-      const token = ++workspaceSyncToken
-      tuiState.dispatch({
-        type: "workspace.selected",
-        workspaceID,
-      })
-      sdk.setWorkspace(workspaceID)
-      const [pathResult, vcsResult] = await Promise.allSettled([sdk.client.path.get(), sdk.client.vcs.get()])
-      if (token !== workspaceSyncToken) return
-      if (pathResult.status === "fulfilled" && pathResult.value.data) {
-        tuiState.dispatch({
-          type: "path.synced",
-          path: pathResult.value.data,
-        })
-      }
-      if (vcsResult.status === "fulfilled") {
-        tuiState.dispatch({
-          type: "vcs.synced",
-          vcs: vcsResult.value.data,
-        })
-      }
-    }
 
     async function syncWorkspaces() {
       const result = await sdk.client.worktree.list().catch(() => undefined)
       if (!result?.data) return
-      tuiState.dispatch({
-        type: "workspace.list.synced",
-        workspaceList: result.data,
-      })
+      setStore("workspaceList", reconcile(result.data))
     }
 
     // Debugging & Refactoring Engine poll. Hits the server's
@@ -480,7 +297,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           bootstrap()
           break
         case "permission.replied": {
-          tuiState.dispatchEvent(event)
+          const requests = store.permission[event.properties.sessionID]
+          if (!requests) break
+          const match = Binary.search(requests, event.properties.requestID, (r) => r.id)
+          if (!match.found) break
+          setStore(
+            "permission",
+            event.properties.sessionID,
+            produce((draft) => {
+              draft.splice(match.index, 1)
+            }),
+          )
           break
         }
 
@@ -492,13 +319,39 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             })
             break
           }
-          tuiState.dispatchEvent(event)
+          const requests = store.permission[request.sessionID]
+          if (!requests) {
+            setStore("permission", request.sessionID, [request])
+            break
+          }
+          const match = Binary.search(requests, request.id, (r) => r.id)
+          if (match.found) {
+            setStore("permission", request.sessionID, match.index, reconcile(request))
+            break
+          }
+          setStore(
+            "permission",
+            request.sessionID,
+            produce((draft) => {
+              draft.splice(match.index, 0, request)
+            }),
+          )
           break
         }
 
         case "question.replied":
         case "question.rejected": {
-          tuiState.dispatchEvent(event)
+          const requests = store.question[event.properties.sessionID]
+          if (!requests) break
+          const match = Binary.search(requests, event.properties.requestID, (r) => r.id)
+          if (!match.found) break
+          setStore(
+            "question",
+            event.properties.sessionID,
+            produce((draft) => {
+              draft.splice(match.index, 1)
+            }),
+          )
           break
         }
 
@@ -511,7 +364,23 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             })
             break
           }
-          tuiState.dispatchEvent(event)
+          const requests = store.question[request.sessionID]
+          if (!requests) {
+            setStore("question", request.sessionID, [request])
+            break
+          }
+          const match = Binary.search(requests, request.id, (r) => r.id)
+          if (match.found) {
+            setStore("question", request.sessionID, match.index, reconcile(request))
+            break
+          }
+          setStore(
+            "question",
+            request.sessionID,
+            produce((draft) => {
+              draft.splice(match.index, 0, request)
+            }),
+          )
           break
         }
 
@@ -524,62 +393,138 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           break
 
         case "session.deleted": {
-          tuiState.dispatchEvent(event)
-          fullSyncedSessions.delete(event.properties.info.id)
-          setStore(
-            produce((draft) => {
-              delete draft.todo[event.properties.info.id]
-              delete draft.session_diff[event.properties.info.id]
-            }),
-          )
+          const result = Binary.search(store.session, event.properties.info.id, (s) => s.id)
+          if (result.found) {
+            setStore(
+              "session",
+              produce((draft) => {
+                draft.splice(result.index, 1)
+              }),
+            )
+          }
           break
         }
         case "session.created":
         case "session.updated": {
-          tuiState.dispatchEvent(event)
+          setStore(
+            "session",
+            produce((draft) => {
+              upsert(draft, event.properties.info)
+            }),
+          )
           break
         }
 
         case "session.status": {
-          tuiState.dispatchEvent(event)
-          break
-        }
-
-        case "session.idle": {
-          tuiState.dispatchEvent(event)
+          setStore("session_status", event.properties.sessionID, event.properties.status)
           break
         }
 
         case "message.updated": {
-          tuiState.dispatchEvent(event)
+          const messages = store.message[event.properties.info.sessionID]
+          if (!messages) {
+            setStore("message", event.properties.info.sessionID, [event.properties.info])
+            break
+          }
+          const result = Binary.search(messages, event.properties.info.id, (m) => m.id)
+          if (result.found) {
+            setStore("message", event.properties.info.sessionID, result.index, reconcile(event.properties.info))
+            break
+          }
+          setStore(
+            "message",
+            event.properties.info.sessionID,
+            produce((draft) => {
+              draft.splice(result.index, 0, event.properties.info)
+            }),
+          )
+          const updated = store.message[event.properties.info.sessionID]
+          if (updated.length > 100) {
+            const oldest = updated[0]
+            batch(() => {
+              setStore(
+                "message",
+                event.properties.info.sessionID,
+                produce((draft) => {
+                  draft.shift()
+                }),
+              )
+              setStore(
+                "part",
+                produce((draft) => {
+                  delete draft[oldest.id]
+                }),
+              )
+            })
+          }
           break
         }
         case "message.removed": {
-          tuiState.dispatchEvent(event)
+          const messages = store.message[event.properties.sessionID]
+          if (!messages) break
+          const result = Binary.search(messages, event.properties.messageID, (m) => m.id)
+          if (result.found) {
+            setStore(
+              "message",
+              event.properties.sessionID,
+              produce((draft) => {
+                draft.splice(result.index, 1)
+              }),
+            )
+          }
           break
         }
         case "message.part.updated": {
-          tuiState.dispatchEvent(event)
+          const parts = store.part[event.properties.part.messageID]
+          if (!parts) {
+            setStore("part", event.properties.part.messageID, [event.properties.part])
+            break
+          }
+          const result = Binary.search(parts, event.properties.part.id, (p) => p.id)
+          if (result.found) {
+            setStore("part", event.properties.part.messageID, result.index, reconcile(event.properties.part))
+            break
+          }
+          setStore(
+            "part",
+            event.properties.part.messageID,
+            produce((draft) => {
+              draft.splice(result.index, 0, event.properties.part)
+            }),
+          )
           break
         }
 
         case "message.part.delta": {
-          tuiState.dispatchEvent(event)
+          const parts = store.part[event.properties.messageID]
+          if (!parts) break
+          const result = Binary.search(parts, event.properties.partID, (p) => p.id)
+          if (!result.found) break
+          setStore(
+            "part",
+            event.properties.messageID,
+            produce((draft) => {
+              const part = draft[result.index]
+              const field = event.properties.field as keyof typeof part
+              const existing = part[field] as string | undefined
+              ;(part[field] as string) = (existing ?? "") + event.properties.delta
+            }),
+          )
           break
         }
 
         case "message.part.removed": {
-          tuiState.dispatchEvent(event)
-          break
-        }
-
-        case "tui.prompt.append": {
-          tuiState.dispatchEvent(event)
-          break
-        }
-
-        case "tui.session.select": {
-          tuiState.dispatchEvent(event)
+          const parts = store.part[event.properties.messageID]
+          if (!parts) break
+          const result = Binary.search(parts, event.properties.partID, (p) => p.id)
+          if (result.found)
+            setStore(
+              "part",
+              event.properties.messageID,
+              produce((draft) => {
+                draft.splice(result.index, 1)
+              }),
+            )
           break
         }
 
@@ -621,7 +566,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         }
 
         case "vcs.branch.updated": {
-          tuiState.dispatchEvent(event)
+          setStore("vcs", { branch: event.properties.branch })
           break
         }
       }
@@ -638,75 +583,55 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         .list({ start: start })
         .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
 
-      // v2.24.11: revert the v2.23.0 non-blocking-provider-load change.
-      // v2.23.0 moved providers/agents/config/command to the non-blocking
-      // path so the home route could render before these finished loading.
-      // In practice, though, each promise resolves at a different moment a
-      // few seconds in, and the independent setStore calls fan out into
-      // overlapping reactive cascades through Prompt, Autocomplete, and the
-      // sidebar. The render-watchdog captured the final cascade's tail —
-      // but the real trigger is the staggered provider/agent/config
-      // arrivals landing on top of whatever user input was in-flight.
-      //
-      // Collect them upfront as blocking (the v2.22 behaviour) and settle
-      // their setStore writes inside one batch so the TUI mounts with
-      // stable provider/agent/config state. The TUI shows its "Loading…"
-      // frame for a beat longer; in exchange the post-mount reactive graph
-      // is quiescent and the first-input cascade has nothing to race with.
+      // Only keep the continue-session lookup on the blocking path. The
+      // home route can render immediately with empty provider/agent/config
+      // state and hydrate those details afterward.
       const providersPromise = sdk.client.config.providers({}, { throwOnError: true })
       const providerListPromise = sdk.client.provider.list({}, { throwOnError: true })
       const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
       const configPromise = sdk.client.config.get({}, { throwOnError: true })
       const commandPromise = sdk.client.command.list()
-      const blockingRequests: Promise<unknown>[] = [
-        providersPromise,
-        providerListPromise,
-        agentsPromise,
-        configPromise,
-        commandPromise,
-        ...(args.continue ? [sessionListPromise] : []),
-      ]
+      const blockingRequests: Promise<unknown>[] = args.continue ? [sessionListPromise] : []
 
       await Promise.all(blockingRequests)
-        .then(async () => {
-          const [providers, providerList, agents, config, commands] = await Promise.all([
-            providersPromise.then((x) => x.data ?? { providers: [], default: {} }),
-            providerListPromise.then((x) => x.data ?? store.provider_next),
-            agentsPromise.then((x) => x.data ?? []),
-            configPromise.then((x) => x.data ?? store.config),
-            commandPromise.then((x) => x.data ?? []),
-          ])
-          batch(() => {
-            setStore("provider", reconcile(providers.providers))
-            setStore("provider_default", reconcile(providers.default))
-            setStore("provider_loaded", true)
-            setStore("provider_failed", false)
-            setStore("provider_next", reconcile(providerList))
-            setStore("agent", reconcile(agents))
-            setStore("config", reconcile(config))
-            setStore("command", reconcile(commands))
-          })
+        .then(() => {
           if (args.continue) {
-            const sessions = await sessionListPromise
-            hydrateTuiState({
-              session: mergeSorted(tuiState.getSnapshot().session, sessions),
+            return sessionListPromise.then((sessions) => {
+              setStore("session", reconcile(mergeSorted(store.session, sessions)))
             })
           }
         })
         .then(() => {
           if (store.status === "loading") setStore("status", "partial")
-          // non-blocking — remaining per-subsystem fetches. Provider /
-          // agent / config / command are already applied above in one
-          // batch, so nothing here can cause the staggered-arrival
-          // cascade that v2.24.x chased.
+          // non-blocking — each call is individually guarded so one failure
+          // doesn't prevent the rest from completing or status from advancing.
           Promise.allSettled([
+            providersPromise
+              .then((x) => x.data ?? { providers: [], default: {} })
+              .then((providers) => {
+                batch(() => {
+                  setStore("provider", reconcile(providers.providers))
+                  setStore("provider_default", reconcile(providers.default))
+                  setStore("provider_loaded", true)
+                  setStore("provider_failed", false)
+                })
+              })
+              .catch((error) => {
+                batch(() => {
+                  setStore("provider_loaded", true)
+                  setStore("provider_failed", true)
+                })
+                throw error
+              }),
+            providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
+            agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
+            configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
+            commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
             ...(args.continue
               ? []
               : [
                   sessionListPromise.then((sessions) =>
-                    hydrateTuiState({
-                      session: mergeSorted(tuiState.getSnapshot().session, sessions),
-                    }),
+                    setStore("session", reconcile(mergeSorted(store.session, sessions))),
                   ),
                 ]),
             sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data ?? []))),
@@ -714,11 +639,11 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
             sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data ?? []))),
             sdk.client.session.status().then((x) => {
-              hydrateTuiState({ sessionStatus: x.data ?? {} })
+              setStore("session_status", reconcile(x.data ?? {}))
             }),
             sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
-            sdk.client.vcs.get().then((x) => hydrateTuiState({ vcs: x.data })),
-            sdk.client.path.get().then((x) => hydrateTuiState({ path: x.data ?? tuiState.getSnapshot().path })),
+            sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
+            sdk.client.path.get().then((x) => setStore("path", reconcile(x.data ?? store.path))),
             syncWorkspaces(),
             syncDebugEngine(),
             syncIsolation(),
@@ -764,42 +689,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     })
 
     const fullSyncedSessions = new Set<string>()
-    // Route changes dispatch into the store AND kick off an async workspace
-    // activation; the latter eventually writes back to signals this effect
-    // reads. High feedback-loop risk — worth the label.
-    tracedEffect("sync.routeSession", () => {
-      const data = route.data
-      tuiState.dispatch({
-        type: "route.session.selected",
-        sessionID: data.type === "session" ? data.sessionID : undefined,
-      })
-      const workspaceID =
-        data.type === "session" ? store.session.find((item) => item.id === data.sessionID)?.directory : data.workspaceID
-      void activateWorkspace(workspaceID)
-    })
-
     const result = {
       data: store,
-      set(...args: unknown[]) {
-        if (args.length === 2) {
-          const [key, value] = args as [ManagedTuiKey | string, unknown]
-          if (
-            key === "workspaceList" ||
-            key === "session" ||
-            key === "session_status" ||
-            key === "message" ||
-            key === "part" ||
-            key === "permission" ||
-            key === "question" ||
-            key === "vcs" ||
-            key === "path"
-          ) {
-            setManagedTuiField(key, value)
-            return
-          }
-        }
-        ;(setStore as (...args: unknown[]) => void)(...args)
-      },
+      set: setStore,
       get status() {
         return store.status
       },
@@ -811,25 +703,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           const match = Binary.search(store.session, sessionID, (s) => s.id)
           if (match.found) return store.session[match.index]
           return undefined
-        },
-        cache(session: Session) {
-          tuiState.dispatch({
-            type: "session.upserted",
-            session,
-          })
-        },
-        remove(sessionID: string) {
-          tuiState.dispatch({
-            type: "session.deleted",
-            sessionID,
-          })
-          fullSyncedSessions.delete(sessionID)
-          setStore(
-            produce((draft) => {
-              delete draft.todo[sessionID]
-              delete draft.session_diff[sessionID]
-            }),
-          )
         },
         status(sessionID: string) {
           const session = result.session.get(sessionID)
@@ -854,27 +727,16 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             return
           }
           const messageList = messages.data ?? []
-          const snapshot = tuiState.getSnapshot()
-          const nextPart = {
-            ...snapshot.part,
-          }
-          for (const existing of snapshot.message[sessionID] ?? []) {
-            delete nextPart[existing.id]
-          }
-          for (const message of messageList) {
-            nextPart[message.info.id] = message.parts
-          }
-          hydrateTuiState({
-            session: mergeSorted(snapshot.session, [session.data]),
-            message: {
-              ...snapshot.message,
-              [sessionID]: messageList.map((item) => item.info),
-            },
-            part: nextPart,
-          })
           setStore(
             produce((draft) => {
+              const match = Binary.search(draft.session, sessionID, (s) => s.id)
+              if (match.found) draft.session[match.index] = session.data
+              if (!match.found) draft.session.splice(match.index, 0, session.data)
               draft.todo[sessionID] = todo.data ?? []
+              draft.message[sessionID] = messageList.map((x) => x.info)
+              for (const message of messageList) {
+                draft.part[message.info.id] = message.parts
+              }
               draft.session_diff[sessionID] = diff.data ?? []
             }),
           )
@@ -885,7 +747,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         get(workspaceID: string) {
           return store.workspaceList.find((workspace) => workspace === workspaceID)
         },
-        activate: activateWorkspace,
         sync: syncWorkspaces,
       },
       bootstrap,

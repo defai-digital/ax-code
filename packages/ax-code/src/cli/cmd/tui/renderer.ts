@@ -1,4 +1,4 @@
-import { render, type JSX } from "@tui/renderer-adapter/opentui"
+import { render, type JSX } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 
@@ -18,7 +18,6 @@ export function createTuiRenderOptions(
     exitOnCtrlC: false,
     useKittyKeyboard: {},
     autoFocus: false,
-    externalOutputMode: "passthrough",
     openConsoleOnError: false,
     consoleOptions: {
       keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],

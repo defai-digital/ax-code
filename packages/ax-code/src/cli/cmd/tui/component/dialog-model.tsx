@@ -17,7 +17,7 @@ const FREE_PROVIDERS = new Set([
   "ax-code",
   "ollama",
   "lmstudio",
-  "ax-serving",
+  "ax-studio",
   "zai-coding-plan",
   "alibaba-coding-plan",
   "claude-code",
@@ -156,7 +156,7 @@ export function DialogModel(props: { providerID?: string }) {
           keybind: keybind.all.model_provider_list?.[0],
           title: connected() ? "Connect provider" : "View all providers",
           onTrigger() {
-            dialog.replaceWithKind("provider", () => <DialogProvider />)
+            dialog.replace(() => <DialogProvider />)
           },
         },
         {

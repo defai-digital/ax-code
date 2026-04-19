@@ -1,7 +1,7 @@
-import { TextAttributes } from "@tui/renderer-adapter/opentui"
+import { TextAttributes } from "@opentui/core"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "./dialog"
-import { useKeyboard } from "@tui/renderer-adapter/opentui"
+import { useKeyboard } from "@opentui/solid"
 import { useKeybind } from "@tui/context/keybind"
 import { For } from "solid-js"
 

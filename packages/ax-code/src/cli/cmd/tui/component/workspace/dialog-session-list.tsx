@@ -12,7 +12,6 @@ import { useKV } from "../../context/kv"
 import { createDebouncedSignal } from "../../util/signal"
 import { Spinner } from "../spinner"
 import { useToast } from "../../ui/toast"
-import { localWorkspaceDirectory } from "./local-workspace"
 
 export function DialogSessionList(props: { workspaceID?: string; localOnly?: boolean } = {}) {
   const dialog = useDialog()
@@ -25,12 +24,6 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
   const toast = useToast()
   const [toDelete, setToDelete] = createSignal<string>()
   const [search, setSearch] = createDebouncedSignal("", 150)
-  const localDirectory = createMemo(() =>
-    localWorkspaceDirectory({
-      baseDirectory: sdk.baseDirectory,
-      fallbackDirectory: sync.data.path.directory || sdk.directory,
-    }),
-  )
 
   const [listed, listedActions] = createResource(
     () => props.workspaceID,
@@ -58,7 +51,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
     const results = searchResults()
     if (results) return results
     if (props.workspaceID) return listed() ?? []
-    if (props.localOnly) return sync.data.session.filter((session) => session.directory === localDirectory())
+    if (props.localOnly) return sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory))
     return sync.data.session
   })
 
@@ -69,7 +62,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
         if (x.parentID !== undefined) return false
         if (props.workspaceID && listed()) return true
         if (props.workspaceID) return x.directory === props.workspaceID
-        if (props.localOnly) return x.directory === localDirectory()
+        if (props.localOnly) return x.directory === (sync.data.path.directory || sdk.directory)
         return true
       })
       .toSorted((a, b) => b.time.updated - a.time.updated)
@@ -138,7 +131,10 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
                 listedActions.mutate((sessions) => sessions?.filter((session) => session.id !== option.value))
                 return
               }
-              sync.session.remove(option.value)
+              sync.set(
+                "session",
+                sync.data.session.filter((session) => session.id !== option.value),
+              )
               return
             }
             setToDelete(option.value)

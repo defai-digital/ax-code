@@ -48,8 +48,8 @@ export function promptState(parts: Part[] | undefined): PromptInfo {
   }
 
   for (const part of parts ?? []) {
-    if (part.type === "text" && !part.synthetic && !part.ignored) state.input += part.text ?? ""
-    if (part.type === "file" || part.type === "agent") {
+    if (part.type === "text" && !part.synthetic) state.input += part.text ?? ""
+    if (part.type === "file") {
       const { id: _id, messageID: _messageID, sessionID: _sessionID, ...rest } = part
       state.parts.push(rest as PromptInfo["parts"][number])
     }

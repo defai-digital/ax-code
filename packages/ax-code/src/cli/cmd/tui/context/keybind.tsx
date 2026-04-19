@@ -1,18 +1,12 @@
 import { createMemo, onCleanup } from "solid-js"
-import type { Keybind } from "@/util/keybind"
+import { Keybind } from "@/util/keybind"
+import { pipe, mapValues } from "remeda"
 import type { TuiConfig } from "@/config/tui"
-import type { ParsedKey, Renderable } from "@tui/renderer-adapter/opentui"
+import type { ParsedKey, Renderable } from "@opentui/core"
 import { createStore } from "solid-js/store"
-import { useKeyboard, useRenderer } from "@tui/renderer-adapter/opentui"
+import { useKeyboard, useRenderer } from "@opentui/solid"
 import { createSimpleContext } from "./helper"
 import { useTuiConfig } from "./tui-config"
-import {
-  keymapEvent,
-  matchKeymapBinding,
-  parseKeymapBindings,
-  printKeymapBinding,
-  type Keymap,
-} from "../input/keymap"
 
 export type KeybindKey = keyof NonNullable<TuiConfig.Info["keybinds"]> & string
 
@@ -20,7 +14,12 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
   name: "Keybind",
   init: () => {
     const config = useTuiConfig()
-    const keybinds = createMemo<Keymap>(() => parseKeymapBindings((config.keybinds ?? {}) as Record<string, string>))
+    const keybinds = createMemo<Record<string, Keybind.Info[]>>(() => {
+      return pipe(
+        (config.keybinds ?? {}) as Record<string, string>,
+        mapValues((value) => Keybind.parse(value)),
+      )
+    })
     const [store, setStore] = createStore({
       leader: false,
     })
@@ -44,55 +43,12 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
       }
 
       if (!active) {
-        if (focus && !focus.isDestroyed && !renderer.currentFocusedRenderable) {
+        if (focus && !renderer.currentFocusedRenderable) {
           focus.focus()
         }
         setStore("leader", false)
       }
     }
-
-    const result = {
-      get all() {
-        return keybinds()
-      },
-      get leader() {
-        return store.leader
-      },
-      parse(evt: ParsedKey): Keybind.Info {
-        return keymapEvent(
-          evt.name === "\x1F"
-            ? {
-                ...evt,
-                name: "_",
-                ctrl: true,
-              }
-            : evt,
-          store.leader,
-        )
-      },
-      bindings(key: KeybindKey) {
-        return keybinds()[key] ?? []
-      },
-      match(key: KeybindKey, evt: ParsedKey) {
-        return matchKeymapBinding(
-          keybinds(),
-          key,
-          evt.name === "\x1F"
-            ? {
-                ...evt,
-                name: "_",
-                ctrl: true,
-              }
-            : evt,
-          store.leader,
-        )
-      },
-      print(key: KeybindKey) {
-        return printKeymapBinding(keybinds(), key)
-      },
-    }
-
-    onCleanup(() => clearTimeout(timeout))
 
     useKeyboard(async (evt) => {
       if (!store.leader && result.match("leader", evt)) {
@@ -102,13 +58,47 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
 
       if (store.leader && evt.name) {
         setImmediate(() => {
-          if (focus && !focus.isDestroyed && renderer.currentFocusedRenderable === focus) {
+          if (focus && renderer.currentFocusedRenderable === focus) {
             focus.focus()
           }
           leader(false)
         })
       }
     })
+
+    onCleanup(() => clearTimeout(timeout))
+
+    const result = {
+      get all() {
+        return keybinds()
+      },
+      get leader() {
+        return store.leader
+      },
+      parse(evt: ParsedKey): Keybind.Info {
+        // Handle special case for Ctrl+Underscore (represented as \x1F)
+        if (evt.name === "\x1F") {
+          return Keybind.fromParsedKey({ ...evt, name: "_", ctrl: true }, store.leader)
+        }
+        return Keybind.fromParsedKey(evt, store.leader)
+      },
+      match(key: KeybindKey, evt: ParsedKey) {
+        const keybind = keybinds()[key]
+        if (!keybind) return false
+        const parsed: Keybind.Info = result.parse(evt)
+        for (const key of keybind) {
+          if (Keybind.match(key, parsed)) {
+            return true
+          }
+        }
+        return false
+      },
+      print(key: KeybindKey) {
+        const first = keybinds()[key]?.at(0)
+        if (!first) return ""
+        return Keybind.toDisplayString(first, keybinds().leader?.at(0))
+      },
+    }
     return result
   },
 })

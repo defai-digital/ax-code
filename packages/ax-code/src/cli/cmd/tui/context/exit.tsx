@@ -1,9 +1,8 @@
-import { useRenderer } from "@tui/renderer-adapter/opentui"
+import { useRenderer } from "@opentui/solid"
 import { onCleanup } from "solid-js"
 import { createSimpleContext } from "./helper"
 import { FormatError, FormatUnknownError } from "@/cli/error"
 import { win32FlushInputBuffer } from "../win32"
-import { disposeRenderWatchdog } from "../debug/render-watchdog"
 type Exit = ((reason?: unknown) => Promise<void>) & {
   message: {
     set: (value?: string) => () => void
@@ -37,7 +36,6 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
         task = (async () => {
           // Reset window title before destroying renderer
           renderer.setTerminalTitle("")
-          disposeRenderWatchdog(renderer)
           renderer.destroy()
           win32FlushInputBuffer()
           if (reason) {

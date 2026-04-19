@@ -7,18 +7,22 @@ import { useSDK } from "../context/sdk"
 import { DialogPrompt } from "../ui/dialog-prompt"
 import { Link } from "../ui/link"
 import { useTheme } from "../context/theme"
-import { TextAttributes } from "@tui/renderer-adapter/opentui"
+import { TextAttributes } from "@opentui/core"
 import type { ProviderAuthAuthorization, ProviderAuthMethod } from "@ax-code/sdk/v2"
 import { DialogModel } from "./dialog-model"
-import { useKeyboard } from "@tui/renderer-adapter/opentui"
+import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
-import { probeCliProvider } from "@/provider/cli/connect"
-import { getCliProviderDefinition } from "@/provider/cli/config"
 import { resolveCliModel } from "@/provider/cli/resolve"
 import { which } from "@/util/which"
 
-const OFFLINE_PROVIDERS = new Set(["ax-serving", "ollama", "lmstudio"])
+const CLI_BINARIES: Record<string, string> = {
+  "claude-code": "claude",
+  "gemini-cli": "gemini",
+  "codex-cli": "codex",
+}
+
+const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama", "lmstudio"])
 const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "alibaba"])
 
@@ -44,9 +48,8 @@ export function createDialogProviderOptions() {
 
           // CLI providers — check binary availability, support connect/disconnect
           if (CLI_PROVIDERS.has(provider.id)) {
-            const definition = getCliProviderDefinition(provider.id)
-            const binary = definition?.binary
-            const available = !!binary && which(binary) !== null
+            const binary = CLI_BINARIES[provider.id]
+            const available = binary ? which(binary) !== null : false
 
             if (!available) {
               dialog.replace(() => (
@@ -67,8 +70,9 @@ export function createDialogProviderOptions() {
               return
             }
 
+            const info = await resolveCliModel(provider.id)
+
             if (isConnected) {
-              const info = await resolveCliModel(provider.id)
               const action = await new Promise<"use" | "disconnect" | null>((resolve) => {
                 dialog.replace(
                   () => (
@@ -93,7 +97,7 @@ export function createDialogProviderOptions() {
                 )
               })
               if (action === "use") {
-                dialog.replaceWithKind("model", () => <DialogModel providerID={provider.id} />)
+                dialog.replace(() => <DialogModel providerID={provider.id} />)
               } else if (action === "disconnect") {
                 await sdk.client.auth.remove({ providerID: provider.id })
                 await sdk.client.instance.dispose()
@@ -102,24 +106,15 @@ export function createDialogProviderOptions() {
                 dialog.clear()
               }
             } else {
-              try {
-                await probeCliProvider(provider.id)
-                // Connect: store a marker in auth.json so provider persists as connected
-                await sdk.client.auth.set({
-                  providerID: provider.id,
-                  auth: { type: "api", key: "cli" },
-                })
-                await sdk.client.instance.dispose()
-                await sync.bootstrap()
-                toast.show({ variant: "success", message: `Connected ${provider.name}` })
-                dialog.replaceWithKind("model", () => <DialogModel providerID={provider.id} />)
-              } catch (error) {
-                toast.show({
-                  variant: "error",
-                  message: error instanceof Error ? error.message : String(error),
-                })
-                dialog.clear()
-              }
+              // Connect: store a marker in auth.json so provider persists as connected
+              await sdk.client.auth.set({
+                providerID: provider.id,
+                auth: { type: "api", key: "cli" },
+              })
+              await sdk.client.instance.dispose()
+              await sync.bootstrap()
+              toast.show({ variant: "success", message: `Connected ${provider.name}` })
+              dialog.replace(() => <DialogModel providerID={provider.id} />)
             }
             return
           }
@@ -156,7 +151,7 @@ export function createDialogProviderOptions() {
             })
             if (action === null) return
             if (action === "use") {
-              dialog.replaceWithKind("model", () => <DialogModel providerID={provider.id} />)
+              dialog.replace(() => <DialogModel providerID={provider.id} />)
               return
             }
             if (action === "remove") {
@@ -230,12 +225,12 @@ export function createDialogProviderOptions() {
               return
             }
             if (authorization.method === "code") {
-              dialog.replaceWithKind("custom", () => (
+              dialog.replace(() => (
                 <CodeMethod providerID={provider.id} title={method.label} index={index} authorization={authorization} />
               ))
             }
             if (authorization.method === "auto") {
-              dialog.replaceWithKind("custom", () => (
+              dialog.replace(() => (
                 <AutoMethod providerID={provider.id} title={method.label} index={index} authorization={authorization} />
               ))
             }
@@ -288,7 +283,7 @@ function AutoMethod(props: AutoMethodProps) {
     }
     await sdk.client.instance.dispose()
     await sync.bootstrap()
-    dialog.replaceWithKind("model", () => <DialogModel providerID={props.providerID} />)
+    dialog.replace(() => <DialogModel providerID={props.providerID} />)
   })
 
   return (
@@ -339,7 +334,7 @@ function CodeMethod(props: CodeMethodProps) {
         if (!error) {
           await sdk.client.instance.dispose()
           await sync.bootstrap()
-          dialog.replaceWithKind("model", () => <DialogModel providerID={props.providerID} />)
+          dialog.replace(() => <DialogModel providerID={props.providerID} />)
           return
         }
         setError(true)
@@ -385,7 +380,7 @@ function ApiMethod(props: ApiMethodProps) {
         })
         await sdk.client.instance.dispose()
         await sync.bootstrap()
-        dialog.replaceWithKind("model", () => <DialogModel providerID={props.providerID} />)
+        dialog.replace(() => <DialogModel providerID={props.providerID} />)
       }}
     />
   )

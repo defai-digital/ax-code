@@ -1,8 +1,8 @@
-import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@tui/renderer-adapter/opentui"
+import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
 import { useTheme, selectedForeground } from "@tui/context/theme"
 import { batch, createEffect, createMemo, For, Show, type JSX, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useKeyboard, useTerminalDimensions } from "@tui/renderer-adapter/opentui"
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
@@ -16,8 +16,6 @@ import {
   dialogSelectRows,
   dialogSelectVisibleHeight,
 } from "./dialog-select-view-model"
-
-const HIDDEN_SCROLLBAR_OPTIONS = { visible: false } as const
 
 export interface DialogSelectProps<T> {
   title: string
@@ -254,7 +252,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         <scrollbox
           paddingLeft={1}
           paddingRight={1}
-          scrollbarOptions={HIDDEN_SCROLLBAR_OPTIONS}
+          scrollbarOptions={{ visible: false }}
           ref={(r: ScrollBoxRenderable) => (scroll = r)}
           maxHeight={height()}
         >
@@ -270,8 +268,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                 </Show>
                 <For each={options}>
                   {(option) => {
-                    const active = () => isDeepEqual(option.value, selected()?.value)
-                    const current = () => isDeepEqual(option.value, props.current)
+                    const active = createMemo(() => isDeepEqual(option.value, selected()?.value))
+                    const current = createMemo(() => isDeepEqual(option.value, props.current))
                     return (
                       <box
                         id={JSON.stringify(option.value)}

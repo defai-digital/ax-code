@@ -1,5 +1,5 @@
 import type { JSX } from "solid-js"
-import type { RGBA } from "@tui/renderer-adapter/opentui"
+import type { RGBA } from "@opentui/core"
 import open from "open"
 
 export interface LinkProps {

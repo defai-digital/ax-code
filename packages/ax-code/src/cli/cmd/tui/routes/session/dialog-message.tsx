@@ -5,9 +5,9 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { Clipboard } from "@tui/util/clipboard"
 import type { PromptInfo } from "@tui/component/prompt/history"
+import { strip } from "@tui/component/prompt/part"
 import { EventQuery } from "@/replay/query"
 import { messageRoute } from "./route"
-import { promptState } from "./messages"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "tui.dialog-message" })
@@ -61,7 +61,18 @@ export function DialogMessage(props: {
             })
 
             if (props.setPrompt) {
-              props.setPrompt(promptState(sync.data.part[msg.id] ?? []))
+              const parts = sync.data.part[msg.id] ?? []
+              const promptInfo = parts.reduce(
+                (agg, part) => {
+                  if (part.type === "text") {
+                    if (!part.synthetic) agg.input += part.text
+                  }
+                  if (part.type === "file") agg.parts.push(strip(part))
+                  return agg
+                },
+                { input: "", parts: [] as PromptInfo["parts"] },
+              )
+              props.setPrompt(promptInfo)
             }
 
             dialog.clear()
@@ -109,7 +120,17 @@ export function DialogMessage(props: {
             const initialPrompt = (() => {
               const msg = message()
               if (!msg) return undefined
-              return promptState(sync.data.part[msg.id] ?? [])
+              const parts = sync.data.part[msg.id] ?? []
+              return parts.reduce(
+                (agg, part) => {
+                  if (part.type === "text") {
+                    if (!part.synthetic) agg.input += part.text
+                  }
+                  if (part.type === "file") agg.parts.push(part)
+                  return agg
+                },
+                { input: "", parts: [] as PromptInfo["parts"] },
+              )
             })()
             route.navigate({
               sessionID: result.data.id,

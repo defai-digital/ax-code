@@ -1,9 +1,9 @@
-import { TextAttributes } from "@tui/renderer-adapter/opentui"
+import { TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { For } from "solid-js"
-import { useKeyboard } from "@tui/renderer-adapter/opentui"
+import { useKeyboard } from "@opentui/solid"
 import { Locale } from "@/util/locale"
 
 export type DialogConfirmProps = {
@@ -73,8 +73,7 @@ export function DialogConfirm(props: DialogConfirmProps) {
 
 DialogConfirm.show = (dialog: DialogContext, title: string, message: string, label?: string) => {
   return new Promise<DialogConfirmResult>((resolve) => {
-    dialog.replaceWithKind(
-      "confirm",
+    dialog.replace(
       () => (
         <DialogConfirm
           title={title}

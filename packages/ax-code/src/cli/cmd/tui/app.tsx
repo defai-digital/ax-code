@@ -1,7 +1,7 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@tui/renderer-adapter/opentui"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
-import { MouseButton, TextAttributes } from "@tui/renderer-adapter/opentui"
+import { MouseButton, TextAttributes } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import {
   Switch,
@@ -17,8 +17,6 @@ import {
   onCleanup,
 } from "solid-js"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
-import { tracedEffect } from "@tui/debug/effect-tracer"
-import { installRenderWatchdog } from "@tui/debug/render-watchdog"
 import { Flag } from "@/flag/flag"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
@@ -47,8 +45,6 @@ import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
 import { renderTui } from "./renderer"
-import { resolveTuiRendererName } from "./renderer-choice"
-import { runNativeTuiSlice } from "./native/vertical-slice"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
 import { Session } from "@tui/routes/session"
@@ -72,25 +68,24 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
       if (match) {
         cleanup()
         const color = match[1]
-        if (!color) return
         let r = 0
         let g = 0
         let b = 0
 
         if (color.startsWith("rgb:")) {
           const parts = color.substring(4).split("/")
-          r = parseInt(parts[0] ?? "0", 16) >> 8
-          g = parseInt(parts[1] ?? "0", 16) >> 8
-          b = parseInt(parts[2] ?? "0", 16) >> 8
+          r = parseInt(parts[0], 16) >> 8
+          g = parseInt(parts[1], 16) >> 8
+          b = parseInt(parts[2], 16) >> 8
         } else if (color.startsWith("#")) {
           r = parseInt(color.substring(1, 3), 16)
           g = parseInt(color.substring(3, 5), 16)
           b = parseInt(color.substring(5, 7), 16)
         } else if (color.startsWith("rgb(")) {
           const parts = color.substring(4, color.length - 1).split(",")
-          r = parseInt(parts[0] ?? "0")
-          g = parseInt(parts[1] ?? "0")
-          b = parseInt(parts[2] ?? "0")
+          r = parseInt(parts[0])
+          g = parseInt(parts[1])
+          b = parseInt(parts[2])
         }
 
         const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
@@ -119,8 +114,6 @@ export function tui(input: {
   headers?: RequestInit["headers"]
   events?: EventSource
 }) {
-  if (resolveTuiRendererName() === "native") return runNativeTuiSlice(input)
-
   // promise to prevent immediate exit
   return new Promise<void>(async (resolve) => {
     const unguard = win32InstallCtrlCGuard()
@@ -192,12 +185,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
-  // Guard against runaway requestRender() feedback loops in opentui. With
-  // --debug enabled it also records tui.render.loopDetected stacks, but the
-  // backpressure itself stays on in normal runs so render bursts cannot wedge
-  // the main thread and starve Ctrl+C / IPC forever.
-  const disposeRenderWatchdog = installRenderWatchdog(renderer)
-  onCleanup(disposeRenderWatchdog)
+  renderer.externalOutputMode = "passthrough"
   const dialog = useDialog()
   const local = useLocal()
   const kv = useKV()
@@ -214,7 +202,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogProvider: ProviderDialog } = await import("@tui/component/dialog-provider")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replaceWithKind("provider", () => <ProviderDialog />)
+      dialog.replace(() => <ProviderDialog />)
     } catch (error) {
       Log.Default.warn("failed to load provider dialog", { error })
       toast.show({ message: "Failed to open provider dialog", variant: "error" })
@@ -226,7 +214,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogModel: ModelDialog } = await import("@tui/component/dialog-model")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replaceWithKind("model", () => <ModelDialog />)
+      dialog.replace(() => <ModelDialog />)
     } catch (error) {
       Log.Default.warn("failed to load model dialog", { error })
       toast.show({ message: "Failed to open model dialog", variant: "error" })
@@ -238,7 +226,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogSessionList } = await import("@tui/component/dialog-session-list")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replaceWithKind("session", () => <DialogSessionList />)
+      dialog.replace(() => <DialogSessionList />)
     } catch (error) {
       Log.Default.warn("failed to load session list dialog", { error })
       toast.show({ message: "Failed to open session list", variant: "error" })
@@ -250,7 +238,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogWorkspaceList } = await import("@tui/component/dialog-workspace-list")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replaceWithKind("workspace", () => <DialogWorkspaceList />)
+      dialog.replace(() => <DialogWorkspaceList />)
     } catch (error) {
       Log.Default.warn("failed to load workspace list dialog", { error })
       toast.show({ message: "Failed to open workspace list", variant: "error" })
@@ -262,7 +250,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     try {
       const { DialogAgent } = await import("@tui/component/dialog-agent")
       if (dialog.stack.at(-1) !== marker) return
-      dialog.replaceWithKind("agent", () => <DialogAgent />)
+      dialog.replace(() => <DialogAgent />)
     } catch (error) {
       Log.Default.warn("failed to load agent dialog", { error })
       toast.show({ message: "Failed to open agent list", variant: "error" })
@@ -359,7 +347,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
 
   // Update terminal window title based on current route and session
-  tracedEffect(() => {
+  createEffect(() => {
     if (!terminalTitleEnabled() || Flag.AX_CODE_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {
@@ -405,7 +393,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
 
   let continued = false
-  tracedEffect("app.continueAutoNavigate", () => {
+  createEffect(() => {
     // When using -c, session list is loaded in blocking phase, so we can navigate at "partial"
     if (continued || sync.status === "loading" || !args.continue) return
     const match = sync.data.session
@@ -431,7 +419,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // (session list loads in non-blocking phase for --session, so we must wait for "complete"
   // to avoid a race where reconcile overwrites the newly forked session)
   let forked = false
-  tracedEffect("app.forkOnSession", () => {
+  createEffect(() => {
     if (forked || sync.status !== "complete" || !args.sessionID || !args.fork) return
     forked = true
     sdk.client.session
@@ -451,8 +439,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       })
   })
 
-  tracedEffect(
-    "app.showProviderOnEmpty",
+  createEffect(
     on(
       () =>
         sync.status === "complete" &&

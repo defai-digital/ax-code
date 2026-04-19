@@ -12,7 +12,7 @@ import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
-import { RGBA } from "@tui/renderer-adapter/opentui"
+import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
 import { resolveCurrentAgent } from "./local-util"
 
