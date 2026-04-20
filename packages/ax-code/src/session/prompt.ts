@@ -653,6 +653,8 @@ export namespace SessionPrompt {
           providerID: lastUser.model.providerID,
           history: msgs,
           abort,
+        }).catch((error) => {
+          log.debug("failed to ensure title", { sessionID, error })
         })
         Recorder.emit({
           type: "session.start",

@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import { describeRoute, validator, resolver } from "hono-openapi"
+import { HTTPException } from "hono/http-exception"
 import { SessionID, MessageID, PartID } from "@/session/schema"
 import z from "zod"
 import { Session } from "../../session"
@@ -990,9 +991,7 @@ export const SessionRoutes = lazy(() =>
         SessionPrompt.assertNotBusy(params.sessionID)
         const body = c.req.valid("json")
         if (body.id !== params.partID || body.messageID !== params.messageID || body.sessionID !== params.sessionID) {
-          throw new Error(
-            `Part mismatch: body.id='${body.id}' vs partID='${params.partID}', body.messageID='${body.messageID}' vs messageID='${params.messageID}', body.sessionID='${body.sessionID}' vs sessionID='${params.sessionID}'`,
-          )
+          throw new HTTPException(400, { message: "Part identifiers do not match the request path" })
         }
         const part = await Session.updatePart(body)
         return c.json(part)
@@ -1034,8 +1033,12 @@ export const SessionRoutes = lazy(() =>
         return stream(c, async (stream) => {
           const sessionID = c.req.valid("param").sessionID
           const body = c.req.valid("json")
-          const msg = await SessionPrompt.prompt({ ...body, sessionID })
-          stream.write(JSON.stringify(msg))
+          try {
+            const msg = await SessionPrompt.prompt({ ...body, sessionID })
+            stream.write(JSON.stringify(msg))
+          } catch (err) {
+            stream.write(JSON.stringify({ error: NamedError.message(err) }))
+          }
         })
       },
     )
@@ -1065,6 +1068,39 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         SessionPrompt.prompt({ ...body, sessionID }).catch((err) => {
           log.error("prompt_async failed", { sessionID, error: err })
+          Bus.publish(Session.Event.Error, {
+            sessionID,
+            error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
+          })
+        })
+        return c.body(null, 202)
+      },
+    )
+    .post(
+      "/:sessionID/command_async",
+      describeRoute({
+        summary: "Send async command",
+        description: "Queue a command for a session and return immediately after it is accepted.",
+        operationId: "session.command_async",
+        responses: {
+          202: {
+            description: "Command accepted",
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+        SessionPrompt.command({ ...body, sessionID }).catch((err) => {
+          log.error("command_async failed", { sessionID, error: err })
           Bus.publish(Session.Event.Error, {
             sessionID,
             error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
@@ -1108,6 +1144,39 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         const msg = await SessionPrompt.command({ ...body, sessionID })
         return c.json(msg)
+      },
+    )
+    .post(
+      "/:sessionID/shell_async",
+      describeRoute({
+        summary: "Run async shell command",
+        description: "Queue a shell command for a session and return immediately after it is accepted.",
+        operationId: "session.shell_async",
+        responses: {
+          202: {
+            description: "Shell command accepted",
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+        SessionPrompt.shell({ ...body, sessionID }).catch((err) => {
+          log.error("shell_async failed", { sessionID, error: err })
+          Bus.publish(Session.Event.Error, {
+            sessionID,
+            error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
+          })
+        })
+        return c.body(null, 202)
       },
     )
     .post(
@@ -1169,6 +1238,7 @@ export const SessionRoutes = lazy(() =>
       validator("json", SessionRevert.RevertInput.omit({ sessionID: true })),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        SessionPrompt.assertNotBusy(sessionID)
         log.info("revert", c.req.valid("json"))
         const session = await SessionRevert.revert({
           sessionID,
@@ -1203,6 +1273,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        SessionPrompt.assertNotBusy(sessionID)
         const session = await SessionRevert.unrevert({ sessionID })
         return c.json(session)
       },

@@ -70,7 +70,14 @@ export function createDialogProviderOptions() {
               return
             }
 
-            const info = await resolveCliModel(provider.id)
+            const info = await resolveCliModel(provider.id).catch((error) => {
+              toast.show({
+                variant: "error",
+                message: error instanceof Error ? error.message : `Failed to inspect ${provider.name}`,
+              })
+              return undefined
+            })
+            if (!info) return
 
             if (isConnected) {
               const action = await new Promise<"use" | "disconnect" | null>((resolve) => {

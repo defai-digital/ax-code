@@ -35,6 +35,9 @@ export type FooterTrustChip =
       count: 0
     }
 
+export const SESSION_STATUS_STALE_AFTER_MS = 60_000
+export const SESSION_STATUS_TOOL_STALE_AFTER_MS = 90_000
+
 export function footerPermissionLabel(count: number): string | undefined {
   if (count <= 0) return
   return `${count} Permission${count > 1 ? "s" : ""}`
@@ -45,19 +48,26 @@ function footerToolLabel(tool: string) {
   return Locale.titlecase(normalized || "tool")
 }
 
-export function footerSessionStatusLabel(input: {
+export function footerSessionStatusView(input: {
   status?: FooterSessionStatus
   now?: number
-}): string | undefined {
+  stalledAfterMs?: number
+}): {
+  label?: string
+  stale: boolean
+} {
   const status = input.status
-  if (!status || status.type === "idle") return
+  if (!status || status.type === "idle") return { stale: false }
 
   const now = input.now ?? Date.now()
 
   if (status.type === "retry") {
     const remaining = Math.max(0, Math.round((status.next - now) / 1000))
     const duration = formatDuration(remaining)
-    return duration ? `Retrying in ${duration}` : "Retrying"
+    return {
+      label: duration ? `Retrying in ${duration}` : "Retrying",
+      stale: false,
+    }
   }
 
   const elapsedSeconds =
@@ -71,7 +81,26 @@ export function footerSessionStatusLabel(input: {
     label = "Waiting for model"
   }
 
-  return elapsed ? `${label} · ${elapsed}` : label
+  const staleAfterMs =
+    input.stalledAfterMs ?? (status.waitState === "tool" ? SESSION_STATUS_TOOL_STALE_AFTER_MS : SESSION_STATUS_STALE_AFTER_MS)
+  const idleMs = status.lastActivityAt !== undefined ? Math.max(0, now - status.lastActivityAt) : 0
+  const stale = idleMs >= staleAfterMs
+  const inactive =
+    stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / 1000))) : undefined
+  const text = elapsed ? `${label} · ${elapsed}` : label
+
+  return {
+    label: inactive ? `${text} · no activity ${inactive}` : text,
+    stale,
+  }
+}
+
+export function footerSessionStatusLabel(input: {
+  status?: FooterSessionStatus
+  now?: number
+  stalledAfterMs?: number
+}): string | undefined {
+  return footerSessionStatusView(input).label
 }
 
 export function footerMcpView(statuses: FooterMcpStatus[]) {

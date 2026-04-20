@@ -218,7 +218,7 @@ export const ExperimentalRoutes = lazy(() =>
             .optional()
             .meta({ description: "Return sessions updated before this timestamp (milliseconds since epoch)" }),
           search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
-          limit: z.coerce.number().optional().meta({ description: "Maximum number of sessions to return" }),
+          limit: z.coerce.number().int().min(1).max(1000).optional().meta({ description: "Maximum number of sessions to return" }),
           archived: z.coerce.boolean().optional().meta({ description: "Include archived sessions (default false)" }),
         }),
       ),

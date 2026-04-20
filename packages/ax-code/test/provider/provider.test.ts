@@ -351,6 +351,31 @@ test("getModel throws ModelNotFoundError for invalid provider", async () => {
   })
 })
 
+test("getLanguage throws ModelNotFoundError when the model provider is missing", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(
+        Provider.getLanguage({
+          id: ModelID.make("missing-model"),
+          providerID: ProviderID.make("missing-provider"),
+        } as any),
+      ).rejects.toThrow()
+    },
+  })
+})
+
 test("parseModel correctly parses provider/model string", () => {
   const result = Provider.parseModel("xai/grok-4")
   expect(String(result.providerID)).toBe("xai")

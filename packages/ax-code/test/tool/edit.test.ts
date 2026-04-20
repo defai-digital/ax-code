@@ -112,6 +112,34 @@ describe("tool.edit", () => {
   })
 
   describe("editing existing files", () => {
+    test("preserves the previous file content in filediff when oldString is empty", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "existing.txt")
+      await fs.writeFile(filepath, "old content", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await FileTime.read(ctx.sessionID, filepath)
+
+          const edit = await EditTool.init()
+          const result = await edit.execute(
+            {
+              filePath: filepath,
+              oldString: "",
+              newString: "new content",
+            },
+            ctx,
+          )
+
+          expect(result.metadata.filediff.before).toBe("old content")
+          expect(result.metadata.filediff.after).toBe("new content")
+          expect(result.metadata.filediff.deletions).toBe(1)
+          expect(result.metadata.filediff.additions).toBe(1)
+        },
+      })
+    })
+
     test("replaces text in existing file", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "existing.txt")

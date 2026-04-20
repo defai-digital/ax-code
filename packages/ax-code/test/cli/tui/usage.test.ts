@@ -42,6 +42,12 @@ describe("Usage.total", () => {
     msg.tokens.total = 200
     expect(Usage.total(msg)).toBe(200)
   })
+
+  test("treats missing cache tokens as zero", () => {
+    const msg = assistant({ input: 10, output: 5 }) as any
+    delete msg.tokens.cache
+    expect(Usage.total(msg)).toBe(15)
+  })
 })
 
 describe("Usage.last", () => {

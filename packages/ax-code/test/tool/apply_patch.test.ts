@@ -275,6 +275,58 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test.skipIf(process.platform === "win32")("rejects move destination symlink that escapes the project", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const original = path.join(fixture.path, "old.txt")
+        const outside = path.join(fixture.path, "..", `apply-patch-outside-${Date.now()}.txt`)
+        const link = path.join(fixture.path, "link.txt")
+        await writeAndTrack(original, "from\n")
+        await fs.writeFile(outside, "outside\n", "utf-8")
+        await fs.symlink(outside, link)
+
+        const patchText =
+          "*** Begin Patch\n*** Update File: old.txt\n*** Move to: link.txt\n@@\n-from\n+new\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow("move_path symlink target escapes project directory")
+        expect(await fs.readFile(original, "utf-8")).toBe("from\n")
+        expect(await fs.readFile(outside, "utf-8")).toBe("outside\n")
+        await fs.unlink(outside).catch(() => undefined)
+      },
+    })
+  })
+
+  test("rejects add when the file appears between verification and write", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "late.txt")
+        const originalWithLock = FileTime.withLock.bind(FileTime)
+        const withLockSpy = spyOn(FileTime, "withLock").mockImplementation(async (filePath, fn) => {
+          if (String(filePath) === target) {
+            await fs.writeFile(target, "appeared late\n", "utf-8")
+          }
+          return originalWithLock(filePath, fn)
+        })
+
+        try {
+          const patchText = "*** Begin Patch\n*** Add File: late.txt\n+new content\n*** End Patch"
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("was created between verification and write")
+          expect(await fs.readFile(target, "utf-8")).toBe("appeared late\n")
+        } finally {
+          withLockSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("adds file overwriting existing file", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

@@ -23,6 +23,39 @@ function writeOsc52(text: string): void {
   process.stdout.write(sequence)
 }
 
+function createTimeout(ms: number) {
+  let handle: NodeJS.Timeout | undefined
+  return {
+    promise: new Promise<"timeout">((resolve) => {
+      handle = setTimeout(() => resolve("timeout"), ms)
+    }),
+    clear() {
+      if (handle) clearTimeout(handle)
+    },
+  }
+}
+
+async function waitForExit(proc: { exited: Promise<unknown>; kill(): void }) {
+  const timeout = createTimeout(5_000)
+  try {
+    const result = await Promise.race([proc.exited.then(() => "done" as const), timeout.promise]).catch(
+      () => "timeout" as const,
+    )
+    if (result === "timeout") proc.kill()
+  } finally {
+    timeout.clear()
+  }
+}
+
+async function waitForWrite(input: Promise<unknown>) {
+  const timeout = createTimeout(5_000)
+  try {
+    await Promise.race([input, timeout.promise])
+  } finally {
+    timeout.clear()
+  }
+}
+
 export namespace Clipboard {
   export interface Content {
     data: string
@@ -114,8 +147,7 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
-          if (result === "timeout") proc.kill()
+          await waitForExit(proc)
         }
       }
       if (which("xclip")) {
@@ -128,8 +160,7 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
-          if (result === "timeout") proc.kill()
+          await waitForExit(proc)
         }
       }
       if (which("xsel")) {
@@ -142,8 +173,7 @@ export namespace Clipboard {
           if (!proc.stdin) return
           proc.stdin.write(text)
           proc.stdin.end()
-          const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
-          if (result === "timeout") proc.kill()
+          await waitForExit(proc)
         }
       }
     }
@@ -169,13 +199,12 @@ export namespace Clipboard {
         if (!proc.stdin) return
         proc.stdin.write(text)
         proc.stdin.end()
-        const result = await Promise.race([proc.exited.then(() => "done" as const), new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5_000))]).catch(() => "timeout" as const)
-        if (result === "timeout") proc.kill()
+        await waitForExit(proc)
       }
     }
 
     return async (text: string) => {
-      await Promise.race([clipboardy.write(text), new Promise((r) => setTimeout(r, 5_000))]).catch(() => {})
+      await waitForWrite(clipboardy.write(text)).catch(() => {})
     }
   })
 

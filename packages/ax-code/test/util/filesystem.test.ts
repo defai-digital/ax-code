@@ -451,6 +451,42 @@ describe("filesystem", () => {
       }
       expect(await fs.readFile(filepath, "utf-8")).toBe(content)
     })
+
+    test("preserves the existing file when the stream fails mid-write", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "atomic.txt")
+      await fs.writeFile(filepath, "original", "utf-8")
+
+      const { Readable } = await import("stream")
+      let pushed = false
+      const stream = new Readable({
+        read() {
+          if (pushed) return
+          pushed = true
+          this.push("partial")
+          queueMicrotask(() => this.destroy(new Error("stream failed")))
+        },
+      })
+
+      await expect(Filesystem.writeStream(filepath, stream)).rejects.toThrow("stream failed")
+      expect(await fs.readFile(filepath, "utf-8")).toBe("original")
+
+      const extra = await fs.readdir(tmp.path)
+      expect(extra.filter((name) => name.endsWith(".tmp"))).toEqual([])
+    })
+  })
+
+  describe("contains()/overlaps()", () => {
+    test("normalizes dot segments before checking containment", () => {
+      expect(Filesystem.contains("/repo/src", "/repo/src/../src/file.ts")).toBe(true)
+      expect(Filesystem.contains("/repo/src", "/repo/src/../../etc/passwd")).toBe(false)
+    })
+
+    test("detects overlaps only when one path contains the other", () => {
+      expect(Filesystem.overlaps("/repo/src", "/repo/src/file.ts")).toBe(true)
+      expect(Filesystem.overlaps("/repo/src/feature", "/repo/src")).toBe(true)
+      expect(Filesystem.overlaps("/repo/src", "/repo/src-other")).toBe(false)
+    })
   })
 
   describe("resolve()", () => {

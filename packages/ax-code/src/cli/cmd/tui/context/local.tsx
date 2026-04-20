@@ -166,10 +166,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return
         }
         state.pending = false
-        Filesystem.writeJson(filePath, {
+        void Filesystem.writeJson(filePath, {
           recent: modelStore.recent,
           favorite: modelStore.favorite,
           variant: modelStore.variant,
+        }).catch(() => {
+          state.pending = true
         })
       }
 

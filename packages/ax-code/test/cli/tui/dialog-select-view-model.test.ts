@@ -31,6 +31,19 @@ describe("tui dialog select view model", () => {
     expect(grouped).toEqual([["", [options[1]]]])
   })
 
+  test("does not penalize results with an undefined category", () => {
+    const grouped = dialogSelectGroupedOptions({
+      options: [
+        { title: "Open Session", value: "session", category: "Navigation" },
+        { title: "Open Settings", value: "settings", category: undefined },
+      ],
+      query: "settings",
+      flat: true,
+    })
+
+    expect(grouped).toEqual([["", [{ title: "Open Settings", value: "settings", category: undefined }]]])
+  })
+
   test("derives row count, visible height, and wrapped movement", () => {
     const grouped = dialogSelectGroupedOptions({ options, query: "" })
 

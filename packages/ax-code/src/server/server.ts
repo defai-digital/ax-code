@@ -538,7 +538,12 @@ export namespace Server {
         }
         const current = rate.get(key)
         const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)
-        const limit = c.req.path.includes("/prompt_async") || c.req.path.endsWith("/shell") ? 30 : mutating ? 120 : 600
+        const isFastAcceptRoute =
+          c.req.path.includes("/prompt_async") ||
+          c.req.path.includes("/command_async") ||
+          c.req.path.includes("/shell_async") ||
+          c.req.path.endsWith("/shell")
+        const limit = isFastAcceptRoute ? 30 : mutating ? 120 : 600
         if (!current || current.reset <= now) {
           rate.set(key, { count: 1, reset: now + 60_000 })
           return next()
@@ -873,7 +878,7 @@ export namespace Server {
           z.object({
             service: z.string().max(64).regex(/^[a-zA-Z0-9._-]+$/).meta({ description: "Service name for the log entry" }),
             level: z.enum(["debug", "info", "error", "warn"]).meta({ description: "Log level" }),
-            message: z.string().meta({ description: "Log message" }),
+            message: z.string().max(10000).meta({ description: "Log message" }),
             extra: z
               .record(z.string(), z.any())
               .optional()

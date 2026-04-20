@@ -76,13 +76,15 @@ export namespace SessionSummary {
     messages?: MessageV2.WithParts[],
   ) {
     const all = messages ?? await Session.messages({ sessionID: input.sessionID })
-    await Promise.all([
+    const settled = await Promise.allSettled([
       summarizeSession({ sessionID: input.sessionID, messages: all }),
       summarizeMessage({ messageID: input.messageID, messages: all }),
-    ]).catch((err) => {
-      if (NotFoundError.isInstance(err)) return
-      throw err
-    })
+    ])
+    const failures = settled
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason)
+      .filter((error) => !NotFoundError.isInstance(error))
+    if (failures.length > 0) throw failures[0]
   }
 
   async function summarizeSession(input: { sessionID: SessionID; messages: MessageV2.WithParts[] }) {
@@ -108,7 +110,7 @@ export namespace SessionSummary {
     )
     const msgWithParts = messages.find((m) => m.info.id === input.messageID)
     if (!msgWithParts) return
-    const userMsg = msgWithParts.info as MessageV2.User
+    const userMsg = { ...(msgWithParts.info as MessageV2.User) }
     const diffs = await computeDiff({ messages })
     userMsg.summary = {
       ...userMsg.summary,

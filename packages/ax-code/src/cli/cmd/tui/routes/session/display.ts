@@ -32,7 +32,10 @@ export function lastAssistantText(
   parts: Record<string, Part[] | undefined>,
   revert: string | undefined,
 ) {
-  const message = messages.findLast((item) => item.role === "assistant" && (!revert || item.id < revert))
+  const revertIndex = revert ? messages.findIndex((item) => item.id === revert) : -1
+  const message = messages.findLast(
+    (item, index) => item.role === "assistant" && (revertIndex === -1 || index < revertIndex),
+  )
   if (!message) return { error: "No assistant messages found" as const }
 
   const text = (parts[message.id] ?? [])

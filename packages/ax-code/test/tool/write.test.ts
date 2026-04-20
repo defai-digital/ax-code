@@ -179,6 +179,28 @@ describe("tool.write", () => {
   })
 
   describe("content types", () => {
+    test("enforces the 5MB limit by UTF-8 byte length, not string length", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "emoji.txt")
+      const content = "😀".repeat(1_400_000)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await expect(
+            write.execute(
+              {
+                filePath: filepath,
+                content,
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("Write content too large")
+        },
+      })
+    })
+
     test("writes JSON content", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "data.json")

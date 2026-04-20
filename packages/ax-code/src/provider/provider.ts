@@ -845,6 +845,9 @@ export namespace Provider {
     if (pending) return pending
 
     const provider = s.providers[model.providerID]
+    if (!provider) {
+      throw new ModelNotFoundError({ providerID: model.providerID, modelID: model.id })
+    }
 
     const promise = (async (): Promise<Lang> => {
       // CLI providers bypass SDK loading — their custom loaders handle everything

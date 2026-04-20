@@ -7,6 +7,49 @@ import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
 
 export namespace Editor {
+  function parseCommand(input: string) {
+    const parts: string[] = []
+    let current = ""
+    let quote: '"' | "'" | undefined
+    let escape = false
+
+    for (const char of input) {
+      if (escape) {
+        current += char
+        escape = false
+        continue
+      }
+      if (char === "\\") {
+        escape = true
+        continue
+      }
+      if (quote) {
+        if (char === quote) {
+          quote = undefined
+          continue
+        }
+        current += char
+        continue
+      }
+      if (char === '"' || char === "'") {
+        quote = char
+        continue
+      }
+      if (/\s/.test(char)) {
+        if (current) {
+          parts.push(current)
+          current = ""
+        }
+        continue
+      }
+      current += char
+    }
+
+    if (escape) current += "\\"
+    if (current) parts.push(current)
+    return parts
+  }
+
   export async function open(opts: { value: string; renderer: CliRenderer }): Promise<string | undefined> {
     const editor = process.env["VISUAL"] || process.env["EDITOR"]
     if (!editor) return
@@ -18,7 +61,8 @@ export namespace Editor {
     opts.renderer.suspend()
     opts.renderer.currentRenderBuffer.clear()
     try {
-      const parts = editor.split(" ")
+      const parts = parseCommand(editor)
+      if (parts.length === 0) return
       const proc = Process.spawn([...parts, filepath], {
         stdin: "inherit",
         stdout: "inherit",

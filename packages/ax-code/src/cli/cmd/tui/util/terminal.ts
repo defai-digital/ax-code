@@ -24,10 +24,11 @@ export namespace Terminal {
       let foreground: RGBA | null = null
       const paletteColors: RGBA[] = []
       let timeout: NodeJS.Timeout
+      const wasRaw = process.stdin.isRaw === true
 
       const cleanup = () => {
-        process.stdin.setRawMode(false)
         process.stdin.removeListener("data", handler)
+        process.stdin.setRawMode(wasRaw)
         clearTimeout(timeout)
       }
 

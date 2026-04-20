@@ -23,6 +23,12 @@ export type MessageWithParts = {
 
 export { agentLabel, userRoute, type AgentInfo } from "../routes/session/route"
 
+function fence(content: string, language?: string) {
+  const maxBackticks = Math.max(...(content.match(/`+/g) ?? []).map((item) => item.length), 0)
+  const marker = "`".repeat(Math.max(3, maxBackticks + 1))
+  return `${marker}${language ?? ""}\n${content}\n${marker}\n`
+}
+
 export function formatUserHeader(msg: UserMessage, parts: Part[], agents?: AgentInfo[]) {
   const route = userRoute(msg, parts, agents)
   if (msg.agent === "build" && route.delegated.length === 0) return `## User\n\n`
@@ -93,13 +99,13 @@ export function formatPart(part: Part, options: TranscriptOptions): string {
   if (part.type === "tool") {
     let result = `**Tool: ${part.tool}**\n`
     if (options.toolDetails && part.state.input) {
-      result += `\n**Input:**\n\`\`\`json\n${JSON.stringify(part.state.input, null, 2)}\n\`\`\`\n`
+      result += `\n**Input:**\n${fence(JSON.stringify(part.state.input, null, 2), "json")}`
     }
     if (options.toolDetails && part.state.status === "completed" && part.state.output) {
-      result += `\n**Output:**\n\`\`\`\n${part.state.output}\n\`\`\`\n`
+      result += `\n**Output:**\n${fence(part.state.output)}`
     }
     if (options.toolDetails && part.state.status === "error" && part.state.error) {
-      result += `\n**Error:**\n\`\`\`\n${part.state.error}\n\`\`\`\n`
+      result += `\n**Error:**\n${fence(part.state.error)}`
     }
     result += `\n`
     return result

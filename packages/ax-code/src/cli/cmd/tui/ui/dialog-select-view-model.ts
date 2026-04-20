@@ -25,7 +25,11 @@ export function dialogSelectFilteredOptions<T extends DialogSelectViewOption>(
   return fuzzysort
     .go(needle, enabled, {
       keys: ["title", "category"],
-      scoreFn: (result) => result[0].score * 2 + result[1].score,
+      scoreFn: (result) => {
+        const titleScore = result[0]?.score ?? 0
+        const categoryScore = result[1]?.score
+        return titleScore * 2 + (Number.isFinite(categoryScore) ? categoryScore : 0)
+      },
     })
     .map((result) => result.obj)
 }

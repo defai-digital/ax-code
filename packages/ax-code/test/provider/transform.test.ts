@@ -927,3 +927,68 @@ describe("ProviderTransform.variants", () => {
 
   // @ai-sdk/groq provider was removed in v2.23.3
 })
+
+describe("ProviderTransform family matching", () => {
+  const createModel = (overrides: Partial<any> = {}) =>
+    ({
+      id: "test/test-model",
+      providerID: "test",
+      api: {
+        id: "test-model",
+        url: "https://api.test.com",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      name: "Test Model",
+      family: undefined,
+      capabilities: {
+        temperature: true,
+        reasoning: true,
+        attachment: true,
+        toolcall: true,
+        input: { text: true, audio: false, image: false, video: false, pdf: false },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      limit: {
+        context: 200_000,
+        output: 64_000,
+      },
+      status: "active",
+      options: {},
+      headers: {},
+      ...overrides,
+    }) as any
+
+  test("ignores family tokens that only appear in provider path segments", () => {
+    const model = createModel({
+      id: "accounts/qwen-tools/models/custom-model",
+    })
+
+    expect(ProviderTransform.temperature(model)).toBeUndefined()
+    expect(ProviderTransform.topP(model)).toBeUndefined()
+    expect(ProviderTransform.topK(model)).toBeUndefined()
+    expect(Object.keys(ProviderTransform.variants(model))).toEqual(["low", "medium", "high"])
+  })
+
+  test("matches model families from the final id segment", () => {
+    const qwen = createModel({
+      id: "accounts/fireworks/models/qwen3-next",
+      family: "qwen",
+      capabilities: { reasoning: false },
+    })
+    const kimi = createModel({
+      id: "accounts/fireworks/models/kimi-k2p5",
+      family: "kimi",
+      capabilities: { reasoning: false },
+    })
+    const gemini = createModel({
+      id: "google/gemini-3-flash",
+      family: "gemini-flash",
+      capabilities: { reasoning: false },
+    })
+
+    expect(ProviderTransform.temperature(qwen)).toBe(0.55)
+    expect(ProviderTransform.topP(kimi)).toBe(0.95)
+    expect(ProviderTransform.topK(gemini)).toBe(64)
+  })
+})

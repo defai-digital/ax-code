@@ -18,6 +18,7 @@ describe("tui session format", () => {
     expect(filetype("a.tsx")).toBe("typescript")
     expect(filetype("a.jsx")).toBe("typescript")
     expect(filetype("a.bash")).toBe("shellscript")
+    expect(filetype("a.unknown")).toBe("none")
     expect(filetype()).toBe("none")
   })
 

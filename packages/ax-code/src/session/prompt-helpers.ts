@@ -23,6 +23,7 @@ import { Shell } from "@/shell/shell"
 import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { Filesystem } from "@/util/filesystem"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -92,6 +93,7 @@ export function commandArgs(input: string) {
 export function commandTemplate(template: string, input: string) {
   const args = commandArgs(input)
   const placeholders = template.match(placeholderRegex) ?? []
+  const hasArgumentsPlaceholder = template.includes("$ARGUMENTS")
   let last = 0
   for (const item of placeholders) {
     const value = Number(item.slice(1))
@@ -106,15 +108,18 @@ export function commandTemplate(template: string, input: string) {
     // `args[-1]` = undefined and stringify to the literal "undefined"
     // in the rendered template. See BUG-72.
     if (arg < 0 || arg >= args.length) return ""
-    if (position === last) return args.slice(arg).join(" ")
+    if (!hasArgumentsPlaceholder && position === last) return args.slice(arg).join(" ")
     return args[arg]
   })
 
-  if (placeholders.length === 0 && !template.includes("$ARGUMENTS") && input.trim()) {
+  if (placeholders.length === 0 && !hasArgumentsPlaceholder && input.trim()) {
     return withArgs + "\n\n" + input
   }
 
-  return withArgs.replaceAll("$ARGUMENTS", input)
+  if (!hasArgumentsPlaceholder) return withArgs
+
+  const remaining = placeholders.length > 0 ? args.slice(last).join(" ") : input
+  return withArgs.replaceAll("$ARGUMENTS", remaining)
 }
 
 export async function commandTemplateText(input: {
@@ -492,8 +497,13 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
       const filepath = name.startsWith("~/")
         ? path.join(os.homedir(), name.slice(2))
         : path.resolve(Instance.worktree, name)
+      const checkedPath = name.startsWith("~/") ? filepath : await fs.realpath(filepath).catch(() => filepath)
 
-      const stats = await fs.stat(filepath).catch(() => undefined)
+      if (!name.startsWith("~/") && !Filesystem.contains(Instance.worktree, checkedPath)) {
+        return
+      }
+
+      const stats = await fs.stat(checkedPath).catch(() => undefined)
       if (!stats) {
         const agent = await Agent.get(name)
         if (agent) {
@@ -508,7 +518,7 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
       if (stats.isDirectory()) {
         parts.push({
           type: "file",
-          url: pathToFileURL(filepath).href,
+          url: pathToFileURL(checkedPath).href,
           filename: name,
           mime: "application/x-directory",
         })
@@ -517,7 +527,7 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
 
       parts.push({
         type: "file",
-        url: pathToFileURL(filepath).href,
+        url: pathToFileURL(checkedPath).href,
         filename: name,
         mime: "text/plain",
       })

@@ -23,6 +23,10 @@ function logStashWriteFailure(operation: string) {
   }
 }
 
+function serialize(entries: StashEntry[]) {
+  return entries.length > 0 ? entries.map((line) => JSON.stringify(line)).join("\n") + "\n" : ""
+}
+
 export const { use: usePromptStash, provider: PromptStashProvider } = createSimpleContext({
   name: "PromptStash",
   init: () => {
@@ -62,6 +66,7 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
       push(entry: Omit<StashEntry, "timestamp">) {
         const stash = structuredClone(unwrap({ ...entry, timestamp: Date.now() }))
         let trimmed = false
+        let nextEntries: StashEntry[] = []
         setStore(
           produce((draft) => {
             draft.entries.push(stash)
@@ -69,12 +74,12 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
               draft.entries = draft.entries.slice(-MAX_STASH_ENTRIES)
               trimmed = true
             }
+            nextEntries = draft.entries.map((item) => structuredClone(unwrap(item)))
           }),
         )
 
         if (trimmed) {
-          const content = store.entries.map((line) => JSON.stringify(line)).join("\n") + "\n"
-          writeFile(stashPath, content).catch(logStashWriteFailure("trim"))
+          writeFile(stashPath, serialize(nextEntries)).catch(logStashWriteFailure("trim"))
           return
         }
 
@@ -83,26 +88,26 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
       pop() {
         if (store.entries.length === 0) return undefined
         const entry = store.entries[store.entries.length - 1]
+        let nextEntries: StashEntry[] = []
         setStore(
           produce((draft) => {
             draft.entries.pop()
+            nextEntries = draft.entries.map((item) => structuredClone(unwrap(item)))
           }),
         )
-        const content =
-          store.entries.length > 0 ? store.entries.map((line) => JSON.stringify(line)).join("\n") + "\n" : ""
-        writeFile(stashPath, content).catch(logStashWriteFailure("pop"))
+        writeFile(stashPath, serialize(nextEntries)).catch(logStashWriteFailure("pop"))
         return entry
       },
       remove(index: number) {
         if (index < 0 || index >= store.entries.length) return
+        let nextEntries: StashEntry[] = []
         setStore(
           produce((draft) => {
             draft.entries.splice(index, 1)
+            nextEntries = draft.entries.map((item) => structuredClone(unwrap(item)))
           }),
         )
-        const content =
-          store.entries.length > 0 ? store.entries.map((line) => JSON.stringify(line)).join("\n") + "\n" : ""
-        writeFile(stashPath, content).catch(logStashWriteFailure("remove"))
+        writeFile(stashPath, serialize(nextEntries)).catch(logStashWriteFailure("remove"))
       },
     }
   },

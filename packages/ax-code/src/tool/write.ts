@@ -20,8 +20,8 @@ export const WriteTool = Tool.define("write", {
   }),
   async execute(params, ctx) {
     const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
-    if (params.content.length > 5 * 1024 * 1024)
-      throw new Error(`Write content too large: ${params.content.length} bytes (max 5MB)`)
+    const bytes = Buffer.byteLength(params.content, "utf-8")
+    if (bytes > 5 * 1024 * 1024) throw new Error(`Write content too large: ${bytes} bytes (max 5MB)`)
     await assertExternalDirectory(ctx, filepath)
     // Resolve symlinks and re-check containment so a symlink inside
     // the project pointing to e.g. `~/.ssh/authorized_keys` cannot be

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import {
   assistantMessageDuration,
+  compactDelegatedLabel,
   codeDisplayView,
   diffDisplayView,
   sessionTaskSummary,
+  userMessageMetadataDensity,
   todoWriteView,
   userMessageView,
 } from "../../../src/cli/cmd/tui/routes/session/view-model"
@@ -61,6 +63,8 @@ describe("tui session view model", () => {
       ],
       pending: "msg_0",
       showTimestamps: false,
+      width: 80,
+      metadataPreference: "auto",
       agents: [{ name: "perf", displayName: "Perf" }],
     })
 
@@ -69,7 +73,39 @@ describe("tui session view model", () => {
     expect(view.queued).toBe(true)
     expect(view.showPrimary).toBe(true)
     expect(view.metadataVisible).toBe(true)
+    expect(view.metadataDensity).toBe("compact")
+    expect(view.compactDelegatedLabel).toBe("1 delegated")
     expect(view.route.delegated).toEqual([{ id: "part_3", name: "perf", label: "Perf" }])
+  })
+
+  test("uses full metadata density at wider widths", () => {
+    expect(
+      userMessageMetadataDensity({
+        width: 120,
+        preference: "auto",
+      }),
+    ).toBe("full")
+  })
+
+  test("allows explicit metadata density overrides", () => {
+    expect(
+      userMessageMetadataDensity({
+        width: 80,
+        preference: "full",
+      }),
+    ).toBe("full")
+    expect(
+      userMessageMetadataDensity({
+        width: 120,
+        preference: "compact",
+      }),
+    ).toBe("compact")
+  })
+
+  test("summarizes delegated badges for compact metadata rows", () => {
+    expect(compactDelegatedLabel(0)).toBeUndefined()
+    expect(compactDelegatedLabel(1)).toBe("1 delegated")
+    expect(compactDelegatedLabel(3)).toBe("3 delegated")
   })
 
   test("calculates assistant duration only for final messages", () => {

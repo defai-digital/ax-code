@@ -76,7 +76,10 @@ export const EditTool = Tool.define("edit", {
         // with oldString="" blow away a file the session had never
         // read — bypassing the staleness check that every other
         // write path enforces.
-        if (existed) await FileTime.assert(ctx.sessionID, filePath)
+        if (existed) {
+          await FileTime.assert(ctx.sessionID, filePath)
+          contentOld = await Filesystem.readText(filePath)
+        }
         contentNew = params.newString
         diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
         await ctx.ask({

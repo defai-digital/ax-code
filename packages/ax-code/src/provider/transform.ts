@@ -127,11 +127,11 @@ export namespace ProviderTransform {
 
   export function temperature(model: Provider.Model) {
     const id = model.id.toLowerCase()
-    if (id.includes("qwen")) return 0.55
-    if (id.includes("gemini")) return 1.0
-    if (id.includes("glm")) return 1.0
-    if (id.includes("minimax-m2")) return 1.0
-    if (id.includes("kimi-k2")) {
+    if (hasFamily(model, "qwen")) return 0.55
+    if (hasFamily(model, "gemini")) return 1.0
+    if (hasFamily(model, "glm")) return 1.0
+    if (hasFamily(model, "minimax-m2")) return 1.0
+    if (hasFamily(model, "kimi-k2")) {
       // kimi-k2-thinking & kimi-k2.5 && kimi-k2p5 && kimi-k2-5
       if (["thinking", "k2.", "k2p", "k2-5"].some((s) => id.includes(s))) {
         return 1.0
@@ -142,9 +142,8 @@ export namespace ProviderTransform {
   }
 
   export function topP(model: Provider.Model) {
-    const id = model.id.toLowerCase()
-    if (id.includes("qwen")) return 1
-    if (["minimax-m2", "gemini", "kimi-k2.5", "kimi-k2p5", "kimi-k2-5"].some((s) => id.includes(s))) {
+    if (hasFamily(model, "qwen")) return 1
+    if (hasAnyFamily(model, ["minimax-m2", "gemini", "kimi-k2.5", "kimi-k2p5", "kimi-k2-5"])) {
       return 0.95
     }
     return undefined
@@ -152,31 +151,35 @@ export namespace ProviderTransform {
 
   export function topK(model: Provider.Model) {
     const id = model.id.toLowerCase()
-    if (id.includes("minimax-m2")) {
+    if (hasFamily(model, "minimax-m2")) {
       if (["m2.", "m25", "m21"].some((s) => id.includes(s))) return 40
       return 20
     }
-    if (id.includes("gemini")) return 64
+    if (hasFamily(model, "gemini")) return 64
     return undefined
   }
 
   const WIDELY_SUPPORTED_EFFORTS = ["low", "medium", "high"]
 
-  // Match a model family name against a model id with a word-boundary on
-  // both sides, so ids like "zai-glm-4" do not match the "glm" family and
-  // hypothetical providers named "kimi-tools" do not match "kimi". A
-  // family matches when it appears at the start, end, or surrounded by
-  // non-alphanumeric characters (typically "-", "/", "."). This keeps the
-  // existing substring-based dispatch without false positives from future
-  // provider names that embed a family token as a substring of a larger
-  // word.
-  function hasFamily(id: string, family: string): boolean {
-    const idx = id.indexOf(family)
-    if (idx === -1) return false
-    const before = idx === 0 ? "" : id[idx - 1]
-    const after = idx + family.length >= id.length ? "" : id[idx + family.length]
-    const isWord = (c: string) => /[a-z0-9]/.test(c)
-    return !isWord(before) && !isWord(after)
+  // Match against the declared family when available, otherwise only the
+  // final model-id segment. This avoids substring matches from provider or
+  // account prefixes such as `accounts/qwen-tools/...` while still matching
+  // ids like `google/gemini-3-flash` and family aliases such as
+  // `gemini-flash`.
+  function hasFamily(model: Provider.Model, family: string): boolean {
+    const matches = (value?: string) => {
+      if (!value) return false
+      if (!value.startsWith(family)) return false
+      const next = value[family.length]
+      return next === undefined || /[^a-z0-9]/.test(next)
+    }
+    const segment = model.id.toLowerCase().split("/").filter(Boolean).at(-1)
+    const declared = model.family?.toLowerCase()
+    return matches(segment) || matches(declared)
+  }
+
+  function hasAnyFamily(model: Provider.Model, families: string[]): boolean {
+    return families.some((family) => hasFamily(model, family))
   }
 
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
@@ -184,13 +187,13 @@ export namespace ProviderTransform {
 
     const id = model.id.toLowerCase()
     if (
-      hasFamily(id, "deepseek") ||
-      hasFamily(id, "minimax") ||
-      hasFamily(id, "glm") ||
-      hasFamily(id, "mistral") ||
-      hasFamily(id, "kimi") ||
+      hasFamily(model, "deepseek") ||
+      hasFamily(model, "minimax") ||
+      hasFamily(model, "glm") ||
+      hasFamily(model, "mistral") ||
+      hasFamily(model, "kimi") ||
       // TODO: Remove this after models.dev data is fixed to use "kimi-k2.5" instead of "k2p5"
-      hasFamily(id, "k2p5")
+      hasFamily(model, "k2p5")
     )
       return {}
 

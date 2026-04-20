@@ -8,7 +8,7 @@ export function DialogTag(props: { onSelect?: (value: string) => void }) {
   const sdk = useSDK()
   const dialog = useDialog()
 
-  const [store] = createStore({
+  const [store, setStore] = createStore({
     filter: "",
   })
 
@@ -35,6 +35,7 @@ export function DialogTag(props: { onSelect?: (value: string) => void }) {
     <DialogSelect
       title="Autocomplete"
       options={options()}
+      onFilter={(filter) => setStore("filter", filter)}
       onSelect={(option) => {
         props.onSelect?.(option.value)
         dialog.clear()

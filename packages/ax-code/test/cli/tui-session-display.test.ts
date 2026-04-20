@@ -85,6 +85,23 @@ describe("tui session display helpers", () => {
     ).toEqual({ text: "new" })
   })
 
+  test("uses message order instead of lexicographic id ordering for revert filtering", () => {
+    expect(
+      lastAssistantText(
+        [
+          assistant("a-2"),
+          assistant("a-10"),
+          user("revert"),
+        ],
+        {
+          "a-2": [text("p1", "a-2", "older")],
+          "a-10": [text("p2", "a-10", "newer")],
+        },
+        "revert",
+      ),
+    ).toEqual({ text: "newer" })
+  })
+
   test("returns an error when no assistant text is available", () => {
     expect(lastAssistantText([user("a")], {}, undefined)).toEqual({
       error: "No assistant messages found",

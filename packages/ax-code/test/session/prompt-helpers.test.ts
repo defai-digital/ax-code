@@ -43,6 +43,13 @@ describe("session.prompt helpers", () => {
     expect(commandTemplate("run this:\n$ARGUMENTS", `echo "hello world"`)).toBe('run this:\necho "hello world"')
   })
 
+  test("uses remaining args for $ARGUMENTS when numbered placeholders are also present", () => {
+    expect(commandTemplate("$1 $ARGUMENTS", "foo bar baz")).toBe("foo bar baz")
+    expect(commandTemplate("compare $1 with $ARGUMENTS", 'left "right side" extra')).toBe(
+      "compare left with right side extra",
+    )
+  })
+
   test("appends args when template has no placeholders", () => {
     expect(commandTemplate("summarize this change", "focus on tests")).toBe("summarize this change\n\nfocus on tests")
   })

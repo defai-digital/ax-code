@@ -6,7 +6,10 @@ export function useDirectory() {
   const sync = useSync()
   return createMemo(() => {
     const directory = sync.data.path.directory || process.cwd()
-    const result = directory.replace(Global.Path.home, "~")
+    const result =
+      directory === Global.Path.home || directory.startsWith(Global.Path.home + "/")
+        ? directory.replace(Global.Path.home, "~")
+        : directory
     if (sync.data.vcs?.branch) return result + ":" + sync.data.vcs.branch
     return result
   })

@@ -1,4 +1,4 @@
-import { access, chmod, mkdir, readFile, rename, stat as statAsync, writeFile } from "fs/promises"
+import { access, chmod, mkdir, readFile, rename, stat as statAsync, unlink, writeFile } from "fs/promises"
 import { createWriteStream, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
@@ -74,14 +74,20 @@ export namespace Filesystem {
     mode?: number,
   ): Promise<void> {
     const dir = dirname(p)
+    const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
     await mkdir(dir, { recursive: true })
 
     const nodeStream = stream instanceof ReadableStream ? Readable.fromWeb(stream as any) : stream
-    const writeStream = createWriteStream(p)
-    await pipeline(nodeStream, writeStream)
-
-    if (mode) {
-      await chmod(p, mode)
+    try {
+      const writeStream = createWriteStream(tmp, mode ? { mode } : undefined)
+      await pipeline(nodeStream, writeStream)
+      if (mode) {
+        await chmod(tmp, mode)
+      }
+      await rename(tmp, p)
+    } catch (error) {
+      await unlink(tmp).catch(() => {})
+      throw error
     }
   }
 
@@ -139,9 +145,7 @@ export namespace Filesystem {
     )
   }
   export function overlaps(a: string, b: string) {
-    const relA = relative(a, b)
-    const relB = relative(b, a)
-    return !relA || !relA.startsWith("..") || !relB || !relB.startsWith("..")
+    return contains(a, b) || contains(b, a)
   }
 
   export function contains(parent: string, child: string) {

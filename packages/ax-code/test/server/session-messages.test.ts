@@ -119,13 +119,29 @@ describe("session messages endpoint", () => {
 })
 
 describe("session.prompt_async error handling", () => {
-  test("prompt_async route has error handler for detached prompt call", async () => {
+  const extractRoute = async (startMarker: string, endMarker: string) => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
-    const start = src.indexOf('"/:sessionID/prompt_async"')
-    const end = src.indexOf('"/:sessionID/command"', start)
+    const start = src.indexOf(startMarker)
+    const end = src.indexOf(endMarker, start)
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
-    const route = src.slice(start, end)
+    return src.slice(start, end)
+  }
+
+  test("prompt_async route has error handler for detached prompt call", async () => {
+    const route = await extractRoute('"/:sessionID/prompt_async"', '"/:sessionID/command_async"')
+    expect(route).toContain(".catch(")
+    expect(route).toContain("Bus.publish(Session.Event.Error")
+  })
+
+  test("command_async route has error handler for detached command call", async () => {
+    const route = await extractRoute('"/:sessionID/command_async"', '"/:sessionID/command"')
+    expect(route).toContain(".catch(")
+    expect(route).toContain("Bus.publish(Session.Event.Error")
+  })
+
+  test("shell_async route has error handler for detached shell call", async () => {
+    const route = await extractRoute('"/:sessionID/shell_async"', '"/:sessionID/shell"')
     expect(route).toContain(".catch(")
     expect(route).toContain("Bus.publish(Session.Event.Error")
   })

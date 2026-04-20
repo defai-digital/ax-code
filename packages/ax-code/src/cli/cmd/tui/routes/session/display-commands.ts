@@ -60,8 +60,10 @@ export function displayCommands(input: {
   setShowThinking: (next: Setter<boolean>) => void
   setSidebar: (fn: () => "auto" | "hide") => void
   setSidebarOpen: (value: boolean) => void
+  setMetadataDensity: (next: "auto" | "full" | "compact") => void
   setTimestamps: (next: Setter<"hide" | "show">) => void
   shareEnabled: boolean
+  metadataDensity: Accessor<"auto" | "full" | "compact">
   showAssistantMetadata: Accessor<boolean>
   showDetails: Accessor<boolean>
   showGenericToolOutput: Accessor<boolean>
@@ -74,6 +76,18 @@ export function displayCommands(input: {
   suggested: boolean
   toast: Toast
 }) {
+  const metadataDensityLabel = {
+    auto: "Auto",
+    full: "Full",
+    compact: "Compact",
+  } as const
+
+  function nextMetadataDensity(current: "auto" | "full" | "compact"): "auto" | "full" | "compact" {
+    if (current === "auto") return "compact"
+    if (current === "compact") return "full"
+    return "auto"
+  }
+
   return [
     {
       title: shareTitle(input.session()?.share?.url),
@@ -201,6 +215,18 @@ export function displayCommands(input: {
       category: "Session",
       onSelect: (dialog: DialogContext) => {
         input.setConceal((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
+      title: `Message metadata: ${metadataDensityLabel[input.metadataDensity()]}`,
+      value: "session.toggle.metadata_density",
+      category: "Session",
+      slash: {
+        name: "metadata",
+      },
+      onSelect: (dialog: DialogContext) => {
+        input.setMetadataDensity(nextMetadataDensity(input.metadataDensity()))
         dialog.clear()
       },
     },

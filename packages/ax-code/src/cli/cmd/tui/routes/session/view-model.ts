@@ -21,6 +21,9 @@ export type SessionTaskSummary = {
   total: number
 }
 
+export type UserMetadataPreference = "auto" | "full" | "compact"
+export type UserMetadataDensity = "full" | "compact"
+
 export type TodoWriteView =
   | {
       state: "pending"
@@ -121,6 +124,8 @@ export function userMessageView(input: {
   agents?: AgentInfo[]
   pending?: string
   showTimestamps: boolean
+  width?: number
+  metadataPreference?: UserMetadataPreference
 }) {
   const text = input.parts.find(isTextPart)
   const files = input.parts.filter(isFilePart)
@@ -129,6 +134,10 @@ export function userMessageView(input: {
   const route = userRoute(input.message, input.parts, input.agents)
   const showPrimary = input.message.agent !== "build" || route.delegated.length > 0
   const metadataVisible = queued || input.showTimestamps || showPrimary || route.delegated.length > 0
+  const metadataDensity = userMessageMetadataDensity({
+    width: input.width ?? Number.MAX_SAFE_INTEGER,
+    preference: input.metadataPreference ?? "auto",
+  })
 
   return {
     text,
@@ -138,7 +147,23 @@ export function userMessageView(input: {
     route,
     showPrimary,
     metadataVisible,
+    metadataDensity,
+    compactDelegatedLabel: compactDelegatedLabel(route.delegated.length),
   }
+}
+
+export function userMessageMetadataDensity(input: {
+  width: number
+  preference: UserMetadataPreference
+}): UserMetadataDensity {
+  if (input.preference === "full") return "full"
+  if (input.preference === "compact") return "compact"
+  return input.width < 100 ? "compact" : "full"
+}
+
+export function compactDelegatedLabel(count: number) {
+  if (count <= 0) return
+  return count === 1 ? "1 delegated" : `${count} delegated`
 }
 
 export function diffDisplayView(input: {

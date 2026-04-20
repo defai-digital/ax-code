@@ -33,7 +33,7 @@ export const FileRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          pattern: z.string(),
+          pattern: z.string().max(1024),
         }),
       ),
       async (c) => {

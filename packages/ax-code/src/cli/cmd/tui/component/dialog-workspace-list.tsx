@@ -21,6 +21,7 @@ async function openWorkspace(input: {
   workspaceID: string
   forceCreate?: boolean
 }) {
+  const MAX_CREATE_RETRIES = 5
   const cacheSession = (session: Session) => {
     input.sync.set(
       "session",
@@ -47,7 +48,9 @@ async function openWorkspace(input: {
     return
   }
   let created: Session | undefined
-  while (!created) {
+  let createAttempts = 0
+  while (!created && createAttempts < MAX_CREATE_RETRIES) {
+    createAttempts++
     const result = await client.session.create({}).catch(() => undefined)
     if (!result) {
       input.toast.show({
@@ -68,6 +71,13 @@ async function openWorkspace(input: {
       return
     }
     created = result.data
+  }
+  if (!created) {
+    input.toast.show({
+      message: "Failed to open workspace after multiple retries",
+      variant: "error",
+    })
+    return
   }
   cacheSession(created)
   input.route.navigate({

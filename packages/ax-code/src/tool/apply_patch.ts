@@ -153,6 +153,13 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           const moveOldContent = moveExisted ? await fs.readFile(movePath!, "utf-8").catch(() => "") : undefined
           await assertExternalDirectory(ctx, movePath)
           if (movePath && Filesystem.contains(Instance.directory, movePath)) {
+            const moveStat = await fs.lstat(movePath).catch(() => null)
+            if (moveStat?.isSymbolicLink()) {
+              const realMove = await fs.realpath(movePath).catch(() => null)
+              if (!realMove || !Filesystem.contains(Instance.directory, realMove)) {
+                throw new Error("Access denied: move_path symlink target escapes project directory")
+              }
+            }
             const parentDir = path.dirname(movePath)
             const realParent = await fs.realpath(parentDir).catch(() => parentDir)
             if (!Filesystem.contains(Instance.directory, realParent)) {
@@ -251,8 +258,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
     // Apply the changes
     const updates: Array<{ file: string; event: "add" | "change" | "unlink" }> = []
-    const rollback = async () => {
-      for (const change of [...fileChanges].reverse()) {
+    const appliedChanges: typeof fileChanges = []
+    let activeChange: (typeof fileChanges)[number] | undefined
+    let activeDirty = false
+    const rollback = async (changes: typeof fileChanges) => {
+      for (const change of [...changes].reverse()) {
         if (change.type === "move" && change.movePath) {
           const dest = change.movePath
           const [first, second] = [change.filePath, dest].sort()
@@ -283,11 +293,21 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
     try {
       for (const change of fileChanges) {
+        activeChange = change
+        activeDirty = false
         const edited = change.type === "delete" ? undefined : (change.movePath ?? change.filePath)
         switch (change.type) {
           case "add":
             await fs.mkdir(path.dirname(change.filePath), { recursive: true })
             await FileTime.withLock(change.filePath, async () => {
+              const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+              if (!change.existed && current !== undefined) {
+                throw new Error(`apply_patch conflict: ${change.filePath} was created between verification and write`)
+              }
+              if (change.existed && current !== change.oldContent) {
+                throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
+              }
+              activeDirty = true
               await fs.writeFile(change.filePath, change.newContent, "utf-8")
             })
             await FileTime.read(ctx.sessionID, change.filePath)
@@ -299,6 +319,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
               if (current !== undefined && current !== change.oldContent)
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
+              activeDirty = true
               await fs.writeFile(change.filePath, change.newContent, "utf-8")
             })
             await FileTime.read(ctx.sessionID, change.filePath)
@@ -312,12 +333,30 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               const [first, second] = [change.filePath, dest].sort()
               if (first === second) {
                 await FileTime.withLock(first, async () => {
+                  const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+                  if (current !== change.oldContent) {
+                    throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
+                  }
                   await fs.writeFile(dest, change.newContent, "utf-8")
-                  await fs.unlink(change.filePath)
+                  if (dest !== change.filePath) await fs.unlink(change.filePath)
                 })
               } else {
                 await FileTime.withLock(first, async () => {
                   await FileTime.withLock(second, async () => {
+                    const currentSource = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+                    if (currentSource !== change.oldContent) {
+                      throw new Error(
+                        `apply_patch conflict: ${change.filePath} was modified between verification and write`,
+                      )
+                    }
+                    const currentDest = await fs.readFile(dest, "utf-8").catch(() => undefined)
+                    if (!change.moveExisted && currentDest !== undefined) {
+                      throw new Error(`apply_patch conflict: ${dest} was created between verification and write`)
+                    }
+                    if (change.moveExisted && currentDest !== change.moveOldContent) {
+                      throw new Error(`apply_patch conflict: ${dest} was modified between verification and write`)
+                    }
+                    activeDirty = true
                     await fs.writeFile(dest, change.newContent, "utf-8")
                     if (dest !== change.filePath) await fs.unlink(change.filePath)
                   })
@@ -331,12 +370,16 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           case "delete":
             await FileTime.withLock(change.filePath, async () => {
+              activeDirty = true
               await fs.unlink(change.filePath)
             })
             updates.push({ file: change.filePath, event: "unlink" })
             break
         }
 
+        appliedChanges.push(change)
+        activeChange = undefined
+        activeDirty = false
         if (edited) {
           await Bus.publish(File.Event.Edited, {
             file: edited,
@@ -344,7 +387,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         }
       }
     } catch (error) {
-      await rollback()
+      const rollbackChanges = activeChange && activeDirty ? [...appliedChanges, activeChange] : appliedChanges
+      await rollback(rollbackChanges)
       throw error
     }
 

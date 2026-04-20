@@ -1,3 +1,4 @@
+import fs from "fs/promises"
 import path from "path"
 import { describe, expect, test } from "bun:test"
 import { NamedError } from "@ax-code/util/error"
@@ -220,6 +221,22 @@ describe("session.prompt special characters", () => {
         await Session.remove(session.id)
       },
     })
+  })
+
+  test("ignores @file references that escape the worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const outside = path.join(tmp.path, "..", `outside-${Date.now()}.txt`)
+    await Bun.write(outside, "outside secret\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parts = await SessionPrompt.resolvePromptParts(`Read @${outside}`)
+        expect(parts.filter((part) => part.type === "file")).toHaveLength(0)
+      },
+    })
+
+    await fs.unlink(outside).catch(() => {})
   })
 })
 

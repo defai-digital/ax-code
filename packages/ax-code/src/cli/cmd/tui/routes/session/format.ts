@@ -34,7 +34,7 @@ export const filetype = (input?: string) => {
   const ext = path.extname(input)
   const language = LANGUAGE_EXTENSIONS[ext]
   if (["typescriptreact", "javascriptreact", "javascript"].includes(language)) return "typescript"
-  return language
+  return language ?? "none"
 }
 
 export const workdir = (base: string | undefined, home: string | undefined, input?: string) => {

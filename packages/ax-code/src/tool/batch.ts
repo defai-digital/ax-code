@@ -9,6 +9,60 @@ const FILTERED_FROM_SUGGESTIONS = new Set(["invalid", "patch", ...DISALLOWED])
 const log = Log.create({ service: "tool.batch" })
 const TOOL_TIMEOUT = 60_000
 
+function asError(reason: unknown, fallback: string) {
+  if (reason instanceof Error) return reason
+  if (typeof reason === "string" && reason.length > 0) return new Error(reason)
+  return new Error(fallback)
+}
+
+export function withToolTimeout<T>(input: {
+  tool: string
+  parent: AbortSignal
+  timeoutMs: number
+  run(signal: AbortSignal): Promise<T>
+}): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const controller = new AbortController()
+    const timeoutError = new Error(`Tool '${input.tool}' timed out after ${input.timeoutMs}ms`)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let settled = false
+
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      if (timer) clearTimeout(timer)
+      controller.signal.removeEventListener("abort", onAbort)
+      input.parent.removeEventListener("abort", onParentAbort)
+      fn()
+    }
+
+    const onAbort = () => {
+      finish(() => reject(asError(controller.signal.reason, `Tool '${input.tool}' was aborted`)))
+    }
+
+    const onParentAbort = () => {
+      controller.abort(input.parent.reason)
+    }
+
+    controller.signal.addEventListener("abort", onAbort, { once: true })
+    if (input.parent.aborted) {
+      controller.abort(input.parent.reason)
+    } else {
+      input.parent.addEventListener("abort", onParentAbort, { once: true })
+    }
+
+    timer = setTimeout(() => {
+      controller.abort(timeoutError)
+    }, input.timeoutMs)
+    if (typeof timer === "object" && "unref" in timer) timer.unref()
+
+    input.run(controller.signal).then(
+      (value) => finish(() => resolve(value)),
+      (error) => finish(() => reject(asError(error, `Tool '${input.tool}' failed`))),
+    )
+  })
+}
+
 export const BatchTool = Tool.define("batch", async () => {
   return {
     description: DESCRIPTION,
@@ -91,21 +145,16 @@ export const BatchTool = Tool.define("batch", async () => {
             },
           })
 
-          const result = await new Promise<Awaited<ReturnType<typeof tool.execute>>>((resolve, reject) => {
-            const timer = setTimeout(() => {
-              reject(new Error(`Tool '${call.tool}' timed out after ${TOOL_TIMEOUT}ms`))
-            }, TOOL_TIMEOUT)
-            if (typeof timer === "object" && "unref" in timer) timer.unref()
-            tool.execute(validatedParams, { ...ctx, callID: partID }).then(
-              (value) => {
-                clearTimeout(timer)
-                resolve(value)
-              },
-              (error) => {
-                clearTimeout(timer)
-                reject(error)
-              },
-            )
+          const result = await withToolTimeout({
+            tool: call.tool,
+            parent: ctx.abort,
+            timeoutMs: TOOL_TIMEOUT,
+            run: (abort) =>
+              tool.execute(validatedParams, {
+                ...ctx,
+                callID: partID,
+                abort,
+              }),
           })
           const attachments = result.attachments?.map((attachment) => ({
             ...attachment,

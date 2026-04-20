@@ -33,15 +33,22 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
     active: "filename" as "filename" | "thinking" | "toolDetails" | "assistantMetadata" | "openWithoutSaving",
   })
 
+  const confirm = () => {
+    props.onConfirm?.({
+      filename: textarea.plainText,
+      thinking: store.thinking,
+      toolDetails: store.toolDetails,
+      assistantMetadata: store.assistantMetadata,
+      openWithoutSaving: store.openWithoutSaving,
+    })
+  }
+
   useKeyboard((evt) => {
     if (evt.name === "return") {
-      props.onConfirm?.({
-        filename: textarea.plainText,
-        thinking: store.thinking,
-        toolDetails: store.toolDetails,
-        assistantMetadata: store.assistantMetadata,
-        openWithoutSaving: store.openWithoutSaving,
-      })
+      if (store.active === "filename") return
+      evt.preventDefault()
+      evt.stopPropagation()
+      confirm()
     }
     if (evt.name === "tab") {
       const order: Array<"filename" | "thinking" | "toolDetails" | "assistantMetadata" | "openWithoutSaving"> = [
@@ -61,7 +68,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
       if (store.active === "toolDetails") setStore("toolDetails", !store.toolDetails)
       if (store.active === "assistantMetadata") setStore("assistantMetadata", !store.assistantMetadata)
       if (store.active === "openWithoutSaving") setStore("openWithoutSaving", !store.openWithoutSaving)
-      evt.preventDefault()
+      if (store.active !== "filename") evt.preventDefault()
     }
   })
 
@@ -90,6 +97,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           <text fg={theme.text}>Filename:</text>
         </box>
         <textarea
+          onSubmit={confirm}
           height={3}
           keyBindings={[{ name: "return", action: "submit" }]}
           ref={(val: TextareaRenderable) => (textarea = val)}

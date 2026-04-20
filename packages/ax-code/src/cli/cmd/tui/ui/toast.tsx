@@ -1,4 +1,4 @@
-import { createContext, useContext, type ParentProps, Show } from "solid-js"
+import { createContext, onCleanup, useContext, type ParentProps, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "@tui/context/theme"
 import { useTerminalDimensions } from "@opentui/solid"
@@ -62,6 +62,7 @@ function init() {
       if (timeoutHandle) clearTimeout(timeoutHandle)
       timeoutHandle = setTimeout(() => {
         setStore("currentToast", null)
+        timeoutHandle = null
       }, duration).unref()
     },
     error: (err: any) => {
@@ -78,6 +79,11 @@ function init() {
     get currentToast(): ToastOptions | null {
       return store.currentToast
     },
+    dispose() {
+      if (!timeoutHandle) return
+      clearTimeout(timeoutHandle)
+      timeoutHandle = null
+    },
   }
   return toast
 }
@@ -88,6 +94,7 @@ const ctx = createContext<ToastContext>()
 
 export function ToastProvider(props: ParentProps) {
   const value = init()
+  onCleanup(() => value.dispose())
   return <ctx.Provider value={value}>{props.children}</ctx.Provider>
 }
 
