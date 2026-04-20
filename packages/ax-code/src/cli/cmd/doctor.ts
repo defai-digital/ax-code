@@ -16,6 +16,7 @@ import { NativeStore } from "../../code-intelligence/native-store"
 import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
+import { getTuiPreloadCheck } from "./doctor-preload"
 import path from "path"
 import fs from "fs/promises"
 
@@ -235,21 +236,9 @@ export const DoctorCommand: CommandModule = {
       checks.push({ name: "TUI server", status: "ok", detail: "Port 4096 available" })
     }
 
-    // 11b. Bun preload — SolidJS JSX transform required for the TUI renderer
-    try {
-      const preloadPath = Bun.resolveSync("@opentui/solid/preload", import.meta.dir)
-      checks.push({
-        name: "TUI preload",
-        status: "ok",
-        detail: `@opentui/solid/preload resolved (${path.basename(path.dirname(preloadPath))})`,
-      })
-    } catch {
-      checks.push({
-        name: "TUI preload",
-        status: "fail",
-        detail: "@opentui/solid/preload not found — TUI will fail to start. Run: pnpm install",
-      })
-    }
+    // 11b. Bun preload — required for source/dev TUI runs, but embedded in
+    // standalone binaries published via npm/Homebrew/GitHub Releases.
+    checks.push(getTuiPreloadCheck())
 
     // 12. Recent logs analysis — scan last 5 log files for TUI crashes / errors
     try {

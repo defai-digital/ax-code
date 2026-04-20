@@ -5,7 +5,7 @@ import path from "path"
 const TUI_ROOT = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const RENDERER_SRC = path.join(TUI_ROOT, "renderer.ts")
-const DOCTOR_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/doctor.ts")
+const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/doctor-preload.ts")
 
 describe("tui OpenTUI stability guardrails", () => {
   test("keeps OpenTUI wired as the default renderer path", async () => {
@@ -34,10 +34,12 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).toContain('renderer.externalOutputMode = "passthrough"')
   })
 
-  test("keeps doctor checking the OpenTUI preload dependency", async () => {
-    const doctor = await fs.readFile(DOCTOR_SRC, "utf8")
+  test("keeps doctor checking the OpenTUI preload dependency with bundled-runtime awareness", async () => {
+    const doctor = await fs.readFile(DOCTOR_PRELOAD_SRC, "utf8")
 
-    expect(doctor).toContain('Bun.resolveSync("@opentui/solid/preload"')
-    expect(doctor).toContain("@opentui/solid/preload not found")
+    expect(doctor).toContain("Bun.resolveSync")
+    expect(doctor).toContain('"@opentui/solid/preload"')
+    expect(doctor).toContain("Bundled runtime")
+    expect(doctor).toContain("source/dev TUI may fail to start")
   })
 })
