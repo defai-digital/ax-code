@@ -217,9 +217,9 @@ describe("transcript", () => {
       const result = formatPart(part, options)
       // The tool header should not be inside a code block
       expect(result).toStartWith("**Tool: bash**\n")
-      // Input and output should each be in their own code blocks
-      expect(result).toContain("**Input:**\n```json")
-      expect(result).toContain("**Output:**\n```\n```hello```\n```")
+      // The formatter should widen the fence when the payload already contains triple backticks.
+      expect(result).toContain("**Input:**\n````json")
+      expect(result).toContain("**Output:**\n````\n```hello```\n````")
     })
 
     test("formats tool part without details when disabled", () => {

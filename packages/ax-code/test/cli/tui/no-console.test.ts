@@ -47,7 +47,10 @@ describe("tui console hygiene", () => {
   test("submits prompts through the async endpoint", async () => {
     const text = await fs.readFile(PROMPT_SRC, "utf8")
 
-    expect(text).toContain("sdk.client.session.promptAsync")
+    expect(text).toContain("submitAsyncRoute")
+    expect(text).toContain('path: "prompt_async"')
+    expect(text).toContain('path: "command_async"')
+    expect(text).toContain('path: "shell_async"')
     expect(text).not.toContain("sdk.client.session.prompt(")
   })
 
