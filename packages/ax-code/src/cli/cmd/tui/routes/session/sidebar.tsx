@@ -17,6 +17,8 @@ import { SessionDre } from "./dre"
 import { SessionBranch } from "./branch"
 import { SessionRollback } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
+import type { FooterSessionStatus } from "./footer-view-model"
+import { estimateContextEta, formatContextEtaLabel } from "./sidebar-eta"
 
 export function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
@@ -72,7 +74,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
-  const status = createMemo(() => sync.data.session_status?.[props.sessionID] ?? { type: "idle" as const })
+  const status = createMemo<FooterSessionStatus>(
+    () => (sync.data.session_status?.[props.sessionID] as FooterSessionStatus | undefined) ?? { type: "idle" },
+  )
   const dimensions = useTerminalDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
   // Bar widths scale with sidebar: full bar uses sidebar minus padding, half bar is half of that
@@ -86,9 +90,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const [etaAnchor, setEtaAnchor] = createSignal<{
     computedAt: number
     remainSec: number
-    elapsedSec: number
+    totalSec: number
   }>()
   let etaAnchorSessionID = ""
+  let etaRun: { startedAt: number; startTokens: number } | undefined
+  let prevStatusType: "idle" | "busy" | "retry" | undefined
   let prevSample: { time: number; tokens: number } | undefined
   let smoothRate: number | undefined
 
@@ -213,53 +219,57 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       limit: model?.limit?.context ?? 0,
     }
   })
-  // Recalculate ETA every 2s using windowed velocity (recent token rate)
+  // Recalculate context-fill ETA every 5s using tokens consumed in the current busy run.
   const etaEstimate = createMemo(() => {
     etaTick()
-    const idle = status().type === "idle"
+    const currentStatus = status()
+    const busy = currentStatus.type === "busy"
     const ctx = context()
     if (etaAnchorSessionID !== props.sessionID) {
       etaAnchorSessionID = props.sessionID
       setEtaAnchor(undefined)
+      etaRun = undefined
+      prevStatusType = undefined
       prevSample = undefined
       smoothRate = undefined
     }
-    if (idle) {
+    if (!busy) {
       setEtaAnchor(undefined)
+      etaRun = undefined
+      prevStatusType = currentStatus.type
       prevSample = undefined
       smoothRate = undefined
       return
     }
     if (!ctx || !ctx.limit || !ctx.raw) return
     const now = Date.now()
-    const s = session()
-    if (!s?.time?.created) return
-    const elapsedSec = Math.round((now - s.time.created) / 1000)
-    if (elapsedSec < 10) return
-    if (ctx.raw / ctx.limit < 0.02) return
-    // EMA-smoothed velocity: blends instant rate into a running average
-    // so the estimate adjusts gradually without jumping.
-    const lifetimeRate = ctx.raw / elapsedSec
-    if (prevSample && now - prevSample.time >= 5_000) {
-      const dt = (now - prevSample.time) / 1000
-      const instantRate = (ctx.raw - prevSample.tokens) / dt
-      // EMA alpha 0.2 = slow adaptation, avoids jumps from burst/pause cycles
-      smoothRate = smoothRate !== undefined ? smoothRate * 0.8 + instantRate * 0.2 : lifetimeRate
+    if (!etaRun || prevStatusType !== "busy" || ctx.raw < etaRun.startTokens) {
+      etaRun = {
+        startedAt: currentStatus.startedAt ?? now,
+        startTokens: ctx.raw,
+      }
       prevSample = { time: now, tokens: ctx.raw }
-    } else if (!prevSample) {
-      smoothRate = lifetimeRate
-      prevSample = { time: now, tokens: ctx.raw }
-    }
-    const tokPerSec = smoothRate ?? lifetimeRate
-    if (tokPerSec <= 0) return
-    const remaining = ctx.limit - ctx.raw
-    if (remaining <= 0) {
-      setEtaAnchor({ computedAt: now, remainSec: 0, elapsedSec })
+      smoothRate = undefined
+      prevStatusType = currentStatus.type
+      setEtaAnchor(undefined)
       return
     }
-    const remainSec = Math.min(3600, Math.round(remaining / tokPerSec))
-    setEtaAnchor({ computedAt: now, remainSec, elapsedSec: elapsedSec + remainSec })
-    return
+    prevStatusType = currentStatus.type
+    const result = estimateContextEta({
+      now,
+      limit: ctx.limit,
+      totalTokens: ctx.raw,
+      run: etaRun,
+      prevSample,
+      smoothRate,
+    })
+    prevSample = result.prevSample
+    smoothRate = result.smoothRate
+    if (!result.estimate) {
+      setEtaAnchor(undefined)
+      return
+    }
+    setEtaAnchor(result.estimate)
   })
 
   // Countdown display: ticks every 1s, counts down from last anchor
@@ -271,11 +281,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     const sinceLast = Math.round((Date.now() - anchor.computedAt) / 1000)
     const remainSec = anchor.remainSec - sinceLast
     if (remainSec <= 0) return
-    const remainPct = Math.min(100, Math.round((remainSec / anchor.elapsedSec) * 100))
-    const h = Math.floor(remainSec / 3600)
-    const m = Math.floor((remainSec % 3600) / 60)
-    const sec = remainSec % 60
-    const label = h > 0 ? `~${h}h ${m}m` : m > 0 ? `~${m}m ${sec}s` : `~${sec}s`
+    const remainPct = Math.min(100, Math.round((remainSec / anchor.totalSec) * 100))
+    const label = formatContextEtaLabel(remainSec)
     return { remainPct, label, remainSec }
   })
 
