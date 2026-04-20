@@ -19,6 +19,7 @@ import { SessionRollback } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import type { FooterSessionStatus } from "./footer-view-model"
 import { estimateContextEta, formatContextEtaLabel } from "./sidebar-eta"
+import { computeSidebarWidth } from "./layout"
 
 export function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
@@ -33,13 +34,6 @@ export function activityColor(status: string, theme: ReturnType<typeof useTheme>
     default:
       return theme.textMuted
   }
-}
-
-// Returns the sidebar width in characters based on terminal width (3-tier).
-export function computeSidebarWidth(terminalWidth: number): number {
-  if (terminalWidth >= 200) return 52
-  if (terminalWidth >= 160) return 46
-  return 42
 }
 
 // Eighth-block characters for sub-pixel progress bar smoothness

@@ -47,6 +47,7 @@ import { Log } from "@/util/log"
 import { renderTui } from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
+import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
 import { Session } from "@tui/routes/session"
 
 const FALLBACK_COLOR_MODE = "dark" as const
@@ -67,10 +68,12 @@ export function tui(input: TuiInput) {
   return new Promise<void>((resolve, reject) => {
     void (async () => {
       const unguard = win32InstallCtrlCGuard()
+      const unresize = installResizeInputGuard()
       try {
         win32DisableProcessedInput()
 
         const onExit = async () => {
+          unresize()
           unguard?.()
           resolve()
         }
@@ -127,6 +130,7 @@ export function tui(input: TuiInput) {
           )
         })
       } catch (error) {
+        unresize()
         unguard?.()
         reject(error)
       }
@@ -149,6 +153,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+
+  useResizeInputRecovery(dimensions)
 
   async function showProviderDialog() {
     const marker = dialog.stack.at(-1)

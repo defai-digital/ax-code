@@ -10,7 +10,7 @@ import { Flag } from "@/flag/flag"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Usage } from "./usage"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
-import { computeSidebarWidth } from "./sidebar"
+import { computeSidebarWidth } from "./layout"
 
 const Title = (props: { session: Accessor<Session | undefined> }) => {
   const { theme } = useTheme()

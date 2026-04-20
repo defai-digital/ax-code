@@ -57740,6 +57740,41 @@
           "output": 256000
         }
       },
+      "workers-ai/@cf/moonshotai/kimi-k2.6": {
+        "id": "workers-ai/@cf/moonshotai/kimi-k2.6",
+        "name": "Kimi K2.6",
+        "family": "kimi",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-04-20",
+        "last_updated": "2026-04-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.95,
+          "output": 4,
+          "cache_read": 0.16
+        },
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
+      },
       "workers-ai/@cf/ai4bharat/indictrans2-en-indic-1B": {
         "id": "workers-ai/@cf/ai4bharat/indictrans2-en-indic-1B",
         "name": "IndicTrans2 EN-Indic 1B",
@@ -102003,7 +102038,7 @@
         "cost": {
           "input": 0.3,
           "output": 2.5,
-          "cache_read": 0.075,
+          "cache_read": 0.03,
           "input_audio": 1
         },
         "limit": {
@@ -107118,7 +107153,7 @@
         "cost": {
           "input": 0.3,
           "output": 2.5,
-          "cache_read": 0.075,
+          "cache_read": 0.03,
           "input_audio": 1
         },
         "limit": {
@@ -110193,6 +110228,41 @@
           "context": 256000,
           "output": 256000
         }
+      },
+      "@cf/moonshotai/kimi-k2.6": {
+        "id": "@cf/moonshotai/kimi-k2.6",
+        "name": "Kimi K2.6",
+        "family": "kimi",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-04-20",
+        "last_updated": "2026-04-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.95,
+          "output": 4,
+          "cache_read": 0.16
+        },
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
       }
     }
   },
@@ -112179,7 +112249,7 @@
         "cost": {
           "input": 0.3,
           "output": 2.5,
-          "cache_read": 0.075,
+          "cache_read": 0.03,
           "input_audio": 1
         },
         "limit": {

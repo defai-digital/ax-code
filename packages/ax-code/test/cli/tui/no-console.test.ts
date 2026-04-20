@@ -64,6 +64,13 @@ describe("tui console hygiene", () => {
     expect(renderer).toContain("render(root, createTuiRenderOptions(options))")
   })
 
+  test("keeps resize input recovery wired through the app shell", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).toContain("installResizeInputGuard()")
+    expect(app).toContain("useResizeInputRecovery(dimensions)")
+  })
+
   test("does not assume the session header data has loaded", async () => {
     const text = await fs.readFile(SESSION_HEADER_SRC, "utf8")
 

@@ -29,7 +29,7 @@ import { assign } from "./part"
 import { usePromptStash } from "./stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useRenderer } from "@opentui/solid"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { useExit } from "../../context/exit"
@@ -51,6 +51,10 @@ import { isPromptExitCommand, promptSubmissionView } from "./view-model"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
 import { footerSessionStatusView } from "../../routes/session/footer-view-model"
+import { selectedForeground } from "@tui/context/theme"
+import { footerToggleLabel } from "./footer-toggle"
+import { footerHintWidth, promptFooterLayout } from "./footer-layout"
+import { computeSessionMainPaneWidth } from "../../routes/session/layout"
 
 const log = Log.create({ service: "tui.prompt" })
 
@@ -89,6 +93,7 @@ export function Prompt(props: PromptProps) {
   const local = useLocal()
   const sdk = useSDK()
   const route = useRoute()
+  const dimensions = useTerminalDimensions()
   const sync = useSync()
   const dialog = useDialog()
   const toast = useToast()
@@ -103,6 +108,38 @@ export function Prompt(props: PromptProps) {
   const [expandedPastes, setExpandedPastes] = createSignal<Set<number>>(new Set<number>())
   const inputBlocked = createMemo(() => props.disabled || submitPending())
   const [statusTick, setStatusTick] = createSignal(0)
+  const [sidebarPreference] = kv.signal<"auto" | "hide">("sidebar", "auto")
+
+  function footerToggleChip(input: {
+    label: string
+    active: boolean
+    activeFg: unknown
+    inactiveFg: unknown
+    background?: unknown
+    onMouseUp: () => void
+  }) {
+    const fg = input.active
+      ? input.background
+        ? selectedForeground(theme, input.background as any)
+        : input.activeFg
+      : input.inactiveFg
+
+    return (
+      <box flexShrink={0}>
+        <text onMouseUp={input.onMouseUp}>
+          <span
+            style={{
+              fg: fg as any,
+              bg: input.active ? (input.background as any) : undefined,
+              bold: input.active,
+            }}
+          >
+            {footerToggleLabel(input.label, input.active)}
+          </span>
+        </text>
+      </box>
+    )
+  }
 
   function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean } = {}) {
     scheduleMicrotaskTask(() => {
@@ -119,6 +156,18 @@ export function Prompt(props: PromptProps) {
       input.cursorColor = inputBlocked() ? theme.backgroundElement : theme.text
     })
   }
+
+  const promptContentWidth = createMemo(() => {
+    const sidebarVisible =
+      route.data.type === "session" &&
+      !sync.session.get(route.data.sessionID)?.parentID &&
+      sidebarPreference() === "auto" &&
+      dimensions().width > 120
+    return computeSessionMainPaneWidth({
+      terminalWidth: dimensions().width,
+      sidebarVisible,
+    })
+  })
 
   function promptModelWarning() {
     if (!sync.data.provider_loaded) {
@@ -221,6 +270,22 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
   })
+
+  const footerLayout = createMemo(() =>
+    promptFooterLayout({
+      contentWidth: promptContentWidth(),
+      toggleWidth:
+        footerToggleLabel("Auto-route", sync.data.smartLlm).length +
+        footerToggleLabel("Autonomous", sync.data.autonomous).length +
+        footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
+      mode: store.mode,
+      commandsWidth: footerHintWidth(keybind.print("command_list"), "commands"),
+      agentsWidth: footerHintWidth(keybind.print("agent_cycle"), "agents"),
+      variantsWidth:
+        local.model.variant.list().length > 0 ? footerHintWidth(keybind.print("variant_cycle"), "variants") : 0,
+      shellWidth: footerHintWidth("esc", "exit shell mode"),
+    }),
+  )
 
   createEffect(
     on(
@@ -1360,7 +1425,11 @@ export function Prompt(props: PromptProps) {
             }
           />
         </box>
-        <box flexDirection="row" justifyContent="space-between">
+        <box
+          flexDirection={footerLayout().stacked ? "column" : "row"}
+          justifyContent={footerLayout().stacked ? "flex-start" : "space-between"}
+          gap={footerLayout().stacked ? 1 : 0}
+        >
           <Show
             when={status().type !== "idle"}
             fallback={
@@ -1452,55 +1521,72 @@ export function Prompt(props: PromptProps) {
             </box>
           </Show>
           <Show when={status().type !== "retry"}>
-            <box gap={2} flexDirection="row">
-              <text
-                fg={sync.data.smartLlm ? theme.primary : theme.textMuted}
-                onMouseUp={() => command.trigger("app.toggle.smart_llm")}
+            <box
+              gap={footerLayout().stacked ? 0 : 1}
+              flexDirection={footerLayout().stacked ? "column" : "row"}
+              flexShrink={0}
+            >
+              <box flexDirection="row" flexShrink={0}>
+                {footerToggleChip({
+                  label: "Auto-route",
+                  active: sync.data.smartLlm,
+                  activeFg: theme.primary,
+                  inactiveFg: theme.textMuted,
+                  onMouseUp: () => command.trigger("app.toggle.smart_llm"),
+                })}
+                {footerToggleChip({
+                  label: "Autonomous",
+                  active: sync.data.autonomous,
+                  activeFg: theme.text,
+                  inactiveFg: theme.textMuted,
+                  background: theme.warning,
+                  onMouseUp: () => command.trigger("app.toggle.autonomous"),
+                })}
+                {footerToggleChip({
+                  label: "Sandbox",
+                  active: sync.data.isolation.mode !== "full-access",
+                  activeFg: theme.success,
+                  inactiveFg: theme.error,
+                  onMouseUp: () => command.trigger("app.toggle.sandbox"),
+                })}
+              </box>
+              <Show
+                when={
+                  footerLayout().showCommands ||
+                  footerLayout().showAgents ||
+                  footerLayout().showVariants ||
+                  footerLayout().showShellHint
+                }
               >
-                {sync.data.smartLlm ? "● Auto-route" : "○ Auto-route"}
-              </text>
-              {sync.data.autonomous ? (
-                <box
-                  backgroundColor="yellow"
-                  paddingLeft={1}
-                  paddingRight={1}
-                  onMouseUp={() => command.trigger("app.toggle.autonomous")}
-                >
-                  <text fg="red">
-                    <b>● Autonomous</b>
-                  </text>
+                <box gap={2} flexDirection="row" flexShrink={0}>
+                  <Switch>
+                    <Match when={store.mode === "normal"}>
+                      <Show when={footerLayout().showVariants}>
+                        <text fg={theme.text}>
+                          {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
+                        </text>
+                      </Show>
+                      <Show when={footerLayout().showAgents}>
+                        <text fg={theme.text}>
+                          {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
+                        </text>
+                      </Show>
+                      <Show when={footerLayout().showCommands}>
+                        <text fg={theme.text}>
+                          {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
+                        </text>
+                      </Show>
+                    </Match>
+                    <Match when={store.mode === "shell"}>
+                      <Show when={footerLayout().showShellHint}>
+                        <text fg={theme.text}>
+                          esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
+                        </text>
+                      </Show>
+                    </Match>
+                  </Switch>
                 </box>
-              ) : (
-                <text fg={theme.textMuted} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
-                  ○ Autonomous
-                </text>
-              )}
-              <text
-                fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}
-                onMouseUp={() => command.trigger("app.toggle.sandbox")}
-              >
-                {sync.data.isolation.mode === "full-access" ? "○ Sandbox" : "● Sandbox"}
-              </text>
-              <Switch>
-                <Match when={store.mode === "normal"}>
-                  <Show when={local.model.variant.list().length > 0}>
-                    <text fg={theme.text}>
-                      {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
-                    </text>
-                  </Show>
-                  <text fg={theme.text}>
-                    {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
-                  </text>
-                  <text fg={theme.text}>
-                    {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
-                  </text>
-                </Match>
-                <Match when={store.mode === "shell"}>
-                  <text fg={theme.text}>
-                    esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                  </text>
-                </Match>
-              </Switch>
+              </Show>
             </box>
           </Show>
         </box>

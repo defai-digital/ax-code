@@ -8,6 +8,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Switch,
   useContext,
@@ -69,7 +70,8 @@ import { DialogBranch } from "./dialog-branch"
 import { DialogCompare } from "./dialog-compare"
 import { DialogRollback } from "./dialog-rollback"
 import { SessionRollback } from "./rollback"
-import { computeSidebarWidth, Sidebar } from "./sidebar"
+import { Sidebar } from "./sidebar"
+import { computeSidebarWidth, computeSessionMainPaneWidth } from "./layout"
 import { Flag } from "@/flag/flag"
 import parsers from "../../../../../../parsers-config.ts"
 import { Toast, useToast } from "../../ui/toast"
@@ -104,6 +106,7 @@ import { SessionCodeRenderer, SessionDiffRenderer } from "./render-adapter"
 import { Log } from "@/util/log"
 import { firstCompactionMessageID, shouldShowCompactionNotice } from "./compaction-view-model"
 import { createReconnectRecoveryGate } from "../../util/reconnect-recovery"
+import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 
 addDefaultParsers(parsers.parsers)
 
@@ -207,9 +210,16 @@ export function Session() {
     return false
   })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(
-    () => dimensions().width - (sidebarVisible() && wide() ? computeSidebarWidth(dimensions().width) : 0) - 4,
+  const contentWidth = createMemo(() =>
+    computeSessionMainPaneWidth({
+      terminalWidth: dimensions().width,
+      sidebarVisible: sidebarVisible() && wide(),
+    }),
   )
+
+  onMount(() => {
+    recordTuiStartupOnce("tui.startup.sessionMounted")
+  })
 
   const scrollAcceleration = createMemo(() => {
     const tui = tuiConfig
