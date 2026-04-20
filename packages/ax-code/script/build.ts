@@ -16,6 +16,7 @@ process.chdir(dir)
 import { Script } from "@ax-code/script"
 import pkg from "../package.json"
 import { scopePackageName } from "./package-names"
+import { compiledBunfsModulePath } from "./embedded-path"
 
 const modelsUrl = process.env.AX_CODE_MODELS_URL || "https://models.dev"
 const snapshotPath = path.join(dir, "src/provider/models-snapshot.json")
@@ -198,7 +199,7 @@ for (const item of targets) {
       AX_CODE_VERSION: `'${Script.version}'`,
       AX_CODE_MIGRATIONS: JSON.stringify(migrations),
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
-      AX_CODE_WORKER_PATH: bunfsRoot + workerPath.replace(/^\.\//, ""),
+      AX_CODE_WORKER_PATH: compiledBunfsModulePath(bunfsRoot, workerPath),
       AX_CODE_CHANNEL: `'${Script.channel}'`,
       AX_CODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
     },
