@@ -2,13 +2,14 @@ import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable }
 import { pathToFileURL } from "bun"
 import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
-import { createMemo, createResource, createEffect, onMount, onCleanup, Index, Show, createSignal } from "solid-js"
+import { createMemo, createResource, createEffect, onMount, Index, Show, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
 import { useTheme, selectedForeground } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Agent } from "@/agent/agent"
 import { Locale } from "@/util/locale"
@@ -90,28 +91,13 @@ export function Autocomplete(props: {
     input: "keyboard" as "keyboard" | "mouse",
   })
 
-  const [positionTick, setPositionTick] = createSignal(0)
   const [cursorTick, setCursorTick] = createSignal(0)
 
-  createEffect(() => {
-    if (store.visible) {
-      let lastPos = { x: 0, y: 0, width: 0 }
-      const interval = setInterval(() => {
-        const anchor = props.anchor()
-        if (anchor.x !== lastPos.x || anchor.y !== lastPos.y || anchor.width !== lastPos.width) {
-          lastPos = { x: anchor.x, y: anchor.y, width: anchor.width }
-          setPositionTick((t) => t + 1)
-        }
-      }, 50)
-
-      onCleanup(() => clearInterval(interval))
-    }
-  })
-
-  const position = createMemo(() => {
+  const anchorMetrics = createMemo(() => {
     if (!store.visible) return { x: 0, y: 0, width: 0 }
-    const dims = dimensions()
-    positionTick()
+    props.value
+    cursorTick()
+    dimensions()
     const anchor = props.anchor()
     const parent = anchor.parent
     const parentX = parent?.x ?? 0
@@ -490,7 +476,9 @@ export function Autocomplete(props: {
   }
 
   function refreshCursorAfterKey() {
-    setTimeout(() => setCursorTick((tick) => tick + 1), 0)
+    scheduleMicrotaskTask(() => {
+      setCursorTick((tick) => tick + 1)
+    })
   }
 
   function hide() {
@@ -613,8 +601,7 @@ export function Autocomplete(props: {
   const height = createMemo(() => {
     const count = options().length || 1
     if (!store.visible) return Math.min(10, count)
-    positionTick()
-    return Math.min(10, count, Math.max(1, props.anchor().y))
+    return Math.min(10, count, Math.max(1, anchorMetrics().y))
   })
 
   let scroll: ScrollBoxRenderable
@@ -623,9 +610,9 @@ export function Autocomplete(props: {
     <box
       visible={store.visible !== false}
       position="absolute"
-      top={position().y - height()}
-      left={position().x}
-      width={position().width}
+      top={anchorMetrics().y - height()}
+      left={anchorMetrics().x}
+      width={anchorMetrics().width}
       zIndex={100}
       {...SplitBorder}
       borderColor={theme.border}

@@ -87,10 +87,10 @@ export function Home() {
     }
   })
 
-  // Wait for sync and model store to be ready before auto-submitting --prompt
+  // Wait for providers and model state to settle before auto-submitting --prompt.
   createEffect(
     on(
-      () => sync.ready && local.model.ready,
+      () => sync.data.provider_loaded && local.model.ready && !!local.model.current(),
       (ready) => {
         if (!ready) return
         if (!args.prompt) return

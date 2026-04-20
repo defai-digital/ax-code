@@ -10,6 +10,7 @@ import { createStore, produce } from "solid-js/store"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
 import { useTuiConfig } from "./tui-config"
+import { scheduleDeferredStartupTask } from "../util/startup-task"
 
 type Theme = ThemeColors & {
   _hasSelectedListItemText: boolean
@@ -161,6 +162,7 @@ function ansiToRgba(code: number): RGBA {
 export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   name: "Theme",
   init: (props: { mode: "dark" | "light" }) => {
+    const THEME_DISCOVERY_DELAY_MS = 25
     const renderer = useRenderer()
     const config = useTuiConfig()
     const kv = useKV()
@@ -182,10 +184,14 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       if (theme) setStore("active", theme)
     })
 
-    function init() {
-      resolveSystemTheme(store.mode)
-      getCustomThemes()
+    let customThemesLoaded = false
+    let customThemesPromise: Promise<void> | undefined
+    function ensureCustomThemesLoaded() {
+      if (customThemesLoaded) return Promise.resolve()
+      if (customThemesPromise) return customThemesPromise
+      customThemesPromise = getCustomThemes()
         .then((custom) => {
+          customThemesLoaded = true
           setStore(
             produce((draft) => {
               Object.assign(draft.themes, custom)
@@ -196,13 +202,21 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           setStore("active", "github")
         })
         .finally(() => {
+          customThemesPromise = undefined
           if (store.active !== "system") {
             setStore("ready", true)
           }
         })
+      return customThemesPromise
     }
 
-    onMount(init)
+    onMount(() => {
+      resolveSystemTheme(store.mode)
+      const cancel = scheduleDeferredStartupTask(() => ensureCustomThemesLoaded(), {
+        delayMs: THEME_DISCOVERY_DELAY_MS,
+      })
+      onCleanup(cancel)
+    })
 
     function resolveSystemTheme(mode: "dark" | "light" = store.mode) {
       renderer
@@ -293,6 +307,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       all() {
         return store.themes
       },
+      ensureCustomThemesLoaded,
       syntax,
       subtleSyntax,
       mode() {
@@ -311,6 +326,9 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         pin(mode)
       },
       set(theme: string) {
+        if (theme !== "system" && !store.themes[theme]) {
+          void ensureCustomThemesLoaded()
+        }
         setStore("active", theme)
         kv.set("theme", theme)
       },

@@ -45,6 +45,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   init: () => {
     const [store, setStore] = createStore<{
       status: "loading" | "partial" | "complete"
+      session_loaded: boolean
       provider: Provider[]
       provider_loaded: boolean
       provider_failed: boolean
@@ -144,6 +145,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         default: {},
         connected: [],
       },
+      session_loaded: false,
       provider_loaded: false,
       provider_failed: false,
       provider_auth: {},
@@ -599,13 +601,16 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       if (bootstrapPromise) return bootstrapPromise
       bootstrapPromise = (async () => {
         fullSyncedSessions.clear()
+        setStore("session_loaded", false)
         const start = Date.now() - 30 * 24 * 60 * 60 * 1000
         const sessionListPromise = withSyncTimeout(
           "tui bootstrap session.list",
           sdk.client.session
             .list({ start: start })
             .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id))),
-        )
+        ).finally(() => {
+          setStore("session_loaded", true)
+        })
         const providersPromise = withSyncTimeout(
           "tui bootstrap config.providers",
           sdk.client.config.providers({}, { throwOnError: true }),
@@ -644,9 +649,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
         if (store.status === "loading") setStore("status", "partial")
 
-        // Keep bootstrapPromise alive until the background hydration finishes
-        // so reconnect-triggered bootstraps do not overlap and race each other.
-        return Promise.allSettled([
+        const coreBootstrapTasks = [
           providersPromise
             .then((x) => x.data ?? { providers: [], default: {} })
             .then((providers) => {
@@ -695,33 +698,52 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           withSyncTimeout("tui bootstrap provider.auth", sdk.client.provider.auth()).then((x) =>
             setStore("provider_auth", reconcile(x.data ?? {})),
           ),
-          withSyncTimeout("tui bootstrap vcs.get", sdk.client.vcs.get()).then((x) =>
-            setStore("vcs", reconcile(x.data)),
-          ),
           withSyncTimeout("tui bootstrap path.get", sdk.client.path.get()).then((x) =>
             setStore("path", reconcile(x.data ?? store.path)),
           ),
-          withSyncTimeout("tui bootstrap worktree.list", syncWorkspaces()),
-          withSyncTimeout("tui bootstrap debug-engine", syncDebugEngine()),
           withSyncTimeout("tui bootstrap isolation", syncIsolation()),
           withSyncTimeout("tui bootstrap autonomous", syncAutonomous()),
+        ]
+
+        const coreResults = await Promise.allSettled(coreBootstrapTasks)
+        for (const result of coreResults) {
+          if (result.status === "rejected") {
+            Log.Default.error("core bootstrap item failed", { error: String(result.reason) })
+          }
+        }
+
+        setStore("status", "complete")
+
+        // Defer lower-priority status/metadata hydration so startup does not fan out
+        // every auxiliary request before the first usable home/session state settles.
+        // Keep bootstrapPromise alive until these finish so reconnect-triggered
+        // bootstraps do not overlap and race each other.
+        const deferredBootstrapTasks = [
+          withSyncTimeout("tui bootstrap lsp.status", sdk.client.lsp.status()).then((x) =>
+            setStore("lsp", reconcile(x.data ?? [])),
+          ),
+          withSyncTimeout("tui bootstrap mcp.status", sdk.client.mcp.status()).then((x) =>
+            setStore("mcp", reconcile(x.data ?? {})),
+          ),
+          withSyncTimeout("tui bootstrap resource.list", sdk.client.experimental.resource.list()).then((x) =>
+            setStore("mcp_resource", reconcile(x.data ?? {})),
+          ),
+          withSyncTimeout("tui bootstrap formatter.status", sdk.client.formatter.status()).then((x) =>
+            setStore("formatter", reconcile(x.data ?? [])),
+          ),
+          withSyncTimeout("tui bootstrap vcs.get", sdk.client.vcs.get()).then((x) =>
+            setStore("vcs", reconcile(x.data)),
+          ),
+          withSyncTimeout("tui bootstrap worktree.list", syncWorkspaces()),
+          withSyncTimeout("tui bootstrap debug-engine", syncDebugEngine()),
           withSyncTimeout("tui bootstrap smart-llm", syncSmartLlm()),
-        ])
-          .then((results) => {
-            for (const r of results) {
-              if (r.status === "rejected")
-                Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
-            }
-            setStore("status", "complete")
-          })
-          .catch(async (e) => {
-            Log.Default.error("tui bootstrap failed", {
-              error: e instanceof Error ? e.message : String(e),
-              name: e instanceof Error ? e.name : undefined,
-              stack: e instanceof Error ? e.stack : undefined,
-            })
-            await exit(e)
-          })
+        ]
+        const deferredResults = await Promise.allSettled(deferredBootstrapTasks)
+        for (const result of deferredResults) {
+          if (result.status === "rejected") {
+            Log.Default.error("deferred bootstrap item failed", { error: String(result.reason) })
+          }
+        }
       })().finally(() => {
         bootstrapPromise = undefined
       })

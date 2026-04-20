@@ -2,6 +2,7 @@ import { TextareaRenderable, TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { onCleanup, onMount, type JSX } from "solid-js"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
 
 export type DialogPromptProps = {
   title: string
@@ -19,11 +20,11 @@ export function DialogPrompt(props: DialogPromptProps) {
 
   onMount(() => {
     dialog.setSize("medium")
-    const timer = setTimeout(() => {
+    const cancel = scheduleMicrotaskTask(() => {
       if (!textarea || textarea.isDestroyed) return
       textarea.focus()
-    }, 1)
-    onCleanup(() => clearTimeout(timer))
+    })
+    onCleanup(cancel)
     textarea.gotoLineEnd()
   })
 

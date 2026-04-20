@@ -54,6 +54,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { Header } from "./header"
 import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
@@ -387,9 +388,9 @@ export function Session() {
       type: "session",
       sessionID,
     })
-    setTimeout(() => {
+    scheduleMicrotaskTask(() => {
       promptRef.current?.focus()
-    }, 0)
+    })
   }
 
   const command = useCommandDialog()

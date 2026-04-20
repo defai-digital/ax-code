@@ -1,12 +1,13 @@
 import path from "path"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
-import { onMount } from "solid-js"
+import { onCleanup, onMount } from "solid-js"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
 import type { PromptInfo } from "./history"
 import { Log } from "@/util/log"
+import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 
 export type StashEntry = {
   input: string
@@ -15,6 +16,7 @@ export type StashEntry = {
 }
 
 const MAX_STASH_ENTRIES = 50
+const STASH_LOAD_DELAY_MS = 50
 const log = Log.create({ service: "tui.prompt-stash" })
 
 function logStashWriteFailure(operation: string) {
@@ -31,28 +33,39 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
   name: "PromptStash",
   init: () => {
     const stashPath = path.join(Global.Path.state, "prompt-stash.jsonl")
-    onMount(async () => {
-      const text = await Filesystem.readText(stashPath).catch(() => "")
-      const lines = text
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => {
-          try {
-            return JSON.parse(line)
-          } catch {
-            return null
+    onMount(() => {
+      const cancel = scheduleDeferredStartupTask(
+        async () => {
+          const text = await Filesystem.readText(stashPath).catch(() => "")
+          const lines = text
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => {
+              try {
+                return JSON.parse(line)
+              } catch {
+                return null
+              }
+            })
+            .filter((line): line is StashEntry => line !== null)
+            .slice(-MAX_STASH_ENTRIES)
+
+          const merged = [...lines, ...store.entries]
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .slice(-MAX_STASH_ENTRIES)
+          setStore("entries", merged)
+
+          // Rewrite file with only valid entries to self-heal corruption
+          if (merged.length > 0) {
+            const content = merged.map((line) => JSON.stringify(line)).join("\n") + "\n"
+            writeFile(stashPath, content).catch(logStashWriteFailure("rewrite"))
           }
-        })
-        .filter((line): line is StashEntry => line !== null)
-        .slice(-MAX_STASH_ENTRIES)
-
-      setStore("entries", lines)
-
-      // Rewrite file with only valid entries to self-heal corruption
-      if (lines.length > 0) {
-        const content = lines.map((line) => JSON.stringify(line)).join("\n") + "\n"
-        writeFile(stashPath, content).catch(logStashWriteFailure("rewrite"))
-      }
+        },
+        {
+          delayMs: STASH_LOAD_DELAY_MS,
+        },
+      )
+      onCleanup(cancel)
     })
 
     const [store, setStore] = createStore({

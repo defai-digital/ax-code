@@ -4,6 +4,7 @@ import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { onMount, onCleanup, Show, type JSX } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
 
 export type DialogExportOptionsProps = {
   defaultFilename: string
@@ -74,11 +75,11 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
 
   onMount(() => {
     dialog.setSize("medium")
-    const timer = setTimeout(() => {
+    const cancel = scheduleMicrotaskTask(() => {
       if (!textarea || textarea.isDestroyed) return
       textarea.focus()
-    }, 1)
-    onCleanup(() => clearTimeout(timer))
+    })
+    onCleanup(cancel)
     textarea.gotoLineEnd()
   })
 

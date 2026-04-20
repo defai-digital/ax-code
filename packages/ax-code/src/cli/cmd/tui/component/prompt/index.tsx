@@ -1,5 +1,17 @@
 import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes, t, dim, fg } from "@opentui/core"
-import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match, For } from "solid-js"
+import {
+  createEffect,
+  createMemo,
+  type JSX,
+  onMount,
+  createSignal,
+  onCleanup,
+  on,
+  Show,
+  Switch,
+  Match,
+  For,
+} from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
@@ -19,6 +31,7 @@ import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
 import { useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@ax-code/sdk/v2"
@@ -91,6 +104,22 @@ export function Prompt(props: PromptProps) {
   const inputBlocked = createMemo(() => props.disabled || submitPending())
   const [statusTick, setStatusTick] = createSignal(0)
 
+  function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean } = {}) {
+    scheduleMicrotaskTask(() => {
+      if (!input || input.isDestroyed) return
+      input.getLayoutNode().markDirty()
+      if (options.gotoBufferEnd) input.gotoBufferEnd()
+      renderer.requestRender()
+    })
+  }
+
+  function syncInputCursorColor() {
+    scheduleMicrotaskTask(() => {
+      if (!input || input.isDestroyed) return
+      input.cursorColor = inputBlocked() ? theme.backgroundElement : theme.text
+    })
+  }
+
   function promptModelWarning() {
     if (!sync.data.provider_loaded) {
       toast.show({
@@ -152,13 +181,7 @@ export function Prompt(props: PromptProps) {
   const unsubPromptAppend = sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
     if (!input || input.isDestroyed) return
     input.insertText(evt.properties.text)
-    setTimeout(() => {
-      // setTimeout is a workaround and needs to be addressed properly
-      if (!input || input.isDestroyed) return
-      input.getLayoutNode().markDirty()
-      input.gotoBufferEnd()
-      renderer.requestRender()
-    }, 0)
+    requestInputLayoutRefresh({ gotoBufferEnd: true })
   })
   onCleanup(() => unsubPromptAppend())
 
@@ -1232,12 +1255,7 @@ export function Prompt(props: PromptProps) {
                 }
 
                 // Force layout update and render for the pasted content
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
-                  input.getLayoutNode().markDirty()
-                  renderer.requestRender()
-                }, 0)
+                requestInputLayoutRefresh()
               }}
               ref={(r: TextareaRenderable) => {
                 input = r
@@ -1245,11 +1263,7 @@ export function Prompt(props: PromptProps) {
                   promptPartTypeId = input.extmarks.registerType("prompt-part")
                 }
                 props.ref?.(ref)
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
-                  input.cursorColor = inputBlocked() ? theme.backgroundElement : theme.text
-                }, 0)
+                syncInputCursorColor()
               }}
               onMouseDown={(r: MouseEvent) => r.target?.focus()}
               focusedBackgroundColor={theme.backgroundElement}
@@ -1310,9 +1324,7 @@ export function Prompt(props: PromptProps) {
                             {view.label}
                           </text>
                           <text fg={theme.textMuted}>{previewText()}</text>
-                          <text fg={theme.textMuted}>
-                            {expanded() ? "Click to collapse" : "Click to expand"}
-                          </text>
+                          <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
                         </box>
                       </box>
                     )

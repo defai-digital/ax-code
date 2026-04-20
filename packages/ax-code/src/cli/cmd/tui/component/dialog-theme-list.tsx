@@ -1,20 +1,26 @@
 import { DialogSelect, type DialogSelectRef } from "../ui/dialog-select"
 import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
-import { onCleanup, onMount } from "solid-js"
+import { createMemo, onCleanup, onMount } from "solid-js"
 
 export function DialogThemeList() {
   const theme = useTheme()
-  const options = Object.keys(theme.all())
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
-    .map((value) => ({
-      title: value,
-      value: value,
-    }))
+  const options = createMemo(() =>
+    Object.keys(theme.all())
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+      .map((value) => ({
+        title: value,
+        value: value,
+      })),
+  )
   const dialog = useDialog()
   let confirmed = false
   let ref: DialogSelectRef<string>
   const initial = theme.selected
+
+  onMount(() => {
+    void theme.ensureCustomThemesLoaded()
+  })
 
   onCleanup(() => {
     if (!confirmed) theme.set(initial)
@@ -23,7 +29,7 @@ export function DialogThemeList() {
   return (
     <DialogSelect
       title="Themes"
-      options={options}
+      options={options()}
       current={initial}
       onMove={(opt) => {
         theme.set(opt.value)

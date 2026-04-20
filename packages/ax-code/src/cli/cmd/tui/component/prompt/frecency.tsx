@@ -1,10 +1,11 @@
 import path from "path"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
-import { onMount } from "solid-js"
+import { onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
+import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 
 function calculateFrecency(entry?: { frequency: number; lastOpen: number }): number {
   if (!entry) return 0
@@ -14,52 +15,86 @@ function calculateFrecency(entry?: { frequency: number; lastOpen: number }): num
 }
 
 const MAX_FRECENCY_ENTRIES = 1000
+const FRECENCY_LOAD_DELAY_MS = 75
+const FRECENCY_COMPACT_WRITE_THRESHOLD = 100
 
 export const { use: useFrecency, provider: FrecencyProvider } = createSimpleContext({
   name: "Frecency",
   init: () => {
     const frecencyPath = path.join(Global.Path.state, "frecency.jsonl")
-    onMount(async () => {
-      const text = await Filesystem.readText(frecencyPath).catch(() => "")
-      const lines = text
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => {
-          try {
-            return JSON.parse(line) as { path: string; frequency: number; lastOpen: number }
-          } catch {
-            return null
-          }
-        })
-        .filter((line): line is { path: string; frequency: number; lastOpen: number } => line !== null)
-
-      const latest = lines.reduce(
-        (acc, entry) => {
-          acc[entry.path] = entry
-          return acc
-        },
-        {} as Record<string, { path: string; frequency: number; lastOpen: number }>,
-      )
-
-      const sorted = Object.values(latest)
-        .sort((a, b) => b.lastOpen - a.lastOpen)
-        .slice(0, MAX_FRECENCY_ENTRIES)
-
-      setStore(
-        "data",
-        Object.fromEntries(
-          sorted.map((entry) => [entry.path, { frequency: entry.frequency, lastOpen: entry.lastOpen }]),
-        ),
-      )
-
-      if (sorted.length > 0) {
-        const content = sorted.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
-        writeFile(frecencyPath, content).catch(() => {})
-      }
-    })
-
     const [store, setStore] = createStore({
       data: {} as Record<string, { frequency: number; lastOpen: number }>,
+    })
+    let writesSinceCompact = 0
+
+    function compact(entries = store.data) {
+      const sorted = Object.entries(entries)
+        .sort(([, a], [, b]) => b.lastOpen - a.lastOpen)
+        .slice(0, MAX_FRECENCY_ENTRIES)
+      setStore("data", Object.fromEntries(sorted))
+      writesSinceCompact = 0
+      const content =
+        sorted.map(([entryPath, entry]) => JSON.stringify({ path: entryPath, ...entry })).join("\n") + "\n"
+      writeFile(frecencyPath, content).catch(() => {})
+    }
+
+    onMount(() => {
+      const cancel = scheduleDeferredStartupTask(
+        async () => {
+          const text = await Filesystem.readText(frecencyPath).catch(() => "")
+          const lines = text
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => {
+              try {
+                return JSON.parse(line) as { path: string; frequency: number; lastOpen: number }
+              } catch {
+                return null
+              }
+            })
+            .filter((line): line is { path: string; frequency: number; lastOpen: number } => line !== null)
+
+          const latest = lines.reduce(
+            (acc, entry) => {
+              acc[entry.path] = entry
+              return acc
+            },
+            {} as Record<string, { path: string; frequency: number; lastOpen: number }>,
+          )
+
+          for (const [entryPath, entry] of Object.entries(store.data)) {
+            const current = latest[entryPath]
+            if (!current || entry.lastOpen >= current.lastOpen) {
+              latest[entryPath] = {
+                path: entryPath,
+                frequency: entry.frequency,
+                lastOpen: entry.lastOpen,
+              }
+            }
+          }
+
+          const merged = Object.values(latest)
+            .sort((a, b) => b.lastOpen - a.lastOpen)
+            .slice(0, MAX_FRECENCY_ENTRIES)
+
+          setStore(
+            "data",
+            Object.fromEntries(
+              merged.map((entry) => [entry.path, { frequency: entry.frequency, lastOpen: entry.lastOpen }]),
+            ),
+          )
+          writesSinceCompact = 0
+
+          if (merged.length > 0) {
+            const content = merged.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
+            writeFile(frecencyPath, content).catch(() => {})
+          }
+        },
+        {
+          delayMs: FRECENCY_LOAD_DELAY_MS,
+        },
+      )
+      onCleanup(cancel)
     })
 
     function updateFrecency(filePath: string) {
@@ -69,15 +104,14 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
         lastOpen: Date.now(),
       }
       setStore("data", absolutePath, newEntry)
+      writesSinceCompact += 1
       appendFile(frecencyPath, JSON.stringify({ path: absolutePath, ...newEntry }) + "\n").catch(() => {})
 
-      if (Object.keys(store.data).length > MAX_FRECENCY_ENTRIES) {
-        const sorted = Object.entries(store.data)
-          .sort(([, a], [, b]) => b.lastOpen - a.lastOpen)
-          .slice(0, MAX_FRECENCY_ENTRIES)
-        setStore("data", Object.fromEntries(sorted))
-        const content = sorted.map(([path, entry]) => JSON.stringify({ path, ...entry })).join("\n") + "\n"
-        writeFile(frecencyPath, content).catch(() => {})
+      if (
+        Object.keys(store.data).length > MAX_FRECENCY_ENTRIES ||
+        writesSinceCompact >= FRECENCY_COMPACT_WRITE_THRESHOLD
+      ) {
+        compact()
       }
     }
 

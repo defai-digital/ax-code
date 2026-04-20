@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount, Show } from "solid-js"
+import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { filter, map, pipe, sortBy } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
@@ -36,13 +36,20 @@ export function createDialogProviderOptions() {
     return pipe(
       sync.data.provider_next.all,
       filter((x) => !HIDDEN_PROVIDERS.has(x.id)),
-      sortBy((x) => (OFFLINE_PROVIDERS.has(x.id) ? 0 : CLI_PROVIDERS.has(x.id) ? 1 : 2), (x) => x.name),
+      sortBy(
+        (x) => (OFFLINE_PROVIDERS.has(x.id) ? 0 : CLI_PROVIDERS.has(x.id) ? 1 : 2),
+        (x) => x.name,
+      ),
       map((provider) => ({
         title: provider.name,
         value: provider.id,
         description: sync.data.provider_next.connected.includes(provider.id) ? "Connected" : undefined,
         descriptionFg: sync.data.provider_next.connected.includes(provider.id) ? theme.warning : undefined,
-        category: OFFLINE_PROVIDERS.has(provider.id) ? "Offline" : CLI_PROVIDERS.has(provider.id) ? "Online - CLI" : "Online",
+        category: OFFLINE_PROVIDERS.has(provider.id)
+          ? "Offline"
+          : CLI_PROVIDERS.has(provider.id)
+            ? "Online - CLI"
+            : "Online",
         async onSelect() {
           const isConnected = sync.data.provider_next.connected.includes(provider.id)
 
@@ -279,18 +286,34 @@ function AutoMethod(props: AutoMethodProps) {
     }
   })
 
-  onMount(async () => {
-    const result = await sdk.client.provider.oauth.callback({
-      providerID: props.providerID,
-      method: props.index,
-    })
-    if (result.error) {
+  onMount(() => {
+    let cancelled = false
+    void (async () => {
+      const result = await sdk.client.provider.oauth.callback({
+        providerID: props.providerID,
+        method: props.index,
+      })
+      if (cancelled) return
+      if (result.error) {
+        dialog.clear()
+        return
+      }
+      await sdk.client.instance.dispose()
+      if (cancelled) return
+      await sync.bootstrap()
+      if (cancelled) return
+      dialog.replace(() => <DialogModel providerID={props.providerID} />)
+    })().catch((error) => {
+      if (cancelled) return
+      toast.show({
+        message: error instanceof Error ? error.message : "Failed to complete provider authorization",
+        variant: "error",
+      })
       dialog.clear()
-      return
-    }
-    await sdk.client.instance.dispose()
-    await sync.bootstrap()
-    dialog.replace(() => <DialogModel providerID={props.providerID} />)
+    })
+    onCleanup(() => {
+      cancelled = true
+    })
   })
 
   return (
@@ -373,9 +396,7 @@ function ApiMethod(props: ApiMethodProps) {
     <DialogPrompt
       title={props.title}
       placeholder="API key"
-      description={
-        undefined
-      }
+      description={undefined}
       onConfirm={async (value) => {
         if (!value) return
         await sdk.client.auth.set({

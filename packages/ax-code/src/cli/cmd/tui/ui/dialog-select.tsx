@@ -6,6 +6,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
 import {
@@ -116,7 +117,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   createEffect(
     on([() => store.filter, () => props.current], ([filter, current]) => {
-      const timer = setTimeout(() => {
+      const cancel = scheduleMicrotaskTask(() => {
         if (filter.length > 0) {
           moveTo(0, true)
         } else if (current) {
@@ -125,8 +126,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             moveTo(currentIndex, true)
           }
         }
-      }, 0)
-      onCleanup(() => clearTimeout(timer))
+      })
+      onCleanup(cancel)
     }),
   )
 
@@ -233,12 +234,12 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             focusedTextColor={theme.textMuted}
             ref={(r) => {
               input = r
-              const timer = setTimeout(() => {
+              const cancel = scheduleMicrotaskTask(() => {
                 if (!input) return
                 if (input.isDestroyed) return
                 input.focus()
-              }, 1)
-              onCleanup(() => clearTimeout(timer))
+              })
+              onCleanup(cancel)
             }}
             placeholder={props.placeholder ?? "Search"}
           />

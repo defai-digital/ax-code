@@ -423,8 +423,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   let continued = false
   createEffect(() => {
-    // When using -c, session list is loaded in blocking phase, so we can navigate at "partial"
-    if (continued || sync.status === "loading" || !args.continue) return
+    if (continued || !sync.data.session_loaded || !args.continue) return
     const match = sync.data.session
       .toSorted((a, b) => b.time.updated - a.time.updated)
       .find((x) => x.parentID === undefined)?.id
@@ -438,23 +437,19 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     }
   })
 
-  // Handle --session with --fork: wait for sync to be fully complete before forking
-  // (session list loads in non-blocking phase for --session, so we must wait for "complete"
+  // Handle --session with --fork: wait for the session list to settle before forking
+  // (session list loads in non-blocking phase for --session, so we must wait for it
   // to avoid a race where reconcile overwrites the newly forked session)
   let startupForkStarted = false
   createEffect(() => {
-    if (startupForkStarted || sync.status !== "complete" || !args.sessionID || !args.fork) return
+    if (startupForkStarted || !sync.data.session_loaded || !args.sessionID || !args.fork) return
     startupForkStarted = true
     forkSessionWithRetries({ sessionID: args.sessionID, source: "startup" })
   })
 
   createEffect(
     on(
-      () =>
-        sync.status === "complete" &&
-        sync.data.provider_loaded &&
-        !sync.data.provider_failed &&
-        sync.data.provider.length === 0,
+      () => sync.data.provider_loaded && !sync.data.provider_failed && sync.data.provider.length === 0,
       (isEmpty, wasEmpty) => {
         // only trigger when we transition into an empty-provider state
         if (!isEmpty || wasEmpty) return

@@ -1,11 +1,12 @@
 import path from "path"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
-import { onMount } from "solid-js"
+import { onCleanup, onMount } from "solid-js"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
 import type { AgentPart, FilePart, TextPart } from "@ax-code/sdk/v2"
+import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 
 export type PromptInfo = {
   input: string
@@ -26,33 +27,43 @@ export type PromptInfo = {
 }
 
 const MAX_HISTORY_ENTRIES = 50
+const HISTORY_LOAD_DELAY_MS = 100
 
 export const { use: usePromptHistory, provider: PromptHistoryProvider } = createSimpleContext({
   name: "PromptHistory",
   init: () => {
     const historyPath = path.join(Global.Path.state, "prompt-history.jsonl")
-    onMount(async () => {
-      const text = await Filesystem.readText(historyPath).catch(() => "")
-      const lines = text
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => {
-          try {
-            return JSON.parse(line)
-          } catch {
-            return null
+    onMount(() => {
+      const cancel = scheduleDeferredStartupTask(
+        async () => {
+          const text = await Filesystem.readText(historyPath).catch(() => "")
+          const lines = text
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => {
+              try {
+                return JSON.parse(line)
+              } catch {
+                return null
+              }
+            })
+            .filter((line): line is PromptInfo => line !== null)
+            .slice(-MAX_HISTORY_ENTRIES)
+
+          const merged = [...lines, ...store.history].slice(-MAX_HISTORY_ENTRIES)
+          setStore("history", merged)
+
+          // Rewrite file with only valid entries to self-heal corruption
+          if (merged.length > 0) {
+            const content = merged.map((line) => JSON.stringify(line)).join("\n") + "\n"
+            writeFile(historyPath, content).catch(() => {})
           }
-        })
-        .filter((line): line is PromptInfo => line !== null)
-        .slice(-MAX_HISTORY_ENTRIES)
-
-      setStore("history", lines)
-
-      // Rewrite file with only valid entries to self-heal corruption
-      if (lines.length > 0) {
-        const content = lines.map((line) => JSON.stringify(line)).join("\n") + "\n"
-        writeFile(historyPath, content).catch(() => {})
-      }
+        },
+        {
+          delayMs: HISTORY_LOAD_DELAY_MS,
+        },
+      )
+      onCleanup(cancel)
     })
 
     const [store, setStore] = createStore({

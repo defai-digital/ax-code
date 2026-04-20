@@ -4,6 +4,7 @@ import { useTheme } from "@tui/context/theme"
 import { MouseButton, Renderable, RGBA } from "@opentui/core"
 import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { Flag } from "@/flag/flag"
 import { Selection } from "@tui/util/selection"
 
@@ -85,7 +86,7 @@ function init() {
   })
 
   let focus: Renderable | null
-  let refocusTimer: ReturnType<typeof setTimeout> | undefined
+  let cancelRefocus: (() => void) | undefined
   function closeItem(item?: { onClose?: () => void }) {
     if (!item?.onClose) return
     try {
@@ -95,8 +96,8 @@ function init() {
     }
   }
   function refocus() {
-    clearTimeout(refocusTimer)
-    refocusTimer = setTimeout(() => {
+    cancelRefocus?.()
+    cancelRefocus = scheduleMicrotaskTask(() => {
       if (!focus) return
       if (focus.isDestroyed) return
       function find(item: Renderable) {
@@ -109,9 +110,9 @@ function init() {
       const found = find(renderer.root)
       if (!found) return
       focus.focus()
-    }, 1)
+    })
   }
-  onCleanup(() => clearTimeout(refocusTimer))
+  onCleanup(() => cancelRefocus?.())
 
   return {
     clear() {
