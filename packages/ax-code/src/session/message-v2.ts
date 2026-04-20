@@ -965,6 +965,40 @@ export namespace MessageV2 {
     return truncated
   }
 
+  // Transient network error codes and message patterns that should trigger
+  // automatic retry with backoff instead of surfacing as permanent failures.
+  const TRANSIENT_CODES = new Set(["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EPIPE", "EAI_AGAIN"])
+  const TRANSIENT_PATTERNS = [
+    "socket hang up",
+    "network",
+    "SSE read timed out",
+    "Stream ended without finish event",
+    "fetch failed",
+    "terminated",
+    "aborted",
+  ]
+
+  function isTransientNetworkError(e: unknown): boolean {
+    if ((e as SystemError)?.code && TRANSIENT_CODES.has((e as SystemError).code!)) return true
+    const msg = e instanceof Error ? e.message : typeof e === "string" ? e : ""
+    const lower = msg.toLowerCase()
+    return TRANSIENT_PATTERNS.some((p) => lower.includes(p.toLowerCase()))
+  }
+
+  function transientNetworkMessage(e: unknown): string {
+    const code = (e as SystemError)?.code
+    if (code === "ECONNRESET") return "Connection reset by server"
+    if (code === "ETIMEDOUT") return "Connection timed out"
+    if (code === "ECONNREFUSED") return "Connection refused"
+    if (code === "ENOTFOUND") return "DNS lookup failed — no internet connection"
+    if (code === "EPIPE") return "Connection broken (broken pipe)"
+    if (code === "EAI_AGAIN") return "DNS resolution temporarily failed"
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes("SSE read timed out")) return "Stream stalled — no data received (possible network interruption)"
+    if (msg.includes("Stream ended without finish event")) return "Stream terminated prematurely — possible network interruption"
+    return `Network error: ${msg}`
+  }
+
   export function fromError(e: unknown, ctx: { providerID: ProviderID }): NonNullable<Assistant["error"]> {
     switch (true) {
       case e instanceof DOMException && e.name === "AbortError":
@@ -998,15 +1032,15 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
-      case (e as SystemError)?.code === "ECONNRESET":
+      case isTransientNetworkError(e):
         return new MessageV2.APIError(
           {
-            message: "Connection reset by server",
+            message: transientNetworkMessage(e),
             isRetryable: true,
             metadata: {
-              code: (e as SystemError).code ?? "",
-              syscall: (e as SystemError).syscall ?? "",
-              message: (e as SystemError).message ?? "",
+              code: (e as SystemError)?.code ?? "",
+              syscall: (e as SystemError)?.syscall ?? "",
+              message: (e as SystemError)?.message ?? (e instanceof Error ? e.message : String(e)),
             },
           },
           { cause: e },

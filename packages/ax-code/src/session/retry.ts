@@ -54,11 +54,16 @@ export namespace SessionRetry {
           }
         }
 
-        return Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY)
+        return jitter(Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY))
       }
     }
 
-    return Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS)
+    return jitter(Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS))
+  }
+
+  /** Add +/-25% jitter to prevent thundering herd on simultaneous retries. */
+  function jitter(ms: number): number {
+    return Math.round(ms * (0.75 + Math.random() * 0.5))
   }
 
   // Patterns that indicate the error is permanent — retrying the same

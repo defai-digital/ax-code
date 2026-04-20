@@ -20,10 +20,16 @@ function wrap(message: unknown): ReturnType<NamedError["toObject"]> {
 }
 
 describe("session.retry.delay", () => {
-  test("caps delay at 30 seconds when headers missing", () => {
+  test("caps delay at 30 seconds when headers missing (with jitter)", () => {
     const error = apiError()
+    // Jitter adds +/-25% variance, so check that each delay falls within
+    // the expected range around the base exponential value.
+    const bases = [2000, 4000, 8000, 16000, 30000, 30000, 30000, 30000, 30000, 30000]
     const delays = Array.from({ length: 10 }, (_, index) => SessionRetry.delay(index + 1, error))
-    expect(delays).toStrictEqual([2000, 4000, 8000, 16000, 30000, 30000, 30000, 30000, 30000, 30000])
+    for (let i = 0; i < bases.length; i++) {
+      expect(delays[i]).toBeGreaterThanOrEqual(Math.round(bases[i] * 0.75))
+      expect(delays[i]).toBeLessThanOrEqual(Math.round(bases[i] * 1.25))
+    }
   })
 
   test("prefers retry-after-ms when shorter than exponential", () => {
@@ -46,18 +52,25 @@ describe("session.retry.delay", () => {
 
   test("ignores invalid retry hints", () => {
     const error = apiError({ "retry-after": "not-a-number" })
-    expect(SessionRetry.delay(1, error)).toBe(2000)
+    const d = SessionRetry.delay(1, error)
+    // Falls through to exponential with jitter (+/-25% of 2000)
+    expect(d).toBeGreaterThanOrEqual(1500)
+    expect(d).toBeLessThanOrEqual(2500)
   })
 
   test("ignores malformed date retry hints", () => {
     const error = apiError({ "retry-after": "Invalid Date String" })
-    expect(SessionRetry.delay(1, error)).toBe(2000)
+    const d = SessionRetry.delay(1, error)
+    expect(d).toBeGreaterThanOrEqual(1500)
+    expect(d).toBeLessThanOrEqual(2500)
   })
 
   test("ignores past date retry hints", () => {
     const pastDate = new Date(Date.now() - 5000).toUTCString()
     const error = apiError({ "retry-after": pastDate })
-    expect(SessionRetry.delay(1, error)).toBe(2000)
+    const d = SessionRetry.delay(1, error)
+    expect(d).toBeGreaterThanOrEqual(1500)
+    expect(d).toBeLessThanOrEqual(2500)
   })
 
   test("uses retry-after values even when exceeding 10 minutes with headers", () => {
