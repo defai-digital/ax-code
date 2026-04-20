@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import { Session } from "../../src/session"
 import { Bus } from "../../src/bus"
@@ -157,6 +157,33 @@ describe("session.updatePartDelta", () => {
           }),
         ).rejects.toThrow("NotFoundError")
         await Session.remove(session.id)
+      },
+    })
+  })
+})
+
+describe("session.setArchived", () => {
+  test("updates time.updated when archiving", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({})
+        const archivedAt = 50_000
+        const updatedAt = 40_000
+        const nowSpy = spyOn(Date, "now").mockReturnValue(updatedAt)
+
+        try {
+          const before = await Session.get(session.id)
+          await Session.setArchived({ sessionID: session.id, time: archivedAt })
+          const after = await Session.get(session.id)
+
+          expect(after.time.archived).toBe(archivedAt)
+          expect(after.time.updated).toBe(updatedAt)
+          expect(after.time.updated).not.toBe(before.time.updated)
+        } finally {
+          nowSpy.mockRestore()
+          await Session.remove(session.id)
+        }
       },
     })
   })

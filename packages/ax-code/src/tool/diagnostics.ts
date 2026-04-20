@@ -21,7 +21,8 @@ export async function collectDiagnostics(
   files: string[],
   options?: { includeProjectDiagnostics?: boolean },
 ) {
-  for (const file of files) await LSP.touchFile(file, false)
+  const uniqueFiles = [...new Set(files)]
+  await Promise.all(uniqueFiles.map((file) => LSP.touchFile(file, false)))
   const diagnostics = await LSP.diagnostics()
   return { diagnostics, output: renderDiagnostics(diagnostics, files, options) }
 }

@@ -158,6 +158,30 @@ export namespace MCP {
   // Store transports for OAuth servers to allow finishing auth
   type TransportWithAuth = StreamableHTTPClientTransport | SSEClientTransport
   const pendingOAuthTransports = new Map<string, TransportWithAuth>()
+  async function closePendingOAuthTransport(mcpName: string) {
+    const transport = pendingOAuthTransports.get(mcpName)
+    pendingOAuthTransports.delete(mcpName)
+    await transport?.close?.().catch((error) => {
+      log.debug("failed to close pending oauth transport", { mcpName, error })
+    })
+  }
+  async function closeAllPendingOAuthTransports() {
+    const transports = [...pendingOAuthTransports.entries()]
+    pendingOAuthTransports.clear()
+    await Promise.all(
+      transports.map(async ([mcpName, transport]) => {
+        await transport.close?.().catch((error) => {
+          log.debug("failed to close pending oauth transport", { mcpName, error })
+        })
+      }),
+    )
+  }
+  const pendingOAuthTransportCleanup = Instance.state(
+    () => true,
+    async () => {
+      await closeAllPendingOAuthTransports()
+    },
+  )
 
   // Prompt cache types
   type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
@@ -270,7 +294,7 @@ export namespace MCP {
       toolsCacheSubscribed = false
       cachedTools = undefined
       toolsPromise = undefined
-      pendingOAuthTransports.clear()
+      await closeAllPendingOAuthTransports()
     },
   )
 
@@ -463,6 +487,7 @@ export namespace MCP {
               }).catch((e) => log.debug("failed to show toast", { error: e }))
             } else {
               // Store transport for later finishAuth call
+              pendingOAuthTransportCleanup()
               pendingOAuthTransports.set(key, transport)
               status = { status: "needs_auth" as const }
               // Show toast for needs_auth
@@ -956,6 +981,7 @@ export namespace MCP {
     } catch (error) {
       if (error instanceof UnauthorizedError && capturedUrl) {
         // Store transport for finishAuth
+        pendingOAuthTransportCleanup()
         pendingOAuthTransports.set(mcpName, transport)
         return { authorizationUrl: capturedUrl.toString() }
       }
@@ -1069,7 +1095,6 @@ export namespace MCP {
 
       // Re-add the MCP server to establish connection
       const result = await add(mcpName, mcpConfig)
-      pendingOAuthTransports.delete(mcpName)
 
       const statusRecord = result.status as Record<string, Status>
       return statusRecord[mcpName] ?? { status: "failed", error: "Unknown error after auth" }
@@ -1079,6 +1104,8 @@ export namespace MCP {
         status: "failed",
         error: NamedError.message(error),
       }
+    } finally {
+      await closePendingOAuthTransport(mcpName)
     }
   }
 
@@ -1088,7 +1115,7 @@ export namespace MCP {
   export async function removeAuth(mcpName: string): Promise<void> {
     await McpAuth.remove(mcpName)
     McpOAuthCallback.cancelPending(mcpName)
-    pendingOAuthTransports.delete(mcpName)
+    await closePendingOAuthTransport(mcpName)
     await McpAuth.clearOAuthState(mcpName)
     log.info("removed oauth credentials", { mcpName })
   }

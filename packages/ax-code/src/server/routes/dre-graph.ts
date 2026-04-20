@@ -10,6 +10,25 @@ import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
 
+// Maps agent internal identifiers → human-readable display names
+const AGENT_DISPLAY: Record<string, string> = {
+  build: "Dev",
+  plan: "Planner",
+  react: "Reasoner",
+  general: "Assistant",
+  explore: "Researcher",
+  security: "Security",
+  architect: "Architect",
+  debug: "Debugger",
+  perf: "Perf",
+  devops: "DevOps",
+  test: "Tester",
+}
+
+function agentDisplay(name: string): string {
+  return AGENT_DISPLAY[name] ?? name.charAt(0).toUpperCase() + name.slice(1)
+}
+
 function esc(input: string) {
   return input
     .replaceAll("&", "&amp;")
@@ -564,6 +583,243 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
 }
 
 // ── Section 3: Execution Graph ─────────────────────────────────────
+function activitySection(
+  graph: SessionGraph.Snapshot,
+  dre: SessionDre.Snapshot,
+  points: SessionRollback.Point[],
+) {
+  const parsed = parseTimeline(dre.timeline)
+  const detail = dre.detail
+
+  // Rank steps by duration, top 3
+  const durations = parsed.steps.map((s) => {
+    const m = s.duration.match(/(?:(\d+)m\s*)?(\d+)s/)
+    return m ? (parseInt(m[1] ?? "0") * 60 + parseInt(m[2] ?? "0")) * 1000 : 0
+  })
+  const maxDur = Math.max(...durations, 1)
+  const allSameIndex = parsed.steps.every((s) => s.index === parsed.steps[0]?.index)
+  const ranked = parsed.steps
+    .map((s, i) => ({ step: s, dur: durations[i], seq: i }))
+    .sort((a, b) => b.dur - a.dur || b.step.tools.length - a.step.tools.length)
+    .slice(0, 3)
+
+  // Plain-English summary of what a step actually did
+  function activitySummary(tools: { name: string; args: string; status: string }[]): string {
+    const reads: string[] = []
+    const edits: string[] = []
+    let searches = 0, shells = 0, webs = 0, others = 0
+    for (const t of tools) {
+      const n = t.name.toLowerCase()
+      const arg = t.args ? (t.args.split("/").pop()?.split("\\").pop() ?? t.args) : ""
+      if (/^(read|view|cat)$/.test(n)) reads.push(arg || t.name)
+      else if (/^(edit|write|apply_patch|multiedit|patch)$/.test(n)) edits.push(arg || t.name)
+      else if (/^(grep|glob|search|find|code_intelligence|semantic)/.test(n)) searches++
+      else if (/^(bash|run|exec|shell|command)$/.test(n)) shells++
+      else if (/^(web_fetch|web_search|fetch|browse)/.test(n)) webs++
+      else others++
+    }
+    const parts: string[] = []
+    if (reads.length) parts.push(reads.length <= 2 ? `read ${reads.filter(Boolean).join(", ")}` : `read ${reads.length} files`)
+    if (edits.length) parts.push(edits.length <= 2 ? `edited ${edits.filter(Boolean).join(", ")}` : `edited ${edits.length} files`)
+    if (searches) parts.push(`searched ${searches}×`)
+    if (shells) parts.push(`ran ${shells} command${shells > 1 ? "s" : ""}`)
+    if (webs) parts.push(`fetched ${webs} URL${webs > 1 ? "s" : ""}`)
+    if (others) parts.push(`${others} misc`)
+    return parts.join(" · ") || "no tool calls"
+  }
+
+  function toolChips(tools: { name: string }[]): string {
+    const counts = new Map<string, number>()
+    for (const t of tools) counts.set(t.name, (counts.get(t.name) ?? 0) + 1)
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => chip({ label: count > 1 ? `${name} ×${count}` : name }))
+      .join("")
+  }
+
+  const topStepsHtml = ranked.length
+    ? ranked
+        .map(({ step, dur, seq }) => {
+          const label = allSameIndex ? `Turn ${seq + 1}` : step.index
+          const pct = Math.max(4, (dur / maxDur) * 100)
+          const hasErrors = step.errors.length > 0
+          const barColor = hasErrors ? "var(--high)" : dur === maxDur ? "var(--warn)" : "var(--accent)"
+          const agentLabel = step.routes.length ? step.routes[step.routes.length - 1] : ""
+
+          // Tool timing breakdown — sorted slowest first, answers "why so long?"
+          const toolTiming = [...step.tools]
+            .filter((t) => t.durationMs > 0)
+            .sort((a, b) => b.durationMs - a.durationMs)
+          const slowestMs = toolTiming[0]?.durationMs ?? 1
+          const toolTimingHtml = toolTiming.length
+            ? [
+                `<div class="act-timing">`,
+                `<div class="act-timing-label">Time breakdown</div>`,
+                toolTiming.slice(0, 8).map((t) => {
+                  const tpct = Math.max(3, (t.durationMs / slowestMs) * 100)
+                  const tcolor = t.status === "ERR" ? "var(--high)" : t.durationMs > 5000 ? "var(--warn)" : "var(--low)"
+                  const ms = t.durationMs >= 1000 ? `${(t.durationMs / 1000).toFixed(1)}s` : `${t.durationMs}ms`
+                  const argLabel = t.args ? ` ${t.args.split("/").pop()?.split("\\").pop() ?? t.args}`.slice(0, 28) : ""
+                  return [
+                    `<div class="act-timing-row">`,
+                    `<span class="act-timing-name">${esc(t.name)}${argLabel ? `<span class="act-timing-arg">${esc(argLabel)}</span>` : ""}${t.status === "ERR" ? ` <span class="act-err-badge">ERR</span>` : ""}</span>`,
+                    `<div class="act-timing-track"><div class="act-timing-bar" style="width:${tpct.toFixed(0)}%;background:${tcolor}"></div></div>`,
+                    `<span class="act-timing-ms">${ms}</span>`,
+                    `</div>`,
+                  ].join("")
+                }).join(""),
+                toolTiming.length > 8 ? `<span class="muted" style="font-size:11px">+${toolTiming.length - 8} more tools (no timing)</span>` : "",
+                `</div>`,
+              ].join("")
+            : ""
+
+          // Files read and edited
+          const filesRead = step.tools.filter((t) => /^(read|view|cat)$/.test(t.name.toLowerCase()) && t.args).map((t) => t.args.split("/").pop() ?? t.args)
+          const filesEdited = step.tools.filter((t) => /^(edit|write|apply_patch|multiedit|patch)$/.test(t.name.toLowerCase()) && t.args).map((t) => t.args.split("/").pop() ?? t.args)
+          const filesHtml = (filesRead.length || filesEdited.length)
+            ? [
+                `<div class="act-files">`,
+                filesRead.length ? `<div class="act-files-row"><span class="act-files-label">Read</span><span class="act-files-list">${esc(filesRead.slice(0, 5).join(", "))}${filesRead.length > 5 ? ` +${filesRead.length - 5}` : ""}</span></div>` : "",
+                filesEdited.length ? `<div class="act-files-row"><span class="act-files-label">Edited</span><span class="act-files-list act-files-edited">${esc(filesEdited.slice(0, 5).join(", "))}${filesEdited.length > 5 ? ` +${filesEdited.length - 5}` : ""}</span></div>` : "",
+                `</div>`,
+              ].join("")
+            : ""
+
+          const errorsHtml = step.errors.length
+            ? `<div class="act-error-list">${step.errors.map((e) => `<div class="gantt-error">${esc(e)}</div>`).join("")}</div>`
+            : ""
+
+          return [
+            `<details class="act-card${hasErrors ? " act-card-err" : ""}">`,
+            `<summary class="act-card-summary">`,
+            `<div class="act-card-head">`,
+            `<span class="act-label">${esc(label)}</span>`,
+            agentLabel ? `<span class="act-agent">${esc(agentDisplay(agentLabel))}</span>` : "",
+            `<div class="act-bar-wrap"><div class="act-bar" style="width:${pct.toFixed(0)}%;background:${barColor}"></div></div>`,
+            `<span class="act-dur">${esc(step.duration)}</span>`,
+            hasErrors ? `<span class="act-err-badge">${step.errors.length} err</span>` : "",
+            `</div>`,
+            `<div class="act-summary">${esc(activitySummary(step.tools))}</div>`,
+            `<div class="act-chips">${toolChips(step.tools)}</div>`,
+            `</summary>`,
+            `<div class="act-expand">`,
+            toolTimingHtml,
+            filesHtml,
+            errorsHtml,
+            `</div>`,
+            `</details>`,
+          ].join("")
+        })
+        .join("")
+    : `<p class="empty">No steps recorded yet.</p>`
+
+  // Agent roster — which agents were involved and their role
+  const agentMeta = graph.graph.metadata.agents
+  const routedTargets = new Set((detail?.routes ?? []).map((r) => r.to))
+  const routeConf = new Map((detail?.routes ?? []).map((r) => [r.to, r.confidence]))
+  const agentsHtml = agentMeta.length
+    ? [
+        `<div class="agent-roster">`,
+        agentMeta
+          .map((a, i) => {
+            const isRouted = routedTargets.has(a)
+            const conf = routeConf.get(a)
+            const role = i === 0 && !isRouted ? "primary" : isRouted ? `routed · ${conf != null ? (conf * 100).toFixed(0) + "% conf" : ""}` : "active"
+            return `<div class="agent-item"><span class="agent-dot"></span><span class="agent-name">${esc(agentDisplay(a))}</span><span class="agent-tag">${esc(role)}</span></div>`
+          })
+          .join(""),
+        `</div>`,
+      ].join("")
+    : `<p class="empty">No agent data.</p>`
+
+  // Tool usage — aggregate counts
+  const toolUsageHtml = detail?.tools.length
+    ? (() => {
+        const counts = new Map<string, number>()
+        for (const t of detail.tools) counts.set(t, (counts.get(t) ?? 0) + 1)
+        const median = [...counts.values()].sort((a, b) => a - b)[Math.floor(counts.size / 2)] ?? 1
+        return barChart({
+          items: [...counts.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([label, value]) => ({ label, value })),
+          unit: "×",
+          colorFn: (v) => (v > median * 4 ? "var(--warn)" : v > median * 2 ? "var(--accent)" : "var(--low)"),
+        })
+      })()
+    : `<p class="empty">No tool data.</p>`
+
+  // Rollback points
+  const rbHtml = points.length
+    ? (() => {
+        const maxRbDur = Math.max(...points.map((p) => p.duration ?? 0), 1)
+        return [
+          `<div class="rb-bars-list">`,
+          points
+            .map((item, idx) => {
+              const dur = item.duration ?? 0
+              const durPct = Math.max(3, (dur / maxRbDur) * 100)
+              const barColor = dur > maxRbDur * 0.6 ? "var(--warn)" : "var(--accent)"
+              const uniq = new Map<string, number>()
+              for (const t of item.kinds) uniq.set(t, (uniq.get(t) ?? 0) + 1)
+              const toolSummary = [...uniq.entries()].map(([k, v]) => (v > 1 ? `${k} ×${v}` : k)).join(", ")
+              return [
+                `<div class="rb-row">`,
+                `<span class="rb-idx">${idx + 1}</span>`,
+                `<div class="rb-content">`,
+                `<div class="rb-bar-line">`,
+                `<div class="rb-bar-track"><div class="rb-bar-fill" style="width:${durPct.toFixed(0)}%;background:${barColor}"></div></div>`,
+                `<span class="rb-dur">${time(dur)}</span>`,
+                `</div>`,
+                toolSummary ? `<span class="rb-tools-text">${esc(toolSummary)}</span>` : "",
+                `</div>`,
+                `</div>`,
+              ].join("")
+            })
+            .join(""),
+          `</div>`,
+        ].join("")
+      })()
+    : `<p class="empty">No rollback points recorded.</p>`
+
+  return [
+    `<section class="band" id="activity">`,
+    `<div class="wrap">`,
+    `<div class="section-head"><h2>Activity</h2><p>Top steps by duration — what the agent actually worked on</p></div>`,
+    `<div class="grid">`,
+    // Left: key steps (top 3 by duration)
+    `<div class="panel">`,
+    `<h3>Key Steps</h3>`,
+    topStepsHtml,
+    parsed.steps.length > 3
+      ? `<p class="muted" style="font-size:12px;margin-top:12px">Showing top 3 of ${parsed.steps.length} steps — full breakdown in the execution graph above</p>`
+      : "",
+    detail?.notes.length
+      ? [
+          `<div style="margin-top:20px"><h3>Notes</h3>`,
+          `<div class="driver-list">`,
+          detail.notes.map((item) => `<div class="driver-item"><span class="driver-icon">·</span><span>${esc(item)}</span></div>`).join(""),
+          `</div></div>`,
+        ].join("")
+      : "",
+    `</div>`,
+    // Right: agents + tool usage + rollback
+    `<div class="panel">`,
+    `<h3>Agents Involved</h3>`,
+    agentsHtml,
+    `<h3 style="margin-top:20px">Tool Usage</h3>`,
+    toolUsageHtml,
+    `<h3 style="margin-top:20px">Rollback Points <span class="rb-count">${points.length}</span></h3>`,
+    rbHtml,
+    `</div>`,
+    `</div>`,
+    `</div>`,
+    `</section>`,
+  ].join("")
+}
+
+// ── (legacy retained for reference — replaced by activitySection) ──
 function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
   const head = input.topology.find((item) => item.kind === "heading")
   const path = input.topology.find((item) => item.kind === "path")
@@ -585,7 +841,7 @@ function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
           detail.routes
             .map(
               (item) =>
-                `<div class="route-item"><span class="route-from">${esc(item.from)}</span><span class="route-arrow">→</span><span class="route-to">${esc(item.to)}</span><span class="route-conf">${item.confidence.toFixed(2)}</span></div>`,
+                `<div class="route-item"><span class="route-from">${esc(agentDisplay(item.from))}</span><span class="route-arrow">→</span><span class="route-to">${esc(agentDisplay(item.to))}</span><span class="route-conf">${item.confidence.toFixed(2)}</span></div>`,
             )
             .join(""),
           `</div>`,
@@ -710,40 +966,86 @@ function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
 // ── Section 4: Branches ────────────────────────────────────────────
 function branchSection(input?: SessionBranchRank.Family) {
   if (!input) return ""
+
+  const readinessLabel: Record<string, string> = {
+    ready: "Ready to accept",
+    needs_validation: "Needs validation",
+    needs_review: "Needs review",
+    blocked: "Blocked",
+  }
+  const readinessIcon: Record<string, string> = {
+    ready: "✓",
+    needs_validation: "⚠",
+    needs_review: "⊙",
+    blocked: "✗",
+  }
+
+  const isSwitching = input.current.id !== input.recommended.id
+  const topReason = input.reasons[0] ?? ""
+
+  function branchCard(item: SessionBranchRank.Item) {
+    const ready = item.risk.readiness
+    const readyTone = readinessTone(ready)
+    const scoreTotal = Math.round(item.decision.total * 100)
+
+    return [
+      `<div class="branch-card ${item.recommended ? "recommended" : ""}${item.current ? " current" : ""}">`,
+      // Header: title + badges
+      `<div class="branch-head">`,
+      `<strong class="branch-title">${esc(item.title)}</strong>`,
+      `<div class="tag-row">`,
+      item.current ? chip({ label: "current" }) : "",
+      item.recommended ? chip({ label: "recommended", kind: "low" }) : "",
+      `</div>`,
+      `</div>`,
+      // Readiness — most actionable signal, shown prominently
+      `<div class="branch-readiness ${readyTone}">`,
+      `<span class="branch-readiness-icon">${readinessIcon[ready] ?? "?"}</span>`,
+      `<span>${esc(readinessLabel[ready] ?? ready)}</span>`,
+      `<span class="branch-score-chip">${scoreTotal}/100</span>`,
+      `</div>`,
+      // What this branch actually did
+      `<p class="branch-headline">${esc(item.headline)}</p>`,
+      // Decision breakdown with explanations — the "why"
+      `<div class="branch-scorecard">`,
+      item.decision.breakdown.map((part) => {
+        const pct = Math.round(part.value * 100)
+        const color = part.value >= 0.7 ? "var(--low)" : part.value >= 0.4 ? "var(--warn)" : "var(--high)"
+        return [
+          `<div class="branch-score-row">`,
+          `<span class="branch-score-label">${esc(part.label)}</span>`,
+          `<div class="branch-score-track"><div class="branch-score-fill" style="width:${pct}%;background:${color}"></div></div>`,
+          `<span class="branch-score-val" style="color:${color}">${pct}%</span>`,
+          `</div>`,
+          part.detail ? `<div class="branch-score-detail">${esc(part.detail)}</div>` : "",
+        ].join("")
+      }).join(""),
+      `</div>`,
+      // Top evidence — specific reasons behind the risk score
+      item.risk.evidence.length
+        ? [
+            `<div class="branch-evidence">`,
+            item.risk.evidence.slice(0, 2).map((e) => `<div class="branch-ev-item"><span class="ev-dot">·</span><span>${esc(e)}</span></div>`).join(""),
+            `</div>`,
+          ].join("")
+        : "",
+      // Semantic diff summary if available
+      item.semantic
+        ? `<div class="branch-semantic">${esc(item.semantic.headline)} <span class="muted">(+${item.semantic.additions} / -${item.semantic.deletions})</span></div>`
+        : "",
+      `</div>`,
+    ].join("")
+  }
+
   return [
     `<section class="band" id="branches">`,
     `<div class="wrap">`,
-    `<div class="section-head"><h2>Branches</h2><p>${esc(input.reasons.join(" · "))}</p></div>`,
-    `<div class="grid-thirds">`,
-    stat({ label: "Current", value: input.current.title }),
-    stat({ label: "Recommended", value: input.recommended.title, kind: "low" }),
-    stat({ label: "Confidence", value: input.confidence.toFixed(2) }),
+    `<div class="section-head">`,
+    `<h2>Branches</h2>`,
+    `<p>${isSwitching ? `Switch to <strong>${esc(input.recommended.title)}</strong> — ${esc(topReason)}` : `You're on the recommended branch · ${esc(topReason)}`}</p>`,
     `</div>`,
-    `<div class="branch-list">`,
-    input.items
-      .map((item) =>
-        [
-          `<div class="branch-card ${item.recommended ? "recommended" : ""}">`,
-          `<div class="branch-head">`,
-          `<strong>${esc(item.title)}</strong>`,
-          `<div class="tag-row">`,
-          item.current ? chip({ label: "current" }) : "",
-          item.recommended ? chip({ label: "recommended", kind: "low" }) : "",
-          chip({ label: `${item.risk.level} ${item.risk.score}/100`, kind: tone(item.risk.level) }),
-          `</div>`,
-          `</div>`,
-          `<span>${esc(item.headline)}</span>`,
-          `<span class="muted">${esc(item.view.plan)}</span>`,
-          item.semantic ? `<span class="muted">${esc(item.semantic.headline)}</span>` : "",
-          `<div class="branch-scorecard">${item.decision.breakdown.map((part) => {
-            const pct = Math.round(part.value * 100)
-            const color = part.value >= 0.7 ? "var(--low)" : part.value >= 0.4 ? "var(--warn)" : "var(--high)"
-            return `<div class="branch-score-row"><span class="branch-score-label">${esc(part.label)}</span><div class="branch-score-track"><div class="branch-score-fill" style="width:${pct}%;background:${color}"></div></div><span class="branch-score-val">${part.value.toFixed(2)}</span></div>`
-          }).join("")}</div>`,
-          `</div>`,
-        ].join(""),
-      )
-      .join(""),
+    `<div class="branch-list ${input.items.length === 2 ? "branch-compare" : ""}">`,
+    input.items.map(branchCard).join(""),
     `</div>`,
     `</div>`,
     `</section>`,
@@ -1010,6 +1312,40 @@ function sessionFingerprint(input: {
   }
 }
 
+// Inline script in <head> — sets theme before first paint to prevent flash
+function themeScript() {
+  return [
+    `<script>`,
+    `(function(){`,
+    `  var t=localStorage.getItem('ax-theme')||'dark';`,
+    `  document.documentElement.setAttribute('data-theme',t);`,
+    `})()`,
+    `</script>`,
+  ].join("")
+}
+
+// Theme toggle button + JS wired to Mermaid re-init
+function themeToggle() {
+  return [
+    `<button class="theme-btn" id="theme-btn" onclick="axToggleTheme()" title="Switch theme">☀ Light</button>`,
+    `<script>`,
+    `function axToggleTheme(){`,
+    `  var next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';`,
+    `  document.documentElement.setAttribute('data-theme',next);`,
+    `  localStorage.setItem('ax-theme',next);`,
+    `  var b=document.getElementById('theme-btn');`,
+    `  if(b)b.textContent=next==='dark'?'☀ Light':'◑ Dark';`,
+    `  if(window._reinitGraph)window._reinitGraph(next);`,
+    `}`,
+    `(function(){`,
+    `  var t=document.documentElement.getAttribute('data-theme')||'dark';`,
+    `  var b=document.getElementById('theme-btn');`,
+    `  if(b)b.textContent=t==='dark'?'☀ Light':'◑ Dark';`,
+    `})()`,
+    `</script>`,
+  ].join("")
+}
+
 function live(input: { sessionID?: string; directory?: string }) {
   return [
     `<script>`,
@@ -1111,31 +1447,106 @@ function live(input: { sessionID?: string; directory?: string }) {
   ].join("\n")
 }
 
+function mermaidScript(sid: string) {
+  return [
+    `<script>`,
+    `const _AGENT = {`,
+    `  build:'Dev', plan:'Planner', react:'Reasoner', general:'Assistant',`,
+    `  explore:'Researcher', security:'Security', architect:'Architect',`,
+    `  debug:'Debugger', perf:'Perf', devops:'DevOps', test:'Tester',`,
+    `};`,
+    `function _agentName(n) { return _AGENT[n] || (n ? n.charAt(0).toUpperCase()+n.slice(1) : 'Agent'); }`,
+    `function _fmtMs(ms) { const s=Math.round(ms/1000); return s>=60 ? Math.floor(s/60)+'m '+s%60+'s' : s+'s'; }`,
+    `function _updateSummary(graph) {`,
+    `  const el = document.getElementById('gviz-summary-status');`,
+    `  const dl = document.getElementById('gviz-summary-detail');`,
+    `  if (!el || !dl) return;`,
+    `  const meta = graph.metadata;`,
+    `  const nodes = graph.nodes || [];`,
+    `  const sorted = [...nodes].sort((a,b) => a.timestamp - b.timestamp);`,
+    `  const lastRoute = [...sorted].reverse().find(n => n.type === 'agent_route');`,
+    `  const currentAgent = lastRoute ? lastRoute.agent : meta.agents[0];`,
+    `  const pendingStep = nodes.find(n => n.type === 'step' && n.duration == null && n.status !== 'error');`,
+    `  const doneSteps = nodes.filter(n => n.type === 'step' && n.duration != null).length;`,
+    `  const toolCounts = {};`,
+    `  for (const t of meta.tools) toolCounts[t] = (toolCounts[t]||0)+1;`,
+    `  const topTools = Object.entries(toolCounts).sort((a,b)=>b[1]-a[1]).slice(0,3)`,
+    `    .map(([t,c])=>c>1?t+'\u00d7'+c:t).join(', ');`,
+    `  const dur = meta.duration > 0 ? _fmtMs(meta.duration) : null;`,
+    `  const errBadge = meta.errors > 0 ? ' \u00b7 '+meta.errors+' error'+(meta.errors>1?'s':'') : '';`,
+    `  if (nodes.length === 0) {`,
+    `    el.textContent = 'Waiting for session data\u2026'; dl.textContent = '';`,
+    `  } else if (pendingStep) {`,
+    `    el.textContent = _agentName(currentAgent)+' \u00b7 Step '+(pendingStep.stepIndex ?? doneSteps+1)+' of '+meta.steps+' \u2014 in progress';`,
+    `    dl.textContent = (topTools || 'working'+(dur?' \u00b7 '+dur+' elapsed':''));`,
+    `  } else {`,
+    `    const risk = meta.risk.level;`,
+    `    const riskColor = {LOW:'var(--low)',MEDIUM:'var(--warn)',HIGH:'var(--high)',CRITICAL:'var(--critical)'}[risk]||'var(--muted)';`,
+    `    el.textContent = 'Completed \u00b7 '+meta.steps+' step'+(meta.steps===1?'':'s')+(dur?' \u00b7 '+dur:'');`,
+    `    dl.innerHTML = (topTools?topTools+' \u00b7 ':'')+'<span style="color:'+riskColor+'">'+risk+' risk</span>'+errBadge;`,
+    `  }`,
+    `}`,
+    `const _sid = ${json(sid)};`,
+    `let _last = null;`,
+    `async function _renderGraph() {`,
+    `  const status = document.getElementById('gviz-status');`,
+    `  try {`,
+    `    const [svgRes, jsonRes] = await Promise.all([`,
+    `      fetch('/graph/' + _sid + '?format=svggantt', { cache: 'no-store' }),`,
+    `      fetch('/graph/' + _sid + '?format=json', { cache: 'no-store' }),`,
+    `    ]);`,
+    `    if (jsonRes.ok) { const j = await jsonRes.json(); _updateSummary(j.data); }`,
+    `    if (!svgRes.ok) return;`,
+    `    const text = await svgRes.text();`,
+    `    if (text === _last) { if (status) status.textContent = 'updated ' + new Date().toLocaleTimeString(); return; }`,
+    `    _last = text;`,
+    `    const el = document.getElementById('graph-viz');`,
+    `    if (el) el.innerHTML = text;`,
+    `    if (status) status.textContent = 'updated ' + new Date().toLocaleTimeString();`,
+    `  } catch(e) {`,
+    `    const el = document.getElementById('graph-viz');`,
+    `    if (el && !el.querySelector('svg')) el.innerHTML = '<span style="color:var(--muted);font-size:13px;font-style:italic;padding:12px;display:block">Graph unavailable — no execution data yet</span>';`,
+    `    if (status) status.textContent = 'unavailable';`,
+    `  }`,
+    `}`,
+    `_renderGraph();`,
+    `window.setInterval(_renderGraph, 15000);`,
+    `window._reinitGraph = function() { _last = null; _renderGraph(); };`,
+    `</script>`,
+  ].join("\n")
+}
+
 function style() {
   return `
+    /* ── Shared structural variables ── */
     :root {
+      --radius: 12px; --radius-sm: 8px; --radius-xs: 6px;
+    }
+    /* ── Dark theme (default) ── */
+    :root, [data-theme="dark"] {
       color-scheme: dark;
-      --bg: #09090b;
-      --panel: #18181b;
-      --surface: #27272a;
-      --line: #3f3f46;
-      --line-subtle: #27272a;
-      --text: #fafafa;
-      --text-secondary: #d4d4d8;
-      --muted: #a1a1aa;
-      --accent: #3b82f6;
-      --accent-light: #60a5fa;
-      --accent-subtle: rgba(59, 130, 246, 0.1);
-      --warn: #eab308;
-      --high: #ef4444;
-      --critical: #dc2626;
-      --low: #22c55e;
-      --radius: 12px;
-      --radius-sm: 8px;
-      --radius-xs: 6px;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-      --shadow-md: 0 4px 12px rgba(0,0,0,0.25);
-      --shadow-lg: 0 8px 32px rgba(0,0,0,0.35);
+      --bg: #09090b; --panel: #18181b; --surface: #27272a;
+      --line: #3f3f46; --line-subtle: #27272a;
+      --text: #fafafa; --text-secondary: #d4d4d8; --muted: #a1a1aa;
+      --accent: #3b82f6; --accent-light: #60a5fa; --accent-subtle: rgba(59,130,246,0.1);
+      --warn: #eab308; --high: #ef4444; --critical: #dc2626; --low: #22c55e;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.30);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.40);
+      --nav-bg: rgba(9,9,11,0.85);
+    }
+    /* ── Light theme ── */
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f8fafc; --panel: #ffffff; --surface: #f1f5f9;
+      --line: #cbd5e1; --line-subtle: #e2e8f0;
+      --text: #0f172a; --text-secondary: #475569; --muted: #94a3b8;
+      --accent: #2563eb; --accent-light: #3b82f6; --accent-subtle: rgba(37,99,235,0.08);
+      --warn: #d97706; --high: #dc2626; --critical: #b91c1c; --low: #16a34a;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+      --nav-bg: rgba(248,250,252,0.90);
     }
     * { box-sizing: border-box; margin: 0; }
     html { scroll-behavior: smooth; scroll-padding-top: 56px; }
@@ -1156,11 +1567,19 @@ function style() {
     /* Navigation */
     .nav {
       position: sticky; top: 0; z-index: 10;
-      background: rgba(9, 9, 11, 0.82);
+      background: var(--nav-bg);
       backdrop-filter: blur(20px) saturate(180%);
       border-bottom: 1px solid var(--line-subtle);
       padding: 0 24px;
     }
+    .theme-btn {
+      margin-left: 8px; padding: 4px 10px; font-size: 12px; font-weight: 500;
+      border: 1px solid var(--line); border-radius: var(--radius-xs);
+      background: var(--surface); color: var(--text-secondary);
+      cursor: pointer; white-space: nowrap; transition: all 0.15s;
+      font-family: inherit;
+    }
+    .theme-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-subtle); }
     .nav-inner {
       max-width: 1200px; margin: 0 auto;
       display: flex; align-items: center; gap: 2px; height: 52px;
@@ -1581,6 +2000,40 @@ function style() {
       text-align: center; font-size: 11px; color: var(--muted); letter-spacing: 0.02em;
     }
 
+    /* ── Execution summary bar ── */
+    .gviz-summary-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 14px; margin-top: 14px; margin-bottom: 6px;
+      background: var(--surface); border: 1px solid var(--line-subtle);
+      border-radius: var(--radius-xs); font-size: 13px; line-height: 1;
+    }
+    .gviz-summary-icon { color: var(--accent); font-size: 12px; flex-shrink: 0; }
+    .gviz-summary-status { font-weight: 600; color: var(--text); white-space: nowrap; }
+    .gviz-summary-sep { color: var(--line); flex-shrink: 0; }
+    .gviz-summary-detail { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Execution graph viz (Mermaid inline) ── */
+    .gviz-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 14px; margin-bottom: 6px;
+    }
+    .gviz-label {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .gviz-status {
+      font-size: 11px; color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    .gviz-container {
+      overflow: hidden;
+      background: var(--panel); border: 1px solid var(--line-subtle);
+      border-radius: var(--radius-sm); padding: 16px;
+      transition: border-color 0.15s;
+    }
+    .gviz-container:hover { border-color: var(--line); }
+    .gviz-container svg { display: block; width: 100%; height: auto; }
+
     /* SVG Gauge */
     .gauge { display: block; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2)); }
     .summary-risk { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
@@ -1644,10 +2097,63 @@ function style() {
     /* ── Branch scorecard ── */
     .branch-scorecard { margin-top: 10px; display: grid; gap: 4px; }
     .branch-score-row { display: grid; grid-template-columns: 76px 1fr 36px; gap: 6px; align-items: center; font-size: 11px; }
-    .branch-score-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .branch-compare { grid-template-columns: repeat(2, 1fr); }
+    .branch-title { font-size: 14px; }
+    .branch-readiness { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: var(--radius-xs); margin: 8px 0; }
+    .branch-readiness.low { background: rgba(34,197,94,0.1); color: var(--low); }
+    .branch-readiness.medium { background: rgba(234,179,8,0.1); color: var(--warn); }
+    .branch-readiness.high { background: rgba(239,68,68,0.1); color: var(--high); }
+    .branch-readiness.critical { background: rgba(220,38,38,0.15); color: var(--critical); }
+    .branch-readiness-icon { font-size: 14px; flex-shrink: 0; }
+    .branch-score-chip { margin-left: auto; font-size: 12px; font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 700; }
+    .branch-headline { font-size: 13px; color: var(--text-secondary); margin: 8px 0; line-height: 1.5; }
+    .branch-score-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
     .branch-score-track { height: 4px; background: var(--surface); border-radius: 2px; overflow: hidden; }
     .branch-score-fill { height: 100%; border-radius: 2px; min-width: 2px; }
-    .branch-score-val { text-align: right; font-family: ui-monospace, SFMono-Regular, monospace; color: var(--text-secondary); }
+    .branch-score-val { text-align: right; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; font-weight: 600; min-width: 32px; }
+    .branch-score-detail { grid-column: 1 / -1; font-size: 11px; color: var(--muted); margin: -2px 0 4px; padding-left: 2px; font-style: italic; }
+    .branch-evidence { margin-top: 10px; display: grid; gap: 3px; }
+    .branch-ev-item { display: flex; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+    .ev-dot { color: var(--muted); flex-shrink: 0; }
+    .branch-semantic { font-size: 12px; color: var(--muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-subtle); }
+
+    /* ── Activity section ── */
+    .act-card { background: var(--surface); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 10px; border: 1px solid var(--line-subtle); }
+    .act-card-err { border-color: rgba(239,68,68,0.3); }
+    .act-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; flex-wrap: wrap; }
+    .act-label { font-weight: 600; font-size: 13px; white-space: nowrap; min-width: 52px; }
+    .act-agent { font-size: 11px; color: var(--accent-light); background: var(--accent-subtle); padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+    .act-bar-wrap { flex: 1; height: 5px; background: var(--panel); border-radius: 3px; overflow: hidden; min-width: 40px; }
+    .act-bar { height: 100%; border-radius: 3px; min-width: 4px; }
+    .act-dur { font-size: 12px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, monospace; color: var(--text-secondary); white-space: nowrap; }
+    .act-err-badge { font-size: 11px; color: var(--high); white-space: nowrap; }
+    .act-card-summary { list-style: none; cursor: pointer; }
+    .act-card-summary::-webkit-details-marker { display: none; }
+    .act-card[open] .act-card-summary { margin-bottom: 12px; }
+    .act-card-summary:hover .act-label { color: var(--accent-light); }
+    .act-summary { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.5; }
+    .act-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .act-expand { border-top: 1px solid var(--line-subtle); margin-top: 12px; padding-top: 12px; display: grid; gap: 12px; }
+    .act-timing { display: grid; gap: 5px; }
+    .act-timing-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 2px; }
+    .act-timing-row { display: grid; grid-template-columns: 1fr 120px 44px; gap: 8px; align-items: center; }
+    .act-timing-name { font-size: 12px; font-family: ui-monospace, SFMono-Regular, monospace; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .act-timing-arg { color: var(--muted); margin-left: 4px; }
+    .act-timing-track { height: 5px; background: var(--panel); border-radius: 3px; overflow: hidden; }
+    .act-timing-bar { height: 100%; border-radius: 3px; min-width: 3px; }
+    .act-timing-ms { font-size: 11px; font-family: ui-monospace, SFMono-Regular, monospace; text-align: right; color: var(--text-secondary); }
+    .act-files { display: grid; gap: 4px; }
+    .act-files-row { display: flex; gap: 8px; font-size: 12px; align-items: baseline; }
+    .act-files-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; min-width: 36px; }
+    .act-files-list { font-family: ui-monospace, SFMono-Regular, monospace; color: var(--text-secondary); }
+    .act-files-edited { color: var(--accent-light); }
+    .act-error-list { display: grid; gap: 4px; }
+    /* ── Agent roster ── */
+    .agent-roster { display: grid; gap: 5px; }
+    .agent-item { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 7px 10px; background: var(--surface); border-radius: var(--radius-xs); }
+    .agent-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+    .agent-name { flex: 1; font-weight: 500; }
+    .agent-tag { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
     @media (max-width: 900px) {
       .grid, .step-grid { grid-template-columns: 1fr; }
@@ -1683,12 +2189,14 @@ function index(input: { list: Session.Info[]; search: string }) {
     `<meta charset="utf-8" />`,
     `<meta name="viewport" content="width=device-width, initial-scale=1" />`,
     `<title>AX Code · DRE Sessions</title>`,
+    themeScript(),
     `<style>${style()}</style>`,
     `</head>`,
     `<body>`,
     `<nav class="nav"><div class="nav-inner">`,
     `<span class="nav-brand">AX Code DRE</span>`,
     `<span class="live" id="live-status">connecting</span>`,
+    themeToggle(),
     `</div></nav>`,
     `<header class="hero">`,
     `<div class="wrap">`,
@@ -1755,6 +2263,7 @@ function page(input: {
     `<meta charset="utf-8" />`,
     `<meta name="viewport" content="width=device-width, initial-scale=1" />`,
     `<title>AX Code · DRE · ${title}</title>`,
+    themeScript(),
     `<style>${style()}</style>`,
     `</head>`,
     `<body>`,
@@ -1767,12 +2276,12 @@ function page(input: {
     `<a class="nav-link" href="#changes">Changes</a>`,
     `<a class="nav-link" href="#risk">Risk</a>`,
     `<a class="nav-link" href="#validation">Validation</a>`,
-    `<a class="nav-link" href="#graph">Execution</a>`,
+    `<a class="nav-link" href="#activity">Activity</a>`,
     `<a class="nav-link" href="#branches">Branches</a>`,
-    `<a class="nav-link" href="#timeline">Timeline</a>`,
     `<div class="nav-sep"></div>`,
     `<span class="nav-back">${link(`/dre-graph`, "← All Sessions")}</span>`,
     `<span class="live" id="live-status">connecting</span>`,
+    themeToggle(),
     `</div></nav>`,
     // ── Hero: session identity ──
     `<header class="hero">`,
@@ -1782,12 +2291,17 @@ function page(input: {
     chip({ label: dir }),
     chip({ label: stamp(input.session.time.updated) }),
     `</div>`,
-    `<div class="links" style="margin-top:10px">`,
-    link(`/session/${sid}/dre`, "dre.json"),
-    link(`/session/${sid}/risk`, "risk.json"),
-    link(`/session/${sid}/graph`, "graph.json"),
-    link(`/graph/${sid}`, "mermaid", { format: "mermaid" }),
+    `<div class="gviz-summary-bar">`,
+    `<span class="gviz-summary-icon">⬡</span>`,
+    `<span class="gviz-summary-status" id="gviz-summary-status">Loading session…</span>`,
+    `<span class="gviz-summary-sep">·</span>`,
+    `<span class="gviz-summary-detail" id="gviz-summary-detail"></span>`,
     `</div>`,
+    `<div class="gviz-header">`,
+    `<span class="gviz-label">Execution Graph</span>`,
+    `<span class="gviz-status" id="gviz-status">loading…</span>`,
+    `</div>`,
+    `<div id="graph-viz" class="gviz-container"><span style="color:var(--muted);font-size:13px;font-style:italic;padding:12px;display:block">Loading…</span></div>`,
     `</div>`,
     `</header>`,
     // ── 1. Summary: "what happened and should I care?" ──
@@ -1800,15 +2314,14 @@ function page(input: {
     riskSection(input.risk, input.dre),
     // ── 5. Validation: "what was validated?" ──
     validationSection({ risk: input.risk }),
-    // ── 6. Execution: "what did the agent do?" ──
-    graphSection(input.graph, input.dre),
+    // ── 6. Activity: "what did the agent actually work on?" ──
+    activitySection(input.graph, input.dre, input.rollback),
     // ── 7. Branches: "which path is best?" ──
     branchSection(input.rank),
-    // ── 8. Timeline + Rollback ──
-    timelineSection(input.dre, input.rollback, input.dre.detail),
     // ── Footer ──
     `<footer class="footer">AX Code DRE · Debugging & Refactoring Engine</footer>`,
     live({ sessionID: input.session.id, directory: input.session.directory }),
+    mermaidScript(input.session.id),
     `</body>`,
     `</html>`,
   ].join("")

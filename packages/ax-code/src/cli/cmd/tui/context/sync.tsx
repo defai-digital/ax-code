@@ -32,6 +32,8 @@ import { upsert, mergeSorted } from "./sync-util"
 import { AutonomousQuestion } from "@/question/autonomous"
 import { createReconnectRecoveryGate } from "../util/reconnect-recovery"
 import { withTimeout } from "@/util/timeout"
+import { Flag } from "@/flag/flag"
+import { createTuiStartupSpan, recordTuiStartupOnce } from "@tui/util/startup-trace"
 
 const BOOTSTRAP_REQUEST_TIMEOUT_MS = 10_000
 const SESSION_SYNC_REQUEST_TIMEOUT_MS = 10_000
@@ -214,6 +216,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     // were added in v2.3.6 and default to zero if the server is an
     // older peer that doesn't send them.
     async function syncDebugEngine() {
+      if (!Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE) return
       try {
         const headers: Record<string, string> = { accept: "application/json" }
         if (sdk.directory) {
@@ -309,6 +312,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       }
     }
 
+    const fullSyncedSessions = new Set<string>()
+    const inFlightSessions = new Set<string>()
     const unsubscribeEvents = sdk.event.listen((e) => {
       const event = e.details
       switch (event.type) {
@@ -412,7 +417,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           break
 
         case "session.deleted": {
-          const result = Binary.search(store.session, event.properties.info.id, (s) => s.id)
+          const sessionID = event.properties.info.id
+          fullSyncedSessions.delete(sessionID)
+          inFlightSessions.delete(sessionID)
+          const result = Binary.search(store.session, sessionID, (s) => s.id)
           if (result.found) {
             setStore(
               "session",
@@ -600,149 +608,163 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     async function bootstrap() {
       if (bootstrapPromise) return bootstrapPromise
       bootstrapPromise = (async () => {
-        fullSyncedSessions.clear()
-        setStore("session_loaded", false)
-        const start = Date.now() - 30 * 24 * 60 * 60 * 1000
-        const sessionListPromise = withSyncTimeout(
-          "tui bootstrap session.list",
-          sdk.client.session
-            .list({ start: start })
-            .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id))),
-        ).finally(() => {
-          setStore("session_loaded", true)
-        })
-        const providersPromise = withSyncTimeout(
-          "tui bootstrap config.providers",
-          sdk.client.config.providers({}, { throwOnError: true }),
-        )
-        const providerListPromise = withSyncTimeout(
-          "tui bootstrap provider.list",
-          sdk.client.provider.list({}, { throwOnError: true }),
-        )
-        const agentsPromise = withSyncTimeout(
-          "tui bootstrap app.agents",
-          sdk.client.app.agents({}, { throwOnError: true }),
-        )
-        const configPromise = withSyncTimeout(
-          "tui bootstrap config.get",
-          sdk.client.config.get({}, { throwOnError: true }),
-        )
-        const commandPromise = withSyncTimeout("tui bootstrap command.list", sdk.client.command.list())
-        const permissionPromise = withSyncTimeout("tui bootstrap permission.list", sdk.client.permission.list())
-        const questionPromise = withSyncTimeout("tui bootstrap question.list", sdk.client.question.list())
-        const blockingRequests = args.continue
-          ? [
-              sessionListPromise.then((sessions) => {
-                setStore("session", reconcile(mergeSorted(store.session, sessions)))
-              }),
-            ]
-          : []
+        const isStartupBootstrap = store.status === "loading"
+        const startupBootstrap = isStartupBootstrap ? createTuiStartupSpan("tui.startup.bootstrap") : undefined
+        let finishCoreBootstrap: ReturnType<typeof createTuiStartupSpan> | undefined
+        let finishDeferredBootstrap: ReturnType<typeof createTuiStartupSpan> | undefined
 
-        const blockingResults = await Promise.allSettled(blockingRequests)
-        for (const result of blockingResults) {
-          if (result.status === "rejected") {
-            Log.Default.warn("blocking bootstrap item failed", {
-              error: String(result.reason),
-            })
+        try {
+          fullSyncedSessions.clear()
+          setStore("session_loaded", false)
+          const start = Date.now() - 30 * 24 * 60 * 60 * 1000
+          const sessionListPromise = withSyncTimeout(
+            "tui bootstrap session.list",
+            sdk.client.session
+              .list({ start: start })
+              .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id))),
+          ).finally(() => {
+            setStore("session_loaded", true)
+            recordTuiStartupOnce("tui.startup.sessionListReady")
+          })
+          const providersPromise = withSyncTimeout(
+            "tui bootstrap config.providers",
+            sdk.client.config.providers({}, { throwOnError: true }),
+          )
+          const providerListPromise = withSyncTimeout(
+            "tui bootstrap provider.list",
+            sdk.client.provider.list({}, { throwOnError: true }),
+          )
+          const agentsPromise = withSyncTimeout(
+            "tui bootstrap app.agents",
+            sdk.client.app.agents({}, { throwOnError: true }),
+          )
+          const configPromise = withSyncTimeout(
+            "tui bootstrap config.get",
+            sdk.client.config.get({}, { throwOnError: true }),
+          )
+          const commandPromise = withSyncTimeout("tui bootstrap command.list", sdk.client.command.list())
+          const permissionPromise = withSyncTimeout("tui bootstrap permission.list", sdk.client.permission.list())
+          const questionPromise = withSyncTimeout("tui bootstrap question.list", sdk.client.question.list())
+          const blockingRequests = args.continue
+            ? [
+                sessionListPromise.then((sessions) => {
+                  setStore("session", reconcile(mergeSorted(store.session, sessions)))
+                }),
+              ]
+            : []
+
+          const blockingResults = await Promise.allSettled(blockingRequests)
+          for (const result of blockingResults) {
+            if (result.status === "rejected") {
+              Log.Default.warn("blocking bootstrap item failed", {
+                error: String(result.reason),
+              })
+            }
           }
-        }
 
-        if (store.status === "loading") setStore("status", "partial")
+          if (store.status === "loading") {
+            setStore("status", "partial")
+            recordTuiStartupOnce("tui.startup.syncPartial")
+          }
 
-        const coreBootstrapTasks = [
-          providersPromise
-            .then((x) => x.data ?? { providers: [], default: {} })
-            .then((providers) => {
-              batch(() => {
-                setStore("provider", reconcile(providers.providers))
-                setStore("provider_default", reconcile(providers.default))
-                setStore("provider_loaded", true)
-                setStore("provider_failed", false)
+          finishCoreBootstrap = isStartupBootstrap ? createTuiStartupSpan("tui.startup.bootstrapCore") : undefined
+          const coreBootstrapTasks = [
+            providersPromise
+              .then((x) => x.data ?? { providers: [], default: {} })
+              .then((providers) => {
+                batch(() => {
+                  setStore("provider", reconcile(providers.providers))
+                  setStore("provider_default", reconcile(providers.default))
+                  setStore("provider_loaded", true)
+                  setStore("provider_failed", false)
+                })
+                recordTuiStartupOnce("tui.startup.providersReady", { failed: false })
               })
-            })
-            .catch((error) => {
-              batch(() => {
-                setStore("provider_loaded", true)
-                setStore("provider_failed", true)
-              })
-              throw error
+              .catch((error) => {
+                batch(() => {
+                  setStore("provider_loaded", true)
+                  setStore("provider_failed", true)
+                })
+                recordTuiStartupOnce("tui.startup.providersReady", { failed: true })
+                throw error
+              }),
+            providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
+            agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
+            configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
+            commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
+            ...(args.continue
+              ? []
+              : [
+                  sessionListPromise.then((sessions) =>
+                    setStore("session", reconcile(mergeSorted(store.session, sessions))),
+                  ),
+                ]),
+            permissionPromise.then((x) => setStore("permission", reconcile(groupBySession(x.data ?? [])))),
+            questionPromise.then((x) => setStore("question", reconcile(groupBySession(x.data ?? [])))),
+            withSyncTimeout("tui bootstrap session.status", sdk.client.session.status()).then((x) => {
+              setStore("session_status", reconcile(x.data ?? {}))
             }),
-          providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
-          agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
-          configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
-          commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
-          ...(args.continue
-            ? []
-            : [
-                sessionListPromise.then((sessions) =>
-                  setStore("session", reconcile(mergeSorted(store.session, sessions))),
-                ),
-              ]),
-          permissionPromise.then((x) => setStore("permission", reconcile(groupBySession(x.data ?? [])))),
-          questionPromise.then((x) => setStore("question", reconcile(groupBySession(x.data ?? [])))),
-          withSyncTimeout("tui bootstrap lsp.status", sdk.client.lsp.status()).then((x) =>
-            setStore("lsp", reconcile(x.data ?? [])),
-          ),
-          withSyncTimeout("tui bootstrap mcp.status", sdk.client.mcp.status()).then((x) =>
-            setStore("mcp", reconcile(x.data ?? {})),
-          ),
-          withSyncTimeout("tui bootstrap resource.list", sdk.client.experimental.resource.list()).then((x) =>
-            setStore("mcp_resource", reconcile(x.data ?? {})),
-          ),
-          withSyncTimeout("tui bootstrap formatter.status", sdk.client.formatter.status()).then((x) =>
-            setStore("formatter", reconcile(x.data ?? [])),
-          ),
-          withSyncTimeout("tui bootstrap session.status", sdk.client.session.status()).then((x) => {
-            setStore("session_status", reconcile(x.data ?? {}))
-          }),
-          withSyncTimeout("tui bootstrap provider.auth", sdk.client.provider.auth()).then((x) =>
-            setStore("provider_auth", reconcile(x.data ?? {})),
-          ),
-          withSyncTimeout("tui bootstrap path.get", sdk.client.path.get()).then((x) =>
-            setStore("path", reconcile(x.data ?? store.path)),
-          ),
-          withSyncTimeout("tui bootstrap isolation", syncIsolation()),
-          withSyncTimeout("tui bootstrap autonomous", syncAutonomous()),
-        ]
+            withSyncTimeout("tui bootstrap provider.auth", sdk.client.provider.auth()).then((x) =>
+              setStore("provider_auth", reconcile(x.data ?? {})),
+            ),
+            withSyncTimeout("tui bootstrap path.get", sdk.client.path.get()).then((x) =>
+              setStore("path", reconcile(x.data ?? store.path)),
+            ),
+            withSyncTimeout("tui bootstrap isolation", syncIsolation()),
+            withSyncTimeout("tui bootstrap autonomous", syncAutonomous()),
+          ]
 
-        const coreResults = await Promise.allSettled(coreBootstrapTasks)
-        for (const result of coreResults) {
-          if (result.status === "rejected") {
+          const coreResults = await Promise.allSettled(coreBootstrapTasks)
+          const coreRejected = coreResults.filter((result) => result.status === "rejected")
+          for (const result of coreRejected) {
             Log.Default.error("core bootstrap item failed", { error: String(result.reason) })
           }
-        }
+          recordTuiStartupOnce("tui.startup.bootstrapCoreReady", { rejected: coreRejected.length })
+          finishCoreBootstrap?.({ rejected: coreRejected.length })
 
-        setStore("status", "complete")
+          setStore("status", "complete")
 
-        // Defer lower-priority status/metadata hydration so startup does not fan out
-        // every auxiliary request before the first usable home/session state settles.
-        // Keep bootstrapPromise alive until these finish so reconnect-triggered
-        // bootstraps do not overlap and race each other.
-        const deferredBootstrapTasks = [
-          withSyncTimeout("tui bootstrap lsp.status", sdk.client.lsp.status()).then((x) =>
-            setStore("lsp", reconcile(x.data ?? [])),
-          ),
-          withSyncTimeout("tui bootstrap mcp.status", sdk.client.mcp.status()).then((x) =>
-            setStore("mcp", reconcile(x.data ?? {})),
-          ),
-          withSyncTimeout("tui bootstrap resource.list", sdk.client.experimental.resource.list()).then((x) =>
-            setStore("mcp_resource", reconcile(x.data ?? {})),
-          ),
-          withSyncTimeout("tui bootstrap formatter.status", sdk.client.formatter.status()).then((x) =>
-            setStore("formatter", reconcile(x.data ?? [])),
-          ),
-          withSyncTimeout("tui bootstrap vcs.get", sdk.client.vcs.get()).then((x) =>
-            setStore("vcs", reconcile(x.data)),
-          ),
-          withSyncTimeout("tui bootstrap worktree.list", syncWorkspaces()),
-          withSyncTimeout("tui bootstrap debug-engine", syncDebugEngine()),
-          withSyncTimeout("tui bootstrap smart-llm", syncSmartLlm()),
-        ]
-        const deferredResults = await Promise.allSettled(deferredBootstrapTasks)
-        for (const result of deferredResults) {
-          if (result.status === "rejected") {
+          // Defer lower-priority status/metadata hydration so startup does not fan out
+          // every auxiliary request before the first usable home/session state settles.
+          // Keep bootstrapPromise alive until these finish so reconnect-triggered
+          // bootstraps do not overlap and race each other.
+          finishDeferredBootstrap = isStartupBootstrap
+            ? createTuiStartupSpan("tui.startup.bootstrapDeferred")
+            : undefined
+          const deferredBootstrapTasks = [
+            withSyncTimeout("tui bootstrap lsp.status", sdk.client.lsp.status()).then((x) =>
+              setStore("lsp", reconcile(x.data ?? [])),
+            ),
+            withSyncTimeout("tui bootstrap mcp.status", sdk.client.mcp.status()).then((x) =>
+              setStore("mcp", reconcile(x.data ?? {})),
+            ),
+            withSyncTimeout("tui bootstrap resource.list", sdk.client.experimental.resource.list()).then((x) =>
+              setStore("mcp_resource", reconcile(x.data ?? {})),
+            ),
+            withSyncTimeout("tui bootstrap formatter.status", sdk.client.formatter.status()).then((x) =>
+              setStore("formatter", reconcile(x.data ?? [])),
+            ),
+            withSyncTimeout("tui bootstrap vcs.get", sdk.client.vcs.get()).then((x) =>
+              setStore("vcs", reconcile(x.data)),
+            ),
+            withSyncTimeout("tui bootstrap worktree.list", syncWorkspaces()),
+            withSyncTimeout("tui bootstrap debug-engine", syncDebugEngine()),
+            withSyncTimeout("tui bootstrap smart-llm", syncSmartLlm()),
+          ]
+          const deferredResults = await Promise.allSettled(deferredBootstrapTasks)
+          const deferredRejected = deferredResults.filter((result) => result.status === "rejected")
+          for (const result of deferredRejected) {
             Log.Default.error("deferred bootstrap item failed", { error: String(result.reason) })
           }
+          recordTuiStartupOnce("tui.startup.bootstrapDeferredReady", { rejected: deferredRejected.length })
+          finishDeferredBootstrap?.({ rejected: deferredRejected.length })
+          startupBootstrap?.()
+        } catch (error) {
+          finishDeferredBootstrap?.({ ok: false, error: String(error) })
+          finishCoreBootstrap?.({ ok: false, error: String(error) })
+          startupBootstrap?.({ ok: false, error: String(error) })
+          Log.Default.error("tui bootstrap failed", { error })
+          await exit(error)
         }
       })().finally(() => {
         bootstrapPromise = undefined
@@ -765,10 +787,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       // in another terminal reflects within a single UI beat,
       // slow enough to add negligible server load (the endpoint
       // runs two COUNT(*) queries against indexed columns).
-      const debugEnginePoll = setInterval(() => {
-        void syncDebugEngine()
-      }, 10_000)
-      onCleanup(() => clearInterval(debugEnginePoll))
+      if (Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE) {
+        const debugEnginePoll = setInterval(() => {
+          void syncDebugEngine()
+        }, 10_000)
+        onCleanup(() => clearInterval(debugEnginePoll))
+      }
     })
 
     const reconnectBootstrap = createReconnectRecoveryGate({
@@ -781,8 +805,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       ),
     )
 
-    const fullSyncedSessions = new Set<string>()
-    const inFlightSessions = new Set<string>()
     const result = {
       data: store,
       set: setStore,

@@ -43,12 +43,20 @@ export function lastUserMessageID(messages: Message[], parts: Record<string, Par
 }
 
 export function undoMessageID(messages: Message[], revert: string | undefined) {
-  return messages.findLast((message) => (!revert || message.id < revert) && message.role === "user")?.id
+  if (!revert) return messages.findLast((message) => message.role === "user")?.id
+  // Use array index rather than lexicographic comparison on ID strings,
+  // matching the approach in revert.ts which is resilient to ID format changes.
+  const revertIndex = messages.findIndex((m) => m.id === revert)
+  if (revertIndex === -1) return messages.findLast((message) => message.role === "user")?.id
+  return messages.slice(0, revertIndex).findLast((message) => message.role === "user")?.id
 }
 
 export function redoMessageID(messages: Message[], revert: string | undefined) {
   if (!revert) return
-  return messages.find((message) => message.role === "user" && message.id > revert)?.id
+  // Use array index rather than lexicographic comparison on ID strings.
+  const revertIndex = messages.findIndex((m) => m.id === revert)
+  if (revertIndex === -1) return
+  return messages.slice(revertIndex + 1).find((message) => message.role === "user")?.id
 }
 
 export function promptState(parts: Part[] | undefined): PromptInfo {

@@ -11,6 +11,7 @@ describe("RuntimeHotPath", () => {
       "Plugin.init",
       "LSP.init",
       "Provider.warmup",
+      "LSP.prewarmWorkspace",
       "File.init",
       "FileWatcher.init",
       "Vcs.init",
@@ -27,6 +28,7 @@ describe("RuntimeHotPath", () => {
     const project = RuntimeHotPath.get("Project.fromDirectory")
     const format = RuntimeHotPath.get("Format.init")
     const plugin = RuntimeHotPath.get("Plugin.init")
+    const prewarm = RuntimeHotPath.get("LSP.prewarmWorkspace")
     const file = RuntimeHotPath.get("File.init")
     const watcher = RuntimeHotPath.get("FileWatcher.init")
     const vcs = RuntimeHotPath.get("Vcs.init")
@@ -45,6 +47,10 @@ describe("RuntimeHotPath", () => {
       phase0Action: "observe_only",
     })
     expect(plugin).toMatchObject({
+      dependencyMode: "promise",
+      phase0Action: "observe_only",
+    })
+    expect(prewarm).toMatchObject({
       dependencyMode: "promise",
       phase0Action: "observe_only",
     })
@@ -82,6 +88,7 @@ describe("RuntimeHotPath", () => {
     })
     expect(permission?.triggers).toContain("startup")
     expect(question?.triggers).toContain("live_update")
+    expect(prewarm?.triggers).toContain("startup")
     expect(dispose?.triggers).toContain("shutdown")
   })
 })

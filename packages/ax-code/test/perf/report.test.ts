@@ -9,6 +9,7 @@ const report: Bench = {
   directory: "/repo",
   worktree: "/repo",
   requested: {
+    cacheMode: "cold",
     concurrency: 4,
     repeat: 3,
     warmup: 1,
@@ -102,6 +103,7 @@ describe("perf.report", () => {
 
     expect(text).toContain("## ax-code perf report")
     expect(text).toContain("- status: failed")
+    expect(text).toContain("- cache mode: cold")
     expect(text).toContain("- report: /tmp/perf-index.json")
     expect(text).toContain("- summary: /tmp/perf-index-summary.json")
     expect(text).toContain("- baseline summary: /tmp/perf-index-baseline-summary.json")

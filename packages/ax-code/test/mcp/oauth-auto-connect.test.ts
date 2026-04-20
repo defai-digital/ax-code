@@ -14,6 +14,8 @@ const transportCalls: Array<{
   url: string
   options: { authProvider?: unknown }
 }> = []
+const transportInstances: Array<{ url: string; closeCalls: number }> = []
+const authenticatedUrls = new Set<string>()
 
 // Controls whether the mock transport simulates a 401 that triggers the SDK
 // auth flow (which calls provider.state()) or a simple UnauthorizedError.
@@ -22,6 +24,8 @@ let simulateAuthFlow = true
 // Mock the transport constructors to simulate OAuth auto-auth on 401
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTP {
+    url: string
+    closeCalls = 0
     authProvider:
       | {
           state?: () => Promise<string>
@@ -30,14 +34,17 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
         }
       | undefined
     constructor(url: URL, options?: { authProvider?: unknown }) {
+      this.url = url.toString()
       this.authProvider = options?.authProvider as typeof this.authProvider
       transportCalls.push({
         type: "streamable",
-        url: url.toString(),
+        url: this.url,
         options: options ?? {},
       })
+      transportInstances.push(this)
     }
     async start() {
+      if (authenticatedUrls.has(this.url)) return
       // Simulate what the real SDK transport does on 401:
       // It calls auth() which eventually calls provider.state(), then
       // provider.redirectToAuthorization(), then throws UnauthorizedError.
@@ -58,7 +65,12 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
       }
       throw new MockUnauthorizedError()
     }
-    async finishAuth(_code: string) {}
+    async finishAuth(_code: string) {
+      authenticatedUrls.add(this.url)
+    }
+    async close() {
+      this.closeCalls++
+    }
   },
 }))
 
@@ -80,9 +92,14 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
 // Mock the MCP SDK Client
 mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
+    setNotificationHandler() {}
     async connect(transport: { start: () => Promise<void> }) {
       await transport.start()
     }
+    async listTools() {
+      return { tools: [] }
+    }
+    async close() {}
   },
 }))
 
@@ -91,8 +108,27 @@ mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
   UnauthorizedError: MockUnauthorizedError,
 }))
 
+mock.module("../../src/util/ssrf", () => ({
+  Ssrf: {
+    assertPublicUrl: async () => {},
+  },
+}))
+
+mock.module("../../src/mcp/oauth-callback", () => ({
+  McpOAuthCallback: {
+    ensureRunning: async () => {},
+    waitForCallback: async () => {
+      throw new Error("waitForCallback should not be called in this test")
+    },
+    cancelPending: () => {},
+    isRunning: () => false,
+  },
+}))
+
 beforeEach(() => {
   transportCalls.length = 0
+  transportInstances.length = 0
+  authenticatedUrls.clear()
   simulateAuthFlow = true
 })
 
@@ -229,4 +265,99 @@ test("startAuth reuses an existing saved oauth state", async () => {
       expect(await McpAuth.getOAuthState("test-oauth")).toBe(state)
     },
   })
+})
+
+test("finishAuth closes the pending OAuth transport after reconnecting", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {
+            "test-oauth-finish": {
+              type: "remote",
+              url: "https://example.com/mcp",
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.startAuth("test-oauth-finish")
+      const pending = transportInstances[0]!
+      expect(pending.closeCalls).toBe(0)
+
+      const status = await MCP.finishAuth("test-oauth-finish", "auth-code")
+      expect(status.status).toBe("connected")
+      expect(pending.closeCalls).toBe(1)
+    },
+  })
+})
+
+test("removeAuth closes the pending OAuth transport", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {
+            "test-oauth-remove": {
+              type: "remote",
+              url: "https://example.com/mcp",
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.startAuth("test-oauth-remove")
+      const pending = transportInstances[0]!
+      expect(pending.closeCalls).toBe(0)
+
+      await MCP.removeAuth("test-oauth-remove")
+      expect(pending.closeCalls).toBe(1)
+    },
+  })
+})
+
+test("instance disposal closes pending OAuth transports", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {
+            "test-oauth-dispose": {
+              type: "remote",
+              url: "https://example.com/mcp",
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  let pending: { closeCalls: number } | undefined
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.startAuth("test-oauth-dispose")
+      pending = transportInstances[0]
+      expect(pending?.closeCalls).toBe(0)
+    },
+  })
+
+  await Instance.disposeAll()
+  expect(pending?.closeCalls).toBe(1)
 })

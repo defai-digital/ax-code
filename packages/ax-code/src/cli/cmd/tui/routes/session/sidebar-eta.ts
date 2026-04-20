@@ -85,7 +85,7 @@ export function formatContextEtaLabel(remainSec: number) {
   const m = Math.floor((remainSec % 3600) / 60)
   const sec = remainSec % 60
 
-  if (h > 0) return `ctx full ~${h}h ${m}m`
-  if (m > 0) return `ctx full ~${m}m ${sec}s`
-  return `ctx full ~${sec}s`
+  if (h > 0) return `context full in ~${h}h ${m}m`
+  if (m > 0) return `context full in ~${m}m ${sec}s`
+  return `context full in ~${sec}s`
 }

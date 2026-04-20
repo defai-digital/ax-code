@@ -31,6 +31,9 @@ export function ResizeHandle(props: ResizeHandleProps) {
     const start = local.direction === "horizontal" ? e.clientX : e.clientY
     const startSize = local.size
     let current = startSize
+    let finished = false
+    const originalUserSelect = document.body.style.userSelect
+    const originalOverflow = document.body.style.overflow
 
     document.body.style.userSelect = "none"
     document.body.style.overflow = "hidden"
@@ -51,10 +54,13 @@ export function ResizeHandle(props: ResizeHandleProps) {
     }
 
     const onMouseUp = () => {
-      document.body.style.userSelect = ""
-      document.body.style.overflow = ""
+      if (finished) return
+      finished = true
+      document.body.style.userSelect = originalUserSelect
+      document.body.style.overflow = originalOverflow
       document.removeEventListener("mousemove", onMouseMove)
       document.removeEventListener("mouseup", onMouseUp)
+      window.removeEventListener("blur", onMouseUp)
 
       const threshold = local.collapseThreshold ?? 0
       if (local.onCollapse && threshold > 0 && current < threshold) {
@@ -62,6 +68,7 @@ export function ResizeHandle(props: ResizeHandleProps) {
       }
     }
 
+    window.addEventListener("blur", onMouseUp)
     document.addEventListener("mousemove", onMouseMove)
     document.addEventListener("mouseup", onMouseUp)
   }

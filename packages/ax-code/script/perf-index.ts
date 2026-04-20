@@ -2,7 +2,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { parse } from "jsonc-parser"
-import type { Bench } from "../src/cli/cmd/debug/perf"
+import type { Bench, CacheMode } from "../src/cli/cmd/debug/perf"
 
 type Threshold = {
   elapsedMs?: number
@@ -18,6 +18,7 @@ type Regression = {
 
 type Config = {
   bench?: {
+    cacheMode?: CacheMode
     limit?: number
     repeat?: number
     warmup?: number
@@ -42,6 +43,7 @@ type Config = {
 }
 
 type Opts = {
+  cacheMode: CacheMode
   limit?: number
   repeat: number
   warmup: number
@@ -258,6 +260,12 @@ function pct(name: string) {
   return num(name)
 }
 
+function mode(value: unknown, key: string): CacheMode | undefined {
+  if (value === undefined) return undefined
+  if (value === "cold" || value === "warm-cache") return value
+  throw new Error(`${key} must be "cold" or "warm-cache"`)
+}
+
 export function threshold(): Threshold {
   return {
     elapsedMs: num("--max-elapsed-median-ms"),
@@ -297,6 +305,7 @@ export async function load(file: string) {
   const cfg: Config = {}
   if (bench) {
     cfg.bench = {
+      cacheMode: mode(bench.cacheMode, "bench.cacheMode"),
       limit: typeof bench.limit === "number" ? bench.limit : undefined,
       repeat: typeof bench.repeat === "number" ? bench.repeat : undefined,
       warmup: typeof bench.warmup === "number" ? bench.warmup : undefined,
@@ -364,6 +373,7 @@ export function resolve(cwd: string, file: string | undefined, cfg: Config): Opt
   const writeSum = arg("--write-baseline-summary") ?? (write ? sidecar(write) : undefined)
 
   return {
+    cacheMode: pick(mode(arg("--cache-mode"), "--cache-mode"), cfg.bench?.cacheMode) ?? "cold",
     limit: pick(num("--limit"), cfg.bench?.limit),
     repeat: pick(num("--repeat"), cfg.bench?.repeat) ?? 3,
     warmup: pick(num("--warmup"), cfg.bench?.warmup) ?? 1,
@@ -469,7 +479,7 @@ export async function baselineSummary(file: string | undefined, required = false
   }
 }
 
-export function guard(curr: { directory: string; meta: Meta }, prev?: Verdict) {
+export function guard(curr: { directory: string; meta: Meta; requested: Bench["requested"] }, prev?: Verdict) {
   const failures: string[] = []
   const notes: string[] = []
 
@@ -492,6 +502,11 @@ export function guard(curr: { directory: string; meta: Meta }, prev?: Verdict) {
   if (prev.meta.runtime.platform !== curr.meta.runtime.platform || prev.meta.runtime.arch !== curr.meta.runtime.arch) {
     failures.push(
       `baseline runtime ${prev.meta.runtime.platform}/${prev.meta.runtime.arch} does not match current runtime ${curr.meta.runtime.platform}/${curr.meta.runtime.arch}`,
+    )
+  }
+  if (prev.requested.cacheMode !== curr.requested.cacheMode) {
+    failures.push(
+      `baseline cache mode ${prev.requested.cacheMode} does not match current cache mode ${curr.requested.cacheMode}`,
     )
   }
   if (prev.meta.runtime.bun && curr.meta.runtime.bun && prev.meta.runtime.bun !== curr.meta.runtime.bun) {
@@ -633,6 +648,7 @@ export function render(report: Bench, check: Check, file: string, sum?: string, 
   out.push("")
   out.push(`- directory: ${report.directory}`)
   out.push(`- files: ${report.files}`)
+  out.push(`- cache mode: ${report.requested.cacheMode}`)
   out.push(`- repeat: ${report.requested.repeat}`)
   out.push(`- warmup: ${report.requested.warmup}`)
   out.push(`- native profile: ${report.requested.nativeProfile ? "on" : "off"}`)
@@ -644,6 +660,11 @@ export function render(report: Bench, check: Check, file: string, sum?: string, 
   out.push("Top phases:")
   for (const [name, value] of Object.entries(report.summary.phases).slice(0, 5)) {
     out.push(`- ${name}: median ${value.median.toFixed(2)}ms`)
+  }
+  if (report.summary.diagnosis && report.summary.diagnosis.length > 0) {
+    out.push("")
+    out.push("Diagnosis:")
+    out.push(...report.summary.diagnosis.map((item) => `- ${item}`))
   }
   out.push("")
   out.push(`Artifact: ${file}`)
@@ -675,6 +696,7 @@ export function renderCompare(
   out.push("")
   out.push(`- directory: ${report.directory}`)
   out.push(`- files: ${report.files}`)
+  out.push(`- cache mode: ${report.requested.cacheMode}`)
   out.push(`- status: ${check.failures.length === 0 ? "passed" : "failed"}`)
   out.push("")
   out.push("Artifacts:")
@@ -790,6 +812,7 @@ export function verdict(
 
 async function run(cwd: string, opts: Opts) {
   const cmd = [process.execPath, "run", "./src/index.ts", "debug", "perf", "index", "--json"]
+  cmd.push("--cache-mode", opts.cacheMode)
   if (opts.limit !== undefined) cmd.push("--limit", String(opts.limit))
   cmd.push("--repeat", String(opts.repeat))
   cmd.push("--warmup", String(opts.warmup))
@@ -850,7 +873,7 @@ async function main() {
     }
     const prev = JSON.parse(await Bun.file(base).text()) as Bench
     diff = compare(report, prev, opts.baseline.regression)
-    diff.compat = guard({ directory: report.directory, meta: info }, baseSummary.verdict)
+    diff.compat = guard({ directory: report.directory, meta: info, requested: report.requested }, baseSummary.verdict)
     out.push(renderCompare(report, diff, opts.out, base))
     failures.push(...diff.failures)
     if (diff.compat) failures.push(...diff.compat.failures)

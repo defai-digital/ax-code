@@ -42,6 +42,10 @@ export function Dialog(
       backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
     >
       <box
+        onMouseDown={(e) => {
+          dismiss = false
+          e.stopPropagation()
+        }}
         onMouseUp={(e) => {
           dismiss = false
           e.stopPropagation()

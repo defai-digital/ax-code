@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import path from "path"
+import { setTimeout as sleep } from "node:timers/promises"
 import { ReadTool } from "../../src/tool/read"
 import { LSP } from "../../src/lsp"
 import { Instance } from "../../src/project/instance"
@@ -471,6 +472,15 @@ describe("tool.read lsp", () => {
       fn: async () => {
         const read = await ReadTool.init()
         await read.execute({ filePath: path.join(tmp.path, "test.txt") }, ctx)
+        for (let i = 0; i < 20; i++) {
+          const status = await LSP.status()
+          if (
+            status.some((item) => item.id === "fake" && item.name === "fake" && item.root === "" && item.status === "connected")
+          ) {
+            return
+          }
+          await sleep(25)
+        }
         expect(await LSP.status()).toContainEqual({
           id: "fake",
           name: "fake",
@@ -479,6 +489,129 @@ describe("tool.read lsp", () => {
         })
       },
     })
+  })
+
+  test("does not wait for opportunistic lsp warmup", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "test.txt"), "hello world")
+      },
+    })
+
+    let resolveTouch: ((value: number) => void) | undefined
+    const hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
+    const touchSpy = spyOn(LSP, "touchFile").mockImplementation(
+      () =>
+        new Promise<number>((resolve) => {
+          resolveTouch = resolve
+        }),
+    )
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const read = await ReadTool.init()
+          const result = await read.execute({ filePath: path.join(tmp.path, "test.txt") }, ctx)
+          expect(result.output).toContain("hello world")
+          expect(hasClientsSpy).toHaveBeenCalledTimes(0)
+          expect(touchSpy).toHaveBeenCalledTimes(0)
+          await sleep(10)
+          expect(hasClientsSpy).toHaveBeenCalledWith(path.join(tmp.path, "test.txt"), { mode: "semantic" })
+          expect(touchSpy).toHaveBeenCalledTimes(1)
+          expect(resolveTouch).toBeDefined()
+        },
+      })
+    } finally {
+      resolveTouch?.(1)
+      hasClientsSpy.mockRestore()
+      touchSpy.mockRestore()
+    }
+  })
+
+  test("continues when opportunistic lsp warmup fails", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "test.txt"), "hello world")
+      },
+    })
+
+    const hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
+    const touchSpy = spyOn(LSP, "touchFile").mockRejectedValue(new Error("warmup failed"))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const read = await ReadTool.init()
+          const result = await read.execute({ filePath: path.join(tmp.path, "test.txt") }, ctx)
+          expect(result.output).toContain("hello world")
+          await sleep(10)
+        },
+      })
+    } finally {
+      hasClientsSpy.mockRestore()
+      touchSpy.mockRestore()
+    }
+  })
+
+  test("skips opportunistic lsp warmup when no semantic server matches", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "notes.txt"), "hello world")
+      },
+    })
+
+    const hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(false)
+    const touchSpy = spyOn(LSP, "touchFile").mockResolvedValue(0 as never)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const read = await ReadTool.init()
+          const result = await read.execute({ filePath: path.join(tmp.path, "notes.txt") }, ctx)
+          expect(result.output).toContain("hello world")
+          await sleep(10)
+          expect(hasClientsSpy).toHaveBeenCalledWith(path.join(tmp.path, "notes.txt"), { mode: "semantic" })
+          expect(touchSpy).not.toHaveBeenCalled()
+        },
+      })
+    } finally {
+      hasClientsSpy.mockRestore()
+      touchSpy.mockRestore()
+    }
+  })
+
+  test("skips deferred lsp warmup after instance disposal", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "test.txt"), "hello world")
+      },
+    })
+
+    const hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
+    const touchSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const read = await ReadTool.init()
+          const result = await read.execute({ filePath: path.join(tmp.path, "test.txt") }, ctx)
+          expect(result.output).toContain("hello world")
+        },
+      })
+
+      await Instance.disposeAll()
+      await sleep(10)
+
+      expect(hasClientsSpy).not.toHaveBeenCalled()
+      expect(touchSpy).not.toHaveBeenCalled()
+    } finally {
+      hasClientsSpy.mockRestore()
+      touchSpy.mockRestore()
+    }
   })
 })
 

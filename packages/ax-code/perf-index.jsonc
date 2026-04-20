@@ -1,5 +1,6 @@
 {
   "bench": {
+    "cacheMode": "cold",
     "limit": 25,
     "repeat": 3,
     "warmup": 1,

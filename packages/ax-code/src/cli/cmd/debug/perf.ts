@@ -2,14 +2,21 @@ import { EOL } from "os"
 import path from "path"
 import type { Argv } from "yargs"
 import { CodeIntelligence } from "../../../code-intelligence"
+import { CodeGraphQuery } from "../../../code-intelligence/query"
 import { Instance } from "../../../project/instance"
 import { Ripgrep } from "../../../file/ripgrep"
 import { LSP } from "../../../lsp"
+import {
+  INDEXER_SEMANTIC_METHODS,
+  INDEX_PREWARM_MAX_FILES,
+  INDEX_PREWARM_MAX_LANGUAGES,
+} from "../../../lsp/prewarm-profile"
 import { NativePerf } from "../../../perf/native"
 import { buildIndexReport, groupFilesByLanguage, isIndexableFile, probeLspServers } from "../index-graph"
 import { cmd } from "../cmd"
 
 export type IndexReport = ReturnType<typeof buildIndexReport>
+export type CacheMode = "cold" | "warm-cache"
 
 type Stat = {
   min: number
@@ -22,6 +29,7 @@ export type Summary = {
   elapsedMs: Stat
   totalMs: Stat
   phases: Record<string, Stat>
+  diagnosis?: string[]
   native?: {
     total: Record<"calls" | "fails" | "totalMs" | "inBytes" | "outBytes", Stat>
     rows: Record<string, Record<"calls" | "fails" | "totalMs" | "inBytes" | "outBytes", Stat>>
@@ -39,6 +47,7 @@ export type Bench = {
   directory: string
   worktree: string
   requested: {
+    cacheMode: CacheMode
     concurrency: number
     limit?: number
     probe: boolean
@@ -60,6 +69,11 @@ function int(value: unknown, key: string, min = 0) {
     throw new Error(`${key} must be an integer >= ${min}`)
   }
   return value
+}
+
+function cacheMode(value: unknown, key: string): CacheMode {
+  if (value === "cold" || value === "warm-cache") return value
+  throw new Error(`${key} must be one of: cold, warm-cache`)
 }
 
 export function stat(vals: number[]): Stat {
@@ -194,9 +208,71 @@ export function summarize(samples: IndexReport[]): Summary {
         })
         .sort((a, b) => b[1].totalMs.median - a[1].totalMs.median),
     )
+    summary.diagnosis = diagnoseLsp(summary.lsp)
   }
 
   return summary
+}
+
+function medianOf(
+  rows: Summary["lsp"] | undefined,
+  operation: string,
+  key: "count" | "okCount" | "errorCount" | "p50" | "p95" | "maxMs" | "totalMs",
+): number {
+  return rows?.[operation]?.[key]?.median ?? 0
+}
+
+export function diagnoseLsp(rows: Summary["lsp"] | undefined): string[] {
+  if (!rows) return []
+
+  const diagnosis: string[] = []
+  const prewarmMs = medianOf(rows, "prewarm", "totalMs")
+  const initMs = medianOf(rows, "client.initialize", "totalMs")
+  const coldSelectMs = medianOf(rows, "touch.select.spawned", "totalMs")
+  const touchSelectMs = medianOf(rows, "touch.select", "totalMs")
+  const touchNotifyMs = medianOf(rows, "touch.notify", "totalMs")
+  const refsRpcMs = medianOf(rows, "references.rpc", "totalMs")
+  const refsSelectMs = medianOf(rows, "references.select", "totalMs")
+  const refsCachedCount = medianOf(rows, "references.cached", "count")
+  const docRpcMs = medianOf(rows, "documentSymbol.rpc", "totalMs")
+  const docSelectMs = medianOf(rows, "documentSymbol.select", "totalMs")
+  const docCachedCount = medianOf(rows, "documentSymbol.cached", "count")
+
+  if (prewarmMs >= 200 && coldSelectMs <= 10) {
+    diagnosis.push(
+      `Cold start was shifted into prewarm: prewarm ${num(prewarmMs)}ms, client initialize ${num(initMs)}ms, touch.select.spawned ${num(coldSelectMs)}ms.`,
+    )
+  } else if (initMs >= 200 || coldSelectMs >= 200) {
+    diagnosis.push(
+      `Cold start dominates: client initialize ${num(initMs)}ms, touch.select.spawned ${num(coldSelectMs)}ms.`,
+    )
+  }
+
+  if (coldSelectMs > 0 && touchSelectMs >= coldSelectMs * 2) {
+    diagnosis.push(
+      `Concurrent files are stacking behind the same cold start: touch.select total ${num(touchSelectMs)}ms vs spawned ${num(coldSelectMs)}ms.`,
+    )
+  }
+
+  if (touchNotifyMs > 0 && touchNotifyMs <= 10) {
+    diagnosis.push(`didOpen/didChange overhead is negligible: touch.notify ${num(touchNotifyMs)}ms.`)
+  }
+
+  if (refsRpcMs >= 200 && refsRpcMs > refsSelectMs * 5) {
+    diagnosis.push(`Steady-state references work is RPC-bound: references.rpc ${num(refsRpcMs)}ms.`)
+  }
+
+  if (docRpcMs >= 200 && docRpcMs > docSelectMs * 5) {
+    diagnosis.push(`Document symbol work is RPC-bound after selection: documentSymbol.rpc ${num(docRpcMs)}ms.`)
+  }
+
+  if (docCachedCount > 0 || refsCachedCount > 0) {
+    diagnosis.push(
+      `Repeated semantic work is cache-accelerated: documentSymbol.cached ${num(docCachedCount)} call(s), references.cached ${num(refsCachedCount)} call(s).`,
+    )
+  }
+
+  return diagnosis
 }
 
 function num(value: number, digits = 2) {
@@ -233,6 +309,19 @@ async function run(
   if (args.nativeProfile) NativePerf.reset()
   LSP.perfReset()
   const start = Date.now()
+  await LSP.prewarmFiles(
+    LSP.selectPrewarmFiles(list, {
+      maxFiles: INDEX_PREWARM_MAX_FILES,
+      maxLanguages: INDEX_PREWARM_MAX_LANGUAGES,
+    }),
+    {
+      mode: "semantic",
+      methods: [...INDEXER_SEMANTIC_METHODS],
+    },
+  ).catch(() => ({
+    readyCount: 0,
+    freshSpawnCount: 0,
+  }))
   const result = await CodeIntelligence.indexFiles(Instance.project.id, list, {
     concurrency: args.concurrency,
     lock: "acquire",
@@ -265,6 +354,10 @@ async function run(
   })
 }
 
+function clearSemanticCache() {
+  CodeGraphQuery.clearLspCache(Instance.project.id)
+}
+
 const PerfIndexCommand = cmd({
   command: "index",
   describe: "benchmark repeated code-intelligence indexing runs",
@@ -289,6 +382,11 @@ const PerfIndexCommand = cmd({
         type: "number",
         default: 1,
       })
+      .option("cache-mode", {
+        describe: "LSP semantic cache mode: clear it before each sample, or seed and measure warm-cache runs",
+        choices: ["cold", "warm-cache"] as const,
+        default: "cold",
+      })
       .option("probe", {
         describe: "probe LSP readiness before benchmarking",
         type: "boolean",
@@ -308,6 +406,7 @@ const PerfIndexCommand = cmd({
     const repeat = int(args.repeat, "repeat", 1)
     const warmup = int(args.warmup, "warmup", 0)
     const limit = args.limit === undefined ? undefined : int(args.limit, "limit", 1)
+    const currentCacheMode = cacheMode(args.cacheMode, "cache-mode")
     const json = args.json === true
     const nativeProfile = args.nativeProfile === true
 
@@ -338,6 +437,7 @@ const PerfIndexCommand = cmd({
           console.log(`  files:    ${list.length}`)
           console.log(`  warmup:   ${warmup}`)
           console.log(`  samples:  ${repeat}`)
+          console.log(`  cache:    ${currentCacheMode}`)
           if (probeResult) {
             console.log(
               `  probe:    ${probeResult.ready.length} ready, ${Object.keys(probeResult.missing).length} missing`,
@@ -352,6 +452,7 @@ const PerfIndexCommand = cmd({
             directory: Instance.directory,
             worktree: Instance.worktree,
             requested: {
+              cacheMode: currentCacheMode,
               concurrency: args.concurrency,
               limit,
               probe: args.probe,
@@ -373,35 +474,30 @@ const PerfIndexCommand = cmd({
           return
         }
 
+        const runArgs = {
+          concurrency: args.concurrency,
+          limit,
+          probe: args.probe,
+          nativeProfile,
+        }
+
+        if (currentCacheMode === "warm-cache") {
+          clearSemanticCache()
+          if (!json) console.log("  seed warm-cache")
+          await run(list, runArgs, probeResult)
+        }
+
         for (let i = 0; i < warmup; i++) {
+          if (currentCacheMode === "cold") clearSemanticCache()
           if (!json) console.log(`  warmup ${i + 1}/${warmup}`)
-          await run(
-            list,
-            {
-              concurrency: args.concurrency,
-              limit,
-              probe: args.probe,
-              nativeProfile,
-            },
-            probeResult,
-          )
+          await run(list, runArgs, probeResult)
         }
 
         const samples: IndexReport[] = []
         for (let i = 0; i < repeat; i++) {
+          if (currentCacheMode === "cold") clearSemanticCache()
           if (!json) console.log(`  sample ${i + 1}/${repeat}`)
-          samples.push(
-            await run(
-              list,
-              {
-                concurrency: args.concurrency,
-                limit,
-                probe: args.probe,
-                nativeProfile,
-              },
-              probeResult,
-            ),
-          )
+          samples.push(await run(list, runArgs, probeResult))
         }
 
         const summary = summarize(samples)
@@ -410,6 +506,7 @@ const PerfIndexCommand = cmd({
           directory: Instance.directory,
           worktree: Instance.worktree,
           requested: {
+            cacheMode: currentCacheMode,
             concurrency: args.concurrency,
             limit,
             probe: args.probe,
@@ -463,6 +560,13 @@ const PerfIndexCommand = cmd({
             console.log(
               `  ${name}: p50 ${num(value.p50.median)}ms | p95 ${num(value.p95.median)}ms | max ${num(value.maxMs.median)}ms | calls ${num(value.count.median)} | errors ${num(value.errorCount.median)}`,
             )
+          }
+        }
+        if (summary.diagnosis && summary.diagnosis.length > 0) {
+          console.log("")
+          console.log("  diagnosis:")
+          for (const line of summary.diagnosis) {
+            console.log(`  - ${line}`)
           }
         }
       },

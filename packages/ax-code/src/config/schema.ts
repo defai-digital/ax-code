@@ -635,9 +635,23 @@ export const Info = z
               disabled: z.literal(true),
             }),
             z.object({
-              command: z.array(z.string()),
+              command: z.array(z.string()).optional(),
               extensions: z.array(z.string()).optional(),
               disabled: z.boolean().optional(),
+              semantic: z.boolean().optional(),
+              priority: z.number().int().optional(),
+              concurrency: z.number().int().positive().optional(),
+              capabilities: z
+                .object({
+                  hover: z.boolean().optional(),
+                  definition: z.boolean().optional(),
+                  references: z.boolean().optional(),
+                  implementation: z.boolean().optional(),
+                  documentSymbol: z.boolean().optional(),
+                  workspaceSymbol: z.boolean().optional(),
+                  callHierarchy: z.boolean().optional(),
+                })
+                .optional(),
               env: z.record(z.string(), z.string()).optional(),
               initialization: z.record(z.string(), z.any()).optional(),
             }),
@@ -654,11 +668,11 @@ export const Info = z
           return Object.entries(data).every(([id, config]) => {
             if (config.disabled) return true
             if (serverIds.has(id)) return true
-            return Boolean(config.extensions)
+            return Boolean(config.command && config.extensions)
           })
         },
         {
-          error: "For custom LSP servers, 'extensions' array is required.",
+          error: "For custom LSP servers, both 'command' and 'extensions' are required.",
         },
       ),
     instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),

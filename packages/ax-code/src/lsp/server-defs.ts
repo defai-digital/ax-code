@@ -115,6 +115,7 @@ export const Vue: Info = {
 
 export const ESLint: Info = {
   id: "eslint",
+  semantic: false,
   root: NearestRoot([...JS_LOCKFILES]),
   extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue"],
   async spawn(root) {
@@ -176,6 +177,7 @@ export const ESLint: Info = {
 
 export const Oxlint: Info = {
   id: "oxlint",
+  semantic: false,
   root: NearestRoot([
     ".oxlintrc.json",
     "package-lock.json",
@@ -251,6 +253,7 @@ export const Oxlint: Info = {
 
 export const Biome: Info = {
   id: "biome",
+  semantic: false,
   root: NearestRoot([
     "biome.json",
     "biome.jsonc",

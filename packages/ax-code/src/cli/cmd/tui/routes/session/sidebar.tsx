@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
@@ -84,11 +84,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     remainSec: number
     totalSec: number
   }>()
-  let etaAnchorSessionID = ""
-  let etaRun: { startedAt: number; startTokens: number } | undefined
-  let prevStatusType: "idle" | "busy" | "retry" | undefined
-  let prevSample: { time: number; tokens: number } | undefined
-  let smoothRate: number | undefined
+  let etaState: {
+    sessionID: string
+    run?: { startedAt: number; startTokens: number }
+    prevStatusType?: FooterSessionStatus["type"]
+    prevSample?: { time: number; tokens: number }
+    smoothRate?: number
+  } = {
+    sessionID: props.sessionID,
+  }
 
   onMount(() => {
     const animationId = setInterval(() => {
@@ -201,52 +205,62 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       limit: model?.limit?.context ?? 0,
     }
   })
-  // Recalculate context-fill ETA every 5s using tokens consumed in the current busy run.
-  const etaEstimate = createMemo(() => {
+  createEffect(() => {
     clockTick()
+    const sessionID = props.sessionID
     const currentStatus = status()
     const busy = currentStatus.type === "busy"
     const ctx = context()
-    if (etaAnchorSessionID !== props.sessionID) {
-      etaAnchorSessionID = props.sessionID
+    if (etaState.sessionID !== sessionID) {
+      etaState = { sessionID }
       setEtaAnchor(undefined)
-      etaRun = undefined
-      prevStatusType = undefined
-      prevSample = undefined
-      smoothRate = undefined
     }
     if (!busy) {
-      setEtaAnchor(undefined)
-      etaRun = undefined
-      prevStatusType = currentStatus.type
-      prevSample = undefined
-      smoothRate = undefined
-      return
-    }
-    if (!ctx || !ctx.limit || !ctx.raw) return
-    const now = Date.now()
-    if (!etaRun || prevStatusType !== "busy" || ctx.raw < etaRun.startTokens) {
-      etaRun = {
-        startedAt: currentStatus.startedAt ?? now,
-        startTokens: ctx.raw,
+      etaState = {
+        sessionID,
+        prevStatusType: currentStatus.type,
       }
-      prevSample = { time: now, tokens: ctx.raw }
-      smoothRate = undefined
-      prevStatusType = currentStatus.type
       setEtaAnchor(undefined)
       return
     }
-    prevStatusType = currentStatus.type
+    if (!ctx || !ctx.limit || !ctx.raw) {
+      etaState = {
+        sessionID,
+        prevStatusType: currentStatus.type,
+      }
+      setEtaAnchor(undefined)
+      return
+    }
+    const now = Date.now()
+    if (!etaState.run || etaState.prevStatusType !== "busy" || ctx.raw < etaState.run.startTokens) {
+      etaState = {
+        sessionID,
+        run: {
+          startedAt: currentStatus.startedAt ?? now,
+          startTokens: ctx.raw,
+        },
+        prevStatusType: currentStatus.type,
+        prevSample: { time: now, tokens: ctx.raw },
+        smoothRate: undefined,
+      }
+      setEtaAnchor(undefined)
+      return
+    }
     const result = estimateContextEta({
       now,
       limit: ctx.limit,
       totalTokens: ctx.raw,
-      run: etaRun,
-      prevSample,
-      smoothRate,
+      run: etaState.run,
+      prevSample: etaState.prevSample,
+      smoothRate: etaState.smoothRate,
     })
-    prevSample = result.prevSample
-    smoothRate = result.smoothRate
+    etaState = {
+      sessionID,
+      run: etaState.run,
+      prevStatusType: currentStatus.type,
+      prevSample: result.prevSample,
+      smoothRate: result.smoothRate,
+    }
     if (!result.estimate) {
       setEtaAnchor(undefined)
       return
@@ -257,7 +271,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   // Countdown display: ticks every 1s, counts down from last anchor
   const eta = createMemo(() => {
     clockTick()
-    etaEstimate()
     const anchor = etaAnchor()
     if (!anchor || anchor.remainSec <= 0) return
     const sinceLast = Math.round((Date.now() - anchor.computedAt) / 1000)

@@ -92,6 +92,15 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
 
+  async function documentSymbolsForRangeExpansion(
+    uri: string,
+  ): Promise<Awaited<ReturnType<typeof LSP.documentSymbolEnvelope>>["data"]> {
+    return (
+      (await LSP.documentSymbolCachedEnvelope(uri).catch(() => undefined)) ??
+      (await LSP.documentSymbolEnvelope(uri, { cache: true }).catch(() => undefined))
+    )?.data ?? []
+  }
+
   const state = Instance.state(
     () => {
       const data: Record<
@@ -1629,7 +1638,7 @@ export namespace SessionPrompt {
                   // workspace/symbol searches, so we'll try to find the
                   // symbol in the document to get the full range
                   if (start === end) {
-                    const symbols = await LSP.documentSymbol(filePathURI).catch(() => [])
+                    const symbols = await documentSymbolsForRangeExpansion(filePathURI)
                     for (const symbol of symbols) {
                       let range: LSP.Range | undefined
                       if ("range" in symbol) {

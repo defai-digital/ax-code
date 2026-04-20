@@ -8,12 +8,16 @@ import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 
 // Minimal fake LSP server that speaks JSON-RPC over stdio
-function spawnFakeServer() {
+function spawnFakeServer(env?: Record<string, string>) {
   const { spawn } = require("child_process")
   const serverPath = path.join(__dirname, "../fixture/lsp/fake-lsp-server.js")
   return {
     process: spawn(process.execPath, [serverPath], {
       stdio: "pipe",
+      env: {
+        ...process.env,
+        ...env,
+      },
     }),
   }
 }
@@ -91,6 +95,33 @@ describe("LSPClient interop", () => {
     await new Promise((r) => setTimeout(r, 100))
 
     expect(client.connection).toBeDefined()
+
+    await client.shutdown()
+  })
+
+  test("captures initialize capabilities for method-aware routing", async () => {
+    const handle = spawnFakeServer({
+      FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({
+        hoverProvider: true,
+        referencesProvider: true,
+        documentSymbolProvider: false,
+      }),
+    }) as any
+
+    const client = await Instance.provide({
+      directory: process.cwd(),
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: process.cwd(),
+        }),
+    })
+
+    expect(client.methodSupport("hover")).toBe("supported")
+    expect(client.methodSupport("references")).toBe("supported")
+    expect(client.methodSupport("documentSymbol")).toBe("unsupported")
+    expect(client.methodSupport("workspaceSymbol")).toBe("unknown")
 
     await client.shutdown()
   })

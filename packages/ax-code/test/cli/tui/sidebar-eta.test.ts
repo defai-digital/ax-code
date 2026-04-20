@@ -56,7 +56,7 @@ describe("sidebar context ETA", () => {
   })
 
   test("formats the label as context-fill time", () => {
-    expect(formatContextEtaLabel(3900)).toBe("ctx full ~1h 5m")
-    expect(formatContextEtaLabel(125)).toBe("ctx full ~2m 5s")
+    expect(formatContextEtaLabel(3900)).toBe("context full in ~1h 5m")
+    expect(formatContextEtaLabel(125)).toBe("context full in ~2m 5s")
   })
 })

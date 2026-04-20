@@ -8,6 +8,7 @@ import { pathToFileURL } from "url"
 import { assertExternalDirectory } from "./external-directory"
 import { Filesystem } from "../util/filesystem"
 import { AuditSemanticCall } from "../audit/semantic-call"
+import type { LSPServer } from "../lsp/server"
 
 // Synthesize a minimal envelope for operations that don't yet have an
 // envelope-returning LSP variant. Lets us audit every tool call
@@ -40,6 +41,34 @@ const operations = [
   "incomingCalls",
   "outgoingCalls",
 ] as const
+
+const semanticMethodByOperation: Record<
+  Exclude<(typeof operations)[number], "workspaceSymbol" | "diagnosticsAggregated">,
+  LSPServer.Method
+> = {
+  goToDefinition: "definition",
+  findReferences: "references",
+  hover: "hover",
+  documentSymbol: "documentSymbol",
+  goToImplementation: "implementation",
+  prepareCallHierarchy: "callHierarchy",
+  incomingCalls: "callHierarchy",
+  outgoingCalls: "callHierarchy",
+}
+
+async function cacheableEnvelope(input: {
+  operation: Exclude<(typeof operations)[number], "workspaceSymbol" | "diagnosticsAggregated">
+  uri: string
+  position: { file: string; line: number; character: number }
+}) {
+  if (input.operation === "findReferences") {
+    return LSP.referencesCachedEnvelope(input.position)
+  }
+  if (input.operation === "documentSymbol") {
+    return LSP.documentSymbolCachedEnvelope(input.uri)
+  }
+  return undefined
+}
 
 export const LspTool = Tool.define("lsp", {
   description: DESCRIPTION,
@@ -137,13 +166,6 @@ export const LspTool = Tool.define("lsp", {
       }
 
     if (args.operation === "diagnosticsAggregated") {
-      await ctx.ask({
-        permission: "lsp",
-        patterns: ["*"],
-        always: ["*"],
-        metadata: {},
-      })
-
       let file: string | undefined
       if (args.filePath) {
         file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
@@ -159,7 +181,16 @@ export const LspTool = Tool.define("lsp", {
           audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "NoServerAvailable" })
           throw new Error("No LSP server available for this file type.")
         }
+      }
 
+      await ctx.ask({
+        permission: "lsp",
+        patterns: ["*"],
+        always: ["*"],
+        metadata: {},
+      })
+
+      if (file) {
         const opened = await LSP.touchFile(file, true)
         if (opened === 0) {
           audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "ServerStartFailed" })
@@ -224,18 +255,6 @@ export const LspTool = Tool.define("lsp", {
       throw new Error(`File not found: ${file}`)
     }
 
-    const available = await LSP.hasClients(file)
-    if (!available) {
-      audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "NoServerAvailable" })
-      throw new Error("No LSP server available for this file type.")
-    }
-
-    await ctx.ask({
-      permission: "lsp",
-      patterns: ["*"],
-      always: ["*"],
-      metadata: {},
-    })
     const uri = pathToFileURL(file).href
     const position = {
       file,
@@ -246,10 +265,45 @@ export const LspTool = Tool.define("lsp", {
     const relPath = path.relative(Instance.worktree, file)
     const title = `${args.operation} ${relPath}:${args.line}:${args.character}`
 
-    const opened = await LSP.touchFile(file, true)
-    if (opened === 0) {
-      audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "ServerStartFailed" })
-      throw new Error("LSP server matched this file type but could not be started or did not accept the file.")
+    const method = semanticMethodByOperation[args.operation]
+    // Best practice for content-addressed semantic ops: probe the cache before
+    // treating "no live server available" as fatal. A valid cache hit remains
+    // correct for the current file content even if the backing server is not
+    // installed or is temporarily unavailable.
+    let envelope: unknown
+    try {
+      envelope = await cacheableEnvelope({
+        operation: args.operation,
+        uri,
+        position,
+      })
+    } catch {
+      // Cache lookup is an optimization only. Fall back to the live LSP path
+      // if the cache layer is unavailable or a cache probe throws.
+      envelope = undefined
+    }
+
+    if (!envelope) {
+      const available = await LSP.hasClients(file, { mode: "semantic", method })
+      if (!available) {
+        audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "NoServerAvailable" })
+        throw new Error("No LSP server available for this file type.")
+      }
+    }
+
+    await ctx.ask({
+      permission: "lsp",
+      patterns: ["*"],
+      always: ["*"],
+      metadata: {},
+    })
+
+    if (!envelope) {
+      const opened = await LSP.touchFile(file, true, { mode: "semantic", method })
+      if (opened === 0) {
+        audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "ServerStartFailed" })
+        throw new Error("LSP server matched this file type but could not be started or did not accept the file.")
+      }
     }
 
     // For operations with an envelope-returning LSP variant, use it
@@ -259,38 +313,39 @@ export const LspTool = Tool.define("lsp", {
     //
     // Audit is load-bearing (PRD §S3): LSP-layer exceptions must
     // surface in the audit trail as errored calls, not go missing.
-    let envelope: unknown
-    try {
-      envelope = await (async () => {
-        switch (args.operation) {
-          case "goToDefinition":
-            return LSP.definitionEnvelope(position)
-          case "findReferences":
-            return LSP.referencesEnvelope(position)
-          case "hover":
-            return LSP.hoverEnvelope(position)
-          case "documentSymbol":
-            return LSP.documentSymbolEnvelope(uri)
-          case "goToImplementation":
-            return LSP.implementationEnvelope(position)
-          case "prepareCallHierarchy":
-            return LSP.prepareCallHierarchyEnvelope(position)
-          case "incomingCalls":
-            return LSP.incomingCallsEnvelope(position)
-          case "outgoingCalls":
-            return LSP.outgoingCallsEnvelope(position)
-          default:
-            return syntheticEnvelope([])
-        }
-      })()
-    } catch (err) {
-      audit({
-        operation: args.operation,
-        args,
-        envelope: syntheticEnvelope([]),
-        errorCode: err instanceof Error ? err.name : "UnknownError",
-      })
-      throw err
+    if (!envelope) {
+      try {
+        envelope = await (async () => {
+          switch (args.operation) {
+            case "goToDefinition":
+              return LSP.definitionEnvelope(position)
+            case "findReferences":
+              return LSP.referencesEnvelope({ ...position, cache: true })
+            case "hover":
+              return LSP.hoverEnvelope(position)
+            case "documentSymbol":
+              return LSP.documentSymbolEnvelope(uri, { cache: true })
+            case "goToImplementation":
+              return LSP.implementationEnvelope(position)
+            case "prepareCallHierarchy":
+              return LSP.prepareCallHierarchyEnvelope(position)
+            case "incomingCalls":
+              return LSP.incomingCallsEnvelope(position)
+            case "outgoingCalls":
+              return LSP.outgoingCallsEnvelope(position)
+            default:
+              return syntheticEnvelope([])
+          }
+        })()
+      } catch (err) {
+        audit({
+          operation: args.operation,
+          args,
+          envelope: syntheticEnvelope([]),
+          errorCode: err instanceof Error ? err.name : "UnknownError",
+        })
+        throw err
+      }
     }
 
     audit({ operation: args.operation, args, envelope })

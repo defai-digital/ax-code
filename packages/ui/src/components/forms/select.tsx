@@ -46,6 +46,8 @@ export function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">)
     key: undefined as string | undefined,
     cleanup: undefined as (() => void) | void,
   }
+  const fallbackObjectValues = new WeakMap<object, string>()
+  let nextFallbackObjectValue = 0
 
   const stop = () => {
     state.cleanup?.()
@@ -53,7 +55,46 @@ export function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">)
     state.key = undefined
   }
 
-  const keyFor = (item: T) => (local.value ? local.value(item) : (item as string))
+  const keyFor = (item: T) => {
+    if (local.value) return local.value(item)
+    if (typeof item === "string") return item
+    if (typeof item === "number" || typeof item === "boolean" || typeof item === "bigint") {
+      return String(item)
+    }
+    if (item && typeof item === "object") {
+      const record = item as Record<string, unknown>
+      for (const field of ["id", "value", "key"] as const) {
+        const candidate = record[field]
+        if (typeof candidate === "string" || typeof candidate === "number" || typeof candidate === "bigint") {
+          return String(candidate)
+        }
+      }
+      let fallback = fallbackObjectValues.get(item)
+      if (!fallback) {
+        fallback = `select-option-${nextFallbackObjectValue++}`
+        fallbackObjectValues.set(item, fallback)
+      }
+      return fallback
+    }
+    return String(item ?? "")
+  }
+
+  const labelFor = (item: T) => {
+    if (local.label) return local.label(item)
+    if (typeof item === "string" || typeof item === "number" || typeof item === "boolean" || typeof item === "bigint") {
+      return String(item)
+    }
+    if (item && typeof item === "object") {
+      const record = item as Record<string, unknown>
+      for (const field of ["label", "name", "title", "id", "value"] as const) {
+        const candidate = record[field]
+        if (typeof candidate === "string" || typeof candidate === "number" || typeof candidate === "bigint") {
+          return String(candidate)
+        }
+      }
+    }
+    return keyFor(item)
+  }
 
   const move = (item: T | undefined) => {
     if (!local.onHighlight) return
@@ -90,8 +131,8 @@ export function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">)
       gutter={4}
       value={local.current}
       options={grouped()}
-      optionValue={(x) => (local.value ? local.value(x) : (x as string))}
-      optionTextValue={(x) => (local.label ? local.label(x) : (x as string))}
+      optionValue={keyFor}
+      optionTextValue={labelFor}
       optionGroupChildren="options"
       placeholder={local.placeholder}
       sectionComponent={(item) => (
@@ -112,9 +153,7 @@ export function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">)
           <Kobalte.ItemLabel data-slot="select-select-item-label">
             {local.children
               ? local.children(itemProps.item.rawValue)
-              : local.label
-                ? local.label(itemProps.item.rawValue)
-                : (itemProps.item.rawValue as string)}
+              : labelFor(itemProps.item.rawValue)}
           </Kobalte.ItemLabel>
           <Kobalte.ItemIndicator data-slot="select-select-item-indicator">
             <Icon name="check-small" size="small" />
@@ -147,8 +186,7 @@ export function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">)
           {(state) => {
             const selected = state.selectedOption() ?? local.current
             if (!selected) return local.placeholder || ""
-            if (local.label) return local.label(selected)
-            return selected as string
+            return labelFor(selected)
           }}
         </Kobalte.Value>
         <Kobalte.Icon data-slot="select-select-trigger-icon">

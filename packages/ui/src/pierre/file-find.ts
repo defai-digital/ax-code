@@ -13,6 +13,7 @@ const hosts = new Set<FindHost>()
 let target: FindHost | undefined
 let current: FindHost | undefined
 let installed = false
+let uninstallShortcuts: (() => void) | undefined
 
 function isEditable(node: unknown): boolean {
   if (!(node instanceof HTMLElement)) return false
@@ -34,44 +35,47 @@ function installShortcuts() {
   if (typeof window === "undefined") return
   installed = true
 
-  window.addEventListener(
-    "keydown",
-    (event) => {
-      if (event.defaultPrevented) return
-      if (isEditable(event.target)) return
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented) return
+    if (isEditable(event.target)) return
 
-      const mod = event.metaKey || event.ctrlKey
-      if (!mod) return
+    const mod = event.metaKey || event.ctrlKey
+    if (!mod) return
 
-      const key = event.key.toLowerCase()
-      if (key === "g") {
-        const host = current
-        if (!host || !host.isOpen()) return
-        event.preventDefault()
-        event.stopPropagation()
-        host.next(event.shiftKey ? -1 : 1)
-        return
-      }
-
-      if (key !== "f") return
-
-      const active = current
-      if (active && active.isOpen()) {
-        event.preventDefault()
-        event.stopPropagation()
-        active.open()
-        return
-      }
-
-      const host = hostForNode(document.activeElement) ?? hostForNode(event.target) ?? target ?? Array.from(hosts)[0]
-      if (!host) return
-
+    const key = event.key.toLowerCase()
+    if (key === "g") {
+      const host = current
+      if (!host || !host.isOpen()) return
       event.preventDefault()
       event.stopPropagation()
-      host.open()
-    },
-    { capture: true },
-  )
+      host.next(event.shiftKey ? -1 : 1)
+      return
+    }
+
+    if (key !== "f") return
+
+    const active = current
+    if (active && active.isOpen()) {
+      event.preventDefault()
+      event.stopPropagation()
+      active.open()
+      return
+    }
+
+    const host = hostForNode(document.activeElement) ?? hostForNode(event.target) ?? target ?? Array.from(hosts)[0]
+    if (!host) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    host.open()
+  }
+
+  window.addEventListener("keydown", onKeyDown, { capture: true })
+  uninstallShortcuts = () => {
+    window.removeEventListener("keydown", onKeyDown, true)
+    installed = false
+    uninstallShortcuts = undefined
+  }
 }
 
 function clearHighlightFind() {
@@ -416,6 +420,7 @@ export function createFileFind(opts: CreateFileFindOptions) {
         clearHighlightFind()
       }
       if (target === host) target = undefined
+      if (hosts.size === 0) uninstallShortcuts?.()
     })
   })
 

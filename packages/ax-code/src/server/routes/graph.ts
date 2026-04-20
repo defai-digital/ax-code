@@ -61,7 +61,7 @@ export const GraphRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          format: z.enum(["ascii", "json", "mermaid", "markdown", "timeline", "topology"]).default("json"),
+          format: z.enum(["ascii", "json", "mermaid", "gantt", "svggantt", "markdown", "timeline", "topology"]).default("json"),
         }),
       ),
       async (c) => {
@@ -72,6 +72,8 @@ export const GraphRoutes = lazy(() =>
 
         if (format === "ascii") return c.text(GraphFormat.ascii(graph).join("\n"))
         if (format === "mermaid") return c.text(GraphFormat.mermaid(graph))
+        if (format === "gantt") return c.text(GraphFormat.gantt(graph))
+        if (format === "svggantt") return c.text(GraphFormat.svgGantt(graph), 200, { "Content-Type": "image/svg+xml" })
         if (format === "markdown") return c.text(GraphFormat.markdown(graph))
         if (format === "timeline")
           return c.text(

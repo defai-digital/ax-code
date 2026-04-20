@@ -342,6 +342,11 @@ function detectRuntimeTargets(root: string, pkg: PackageJson | null): string[] {
 async function calculateComplexity(root: string, info: ProjectInfo): Promise<ComplexityScore> {
   let fileCount = 0
   let loc = 0
+  const countLines = (content: string) => {
+    if (content.length === 0) return 0
+    const lines = content.split("\n")
+    return content.endsWith("\n") ? lines.length - 1 : lines.length
+  }
 
   const sourceDir = info.directories.source
   if (sourceDir) {
@@ -355,8 +360,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
           const results = await Promise.all(batch.map((f) => Bun.file(path.join(cwd, f)).text().catch(() => "")))
           for (const content of results) {
             fileCount++
-            const lines = content.split("\n")
-            loc += content.endsWith("\n") ? lines.length - 1 : lines.length
+            loc += countLines(content)
           }
           batch.length = 0
           if (fileCount > 5000) break
@@ -366,8 +370,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
         const results = await Promise.all(batch.map((f) => Bun.file(path.join(cwd, f)).text().catch(() => "")))
         for (const content of results) {
           fileCount++
-          const lines = content.split("\n")
-          loc += content.endsWith("\n") ? lines.length - 1 : lines.length
+          loc += countLines(content)
         }
       }
     } catch {

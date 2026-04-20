@@ -116,7 +116,9 @@ export function Autocomplete(props: {
     props.value // <- there surely is a better way to do this, like making .input() reactive
     cursorTick()
 
-    return props.input().getTextRange(store.index + 1, props.input().cursorOffset)
+    const input = props.input()
+    if (!input || input.isDestroyed) return
+    return input.getTextRange(store.index + 1, input.cursorOffset)
   })
 
   // filter() reads reactive props.value plus non-reactive cursor/text state.
@@ -610,7 +612,7 @@ export function Autocomplete(props: {
     <box
       visible={store.visible !== false}
       position="absolute"
-      top={anchorMetrics().y - height()}
+      top={Math.max(0, anchorMetrics().y - height())}
       left={anchorMetrics().x}
       width={anchorMetrics().width}
       zIndex={100}

@@ -972,16 +972,23 @@ export function Prompt(props: PromptProps) {
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent
-    if (!props.sessionID)
-      setTimeout(() => {
+    if (!props.sessionID) {
+      if (navigationTimer) clearTimeout(navigationTimer)
+      navigationTimer = setTimeout(() => {
+        navigationTimer = undefined
         route.navigate({
           type: "session",
           sessionID,
         })
       }, 50)
+    }
     input.clear()
   }
   const exit = useExit()
+  let navigationTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (navigationTimer) clearTimeout(navigationTimer)
+  })
 
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset

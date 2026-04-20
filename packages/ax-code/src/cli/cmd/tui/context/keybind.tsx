@@ -25,9 +25,11 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
     })
     const renderer = useRenderer()
 
-    let focus: Renderable | null
-    let timeout: NodeJS.Timeout
+    let focus: Renderable | null = null
+    let timeout: NodeJS.Timeout | undefined
+    let disposed = false
     function leader(active: boolean) {
+      if (disposed) return
       if (active) {
         setStore("leader", true)
         focus = renderer.currentFocusedRenderable
@@ -50,14 +52,42 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
       }
     }
 
+    function parse(evt: ParsedKey): Keybind.Info {
+      // Handle special case for Ctrl+Underscore (represented as \x1F)
+      if (evt.name === "\x1F") {
+        return Keybind.fromParsedKey({ ...evt, name: "_", ctrl: true }, store.leader)
+      }
+      return Keybind.fromParsedKey(evt, store.leader)
+    }
+
+    function match(key: KeybindKey, evt: ParsedKey) {
+      const keybind = keybinds()[key]
+      if (!keybind) return false
+      const parsed: Keybind.Info = parse(evt)
+      for (const key of keybind) {
+        if (Keybind.match(key, parsed)) {
+          return true
+        }
+      }
+      return false
+    }
+
+    function print(key: KeybindKey) {
+      const first = keybinds()[key]?.at(0)
+      if (!first) return ""
+      return Keybind.toDisplayString(first, keybinds().leader?.at(0))
+    }
+
     useKeyboard(async (evt) => {
-      if (!store.leader && result.match("leader", evt)) {
+      if (disposed) return
+      if (!store.leader && match("leader", evt)) {
         leader(true)
         return
       }
 
       if (store.leader && evt.name) {
         setImmediate(() => {
+          if (disposed) return
           if (focus && renderer.currentFocusedRenderable === focus) {
             focus.focus()
           }
@@ -66,7 +96,10 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
       }
     })
 
-    onCleanup(() => clearTimeout(timeout))
+    onCleanup(() => {
+      disposed = true
+      if (timeout) clearTimeout(timeout)
+    })
 
     const result = {
       get all() {
@@ -75,29 +108,9 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
       get leader() {
         return store.leader
       },
-      parse(evt: ParsedKey): Keybind.Info {
-        // Handle special case for Ctrl+Underscore (represented as \x1F)
-        if (evt.name === "\x1F") {
-          return Keybind.fromParsedKey({ ...evt, name: "_", ctrl: true }, store.leader)
-        }
-        return Keybind.fromParsedKey(evt, store.leader)
-      },
-      match(key: KeybindKey, evt: ParsedKey) {
-        const keybind = keybinds()[key]
-        if (!keybind) return false
-        const parsed: Keybind.Info = result.parse(evt)
-        for (const key of keybind) {
-          if (Keybind.match(key, parsed)) {
-            return true
-          }
-        }
-        return false
-      },
-      print(key: KeybindKey) {
-        const first = keybinds()[key]?.at(0)
-        if (!first) return ""
-        return Keybind.toDisplayString(first, keybinds().leader?.at(0))
-      },
+      parse,
+      match,
+      print,
     }
     return result
   },

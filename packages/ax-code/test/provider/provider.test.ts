@@ -904,6 +904,49 @@ test("getSmallModel respects config small_model override", async () => {
   })
 })
 
+test("config-defined zai models keep glm-4-plus but filter glm-4.5-flash", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["zai"],
+          provider: {
+            zai: {
+              models: {
+                "glm-4-plus": {
+                  provider: {
+                    npm: "@ai-sdk/openai-compatible",
+                    api: "https://example.com",
+                  },
+                  limit: { context: 128000, output: 4096 },
+                },
+                "glm-4.5-flash": {
+                  provider: {
+                    npm: "@ai-sdk/openai-compatible",
+                    api: "https://example.com",
+                  },
+                  limit: { context: 128000, output: 4096 },
+                },
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      const zai = providers[ProviderID.make("zai")]
+      expect(zai.models["glm-4-plus"]).toBeDefined()
+      expect(zai.models["glm-4.5-flash"]).toBeUndefined()
+    },
+  })
+})
+
 test("google provider only exposes Gemini 3 or later models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

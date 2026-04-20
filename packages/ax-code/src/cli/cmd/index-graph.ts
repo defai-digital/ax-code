@@ -8,6 +8,11 @@ import { AutoIndex } from "../../code-intelligence/auto-index"
 import { Ripgrep } from "../../file/ripgrep"
 import { LANGUAGE_EXTENSIONS } from "../../lsp/language"
 import { LSP } from "../../lsp"
+import {
+  INDEXER_SEMANTIC_METHODS,
+  INDEX_PREWARM_MAX_FILES,
+  INDEX_PREWARM_MAX_LANGUAGES,
+} from "../../lsp/prewarm-profile"
 import { NativePerf } from "../../perf/native"
 import type { NativePerfSnapshot } from "../../perf/native"
 import { UI } from "../ui"
@@ -198,19 +203,22 @@ export async function probeLspServers(
 ): Promise<{ ready: Set<string>; missing: Map<string, number> }> {
   const ready = new Set<string>()
   const missing = new Map<string, number>()
-  const openedByLanguage = new Map<string, number>()
+  const probes = [...groups.entries()]
+    .filter(([lang]) => lang !== "unknown" && lang !== "plaintext")
+    .map(async ([lang, files]) => {
+      const first = files[0]
+      if (!first) return undefined
 
-  // Touch one file per language. LSP.touchFile triggers a lazy spawn
-  // of any client that matches the file's extension. Do this
-  // sequentially per-language so the output of status() reflects all
-  // probed languages rather than a subset racing against spawn.
-  for (const [lang, files] of groups) {
-    if (lang === "unknown" || lang === "plaintext") continue
-    const first = files[0]
-    if (!first) continue
-    const opened = await LSP.touchFile(first, false).catch(() => 0)
-    openedByLanguage.set(lang, opened)
-  }
+      // Parallel probe: touchFile already deduplicates shared cold starts
+      // via the LSP spawning registry, so serializing by language only
+      // inflates cold index startup on polyglot projects.
+      const opened = await LSP.touchFile(first, false, {
+        mode: "semantic",
+        methods: [...INDEXER_SEMANTIC_METHODS],
+      }).catch(() => 0)
+
+      return { lang, fileCount: files.length, opened }
+    })
 
   // Read the set of connected clients. Each client has a `root` and a
   // list of extensions it serves. We don't get the language name
@@ -221,16 +229,16 @@ export async function probeLspServers(
   // a client at all and its extensions include an extension present
   // in the group, mark the language ready.
   const statuses = await LSP.status().catch(() => [])
-  for (const [lang, files] of groups) {
-    if (lang === "unknown" || lang === "plaintext") continue
+  for (const probe of await Promise.all(probes)) {
+    if (!probe) continue
     // Use the observed touch result rather than hasClients(). The
     // latter is intentionally optimistic (extension + root match),
     // while the probe wants actual readiness after spawn/init.
-    const languageReady = (openedByLanguage.get(lang) ?? 0) > 0
+    const languageReady = probe.opened > 0
     if (languageReady) {
-      ready.add(lang)
+      ready.add(probe.lang)
     } else {
-      missing.set(lang, files.length)
+      missing.set(probe.lang, probe.fileCount)
     }
   }
 
@@ -382,6 +390,25 @@ export const IndexCommand = cmd({
         // try everything.
         const groups = groupFilesByLanguage(files)
         let probeResult: Probe | undefined
+        // Reset before any explicit LSP warmup/probe work so the perf
+        // artifact reflects the full synchronous semantic path the user
+        // paid for, not just the later indexFiles() batch.
+        LSP.perfReset()
+        if (files.length > 0) {
+          await LSP.prewarmFiles(
+            LSP.selectPrewarmFiles(files, {
+              maxFiles: INDEX_PREWARM_MAX_FILES,
+              maxLanguages: INDEX_PREWARM_MAX_LANGUAGES,
+            }),
+            {
+              mode: "semantic",
+              methods: [...INDEXER_SEMANTIC_METHODS],
+            },
+          ).catch(() => ({
+            readyCount: 0,
+            freshSpawnCount: 0,
+          }))
+        }
         // Skip the LSP probe when there are no files — nothing to
         // probe, and the "no LSP servers available" warning would be
         // misleading in a graph-reconcile-only run.
@@ -552,7 +579,9 @@ export const IndexCommand = cmd({
 
         const status = CodeIntelligence.status(projectID)
         const native = args.nativeProfile ? NativePerf.snapshot() : undefined
+        const lspPerf = LSP.perfSnapshot()
         if (args.nativeProfile) NativePerf.reset()
+        LSP.perfReset()
         // Transition to idle now that the run is over. This is the
         // signal the TUI sidebar uses to flip out of its "indexing"
         // state back to the normal "N symbols indexed" display.
@@ -581,6 +610,7 @@ export const IndexCommand = cmd({
                 elapsedMs: elapsed,
                 probeResult,
                 native,
+                lspPerf: Object.keys(lspPerf).length > 0 ? lspPerf : undefined,
               }),
               null,
               2,

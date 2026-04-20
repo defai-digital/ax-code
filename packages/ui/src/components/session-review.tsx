@@ -138,6 +138,7 @@ export const SessionReview = (props: SessionReviewProps) => {
   const i18n = useI18n()
   const fileComponent = useFileComponent()
   const anchors = new Map<string, HTMLElement>()
+  const scheduledFrames = new Set<number>()
   const [store, setStore] = createStore({
     open: [] as string[],
     force: {} as Record<string, boolean>,
@@ -148,6 +149,19 @@ export const SessionReview = (props: SessionReviewProps) => {
   const selection = () => store.selection
   const commenting = () => store.commenting
   const opened = () => store.opened
+  const queueFrame = (callback: FrameRequestCallback) => {
+    const frame = requestAnimationFrame((time) => {
+      scheduledFrames.delete(frame)
+      callback(time)
+    })
+    scheduledFrames.add(frame)
+    return frame
+  }
+
+  onCleanup(() => {
+    for (const frame of scheduledFrames) cancelAnimationFrame(frame)
+    scheduledFrames.clear()
+  })
 
   const open = () => props.open ?? store.open
   const files = createMemo(() => props.diffs.map((diff) => diff.file))
@@ -210,7 +224,7 @@ export const SessionReview = (props: SessionReviewProps) => {
         const target = ready ? anchor : wrapper
         if (!target) {
           if (attempt >= 120) return
-          requestAnimationFrame(() => scrollTo(attempt + 1))
+          queueFrame(() => scrollTo(attempt + 1))
           return
         }
 
@@ -222,12 +236,12 @@ export const SessionReview = (props: SessionReviewProps) => {
 
         if (ready) return
         if (attempt >= 120) return
-        requestAnimationFrame(() => scrollTo(attempt + 1))
+        queueFrame(() => scrollTo(attempt + 1))
       }
 
-      requestAnimationFrame(() => scrollTo(0))
+      queueFrame(() => scrollTo(0))
 
-      requestAnimationFrame(() => props.onFocusedCommentChange?.(null))
+      queueFrame(() => props.onFocusedCommentChange?.(null))
     })
   })
 

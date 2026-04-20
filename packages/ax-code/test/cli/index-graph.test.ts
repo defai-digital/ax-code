@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { setTimeout as sleep } from "node:timers/promises"
 import { buildIndexReport, groupFilesByLanguage, phaseRows, probeLspServers } from "../../src/cli/cmd/index-graph"
 import { LSP } from "../../src/lsp"
 import { Log } from "../../src/util/log"
@@ -125,6 +126,17 @@ describe("groupFilesByLanguage", () => {
           },
         ],
       },
+      lspPerf: {
+        "touch.select": {
+          count: 2,
+          okCount: 2,
+          errorCount: 0,
+          p50: 5,
+          p95: 9,
+          maxMs: 10,
+          totalMs: 10,
+        },
+      },
     })
 
     expect(report.requested).toEqual({
@@ -149,6 +161,7 @@ describe("groupFilesByLanguage", () => {
       ms: 50,
     })
     expect(report.native?.total.calls).toBe(3)
+    expect(report.lspPerf?.["touch.select"]?.count).toBe(2)
   })
 
   test("probeLspServers uses successful touches as readiness", async () => {
@@ -157,7 +170,8 @@ describe("groupFilesByLanguage", () => {
       ["rust", ["/p/lib.rs"]],
     ])
 
-    touchFileSpy = spyOn(LSP, "touchFile").mockImplementation(async (file) => {
+    touchFileSpy = spyOn(LSP, "touchFile").mockImplementation(async (file, _wait, opts) => {
+      expect(opts).toEqual({ mode: "semantic", methods: ["documentSymbol", "references"] })
       if (file === "/p/a.ts") return 1
       return 0
     })
@@ -166,5 +180,30 @@ describe("groupFilesByLanguage", () => {
     const probe = await probeLspServers(groups)
     expect(probe.ready).toEqual(new Set(["typescript"]))
     expect(probe.missing).toEqual(new Map([["rust", 1]]))
+  })
+
+  test("probeLspServers probes representative files in parallel", async () => {
+    const groups = new Map<string, string[]>([
+      ["typescript", ["/p/a.ts"]],
+      ["rust", ["/p/lib.rs"]],
+    ])
+
+    let inflight = 0
+    let maxInflight = 0
+
+    touchFileSpy = spyOn(LSP, "touchFile").mockImplementation(async () => {
+      inflight++
+      maxInflight = Math.max(maxInflight, inflight)
+      await sleep(25)
+      inflight--
+      return 1
+    })
+    statusSpy = spyOn(LSP, "status").mockResolvedValue([])
+
+    const probe = await probeLspServers(groups)
+
+    expect(maxInflight).toBe(2)
+    expect(probe.ready).toEqual(new Set(["typescript", "rust"]))
+    expect(probe.missing).toEqual(new Map())
   })
 })

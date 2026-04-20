@@ -148,6 +148,46 @@ describe("LSP cache integration", () => {
     })
   })
 
+  test("per-call cache override can read cache even when the global flag is off", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "demo.ts")
+    await Bun.write(file, "export const x = 1\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        setCacheFlag(false)
+        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+
+        const buf = await Bun.file(file).arrayBuffer()
+        const contentHash = Bun.hash(new Uint8Array(buf)).toString()
+
+        CodeGraphQuery.upsertLspCache({
+          projectID: Instance.project.id,
+          operation: "documentSymbol",
+          filePath: file,
+          contentHash,
+          line: -1,
+          character: -1,
+          payload: [{ name: "x", kind: 13, location: { uri: pathToFileURL(file).href, range: { start: { line: 0, character: 13 }, end: { line: 0, character: 14 } } } }],
+          serverIDs: ["fake"],
+          completeness: "full",
+          expiresAt: Date.now() + 60_000,
+        })
+
+        const envelope = await LSP.documentSymbolEnvelope(pathToFileURL(file).href, { cache: true })
+        expect(envelope.source).toBe("cache")
+        expect(envelope.completeness).toBe("full")
+        expect(envelope.serverIDs).toEqual(["fake"])
+        expect(envelope.data).toHaveLength(1)
+
+        const snap = LSP.perfSnapshot()
+        expect(snap["documentSymbol.cached"]).toBeDefined()
+        expect(snap["documentSymbol.cached"]!.count).toBe(1)
+      },
+    })
+  })
+
   test("cache flag ON: content change (different hash) yields a miss", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")

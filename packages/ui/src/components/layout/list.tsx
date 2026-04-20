@@ -26,11 +26,6 @@ export interface ListAddProps {
   render: () => JSX.Element
 }
 
-export interface ListAddProps {
-  class?: string
-  render: () => JSX.Element
-}
-
 export interface ListProps<T> extends FilteredListProps<T> {
   class?: string
   children: (item: T) => JSX.Element

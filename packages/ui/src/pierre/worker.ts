@@ -32,6 +32,13 @@ function createPool(lineDiffType: "none" | "word-alt") {
 let unified: WorkerPoolManager | undefined
 let split: WorkerPoolManager | undefined
 
+export function disposeWorkerPools() {
+  unified?.terminate()
+  split?.terminate()
+  unified = undefined
+  split = undefined
+}
+
 export function getWorkerPool(style: WorkerPoolStyle | undefined): WorkerPoolManager | undefined {
   if (typeof window === "undefined") return
 
@@ -49,4 +56,11 @@ export function getWorkerPools() {
     unified: getWorkerPool("unified"),
     split: getWorkerPool("split"),
   }
+}
+
+const hot = (import.meta as ImportMeta & { hot?: { dispose(callback: () => void): void } }).hot
+if (hot) {
+  hot.dispose(() => {
+    disposeWorkerPools()
+  })
 }

@@ -3,7 +3,7 @@ import os from "os"
 import path from "path"
 import { describe, expect, spyOn, test } from "bun:test"
 import { NamedError } from "@ax-code/util/error"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { Instance } from "../../src/project/instance"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
@@ -13,6 +13,8 @@ import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
+import { LSP } from "../../src/lsp"
+import { CodeGraphQuery } from "../../src/code-intelligence/query"
 
 Log.init({ print: false })
 
@@ -180,6 +182,97 @@ describe("session.prompt missing file", () => {
         expect(text[2]).toBe("after-file")
 
         await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("uses cached document symbols to expand a single-line symbol range", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "demo.ts"),
+          ["export function demo() {", "  return 1", "}", ""].join("\n"),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const file = path.join(tmp.path, "demo.ts")
+        const uri = pathToFileURL(file).href
+        const contentHash = Bun.hash(new Uint8Array(await Bun.file(file).arrayBuffer())).toString()
+
+        CodeGraphQuery.upsertLspCache({
+          projectID: Instance.project.id,
+          operation: "documentSymbol",
+          filePath: file,
+          contentHash,
+          line: -1,
+          character: -1,
+          payload: [
+            {
+              name: "demo",
+              kind: 12,
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 2, character: 1 },
+              },
+              selectionRange: {
+                start: { line: 0, character: 16 },
+                end: { line: 0, character: 20 },
+              },
+            },
+          ],
+          serverIDs: ["fake"],
+          completeness: "full",
+          expiresAt: Date.now() + 60_000,
+        })
+
+        const cachedSpy = spyOn(LSP, "documentSymbolCachedEnvelope")
+        const liveSpy = spyOn(LSP, "documentSymbolEnvelope")
+
+        try {
+          try {
+            const ranged = new URL(uri)
+            ranged.searchParams.set("start", "0")
+            ranged.searchParams.set("end", "0")
+
+            const msg = await SessionPrompt.prompt({
+              sessionID: session.id,
+              noReply: true,
+              parts: [
+                {
+                  type: "file",
+                  mime: "text/plain",
+                  url: ranged.href,
+                  filename: "demo.ts",
+                },
+              ],
+            })
+
+            if (msg.info.role !== "user") throw new Error("expected user message")
+
+            const stored = await MessageV2.get({
+              sessionID: session.id,
+              messageID: msg.info.id,
+            })
+            const text = stored.parts.filter((part) => part.type === "text").map((part) => part.text)
+
+            expect(cachedSpy).toHaveBeenCalledWith(uri)
+            expect(liveSpy).not.toHaveBeenCalled()
+            expect(text[0]).toContain(`"filePath":"${file}"`)
+            expect(text[0]).toContain(`"offset":1`)
+            expect(text[0]).toContain(`"limit":3`)
+          } finally {
+            await Session.remove(session.id)
+          }
+        } finally {
+          cachedSpy.mockRestore()
+          liveSpy.mockRestore()
+        }
       },
     })
   })

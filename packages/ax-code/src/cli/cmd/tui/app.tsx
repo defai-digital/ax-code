@@ -4,6 +4,7 @@ import { Selection } from "@tui/util/selection"
 import { MouseButton, TextAttributes } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import {
+  type Component,
   Switch,
   Match,
   createEffect,
@@ -16,6 +17,7 @@ import {
   on,
   onCleanup,
 } from "solid-js"
+import { Dynamic } from "solid-js/web"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
 import { Flag } from "@/flag/flag"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
@@ -48,7 +50,8 @@ import { renderTui } from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
 import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
-import { Session } from "@tui/routes/session"
+import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
+import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -70,6 +73,12 @@ export function tui(input: TuiInput) {
       const unguard = win32InstallCtrlCGuard()
       const unresize = installResizeInputGuard()
       try {
+        beginTuiStartup({
+          continue: !!input.args.continue,
+          fork: !!input.args.fork,
+          hasPrompt: !!input.args.prompt,
+          hasSessionID: !!input.args.sessionID,
+        })
         win32DisableProcessedInput()
 
         const onExit = async () => {
@@ -129,6 +138,7 @@ export function tui(input: TuiInput) {
             </ErrorBoundary>
           )
         })
+        recordTuiStartup("tui.startup.renderDispatched")
       } catch (error) {
         unresize()
         unguard?.()
@@ -153,8 +163,38 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+  const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
+  let sessionRoutePromise: Promise<Component> | undefined
+
+  onMount(() => {
+    recordTuiStartupOnce("tui.startup.appMounted", { route: route.data.type })
+  })
 
   useResizeInputRecovery(dimensions)
+
+  function ensureSessionRouteLoaded(source: "route" | "startup-preload" = "route") {
+    const loaded = sessionRoute()
+    if (loaded) return Promise.resolve(loaded)
+    if (sessionRoutePromise) return sessionRoutePromise
+
+    const finishSessionRouteImport = createTuiStartupSpan("tui.startup.sessionRouteImport", { source })
+    sessionRoutePromise = import("@tui/routes/session")
+      .then(({ Session }) => {
+        setSessionRoute(() => Session)
+        recordTuiStartupOnce("tui.startup.sessionRouteReady", { source })
+        return Session
+      })
+      .catch((error) => {
+        finishSessionRouteImport({ ok: false, error: String(error) })
+        throw error
+      })
+      .finally(() => {
+        finishSessionRouteImport()
+        sessionRoutePromise = undefined
+      })
+
+    return sessionRoutePromise
+  }
 
   async function showProviderDialog() {
     const marker = dialog.stack.at(-1)
@@ -328,6 +368,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
 
   const args = useArgs()
+
+  createEffect(() => {
+    if (route.data.type !== "session") return
+    void ensureSessionRouteLoaded("route")
+  })
+
+  onMount(() => {
+    if (!args.sessionID && !args.continue && !args.fork) return
+    const cancel = scheduleDeferredStartupTask(() => ensureSessionRouteLoaded("startup-preload").then(() => undefined))
+    onCleanup(cancel)
+  })
 
   async function putJsonWithTimeout(path: string, body: unknown, headers?: Record<string, string>) {
     const ctrl = new AbortController()
@@ -847,6 +898,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     },
   ])
 
+  let updateHandlerDisposed = false
   const eventUnsubs = [
     sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
       command.trigger(evt.properties.command)
@@ -901,6 +953,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     }),
 
     sdk.event.on("installation.update-available", async (evt) => {
+      if (updateHandlerDisposed) return
       const version = evt.properties.version
 
       const skipped = kv.get("skipped_version")
@@ -915,6 +968,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         `A new release v${version} is available. Would you like to update now?`,
         "skip",
       )
+      if (updateHandlerDisposed) return
 
       if (choice === false) {
         kv.set("skipped_version", version)
@@ -930,6 +984,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       })
 
       const result = await sdk.client.global.upgrade({ target: version })
+      if (updateHandlerDisposed) return
 
       if (result.error || !result.data?.success) {
         const reason =
@@ -950,11 +1005,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         "Update Complete",
         `Successfully updated to ax-code v${result.data.version}. Please restart the application.`,
       )
+      if (updateHandlerDisposed) return
 
       exit()
     }),
   ]
   onCleanup(() => {
+    updateHandlerDisposed = true
     for (const unsub of eventUnsubs) unsub()
   })
 
@@ -978,7 +1035,16 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           <Home />
         </Match>
         <Match when={route.data.type === "session"}>
-          <Session />
+          <Show
+            when={sessionRoute()}
+            fallback={
+              <box paddingLeft={2} paddingRight={2} paddingTop={1}>
+                <text fg={theme.textMuted}>Loading session...</text>
+              </box>
+            }
+          >
+            {(SessionRoute) => <Dynamic component={SessionRoute()} />}
+          </Show>
         </Match>
       </Switch>
     </box>

@@ -197,7 +197,14 @@ export namespace LspScheduler {
     // the server. Increasing the budget does NOT retroactively wake
     // queued waiters — only new acquires see the new cap; document
     // this limit at call sites that might reconfigure mid-run.
-    export function setBudget(serverID: string, budget: number): void {
+    export function setBudget(serverID: string, budget?: number): void {
+      if (budget === undefined) {
+        overrides.delete(serverID)
+        const slot = slots.get(serverID)
+        if (slot) slot.budget = DEFAULT_BUDGET
+        return
+      }
+
       overrides.set(serverID, Math.max(1, budget))
       const slot = slots.get(serverID)
       if (slot) slot.budget = Math.max(1, budget)

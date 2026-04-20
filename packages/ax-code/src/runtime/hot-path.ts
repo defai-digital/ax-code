@@ -52,6 +52,16 @@ const inventory = [
     notes: "Background warmup begins during bootstrap so the first prompt does not block on provider loading.",
   },
   {
+    name: "LSP.prewarmWorkspace",
+    kind: "task",
+    module: "src/lsp/index.ts",
+    owner: "InstanceBootstrap",
+    triggers: ["startup"],
+    dependencyMode: "promise",
+    phase0Action: "observe_only",
+    notes: "Background semantic prewarm primes a bounded set of representative files so the first semantic request avoids cold start.",
+  },
+  {
     name: "File.init",
     kind: "service",
     module: "src/file/index.ts",

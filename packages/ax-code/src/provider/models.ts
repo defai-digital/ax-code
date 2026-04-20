@@ -35,7 +35,7 @@ export namespace ModelsDev {
   function glm46(id: string) {
     const lower = id.toLowerCase()
     if (!lower.includes("glm")) return true
-    return !lower.includes("glm-4.5") && !lower.startsWith("glm-4-")
+    return !lower.includes("glm-4.5")
   }
 
   function supported(providerID: string, modelID: string) {

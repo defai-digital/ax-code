@@ -465,7 +465,7 @@ export namespace Session {
   )
 
   export const setArchived = fn(z.object({ sessionID: SessionID.zod, time: z.number().optional() }), async (input) =>
-    updateAndPublish(input.sessionID, { time_archived: input.time }),
+    updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() }),
   )
 
   export const setPermission = fn(

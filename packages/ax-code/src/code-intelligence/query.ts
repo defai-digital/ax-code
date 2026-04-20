@@ -630,4 +630,20 @@ export namespace CodeGraphQuery {
       return ids.length
     })
   }
+
+  // Explicit project-scoped eviction for perf harnesses. This keeps
+  // cold-vs-warm benchmark modes reproducible instead of depending on
+  // whatever payload a previous run left behind in the persistent cache.
+  export function clearLspCache(projectID: ProjectID): number {
+    return Database.use((db) => {
+      const ids = db
+        .select({ id: LspCacheTable.id })
+        .from(LspCacheTable)
+        .where(eq(LspCacheTable.project_id, projectID))
+        .all()
+      if (ids.length === 0) return 0
+      db.delete(LspCacheTable).where(eq(LspCacheTable.project_id, projectID)).run()
+      return ids.length
+    })
+  }
 }

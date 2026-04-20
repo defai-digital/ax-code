@@ -15,6 +15,7 @@ import { Installation } from "@/installation"
 import { useKV } from "../context/kv"
 import { useCommandDialog } from "../component/dialog-command"
 import { useLocal } from "../context/local"
+import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 
 export function Home() {
   const sync = useSync()
@@ -77,6 +78,7 @@ export function Home() {
   const args = useArgs()
   const local = useLocal()
   onMount(() => {
+    recordTuiStartupOnce("tui.startup.homeMounted", { hasPrompt: !!args.prompt })
     if (once) return
     if (route.initialPrompt) {
       prompt.set(route.initialPrompt)
@@ -93,6 +95,7 @@ export function Home() {
       () => sync.data.provider_loaded && local.model.ready && !!local.model.current(),
       (ready) => {
         if (!ready) return
+        recordTuiStartupOnce("tui.startup.homePromptReady")
         if (!args.prompt) return
         if (prompt.current?.input !== args.prompt) return
         prompt.submit()

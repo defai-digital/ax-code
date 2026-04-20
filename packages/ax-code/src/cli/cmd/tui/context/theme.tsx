@@ -58,25 +58,31 @@ function detectTerminalMode(colors: TerminalColors): "dark" | "light" | undefine
 
 function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
   const defs = theme.defs ?? {}
-  function resolveColor(c: ColorValue): RGBA {
+  function resolveColor(c: ColorValue, visiting = new Set<string>()): RGBA {
     if (c instanceof RGBA) return c
     if (typeof c === "string") {
       if (c === "transparent" || c === "none") return RGBA.fromInts(0, 0, 0, 0)
 
       if (c.startsWith("#")) return RGBA.fromHex(c)
 
+      if (visiting.has(c)) {
+        throw new Error(`Circular color reference "${c}"`)
+      }
+      const nextVisiting = new Set(visiting)
+      nextVisiting.add(c)
+
       if (defs[c] != null) {
-        return resolveColor(defs[c])
+        return resolveColor(defs[c], nextVisiting)
       } else {
         const referenced = theme.theme[c as keyof ThemeColors]
-        if (referenced !== undefined) return resolveColor(referenced)
+        if (referenced !== undefined) return resolveColor(referenced, nextVisiting)
         throw new Error(`Color reference "${c}" not found in defs or theme`)
       }
     }
     if (typeof c === "number") {
       return ansiToRgba(c)
     }
-    return resolveColor(c[mode])
+    return resolveColor(c[mode], visiting)
   }
 
   const resolved = Object.fromEntries(
@@ -293,14 +299,29 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
 
     const syntax = createMemo(() => generateSyntax(values()))
     const subtleSyntax = createMemo(() => generateSubtleSyntax(values()))
+    const themeProxy = new Proxy({} as Theme, {
+      get(_target, prop) {
+        return values()[prop as keyof Theme]
+      },
+      has(_target, prop) {
+        return prop in values()
+      },
+      ownKeys() {
+        return Reflect.ownKeys(values())
+      },
+      getOwnPropertyDescriptor(_target, prop) {
+        const value = values()[prop as keyof Theme]
+        if (value === undefined) return undefined
+        return {
+          configurable: true,
+          enumerable: true,
+          value,
+        }
+      },
+    })
 
     return {
-      theme: new Proxy(values(), {
-        get(_target, prop) {
-          // @ts-expect-error
-          return values()[prop]
-        },
-      }),
+      theme: themeProxy,
       get selected() {
         return store.active
       },

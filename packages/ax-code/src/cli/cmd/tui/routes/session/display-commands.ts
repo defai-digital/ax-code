@@ -129,13 +129,14 @@ export function displayCommands(input: {
             if (!url) throw new Error("Share endpoint returned no URL")
             return copy(url)
           })
+          .then(() => dialog.clear())
           .catch((error) => {
             input.toast.show({
               message: error instanceof Error ? error.message : "Failed to share session",
               variant: "error",
             })
+            dialog.clear()
           })
-        dialog.clear()
       },
     },
     {

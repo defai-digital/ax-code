@@ -25,6 +25,17 @@ import {
 import * as _Defs from "./server-defs"
 
 export namespace LSPServer {
+  export type Method =
+    | "hover"
+    | "definition"
+    | "references"
+    | "implementation"
+    | "documentSymbol"
+    | "workspaceSymbol"
+    | "callHierarchy"
+
+  export type CapabilityHints = Partial<Record<Method, boolean>>
+
   export interface Handle {
     process: ChildProcessWithoutNullStreams
     initialization?: Record<string, any>
@@ -33,6 +44,10 @@ export namespace LSPServer {
   export interface Info {
     id: string
     extensions: string[]
+    semantic?: boolean
+    priority?: number
+    concurrency?: number
+    capabilityHints?: CapabilityHints
     global?: boolean
     root: (file: string) => Promise<string | undefined>
     spawn(root: string): Promise<Handle | undefined>

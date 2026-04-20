@@ -118,6 +118,8 @@ export namespace LSPClient {
 
   export type Diagnostic = VSCodeDiagnostic
 
+  export type MethodSupport = "supported" | "unsupported" | "unknown"
+
   export const InitializeError = NamedError.create(
     "LSPInitializeError",
     z.object({
@@ -135,7 +137,48 @@ export namespace LSPClient {
     ),
   }
 
-  export async function create(input: { serverID: string; server: LSPServer.Handle; root: string }) {
+  function capabilityEnabled(value: unknown): boolean {
+    return value !== undefined && value !== null && value !== false
+  }
+
+  export function capabilityHintsFromInitializeForTest(capabilities: Record<string, unknown> | undefined): LSPServer.CapabilityHints {
+    if (!capabilities) return {}
+    const hints: LSPServer.CapabilityHints = {}
+
+    if ("hoverProvider" in capabilities) hints.hover = capabilityEnabled(capabilities.hoverProvider)
+    if ("definitionProvider" in capabilities) hints.definition = capabilityEnabled(capabilities.definitionProvider)
+    if ("referencesProvider" in capabilities) hints.references = capabilityEnabled(capabilities.referencesProvider)
+    if ("implementationProvider" in capabilities) hints.implementation = capabilityEnabled(capabilities.implementationProvider)
+    if ("documentSymbolProvider" in capabilities) hints.documentSymbol = capabilityEnabled(capabilities.documentSymbolProvider)
+    if ("workspaceSymbolProvider" in capabilities) hints.workspaceSymbol = capabilityEnabled(capabilities.workspaceSymbolProvider)
+    if ("callHierarchyProvider" in capabilities) hints.callHierarchy = capabilityEnabled(capabilities.callHierarchyProvider)
+
+    return hints
+  }
+
+  export function methodSupportForTest(
+    method: LSPServer.Method,
+    runtimeHints?: LSPServer.CapabilityHints,
+    staticHints?: LSPServer.CapabilityHints,
+  ): MethodSupport {
+    const runtime = runtimeHints?.[method]
+    if (runtime === true) return "supported"
+    if (runtime === false) return "unsupported"
+
+    const hint = staticHints?.[method]
+    if (hint === true) return "supported"
+    if (hint === false) return "unsupported"
+    return "unknown"
+  }
+
+  export async function create(input: {
+    serverID: string
+    server: LSPServer.Handle
+    root: string
+    semantic?: boolean
+    priority?: number
+    capabilityHints?: LSPServer.CapabilityHints
+  }) {
     const l = log.clone().tag("serverID", input.serverID)
     l.info("starting client")
 
@@ -192,7 +235,7 @@ export namespace LSPClient {
     connection.listen()
 
     l.info("sending initialize")
-    await withTimeout(
+    const initializeResult = await withTimeout(
       connection.sendRequest("initialize", {
         rootUri: pathToFileURL(input.root).href,
         processId: input.server.process.pid,
@@ -225,7 +268,7 @@ export namespace LSPClient {
             },
           },
         },
-      }),
+      }) as Promise<{ capabilities?: Record<string, unknown> }>,
       45_000,
     ).catch((err) => {
       l.error("initialize error", { error: err })
@@ -236,6 +279,8 @@ export namespace LSPClient {
         },
       )
     })
+
+    const runtimeCapabilityHints = capabilityHintsFromInitializeForTest(initializeResult?.capabilities)
 
     await connection.sendNotification("initialized", {})
 
@@ -379,6 +424,21 @@ export namespace LSPClient {
       root: input.root,
       get serverID() {
         return input.serverID
+      },
+      get semantic() {
+        return input.semantic !== false
+      },
+      get priority() {
+        return input.priority ?? 0
+      },
+      get capabilityHints() {
+        return input.capabilityHints ?? {}
+      },
+      get runtimeCapabilityHints() {
+        return runtimeCapabilityHints
+      },
+      methodSupport(method: LSPServer.Method): MethodSupport {
+        return methodSupportForTest(method, runtimeCapabilityHints, input.capabilityHints)
       },
       get connection() {
         return connection

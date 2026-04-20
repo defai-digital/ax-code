@@ -12,6 +12,36 @@ import { assertExternalDirectory } from "./external-directory"
 import { InstructionPrompt } from "../session/instruction"
 import { Filesystem } from "../util/filesystem"
 import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "@/constants/tool"
+import { Log } from "@/util/log"
+import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
+
+const log = Log.create({ service: "tool.read" })
+
+function warmSemanticLsp(filepath: string) {
+  const directory = Instance.directory
+  const handle = (err: unknown) => {
+    if (isHarmlessEffectInterrupt(err)) return
+    log.warn("opportunistic lsp warmup failed", {
+      filepath,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  const task = Instance.bind(async () => {
+    // Skip deferred warmup if the project instance was already disposed.
+    if (!Instance.list().includes(directory)) return
+    Promise.resolve()
+      .then(async () => {
+        const available = await LSP.hasClients(filepath, { mode: "semantic" })
+        if (!available) return
+        if (!Instance.list().includes(directory)) return
+        await LSP.touchFile(filepath, false, { mode: "semantic" })
+      })
+      .catch(handle)
+  })
+  const timer = setTimeout(task, 0)
+  timer.unref?.()
+}
 
 export const ReadTool = Tool.define("read", {
   description: DESCRIPTION,
@@ -223,13 +253,16 @@ export const ReadTool = Tool.define("read", {
     }
     output += "\n</content>"
 
-    // just warms the lsp client
-    await LSP.touchFile(filepath, false)
     await FileTime.read(ctx.sessionID, filepath)
 
     if (instructions.length > 0) {
       output += `\n\n<system-reminder>\n${instructions.map((i) => i.content).join("\n\n")}\n</system-reminder>`
     }
+
+    // Opportunistic warmup for later semantic navigation. Schedule it
+    // after the read's last awaited work so current output is not held
+    // behind best-effort LSP startup.
+    warmSemanticLsp(filepath)
 
     return {
       title,

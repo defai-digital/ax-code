@@ -17,6 +17,8 @@ import { Ripgrep } from "../file/ripgrep"
 import { CodeGraphQuery } from "../code-intelligence/query"
 import type { LspCacheOperation } from "../code-intelligence/schema.sql"
 import { LspScheduler } from "./scheduler"
+import { BuiltinServerProfiles } from "./server-profile"
+import { LANGUAGE_EXTENSIONS } from "./language"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -61,6 +63,12 @@ export namespace LSP {
     }
     if (ok) entry.okCount++
     else entry.errorCount++
+  }
+
+  function finishPerfPhase(operation: string, started: number, ok: boolean) {
+    const durationMs = Math.round(performance.now() - started)
+    recordPerf(operation, durationMs, ok)
+    return durationMs
   }
 
   // Exported for unit tests. The cap is load-bearing for p95 stability and
@@ -250,6 +258,108 @@ export namespace LSP {
     })
   export type DocumentSymbol = z.infer<typeof DocumentSymbol>
 
+  export type ClientMode = "all" | "semantic"
+
+  type ClientOptions = {
+    mode?: ClientMode
+    method?: LSPServer.Method
+    methods?: LSPServer.Method[]
+  }
+
+  type PrewarmSelectionOptions = {
+    maxFiles?: number
+    maxLanguages?: number
+  }
+
+  type ClientSelection = {
+    clients: LSPClient.Info[]
+    freshSpawnCount: number
+  }
+
+  export function clientModeMatchesServer(mode: ClientMode, semantic?: boolean) {
+    return mode === "all" || semantic !== false
+  }
+
+  function requestedMethods(opts: ClientOptions): LSPServer.Method[] {
+    const seen = new Set<LSPServer.Method>()
+    const methods: LSPServer.Method[] = []
+    if (opts.method && !seen.has(opts.method)) {
+      seen.add(opts.method)
+      methods.push(opts.method)
+    }
+    for (const method of opts.methods ?? []) {
+      if (seen.has(method)) continue
+      seen.add(method)
+      methods.push(method)
+    }
+    return methods
+  }
+
+  export function clientMethodMatchesServer(
+    method: LSPServer.Method | LSPServer.Method[] | undefined,
+    capabilityHints?: LSPServer.CapabilityHints,
+  ) {
+    const methods = Array.isArray(method) ? method : method ? [method] : []
+    if (methods.length === 0) return true
+    return methods.some((candidate) => capabilityHints?.[candidate] !== false)
+  }
+
+  function mergeCapabilityHints(
+    ...hints: Array<LSPServer.CapabilityHints | undefined>
+  ): LSPServer.CapabilityHints | undefined {
+    const merged: LSPServer.CapabilityHints = {}
+    for (const hint of hints) {
+      if (!hint) continue
+      Object.assign(merged, hint)
+    }
+    return Object.keys(merged).length > 0 ? merged : undefined
+  }
+
+  function sortClients(clients: LSPClient.Info[]): LSPClient.Info[] {
+    return [...clients].sort((a, b) => {
+      if (a.priority !== b.priority) return b.priority - a.priority
+      return a.serverID.localeCompare(b.serverID)
+    })
+  }
+
+  function filterClientsForMethod(clients: LSPClient.Info[], method: LSPServer.Method | undefined): LSPClient.Info[] {
+    if (!method) return sortClients(clients)
+
+    const supported = clients.filter((client) => client.methodSupport(method) === "supported")
+    if (supported.length > 0) return sortClients(supported)
+
+    const maybeSupported = clients.filter((client) => client.methodSupport(method) !== "unsupported")
+    if (maybeSupported.length > 0) return sortClients(maybeSupported)
+
+    return sortClients(clients)
+  }
+
+  function filterClientsForMethods(clients: LSPClient.Info[], methods: LSPServer.Method[]): LSPClient.Info[] {
+    if (methods.length === 0) return sortClients(clients)
+
+    return [...clients].sort((a, b) => {
+      const aSupported = methods.filter((method) => a.methodSupport(method) === "supported").length
+      const bSupported = methods.filter((method) => b.methodSupport(method) === "supported").length
+      if (aSupported !== bSupported) return bSupported - aSupported
+
+      const aMaybe = methods.filter((method) => a.methodSupport(method) !== "unsupported").length
+      const bMaybe = methods.filter((method) => b.methodSupport(method) !== "unsupported").length
+      if (aMaybe !== bMaybe) return bMaybe - aMaybe
+
+      if (a.priority !== b.priority) return b.priority - a.priority
+      return a.serverID.localeCompare(b.serverID)
+    })
+  }
+
+  function filterClientsForSelection(clients: LSPClient.Info[], opts: ClientOptions): LSPClient.Info[] {
+    if (opts.method) return filterClientsForMethod(clients, opts.method)
+
+    const methods = requestedMethods(opts)
+    if (methods.length > 0) return filterClientsForMethods(clients, methods)
+
+    return sortClients(clients)
+  }
+
   const filterExperimentalServers = (servers: Record<string, LSPServer.Info>) => {
     if (Flag.AX_CODE_EXPERIMENTAL_LSP_TY) {
       // If experimental flag is enabled, disable pyright
@@ -284,7 +394,14 @@ export namespace LSP {
       }
 
       for (const server of Object.values(LSPServer)) {
-        servers[server.id] = server
+        const profile = BuiltinServerProfiles[server.id]
+        servers[server.id] = {
+          ...server,
+          semantic: server.semantic ?? profile?.semantic ?? true,
+          priority: server.priority ?? profile?.priority ?? 0,
+          concurrency: server.concurrency ?? profile?.concurrency,
+          capabilityHints: mergeCapabilityHints(profile?.capabilityHints, server.capabilityHints),
+        }
       }
 
       filterExperimentalServers(servers)
@@ -299,21 +416,43 @@ export namespace LSP {
         servers[name] = {
           ...existing,
           id: name,
+          semantic: item.semantic ?? existing?.semantic ?? true,
+          priority: item.priority ?? existing?.priority ?? 0,
+          concurrency: item.concurrency ?? existing?.concurrency,
+          capabilityHints: mergeCapabilityHints(existing?.capabilityHints, item.capabilities),
           root: existing?.root ?? (async () => Instance.directory),
           extensions: item.extensions ?? existing?.extensions ?? [],
           spawn: async (root) => {
+            if (item.command) {
+              return {
+                process: lspspawn(item.command[0], item.command.slice(1), {
+                  cwd: root,
+                  env: {
+                    ...Env.sanitize(),
+                    ...item.env,
+                  },
+                }),
+                initialization: item.initialization,
+              }
+            }
+
+            if (!existing?.spawn) return undefined
+            const handle = await existing.spawn(root)
+            if (!handle) return handle
+            if (!item.initialization) return handle
             return {
-              process: lspspawn(item.command[0], item.command.slice(1), {
-                cwd: root,
-                env: {
-                  ...Env.sanitize(),
-                  ...item.env,
-                },
-              }),
-              initialization: item.initialization,
+              ...handle,
+              initialization: {
+                ...(handle.initialization ?? {}),
+                ...item.initialization,
+              },
             }
           },
         }
+      }
+
+      for (const server of Object.values(servers)) {
+        LspScheduler.Budget.setBudget(server.id, server.concurrency)
       }
 
       log.info("enabled LSP servers", {
@@ -436,31 +575,44 @@ export namespace LSP {
     root: string,
     key: string,
   ): Promise<LSPClient.Info | undefined> {
-    const handle = await server
-      .spawn(root)
-      .then((value) => {
-        if (!value) markBroken(s.broken, key)
-        return value
-      })
-      .catch((err) => {
+    let handle: LSPServer.Handle | undefined
+    const spawnStarted = performance.now()
+    try {
+      handle = await server.spawn(root)
+      finishPerfPhase("client.spawn", spawnStarted, Boolean(handle))
+      if (!handle) {
         markBroken(s.broken, key)
-        log.error(`Failed to spawn LSP server ${server.id}`, { error: err })
         return undefined
-      })
+      }
+    } catch (err) {
+      finishPerfPhase("client.spawn", spawnStarted, false)
+      markBroken(s.broken, key)
+      log.error(`Failed to spawn LSP server ${server.id}`, { error: err })
+      return undefined
+    }
 
     if (!handle) return undefined
     log.info("spawned lsp server", { serverID: server.id })
 
-    const client = await LSPClient.create({
-      serverID: server.id,
-      server: handle,
-      root,
-    }).catch(async (err) => {
+    let client: LSPClient.Info | undefined
+    const initializeStarted = performance.now()
+    try {
+      client = await LSPClient.create({
+        serverID: server.id,
+        server: handle,
+        root,
+        semantic: server.semantic,
+        priority: server.priority,
+        capabilityHints: server.capabilityHints,
+      })
+      finishPerfPhase("client.initialize", initializeStarted, true)
+    } catch (err) {
+      finishPerfPhase("client.initialize", initializeStarted, false)
       markBroken(s.broken, key)
       await Process.stop(handle.process)
       log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
       return undefined
-    })
+    }
 
     if (!client) {
       return undefined
@@ -476,10 +628,13 @@ export namespace LSP {
     return client
   }
 
-  async function getClients(file: string) {
+  async function getClientsDetailed(file: string, opts: ClientOptions = {}): Promise<ClientSelection> {
     const s = await state()
     const extension = path.parse(file).ext || file
+    const mode = opts.mode ?? "all"
+    const methods = requestedMethods(opts)
     const result: LSPClient.Info[] = []
+    let freshSpawnCount = 0
 
     // Pass 1: classify each server-for-this-file and collect pending promises.
     // Servers that already have a client land in `result` directly. Servers
@@ -488,6 +643,8 @@ export namespace LSP {
     const pending: { key: string; task: Promise<LSPClient.Info | undefined>; fresh: boolean }[] = []
 
     for (const server of Object.values(s.servers)) {
+      if (!clientModeMatchesServer(mode, server.semantic)) continue
+      if (!clientMethodMatchesServer(methods, server.capabilityHints)) continue
       if (server.extensions.length && !server.extensions.includes(extension)) continue
 
       const root = await resolveRoot(s, server, file)
@@ -516,6 +673,7 @@ export namespace LSP {
           s.spawning.delete(key)
         }
       })
+      freshSpawnCount++
       pending.push({ key, task, fresh: true })
     }
 
@@ -531,14 +689,27 @@ export namespace LSP {
       }
     }
 
-    return result
+    return {
+      clients: filterClientsForSelection(result, opts),
+      freshSpawnCount,
+    }
   }
 
-  async function getWorkspaceClients() {
+  async function getClients(file: string, opts: ClientOptions = {}) {
+    return (await getClientsDetailed(file, opts)).clients
+  }
+
+  async function getWorkspaceClientsDetailed(opts: ClientOptions = {}): Promise<ClientSelection> {
     const s = await state()
+    const mode = opts.mode ?? "all"
+    const methods = requestedMethods(opts)
     const result: LSPClient.Info[] = []
     const pending: { key: string; task: Promise<LSPClient.Info | undefined>; fresh: boolean }[] = []
     const probeByServer = new Map<string, string>()
+    let freshSpawnCount = 0
+    const eligibleServers = Object.values(s.servers).filter(
+      (server) => clientModeMatchesServer(mode, server.semantic) && clientMethodMatchesServer(methods, server.capabilityHints),
+    )
 
     // Cold workspace symbol should not spawn every configured server.
     // Scan the workspace once and only prime servers for languages that
@@ -546,15 +717,15 @@ export namespace LSP {
     for await (const rel of Ripgrep.files({ cwd: Instance.directory })) {
       const probe = path.join(Instance.directory, rel)
       const extension = path.parse(probe).ext || probe
-      for (const server of Object.values(s.servers)) {
+      for (const server of eligibleServers) {
         if (probeByServer.has(server.id)) continue
         if (server.extensions.length && !server.extensions.includes(extension)) continue
         probeByServer.set(server.id, probe)
       }
-      if (probeByServer.size === Object.keys(s.servers).length) break
+      if (probeByServer.size === eligibleServers.length) break
     }
 
-    for (const server of Object.values(s.servers)) {
+    for (const server of eligibleServers) {
       const probe = probeByServer.get(server.id)
       if (!probe) continue
       const root = await server.root(probe)
@@ -581,6 +752,7 @@ export namespace LSP {
           s.spawning.delete(key)
         }
       })
+      freshSpawnCount++
       pending.push({ key, task, fresh: true })
     }
 
@@ -594,13 +766,20 @@ export namespace LSP {
       }
     }
 
-    return result
+    return {
+      clients: filterClientsForSelection(result, opts),
+      freshSpawnCount,
+    }
   }
 
-  export async function hasClients(file: string) {
+  export async function hasClients(file: string, opts: ClientOptions = {}) {
     const s = await state()
     const extension = path.parse(file).ext || file
+    const mode = opts.mode ?? "all"
+    const methods = requestedMethods(opts)
     for (const server of Object.values(s.servers)) {
+      if (!clientModeMatchesServer(mode, server.semantic)) continue
+      if (!clientMethodMatchesServer(methods, server.capabilityHints)) continue
       if (server.extensions.length && !server.extensions.includes(extension)) continue
       const root = await resolveRoot(s, server, file)
       if (!root) continue
@@ -610,23 +789,214 @@ export namespace LSP {
     return false
   }
 
-  export async function touchFile(input: string, waitForDiagnostics?: boolean) {
-    log.info("touching file", { file: input })
-    return metered("touch", { file: input }, async () => {
-      const clients = await getClients(input).catch((err) => {
+  export type PrewarmResult = {
+    readyCount: number
+    freshSpawnCount: number
+  }
+
+  export type PrewarmWorkspaceResult = PrewarmResult & {
+    files: string[]
+  }
+
+  function detectPrewarmLanguage(file: string): string {
+    const extension = path.parse(file).ext || file
+    return LANGUAGE_EXTENSIONS[extension] ?? "unknown"
+  }
+
+  export function selectPrewarmFiles(files: string[], opts: PrewarmSelectionOptions = {}): string[] {
+    const maxFiles = Math.max(0, opts.maxFiles ?? files.length)
+    const maxLanguages = Math.max(0, opts.maxLanguages ?? maxFiles)
+    if (maxFiles === 0 || maxLanguages === 0) return []
+
+    const selected: string[] = []
+    const seenLanguages = new Set<string>()
+
+    for (const file of files) {
+      if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
+
+      const language = detectPrewarmLanguage(file)
+      if (language === "unknown" || language === "plaintext") continue
+      if (seenLanguages.has(language)) continue
+
+      selected.push(file)
+      seenLanguages.add(language)
+    }
+
+    return selected
+  }
+
+  export async function prewarmFiles(files: string[], opts: ClientOptions = {}): Promise<PrewarmResult> {
+    const mode = opts.mode ?? "all"
+    const methods = requestedMethods(opts)
+    const uniqueFiles = [...new Set(files)]
+
+    return metered(
+      "prewarm",
+      {
+        files: uniqueFiles.length,
+        mode,
+        methods: methods.join(","),
+      },
+      async () => {
+        if (uniqueFiles.length === 0) {
+          return { readyCount: 0, freshSpawnCount: 0 }
+        }
+
+        const s = await state()
+        const planned = new Map<
+          string,
+          {
+            server: LSPServer.Info
+            root: string
+          }
+        >()
+        let readyCount = 0
+        let freshSpawnCount = 0
+
+        for (const file of uniqueFiles) {
+          const extension = path.parse(file).ext || file
+          for (const server of Object.values(s.servers)) {
+            if (!clientModeMatchesServer(mode, server.semantic)) continue
+            if (!clientMethodMatchesServer(methods, server.capabilityHints)) continue
+            if (server.extensions.length && !server.extensions.includes(extension)) continue
+
+            const root = await resolveRoot(s, server, file)
+            if (!root) continue
+
+            const key = root + server.id
+            if (isBroken(s.broken, key)) continue
+            if (planned.has(key)) continue
+
+            const connected = s.clients.find((client) => client.root === root && client.serverID === server.id)
+            if (connected) {
+              planned.set(key, { server, root })
+              readyCount++
+              continue
+            }
+
+            planned.set(key, { server, root })
+          }
+        }
+
+        const targets = [...planned.entries()]
+          .filter(([, target]) => !s.clients.find((client) => client.root === target.root && client.serverID === target.server.id))
+          .sort(([, a], [, b]) => {
+            if ((a.server.priority ?? 0) !== (b.server.priority ?? 0)) {
+              return (b.server.priority ?? 0) - (a.server.priority ?? 0)
+            }
+            return a.server.id.localeCompare(b.server.id)
+          })
+
+        const pending: { task: Promise<LSPClient.Info | undefined>; fresh: boolean }[] = []
+        for (const [key, target] of targets) {
+          const inflight = s.spawning.get(key)
+          if (inflight) {
+            pending.push({ task: inflight, fresh: false })
+            continue
+          }
+
+          const task = scheduleClient(s, target.server, target.root, key)
+          s.spawning.set(key, task)
+          task.finally(() => {
+            if (s.spawning.get(key) === task) {
+              s.spawning.delete(key)
+            }
+          })
+
+          freshSpawnCount++
+          pending.push({ task, fresh: true })
+        }
+
+        // Independent server roots should warm in parallel. Serializing this
+        // loop turns prewarm into O(sum initialize) even though the control
+        // plane already parallelizes ordinary getClients() cold starts.
+        if (pending.length > 0) {
+          const resolved = await Promise.all(pending.map((entry) => entry.task.catch(() => undefined)))
+          for (let i = 0; i < resolved.length; i++) {
+            const client = resolved[i]
+            if (!client) continue
+            readyCount++
+            if (pending[i]?.fresh) Bus.publish(Event.Updated, {})
+          }
+        }
+
+        return {
+          readyCount,
+          freshSpawnCount,
+        }
+      },
+    )
+  }
+
+  export async function prewarmWorkspace(
+    opts: ClientOptions & PrewarmSelectionOptions = {},
+  ): Promise<PrewarmWorkspaceResult> {
+    const maxFiles = Math.max(0, opts.maxFiles ?? 0)
+    const maxLanguages = Math.max(0, opts.maxLanguages ?? maxFiles)
+    if (maxFiles === 0 || maxLanguages === 0) {
+      return { files: [], readyCount: 0, freshSpawnCount: 0 }
+    }
+
+    const selected: string[] = []
+    const seenLanguages = new Set<string>()
+
+    for await (const rel of Ripgrep.files({ cwd: Instance.directory })) {
+      if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
+
+      const probe = path.join(Instance.directory, rel)
+      const language = detectPrewarmLanguage(probe)
+      if (language === "unknown" || language === "plaintext") continue
+      if (seenLanguages.has(language)) continue
+      if (!(await hasClients(probe, opts))) continue
+
+      selected.push(probe)
+      seenLanguages.add(language)
+    }
+
+    const warmed = await prewarmFiles(selected, opts)
+    log.info("workspace semantic prewarm completed", {
+      files: selected.length,
+      readyCount: warmed.readyCount,
+      freshSpawnCount: warmed.freshSpawnCount,
+      mode: opts.mode ?? "all",
+      methods: requestedMethods(opts).join(","),
+    })
+    return {
+      files: selected,
+      ...warmed,
+    }
+  }
+
+  export async function touchFile(input: string, waitForDiagnostics?: boolean, opts: ClientOptions = {}) {
+    const mode = opts.mode ?? "all"
+    log.info("touching file", { file: input, mode })
+    return metered("touch", { file: input, mode }, async () => {
+      let selection: ClientSelection = { clients: [], freshSpawnCount: 0 }
+      const selectStarted = performance.now()
+      try {
+        selection = await getClientsDetailed(input, opts)
+        const durationMs = finishPerfPhase("touch.select", selectStarted, true)
+        if (selection.freshSpawnCount > 0) {
+          recordPerf("touch.select.spawned", durationMs, true)
+        }
+      } catch (err) {
+        finishPerfPhase("touch.select", selectStarted, false)
         log.error("failed to get clients for touch", { err, file: input })
-        return [] as LSPClient.Info[]
-      })
+      }
+      const clients = selection.clients
       // allSettled: one flaky client must not block healthy ones. Each client
       // either completes its notify.open or fails individually with a logged
       // error that carries the serverID for debugging.
+      const notifyStarted = performance.now()
       const results = await Promise.allSettled(
         clients.map((client) => client.notify.open({ path: input, waitForDiagnostics })),
       )
       let opened = 0
+      let notifyOk = true
       for (let i = 0; i < results.length; i++) {
         const r = results[i]
         if (r.status === "rejected") {
+          notifyOk = false
           log.error("failed to touch file for client", {
             err: r.reason,
             file: input,
@@ -636,6 +1006,7 @@ export namespace LSP {
         }
         opened++
       }
+      finishPerfPhase("touch.notify", notifyStarted, notifyOk)
       return opened
     })
   }
@@ -861,6 +1232,9 @@ export namespace LSP {
           ) as Promise<unknown>,
         (results) => (results as unknown[]).filter((r) => r !== null && r !== undefined),
         [] as unknown[],
+        "hover",
+        undefined,
+        { mode: "semantic", method: "hover" },
       ),
     )
   }
@@ -998,6 +1372,10 @@ export namespace LSP {
   const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24h; see PRD §S2 risk 4
   const CACHE_PRUNE_PROBABILITY = 0.01
 
+  function cacheEnabled(override?: boolean): boolean {
+    return override ?? Flag.AX_CODE_LSP_CACHE
+  }
+
   async function hashFile(file: string): Promise<string | undefined> {
     try {
       const buf = await Bun.file(file).arrayBuffer()
@@ -1018,8 +1396,9 @@ export namespace LSP {
     contentHash: string,
     line: number,
     character: number,
+    enabled: boolean,
   ): SemanticEnvelope<T> | undefined {
-    if (!Flag.AX_CODE_LSP_CACHE) return undefined
+    if (!enabled) return undefined
     let row: ReturnType<typeof CodeGraphQuery.getLspCache>
     try {
       row = CodeGraphQuery.getLspCache({
@@ -1069,8 +1448,9 @@ export namespace LSP {
     line: number,
     character: number,
     envelope: SemanticEnvelope<unknown>,
+    enabled: boolean,
   ) {
-    if (!Flag.AX_CODE_LSP_CACHE) return
+    if (!enabled) return
     if (envelope.completeness !== "full") return
 
     const now = Date.now()
@@ -1108,7 +1488,20 @@ export namespace LSP {
 
   export async function workspaceSymbolEnvelope(query: string): Promise<SymbolEnvelope> {
     return metered("workspaceSymbol", { query }, async () => {
-      const clients = await getWorkspaceClients()
+      const selectStarted = performance.now()
+      let selection: ClientSelection
+      try {
+        selection = await getWorkspaceClientsDetailed({ mode: "semantic", method: "workspaceSymbol" })
+      } catch (err) {
+        finishPerfPhase("workspaceSymbol.select", selectStarted, false)
+        throw err
+      }
+      const selectDurationMs = finishPerfPhase("workspaceSymbol.select", selectStarted, true)
+      if (selection.freshSpawnCount > 0) {
+        recordPerf("workspaceSymbol.select.spawned", selectDurationMs, true)
+      }
+
+      const clients = selection.clients
       if (clients.length === 0) {
         return {
           symbols: [],
@@ -1122,31 +1515,39 @@ export namespace LSP {
 
       let failures = 0
       const participatingServerIDs: string[] = []
-      const result = await Promise.all(
-        clients.map((client) =>
-          withTimeout(
-            client.connection.sendRequest("workspace/symbol", {
-              query,
-            }),
-            RPC_TIMEOUT_LONG_MS,
-          )
-            .then((result) => {
-              participatingServerIDs.push(client.serverID)
-              return (result as LSP.Symbol[]).filter((x: LSP.Symbol) => kinds.includes(x.kind))
-            })
-            .catch((err) => {
-              // A linter LSP attached to the same file type may not
-              // implement workspace/symbol — treat MethodNotFound as
-              // "not participating", not as a partial-completeness
-              // downgrade.
-              if (!isMethodNotFound(err)) {
-                failures++
-                log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
-              }
-              return [] as LSP.Symbol[]
-            }),
-        ),
-      )
+      const rpcStarted = performance.now()
+      let result: LSP.Symbol[][]
+      try {
+        result = await Promise.all(
+          clients.map((client) =>
+            withTimeout(
+              client.connection.sendRequest("workspace/symbol", {
+                query,
+              }),
+              RPC_TIMEOUT_LONG_MS,
+            )
+              .then((result) => {
+                participatingServerIDs.push(client.serverID)
+                return (result as LSP.Symbol[]).filter((x: LSP.Symbol) => kinds.includes(x.kind))
+              })
+              .catch((err) => {
+                // A linter LSP attached to the same file type may not
+                // implement workspace/symbol — treat MethodNotFound as
+                // "not participating", not as a partial-completeness
+                // downgrade.
+                if (!isMethodNotFound(err)) {
+                  failures++
+                  log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
+                }
+                return [] as LSP.Symbol[]
+              }),
+          ),
+        )
+        finishPerfPhase("workspaceSymbol.rpc", rpcStarted, failures === 0)
+      } catch (err) {
+        finishPerfPhase("workspaceSymbol.rpc", rpcStarted, false)
+        throw err
+      }
 
       const seen = new Set<string>()
       const symbols = result
@@ -1198,10 +1599,28 @@ export namespace LSP {
   // The bare functions below become back-compat wrappers that discard the
   // envelope; new AI-facing consumers should read the envelope variant.
 
+  // Explicit cache probes used by callers that want to avoid the live LSP
+  // path entirely when a content-addressed answer already exists. These do
+  // not fall through to a server on miss.
+  export async function documentSymbolCachedEnvelope(
+    uri: string,
+  ): Promise<SemanticEnvelope<(LSP.DocumentSymbol | LSP.Symbol)[]> | undefined> {
+    const file = fileURLToPath(uri)
+    const contentHash = await hashFile(file)
+    if (!contentHash) return undefined
+    const hit = cacheLookup<(LSP.DocumentSymbol | LSP.Symbol)[]>("documentSymbol", file, contentHash, -1, -1, true)
+    if (hit) recordPerf("documentSymbol.cached", 0, true)
+    return hit
+  }
+
   export async function documentSymbolEnvelope(
     uri: string,
+    opts?: {
+      cache?: boolean
+    },
   ): Promise<SemanticEnvelope<(LSP.DocumentSymbol | LSP.Symbol)[]>> {
     const file = fileURLToPath(uri)
+    const useCache = cacheEnabled(opts?.cache)
     return metered("documentSymbol", { file }, async () => {
       // Hash the file once per call; used by both the cache (when
       // enabled) and the in-flight dedup (always). A few hundred μs
@@ -1209,18 +1628,9 @@ export namespace LSP {
       // moment two concurrent calls collapse into one LSP RPC.
       const contentHash = await hashFile(file)
 
-      if (contentHash && Flag.AX_CODE_LSP_CACHE) {
-        const hit = cacheLookup<(LSP.DocumentSymbol | LSP.Symbol)[]>(
-          "documentSymbol",
-          file,
-          contentHash,
-          -1,
-          -1,
-        )
-        if (hit) {
-          recordPerf("documentSymbol.cached", 0, true)
-          return hit
-        }
+      if (contentHash && useCache) {
+        const hit = await documentSymbolCachedEnvelope(uri)
+        if (hit) return hit
       }
 
       const dedupKey = contentHash ? `documentSymbol:${file}:${contentHash}` : undefined
@@ -1235,12 +1645,14 @@ export namespace LSP {
           ) as Promise<(LSP.DocumentSymbol | LSP.Symbol)[]>,
         (results) => results.flat().filter(Boolean) as (LSP.DocumentSymbol | LSP.Symbol)[],
         [] as (LSP.DocumentSymbol | LSP.Symbol)[],
+        "documentSymbol",
         dedupKey,
+        { mode: "semantic", method: "documentSymbol" },
       )
 
       recordPerf("documentSymbol.live", 0, true)
-      if (contentHash && Flag.AX_CODE_LSP_CACHE) {
-        cacheWrite("documentSymbol", file, contentHash, -1, -1, envelope)
+      if (contentHash && useCache) {
+        cacheWrite("documentSymbol", file, contentHash, -1, -1, envelope, useCache)
       }
       return envelope
     })
@@ -1269,6 +1681,9 @@ export namespace LSP {
           ) as Promise<unknown>,
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
+        "definition",
+        undefined,
+        { mode: "semantic", method: "definition" },
       ),
     )
   }
@@ -1278,20 +1693,31 @@ export namespace LSP {
     return envelope.data
   }
 
+  export async function referencesCachedEnvelope(input: {
+    file: string
+    line: number
+    character: number
+  }): Promise<SemanticEnvelope<unknown[]> | undefined> {
+    const contentHash = await hashFile(input.file)
+    if (!contentHash) return undefined
+    const hit = cacheLookup<unknown[]>("references", input.file, contentHash, input.line, input.character, true)
+    if (hit) recordPerf("references.cached", 0, true)
+    return hit
+  }
+
   export async function referencesEnvelope(input: {
     file: string
     line: number
     character: number
+    cache?: boolean
   }): Promise<SemanticEnvelope<unknown[]>> {
+    const useCache = cacheEnabled(input.cache)
     return metered("references", { file: input.file }, async () => {
       const contentHash = await hashFile(input.file)
 
-      if (contentHash && Flag.AX_CODE_LSP_CACHE) {
-        const hit = cacheLookup<unknown[]>("references", input.file, contentHash, input.line, input.character)
-        if (hit) {
-          recordPerf("references.cached", 0, true)
-          return hit
-        }
+      if (contentHash && useCache) {
+        const hit = await referencesCachedEnvelope(input)
+        if (hit) return hit
       }
 
       const dedupKey = contentHash
@@ -1311,12 +1737,14 @@ export namespace LSP {
           ) as Promise<unknown>,
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
+        "references",
         dedupKey,
+        { mode: "semantic", method: "references" },
       )
 
       recordPerf("references.live", 0, true)
-      if (contentHash && Flag.AX_CODE_LSP_CACHE) {
-        cacheWrite("references", input.file, contentHash, input.line, input.character, envelope)
+      if (contentHash && useCache) {
+        cacheWrite("references", input.file, contentHash, input.line, input.character, envelope, useCache)
       }
       return envelope
     })
@@ -1350,6 +1778,9 @@ export namespace LSP {
           ) as Promise<unknown>,
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
+        "implementation",
+        undefined,
+        { mode: "semantic", method: "implementation" },
       ),
     )
   }
@@ -1377,6 +1808,9 @@ export namespace LSP {
           ) as Promise<unknown>,
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
+        "prepareCallHierarchy",
+        undefined,
+        { mode: "semantic", method: "callHierarchy" },
       ),
     )
   }
@@ -1407,6 +1841,9 @@ export namespace LSP {
         },
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
+        "incomingCalls",
+        undefined,
+        { mode: "semantic", method: "callHierarchy" },
       ),
     )
   }
@@ -1437,6 +1874,9 @@ export namespace LSP {
         },
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
+        "outgoingCalls",
+        undefined,
+        { mode: "semantic", method: "callHierarchy" },
       ),
     )
   }
@@ -1495,7 +1935,9 @@ export namespace LSP {
     call: (client: LSPClient.Info) => Promise<TClient>,
     reduce: (results: TClient[]) => TPayload,
     empty: TPayload,
+    operation: string,
     dedupKey?: string,
+    opts: ClientOptions = {},
   ): Promise<SemanticEnvelope<TPayload>> {
     // Duplicate-request collapse (Semantic Trust v2 §S1). When dedupKey
     // is supplied and matches an in-flight call, return the same
@@ -1506,10 +1948,10 @@ export namespace LSP {
     // definition calls are rare compared to references/documentSymbol.
     if (dedupKey) {
       return LspScheduler.Inflight.run(dedupKey, () =>
-        runWithEnvelopeUncollapsed(file, call, reduce, empty),
+        runWithEnvelopeUncollapsed(file, call, reduce, empty, operation, opts),
       )
     }
-    return runWithEnvelopeUncollapsed(file, call, reduce, empty)
+    return runWithEnvelopeUncollapsed(file, call, reduce, empty, operation, opts)
   }
 
   async function runWithEnvelopeUncollapsed<TClient, TPayload>(
@@ -1517,8 +1959,23 @@ export namespace LSP {
     call: (client: LSPClient.Info) => Promise<TClient>,
     reduce: (results: TClient[]) => TPayload,
     empty: TPayload,
+    operation: string,
+    opts: ClientOptions = {},
   ): Promise<SemanticEnvelope<TPayload>> {
-    const clients = await getClients(file)
+    const selectStarted = performance.now()
+    let selection: ClientSelection
+    try {
+      selection = await getClientsDetailed(file, opts)
+    } catch (err) {
+      finishPerfPhase(`${operation}.select`, selectStarted, false)
+      throw err
+    }
+    const selectDurationMs = finishPerfPhase(`${operation}.select`, selectStarted, true)
+    if (selection.freshSpawnCount > 0) {
+      recordPerf(`${operation}.select.spawned`, selectDurationMs, true)
+    }
+
+    const clients = selection.clients
     if (clients.length === 0) {
       return {
         data: empty,
@@ -1532,44 +1989,52 @@ export namespace LSP {
 
     let failures = 0
     const participatingServerIDs: string[] = []
-    const perClient = await Promise.all(
-      clients.map(async (c) => {
-        // Per-server concurrency budget (§S2). Blocks if the server
-        // is at cap; caller sees normal queued latency, never more
-        // than ACQUIRE_TIMEOUT_MS of wait before converting to a
-        // one-client failure. Release is in finally so crashes don't
-        // leak slots.
-        let release: () => void
-        try {
-          release = await LspScheduler.Budget.acquire(c.serverID)
-        } catch (err) {
-          failures++
-          log.warn("LSP budget acquire failed in runWithEnvelope", {
-            serverID: c.serverID,
-            err: err instanceof Error ? err.message : String(err),
-          })
-          return undefined
-        }
-        try {
-          const result = await call(c)
-          participatingServerIDs.push(c.serverID)
-          return result
-        } catch (err) {
-          if (isMethodNotFound(err)) {
-            // Server doesn't implement this method — not a failure,
-            // just not participating. Don't count against completeness
-            // and don't attribute to serverIDs (provenance is about
-            // who actually contributed data).
+    const rpcStarted = performance.now()
+    let perClient: Array<TClient | undefined>
+    try {
+      perClient = await Promise.all(
+        clients.map(async (c) => {
+          // Per-server concurrency budget (§S2). Blocks if the server
+          // is at cap; caller sees normal queued latency, never more
+          // than ACQUIRE_TIMEOUT_MS of wait before converting to a
+          // one-client failure. Release is in finally so crashes don't
+          // leak slots.
+          let release: () => void
+          try {
+            release = await LspScheduler.Budget.acquire(c.serverID)
+          } catch (err) {
+            failures++
+            log.warn("LSP budget acquire failed in runWithEnvelope", {
+              serverID: c.serverID,
+              err: err instanceof Error ? err.message : String(err),
+            })
             return undefined
           }
-          failures++
-          log.warn("LSP client failed in runWithEnvelope", { serverID: c.serverID, err })
-          return undefined
-        } finally {
-          release()
-        }
-      }),
-    )
+          try {
+            const result = await call(c)
+            participatingServerIDs.push(c.serverID)
+            return result
+          } catch (err) {
+            if (isMethodNotFound(err)) {
+              // Server doesn't implement this method — not a failure,
+              // just not participating. Don't count against completeness
+              // and don't attribute to serverIDs (provenance is about
+              // who actually contributed data).
+              return undefined
+            }
+            failures++
+            log.warn("LSP client failed in runWithEnvelope", { serverID: c.serverID, err })
+            return undefined
+          } finally {
+            release()
+          }
+        }),
+      )
+      finishPerfPhase(`${operation}.rpc`, rpcStarted, failures === 0)
+    } catch (err) {
+      finishPerfPhase(`${operation}.rpc`, rpcStarted, false)
+      throw err
+    }
 
     const successful = perClient.filter((r): r is Awaited<TClient> => r !== undefined) as TClient[]
     // If every server that could have contributed failed, the result

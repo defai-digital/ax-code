@@ -337,6 +337,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                   if (current !== change.oldContent) {
                     throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
                   }
+                  activeDirty = true
                   await fs.writeFile(dest, change.newContent, "utf-8")
                   if (dest !== change.filePath) await fs.unlink(change.filePath)
                 })

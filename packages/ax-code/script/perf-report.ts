@@ -37,6 +37,7 @@ export function render(verdict: Verdict, report: Bench) {
   out.push(`- files: ${verdict.files}`)
   out.push(`- elapsed median: ${verdict.metrics.elapsedMs.toFixed(2)}ms`)
   out.push(`- builder total median: ${verdict.metrics.totalMs.toFixed(2)}ms`)
+  out.push(`- cache mode: ${verdict.requested.cacheMode}`)
   out.push(`- repeat: ${verdict.requested.repeat}`)
   out.push(`- warmup: ${verdict.requested.warmup}`)
   out.push(`- concurrency: ${verdict.requested.concurrency}`)

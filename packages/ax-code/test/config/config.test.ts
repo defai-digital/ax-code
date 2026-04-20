@@ -151,6 +151,82 @@ test("loads JSONC config file", async () => {
   })
 })
 
+test("loads builtin LSP overrides without requiring a custom command", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        lsp: {
+          typescript: {
+            concurrency: 1,
+            semantic: true,
+            capabilities: {
+              workspaceSymbol: true,
+              callHierarchy: true,
+            },
+          },
+        },
+      })
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.lsp).toMatchObject({
+        typescript: {
+          concurrency: 1,
+          semantic: true,
+          capabilities: {
+            workspaceSymbol: true,
+            callHierarchy: true,
+          },
+        },
+      })
+    },
+  })
+})
+
+test("loads custom LSP capability and concurrency overrides", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        lsp: {
+          custom: {
+            command: ["custom-lsp", "--stdio"],
+            extensions: [".custom"],
+            concurrency: 2,
+            capabilities: {
+              definition: true,
+              references: false,
+            },
+          },
+        },
+      })
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.lsp).toMatchObject({
+        custom: {
+          command: ["custom-lsp", "--stdio"],
+          extensions: [".custom"],
+          concurrency: 2,
+          capabilities: {
+            definition: true,
+            references: false,
+          },
+        },
+      })
+    },
+  })
+})
+
 test("merges multiple config files with correct precedence", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

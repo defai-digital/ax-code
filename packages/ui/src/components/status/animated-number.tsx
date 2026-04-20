@@ -1,7 +1,9 @@
 import { For, Index, createEffect, createMemo, on } from "solid-js"
 import { createStore } from "solid-js/store"
 
-const TRACK = Array.from({ length: 30 }, (_, index) => index % 10)
+const TRACK_REPEATS = 5
+const TRACK_OFFSET = Math.floor(TRACK_REPEATS / 2) * 10
+const TRACK = Array.from({ length: TRACK_REPEATS * 10 }, (_, index) => index % 10)
 const DURATION = 600
 
 function normalize(value: number) {
@@ -16,7 +18,7 @@ function spin(from: number, to: number, direction: 1 | -1) {
 
 function Digit(props: { value: number; direction: 1 | -1 }) {
   const [state, setState] = createStore({
-    step: props.value + 10,
+    step: props.value + TRACK_OFFSET,
     animating: false,
   })
   const step = () => state.step
@@ -31,7 +33,7 @@ function Digit(props: { value: number; direction: 1 | -1 }) {
         last = next
         if (!delta) {
           setState("animating", false)
-          setState("step", next + 10)
+          setState("step", next + TRACK_OFFSET)
           return
         }
 
@@ -49,7 +51,7 @@ function Digit(props: { value: number; direction: 1 | -1 }) {
         data-animating={animating() ? "true" : "false"}
         onTransitionEnd={() => {
           setState("animating", false)
-          setState("step", (value) => normalize(value) + 10)
+          setState("step", (value) => normalize(value) + TRACK_OFFSET)
         }}
         style={{
           "--animated-number-offset": `${step()}`,

@@ -432,6 +432,7 @@ async function contextChecks(input: { root: string; dir: string }) {
 export namespace Server {
   const log = Log.create({ service: "server" })
   const rate = new Map<string, { count: number; reset: number }>()
+  let warnedRequestIpFailure = false
 
   export const Default = lazy(() => createApp({}))
 
@@ -524,7 +525,12 @@ export namespace Server {
           try {
             const srv = (c.env as any)?.server
             if (srv?.requestIP) return srv.requestIP(c.req.raw)?.address ?? null
-          } catch {}
+          } catch (error) {
+            if (!warnedRequestIpFailure) {
+              warnedRequestIpFailure = true
+              log.warn("failed to resolve client IP for rate limiting", { error })
+            }
+          }
           return null
         })()
         const ip = socketAddr ?? "local"
@@ -576,7 +582,12 @@ export namespace Server {
           origin(input) {
             if (!input) return
 
-            const serverPort = opts?.port ?? 4096
+            const boundPort = Number(url?.port ?? "")
+            const serverPort = Number.isFinite(boundPort) && boundPort > 0
+              ? boundPort
+              : opts?.port && opts.port > 0
+                ? opts.port
+                : 4096
             const serverOrigins = [
               `http://localhost:${serverPort}`,
               `http://127.0.0.1:${serverPort}`,

@@ -17,6 +17,7 @@ const DIALOG_PROMPT_SRC = path.join(TUI_ROOT, "ui/dialog-prompt.tsx")
 const DIALOG_EXPORT_OPTIONS_SRC = path.join(TUI_ROOT, "ui/dialog-export-options.tsx")
 const SYNC_SRC = path.join(TUI_ROOT, "context/sync.tsx")
 const HOME_SRC = path.join(TUI_ROOT, "routes/home.tsx")
+const STARTUP_TRACE_SRC = path.join(TUI_ROOT, "util/startup-trace.ts")
 const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "component/prompt/history.tsx"),
   path.join(TUI_ROOT, "component/prompt/frecency.tsx"),
@@ -58,6 +59,14 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).not.toContain("getTerminalBackgroundColor")
   })
 
+  test("does not eagerly import the heavy session route on app startup", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).not.toContain('import { Session } from "@tui/routes/session"')
+    expect(app).toContain('import("@tui/routes/session")')
+    expect(app).toContain("ensureSessionRouteLoaded")
+  })
+
   test("avoids async createEffect in the session startup path", async () => {
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
 
@@ -77,6 +86,9 @@ describe("tui OpenTUI stability guardrails", () => {
 
   test("defers lower-priority sync hydration out of the initial bootstrap burst", async () => {
     const sync = await fs.readFile(SYNC_SRC, "utf8")
+    const coreStart = sync.indexOf("const coreBootstrapTasks = [")
+    const deferredStart = sync.indexOf("const deferredBootstrapTasks = [")
+    const coreBlock = coreStart >= 0 && deferredStart > coreStart ? sync.slice(coreStart, deferredStart) : ""
 
     expect(sync).toContain("const coreBootstrapTasks = [")
     expect(sync).toContain("const deferredBootstrapTasks = [")
@@ -84,6 +96,10 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(sync).toContain('"tui bootstrap worktree.list"')
     expect(sync).toContain('"tui bootstrap mcp.status"')
     expect(sync).toContain('setStore("status", "complete")')
+    expect(coreBlock).not.toContain('"tui bootstrap lsp.status"')
+    expect(coreBlock).not.toContain('"tui bootstrap mcp.status"')
+    expect(coreBlock).not.toContain('"tui bootstrap resource.list"')
+    expect(coreBlock).not.toContain('"tui bootstrap formatter.status"')
   })
 
   test("does not gate context providers on a generic ready flag", async () => {
@@ -161,5 +177,26 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(doctor).toContain('"@opentui/solid/preload"')
     expect(doctor).toContain("Bundled runtime")
     expect(doctor).toContain("source/dev TUI may fail to start")
+  })
+
+  test("keeps startup tracing wired around the first render and bootstrap phases", async () => {
+    const startupTrace = await fs.readFile(STARTUP_TRACE_SRC, "utf8")
+    const app = await fs.readFile(APP_SRC, "utf8")
+    const sync = await fs.readFile(SYNC_SRC, "utf8")
+    const home = await fs.readFile(HOME_SRC, "utf8")
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(startupTrace).toContain("beginTuiStartup")
+    expect(startupTrace).toContain("createTuiStartupSpan")
+    expect(startupTrace).toContain("elapsedMs")
+    expect(app).toContain("beginTuiStartup")
+    expect(app).toContain("tui.startup.renderDispatched")
+    expect(app).toContain('createTuiStartupSpan("tui.startup.sessionRouteImport"')
+    expect(sync).toContain('createTuiStartupSpan("tui.startup.bootstrap"')
+    expect(sync).toContain('recordTuiStartupOnce("tui.startup.sessionListReady"')
+    expect(sync).toContain('recordTuiStartupOnce("tui.startup.bootstrapDeferredReady"')
+    expect(home).toContain('recordTuiStartupOnce("tui.startup.homeMounted"')
+    expect(home).toContain('recordTuiStartupOnce("tui.startup.homePromptReady"')
+    expect(session).toContain('recordTuiStartupOnce("tui.startup.sessionMounted"')
   })
 })

@@ -4,6 +4,23 @@
 const net = require("net")
 
 let nextId = 1
+const initializeCapabilities = (() => {
+  const raw = process.env.FAKE_LSP_CAPABILITIES_JSON
+  if (!raw) return {}
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
+})()
+const unsupportedMethods = new Set(
+  (process.env.FAKE_LSP_UNSUPPORTED_METHODS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+)
+const workspaceSymbolName = process.env.FAKE_LSP_WORKSPACE_SYMBOL ?? "DemoSymbol"
+const initializeDelayMs = Math.max(0, Number(process.env.FAKE_LSP_INITIALIZE_DELAY_MS ?? "0") || 0)
 
 function encode(message) {
   const json = JSON.stringify(message)
@@ -55,7 +72,12 @@ function handle(raw) {
     return
   }
   if (data.method === "initialize") {
-    send({ jsonrpc: "2.0", id: data.id, result: { capabilities: {} } })
+    const respond = () => send({ jsonrpc: "2.0", id: data.id, result: { capabilities: initializeCapabilities } })
+    if (initializeDelayMs > 0) {
+      setTimeout(respond, initializeDelayMs)
+    } else {
+      respond()
+    }
     return
   }
   if (data.method === "initialized") {
@@ -70,13 +92,25 @@ function handle(raw) {
     return
   }
   if (typeof data.id !== "undefined") {
+    if (unsupportedMethods.has(data.method)) {
+      send({
+        jsonrpc: "2.0",
+        id: data.id,
+        error: {
+          code: -32601,
+          message: `Method not found: ${data.method}`,
+        },
+      })
+      return
+    }
+
     if (data.method === "workspace/symbol") {
       send({
         jsonrpc: "2.0",
         id: data.id,
         result: [
           {
-            name: "DemoSymbol",
+            name: workspaceSymbolName,
             kind: 12,
             location: {
               uri: "file:///workspace/demo.ts",

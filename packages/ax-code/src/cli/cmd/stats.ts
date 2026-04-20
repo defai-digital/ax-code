@@ -360,7 +360,7 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   // Tool Usage section
   if (Object.keys(stats.toolUsage).length > 0) {
     const sortedTools = Object.entries(stats.toolUsage).sort(([, a], [, b]) => b - a)
-    const toolsToDisplay = toolLimit ? sortedTools.slice(0, toolLimit) : sortedTools
+    const toolsToDisplay = toolLimit === undefined ? sortedTools : sortedTools.slice(0, toolLimit)
 
     console.log("┌────────────────────────────────────────────────────────┐")
     console.log("│                      TOOL USAGE                        │")

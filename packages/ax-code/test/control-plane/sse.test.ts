@@ -54,6 +54,24 @@ describe("control-plane/sse", () => {
     ])
   })
 
+  test("drops trailing carriage returns for mixed CRLF/LF block boundaries", async () => {
+    const events: unknown[] = []
+    const stop = new AbortController()
+
+    await parseSSE(stream(["id: abc\r\nretry: 1500\r\ndata: hello world\r\n\n"]), stop.signal, (event) => events.push(event))
+
+    expect(events).toEqual([
+      {
+        type: "sse.message",
+        properties: {
+          data: "hello world",
+          id: "abc",
+          retry: 1500,
+        },
+      },
+    ])
+  })
+
   test("emits an unterminated trailing event only once at EOF", async () => {
     const events: unknown[] = []
     const stop = new AbortController()

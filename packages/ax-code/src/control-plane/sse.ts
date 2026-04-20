@@ -82,6 +82,9 @@ export async function parseSSE(
           idx = buf.indexOf("\r\n\r\n")
           gap = 4
           if (idx === -1) break
+        } else if (idx > 0 && buf[idx - 1] === "\r") {
+          idx--
+          gap = 3
         }
         const block = buf.slice(0, idx)
         buf = buf.slice(idx + gap)

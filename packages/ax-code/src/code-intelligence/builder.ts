@@ -12,6 +12,7 @@ import { Flag } from "../flag/flag"
 import { NativeStore } from "./native-store"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
+import { INDEXER_SEMANTIC_METHODS } from "../lsp/prewarm-profile"
 
 const log = Log.create({ service: "code-intelligence.builder" })
 
@@ -75,6 +76,21 @@ type LspLocation = {
   range: LspRange
 }
 
+type ReferenceBookmark = {
+  nodeId: CodeNodeID
+  kind: CodeNodeKind
+  selectionLine: number
+  selectionChar: number
+  rangeStartLine: number
+  rangeEndLine: number
+}
+
+type ReferenceQuery = {
+  selectionLine: number
+  selectionChar: number
+  bookmarks: ReferenceBookmark[]
+}
+
 function isDocumentSymbol(s: LspDocumentSymbol | LspSymbolInformation): s is LspDocumentSymbol {
   return typeof (s as LspDocumentSymbol).range?.start?.line === "number" && !("location" in s)
 }
@@ -133,6 +149,22 @@ function resolveContainingNodeFromDb(
   char: number,
 ): CodeNodeID | undefined {
   const rows = CodeGraphQuery.nodesInFile(projectID, file)
+  return resolveContainingNodeFromRows(rows, line, char)
+}
+
+function resolveContainingNodeFromRows(
+  rows: Array<{
+    id: CodeNodeID
+    name: string
+    kind: CodeNodeKind
+    range_start_line: number
+    range_start_char: number
+    range_end_line: number
+    range_end_char: number
+  }>,
+  line: number,
+  char: number,
+): CodeNodeID | undefined {
   let best: { id: CodeNodeID; size: number } | undefined
   for (const row of rows) {
     if (!isNamedContainer(row.name, row.kind)) continue
@@ -234,6 +266,66 @@ function* walkDocumentSymbols(
   }
 }
 
+function referenceRangeSize(bookmark: Pick<ReferenceBookmark, "rangeStartLine" | "rangeEndLine">): number {
+  return bookmark.rangeEndLine - bookmark.rangeStartLine
+}
+
+function referenceKindPriority(kind: CodeNodeKind): number {
+  if (CALLABLE_KINDS.has(kind)) return 2
+  if (CONTAINER_KINDS.has(kind)) return 1
+  return 0
+}
+
+function planReferenceQueries(bookmarks: ReferenceBookmark[], limit: number): ReferenceQuery[] {
+  const planned: ReferenceQuery[] = []
+  const byKey = new Map<string, ReferenceQuery>()
+  const eligible = bookmarks
+    .filter((bookmark) => CONTAINER_KINDS.has(bookmark.kind))
+    .sort((a, b) => {
+      const priority = referenceKindPriority(b.kind) - referenceKindPriority(a.kind)
+      if (priority !== 0) return priority
+      return referenceRangeSize(b) - referenceRangeSize(a)
+    })
+
+  for (const bookmark of eligible) {
+    const key = `${bookmark.selectionLine}:${bookmark.selectionChar}`
+    const existing = byKey.get(key)
+    if (existing) {
+      existing.bookmarks.push(bookmark)
+      continue
+    }
+    if (planned.length >= limit) continue
+
+    const query = {
+      selectionLine: bookmark.selectionLine,
+      selectionChar: bookmark.selectionChar,
+      bookmarks: [bookmark],
+    }
+    byKey.set(key, query)
+    planned.push(query)
+  }
+
+  return planned
+}
+
+export function __planReferenceQueriesForTest(
+  bookmarks: Array<{
+    nodeId: CodeNodeID
+    kind: CodeNodeKind
+    selectionLine: number
+    selectionChar: number
+    rangeStartLine: number
+    rangeEndLine: number
+  }>,
+  limit: number = MAX_REFERENCE_QUERIES_PER_FILE,
+) {
+  return planReferenceQueries(bookmarks as ReferenceBookmark[], limit).map((query) => ({
+    selectionLine: query.selectionLine,
+    selectionChar: query.selectionChar,
+    nodeIds: query.bookmarks.map((bookmark) => bookmark.nodeId),
+  }))
+}
+
 export namespace CodeGraphBuilder {
   // Project-level mutex. Concurrent `indexFile` calls for the same
   // project would otherwise race: one transaction can read stale
@@ -303,6 +395,31 @@ export namespace CodeGraphBuilder {
     force?: boolean
   }
 
+  type PreparedReferenceResult = {
+    bookmarks: ReferenceBookmark[]
+    locations: LspLocation[]
+  }
+
+  type PreparedIndex =
+    | { kind: "final"; result: IndexResult }
+    | {
+        kind: "commit"
+        absPath: string
+        lang: string
+        sha: string
+        size: number
+        now: number
+        tStart: number
+        nodeCount: number
+        nodeInserts: Parameters<typeof CodeGraphQuery.insertNodes>[0]
+        refBookmarks: ReferenceBookmark[]
+        refResults: PreparedReferenceResult[]
+        referenceFailures: number
+        completeness: "partial" | "lsp-only"
+        timings: IndexTimings
+        nativeTree?: any
+      }
+
   export function indexFile(projectID: ProjectID, absPath: string, opts: IndexFileOptions = {}): Promise<IndexResult> {
     // Serialize per-project to prevent cross-file caller resolution
     // from reading stale nodes that a sibling transaction has already
@@ -312,6 +429,16 @@ export namespace CodeGraphBuilder {
   }
 
   async function indexFileLocked(projectID: ProjectID, absPath: string, opts: IndexFileOptions): Promise<IndexResult> {
+    const prepared = await prepareIndexFile(projectID, absPath, opts)
+    if (prepared.kind === "final") return prepared.result
+    return commitPreparedIndex(projectID, prepared)
+  }
+
+  async function prepareIndexFile(
+    projectID: ProjectID,
+    absPath: string,
+    opts: IndexFileOptions,
+  ): Promise<PreparedIndex> {
     const timings: IndexTimings = {
       readFile: 0,
       lspTouch: 0,
@@ -328,7 +455,7 @@ export namespace CodeGraphBuilder {
     if (lang === "plaintext") {
       log.info("skipping file, language not recognized", { file: absPath })
       timings.total = performance.now() - tStart
-      return { nodes: 0, edges: 0, completeness: "partial", timings }
+      return { kind: "final", result: { nodes: 0, edges: 0, completeness: "partial", timings } }
     }
 
     // Read once for hash + size. If the file doesn't exist, caller
@@ -339,7 +466,7 @@ export namespace CodeGraphBuilder {
     if (!exists) {
       log.info("skipping file, does not exist", { file: absPath })
       timings.total = performance.now() - tStart
-      return { nodes: 0, edges: 0, completeness: "partial", timings }
+      return { kind: "final", result: { nodes: 0, edges: 0, completeness: "partial", timings } }
     }
     const text = await Filesystem.readText(absPath).catch((err) => {
       log.error("failed to read file for indexing", { file: absPath, err })
@@ -347,7 +474,7 @@ export namespace CodeGraphBuilder {
     })
     if (text === undefined) {
       timings.total = performance.now() - tStart
-      return { nodes: 0, edges: 0, completeness: "partial", timings }
+      return { kind: "final", result: { nodes: 0, edges: 0, completeness: "partial", timings } }
     }
     timings.readFile = performance.now() - tRead
 
@@ -375,44 +502,31 @@ export namespace CodeGraphBuilder {
     if (!opts.force && existing && existing.sha === sha && existing.size === size && existing.completeness === "full") {
       timings.total = performance.now() - tStart
       log.info("file unchanged, skipping reindex", { file: absPath, sha, size })
-      return { nodes: 0, edges: 0, completeness: "unchanged", timings }
+      return { kind: "final", result: { nodes: 0, edges: 0, completeness: "unchanged", timings } }
     }
 
     // Touch the file through LSP so the server has it open before we
     // query documentSymbol. This also ensures diagnostics arrive, but
     // we don't wait for them — we only need the symbol info.
     const tTouch = performance.now()
-    await LSP.touchFile(absPath, false)
+    await LSP.touchFile(absPath, false, { mode: "semantic", methods: [...INDEXER_SEMANTIC_METHODS] })
     timings.lspTouch = performance.now() - tTouch
 
     // Pull document symbols. LSP.documentSymbol returns a flat array
     // of results (one per matching client) that we flatten and walk.
     const uri = pathToFileURL(absPath).href
     const tDocSym = performance.now()
-    const raw = (await LSP.documentSymbol(uri).catch((err) => {
+    const documentSymbols = await LSP.documentSymbolEnvelope(uri, { cache: true }).catch((err) => {
       log.error("LSP.documentSymbol failed", { file: absPath, err })
-      return []
-    })) as Array<LspDocumentSymbol | LspSymbolInformation>
+      return undefined
+    })
+    const raw = (documentSymbols?.data ?? []) as Array<LspDocumentSymbol | LspSymbolInformation>
     timings.lspDocumentSymbol = performance.now() - tDocSym
 
     // Build the new node list outside the transaction so we don't hold
     // the DB lock while walking LSP output. The delete + insert + upsert
     // then happens inside one transaction below.
     const nodeInserts: Parameters<typeof CodeGraphQuery.insertNodes>[0] = []
-    // Bookmarks: per-node info needed for the Phase 2 reference pass.
-    // We keep the LSP selectionRange (= the name identifier position, not
-    // the full declaration range) because that's what textDocument/references
-    // expects as its position argument.
-    type ReferenceBookmark = {
-      nodeId: CodeNodeID
-      kind: CodeNodeKind
-      selectionLine: number
-      selectionChar: number
-      // Range of the node itself — used to exclude self-references from
-      // the edge list.
-      rangeStartLine: number
-      rangeEndLine: number
-    }
     const refBookmarks: ReferenceBookmark[] = []
     let nodeCount = 0
     const now = Date.now()
@@ -533,22 +647,21 @@ export namespace CodeGraphBuilder {
       }
     }
 
-    const edgeInserts: Parameters<typeof CodeGraphQuery.insertEdges>[0] = []
-
-    // Sort bookmarks by range size descending — biggest (top-level)
-    // symbols first. We query only the top
-    // MAX_REFERENCE_QUERIES_PER_FILE to keep reference traffic bounded.
-    const eligibleBookmarks = refBookmarks
-      .filter((b) => CONTAINER_KINDS.has(b.kind))
-      .sort((a, b) => b.rangeEndLine - b.rangeStartLine - (a.rangeEndLine - a.rangeStartLine))
-      .slice(0, MAX_REFERENCE_QUERIES_PER_FILE)
+    // Plan at most MAX_REFERENCE_QUERIES_PER_FILE unique reference
+    // positions. Multiple symbols can share the same selection point;
+    // query that point once and fan the result back out to every
+    // bookmark attached to it.
+    const referenceQueries = planReferenceQueries(refBookmarks, MAX_REFERENCE_QUERIES_PER_FILE)
 
     // Determine completeness: "full" if every eligible symbol had its
     // references queried, "lsp-only" if the file was indexed but with
     // nodes only, "partial" if LSP returned nothing.
-    let completeness: "full" | "partial" | "lsp-only" = raw.length === 0 ? "partial" : "lsp-only"
+    const completeness: "partial" | "lsp-only" =
+      documentSymbols?.completeness === "full" && raw.length > 0 ? "lsp-only" : "partial"
 
-    if (eligibleBookmarks.length > 0) {
+    let referenceFailures = 0
+    const refResults: PreparedReferenceResult[] = []
+    if (referenceQueries.length > 0) {
       // Resolve each bookmark's references in small batches. A wide
       // Promise.all here can stampede tsserver/gopls/pyright with
       // hundreds of concurrent RPCs once file-level concurrency is
@@ -563,35 +676,83 @@ export namespace CodeGraphBuilder {
       // "partial" if any reference query failed — the completeness
       // flag is the contract with downstream consumers (findCallers,
       // findReferences) for "trust this file's edges". See BUG-76.
-      let referenceFailures = 0
-      const refResults: Array<{ bookmark: ReferenceBookmark; locations: LspLocation[] }> = []
-      for (let i = 0; i < eligibleBookmarks.length; i += REFERENCE_QUERY_CONCURRENCY) {
-        const batch = eligibleBookmarks.slice(i, i + REFERENCE_QUERY_CONCURRENCY)
+      for (let i = 0; i < referenceQueries.length; i += REFERENCE_QUERY_CONCURRENCY) {
+        const batch = referenceQueries.slice(i, i + REFERENCE_QUERY_CONCURRENCY)
         const batchResults = await Promise.all(
-          batch.map(async (bookmark) => {
-            const locations = (await LSP.references({
+          batch.map(async (query) => {
+            const envelope = await LSP.referencesEnvelope({
               file: absPath,
-              line: bookmark.selectionLine,
-              character: bookmark.selectionChar,
+              line: query.selectionLine,
+              character: query.selectionChar,
+              cache: true,
             }).catch((err) => {
               referenceFailures++
               log.warn("LSP references failed; edges will be incomplete for this symbol", {
                 file: absPath,
-                symbol: bookmark.nodeId,
-                line: bookmark.selectionLine,
+                symbols: query.bookmarks.map((bookmark) => bookmark.nodeId),
+                line: query.selectionLine,
                 err: err instanceof Error ? err.message : String(err),
               })
-              return []
-            })) as LspLocation[]
-            return { bookmark, locations }
+              return undefined
+            })
+            const locations = (envelope?.data ?? []) as LspLocation[]
+            if (envelope && envelope.completeness !== "full") {
+              referenceFailures++
+              log.warn("LSP references were incomplete for this symbol", {
+                file: absPath,
+                symbols: query.bookmarks.map((bookmark) => bookmark.nodeId),
+                line: query.selectionLine,
+                completeness: envelope.completeness,
+                serverIDs: envelope.serverIDs,
+              })
+            }
+            return { bookmarks: query.bookmarks, locations }
           }),
         )
         refResults.push(...batchResults)
       }
       timings.lspReferences = performance.now() - tRefs
+    }
 
+    return {
+      kind: "commit",
+      absPath,
+      lang,
+      sha,
+      size,
+      now,
+      tStart,
+      nodeCount,
+      nodeInserts,
+      refBookmarks,
+      refResults,
+      referenceFailures,
+      completeness,
+      timings,
+      nativeTree,
+    }
+  }
+
+  function commitPreparedIndex(
+    projectID: ProjectID,
+    prepared: Extract<PreparedIndex, { kind: "commit" }>,
+  ): IndexResult {
+    const edgeInserts: Parameters<typeof CodeGraphQuery.insertEdges>[0] = []
+    let completeness: IndexResult["completeness"] = prepared.completeness
+
+    if (prepared.refResults.length > 0) {
       const tResolve = performance.now()
-      for (const { bookmark, locations } of refResults) {
+      const dbRowsByFile = new Map<string, ReturnType<typeof CodeGraphQuery.nodesInFile>>()
+      const callerKindByNode = new Map<CodeNodeID, CodeNodeKind | undefined>()
+      const rowsForFile = (file: string) => {
+        const cached = dbRowsByFile.get(file)
+        if (cached) return cached
+        const rows = CodeGraphQuery.nodesInFile(projectID, file)
+        dbRowsByFile.set(file, rows)
+        return rows
+      }
+
+      for (const { bookmarks, locations } of prepared.refResults) {
         for (const loc of locations) {
           let refFile: string
           try {
@@ -599,59 +760,45 @@ export namespace CodeGraphBuilder {
           } catch {
             continue
           }
-          // Skip self-references (the symbol's own declaration).
-          if (
-            refFile === absPath &&
-            loc.range.start.line >= bookmark.rangeStartLine &&
-            loc.range.start.line <= bookmark.rangeEndLine
-          ) {
-            continue
-          }
-          // Resolve which node in the graph (the "caller") contains this
-          // reference location. Uses the pre-insert nodeInserts for
-          // same-file lookups (since nodes aren't in the DB yet) and
-          // falls back to CodeGraphQuery for other files.
-          const sameFile = refFile === absPath
+
+          const sameFile = refFile === prepared.absPath
           const callerNodeId = sameFile
             ? resolveContainingNodeInMemory(
-                nodeInserts,
-                refBookmarks,
+                prepared.nodeInserts,
+                prepared.refBookmarks,
                 loc.range.start.line,
                 loc.range.start.character,
-                nativeTree,
+                prepared.nativeTree,
               )
-            : resolveContainingNodeFromDb(projectID, refFile, loc.range.start.line, loc.range.start.character)
+            : resolveContainingNodeFromRows(rowsForFile(refFile), loc.range.start.line, loc.range.start.character)
           if (!callerNodeId) continue
 
-          // Determine the caller's kind. Same-file callers come from the
-          // in-memory bookmarks built earlier in this pass. Cross-file
-          // callers have to be read back from the DB — we can't skip
-          // them here, otherwise findCallers silently loses every edge
-          // whose endpoints span two files (which is the common case
-          // for any non-trivial codebase). See __lookupCallerKind.
-          const callerKind = __lookupCallerKind(projectID, callerNodeId, sameFile, refBookmarks)
-          const isCallable =
-            bookmark.kind && CALLABLE_KINDS.has(bookmark.kind) && callerKind && CALLABLE_KINDS.has(callerKind)
+          let callerKind: CodeNodeKind | undefined
+          if (sameFile) {
+            callerKind = __lookupCallerKind(projectID, callerNodeId, true, prepared.refBookmarks)
+          } else if (callerKindByNode.has(callerNodeId)) {
+            callerKind = callerKindByNode.get(callerNodeId)
+          } else {
+            callerKind = CodeGraphQuery.getNode(projectID, callerNodeId)?.kind
+            callerKindByNode.set(callerNodeId, callerKind)
+          }
 
-          edgeInserts.push({
-            id: CodeEdgeID.ascending(),
-            project_id: projectID,
-            kind: "references",
-            from_node: callerNodeId,
-            to_node: bookmark.nodeId,
-            file: refFile,
-            range_start_line: loc.range.start.line,
-            range_start_char: loc.range.start.character,
-            range_end_line: loc.range.end.line,
-            range_end_char: loc.range.end.character,
-            time_created: now,
-            time_updated: now,
-          })
-          if (isCallable) {
+          for (const bookmark of bookmarks) {
+            if (
+              sameFile &&
+              loc.range.start.line >= bookmark.rangeStartLine &&
+              loc.range.start.line <= bookmark.rangeEndLine
+            ) {
+              continue
+            }
+
+            const isCallable =
+              bookmark.kind && CALLABLE_KINDS.has(bookmark.kind) && callerKind && CALLABLE_KINDS.has(callerKind)
+
             edgeInserts.push({
               id: CodeEdgeID.ascending(),
               project_id: projectID,
-              kind: "calls",
+              kind: "references",
               from_node: callerNodeId,
               to_node: bookmark.nodeId,
               file: refFile,
@@ -659,71 +806,75 @@ export namespace CodeGraphBuilder {
               range_start_char: loc.range.start.character,
               range_end_line: loc.range.end.line,
               range_end_char: loc.range.end.character,
-              time_created: now,
-              time_updated: now,
+              time_created: prepared.now,
+              time_updated: prepared.now,
             })
+            if (isCallable) {
+              edgeInserts.push({
+                id: CodeEdgeID.ascending(),
+                project_id: projectID,
+                kind: "calls",
+                from_node: callerNodeId,
+                to_node: bookmark.nodeId,
+                file: refFile,
+                range_start_line: loc.range.start.line,
+                range_start_char: loc.range.start.character,
+                range_end_line: loc.range.end.line,
+                range_end_char: loc.range.end.character,
+                time_created: prepared.now,
+                time_updated: prepared.now,
+              })
+            }
           }
         }
       }
 
-      // If we ran reference queries and LSP gave us results, mark the
-      // file as fully indexed. If all reference queries returned empty,
-      // it's still "lsp-only" — the server supports symbols but not
-      // references (or there genuinely are none). If any reference
-      // query actually threw (LSP crash / RPC timeout), we have
-      // genuinely missing edges and must downgrade to "partial" so
-      // downstream callers know this file's edge set is untrustworthy.
-      // See BUG-76.
-      if (edgeInserts.length > 0) completeness = "full"
-      if (referenceFailures > 0) completeness = "partial"
-      timings.edgeResolve = performance.now() - tResolve
+      if (edgeInserts.length > 0 && completeness !== "partial") completeness = "full"
+      if (prepared.referenceFailures > 0) completeness = "partial"
+      prepared.timings.edgeResolve = performance.now() - tResolve
     }
 
-    // All DB mutations for this file happen atomically. Without the
-    // transaction, a concurrent reader could see nodes without their
-    // edges, or a partially-deleted file, or a new code_file row with
-    // stale node rows underneath it. Transactions are cheap on SQLite
-    // and the whole block is CPU-bound (no await inside), so wrapping
-    // it has no latency cost.
     const tTxn = performance.now()
     Database.transaction((_tx) => {
-      CodeGraphQuery.deleteEdgesTouchingFile(projectID, absPath)
-      CodeGraphQuery.deleteNodesInFile(projectID, absPath)
+      CodeGraphQuery.deleteEdgesTouchingFile(projectID, prepared.absPath)
+      CodeGraphQuery.deleteNodesInFile(projectID, prepared.absPath)
 
-      // Bulk insert. SQLite's multi-row insert is fast but has a 999-
-      // parameter default limit; our row has ~14 columns so we chunk
-      // at 50 rows per statement as a safe margin.
-      for (let i = 0; i < nodeInserts.length; i += 50) {
-        CodeGraphQuery.insertNodes(nodeInserts.slice(i, i + 50))
+      for (let i = 0; i < prepared.nodeInserts.length; i += 50) {
+        CodeGraphQuery.insertNodes(prepared.nodeInserts.slice(i, i + 50))
       }
 
-      // Insert edges. Edge rows have ~12 columns; 60/chunk stays well
-      // under the 999 SQLite parameter limit.
       for (let i = 0; i < edgeInserts.length; i += 60) {
         CodeGraphQuery.insertEdges(edgeInserts.slice(i, i + 60))
       }
 
-      // Record file state regardless of whether we found symbols — we
-      // still want to know we tried, so incremental updates can skip
-      // unchanged files without re-running LSP.
       CodeGraphQuery.upsertFile({
         id: CodeFileID.ascending(),
         project_id: projectID,
-        path: absPath,
-        sha,
-        size,
-        lang,
-        indexed_at: now,
+        path: prepared.absPath,
+        sha: prepared.sha,
+        size: prepared.size,
+        lang: prepared.lang,
+        indexed_at: prepared.now,
         completeness,
-        time_created: now,
-        time_updated: now,
+        time_created: prepared.now,
+        time_updated: prepared.now,
       })
     })
-    timings.dbTransaction = performance.now() - tTxn
-    timings.total = performance.now() - tStart
+    prepared.timings.dbTransaction = performance.now() - tTxn
+    prepared.timings.total = performance.now() - prepared.tStart
 
-    log.info("indexed file", { file: absPath, nodes: nodeCount, edges: edgeInserts.length, completeness })
-    return { nodes: nodeCount, edges: edgeInserts.length, completeness, timings }
+    log.info("indexed file", {
+      file: prepared.absPath,
+      nodes: prepared.nodeCount,
+      edges: edgeInserts.length,
+      completeness,
+    })
+    return {
+      nodes: prepared.nodeCount,
+      edges: edgeInserts.length,
+      completeness,
+      timings: prepared.timings,
+    }
   }
 
   // Options passed to indexFiles. `onProgress` fires once per file
@@ -865,53 +1016,55 @@ export namespace CodeGraphBuilder {
     }
 
     // Per-file progress counter. JS is single-threaded so plain
-    // increment inside the `.then()` continuation is race-free — each
-    // async boundary resolves serially on the event loop.
+    // increment inside async continuations is race-free — each
+    // resolution runs to completion on the event loop before the next.
     let completed = 0
 
-    for (let i = 0; i < files.length; i += concurrency) {
-      const batch = files.slice(i, i + concurrency)
-      const results = await Promise.all(
-        batch.map((file) =>
-          // Use a distinct `failed` marker so the stats loop below can
-          // tell a real crash (exception bubbled up through indexFile)
-          // apart from an intentional partial/skip. The previous code
-          // returned `partial` for both and counted the failure as
-          // "skipped", hiding genuine indexing errors behind benign
-          // ones in the reported totals.
-          indexFile(projectID, file, { force: opts.force })
-            .catch((err): IndexResult => {
-              log.error("indexFile failed", { file, err })
-              return { nodes: 0, edges: 0, completeness: "failed", timings: emptyTimings }
-            })
-            .then((result) => {
-              completed++
-              onProgress?.(completed, files.length, file)
-              return result
-            }),
-        ),
-      )
-      for (const r of results) {
-        nodes += r.nodes
-        edges += r.edges
-        if (r.completeness === "failed") failed++
-        else if (r.completeness === "unchanged") unchanged++
-        else if (r.nodes > 0 || r.completeness !== "partial") indexed++
-        else skipped++
-        // Aggregate per-phase timings. These are wall-clock per file,
-        // so summing across a batch of size N that ran in parallel
-        // over-counts by up to N×. That's fine for identifying which
-        // phase dominates — the ratios are what matter.
-        aggregate.readFile += r.timings.readFile
-        aggregate.lspTouch += r.timings.lspTouch
-        aggregate.lspDocumentSymbol += r.timings.lspDocumentSymbol
-        aggregate.symbolWalk += r.timings.symbolWalk
-        aggregate.lspReferences += r.timings.lspReferences
-        aggregate.edgeResolve += r.timings.edgeResolve
-        aggregate.dbTransaction += r.timings.dbTransaction
-        aggregate.total += r.timings.total
-      }
+    const applyResult = (result: IndexResult) => {
+      nodes += result.nodes
+      edges += result.edges
+      if (result.completeness === "failed") failed++
+      else if (result.completeness === "unchanged") unchanged++
+      else if (result.nodes > 0 || result.completeness !== "partial") indexed++
+      else skipped++
+
+      aggregate.readFile += result.timings.readFile
+      aggregate.lspTouch += result.timings.lspTouch
+      aggregate.lspDocumentSymbol += result.timings.lspDocumentSymbol
+      aggregate.symbolWalk += result.timings.symbolWalk
+      aggregate.lspReferences += result.timings.lspReferences
+      aggregate.edgeResolve += result.timings.edgeResolve
+      aggregate.dbTransaction += result.timings.dbTransaction
+      aggregate.total += result.timings.total
     }
+
+    let nextIndex = 0
+    const workerCount = Math.max(1, Math.min(concurrency, files.length || 1))
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const idx = nextIndex++
+        const file = files[idx]
+        if (!file) return
+
+        // Prepare the expensive file/LSP work outside the project lock,
+        // then serialize only the graph-resolution + DB commit section.
+        const result = await prepareIndexFile(projectID, file, { force: opts.force })
+          .then((prepared) => {
+            if (prepared.kind === "final") return prepared.result
+            return withProjectLock(projectID, () => Promise.resolve(commitPreparedIndex(projectID, prepared)))
+          })
+          .catch((err): IndexResult => {
+            log.error("indexFile failed", { file, err })
+            return { nodes: 0, edges: 0, completeness: "failed", timings: emptyTimings }
+          })
+
+        completed++
+        onProgress?.(completed, files.length, file)
+        applyResult(result)
+      }
+    })
+
+    await Promise.all(workers)
 
     const totalNodes = CodeGraphQuery.countNodes(projectID)
     const totalEdges = CodeGraphQuery.countEdges(projectID)

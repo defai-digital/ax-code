@@ -8,6 +8,7 @@ import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import {
   CodeGraphBuilder,
   __lookupCallerKind,
+  __planReferenceQueriesForTest,
   __resolveContainingNodeFromDbForTests as resolveContainingNodeFromDb,
 } from "../../src/code-intelligence/builder"
 import { CodeNodeID, CodeFileID } from "../../src/code-intelligence/id"
@@ -175,6 +176,133 @@ describe("builder.__lookupCallerKind", () => {
         CodeIntelligence.__clearProject(projectID)
       },
     })
+  })
+})
+
+describe("builder.__planReferenceQueriesForTest", () => {
+  test("deduplicates bookmarks that share the same reference position", () => {
+    const outer = CodeNodeID.ascending()
+    const inner = CodeNodeID.ascending()
+    const sibling = CodeNodeID.ascending()
+
+    const planned = __planReferenceQueriesForTest([
+      {
+        nodeId: outer,
+        kind: "function",
+        selectionLine: 10,
+        selectionChar: 2,
+        rangeStartLine: 0,
+        rangeEndLine: 100,
+      },
+      {
+        nodeId: inner,
+        kind: "method",
+        selectionLine: 10,
+        selectionChar: 2,
+        rangeStartLine: 20,
+        rangeEndLine: 80,
+      },
+      {
+        nodeId: sibling,
+        kind: "class",
+        selectionLine: 40,
+        selectionChar: 1,
+        rangeStartLine: 0,
+        rangeEndLine: 200,
+      },
+    ])
+
+    expect(planned).toEqual([
+      {
+        selectionLine: 10,
+        selectionChar: 2,
+        nodeIds: [outer, inner],
+      },
+      {
+        selectionLine: 40,
+        selectionChar: 1,
+        nodeIds: [sibling],
+      },
+    ])
+  })
+
+  test("prioritizes callable symbols ahead of broader non-callable containers", () => {
+    const callable = CodeNodeID.ascending()
+    const container = CodeNodeID.ascending()
+
+    const planned = __planReferenceQueriesForTest(
+      [
+        {
+          nodeId: container,
+          kind: "class",
+          selectionLine: 20,
+          selectionChar: 0,
+          rangeStartLine: 0,
+          rangeEndLine: 200,
+        },
+        {
+          nodeId: callable,
+          kind: "function",
+          selectionLine: 10,
+          selectionChar: 0,
+          rangeStartLine: 40,
+          rangeEndLine: 50,
+        },
+      ],
+      1,
+    )
+
+    expect(planned).toEqual([
+      {
+        selectionLine: 10,
+        selectionChar: 0,
+        nodeIds: [callable],
+      },
+    ])
+  })
+
+  test("applies the query cap to unique positions rather than raw bookmark count", () => {
+    const sharedA = CodeNodeID.ascending()
+    const sharedB = CodeNodeID.ascending()
+    const unique = CodeNodeID.ascending()
+
+    const planned = __planReferenceQueriesForTest(
+      [
+        {
+          nodeId: sharedA,
+          kind: "function",
+          selectionLine: 5,
+          selectionChar: 0,
+          rangeStartLine: 0,
+          rangeEndLine: 100,
+        },
+        {
+          nodeId: sharedB,
+          kind: "method",
+          selectionLine: 5,
+          selectionChar: 0,
+          rangeStartLine: 10,
+          rangeEndLine: 90,
+        },
+        {
+          nodeId: unique,
+          kind: "class",
+          selectionLine: 20,
+          selectionChar: 0,
+          rangeStartLine: 0,
+          rangeEndLine: 50,
+        },
+      ],
+      1,
+    )
+
+    expect(planned).toEqual([
+      {
+        selectionLine: 5,
+        selectionChar: 0,
+        nodeIds: [sharedA, sharedB],
+      },
+    ])
   })
 })
 

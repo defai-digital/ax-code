@@ -1,4 +1,4 @@
-import { Component, createEffect, createMemo, createSignal, For, Match, Show, Switch, Index, type JSX } from "solid-js"
+import { Component, createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch, Index, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import stripAnsi from "strip-ansi"
 import { Dynamic } from "solid-js/web"
@@ -519,6 +519,11 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     return isLastTextPart()
   })
   const [copied, setCopied] = createSignal(false)
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer)
+  })
 
   const handleCopy = async () => {
     const content = displayText()
@@ -526,7 +531,11 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     try {
       await navigator.clipboard.writeText(content)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => {
+        copiedTimer = undefined
+        setCopied(false)
+      }, 2000)
     } catch {}
   }
 

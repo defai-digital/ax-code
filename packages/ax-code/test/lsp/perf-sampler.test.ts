@@ -5,6 +5,7 @@ import { LSP } from "../../src/lsp"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
 import { spyOn } from "bun:test"
+import path from "path"
 
 Log.init({ print: false })
 
@@ -115,5 +116,40 @@ describe("LSP.perfSnapshot", () => {
     expect(snap.touch!.errorCount).toBe(1)
     expect(snap.documentSymbol!.count).toBe(1)
     expect(snap.documentSymbol!.okCount).toBe(1)
+  })
+
+  test("captures cold-start subphases for touch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "demo.ts")
+    const serverPath = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
+    await Bun.write(file, "export const demo = 1\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        configSpy = spyOn(Config, "get").mockResolvedValue({
+          lsp: {
+            fake: {
+              command: [process.execPath, serverPath],
+              extensions: [".ts"],
+            },
+          },
+        } as never)
+
+        LSP.perfReset()
+        await LSP.touchFile(file, false, { mode: "semantic" })
+        await LSP.touchFile(file, false, { mode: "semantic" })
+
+        const snap = LSP.perfSnapshot()
+        const spawnCount = snap["client.spawn"]?.count ?? 0
+        const initializeCount = snap["client.initialize"]?.count ?? 0
+        expect(spawnCount).toBeGreaterThan(0)
+        expect(initializeCount).toBeGreaterThan(0)
+        expect(initializeCount).toBeLessThanOrEqual(spawnCount)
+        expect(snap["touch.select"]?.count).toBe(2)
+        expect(snap["touch.select.spawned"]?.count).toBe(1)
+        expect(snap["touch.notify"]?.count).toBe(2)
+      },
+    })
   })
 })

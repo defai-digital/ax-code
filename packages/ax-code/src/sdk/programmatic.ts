@@ -155,35 +155,37 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>): StreamHandle {
   })
 
   async function* wrappedIterator(): AsyncGenerator<StreamEvent> {
-    for await (const event of source) {
-      // Fire registered callbacks
-      if (event.type === "text" && listeners["text"]) {
-        for (const cb of listeners["text"]) cb(event.text)
-      }
-      if (event.type === "tool-call" && listeners["tool-call"]) {
-        for (const cb of listeners["tool-call"]) cb(event.tool, event.input)
-      }
-      if (event.type === "tool-result" && listeners["tool-result"]) {
-        for (const cb of listeners["tool-result"]) cb(event.tool, event.output, event.status)
-      }
-      if (event.type === "reasoning" && listeners["reasoning"]) {
-        for (const cb of listeners["reasoning"]) cb(event.text)
-      }
-      if (event.type === "error" && listeners["error"]) {
-        for (const cb of listeners["error"]) cb(event.error)
-      }
-      if (event.type === "done") {
-        cachedResult = event.result
-        if (listeners["done"]) {
-          for (const cb of listeners["done"]) cb(event.result)
+    try {
+      for await (const event of source) {
+        // Fire registered callbacks
+        if (event.type === "text" && listeners["text"]) {
+          for (const cb of listeners["text"]) cb(event.text)
         }
-        resolveCompletion?.()
+        if (event.type === "tool-call" && listeners["tool-call"]) {
+          for (const cb of listeners["tool-call"]) cb(event.tool, event.input)
+        }
+        if (event.type === "tool-result" && listeners["tool-result"]) {
+          for (const cb of listeners["tool-result"]) cb(event.tool, event.output, event.status)
+        }
+        if (event.type === "reasoning" && listeners["reasoning"]) {
+          for (const cb of listeners["reasoning"]) cb(event.text)
+        }
+        if (event.type === "error" && listeners["error"]) {
+          for (const cb of listeners["error"]) cb(event.error)
+        }
+        if (event.type === "done") {
+          cachedResult = event.result
+          if (listeners["done"]) {
+            for (const cb of listeners["done"]) cb(event.result)
+          }
+          yield event
+          return
+        }
         yield event
-        return
       }
-      yield event
+    } finally {
+      resolveCompletion?.()
     }
-    resolveCompletion?.()
   }
 
   let generator: AsyncGenerator<StreamEvent> | undefined
@@ -847,7 +849,9 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
   // Enhancement #4: Timeout on createAgent
   if (opts.timeout) {
     const timeoutMs = opts.timeout
-    await withSdkTimeout(initPromise, timeoutMs, () => new TimeoutError(timeoutMs, "createAgent"))
+    await withSdkTimeout(initPromise, timeoutMs, () => new TimeoutError(timeoutMs, "createAgent"), () => {
+      resolveKeepAlive()
+    })
   } else {
     await initPromise
   }

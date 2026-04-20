@@ -58,9 +58,11 @@ export namespace Editor {
     await using _ = defer(async () => rm(filepath, { force: true }))
 
     await Filesystem.write(filepath, opts.value)
-    opts.renderer.suspend()
-    opts.renderer.currentRenderBuffer.clear()
+    let suspended = false
     try {
+      opts.renderer.suspend()
+      suspended = true
+      opts.renderer.currentRenderBuffer.clear()
       const parts = parseCommand(editor)
       if (parts.length === 0) return
       const proc = Process.spawn([...parts, filepath], {
@@ -74,7 +76,7 @@ export namespace Editor {
       return content || undefined
     } finally {
       opts.renderer.currentRenderBuffer.clear()
-      opts.renderer.resume()
+      if (suspended) opts.renderer.resume()
       opts.renderer.requestRender()
     }
   }

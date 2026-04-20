@@ -36,6 +36,7 @@ const report: Bench = {
   summary: {
     elapsedMs: { min: 100, max: 200, mean: 150, median: 140 },
     totalMs: { min: 50, max: 90, mean: 70, median: 60 },
+    diagnosis: ["Cold start dominates: client initialize 250ms, touch.select.spawned 375ms."],
     phases: {
       "lsp.touch": { min: 10, max: 20, mean: 15, median: 14 },
       "lsp.references": { min: 20, max: 40, mean: 30, median: 28 },
@@ -90,6 +91,8 @@ describe("perf.gate", () => {
     expect(text).toContain("Artifact: /tmp/perf-index.json")
     expect(text).toContain("Summary: /tmp/perf-index-summary.json")
     expect(text).toContain("Baseline out: /tmp/perf-index-baseline.json")
+    expect(text).toContain("Diagnosis:")
+    expect(text).toContain("Cold start dominates: client initialize 250ms, touch.select.spawned 375ms.")
     expect(text).toContain("Failures:")
   })
 

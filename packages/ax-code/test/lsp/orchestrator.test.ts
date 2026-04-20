@@ -102,3 +102,48 @@ describe("LSP.markBroken / LSP.isBroken", () => {
     expect(actualBackoff).toBeGreaterThan(expectedBackoff - 50)
   })
 })
+
+describe("LSP.clientModeMatchesServer", () => {
+  test("'all' mode includes semantic and auxiliary servers", () => {
+    expect(LSP.clientModeMatchesServer("all", true)).toBe(true)
+    expect(LSP.clientModeMatchesServer("all", false)).toBe(true)
+    expect(LSP.clientModeMatchesServer("all")).toBe(true)
+  })
+
+  test("'semantic' mode excludes auxiliary servers", () => {
+    expect(LSP.clientModeMatchesServer("semantic", true)).toBe(true)
+    expect(LSP.clientModeMatchesServer("semantic")).toBe(true)
+    expect(LSP.clientModeMatchesServer("semantic", false)).toBe(false)
+  })
+})
+
+describe("LSP.clientMethodMatchesServer", () => {
+  test("allows all servers when no method is requested", () => {
+    expect(LSP.clientMethodMatchesServer(undefined, undefined)).toBe(true)
+    expect(LSP.clientMethodMatchesServer(undefined, { references: false })).toBe(true)
+  })
+
+  test("skips servers that are statically marked unsupported for a method", () => {
+    expect(LSP.clientMethodMatchesServer("references", { references: false })).toBe(false)
+    expect(LSP.clientMethodMatchesServer("callHierarchy", { callHierarchy: false })).toBe(false)
+  })
+
+  test("keeps servers with positive or unknown method hints eligible", () => {
+    expect(LSP.clientMethodMatchesServer("hover", { hover: true })).toBe(true)
+    expect(LSP.clientMethodMatchesServer("documentSymbol", undefined)).toBe(true)
+  })
+
+  test("supports multi-method selection when any requested method is eligible", () => {
+    expect(LSP.clientMethodMatchesServer(["documentSymbol", "references"], { documentSymbol: true })).toBe(true)
+    expect(LSP.clientMethodMatchesServer(["documentSymbol", "references"], { references: true })).toBe(true)
+    expect(LSP.clientMethodMatchesServer(["documentSymbol", "references"], undefined)).toBe(true)
+  })
+
+  test("skips servers only when every requested method is statically unsupported", () => {
+    expect(LSP.clientMethodMatchesServer(["documentSymbol", "references"], { documentSymbol: false })).toBe(true)
+    expect(LSP.clientMethodMatchesServer(["documentSymbol", "references"], {
+      documentSymbol: false,
+      references: false,
+    })).toBe(false)
+  })
+})

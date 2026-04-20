@@ -45,6 +45,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     let queue: Event[] = []
     let timer: Timer | undefined
     let last = 0
+    let sseGeneration = 0
 
     const flush = () => {
       if (queue.length === 0) return
@@ -76,21 +77,33 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     }
 
     function startSSE() {
+      if (timer) clearTimeout(timer)
+      timer = undefined
+      if (queue.length > 0) flush()
       sse?.abort()
       const ctrl = new AbortController()
+      const generation = ++sseGeneration
       sse = ctrl
       const outer = new AbortController()
       const abortOuter = () => outer.abort()
       abort.signal.addEventListener("abort", abortOuter, { once: true })
       ctrl.signal.addEventListener("abort", abortOuter, { once: true })
+      const isCurrentStream = () => generation === sseGeneration && sse === ctrl
       void runResilientStream<Event>({
         signal: outer.signal,
         subscribe: (signal) => sdk.event.subscribe({}, { signal }),
-        onEvent: handleEvent,
-        onStatus: (status) => setSseConnected(status.connected),
+        onEvent: (event) => {
+          if (!isCurrentStream()) return
+          handleEvent(event)
+        },
+        onStatus: (status) => {
+          if (!isCurrentStream()) return
+          setSseConnected(status.connected)
+        },
       }).finally(() => {
         abort.signal.removeEventListener("abort", abortOuter)
         ctrl.signal.removeEventListener("abort", abortOuter)
+        if (!isCurrentStream()) return
         if (timer) clearTimeout(timer)
         if (queue.length > 0) flush()
       })

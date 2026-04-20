@@ -15,6 +15,12 @@ import { Config } from "../config/config"
 import { Session } from "../session"
 import { Provider } from "../provider/provider"
 import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
+import {
+  BOOTSTRAP_PREWARM_MAX_FILES,
+  BOOTSTRAP_PREWARM_MAX_LANGUAGES,
+  BOOTSTRAP_PREWARM_TIMEOUT_MS,
+  INDEXER_SEMANTIC_METHODS,
+} from "../lsp/prewarm-profile"
 
 const BOOTSTRAP_TIMEOUT_MS = 30_000
 
@@ -90,6 +96,21 @@ export async function InstanceBootstrap() {
     service: "Provider.warmup",
     label: "provider warmup",
     task: () => Provider.warmup({ swallow: false }),
+  })
+  // Keep startup responsive: warm only a few representative semantic
+  // servers in the background so the first real semantic/index request
+  // does not pay the full cold-start penalty.
+  background({
+    service: "LSP.prewarmWorkspace",
+    label: "lsp semantic prewarm",
+    timeoutMs: BOOTSTRAP_PREWARM_TIMEOUT_MS,
+    task: () =>
+      LSP.prewarmWorkspace({
+        mode: "semantic",
+        methods: [...INDEXER_SEMANTIC_METHODS],
+        maxFiles: BOOTSTRAP_PREWARM_MAX_FILES,
+        maxLanguages: BOOTSTRAP_PREWARM_MAX_LANGUAGES,
+      }),
   })
   background({
     service: "File.init",

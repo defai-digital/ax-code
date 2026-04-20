@@ -55,11 +55,19 @@ async function rerun(args: RecordedArgs): Promise<RecordedEnvelope> {
         character: (args.character ?? 1) - 1,
       })) as unknown as RecordedEnvelope
     case "findReferences":
-      return (await LSP.referencesEnvelope({
-        file: args.filePath!,
-        line: (args.line ?? 1) - 1,
-        character: (args.character ?? 1) - 1,
-      })) as unknown as RecordedEnvelope
+      return (
+        (await LSP.referencesCachedEnvelope({
+          file: args.filePath!,
+          line: (args.line ?? 1) - 1,
+          character: (args.character ?? 1) - 1,
+        })) ??
+        (await LSP.referencesEnvelope({
+          file: args.filePath!,
+          line: (args.line ?? 1) - 1,
+          character: (args.character ?? 1) - 1,
+          cache: true,
+        }))
+      ) as unknown as RecordedEnvelope
     case "hover":
       return (await LSP.hoverEnvelope({
         file: args.filePath!,
@@ -68,7 +76,8 @@ async function rerun(args: RecordedArgs): Promise<RecordedEnvelope> {
       })) as unknown as RecordedEnvelope
     case "documentSymbol": {
       const uri = pathToFileURL(args.filePath!).href
-      return (await LSP.documentSymbolEnvelope(uri)) as unknown as RecordedEnvelope
+      return ((await LSP.documentSymbolCachedEnvelope(uri)) ??
+        (await LSP.documentSymbolEnvelope(uri, { cache: true }))) as unknown as RecordedEnvelope
     }
     case "goToImplementation":
       return (await LSP.implementationEnvelope({

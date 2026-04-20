@@ -303,6 +303,21 @@ export type RootFunction = (file: string) => Promise<string | undefined>
 export interface ServerInfo {
   id: string
   extensions: string[]
+  semantic?: boolean
+  priority?: number
+  concurrency?: number
+  capabilityHints?: Partial<
+    Record<
+      | "hover"
+      | "definition"
+      | "references"
+      | "implementation"
+      | "documentSymbol"
+      | "workspaceSymbol"
+      | "callHierarchy",
+      boolean
+    >
+  >
   global?: boolean
   root: RootFunction
   spawn(root: string): Promise<Handle | undefined>
