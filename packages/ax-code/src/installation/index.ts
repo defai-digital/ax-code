@@ -222,7 +222,21 @@ export namespace Installation {
             { name: "yarn", command: () => text(["yarn", "global", "list"]) },
             { name: "pnpm", command: () => text(["pnpm", "list", "-g", "--depth=0"]) },
             { name: "bun", command: () => text(["bun", "pm", "ls", "-g"]) },
-            { name: "brew", command: () => text(["brew", "list", "--formula", "ax-code"]) },
+            {
+              name: "brew",
+              command: () =>
+                Effect.gen(function* () {
+                  for (const formula of [
+                    "defai-digital/ax-code/ax-code",
+                    "defai-digital/ax-code/ax",
+                    "ax-code",
+                  ]) {
+                    const out = yield* text(["brew", "list", "--formula", formula])
+                    if (out.trim()) return "ax-code"
+                  }
+                  return ""
+                }),
+            },
             { name: "scoop", command: () => text(["scoop", "list", "ax-code"]) },
             { name: "choco", command: () => text(["choco", "list", "--limit-output", "ax-code"]) },
           ]

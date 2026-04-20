@@ -25,11 +25,12 @@ import { createSimpleContext } from "./helper"
 import type { Snapshot } from "@/snapshot"
 import { useExit } from "./exit"
 import { useArgs } from "./args"
-import { batch, onMount, onCleanup } from "solid-js"
+import { batch, createEffect, on, onMount, onCleanup } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@ax-code/sdk"
 import { upsert, mergeSorted } from "./sync-util"
 import { AutonomousQuestion } from "@/question/autonomous"
+import { createReconnectRecoveryGate } from "../util/reconnect-recovery"
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
@@ -179,6 +180,14 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     })
 
     const sdk = useSDK()
+    const groupBySession = <T extends { sessionID: string; id: string }>(items: T[]) => {
+      return items.reduce<Record<string, T[]>>((acc, item) => {
+        const list = acc[item.sessionID] ?? []
+        list.push(item)
+        acc[item.sessionID] = list
+        return acc
+      }, {})
+    }
 
     async function syncWorkspaces() {
       const result = await sdk.client.worktree.list().catch(() => undefined)
@@ -498,6 +507,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         case "message.part.delta": {
           const parts = store.part[event.properties.messageID]
           if (!parts) break
+          if (event.properties.field !== "text") break
           const result = Binary.search(parts, event.properties.partID, (p) => p.id)
           if (!result.found) break
           setStore(
@@ -505,9 +515,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             event.properties.messageID,
             produce((draft) => {
               const part = draft[result.index]
-              const field = event.properties.field as keyof typeof part
-              const existing = part[field] as string | undefined
-              ;(part[field] as string) = (existing ?? "") + event.properties.delta
+              if (part.type !== "text" && part.type !== "reasoning") return
+              const existing = part.text
+              part.text = (existing ?? "") + event.properties.delta
             }),
           )
           break
@@ -576,95 +586,106 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const exit = useExit()
     const args = useArgs()
 
+    let bootstrapPromise: Promise<void> | undefined
     async function bootstrap() {
-      fullSyncedSessions.clear()
-      const start = Date.now() - 30 * 24 * 60 * 60 * 1000
-      const sessionListPromise = sdk.client.session
-        .list({ start: start })
-        .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
+      if (bootstrapPromise) return bootstrapPromise
+      bootstrapPromise = (async () => {
+        fullSyncedSessions.clear()
+        const start = Date.now() - 30 * 24 * 60 * 60 * 1000
+        const sessionListPromise = sdk.client.session
+          .list({ start: start })
+          .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
 
-      // Only keep the continue-session lookup on the blocking path. The
-      // home route can render immediately with empty provider/agent/config
-      // state and hydrate those details afterward.
-      const providersPromise = sdk.client.config.providers({}, { throwOnError: true })
-      const providerListPromise = sdk.client.provider.list({}, { throwOnError: true })
-      const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
-      const configPromise = sdk.client.config.get({}, { throwOnError: true })
-      const commandPromise = sdk.client.command.list()
-      const blockingRequests: Promise<unknown>[] = args.continue ? [sessionListPromise] : []
+        // Only keep the continue-session lookup on the blocking path. The
+        // home route can render immediately with empty provider/agent/config
+        // state and hydrate those details afterward.
+        const providersPromise = sdk.client.config.providers({}, { throwOnError: true })
+        const providerListPromise = sdk.client.provider.list({}, { throwOnError: true })
+        const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
+        const configPromise = sdk.client.config.get({}, { throwOnError: true })
+        const commandPromise = sdk.client.command.list()
+        const permissionPromise = sdk.client.permission.list()
+        const questionPromise = sdk.client.question.list()
+        const blockingRequests: Promise<unknown>[] = args.continue ? [sessionListPromise] : []
 
-      await Promise.all(blockingRequests)
-        .then(() => {
-          if (args.continue) {
-            return sessionListPromise.then((sessions) => {
-              setStore("session", reconcile(mergeSorted(store.session, sessions)))
-            })
-          }
-        })
-        .then(() => {
-          if (store.status === "loading") setStore("status", "partial")
-          // non-blocking — each call is individually guarded so one failure
-          // doesn't prevent the rest from completing or status from advancing.
-          Promise.allSettled([
-            providersPromise
-              .then((x) => x.data ?? { providers: [], default: {} })
-              .then((providers) => {
-                batch(() => {
-                  setStore("provider", reconcile(providers.providers))
-                  setStore("provider_default", reconcile(providers.default))
-                  setStore("provider_loaded", true)
-                  setStore("provider_failed", false)
-                })
+        await Promise.all(blockingRequests)
+          .then(() => {
+            if (args.continue) {
+              return sessionListPromise.then((sessions) => {
+                setStore("session", reconcile(mergeSorted(store.session, sessions)))
               })
-              .catch((error) => {
-                batch(() => {
-                  setStore("provider_loaded", true)
-                  setStore("provider_failed", true)
-                })
-                throw error
-              }),
-            providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
-            agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
-            configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
-            commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
-            ...(args.continue
-              ? []
-              : [
-                  sessionListPromise.then((sessions) =>
-                    setStore("session", reconcile(mergeSorted(store.session, sessions))),
-                  ),
-                ]),
-            sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data ?? []))),
-            sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data ?? {}))),
-            sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
-            sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data ?? []))),
-            sdk.client.session.status().then((x) => {
-              setStore("session_status", reconcile(x.data ?? {}))
-            }),
-            sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
-            sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
-            sdk.client.path.get().then((x) => setStore("path", reconcile(x.data ?? store.path))),
-            syncWorkspaces(),
-            syncDebugEngine(),
-            syncIsolation(),
-            syncAutonomous(),
-            syncSmartLlm(),
-          ]).then((results) => {
-            for (const r of results) {
-              if (r.status === "rejected")
-                Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
             }
-            setStore("status", "complete")
           })
-        })
-        .catch(async (e) => {
-          Log.Default.error("tui bootstrap failed", {
-            error: e instanceof Error ? e.message : String(e),
-            name: e instanceof Error ? e.name : undefined,
-            stack: e instanceof Error ? e.stack : undefined,
+          .then(() => {
+            if (store.status === "loading") setStore("status", "partial")
+            // Keep bootstrapPromise alive until the background hydration finishes
+            // so reconnect-triggered bootstraps do not overlap and race each other.
+            return Promise.allSettled([
+              providersPromise
+                .then((x) => x.data ?? { providers: [], default: {} })
+                .then((providers) => {
+                  batch(() => {
+                    setStore("provider", reconcile(providers.providers))
+                    setStore("provider_default", reconcile(providers.default))
+                    setStore("provider_loaded", true)
+                    setStore("provider_failed", false)
+                  })
+                })
+                .catch((error) => {
+                  batch(() => {
+                    setStore("provider_loaded", true)
+                    setStore("provider_failed", true)
+                  })
+                  throw error
+                }),
+              providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
+              agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
+              configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
+              commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
+              ...(args.continue
+                ? []
+                : [
+                    sessionListPromise.then((sessions) =>
+                      setStore("session", reconcile(mergeSorted(store.session, sessions))),
+                    ),
+                  ]),
+              permissionPromise.then((x) => setStore("permission", reconcile(groupBySession(x.data ?? [])))),
+              questionPromise.then((x) => setStore("question", reconcile(groupBySession(x.data ?? [])))),
+              sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data ?? []))),
+              sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data ?? {}))),
+              sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
+              sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data ?? []))),
+              sdk.client.session.status().then((x) => {
+                setStore("session_status", reconcile(x.data ?? {}))
+              }),
+              sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
+              sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
+              sdk.client.path.get().then((x) => setStore("path", reconcile(x.data ?? store.path))),
+              syncWorkspaces(),
+              syncDebugEngine(),
+              syncIsolation(),
+              syncAutonomous(),
+              syncSmartLlm(),
+            ]).then((results) => {
+              for (const r of results) {
+                if (r.status === "rejected")
+                  Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
+              }
+              setStore("status", "complete")
+            })
           })
-          await exit(e)
-        })
+          .catch(async (e) => {
+            Log.Default.error("tui bootstrap failed", {
+              error: e instanceof Error ? e.message : String(e),
+              name: e instanceof Error ? e.name : undefined,
+              stack: e instanceof Error ? e.stack : undefined,
+            })
+            await exit(e)
+          })
+      })().finally(() => {
+        bootstrapPromise = undefined
+      })
+      return bootstrapPromise
     }
 
     onMount(() => {
@@ -688,7 +709,18 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       onCleanup(() => clearInterval(debugEnginePoll))
     })
 
+    const reconnectBootstrap = createReconnectRecoveryGate({
+      recover: bootstrap,
+    })
+    createEffect(
+      on(
+        () => sdk.sseConnected,
+        (connected) => reconnectBootstrap.onConnectionChange(connected),
+      ),
+    )
+
     const fullSyncedSessions = new Set<string>()
+    const inFlightSessions = new Set<string>()
     const result = {
       data: store,
       set: setStore,
@@ -714,33 +746,38 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           if (last.role === "user") return "working"
           return last.time.completed ? "idle" : "working"
         },
-        async sync(sessionID: string) {
-          if (fullSyncedSessions.has(sessionID)) return
-          const [session, messages, todo, diff] = await Promise.all([
-            sdk.client.session.get({ sessionID }, { throwOnError: true }),
-            sdk.client.session.messages({ sessionID, limit: 100 }),
-            sdk.client.session.todo({ sessionID }),
-            sdk.client.session.diff({ sessionID }),
-          ])
-          if (!session.data) {
-            Log.Default.warn("session sync returned no session data", { sessionID })
-            return
+        async sync(sessionID: string, input?: { force?: boolean }) {
+          if (!input?.force && (fullSyncedSessions.has(sessionID) || inFlightSessions.has(sessionID))) return
+          inFlightSessions.add(sessionID)
+          try {
+            const [session, messages, todo, diff] = await Promise.all([
+              sdk.client.session.get({ sessionID }, { throwOnError: true }),
+              sdk.client.session.messages({ sessionID, limit: 100 }),
+              sdk.client.session.todo({ sessionID }),
+              sdk.client.session.diff({ sessionID }),
+            ])
+            if (!session.data) {
+              Log.Default.warn("session sync returned no session data", { sessionID })
+              return
+            }
+            const messageList = messages.data ?? []
+            setStore(
+              produce((draft) => {
+                const match = Binary.search(draft.session, sessionID, (s) => s.id)
+                if (match.found) draft.session[match.index] = session.data
+                if (!match.found) draft.session.splice(match.index, 0, session.data)
+                draft.todo[sessionID] = todo.data ?? []
+                draft.message[sessionID] = messageList.map((x) => x.info)
+                for (const message of messageList) {
+                  draft.part[message.info.id] = message.parts
+                }
+                draft.session_diff[sessionID] = diff.data ?? []
+              }),
+            )
+            fullSyncedSessions.add(sessionID)
+          } finally {
+            inFlightSessions.delete(sessionID)
           }
-          const messageList = messages.data ?? []
-          setStore(
-            produce((draft) => {
-              const match = Binary.search(draft.session, sessionID, (s) => s.id)
-              if (match.found) draft.session[match.index] = session.data
-              if (!match.found) draft.session.splice(match.index, 0, session.data)
-              draft.todo[sessionID] = todo.data ?? []
-              draft.message[sessionID] = messageList.map((x) => x.info)
-              for (const message of messageList) {
-                draft.part[message.info.id] = message.parts
-              }
-              draft.session_diff[sessionID] = diff.data ?? []
-            }),
-          )
-          fullSyncedSessions.add(sessionID)
         },
       },
       workspace: {

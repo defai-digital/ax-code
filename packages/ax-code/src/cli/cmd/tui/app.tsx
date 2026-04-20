@@ -48,63 +48,9 @@ import { renderTui } from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
 import { Session } from "@tui/routes/session"
+import { Terminal } from "./util/terminal"
 
-async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
-  // can't set raw mode if not a TTY
-  if (!process.stdin.isTTY) return "dark"
-
-  return new Promise((resolve) => {
-    let timeout: NodeJS.Timeout
-
-    const cleanup = () => {
-      process.stdin.setRawMode(false)
-      process.stdin.removeListener("data", handler)
-      clearTimeout(timeout)
-    }
-
-    const handler = (data: Buffer) => {
-      const str = data.toString()
-      const match = str.match(/\x1b]11;([^\x07\x1b]+)/)
-      if (match) {
-        cleanup()
-        const color = match[1]
-        let r = 0
-        let g = 0
-        let b = 0
-
-        if (color.startsWith("rgb:")) {
-          const parts = color.substring(4).split("/")
-          r = parseInt(parts[0], 16) >> 8
-          g = parseInt(parts[1], 16) >> 8
-          b = parseInt(parts[2], 16) >> 8
-        } else if (color.startsWith("#")) {
-          r = parseInt(color.substring(1, 3), 16)
-          g = parseInt(color.substring(3, 5), 16)
-          b = parseInt(color.substring(5, 7), 16)
-        } else if (color.startsWith("rgb(")) {
-          const parts = color.substring(4, color.length - 1).split(",")
-          r = parseInt(parts[0])
-          g = parseInt(parts[1])
-          b = parseInt(parts[2])
-        }
-
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-        resolve(luminance > 0.5 ? "light" : "dark")
-      }
-    }
-
-    process.stdin.setRawMode(true)
-    process.stdin.on("data", handler)
-    process.stdout.write("\x1b]11;?\x07")
-
-    timeout = setTimeout(() => {
-      cleanup()
-      resolve("dark")
-    }, 150)
-  })
-}
-
-export function tui(input: {
+export type TuiInput = {
   url: string
   args: Args
   config: TuiConfig.Info
@@ -113,31 +59,35 @@ export function tui(input: {
   fetch?: typeof fetch
   headers?: RequestInit["headers"]
   events?: EventSource
-}) {
+}
+
+export function tui(input: TuiInput) {
   // promise to prevent immediate exit
-  return new Promise<void>(async (resolve) => {
-    const unguard = win32InstallCtrlCGuard()
-    win32DisableProcessedInput()
-    const mode = await getTerminalBackgroundColor()
+  return new Promise<void>((resolve, reject) => {
+    void (async () => {
+      const unguard = win32InstallCtrlCGuard()
+      try {
+        win32DisableProcessedInput()
+        const mode = await Terminal.getTerminalBackgroundColor()
 
-    // Re-clear after getTerminalBackgroundColor() — setRawMode(false) restores
-    // the original console mode which re-enables ENABLE_PROCESSED_INPUT.
-    win32DisableProcessedInput()
+        // Re-clear after getTerminalBackgroundColor() — setRawMode(false) restores
+        // the original console mode which re-enables ENABLE_PROCESSED_INPUT.
+        win32DisableProcessedInput()
 
-    const onExit = async () => {
-      unguard?.()
-      resolve()
-    }
+        const onExit = async () => {
+          unguard?.()
+          resolve()
+        }
 
-    renderTui(() => {
-      return (
-        <ErrorBoundary
-          fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}
-        >
-          <ArgsProvider {...input.args}>
-            <ExitProvider onExit={onExit}>
-              <KVProvider>
-                <ToastProvider>
+        renderTui(() => {
+          return (
+            <ErrorBoundary
+              fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}
+            >
+              <ArgsProvider {...input.args}>
+                <ExitProvider onExit={onExit}>
+                  <KVProvider>
+                    <ToastProvider>
                   <RouteProvider>
                     <TuiConfigProvider config={input.config}>
                       <SDKProvider
@@ -171,13 +121,18 @@ export function tui(input: {
                       </SDKProvider>
                     </TuiConfigProvider>
                   </RouteProvider>
-                </ToastProvider>
-              </KVProvider>
-            </ExitProvider>
-          </ArgsProvider>
-        </ErrorBoundary>
-      )
-    })
+                    </ToastProvider>
+                  </KVProvider>
+                </ExitProvider>
+              </ArgsProvider>
+            </ErrorBoundary>
+          )
+        })
+      } catch (error) {
+        unguard?.()
+        reject(error)
+      }
+    })()
   })
 }
 
@@ -369,6 +324,82 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
 
   const args = useArgs()
+
+  async function putJsonWithTimeout(path: string, body: unknown, headers?: Record<string, string>) {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 10_000)
+    try {
+      const response = await sdk.fetch(`${sdk.url}${path}`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
+      }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  const RETRY_DELAY_MS = 250
+  const MAX_SESSION_FORK_ATTEMPTS = 3
+  const retryTimers = new Set<ReturnType<typeof setTimeout>>()
+  let forkRetryDisposed = false
+
+  onCleanup(() => {
+    forkRetryDisposed = true
+    for (const timer of retryTimers) clearTimeout(timer)
+    retryTimers.clear()
+  })
+
+  function scheduleRetry(fn: () => void, delay = RETRY_DELAY_MS) {
+    const timer = setTimeout(() => {
+      retryTimers.delete(timer)
+      fn()
+    }, delay)
+    retryTimers.add(timer)
+  }
+
+  function forkSessionWithRetries(input: { sessionID: string; source: "continue" | "startup" }) {
+    const attemptFork = (attempt: number) => {
+      sdk.client.session
+        .fork({ sessionID: input.sessionID })
+        .then((result) => {
+          if (forkRetryDisposed) return
+          if (result.data?.id) {
+            route.navigate({ type: "session", sessionID: result.data.id })
+            return
+          }
+          if (attempt < MAX_SESSION_FORK_ATTEMPTS) {
+            scheduleRetry(() => attemptFork(attempt + 1))
+            return
+          }
+          toast.show({ message: "Failed to fork session", variant: "error" })
+        })
+        .catch((error) => {
+          if (forkRetryDisposed) return
+          Log.Default.warn("failed to fork session", {
+            source: input.source,
+            sessionID: input.sessionID,
+            attempt,
+            error,
+          })
+          if (attempt < MAX_SESSION_FORK_ATTEMPTS) {
+            scheduleRetry(() => attemptFork(attempt + 1))
+            return
+          }
+          toast.show({ message: "Failed to fork session", variant: "error" })
+        })
+    }
+
+    attemptFork(1)
+  }
+
   onMount(() => {
     batch(() => {
       if (args.agent) local.agent.set(args.agent)
@@ -390,6 +421,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         })
       }
     })
+
   })
 
   let continued = false
@@ -402,13 +434,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     if (match) {
       continued = true
       if (args.fork) {
-        sdk.client.session.fork({ sessionID: match }).then((result) => {
-          if (result.data?.id) {
-            route.navigate({ type: "session", sessionID: result.data.id })
-          } else {
-            toast.show({ message: "Failed to fork session", variant: "error" })
-          }
-        })
+        forkSessionWithRetries({ sessionID: match, source: "continue" })
       } else {
         route.navigate({ type: "session", sessionID: match })
       }
@@ -418,25 +444,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // Handle --session with --fork: wait for sync to be fully complete before forking
   // (session list loads in non-blocking phase for --session, so we must wait for "complete"
   // to avoid a race where reconcile overwrites the newly forked session)
-  let forked = false
+  let startupForkStarted = false
   createEffect(() => {
-    if (forked || sync.status !== "complete" || !args.sessionID || !args.fork) return
-    forked = true
-    sdk.client.session
-      .fork({ sessionID: args.sessionID })
-      .then((result) => {
-        if (result.data?.id) {
-          route.navigate({ type: "session", sessionID: result.data.id })
-        } else {
-          toast.show({ message: "Failed to fork session", variant: "error" })
-          forked = false
-        }
-      })
-      .catch((error) => {
-        Log.Default.warn("failed to fork startup session", { sessionID: args.sessionID, error })
-        toast.show({ message: "Failed to fork session", variant: "error" })
-        forked = false
-      })
+    if (startupForkStarted || sync.status !== "complete" || !args.sessionID || !args.fork) return
+    startupForkStarted = true
+    forkSessionWithRetries({ sessionID: args.sessionID, source: "startup" })
   })
 
   createEffect(
@@ -793,12 +805,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: (dialog) => {
         const next = !sync.data.smartLlm
         sync.set("smartLlm", next)
-        sdk
-          .fetch(`${sdk.url}/smart-llm`, {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ enabled: next }),
-          })
+        void putJsonWithTimeout("/smart-llm", { enabled: next })
           .catch(() => {
             sync.set("smartLlm", !next)
           })
@@ -813,12 +820,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: (dialog) => {
         const next = !sync.data.autonomous
         sync.set("autonomous", next)
-        sdk
-          .fetch(`${sdk.url}/autonomous`, {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ enabled: next }),
-          })
+        void putJsonWithTimeout("/autonomous", { enabled: next })
           .catch(() => {
             sync.set("autonomous", !next)
           })
@@ -831,8 +833,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
       slash: { name: "sandbox", aliases: ["toggle-sandbox"] },
       onSelect: (dialog) => {
-        const on = sync.data.isolation.mode !== "full-access"
-        const next = on ? "full-access" : "workspace-write"
+        const previousMode = sync.data.isolation.mode
+        const previousNetwork = sync.data.isolation.network
+        const next = previousMode === "full-access" ? "workspace-write" : "full-access"
         sync.set("isolation", "mode", next)
         sync.set("isolation", "network", next === "full-access")
         const headers: Record<string, string> = { "content-type": "application/json" }
@@ -841,15 +844,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           headers["x-ax-code-directory"] = encoded
           headers["x-opencode-directory"] = encoded
         }
-        sdk
-          .fetch(`${sdk.url}/isolation`, {
-            method: "PUT",
-            headers,
-            body: JSON.stringify({ mode: next }),
-          })
+        void putJsonWithTimeout("/isolation", { mode: next }, headers)
           .catch(() => {
-            sync.set("isolation", "mode", on ? "workspace-write" : "full-access")
-            sync.set("isolation", "network", on ? false : true)
+            sync.set("isolation", "mode", previousMode)
+            sync.set("isolation", "network", previousNetwork)
           })
         dialog.clear()
       },
@@ -941,10 +939,14 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       const result = await sdk.client.global.upgrade({ target: version })
 
       if (result.error || !result.data?.success) {
+        const reason =
+          (result.data as { success: false; error: string } | undefined)?.error ||
+          (result.error instanceof Error ? result.error.message : String(result.error ?? "")) ||
+          "Update failed"
         toast.show({
           variant: "error",
           title: "Update Failed",
-          message: "Update failed",
+          message: reason,
           duration: 10000,
         })
         return

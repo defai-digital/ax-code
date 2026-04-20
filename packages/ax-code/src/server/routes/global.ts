@@ -238,9 +238,6 @@ export const GlobalRoutes = lazy(() =>
       ),
       async (c) => {
         const method = await Installation.method()
-        if (method === "unknown") {
-          return c.json({ success: false, error: "Unknown installation method" }, 400)
-        }
         const rawTarget = c.req.valid("json").target || (await Installation.latest(method))
         const target = semver.valid(semver.coerce(rawTarget))
         if (!target) {
