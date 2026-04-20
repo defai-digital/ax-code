@@ -1,6 +1,7 @@
 import fs from "fs/promises"
+import os from "os"
 import path from "path"
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import { NamedError } from "@ax-code/util/error"
 import { fileURLToPath } from "url"
 import { Instance } from "../../src/project/instance"
@@ -237,6 +238,28 @@ describe("session.prompt special characters", () => {
     })
 
     await fs.unlink(outside).catch(() => {})
+  })
+
+  test("resolves @~/file references that stay within the home directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const fakeHome = path.join(tmp.path, "home")
+    await fs.mkdir(fakeHome, { recursive: true })
+    await Bun.write(path.join(fakeHome, "allowed.txt"), "home content\n")
+    const homedir = spyOn(os, "homedir").mockReturnValue(fakeHome)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parts = await SessionPrompt.resolvePromptParts("Read @~/allowed.txt")
+          const fileParts = parts.filter((part) => part.type === "file")
+          expect(fileParts).toHaveLength(1)
+          expect(fileURLToPath(fileParts[0].url)).toBe(path.join(fakeHome, "allowed.txt"))
+        },
+      })
+    } finally {
+      homedir.mockRestore()
+    }
   })
 })
 

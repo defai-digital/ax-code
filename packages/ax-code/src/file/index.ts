@@ -516,10 +516,11 @@ export namespace File {
     if (realFull && !Filesystem.contains(Instance.directory, realFull)) {
       throw new Error("Access denied: symlink target escapes project directory")
     }
+    const readTarget = realFull ?? full
 
     if (isImageByExtension(file)) {
       if (await Filesystem.exists(full)) {
-        const buffer = await Filesystem.readBytes(full)
+        const buffer = await Filesystem.readBytes(readTarget)
         return {
           type: "text",
           content: buffer.toString("base64"),
@@ -548,7 +549,7 @@ export namespace File {
     }
 
     if (encode) {
-      const buffer = await Filesystem.readBytes(full)
+      const buffer = await Filesystem.readBytes(readTarget)
       return {
         type: "text",
         content: buffer.toString("base64"),
@@ -557,7 +558,7 @@ export namespace File {
       }
     }
 
-    const content = await Filesystem.readText(full).catch(() => "")
+    const content = await Filesystem.readText(readTarget).catch(() => "")
 
     if (Instance.project.vcs === "git") {
       let diff = (await git(["-c", "core.fsmonitor=false", "diff", "--", file], { cwd: Instance.directory })).text()

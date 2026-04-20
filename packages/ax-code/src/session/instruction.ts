@@ -19,6 +19,19 @@ const FILES = [
   "CONTEXT.md", // deprecated
 ]
 
+function resolveHomeInstructionPath(input: string) {
+  const resolved = path.resolve(os.homedir(), input.slice(2))
+  if (!Filesystem.contains(os.homedir(), resolved)) {
+    log.warn("instruction path escapes home directory", { path: input, resolved })
+    return
+  }
+  return resolved
+}
+
+function allowInstructionAbsolutePath(input: string) {
+  return Filesystem.contains(Instance.worktree, input) || Filesystem.contains(os.homedir(), input)
+}
+
 function globalFiles() {
   const files = []
   if (Flag.AX_CODE_CONFIG_DIR) {
@@ -98,7 +111,16 @@ export namespace InstructionPrompt {
       for (let instruction of config.instructions) {
         if (instruction.startsWith("https://") || instruction.startsWith("http://")) continue
         if (instruction.startsWith("~/")) {
-          instruction = path.join(os.homedir(), instruction.slice(2))
+          const resolved = resolveHomeInstructionPath(instruction)
+          if (!resolved) continue
+          instruction = resolved
+        }
+        if (path.isAbsolute(instruction)) {
+          instruction = path.resolve(instruction)
+          if (!allowInstructionAbsolutePath(instruction)) {
+            log.warn("instruction path escapes allowed roots", { path: instruction })
+            continue
+          }
         }
         const matches = path.isAbsolute(instruction)
           ? await Glob.scan(path.basename(instruction), {

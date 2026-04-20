@@ -1,4 +1,4 @@
-import { afterEach, describe, test, expect } from "bun:test"
+import { afterEach, describe, test, expect, spyOn } from "bun:test"
 import { $ } from "bun"
 import path from "path"
 import fs from "fs/promises"
@@ -83,6 +83,30 @@ describe("file/index Filesystem patterns", () => {
           expect(result.content).toBe("line1\nline2\nline3")
         },
       })
+    })
+
+    test("reads via the resolved target path after symlink validation", async () => {
+      await using tmp = await tmpdir()
+      const target = path.join(tmp.path, "target.txt")
+      const link = path.join(tmp.path, "link.txt")
+      await fs.writeFile(target, "Hello via target", "utf-8")
+      await fs.symlink(target, link)
+
+      const originalReadText = Filesystem.readText.bind(Filesystem)
+      const readText = spyOn(Filesystem, "readText").mockImplementation((filepath) => originalReadText(filepath))
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const result = await File.read("link.txt")
+            expect(result.content).toBe("Hello via target")
+          },
+        })
+        expect(readText).toHaveBeenCalledWith(target)
+      } finally {
+        readText.mockRestore()
+      }
     })
   })
 

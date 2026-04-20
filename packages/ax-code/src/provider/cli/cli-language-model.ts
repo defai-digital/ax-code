@@ -77,9 +77,11 @@ export class CliLanguageModel implements LanguageModelV3 {
     })
 
     if (this.useStdin()) {
-      proc.stdin!.write(text)
-      proc.stdin!.end()
+      if (!proc.stdin) throw new Error("CLI process stdin not available")
+      proc.stdin.write(text)
+      proc.stdin.end()
     }
+    if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
 
     let timeoutTimer: ReturnType<typeof setTimeout>
     const timeout = new Promise<never>((_, reject) =>
@@ -89,7 +91,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
       }, CLI_TIMEOUT_MS),
     )
-    const result = Promise.all([proc.exited, buffer(proc.stdout!), buffer(proc.stderr!)])
+    const result = Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
     result.catch(() => {})
     const [code, stdout, stderr] = await Promise.race([result, timeout])
     clearTimeout(timeoutTimer!)
@@ -118,9 +120,11 @@ export class CliLanguageModel implements LanguageModelV3 {
     })
 
     if (this.useStdin()) {
-      proc.stdin!.write(text)
-      proc.stdin!.end()
+      if (!proc.stdin) throw new Error("CLI process stdin not available")
+      proc.stdin.write(text)
+      proc.stdin.end()
     }
+    if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
 
     const parser = this.config.parser
     const textId = "cli-0"

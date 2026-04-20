@@ -57,7 +57,11 @@ export namespace Snapshot {
 
   function decode(file: string) {
     if (!file.startsWith('"')) return file
-    return JSON.parse(file) as string
+    try {
+      return JSON.parse(file) as string
+    } catch {
+      return file
+    }
   }
 
   function parsePair(line: string) {

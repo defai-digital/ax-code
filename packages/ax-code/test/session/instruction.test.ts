@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import os from "os"
 import path from "path"
 import { InstructionPrompt } from "../../src/session/instruction"
 import { Instance } from "../../src/project/instance"
@@ -165,6 +166,56 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
       })
     } finally {
       ;(Global.Path as { config: string }).config = originalGlobalConfig
+    }
+  })
+
+  test("rejects ~/ instruction paths that escape the home directory", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["~/../escaped.md"],
+      },
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "escaped.md"), "# escaped")
+      },
+    })
+    const fakeHome = path.join(tmp.path, "home")
+    const homedir = spyOn(os, "homedir").mockReturnValue(fakeHome)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const paths = await InstructionPrompt.systemPaths()
+          expect(Array.from(paths)).not.toContain(path.join(tmp.path, "escaped.md"))
+        },
+      })
+    } finally {
+      homedir.mockRestore()
+    }
+  })
+
+  test("allows ~/ instruction paths that stay within the home directory", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["~/rules.md"],
+      },
+    })
+    const fakeHome = path.join(tmp.path, "home")
+    await Bun.write(path.join(fakeHome, "rules.md"), "# home rules")
+    const homedir = spyOn(os, "homedir").mockReturnValue(fakeHome)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const paths = await InstructionPrompt.systemPaths()
+          expect(paths.has(path.join(fakeHome, "rules.md"))).toBe(true)
+        },
+      })
+    } finally {
+      homedir.mockRestore()
     }
   })
 })

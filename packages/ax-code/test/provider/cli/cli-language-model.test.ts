@@ -1,6 +1,7 @@
-import { test, expect, describe } from "bun:test"
+import { test, expect, describe, spyOn } from "bun:test"
 import { buildCliCommand, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
 import { claudeCodeParser, geminiCliParser, codexCliParser } from "../../../src/provider/cli/parser"
+import { Process } from "../../../src/util/process"
 
 function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageModel>[0]>) {
   return new CliLanguageModel({
@@ -129,6 +130,48 @@ describe("CliLanguageModel", () => {
         prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
       }),
     ).rejects.toThrow(/CLI exited with code 7: partial output/)
+  })
+
+  test("doGenerate fails cleanly when stdin stream is unavailable", async () => {
+    const spawn = spyOn(Process, "spawn").mockReturnValue({
+      stdin: null,
+      stdout: new ReadableStream() as any,
+      stderr: new ReadableStream() as any,
+      exited: Promise.resolve(0),
+      kill() {},
+    } as any)
+
+    try {
+      const model = makeModel({ promptMode: "stdin" })
+      await expect(
+        model.doGenerate({
+          prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        }),
+      ).rejects.toThrow("CLI process stdin not available")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream fails cleanly when output streams are unavailable", async () => {
+    const spawn = spyOn(Process, "spawn").mockReturnValue({
+      stdin: { write() {}, end() {} },
+      stdout: null,
+      stderr: null,
+      exited: Promise.resolve(0),
+      kill() {},
+    } as any)
+
+    try {
+      const model = makeModel({ promptMode: "stdin" })
+      await expect(
+        model.doStream({
+          prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        }),
+      ).rejects.toThrow("CLI process output not available")
+    } finally {
+      spawn.mockRestore()
+    }
   })
 
   test("doStream surfaces process failure after stdout and does not finish", async () => {
