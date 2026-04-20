@@ -100,15 +100,23 @@ export function ScrollView(props: ScrollViewProps) {
     const observer = new ResizeObserver(() => {
       updateThumb()
     })
+    const observeContent = () => {
+      for (const child of Array.from(viewportRef.children)) {
+        observer.observe(child)
+      }
+    }
+    const mutationObserver = new MutationObserver(() => {
+      observeContent()
+      updateThumb()
+    })
 
     observer.observe(viewportRef)
-    // Also observe the first child if possible to catch content changes
-    if (viewportRef.firstElementChild) {
-      observer.observe(viewportRef.firstElementChild)
-    }
+    observeContent()
+    mutationObserver.observe(viewportRef, { childList: true })
 
     onCleanup(() => {
       observer.disconnect()
+      mutationObserver.disconnect()
     })
 
     updateThumb()

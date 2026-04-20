@@ -108,10 +108,31 @@ export function useFilteredList<T>(props: FilteredListProps<T>) {
   }
 
   createEffect(
-    on(() => store.filter, () => {
-      reset()
-    }),
+    on(
+      () => store.filter,
+      () => {
+        reset()
+      },
+    ),
   )
+
+  createEffect(() => {
+    if (grouped.loading) return
+    if (props.noInitialSelection) {
+      if (list.active() !== "") list.setActive("")
+      return
+    }
+
+    const items = flat()
+    if (items.length === 0) {
+      if (list.active() !== "") list.setActive("")
+      return
+    }
+
+    const active = list.active()
+    if (active && items.some((item) => props.key(item) === active)) return
+    reset()
+  })
 
   const onInput = (value: string) => {
     setStore("filter", value)

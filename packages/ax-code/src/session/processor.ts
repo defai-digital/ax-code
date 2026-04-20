@@ -133,6 +133,7 @@ export namespace SessionProcessor {
           let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
           try {
             let usedTools = false
+            let receivedFinish = false
             let stepStartTime = Date.now()
             let stepParts: Array<{ type: "text", text: string } | { type: "reasoning", text: string } | { type: "tool_call", callID: string, tool: string, input: Record<string, unknown> }> = []
             Recorder.emit({
@@ -638,6 +639,7 @@ export namespace SessionProcessor {
                   break
 
                 case "finish":
+                  receivedFinish = true
                   break
 
                 default:
@@ -670,6 +672,12 @@ export namespace SessionProcessor {
                 }
                 break
               }
+            }
+            // If the stream ended without a "finish" event and we're not
+            // doing compaction, the connection was likely severed by a
+            // network interruption. Throw so the catch path triggers retry.
+            if (!receivedFinish && !needsCompaction && !input.abort.aborted) {
+              throw new Error("Stream ended without finish event — possible network interruption")
             }
           } catch (e: unknown) {
             deltaBatcher.flush()

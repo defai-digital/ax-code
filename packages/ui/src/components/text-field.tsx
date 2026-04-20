@@ -1,5 +1,5 @@
 import { TextField as Kobalte } from "@kobalte/core/text-field"
-import { createSignal, Show, splitProps } from "solid-js"
+import { createSignal, onCleanup, Show, splitProps } from "solid-js"
 import type { ComponentProps } from "solid-js"
 import { useI18n } from "../context/i18n"
 import { IconButton } from "./icon-button"
@@ -54,6 +54,11 @@ export function TextField(props: TextFieldProps) {
     "multiline",
   ])
   const [copied, setCopied] = createSignal(false)
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer)
+  })
 
   const label = () => {
     if (copied()) return i18n.t("ui.textField.copied")
@@ -72,7 +77,8 @@ export function TextField(props: TextFieldProps) {
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => setCopied(false), 2000)
     } catch {}
   }
 

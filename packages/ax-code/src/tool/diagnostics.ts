@@ -4,6 +4,9 @@ import { Bus } from "../bus"
 import { File } from "../file"
 import { FileWatcher } from "../file/watcher"
 import { MAX_DIAGNOSTICS_PER_FILE, MAX_PROJECT_DIAGNOSTICS_FILES } from "@/constants/tool"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tool.diagnostics" })
 
 /**
  * Publish file edit + watcher events. Shared across edit, write, and apply_patch.
@@ -17,12 +20,17 @@ export async function notifyFileEdited(file: string, event: "change" | "add") {
  * Touch files with LSP, collect diagnostics, and render output string.
  * Shared across edit, write, and apply_patch.
  */
-export async function collectDiagnostics(
-  files: string[],
-  options?: { includeProjectDiagnostics?: boolean },
-) {
+export async function collectDiagnostics(files: string[], options?: { includeProjectDiagnostics?: boolean }) {
   const uniqueFiles = [...new Set(files)]
-  await Promise.all(uniqueFiles.map((file) => LSP.touchFile(file, false)))
+  const touched = await Promise.allSettled(uniqueFiles.map((file) => LSP.touchFile(file, false)))
+  for (let index = 0; index < touched.length; index++) {
+    const result = touched[index]
+    if (result?.status !== "rejected") continue
+    log.warn("failed to warm LSP before collecting diagnostics", {
+      file: uniqueFiles[index],
+      error: result.reason,
+    })
+  }
   const diagnostics = await LSP.diagnostics()
   return { diagnostics, output: renderDiagnostics(diagnostics, files, options) }
 }

@@ -160,9 +160,7 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
         <box flexDirection="column" gap={0}>
           <text fg={theme.textMuted}>Files ({files.length})</text>
           <box>
-            <For each={files.slice(0, 10)}>
-              {(f) => <text fg={theme.text}>{"  " + normalizePath(f)}</text>}
-            </For>
+            <For each={files.slice(0, 10)}>{(f) => <text fg={theme.text}>{"  " + normalizePath(f)}</text>}</For>
             <Show when={files.length > 10}>
               <text fg={theme.textMuted}>{`  … and ${files.length - 10} more`}</text>
             </Show>
@@ -558,6 +556,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
     }
     if (evt.name === "return") {
       evt.preventDefault()
+      if (!input || input.isDestroyed) return
       props.onConfirm(input.plainText)
     }
   })

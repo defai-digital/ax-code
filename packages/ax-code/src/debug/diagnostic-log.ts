@@ -3,6 +3,7 @@ import { appendFileSync } from "fs"
 import path from "path"
 import os from "os"
 import type { ReplayEvent } from "@/replay/event"
+import { Log } from "@/util/log"
 
 type ConfigureOptions = {
   enabled: boolean
@@ -49,6 +50,7 @@ const SENSITIVE_LOG_KEYS = new Set([
 let state: State | undefined
 let writeQueue = Promise.resolve()
 let processDiagnosticsInstalled = false
+const log = Log.create({ service: "diagnostic-log" })
 
 export namespace DiagnosticLog {
   export function enabled() {
@@ -105,7 +107,9 @@ export namespace DiagnosticLog {
       fs.writeFile(path.join(dir, `manifest-${component}-${manifest.pid}.json`), manifestContent),
       fs.writeFile(path.join(dir, `manifest-latest-${component}.json`), manifestContent),
       fs.writeFile(path.join(dir, "manifest-latest.json"), manifestContent),
-    ]).catch(() => {})
+    ]).catch((error) => {
+      log.warn("failed to write diagnostic manifests", { dir, error })
+    })
     recordProcess("configured", { component: manifest.component, version: manifest.version })
   }
 

@@ -1,4 +1,4 @@
-import { type ComponentProps, createMemo, Show, splitProps } from "solid-js"
+import { type ComponentProps, createMemo, onCleanup, Show, splitProps } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Card, CardDescription } from "./card"
 import { Collapsible } from "./collapsible"
@@ -24,6 +24,12 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
   const open = () => state.open
   const copied = () => state.copied
   const [split, rest] = splitProps(props, ["tool", "error", "defaultOpen", "subtitle", "href"])
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer)
+  })
+
   const name = createMemo(() => {
     const map: Record<string, string> = {
       read: "ui.tool.read",
@@ -71,7 +77,8 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
     if (!text) return
     await navigator.clipboard.writeText(text)
     setState("copied", true)
-    setTimeout(() => setState("copied", false), 2000)
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => setState("copied", false), 2000)
   }
 
   return (

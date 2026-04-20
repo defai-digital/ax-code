@@ -1280,7 +1280,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           borderColor={theme.error}
         >
           <text fg={theme.textMuted}>
-            {props.message.error?.data?.message ?? props.message.error?.message ?? "An error occurred"}
+            {props.message.error?.data?.message ?? "An error occurred"}
           </text>
         </box>
       </Show>

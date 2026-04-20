@@ -47,10 +47,10 @@ import * as ConfigSchema from "./schema"
 // Used to be copy-pasted in 4 places — a domain rename or versioning
 // change would have missed at least one site and persisted wrong
 // schema URLs into random users' configs. See issue #17.
-const CONFIG_SCHEMA_URL = "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json"
+const CONFIG_SCHEMA_URL =
+  "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json"
 
 export namespace Config {
-
   const log = Log.create({ service: "config" })
 
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
@@ -106,7 +106,13 @@ export namespace Config {
       if (value.type === "wellknown") {
         const url = key.replace(/\/+$/, "")
         if (!/^[A-Z][A-Z0-9_]*$/.test(value.key)) {
-          log.warn("ignoring wellknown auth with invalid env var name", { command: "config.load", status: "error", errorCode: "INVALID_ENV_VAR", key: value.key, url: key })
+          log.warn("ignoring wellknown auth with invalid env var name", {
+            command: "config.load",
+            status: "error",
+            errorCode: "INVALID_ENV_VAR",
+            key: value.key,
+            url: key,
+          })
           continue
         }
         process.env[value.key] = value.token
@@ -123,7 +129,13 @@ export namespace Config {
             await Ssrf.assertPublicUrl(endpoint, "wellknown-config")
             await Ssrf.assertPublicUrl(legacy, "wellknown-config")
           } catch (err) {
-            log.warn("wellknown config URL rejected by SSRF guard", { command: "config.load", status: "error", errorCode: "SSRF_REJECTED", url, err })
+            log.warn("wellknown config URL rejected by SSRF guard", {
+              command: "config.load",
+              status: "error",
+              errorCode: "SSRF_REJECTED",
+              url,
+              err,
+            })
             return undefined
           }
           const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(10_000) })
@@ -133,7 +145,13 @@ export namespace Config {
             })
             .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) }))
           if (!response.ok) {
-            log.warn("failed to fetch remote config", { command: "config.load", status: "error", errorCode: "REMOTE_FETCH", url, httpStatus: response.status })
+            log.warn("failed to fetch remote config", {
+              command: "config.load",
+              status: "error",
+              errorCode: "REMOTE_FETCH",
+              url,
+              httpStatus: response.status,
+            })
             return undefined
           }
           const wellknown = (await response.json()) as Record<string, unknown>
@@ -147,7 +165,13 @@ export namespace Config {
           log.debug("loaded remote config from well-known", { command: "config.load", status: "ok", url })
           return loaded
         } catch (err) {
-          log.warn("failed to load wellknown config", { command: "config.load", status: "error", errorCode: "WELLKNOWN_LOAD", url, error: err })
+          log.warn("failed to load wellknown config", {
+            command: "config.load",
+            status: "error",
+            errorCode: "WELLKNOWN_LOAD",
+            url,
+            error: err,
+          })
           return undefined
         }
       }),
@@ -172,9 +196,20 @@ export namespace Config {
       // in by anyone — treat them as untrusted so a malicious
       // `ax-code.json` committed to a shared repo cannot read files
       // outside the config's directory.
-      const configs = await Promise.all(projectFiles.map((file) => loadFile(file, { trusted: false })))
-      for (const cfg of configs) {
-        result = mergeConfigConcatArrays(result, cfg)
+      const configs = await Promise.allSettled(projectFiles.map((file) => loadFile(file, { trusted: false })))
+      for (let index = 0; index < configs.length; index++) {
+        const cfg = configs[index]
+        const filepath = projectFiles[index]
+        if (cfg?.status === "fulfilled") {
+          result = mergeConfigConcatArrays(result, cfg.value)
+          continue
+        }
+        log.warn("failed to load project config", {
+          command: "config.load",
+          status: "error",
+          path: filepath,
+          error: cfg?.reason,
+        })
       }
     }
 
@@ -186,7 +221,11 @@ export namespace Config {
 
     // .ax-code directory config overrides (project and global) config sources.
     if (Flag.AX_CODE_CONFIG_DIR) {
-      log.debug("loading config from AX_CODE_CONFIG_DIR", { command: "config.load", status: "started", path: Flag.AX_CODE_CONFIG_DIR })
+      log.debug("loading config from AX_CODE_CONFIG_DIR", {
+        command: "config.load",
+        status: "started",
+        path: Flag.AX_CODE_CONFIG_DIR,
+      })
     }
 
     const deps = []
@@ -221,7 +260,10 @@ export namespace Config {
       const pluginFiles = await loadPlugin(dir)
       result.plugin.push(...pluginFiles)
 
-      if (dependencyManaged && [...configuredPlugins, ...pluginFiles].some((plugin) => isLocalFilePlugin(plugin, dir))) {
+      if (
+        dependencyManaged &&
+        [...configuredPlugins, ...pluginFiles].some((plugin) => isLocalFilePlugin(plugin, dir))
+      ) {
         deps.push(
           iife(async () => {
             const shouldInstall = await needsInstall(dir)
@@ -252,11 +294,10 @@ export namespace Config {
           accountTimer = setTimeout(() => reject(new Error("account config fetch timed out")), 10_000)
         })
         const [config, token] = await Promise.race([
-          Promise.all([
-            Account.config(active.id, active.active_org_id),
-            Account.token(active.id),
-          ]),
-          accountTimeout.then(() => { throw new Error("timeout") }),
+          Promise.all([Account.config(active.id, active.active_org_id), Account.token(active.id)]),
+          accountTimeout.then(() => {
+            throw new Error("timeout")
+          }),
         ]).finally(() => clearTimeout(accountTimer!))
         if (token) {
           process.env["AX_CODE_CONSOLE_TOKEN"] = token
@@ -375,11 +416,7 @@ export namespace Config {
 
   export async function waitForDependencies() {
     const deps = await state().then((x) => x.deps)
-    await withTimeout(
-      Promise.all(deps),
-      60_000,
-      "config dependency installation timed out after 60s",
-    )
+    await withTimeout(Promise.all(deps), 60_000, "config dependency installation timed out after 60s")
   }
 
   export async function installDependencies(dir: string) {
@@ -402,13 +439,7 @@ export namespace Config {
     const hasGitIgnore = await Filesystem.exists(gitignore)
     if (!hasGitIgnore)
       await Filesystem.write(gitignore, ["node_modules", "package.json", "bun.lock", ".gitignore"].join("\n"))
-    await BunProc.run(
-      [
-        "install",
-        ...BunProc.installCacheWorkaroundArgs(),
-      ],
-      { cwd: dir },
-    ).catch((err) => {
+    await BunProc.run(["install", ...BunProc.installCacheWorkaroundArgs()], { cwd: dir }).catch((err) => {
       if (err instanceof Process.RunFailedError) {
         const detail = {
           dir,
@@ -708,7 +739,6 @@ export namespace Config {
   export type Provider = ConfigSchema.Provider
   export const Info = ConfigSchema.Info
   export type Info = ConfigSchema.Info
-
 
   export const global = lazy(async () => {
     let result: Info = pipe(

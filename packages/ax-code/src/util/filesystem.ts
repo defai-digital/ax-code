@@ -9,11 +9,15 @@ import { Glob } from "./glob"
 
 export namespace Filesystem {
   export async function exists(p: string): Promise<boolean> {
-    return access(p).then(() => true).catch(() => false)
+    return access(p)
+      .then(() => true)
+      .catch(() => false)
   }
 
   export async function isDir(p: string): Promise<boolean> {
-    return statAsync(p).then((stat) => stat.isDirectory()).catch(() => false)
+    return statAsync(p)
+      .then((stat) => stat.isDirectory())
+      .catch(() => false)
   }
 
   export function stat(p: string): ReturnType<typeof statSync> | undefined {
@@ -30,7 +34,14 @@ export namespace Filesystem {
   }
 
   export async function readJson<T = any>(p: string): Promise<T> {
-    return JSON.parse(await readFile(p, "utf-8"))
+    const text = await readFile(p, "utf-8")
+    try {
+      return JSON.parse(text) as T
+    } catch (error) {
+      throw new Error(`Failed to parse JSON in ${p}: ${error instanceof Error ? error.message : String(error)}`, {
+        cause: error instanceof Error ? error : undefined,
+      })
+    }
   }
 
   export async function readBytes(p: string): Promise<Buffer> {

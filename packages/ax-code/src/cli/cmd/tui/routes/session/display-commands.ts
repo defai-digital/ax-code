@@ -6,6 +6,7 @@ import type { DialogContext } from "@tui/ui/dialog"
 import { Clipboard } from "../../util/clipboard"
 import { Editor } from "../../util/editor"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
+import { renderDialogLoading } from "../../ui/dialog-loading"
 import { formatTranscript, type MessageWithParts, type SessionInfo } from "../../util/transcript"
 import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./display"
 import { shareTitle, transcriptFilename } from "./display-command-helpers"
@@ -120,6 +121,7 @@ export function displayCommands(input: {
           dialog.clear()
           return
         }
+        dialog.replace(renderDialogLoading({ title: "Share session", message: "Creating share URL..." }))
         await input.sdk.client.session
           .share({
             sessionID: input.routeSessionID,

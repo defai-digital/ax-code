@@ -1,4 +1,16 @@
-import { Component, createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch, Index, type JSX } from "solid-js"
+import {
+  Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+  Index,
+  type JSX,
+} from "solid-js"
 import { createStore } from "solid-js/store"
 import stripAnsi from "strip-ansi"
 import { Dynamic } from "solid-js/web"
@@ -493,14 +505,10 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     if (props.message.role !== "assistant") return ""
     const agentName = (props.message as AssistantMessage).agent
     const agentLabel = agentName
-      ? data.store.agent?.find((a) => a.name === agentName)?.displayName ?? (agentName[0]?.toUpperCase() + agentName.slice(1))
+      ? (data.store.agent?.find((a) => a.name === agentName)?.displayName ??
+        agentName[0]?.toUpperCase() + agentName.slice(1))
       : ""
-    const items = [
-      agentLabel,
-      model(),
-      duration(),
-      interrupted() ? i18n.t("ui.message.interrupted") : "",
-    ]
+    const items = [agentLabel, model(), duration(), interrupted() ? i18n.t("ui.message.interrupted") : ""]
     return items.filter((x) => !!x).join(" \u00B7 ")
   })
 
@@ -865,6 +873,11 @@ ToolRegistry.register({
       return `$ ${cmd}${out ? "\n\n" + out : ""}`
     })
     const [copied, setCopied] = createSignal(false)
+    let copiedTimer: ReturnType<typeof setTimeout> | undefined
+
+    onCleanup(() => {
+      if (copiedTimer) clearTimeout(copiedTimer)
+    })
 
     const handleCopy = async () => {
       const content = text()
@@ -872,7 +885,8 @@ ToolRegistry.register({
       try {
         await navigator.clipboard.writeText(content)
         setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
+        if (copiedTimer) clearTimeout(copiedTimer)
+        copiedTimer = setTimeout(() => setCopied(false), 2000)
       } catch {}
     }
 

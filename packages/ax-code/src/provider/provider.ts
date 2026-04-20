@@ -684,7 +684,10 @@ export namespace Provider {
 
       const promise = (async (): Promise<SDK> => {
         const customFetch = options["fetch"]
-        const chunkTimeout = options["chunkTimeout"]
+        // Default to 90s per-chunk timeout to detect dead sockets from
+        // network interruptions. Generous enough for extended thinking
+        // (servers send keepalive events) but prevents indefinite hangs.
+        const chunkTimeout = typeof options["chunkTimeout"] === "number" ? options["chunkTimeout"] : 90_000
         delete options["chunkTimeout"]
 
         options["fetch"] = async (input: string | Request | URL, init?: BunFetchRequestInit) => {

@@ -25,6 +25,7 @@ const report: Bench = {
   directory: "/repo",
   worktree: "/repo",
   requested: {
+    cacheMode: "cold",
     concurrency: 4,
     repeat: 3,
     warmup: 1,
@@ -457,6 +458,7 @@ describe("perf.gate", () => {
           git: { branch: "feature" },
           ci: {},
         },
+        requested: report.requested,
       },
       {
         ok: true,

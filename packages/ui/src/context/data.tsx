@@ -42,8 +42,12 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       get directory() {
         return props.directory
       },
-      navigateToSession: props.onNavigateToSession,
-      sessionHref: props.onSessionHref,
+      get navigateToSession() {
+        return props.onNavigateToSession
+      },
+      get sessionHref() {
+        return props.onSessionHref
+      },
     }
   },
 })

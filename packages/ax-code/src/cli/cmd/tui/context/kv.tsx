@@ -1,9 +1,12 @@
 import { Global } from "@/global"
+import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { createSignal, type Setter } from "solid-js"
 import { createStore, unwrap } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import path from "path"
+
+const log = Log.create({ service: "tui.kv" })
 
 export const { use: useKV, provider: KVProvider } = createSimpleContext({
   name: "KV",
@@ -46,7 +49,11 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
       set(key: string, value: any) {
         setStore(key, value)
         const snapshot = structuredClone(unwrap(store))
-        writeQueue = writeQueue.finally(() => Filesystem.writeJson(filePath, snapshot).catch(() => {}))
+        writeQueue = writeQueue.finally(() =>
+          Filesystem.writeJson(filePath, snapshot).catch((error) => {
+            log.warn("failed to persist kv store", { filePath, error })
+          }),
+        )
       },
     }
     return result
