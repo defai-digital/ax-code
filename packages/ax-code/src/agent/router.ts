@@ -439,11 +439,11 @@ export interface MessageAnalysis {
 export async function analyzeMessage(message: string, currentAgent: string): Promise<MessageAnalysis> {
   const keyword = keywordRoute(message, currentAgent)
 
-  // Very short messages: trivially simple, no LLM needed
-  if (message.length < 30) return { route: keyword, complexity: "low" }
-
-  // SmartLLM disabled: keyword routing only, complexity unknown
+  // SmartLLM disabled: keyword routing only, no complexity (guard must come first)
   if (process.env["AX_CODE_SMART_LLM"] !== "true") return { route: keyword, complexity: null }
+
+  // Very short messages: trivially simple — skip LLM, treat as low complexity
+  if (message.length < 30) return { route: keyword, complexity: "low" }
 
   // High-confidence keyword hit: agent is already known — skip LLM to avoid latency.
   // These are clear specialist requests (debug, test, devops…) that warrant the full model anyway.

@@ -286,8 +286,17 @@ describe("analyzeMessage — combined routing + complexity", () => {
     spies.length = 0
   })
 
-  test("short messages return low complexity without LLM call", async () => {
+  test("short messages return null complexity when SmartLLM is disabled", async () => {
     delete process.env["AX_CODE_SMART_LLM"]
+    const defaultModelSpy = spyOn(Provider, "defaultModel")
+    spies.push(defaultModelSpy)
+    const result = await analyzeMessage("fix bug", "build")
+    expect(result.complexity).toBeNull()
+    expect(defaultModelSpy).not.toHaveBeenCalled()
+  })
+
+  test("short messages return low complexity when SmartLLM is enabled", async () => {
+    process.env["AX_CODE_SMART_LLM"] = "true"
     const defaultModelSpy = spyOn(Provider, "defaultModel")
     spies.push(defaultModelSpy)
     const result = await analyzeMessage("fix bug", "build")
