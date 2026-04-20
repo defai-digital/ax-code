@@ -556,6 +556,16 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       </Show>
                     </text>
                   </box>
+                  <text
+                    fg={theme.primary}
+                    onMouseDown={(e: any) => { e.stopPropagation() }}
+                    onMouseUp={(e: any) => {
+                      e.stopPropagation()
+                      command.trigger("session.dre.web")
+                    }}
+                  >
+                    dashboard
+                  </text>
                 </box>
                 <Show when={sync.data.debugEngine.plans.length <= 2 || expanded.dre}>
                   {/* Graph readiness indicator */}

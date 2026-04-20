@@ -10,8 +10,10 @@ import { formatTranscript, type MessageWithParts, type SessionInfo } from "../..
 import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./display"
 import { shareTitle, transcriptFilename } from "./display-command-helpers"
 import { Filesystem } from "@/util/filesystem"
+import { DreGraphServer } from "@/cli/cmd/dre-graph-server"
 
 type Session = SessionInfo & {
+  directory?: string
   share?: {
     url?: string
   }
@@ -50,6 +52,7 @@ export function displayCommands(input: {
   scroll: ScrollBoxRenderable
   scrollToMessage: (direction: "next" | "prev", dialog: DialogContext) => void
   sdk: {
+    url: string
     client: {
       session: {
         share: (input: { sessionID: string }) => Promise<{ data?: { share?: { url: string } } }>
@@ -171,6 +174,29 @@ export function displayCommands(input: {
         name: "graph",
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceDreGraph(dialog),
+    },
+    {
+      title: "Open DRE dashboard in browser",
+      value: "session.dre.web",
+      category: "Session",
+      slash: {
+        name: "dre-dashboard",
+      },
+      onSelect: async (dialog: DialogContext) => {
+        await DreGraphServer.page({
+          base: input.sdk.url,
+          sessionID: input.routeSessionID,
+          directory: input.session()?.directory,
+        })
+          .then((url) => open(url.toString()))
+          .catch(() =>
+            input.toast.show({
+              message: "Failed to open DRE graph in the browser",
+              variant: "error",
+            }),
+          )
+          .finally(() => dialog.clear())
+      },
     },
     {
       title: "View branch ranking",
