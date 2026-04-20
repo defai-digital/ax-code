@@ -10,6 +10,8 @@ import { SessionStatus } from "../../src/session/status"
 import { SessionSummary } from "../../src/session/summary"
 import { Snapshot } from "../../src/snapshot"
 import { Database } from "../../src/storage/db"
+import { CodeIntelligence } from "../../src/code-intelligence"
+import { AutoIndex } from "../../src/code-intelligence/auto-index"
 import { tmpdir } from "../fixture/fixture"
 
 const model: Provider.Model = {
@@ -47,6 +49,9 @@ let modelSpy: ReturnType<typeof spyOn> | undefined
 let summarySpy: ReturnType<typeof spyOn> | undefined
 let trackSpy: ReturnType<typeof spyOn> | undefined
 let patchSpy: ReturnType<typeof spyOn> | undefined
+let codeStatusSpy: ReturnType<typeof spyOn> | undefined
+let startWatcherSpy: ReturnType<typeof spyOn> | undefined
+let autoIndexSpy: ReturnType<typeof spyOn> | undefined
 
 afterEach(async () => {
   streamSpy?.mockRestore()
@@ -59,6 +64,12 @@ afterEach(async () => {
   trackSpy = undefined
   patchSpy?.mockRestore()
   patchSpy = undefined
+  codeStatusSpy?.mockRestore()
+  codeStatusSpy = undefined
+  startWatcherSpy?.mockRestore()
+  startWatcherSpy = undefined
+  autoIndexSpy?.mockRestore()
+  autoIndexSpy = undefined
 })
 
 describe("session.prompt flow", () => {
@@ -118,6 +129,63 @@ describe("session.prompt flow", () => {
         expect(after).toHaveLength(2)
         expect(after[1]?.parts.some((part) => part.type === "text" && part.text.includes("hello from flow"))).toBe(true)
         await Session.remove(sessionID! as any)
+      },
+    })
+  })
+
+  test("defers automatic indexing until after the prompt completes", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+    codeStatusSpy = spyOn(CodeIntelligence, "status").mockReturnValue({
+      projectID: "proj_test" as any,
+      lastCommitSha: null,
+      nodeCount: 0,
+      edgeCount: 0,
+      lastUpdated: null,
+    })
+    startWatcherSpy = spyOn(CodeIntelligence, "startWatcher").mockImplementation(() => {})
+
+    let promptResolved = false
+    autoIndexSpy = spyOn(AutoIndex, "maybeStart").mockImplementation(() => {
+      expect(promptResolved).toBe(true)
+    })
+
+    streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+      fullStream: (async function* () {
+        yield { type: "start" }
+        yield { type: "start-step" }
+        yield { type: "text-start", id: "text_1" }
+        yield { type: "text-delta", id: "text_1", text: "hello from flow" }
+        yield { type: "text-end", id: "text_1" }
+        yield {
+          type: "finish-step",
+          finishReason: "stop",
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        }
+        yield { type: "finish" }
+      })(),
+    } as any)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Deferred Auto Index Test" })
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "say hello" }],
+        })
+        promptResolved = true
+
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(startWatcherSpy).toHaveBeenCalledWith(Instance.project.id)
+        expect(autoIndexSpy).toHaveBeenCalledWith(Instance.project.id)
+
+        await Session.remove(session.id)
       },
     })
   })

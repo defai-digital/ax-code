@@ -11,6 +11,7 @@ import { CodeGraphBuilder } from "./builder"
 import { CodeGraphQuery } from "./query"
 import { Instance } from "../project/instance"
 import type { ProjectID } from "../project/schema"
+import { NativeAddon } from "../native/addon"
 
 // Auto-index: fires a background code-intelligence index when a
 // session starts against an empty or missing graph, so users don't
@@ -165,6 +166,15 @@ export namespace AutoIndex {
     return lang !== undefined && lang !== "plaintext"
   }
 
+  // Standalone release binaries do not ship the code-intelligence native
+  // addon set. The pure TypeScript path is still valid for explicit/manual
+  // indexing, but auto-starting it from the first prompt can monopolize the
+  // worker long enough to feel like the UI hung. Keep auto-index opt-in to
+  // environments where the native index core is actually present.
+  function supportsAutomaticIndexing(): boolean {
+    return NativeAddon.index() !== undefined
+  }
+
   /**
    * Start a background auto-index for the given project if:
    *   - The code intelligence flag is on
@@ -183,6 +193,10 @@ export namespace AutoIndex {
     // on its own.
     if (!Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) return
     if (Flag.AX_CODE_DISABLE_AUTO_INDEX) return
+    if (!supportsAutomaticIndexing()) {
+      log.info("skipping: native index addon unavailable for automatic indexing", { projectID })
+      return
+    }
 
     const key = projectID as unknown as string
     if (inFlight.has(key)) {

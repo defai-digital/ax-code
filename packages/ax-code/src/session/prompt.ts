@@ -40,6 +40,7 @@ import { Flag } from "../flag/flag"
 import { Recorder } from "../replay/recorder"
 import { CodeIntelligence } from "../code-intelligence"
 import { AutoIndex } from "../code-intelligence/auto-index"
+import type { ProjectID } from "../project/schema"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
@@ -512,6 +513,24 @@ export namespace SessionPrompt {
     let reason: "completed" | "aborted" | "error" | "step_limit" = "error"
     let consecutiveErrors = 0
     let continuations = 0
+    let deferredAutoIndexProjectID: ProjectID | undefined
+    await using _autoIndex = defer(() => {
+      if (!deferredAutoIndexProjectID || abort.aborted) return
+      const projectID = deferredAutoIndexProjectID
+      const timer = setTimeout(() => {
+        try {
+          AutoIndex.maybeStart(projectID)
+        } catch (error) {
+          log.warn("deferred auto-index scheduling failed", {
+            command: "session.prompt.codeGraph",
+            status: "error",
+            sessionID,
+            error,
+          })
+        }
+      }, 0)
+      timer.unref?.()
+    })
     const MAX_CONSECUTIVE_ERRORS = _MAX_CONSECUTIVE_ERRORS
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
@@ -686,17 +705,14 @@ export namespace SessionPrompt {
               lastIndexedAt: s.lastUpdated,
             })
             CodeIntelligence.startWatcher(Instance.project.id)
-            // v2.3.9: if the graph is empty (fresh project or
-            // never-indexed), kick off a background batch index so
-            // users don't have to run `ax-code index` manually
-            // before DRE tools produce useful results. The call
-            // is fire-and-forget and self-gated on in-flight state,
-            // empty-graph check, and the AX_CODE_DISABLE_AUTO_INDEX
-            // opt-out — see code-intelligence/auto-index.ts. The
-            // watcher started on the previous line handles
-            // incremental updates once the auto-index populates
-            // the graph.
-            AutoIndex.maybeStart(Instance.project.id)
+            // Keep automatic indexing out of the first-prompt critical
+            // path. Standalone release binaries can only use the slower
+            // TypeScript fallback, and starting that work immediately on
+            // session start can make the UI appear hung after the first
+            // Enter. The deferred callback below still self-gates on
+            // native availability, empty-graph state, and the existing
+            // auto-index opt-out flag.
+            deferredAutoIndexProjectID = Instance.project.id
           } catch (e) {
             log.warn("code.graph init skipped", {
               command: "session.prompt.codeGraph",
