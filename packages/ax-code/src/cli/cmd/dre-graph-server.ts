@@ -1,4 +1,5 @@
 import { Server } from "../../server/server"
+import { internalBaseUrl } from "../../util/internal-url"
 
 type Live = Awaited<ReturnType<typeof Server.listen>>
 
@@ -19,7 +20,7 @@ export namespace DreGraphServer {
   }
 
   export function local(base?: string) {
-    if (!base || base === "http://opencode.internal") return
+    if (!base || base === internalBaseUrl()) return
     const url = new URL(base)
     if (url.hostname !== "127.0.0.1") return
     return url

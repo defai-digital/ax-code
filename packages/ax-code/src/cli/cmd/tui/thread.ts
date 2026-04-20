@@ -16,6 +16,8 @@ import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
 import { writeHeapSnapshot } from "v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { internalBaseUrl } from "@/util/internal-url"
+import type { StreamConnectionStatus } from "./util/resilient-stream"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -42,8 +44,31 @@ function createWorkerFetch(client: RpcClient): typeof fetch {
 }
 
 function createEventSource(client: RpcClient): EventSource {
+  let lastStatus: StreamConnectionStatus | undefined
+  const statusListeners = new Set<(status: StreamConnectionStatus) => void>()
+  client.on<StreamConnectionStatus>("event.status", (status) => {
+    lastStatus = status
+    for (const handler of statusListeners) handler(status)
+  })
+  void client
+    .call("eventStatus", undefined)
+    .then((status) => {
+      if (!status) return
+      lastStatus = status
+      for (const handler of statusListeners) handler(status)
+    })
+    .catch(() => undefined)
+
   return {
     on: (handler) => client.on<Event>("event", handler),
+    onStatus: (handler) => {
+      if (lastStatus) handler(lastStatus)
+      statusListeners.add(handler)
+      return () => {
+        statusListeners.delete(handler)
+      }
+    },
+    status: () => lastStatus,
     setWorkspace: (workspaceID) => {
       void client.call("setWorkspace", { workspaceID })
     },
@@ -146,6 +171,7 @@ export const TuiThreadCommand = cmd({
       }
 
       const client = Rpc.client<typeof rpc>(worker)
+      const internalEvents = createEventSource(client)
       const error = (e: unknown) => {
         DiagnosticLog.recordProcess("tui.threadError", { error: e })
         Log.Default.error(e)
@@ -198,9 +224,9 @@ export const TuiThreadCommand = cmd({
             events: undefined,
           }
         : {
-            url: "http://opencode.internal",
+            url: internalBaseUrl(),
             fetch: createWorkerFetch(client),
-            events: createEventSource(client),
+            events: internalEvents,
           }
 
       const upgradeTimer = setTimeout(() => {
@@ -213,9 +239,9 @@ export const TuiThreadCommand = cmd({
         await tui({
           url: transport.url,
           async onSnapshot() {
-            const tui = writeHeapSnapshot("tui.heapsnapshot")
+            const tuiSnapshot = writeHeapSnapshot("tui.heapsnapshot")
             const server = await client.call("snapshot", undefined)
-            return [tui, server]
+            return [tuiSnapshot, server]
           },
           config,
           directory: cwd,

@@ -27,6 +27,7 @@ import { SkillTool } from "../../tool/skill"
 import { BashTool } from "../../tool/bash"
 import { TodoWriteTool } from "../../tool/todo"
 import { Locale } from "../../util/locale"
+import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -671,11 +672,10 @@ export const RunCommand = cmd({
       const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
         const request = new Request(input, init)
         const url = new URL(request.url)
-        if (!["opencode.internal", "localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
-          throw new Error(`Internal fetch rejected: ${url.hostname}`)
+        if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
         return Server.Default().fetch(request)
       }) as typeof globalThis.fetch
-      const sdk = createOpencodeClient({ baseUrl: "http://opencode.internal", fetch: fetchFn })
+      const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn })
       await execute(sdk)
     })
   },

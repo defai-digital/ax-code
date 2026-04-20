@@ -2,9 +2,12 @@ import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
 import { createSimpleContext } from "./helper"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { batch, createSignal, onCleanup, onMount } from "solid-js"
+import { runResilientStream, type StreamConnectionStatus } from "../util/resilient-stream"
 
 export type EventSource = {
   on: (handler: (event: Event) => void) => () => void
+  onStatus?: (handler: (status: StreamConnectionStatus) => void) => () => void
+  status?: () => StreamConnectionStatus | undefined
   setWorkspace?: (workspaceID?: string) => void
 }
 
@@ -20,9 +23,8 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     const abort = new AbortController()
     const [workspaceID, setWorkspaceID] = createSignal<string | undefined>()
     let sse: AbortController | undefined
-    // Reactive SSE health: true while the stream is live and receiving events.
-    // External-event-source mode always reports connected (no SSE loop to fail).
-    const [sseConnected, setSseConnected] = createSignal(!props.events)
+    // Reactive stream health: true once the current event stream is connected.
+    const [sseConnected, setSseConnected] = createSignal(props.events?.status?.()?.connected ?? false)
 
     function createSDK() {
       return createOpencodeClient({
@@ -59,6 +61,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     }
 
     const handleEvent = (event: Event) => {
+      setSseConnected(true)
       queue.push(event)
       const elapsed = Date.now() - last
 
@@ -72,63 +75,38 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       flush()
     }
 
-    // Stale-connection watchdog: if no SSE event arrives within 60s, the
-    // connection is considered hung (half-open TCP, silent proxy drop, etc.)
-    // and we abort the per-connection controller to force an immediate reconnect.
-    const SSE_WATCHDOG_MS = 60_000
-
     function startSSE() {
       sse?.abort()
       const ctrl = new AbortController()
       sse = ctrl
-      ;(async () => {
-        while (true) {
-          if (abort.signal.aborted || ctrl.signal.aborted) break
-          // Per-connection controller: aborting this forces reconnect without
-          // stopping the outer while-loop (ctrl remains live).
-          const connCtrl = new AbortController()
-          // Propagate outer abort into inner connection.
-          const onOuterAbort = () => connCtrl.abort()
-          ctrl.signal.addEventListener("abort", onOuterAbort, { once: true })
-          let watchdog: ReturnType<typeof setTimeout> | undefined
-          const resetWatchdog = () => {
-            if (watchdog) clearTimeout(watchdog)
-            watchdog = setTimeout(() => connCtrl.abort(), SSE_WATCHDOG_MS)
-          }
-          try {
-            const events = await sdk.event.subscribe({}, { signal: connCtrl.signal })
-            setSseConnected(true)
-            resetWatchdog()
-            for await (const event of events.stream) {
-              if (ctrl.signal.aborted) break
-              resetWatchdog()
-              handleEvent(event)
-            }
-          } catch {
-            setSseConnected(false)
-            if (abort.signal.aborted || ctrl.signal.aborted) break
-            // Interruptible reconnect delay — wakes immediately if outer abort fires
-            await new Promise<void>((resolve) => {
-              const id = setTimeout(resolve, 2000)
-              const wake = () => { clearTimeout(id); resolve() }
-              abort.signal.addEventListener("abort", wake, { once: true })
-              ctrl.signal.addEventListener("abort", wake, { once: true })
-            })
-          } finally {
-            if (watchdog) clearTimeout(watchdog)
-            ctrl.signal.removeEventListener("abort", onOuterAbort)
-          }
-
-          if (timer) clearTimeout(timer)
-          if (queue.length > 0) flush()
-        }
-      })()
+      const outer = new AbortController()
+      const abortOuter = () => outer.abort()
+      abort.signal.addEventListener("abort", abortOuter, { once: true })
+      ctrl.signal.addEventListener("abort", abortOuter, { once: true })
+      void runResilientStream<Event>({
+        signal: outer.signal,
+        subscribe: (signal) => sdk.event.subscribe({}, { signal }),
+        onEvent: handleEvent,
+        onStatus: (status) => setSseConnected(status.connected),
+      }).finally(() => {
+        abort.signal.removeEventListener("abort", abortOuter)
+        ctrl.signal.removeEventListener("abort", abortOuter)
+        if (timer) clearTimeout(timer)
+        if (queue.length > 0) flush()
+      })
     }
 
     onMount(() => {
       if (props.events) {
         const unsub = props.events.on(handleEvent)
-        onCleanup(unsub)
+        const unsubStatus = props.events.onStatus?.((status) => {
+          setSseConnected(status.connected)
+        })
+        if (!props.events.onStatus) setSseConnected(true)
+        onCleanup(() => {
+          unsub()
+          unsubStatus?.()
+        })
       } else {
         startSSE()
       }

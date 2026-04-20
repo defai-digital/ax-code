@@ -17,6 +17,7 @@ import { Tool } from "../tool/tool.js"
 import { setLanguage, t } from "../i18n/index.js"
 import { createOpencodeClient } from "@ax-code/sdk/v2/client"
 import type { OpencodeClient } from "@ax-code/sdk/v2/client"
+import { internalBaseUrl } from "../util/internal-url.js"
 import type {
   Agent,
   AgentOptions,
@@ -411,7 +412,7 @@ function createInProcessClient(directory: string): OpencodeClient {
   }) as typeof globalThis.fetch
 
   return createOpencodeClient({
-    baseUrl: "http://opencode.internal",
+    baseUrl: internalBaseUrl(),
     fetch: fetchFn,
     directory,
   })

@@ -9,13 +9,17 @@ import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
 import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
 import { Flag } from "@/flag/flag"
-import { setTimeout as sleep } from "node:timers/promises"
 import { writeHeapSnapshot } from "node:v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { internalBaseUrl } from "@/util/internal-url"
+import path from "node:path"
+import { tmpdir } from "node:os"
+import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
 
-const debugDir = process.env.AX_CODE_DEBUG === "1" ? process.env.AX_CODE_DEBUG_DIR : undefined
+const debugEnabled = process.env.AX_CODE_DEBUG === "1"
+const debugDir = debugEnabled ? (process.env.AX_CODE_DEBUG_DIR ?? path.join(tmpdir(), "ax-code-debug")) : undefined
 await DiagnosticLog.configure({
-  enabled: Boolean(debugDir),
+  enabled: debugEnabled,
   dir: debugDir,
   includeContent: process.env.AX_CODE_DEBUG_INCLUDE_CONTENT === "1",
   manifest: {
@@ -62,6 +66,7 @@ let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 
 const eventStream = {
   abort: undefined as AbortController | undefined,
+  status: undefined as StreamConnectionStatus | undefined,
 }
 
 const startEventStream = (input: { directory?: string }) => {
@@ -78,45 +83,46 @@ const startEventStream = (input: { directory?: string }) => {
   }) as typeof globalThis.fetch
 
   const sdk = createOpencodeClient({
-    baseUrl: "http://opencode.internal",
+    baseUrl: internalBaseUrl(),
     directory: input.directory ?? process.cwd(),
     fetch: fetchFn,
     signal,
   })
 
-  ;(async () => {
-    while (!signal.aborted) {
-      const events = await Promise.resolve(
-        sdk.event.subscribe(
-          {},
-          {
-            signal,
-          },
-        ),
-      ).catch(() => undefined)
+  const publishStatus = (status: StreamConnectionStatus) => {
+    eventStream.status = status
+    Rpc.emit("event.status", status)
+  }
 
-      if (!events) {
-        await sleep(250)
-        continue
-      }
-
-      for await (const event of events.stream) {
-        Rpc.emit("event", event as Event)
-      }
-
-      if (!signal.aborted) {
-        await sleep(250)
-      }
-    }
-  })().catch((error) => {
+  void runResilientStream<Event>({
+    signal,
+    subscribe: (connectionSignal) =>
+      sdk.event.subscribe(
+        {},
+        {
+          signal: connectionSignal,
+        },
+      ),
+    onEvent: (event) => {
+      Rpc.emit("event", event)
+    },
+    onStatus: publishStatus,
+    onError: (error, status) => {
+      publishStatus(status)
+      DiagnosticLog.recordProcess("worker.eventStreamError", { error, status })
+      Log.Default.warn("event stream reconnecting", {
+        error: error instanceof Error ? error.message : error,
+        reason: status.reason,
+        attempt: status.attempt,
+      })
+    },
+  }).catch((error) => {
     DiagnosticLog.recordProcess("worker.eventStreamError", { error })
     Log.Default.error("event stream error", {
       error: error instanceof Error ? error.message : error,
     })
   })
 }
-
-startEventStream({ directory: process.cwd() })
 
 export const rpc = {
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
@@ -159,8 +165,8 @@ export const rpc = {
     })
   },
   async reload() {
-    Config.global.reset()
     await Instance.disposeAll()
+    Config.global.reset()
   },
   async setWorkspace(input: { workspaceID?: string }) {
     startEventStream({ directory: input.workspaceID ?? process.cwd() })
@@ -171,9 +177,13 @@ export const rpc = {
     await Instance.disposeAll()
     if (server) await server.stop(true)
   },
+  eventStatus() {
+    return eventStream.status
+  },
 }
 
 Rpc.listen(rpc)
+startEventStream({ directory: process.cwd() })
 
 function getAuthorizationHeader(): string | undefined {
   const password = Flag.AX_CODE_SERVER_PASSWORD
