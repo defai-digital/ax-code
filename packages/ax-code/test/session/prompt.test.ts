@@ -665,7 +665,8 @@ describe("session.prompt shell cleanup", () => {
     const originalRemove = AbortSignal.prototype.removeEventListener
     const counts = new Map<AbortSignal, { adds: number; removes: number }>()
 
-    AbortSignal.prototype.addEventListener = function(type, listener, options) {
+    AbortSignal.prototype.addEventListener = function(...args: Parameters<AbortSignal["addEventListener"]>) {
+      const [type, listener, options] = args
       if (type === "abort") {
         const current = counts.get(this) ?? { adds: 0, removes: 0 }
         current.adds += 1
@@ -674,7 +675,10 @@ describe("session.prompt shell cleanup", () => {
       return originalAdd.call(this, type, listener, options)
     }
 
-    AbortSignal.prototype.removeEventListener = function(type, listener, options) {
+    AbortSignal.prototype.removeEventListener = function(
+      ...args: Parameters<AbortSignal["removeEventListener"]>
+    ) {
+      const [type, listener, options] = args
       if (type === "abort") {
         const current = counts.get(this) ?? { adds: 0, removes: 0 }
         current.removes += 1
