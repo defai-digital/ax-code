@@ -33,9 +33,15 @@ export function displayCommands(input: {
   conceal: Accessor<boolean>
   currentModel: () => Model | undefined
   dialogReplaceActivity: (dialog: DialogContext) => void
+  dialogReplaceBranch: (dialog: DialogContext) => void
+  dialogReplaceCompare: (dialog: DialogContext) => void
+  dialogReplaceDre: (dialog: DialogContext) => void
+  dialogReplaceDreGraph: (dialog: DialogContext) => void
+  dialogReplaceRollback: (dialog: DialogContext) => void
   dialogReplaceTimeline: (dialog: DialogContext) => void
   dialogReplaceFork: (dialog: DialogContext) => void
   dialogReplaceRename: (dialog: DialogContext) => void
+  children: Accessor<Array<{ id: string }>>
   jumpToLastUser: () => void
   messages: Accessor<MessageWithParts["info"][]>
   parts: Record<string, MessageWithParts["parts"][number][] | undefined>
@@ -146,6 +152,55 @@ export function displayCommands(input: {
         name: "activity",
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceActivity(dialog),
+    },
+    {
+      title: "View session trust (DRE)",
+      value: "session.trust",
+      category: "Session",
+      slash: {
+        name: "trust",
+        aliases: ["dre", "risk"],
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceDre(dialog),
+    },
+    {
+      title: "View execution graph (DRE)",
+      value: "session.dre.graph",
+      category: "Session",
+      slash: {
+        name: "graph",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceDreGraph(dialog),
+    },
+    {
+      title: "View branch ranking",
+      value: "session.branch",
+      category: "Session",
+      enabled: input.children().length > 1,
+      slash: {
+        name: "branches",
+        aliases: ["branch"],
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceBranch(dialog),
+    },
+    {
+      title: "Compare branch executions",
+      value: "session.compare",
+      category: "Session",
+      enabled: input.children().length > 1,
+      slash: {
+        name: "compare",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceCompare(dialog),
+    },
+    {
+      title: "View rollback points",
+      value: "session.rollback",
+      category: "Session",
+      slash: {
+        name: "rollback",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceRollback(dialog),
     },
     {
       title: "Jump to message",

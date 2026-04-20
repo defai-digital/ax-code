@@ -62,6 +62,12 @@ import { DialogActivity } from "./dialog-activity"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
+import { DialogDre } from "./dialog-dre"
+import { DialogDreGraph } from "./dialog-dre-graph"
+import { DialogBranch } from "./dialog-branch"
+import { DialogCompare } from "./dialog-compare"
+import { DialogRollback } from "./dialog-rollback"
+import { SessionRollback } from "./rollback"
 import { computeSidebarWidth, Sidebar } from "./sidebar"
 import { Flag } from "@/flag/flag"
 import parsers from "../../../../../../parsers-config.ts"
@@ -150,6 +156,13 @@ export function Session() {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
+
+  const messagesWithParts = createMemo(() =>
+    messages().map((item) => ({
+      info: item,
+      parts: sync.data.part[item.id] ?? [],
+    })),
+  )
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -347,12 +360,71 @@ export function Session() {
     }
   }
 
+  function continueBranch(sessionID: string) {
+    navigate({
+      type: "session",
+      sessionID,
+    })
+    setTimeout(() => {
+      promptRef.current?.focus()
+    }, 0)
+  }
+
   const command = useCommandDialog()
   command.register(() => [
     ...displayCommands({
       conceal,
       currentModel: () => local.model.current(),
       dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
+      dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
+      dialogReplaceDreGraph: (dialog) => dialog.replace(() => <DialogDreGraph sessionID={route.sessionID} />),
+      dialogReplaceBranch: (dialog) =>
+        dialog.replace(() => (
+          <DialogBranch
+            currentID={route.sessionID}
+            sessions={children().map((item) => ({ id: item.id, title: item.title }))}
+            onSelect={(sessionID) => navigate({ type: "session", sessionID })}
+            onContinue={continueBranch}
+          />
+        )),
+      dialogReplaceCompare: (dialog) =>
+        dialog.replace(() => (
+          <DialogCompare
+            currentID={route.sessionID}
+            sessions={children().map((item) => ({ id: item.id, title: item.title }))}
+          />
+        )),
+      dialogReplaceRollback: (dialog) =>
+        dialog.replace(() => (
+          <DialogRollback
+            sessionID={route.sessionID}
+            messages={messagesWithParts()}
+            onSelect={async (point) => {
+              const status = sync.data.session_status?.[route.sessionID]
+              if (status?.type !== "idle")
+                await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
+              return sdk.client.session
+                .revert({
+                  sessionID: route.sessionID,
+                  messageID: point.messageID,
+                  partID: point.partID,
+                })
+                .then(() => {
+                  const messageID = SessionRollback.promptID(messagesWithParts(), point)
+                  if (messageID) prompt.set(promptState(sync.data.part[messageID] ?? []))
+                  toBottom()
+                })
+                .catch((error) => {
+                  toast.show({
+                    message: error instanceof Error ? error.message : "Failed to rollback to selected step",
+                    variant: "error",
+                  })
+                  throw error
+                })
+            }}
+          />
+        )),
+      children,
       dialogReplaceTimeline: (dialog) =>
         dialog.replace(() => (
           <DialogTimeline
