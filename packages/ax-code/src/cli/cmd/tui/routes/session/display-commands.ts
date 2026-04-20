@@ -11,6 +11,7 @@ import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./dis
 import { shareTitle, transcriptFilename } from "./display-command-helpers"
 import { Filesystem } from "@/util/filesystem"
 import { DreGraphServer } from "@/cli/cmd/dre-graph-server"
+import open from "open"
 
 type Session = SessionInfo & {
   directory?: string
