@@ -22,6 +22,8 @@ interface RemovalTargets {
   binary: string | null
 }
 
+const npmPackages = [...Installation.NPM_PACKAGE_ALIASES]
+
 export const UninstallCommand = {
   command: "uninstall",
   describe: "uninstall ax-code and remove all related files",
@@ -129,10 +131,10 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
 
   if (method !== "curl" && method !== "unknown") {
     const cmds: Record<string, string> = {
-      npm: "npm uninstall -g ax-code-ai",
-      pnpm: "pnpm uninstall -g ax-code-ai",
-      bun: "bun remove -g ax-code-ai",
-      yarn: "yarn global remove ax-code-ai",
+      npm: `npm uninstall -g ${npmPackages.join(" ")}`,
+      pnpm: `pnpm uninstall -g ${npmPackages.join(" ")}`,
+      bun: `bun remove -g ${npmPackages.join(" ")}`,
+      yarn: `yarn global remove ${npmPackages.join(" ")}`,
       brew: "brew uninstall ax-code",
       choco: "choco uninstall ax-code",
       scoop: "scoop uninstall ax-code",
@@ -180,10 +182,10 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
 
   if (method !== "curl" && method !== "unknown") {
     const cmds: Record<string, string[]> = {
-      npm: ["npm", "uninstall", "-g", "ax-code-ai"],
-      pnpm: ["pnpm", "uninstall", "-g", "ax-code-ai"],
-      bun: ["bun", "remove", "-g", "ax-code-ai"],
-      yarn: ["yarn", "global", "remove", "ax-code-ai"],
+      npm: ["npm", "uninstall", "-g", ...npmPackages],
+      pnpm: ["pnpm", "uninstall", "-g", ...npmPackages],
+      bun: ["bun", "remove", "-g", ...npmPackages],
+      yarn: ["yarn", "global", "remove", ...npmPackages],
       brew: ["brew", "uninstall", "ax-code"],
       choco: ["choco", "uninstall", "ax-code"],
       scoop: ["scoop", "uninstall", "ax-code"],

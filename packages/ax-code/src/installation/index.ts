@@ -20,6 +20,10 @@ import semver from "semver"
 
 export namespace Installation {
   const log = Log.create({ service: "installation" })
+  export const CURRENT_NPM_PACKAGE = "@defai.digital/ax-code"
+  export const LEGACY_NPM_PACKAGE = "ax-code-ai"
+  export const NPM_PACKAGE_ALIASES = [CURRENT_NPM_PACKAGE, LEGACY_NPM_PACKAGE] as const
+  const CURRENT_NPM_PACKAGE_PATH = encodeURIComponent(CURRENT_NPM_PACKAGE)
 
   export type Method = "curl" | "npm" | "yarn" | "pnpm" | "bun" | "brew" | "scoop" | "choco" | "unknown"
 
@@ -40,7 +44,15 @@ export namespace Installation {
     ),
   }
 
+  export function compareVersions(current: string, latest: string) {
+    if (!semver.valid(current) || !semver.valid(latest)) return undefined
+    return semver.compare(latest, current)
+  }
+
   export function getReleaseType(current: string, latest: string): ReleaseType {
+    const compare = compareVersions(current, latest)
+    if (compare === undefined || compare <= 0) return "patch"
+
     const currMajor = semver.major(current)
     const currMinor = semver.minor(current)
     const newMajor = semver.major(latest)
@@ -251,9 +263,11 @@ export namespace Installation {
 
           for (const check of checks) {
             const output = yield* check.command()
-            const installedName =
-              check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "ax-code" : "ax-code-ai"
-            if (output.includes(installedName)) {
+            const installedNames =
+              check.name === "brew" || check.name === "choco" || check.name === "scoop"
+                ? ["ax-code"]
+                : [...NPM_PACKAGE_ALIASES]
+            if (installedNames.some((name) => output.includes(name))) {
               return check.name
             }
           }
@@ -287,7 +301,9 @@ export namespace Installation {
             const registry = reg.endsWith("/") ? reg.slice(0, -1) : reg
             const channel = CHANNEL
             const response = yield* httpOk.execute(
-              HttpClientRequest.get(`${registry}/ax-code-ai/${channel}`).pipe(HttpClientRequest.acceptJson),
+              HttpClientRequest.get(`${registry}/${CURRENT_NPM_PACKAGE_PATH}/${channel}`).pipe(
+                HttpClientRequest.acceptJson,
+              ),
             )
             const data = yield* HttpClientResponse.schemaBodyJson(NpmPackage)(response)
             return data.version
@@ -330,16 +346,16 @@ export namespace Installation {
               result = yield* upgradeCurl(target)
               break
             case "npm":
-              result = yield* run(["npm", "install", "-g", `ax-code-ai@${target}`])
+              result = yield* run(["npm", "install", "-g", `${CURRENT_NPM_PACKAGE}@${target}`])
               break
             case "yarn":
-              result = yield* run(["yarn", "global", "add", `ax-code-ai@${target}`])
+              result = yield* run(["yarn", "global", "add", `${CURRENT_NPM_PACKAGE}@${target}`])
               break
             case "pnpm":
-              result = yield* run(["pnpm", "install", "-g", `ax-code-ai@${target}`])
+              result = yield* run(["pnpm", "install", "-g", `${CURRENT_NPM_PACKAGE}@${target}`])
               break
             case "bun":
-              result = yield* run(["bun", "install", "-g", `ax-code-ai@${target}`])
+              result = yield* run(["bun", "install", "-g", `${CURRENT_NPM_PACKAGE}@${target}`])
               break
             case "brew": {
               const formula = yield* getBrewFormula()

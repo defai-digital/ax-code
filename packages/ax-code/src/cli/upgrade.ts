@@ -11,6 +11,8 @@ export async function upgrade() {
   const method = await Installation.method()
   const latest = await Installation.latest(method).catch(() => {})
   if (!latest) return
+  const compare = Installation.compareVersions(Installation.VERSION, latest)
+  if (compare !== undefined && compare <= 0) return
 
   if (Flag.AX_CODE_ALWAYS_NOTIFY_UPDATE) {
     await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })

@@ -68,8 +68,12 @@ describe("installation", () => {
     })
 
     test("reads npm registry versions", async () => {
+      let requestUrl = ""
       const layer = testLayer(
-        () => jsonResponse({ version: "1.5.0" }),
+        (request) => {
+          requestUrl = String(request.url)
+          return jsonResponse({ version: "1.5.0" })
+        },
         (cmd, args) => {
           if (cmd === "npm" && args.includes("registry")) return "https://registry.npmjs.org\n"
           return ""
@@ -80,6 +84,7 @@ describe("installation", () => {
         Installation.Service.use((svc) => svc.latest("npm")).pipe(Effect.provide(layer)),
       )
       expect(result).toBe("1.5.0")
+      expect(requestUrl).toContain("/%40defai.digital%2Fax-code/")
     })
 
     test("reads npm registry versions for bun method", async () => {
@@ -149,6 +154,60 @@ describe("installation", () => {
         Installation.Service.use((svc) => svc.latest("brew")).pipe(Effect.provide(layer)),
       )
       expect(result).toBe("2.1.0")
+    })
+  })
+
+  describe("method", () => {
+    test("detects the current scoped npm package", async () => {
+      const layer = testLayer(
+        () => jsonResponse({}),
+        (cmd, args) => {
+          if (cmd === "npm" && args.includes("--depth=0")) return "└── @defai.digital/ax-code@3.2.0\n"
+          return ""
+        },
+      )
+
+      const result = await Effect.runPromise(
+        Installation.Service.use((svc) => svc.method()).pipe(Effect.provide(layer)),
+      )
+      expect(result).toBe("npm")
+    })
+
+    test("still detects the legacy npm package for migrations", async () => {
+      const layer = testLayer(
+        () => jsonResponse({}),
+        (cmd, args) => {
+          if (cmd === "npm" && args.includes("--depth=0")) return "└── ax-code-ai@2.25.0\n"
+          return ""
+        },
+      )
+
+      const result = await Effect.runPromise(
+        Installation.Service.use((svc) => svc.method()).pipe(Effect.provide(layer)),
+      )
+      expect(result).toBe("npm")
+    })
+  })
+
+  describe("upgrade", () => {
+    test("installs the current scoped npm package", async () => {
+      const calls: Array<{ cmd: string; args: readonly string[] }> = []
+      const layer = testLayer(
+        () => jsonResponse({}),
+        (cmd, args) => {
+          calls.push({ cmd, args })
+          return ""
+        },
+      )
+
+      await Effect.runPromise(
+        Installation.Service.use((svc) => svc.upgrade("npm", "3.2.0")).pipe(Effect.provide(layer)),
+      )
+
+      expect(calls).toContainEqual({
+        cmd: "npm",
+        args: ["install", "-g", "@defai.digital/ax-code@3.2.0"],
+      })
     })
   })
 })

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "name": "ax-code",
   "type": "module",
   "license": "MIT",
