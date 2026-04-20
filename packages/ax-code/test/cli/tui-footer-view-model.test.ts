@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  footerTrustChip,
   footerSessionStatusLabel,
   footerSessionStatusView,
   SESSION_STATUS_STALE_AFTER_MS,
@@ -85,5 +86,35 @@ describe("footerSessionStatusLabel", () => {
         },
       }),
     ).toBe("Retrying in 9s")
+  })
+})
+
+describe("footerTrustChip", () => {
+  test("shows plan count before ready state", () => {
+    expect(
+      footerTrustChip({
+        experimentalDebugEngine: true,
+        pendingPlans: 2,
+        graphNodeCount: 10,
+      }),
+    ).toEqual({
+      type: "plans",
+      label: "2 Plans",
+      count: 2,
+    })
+  })
+
+  test("uses DRE wording for ready state", () => {
+    expect(
+      footerTrustChip({
+        experimentalDebugEngine: true,
+        pendingPlans: 0,
+        graphNodeCount: 10,
+      }),
+    ).toEqual({
+      type: "ready",
+      label: "DRE ready",
+      count: 0,
+    })
   })
 })

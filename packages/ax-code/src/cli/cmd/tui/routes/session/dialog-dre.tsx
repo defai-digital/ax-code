@@ -18,9 +18,9 @@ export function DialogDre(props: { sessionID: string }) {
     if (!detail) {
       return [
         {
-          title: "No DRE data recorded",
+          title: "No trust data yet",
           value: "empty",
-          description: "Run a session with tools or routes to populate execution evidence.",
+          description: "Trust analysis populates after the session uses tools or agent routes. Keep chatting.",
           category: "Overview",
         },
       ]
@@ -35,5 +35,5 @@ export function DialogDre(props: { sessionID: string }) {
     }))
   })
 
-  return <DialogSelect title="DRE Details" options={options()} skipFilter={false} />
+  return <DialogSelect title="Analysis" options={options()} skipFilter={false} />
 }

@@ -216,23 +216,23 @@ export namespace ReplayCompare {
           key: "correctness",
           label: "Correctness",
           value: correctness,
-          detail: `${status}, confidence ${conf.toFixed(2)}, ${div} divergences, ${fail} tool failures`,
+          detail: `${status} · confidence ${Math.round(conf * 100)}%${div > 0 ? ` · ${div} divergence${div === 1 ? "" : "s"}` : ""}${fail > 0 ? ` · ${fail} tool failure${fail === 1 ? "" : "s"}` : ""}`,
         },
         {
           key: "safety",
           label: "Safety",
           value: safety,
-          detail: `risk ${input.risk.score}/100${change}`,
+          detail: `risk ${input.risk.score}/100 (${input.risk.level.toLowerCase()})${change}`,
         },
         {
           key: "simplicity",
-          label: "Simplicity",
+          label: "Scope",
           value: simplicity,
           detail: `${plural(input.risk.signals.filesChanged, "file")}, ${input.risk.signals.linesChanged} lines, ${plural(toolCount, "tool call")}, ${plural(routeCount, "route")}${change}`,
         },
         {
           key: "validation",
-          label: "Validation",
+          label: "Tests",
           value: validation,
           detail: `${status} · ${input.risk.readiness.replaceAll("_", " ")}`,
         },
@@ -240,12 +240,14 @@ export namespace ReplayCompare {
     }
   }
 
-  export function headline(input: Scorecard, limit = 2) {
-    const head = input.breakdown
-      .slice(0, limit)
-      .map((item) => `${item.key} ${item.value.toFixed(2)}`)
-      .join(" · ")
-    return head ? `decision ${input.total.toFixed(2)} · ${head}` : `decision ${input.total.toFixed(2)}`
+  export function headline(input: Scorecard): string {
+    const correctness = input.breakdown.find((p) => p.key === "correctness")
+    if (!correctness) return `quality ${input.total.toFixed(2)}`
+    if (correctness.value >= 0.9) return "tests passing"
+    if (correctness.value >= 0.72) return "tests partial"
+    if (correctness.value >= 0.5) return "untested"
+    if (correctness.value >= 0.33) return "tests failing"
+    return "tests critical"
   }
 
   export function rank(input: Candidate[]): Ranking {

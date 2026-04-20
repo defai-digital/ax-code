@@ -21,7 +21,7 @@ export namespace RiskView {
       `  Title:   ${input.title}`,
       `  Risk:    ${input.assessment.level} (${input.assessment.score}/100)`,
       `  Ready:   ${input.assessment.readiness.replaceAll("_", " ")}`,
-      `  Trust:   ${Math.round(input.assessment.confidence * 100)}%`,
+      `  Confidence: ${Math.round(input.assessment.confidence * 100)}%`,
       `  Summary: ${input.assessment.summary}`,
     ]
     if (input.semantic) out.push(`  Change:  ${input.semantic.headline} (${input.semantic.risk})`)

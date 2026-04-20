@@ -76,9 +76,9 @@ export namespace SessionDre {
 
     result.push({
       id: "decision",
-      title: `Decision ${input.scorecard.total.toFixed(2)}`,
+      title: `Quality ${input.scorecard.total.toFixed(2)}`,
       description: input.decision,
-      category: "Score",
+      category: "Quality",
     })
 
     for (const part of input.scorecard.breakdown) {
@@ -86,7 +86,7 @@ export namespace SessionDre {
         id: `score:${part.key}`,
         title: `${part.label} ${part.value.toFixed(2)}`,
         description: part.detail,
-        category: "Score",
+        category: "Quality",
       })
     }
 

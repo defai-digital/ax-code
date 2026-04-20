@@ -125,7 +125,7 @@ export function footerTrustChip(input: {
   if (input.experimentalDebugEngine && input.graphNodeCount > 0) {
     return {
       type: "ready",
-      label: "Trust ready",
+      label: "DRE ready",
       count: 0,
     }
   }

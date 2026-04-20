@@ -133,11 +133,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     mcp: true,
     diff: true,
     todo: true,
-    lsp: true,
     // DRE section defaults to expanded so users see the pending-plan
     // list (or the "DRE is active" placeholder) immediately after
     // enabling the experimental flag. Collapses if the plan list
-    // grows beyond 2 entries, same rule as LSP / Todo.
+    // grows beyond 2 entries, same rule as Todo.
     dre: true,
     activity: true,
   })
@@ -471,56 +470,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </Show>
               </box>
             </Show>
-            <box>
-              <box
-                flexDirection="row"
-                gap={1}
-                onMouseDown={() => sync.data.lsp.length > 2 && setExpanded("lsp", !expanded.lsp)}
-              >
-                <Show when={sync.data.lsp.length > 2}>
-                  <text fg={theme.text}>{expanded.lsp ? "−" : "+"}</text>
-                </Show>
-                <text fg={theme.text}>
-                  <b>LSP</b>
-                </text>
-              </box>
-              <Show when={sync.data.lsp.length <= 2 || expanded.lsp}>
-                <Show when={sync.data.lsp.length === 0}>
-                  <text fg={theme.textMuted}>
-                    {sync.data.config.lsp === false
-                      ? "LSPs have been disabled in settings"
-                      : "LSPs will activate as files are read"}
-                  </text>
-                </Show>
-                <For each={sync.data.lsp}>
-                  {(item) => (
-                    <box flexDirection="row" gap={1}>
-                      <text
-                        flexShrink={0}
-                        style={{
-                          fg: {
-                            connected: theme.success,
-                            error: theme.error,
-                          }[item.status],
-                        }}
-                      >
-                        •
-                      </text>
-                      <text fg={theme.textMuted}>
-                        {item.id} {item.root}
-                      </text>
-                    </box>
-                  )}
-                </For>
-              </Show>
-            </box>
-            {/* Debugging & Refactoring Engine section. Mirrors the LSP
-                section's pattern (always visible heading, fallback text
-                when empty, expand/collapse at >2 items) so users can
-                tell at a glance whether DRE is ready to use. Gated on
-                the experimental flag — when the flag is off, no
-                section appears. The empty-state layout shows tool count
-                and graph readiness. */}
+            {/* Debugging & Refactoring Engine section. Always shows a
+                heading and expands/collapses once the plan list grows
+                beyond two entries so users can tell at a glance whether
+                DRE is ready to use. Gated on the experimental flag —
+                when the flag is off, no section appears. The empty-state
+                layout shows tool count and graph readiness. */}
             <Show when={Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE}>
               <box>
                 <box
@@ -595,43 +550,38 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                             : "not indexed · run ax-code index"}
                     </text>
                   </box>
-                  {/* Session trust signals — readiness, confidence, changes */}
+                  {/* Session trust signals — quality, changes, risk drivers, plan */}
                   <Show when={dre()}>
                     {(summary) => (
                       <box flexDirection="column" gap={0}>
-                        <box flexDirection="row" gap={1}>
-                          <text fg={theme.textMuted}>
-                            risk {summary().level.toLowerCase()} ({summary().score}/100) · confidence {Math.round(summary().confidence * 100)}%
-                          </text>
-                        </box>
-                        <Show when={semantic()}>
-                          <box flexDirection="row" gap={1}>
-                            <text
-                              flexShrink={0}
-                              style={{
-                                fg:
-                                  semantic()!.risk === "high"
-                                    ? theme.error
-                                    : semantic()!.risk === "medium"
-                                      ? theme.warning
-                                      : theme.success,
-                              }}
-                            >
-                              △
-                            </text>
-                            <text fg={theme.textMuted} wrapMode="word">
-                              {semantic()!.headline} · {semantic()!.risk} risk
-                            </text>
-                          </box>
-                        </Show>
-                        <text fg={theme.text} wrapMode="word">
-                          {summary().decision}
+                        {/* Quality: test status + confidence + execution stats */}
+                        <text fg={theme.textMuted} wrapMode="word">
+                          {summary().decision} · confidence {Math.round(summary().confidence * 100)}% · {summary().stats}
                         </text>
-                        <Show when={summary().plan !== summary().decision}>
-                          <text fg={theme.textMuted} wrapMode="word">
-                            {summary().plan}
-                          </text>
+                        {/* Semantic diff: what changed — accessor pattern avoids unsafe ! assertions */}
+                        <Show when={semantic()}>
+                          {(sem) => (
+                            <box flexDirection="row" gap={1}>
+                              <text
+                                flexShrink={0}
+                                style={{
+                                  fg:
+                                    sem().risk === "high"
+                                      ? theme.error
+                                      : sem().risk === "medium"
+                                        ? theme.warning
+                                        : theme.success,
+                                }}
+                              >
+                                △
+                              </text>
+                              <text fg={theme.textMuted} wrapMode="word">
+                                {sem().headline} · {sem().risk} change risk
+                              </text>
+                            </box>
+                          )}
                         </Show>
+                        {/* Risk drivers: specific findings */}
                         <Show when={summary().drivers.length > 0}>
                           <For each={summary().drivers}>
                             {(line) => (
@@ -645,6 +595,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                               </box>
                             )}
                           </For>
+                        </Show>
+                        {/* Plan: what the session accomplished — always shown when non-empty */}
+                        <Show when={summary().plan}>
+                          <text fg={theme.textMuted} wrapMode="word">
+                            {summary().plan}
+                          </text>
                         </Show>
                       </box>
                     )}
