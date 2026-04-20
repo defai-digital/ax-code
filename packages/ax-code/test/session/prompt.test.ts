@@ -647,3 +647,66 @@ describe("session.prompt auto routing", () => {
     })
   })
 })
+
+describe("session.prompt shell cleanup", () => {
+  test("removes abort listeners after a shell command completes normally", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    const originalAdd = AbortSignal.prototype.addEventListener
+    const originalRemove = AbortSignal.prototype.removeEventListener
+    const counts = new Map<AbortSignal, { adds: number; removes: number }>()
+
+    AbortSignal.prototype.addEventListener = function(type, listener, options) {
+      if (type === "abort") {
+        const current = counts.get(this) ?? { adds: 0, removes: 0 }
+        current.adds += 1
+        counts.set(this, current)
+      }
+      return originalAdd.call(this, type, listener, options)
+    }
+
+    AbortSignal.prototype.removeEventListener = function(type, listener, options) {
+      if (type === "abort") {
+        const current = counts.get(this) ?? { adds: 0, removes: 0 }
+        current.removes += 1
+        counts.set(this, current)
+      }
+      return originalRemove.call(this, type, listener, options)
+    }
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          await SessionPrompt.shell({
+            sessionID: session.id,
+            agent: "build",
+            model: {
+              providerID: ProviderID.make("openai"),
+              modelID: ModelID.make("gpt-5.2"),
+            },
+            command: "echo shell-ok",
+          })
+          await Session.remove(session.id)
+        },
+      })
+
+      const candidates = [...counts.values()].filter((entry) => entry.adds >= 2)
+      expect(candidates.length).toBeGreaterThan(0)
+      expect(candidates.every((entry) => entry.removes === entry.adds)).toBe(true)
+    } finally {
+      AbortSignal.prototype.addEventListener = originalAdd
+      AbortSignal.prototype.removeEventListener = originalRemove
+    }
+  })
+})

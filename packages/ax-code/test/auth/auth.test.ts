@@ -1,5 +1,5 @@
 import path from "path"
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import { Auth } from "../../src/auth"
 import { Global } from "../../src/global"
@@ -106,4 +106,51 @@ test("set steals an abandoned auth lock owned by a dead process", async () => {
   })
 
   expect(await Auth.get("anthropic")).toMatchObject({ type: "api", key: "sk-test" })
+})
+
+test("set unreferences lock polling timers while waiting for an active holder", async () => {
+  const originalSetTimeout = globalThis.setTimeout
+  const host = process.env.HOSTNAME ?? ""
+  let unrefCalls = 0
+  let nowCalls = 0
+
+  await fs.writeFile(
+    lockFile,
+    JSON.stringify({
+      host,
+      pid: process.pid + 1,
+      startedAt: 1,
+      token: "busy-holder",
+    }),
+  )
+
+  const killSpy = spyOn(process, "kill").mockImplementation(() => true as any)
+  const nowSpy = spyOn(Date, "now").mockImplementation(() => {
+    nowCalls += 1
+    return nowCalls >= 50 ? 6_001 : 1_000
+  })
+
+  globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+    originalSetTimeout(() => fn(...args), 0)
+    return {
+      unref() {
+        unrefCalls += 1
+        return this
+      },
+    } as any
+  }) as typeof setTimeout
+
+  try {
+    await expect(
+      Auth.set("anthropic", {
+        type: "api",
+        key: "sk-test",
+      }),
+    ).rejects.toBeDefined()
+    expect(unrefCalls).toBeGreaterThan(0)
+  } finally {
+    globalThis.setTimeout = originalSetTimeout
+    killSpy.mockRestore()
+    nowSpy.mockRestore()
+  }
 })

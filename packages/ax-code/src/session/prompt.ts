@@ -2438,10 +2438,13 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     let abortTimer: ReturnType<typeof setTimeout> | undefined
 
     await new Promise<void>((resolve, reject) => {
-      if (abort.aborted) {
+      const abortTimeoutHandler = () => {
         abortTimer = setTimeout(() => {
           if (!exited) reject(new Error("Shell abort timed out while waiting for process to exit"))
         }, 5_000)
+      }
+      if (abort.aborted) {
+        abortTimeoutHandler()
       }
       proc.once("close", (code) => {
         exited = true
@@ -2449,6 +2452,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         clearTimeout(shellTimer)
         if (abortTimer) clearTimeout(abortTimer)
         abort.removeEventListener("abort", abortHandler)
+        abort.removeEventListener("abort", abortTimeoutHandler)
         resolve()
       })
       proc.once("error", (err) => {
@@ -2456,17 +2460,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         clearTimeout(shellTimer)
         if (abortTimer) clearTimeout(abortTimer)
         abort.removeEventListener("abort", abortHandler)
+        abort.removeEventListener("abort", abortTimeoutHandler)
         reject(err)
       })
-      abort.addEventListener(
-        "abort",
-        () => {
-          abortTimer = setTimeout(() => {
-            if (!exited) reject(new Error("Shell abort timed out while waiting for process to exit"))
-          }, 5_000)
-        },
-        { once: true },
-      )
+      abort.addEventListener("abort", abortTimeoutHandler, { once: true })
     })
 
     if (aborted) {
