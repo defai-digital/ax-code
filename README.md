@@ -22,6 +22,57 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+---
+
+## Get Started in 60 Seconds
+
+### Install
+
+```bash
+# macOS / Linux (Homebrew) — recommended
+brew install defai-digital/ax-code/ax-code
+
+# npm (any platform)
+npm i -g @defai.digital/ax-code
+
+# curl (Linux / macOS)
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/ax-code-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').tar.gz | tar -xz -C /usr/local/bin
+```
+
+### Run
+
+```bash
+# Set any provider key (pick one)
+export ANTHROPIC_API_KEY="your-key"              # Claude
+export GOOGLE_GENERATIVE_AI_API_KEY="your-key"  # Gemini
+export XAI_API_KEY="your-key"                    # Grok
+export OPENAI_API_KEY="your-key"                 # GPT
+
+# Launch
+ax-code
+```
+
+That's it. No project setup, no config file needed. Run `ax-code /connect` inside the TUI to add or switch providers at any time.
+
+### Update
+
+```bash
+ax-code upgrade          # Built-in (any install method)
+brew upgrade ax-code     # Homebrew
+npm update -g @defai.digital/ax-code  # npm
+```
+
+### From Source (contributors)
+
+```bash
+git clone https://github.com/defai-digital/ax-code.git
+cd ax-code && pnpm install && pnpm run setup:cli
+```
+
+Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.11+
+
+---
+
 ## Why AI Coding Breaks Down
 
 AI coding becomes hard to trust when execution is opaque, unsafe, and difficult to reproduce in real environments.
@@ -120,69 +171,6 @@ Within AutomatosX, `ax-code` is the developer-facing execution layer. `AX Engine
 | **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Enterprise orchestration — multi-node routing, heterogeneous compute    |
 | **AX Fabric**  | [defai-digital/ax-fabric](https://github.com/defai-digital/ax-fabric)   | Knowledge infrastructure — RAG, distillation, knowledge lifecycle       |
 | **AX Engine**  | [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine)   | Mac-native inference — Apple Silicon optimized, 30B-70B+ models         |
-
----
-
-## Get Started in 60 Seconds
-
-### Install
-
-```bash
-# macOS / Linux (Homebrew) — recommended
-brew install defai-digital/ax-code/ax-code
-
-# npm (any platform)
-npm i -g @defai.digital/ax-code
-
-# curl (Linux / macOS)
-curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/ax-code-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').tar.gz | tar -xz -C /usr/local/bin
-```
-
-### Update
-
-```bash
-# Homebrew
-brew upgrade ax-code
-
-# npm
-npm update -g @defai.digital/ax-code
-
-# Built-in (any method)
-ax-code upgrade
-```
-
-### Uninstall
-
-```bash
-# Homebrew
-brew uninstall ax-code && brew untap defai-digital/ax-code
-
-# npm
-npm uninstall -g @defai.digital/ax-code
-
-# Built-in
-ax-code uninstall
-```
-
-### From Source (contributors)
-
-```bash
-git clone https://github.com/defai-digital/ax-code.git
-cd ax-code && pnpm install && pnpm run setup:cli
-```
-
-Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.11+
-
-### Run
-
-```bash
-# Set any provider key (pick one)
-export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Gemini
-export XAI_API_KEY="your-key"                     # Grok
-
-# Launch
-ax-code
-```
 
 ---
 
@@ -611,6 +599,7 @@ ax-code doctor                       # System health check
 
 # Maintenance
 ax-code upgrade                      # Upgrade to latest version
+ax-code uninstall                    # Uninstall ax-code
 
 # Sessions
 ax-code session list                 # List sessions
