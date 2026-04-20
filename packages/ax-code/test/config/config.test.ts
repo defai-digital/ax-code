@@ -407,7 +407,7 @@ test("handles file inclusion with replacement tokens", async () => {
   })
 })
 
-test("validates config schema and throws on invalid fields", async () => {
+test("ignores invalid project config fields and keeps loading defaults", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
@@ -419,13 +419,14 @@ test("validates config schema and throws on invalid fields", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      // Strict schema should throw an error for invalid fields
-      await expect(Config.get()).rejects.toThrow()
+      const config = await Config.get()
+      expect((config as Record<string, unknown>).invalid_field).toBeUndefined()
+      expect(config.username).toBeDefined()
     },
   })
 })
 
-test("throws error for invalid JSON", async () => {
+test("ignores malformed project JSON and keeps loading defaults", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(path.join(dir, "ax-code.json"), "{ invalid json }")
@@ -434,7 +435,8 @@ test("throws error for invalid JSON", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await expect(Config.get()).rejects.toThrow()
+      const config = await Config.get()
+      expect(config.username).toBeDefined()
     },
   })
 })
@@ -945,7 +947,14 @@ test("resolves scoped npm plugins in config", async () => {
 
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
-        JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json", plugin: ["@scope/plugin"] }, null, 2),
+        JSON.stringify(
+          {
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            plugin: ["@scope/plugin"],
+          },
+          null,
+          2,
+        ),
       )
     },
   })
@@ -973,7 +982,14 @@ test("drops unresolved package plugins from untrusted project config", async () 
     init: async (dir) => {
       await Filesystem.write(
         path.join(dir, "ax-code.json"),
-        JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json", plugin: ["malicious-package-name"] }, null, 2),
+        JSON.stringify(
+          {
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            plugin: ["malicious-package-name"],
+          },
+          null,
+          2,
+        ),
       )
     },
   })
@@ -1965,7 +1981,8 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
           await Filesystem.write(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
-              $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+              $schema:
+                "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
               model: "project/model",
               username: "project-user",
             }),
@@ -2060,7 +2077,8 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
           await Filesystem.write(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
-              $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+              $schema:
+                "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
               instructions: ["./CUSTOM.md"],
             }),
           )
@@ -2106,7 +2124,8 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
           await Filesystem.write(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
-              $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+              $schema:
+                "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
               model: "configdir/model",
             }),
           )
@@ -2119,7 +2138,8 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
           await Filesystem.write(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
-              $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+              $schema:
+                "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
               model: "project/model",
             }),
           )
@@ -2222,52 +2242,66 @@ describe("project config {file:} substitution is sandboxed", () => {
   // `NamedError` sets `.message` to the error name; the human-facing
   // detail lives on `.data.message`, so match against that.
 
-  async function expectEscapeRejection(cfgDir: string) {
+  async function expectEscapeIgnored(cfgDir: string, secret: string) {
     await Instance.provide({
       directory: cfgDir,
       fn: async () => {
-        let err: any
-        try {
-          await Config.get()
-        } catch (e) {
-          err = e
-        }
-        expect(err).toBeDefined()
-        expect(err.name).toBe("ConfigInvalidError")
-        expect(err.data?.message ?? "").toMatch(/escapes config directory/)
+        const config = await Config.get()
+        expect((config.instructions ?? []).join("\n")).not.toContain(secret)
       },
     })
   }
 
-  test("rejects absolute path in project config", async () => {
+  test("ignores absolute file refs in project config", async () => {
     await using tmp = await tmpdir({ git: true })
-    const abs = process.platform === "win32" ? "C:\\Windows\\System32\\drivers\\etc\\hosts" : "/etc/hosts"
-    await writeConfig(tmp.path, {
-      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-      username: `{file:${abs}}`,
-    })
-    await expectEscapeRejection(tmp.path)
-  })
-
-  test("rejects ~/ expansion in project config", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await writeConfig(tmp.path, {
-      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-      username: "{file:~/.ssh/id_rsa}",
-    })
-    await expectEscapeRejection(tmp.path)
-  })
-
-  test("rejects relative traversal escaping config dir", async () => {
     await using outer = await tmpdir()
-    await Filesystem.write(path.join(outer.path, "secret.txt"), "secret")
+    const secret = "absolute-secret"
+    const abs = path.join(outer.path, "secret.txt")
+    await Filesystem.write(abs, secret)
+    await writeConfig(tmp.path, {
+      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+      instructions: [`leak {file:${abs}}`],
+    })
+    await expectEscapeIgnored(tmp.path, secret)
+  })
+
+  test("ignores ~/ expansion in project config", async () => {
+    const prevHome = process.env.HOME
+    const prevUserProfile = process.env.USERPROFILE
+    await using home = await tmpdir({
+      init: async (dir) => {
+        await Filesystem.write(path.join(dir, ".ssh", "id_rsa"), "home-secret")
+      },
+    })
+    try {
+      process.env.HOME = home.path
+      process.env.USERPROFILE = home.path
+
+      await using tmp = await tmpdir({ git: true })
+      await writeConfig(tmp.path, {
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        instructions: ["leak {file:~/.ssh/id_rsa}"],
+      })
+      await expectEscapeIgnored(tmp.path, "home-secret")
+    } finally {
+      if (prevHome !== undefined) process.env.HOME = prevHome
+      else delete process.env.HOME
+      if (prevUserProfile !== undefined) process.env.USERPROFILE = prevUserProfile
+      else delete process.env.USERPROFILE
+    }
+  })
+
+  test("ignores relative traversal escaping the config dir", async () => {
+    await using outer = await tmpdir()
+    const secret = "relative-secret"
+    await Filesystem.write(path.join(outer.path, "secret.txt"), secret)
     await using tmp = await tmpdir({ git: true })
     const escape = path.relative(tmp.path, path.join(outer.path, "secret.txt")).replaceAll("\\", "/")
     await writeConfig(tmp.path, {
       $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-      username: `{file:${escape}}`,
+      instructions: [`leak {file:${escape}}`],
     })
-    await expectEscapeRejection(tmp.path)
+    await expectEscapeIgnored(tmp.path, secret)
   })
 
   test("still allows relative refs inside the project dir", async () => {

@@ -16,6 +16,8 @@ const transportCalls: Array<{
 }> = []
 const transportInstances: Array<{ url: string; closeCalls: number }> = []
 const authenticatedUrls = new Set<string>()
+const pendingOauthStates = new Map<string, { reject: (error: Error) => void }>()
+const pendingOauthNames = new Map<string, string>()
 
 // Controls whether the mock transport simulates a 401 that triggers the SDK
 // auth flow (which calls provider.state()) or a simple UnauthorizedError.
@@ -117,10 +119,27 @@ mock.module("../../src/util/ssrf", () => ({
 mock.module("../../src/mcp/oauth-callback", () => ({
   McpOAuthCallback: {
     ensureRunning: async () => {},
-    waitForCallback: async () => {
-      throw new Error("waitForCallback should not be called in this test")
+    waitForCallback: (oauthState: string, mcpName?: string) =>
+      new Promise<string>((_resolve, reject) => {
+        pendingOauthStates.set(oauthState, { reject })
+        if (mcpName) pendingOauthNames.set(mcpName, oauthState)
+      }),
+    cancelPending: (mcpName: string) => {
+      const oauthState = pendingOauthNames.get(mcpName)
+      if (!oauthState) return
+      const pending = pendingOauthStates.get(oauthState)
+      if (!pending) return
+      pendingOauthStates.delete(oauthState)
+      pendingOauthNames.delete(mcpName)
+      pending.reject(new Error("Authorization cancelled"))
     },
-    cancelPending: () => {},
+    stop: async () => {
+      for (const [oauthState, pending] of pendingOauthStates) {
+        pending.reject(new Error("OAuth callback server stopped"))
+        pendingOauthStates.delete(oauthState)
+      }
+      pendingOauthNames.clear()
+    },
     isRunning: () => false,
   },
 }))
@@ -130,6 +149,8 @@ beforeEach(() => {
   transportInstances.length = 0
   authenticatedUrls.clear()
   simulateAuthFlow = true
+  pendingOauthStates.clear()
+  pendingOauthNames.clear()
 })
 
 // Import modules after mocking
