@@ -31,6 +31,14 @@ import type { Path } from "@ax-code/sdk"
 import { upsert, mergeSorted } from "./sync-util"
 import { AutonomousQuestion } from "@/question/autonomous"
 import { createReconnectRecoveryGate } from "../util/reconnect-recovery"
+import { withTimeout } from "@/util/timeout"
+
+const BOOTSTRAP_REQUEST_TIMEOUT_MS = 10_000
+const SESSION_SYNC_REQUEST_TIMEOUT_MS = 10_000
+
+function withSyncTimeout<T>(label: string, promise: Promise<T>, timeoutMs = BOOTSTRAP_REQUEST_TIMEOUT_MS) {
+  return withTimeout(promise, timeoutMs, `${label} timed out after ${timeoutMs}ms`)
+}
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
@@ -592,87 +600,119 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       bootstrapPromise = (async () => {
         fullSyncedSessions.clear()
         const start = Date.now() - 30 * 24 * 60 * 60 * 1000
-        const sessionListPromise = sdk.client.session
-          .list({ start: start })
-          .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
-
-        // Only keep the continue-session lookup on the blocking path. The
-        // home route can render immediately with empty provider/agent/config
-        // state and hydrate those details afterward.
-        const providersPromise = sdk.client.config.providers({}, { throwOnError: true })
-        const providerListPromise = sdk.client.provider.list({}, { throwOnError: true })
-        const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
-        const configPromise = sdk.client.config.get({}, { throwOnError: true })
-        const commandPromise = sdk.client.command.list()
-        const permissionPromise = sdk.client.permission.list()
-        const questionPromise = sdk.client.question.list()
-        const blockingRequests: Promise<unknown>[] = args.continue ? [sessionListPromise] : []
-
-        await Promise.all(blockingRequests)
-          .then(() => {
-            if (args.continue) {
-              return sessionListPromise.then((sessions) => {
+        const sessionListPromise = withSyncTimeout(
+          "tui bootstrap session.list",
+          sdk.client.session
+            .list({ start: start })
+            .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id))),
+        )
+        const providersPromise = withSyncTimeout(
+          "tui bootstrap config.providers",
+          sdk.client.config.providers({}, { throwOnError: true }),
+        )
+        const providerListPromise = withSyncTimeout(
+          "tui bootstrap provider.list",
+          sdk.client.provider.list({}, { throwOnError: true }),
+        )
+        const agentsPromise = withSyncTimeout(
+          "tui bootstrap app.agents",
+          sdk.client.app.agents({}, { throwOnError: true }),
+        )
+        const configPromise = withSyncTimeout(
+          "tui bootstrap config.get",
+          sdk.client.config.get({}, { throwOnError: true }),
+        )
+        const commandPromise = withSyncTimeout("tui bootstrap command.list", sdk.client.command.list())
+        const permissionPromise = withSyncTimeout("tui bootstrap permission.list", sdk.client.permission.list())
+        const questionPromise = withSyncTimeout("tui bootstrap question.list", sdk.client.question.list())
+        const blockingRequests = args.continue
+          ? [
+              sessionListPromise.then((sessions) => {
                 setStore("session", reconcile(mergeSorted(store.session, sessions)))
-              })
-            }
-          })
-          .then(() => {
-            if (store.status === "loading") setStore("status", "partial")
-            // Keep bootstrapPromise alive until the background hydration finishes
-            // so reconnect-triggered bootstraps do not overlap and race each other.
-            return Promise.allSettled([
-              providersPromise
-                .then((x) => x.data ?? { providers: [], default: {} })
-                .then((providers) => {
-                  batch(() => {
-                    setStore("provider", reconcile(providers.providers))
-                    setStore("provider_default", reconcile(providers.default))
-                    setStore("provider_loaded", true)
-                    setStore("provider_failed", false)
-                  })
-                })
-                .catch((error) => {
-                  batch(() => {
-                    setStore("provider_loaded", true)
-                    setStore("provider_failed", true)
-                  })
-                  throw error
-                }),
-              providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
-              agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
-              configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
-              commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
-              ...(args.continue
-                ? []
-                : [
-                    sessionListPromise.then((sessions) =>
-                      setStore("session", reconcile(mergeSorted(store.session, sessions))),
-                    ),
-                  ]),
-              permissionPromise.then((x) => setStore("permission", reconcile(groupBySession(x.data ?? [])))),
-              questionPromise.then((x) => setStore("question", reconcile(groupBySession(x.data ?? [])))),
-              sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data ?? []))),
-              sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data ?? {}))),
-              sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
-              sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data ?? []))),
-              sdk.client.session.status().then((x) => {
-                setStore("session_status", reconcile(x.data ?? {}))
               }),
-              sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
-              sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
-              sdk.client.path.get().then((x) => setStore("path", reconcile(x.data ?? store.path))),
-              syncWorkspaces(),
-              syncDebugEngine(),
-              syncIsolation(),
-              syncAutonomous(),
-              syncSmartLlm(),
-            ]).then((results) => {
-              for (const r of results) {
-                if (r.status === "rejected")
-                  Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
-              }
-              setStore("status", "complete")
+            ]
+          : []
+
+        const blockingResults = await Promise.allSettled(blockingRequests)
+        for (const result of blockingResults) {
+          if (result.status === "rejected") {
+            Log.Default.warn("blocking bootstrap item failed", {
+              error: String(result.reason),
             })
+          }
+        }
+
+        if (store.status === "loading") setStore("status", "partial")
+
+        // Keep bootstrapPromise alive until the background hydration finishes
+        // so reconnect-triggered bootstraps do not overlap and race each other.
+        return Promise.allSettled([
+          providersPromise
+            .then((x) => x.data ?? { providers: [], default: {} })
+            .then((providers) => {
+              batch(() => {
+                setStore("provider", reconcile(providers.providers))
+                setStore("provider_default", reconcile(providers.default))
+                setStore("provider_loaded", true)
+                setStore("provider_failed", false)
+              })
+            })
+            .catch((error) => {
+              batch(() => {
+                setStore("provider_loaded", true)
+                setStore("provider_failed", true)
+              })
+              throw error
+            }),
+          providerListPromise.then((x) => setStore("provider_next", reconcile(x.data ?? store.provider_next))),
+          agentsPromise.then((x) => setStore("agent", reconcile(x.data ?? []))),
+          configPromise.then((x) => setStore("config", reconcile(x.data ?? store.config))),
+          commandPromise.then((x) => setStore("command", reconcile(x.data ?? []))),
+          ...(args.continue
+            ? []
+            : [
+                sessionListPromise.then((sessions) =>
+                  setStore("session", reconcile(mergeSorted(store.session, sessions))),
+                ),
+              ]),
+          permissionPromise.then((x) => setStore("permission", reconcile(groupBySession(x.data ?? [])))),
+          questionPromise.then((x) => setStore("question", reconcile(groupBySession(x.data ?? [])))),
+          withSyncTimeout("tui bootstrap lsp.status", sdk.client.lsp.status()).then((x) =>
+            setStore("lsp", reconcile(x.data ?? [])),
+          ),
+          withSyncTimeout("tui bootstrap mcp.status", sdk.client.mcp.status()).then((x) =>
+            setStore("mcp", reconcile(x.data ?? {})),
+          ),
+          withSyncTimeout("tui bootstrap resource.list", sdk.client.experimental.resource.list()).then((x) =>
+            setStore("mcp_resource", reconcile(x.data ?? {})),
+          ),
+          withSyncTimeout("tui bootstrap formatter.status", sdk.client.formatter.status()).then((x) =>
+            setStore("formatter", reconcile(x.data ?? [])),
+          ),
+          withSyncTimeout("tui bootstrap session.status", sdk.client.session.status()).then((x) => {
+            setStore("session_status", reconcile(x.data ?? {}))
+          }),
+          withSyncTimeout("tui bootstrap provider.auth", sdk.client.provider.auth()).then((x) =>
+            setStore("provider_auth", reconcile(x.data ?? {})),
+          ),
+          withSyncTimeout("tui bootstrap vcs.get", sdk.client.vcs.get()).then((x) =>
+            setStore("vcs", reconcile(x.data)),
+          ),
+          withSyncTimeout("tui bootstrap path.get", sdk.client.path.get()).then((x) =>
+            setStore("path", reconcile(x.data ?? store.path)),
+          ),
+          withSyncTimeout("tui bootstrap worktree.list", syncWorkspaces()),
+          withSyncTimeout("tui bootstrap debug-engine", syncDebugEngine()),
+          withSyncTimeout("tui bootstrap isolation", syncIsolation()),
+          withSyncTimeout("tui bootstrap autonomous", syncAutonomous()),
+          withSyncTimeout("tui bootstrap smart-llm", syncSmartLlm()),
+        ])
+          .then((results) => {
+            for (const r of results) {
+              if (r.status === "rejected")
+                Log.Default.error("non-blocking bootstrap item failed", { error: String(r.reason) })
+            }
+            setStore("status", "complete")
           })
           .catch(async (e) => {
             Log.Default.error("tui bootstrap failed", {
@@ -751,10 +791,26 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           inFlightSessions.add(sessionID)
           try {
             const [session, messages, todo, diff] = await Promise.all([
-              sdk.client.session.get({ sessionID }, { throwOnError: true }),
-              sdk.client.session.messages({ sessionID, limit: 100 }),
-              sdk.client.session.todo({ sessionID }),
-              sdk.client.session.diff({ sessionID }),
+              withSyncTimeout(
+                `tui session sync ${sessionID} session.get`,
+                sdk.client.session.get({ sessionID }, { throwOnError: true }),
+                SESSION_SYNC_REQUEST_TIMEOUT_MS,
+              ),
+              withSyncTimeout(
+                `tui session sync ${sessionID} session.messages`,
+                sdk.client.session.messages({ sessionID, limit: 100 }),
+                SESSION_SYNC_REQUEST_TIMEOUT_MS,
+              ),
+              withSyncTimeout(
+                `tui session sync ${sessionID} session.todo`,
+                sdk.client.session.todo({ sessionID }),
+                SESSION_SYNC_REQUEST_TIMEOUT_MS,
+              ),
+              withSyncTimeout(
+                `tui session sync ${sessionID} session.diff`,
+                sdk.client.session.diff({ sessionID }),
+                SESSION_SYNC_REQUEST_TIMEOUT_MS,
+              ),
             ])
             if (!session.data) {
               Log.Default.warn("session sync returned no session data", { sessionID })

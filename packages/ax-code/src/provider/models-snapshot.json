@@ -29458,8 +29458,8 @@
     "models": {
       "hy3-preview": {
         "id": "hy3-preview",
-        "name": "HY3 Preview",
-        "family": "HY",
+        "name": "Hy3 preview",
+        "family": "Hy",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -30228,7 +30228,7 @@
       "kimi-k2.5": {
         "id": "kimi-k2.5",
         "name": "Kimi K2.5",
-        "family": "kimi",
+        "family": "kimi-k2.5",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -30399,6 +30399,41 @@
         "limit": {
           "context": 204800,
           "output": 131072
+        }
+      },
+      "kimi-k2.6": {
+        "id": "kimi-k2.6",
+        "name": "Kimi K2.6",
+        "family": "kimi-k2.6",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "knowledge": "2024-10",
+        "release_date": "2026-04-21",
+        "last_updated": "2026-04-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.95,
+          "output": 4,
+          "cache_read": 0.16
+        },
+        "limit": {
+          "context": 262144,
+          "output": 65536
         }
       },
       "minimax-m2.5": {
@@ -115440,8 +115475,8 @@
     "models": {
       "hy3-preview": {
         "id": "hy3-preview",
-        "name": "HY3 Preview",
-        "family": "HY",
+        "name": "Hy3 preview",
+        "family": "Hy",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,

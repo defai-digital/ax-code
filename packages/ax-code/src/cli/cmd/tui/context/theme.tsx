@@ -11,7 +11,6 @@ import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
 import { useTuiConfig } from "./tui-config"
 
-
 type Theme = ThemeColors & {
   _hasSelectedListItemText: boolean
   thinkingOpacity: number
@@ -36,6 +35,25 @@ export function selectedForeground(theme: Theme, bg?: RGBA): RGBA {
 }
 
 export { DEFAULT_THEMES, type ThemeJson }
+
+function colorModeFromRgba(color?: RGBA | null): "dark" | "light" | undefined {
+  if (!color) return undefined
+  const luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b
+  return luminance > 0.5 ? "light" : "dark"
+}
+
+function colorModeFromHex(value?: string | null): "dark" | "light" | undefined {
+  if (!value) return undefined
+  try {
+    return colorModeFromRgba(RGBA.fromHex(value))
+  } catch {
+    return undefined
+  }
+}
+
+function detectTerminalMode(colors: TerminalColors): "dark" | "light" | undefined {
+  return colorModeFromHex(colors.defaultBackground) ?? colorModeFromHex(colors.palette[0])
+}
 
 function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
   const defs = theme.defs ?? {}
@@ -192,21 +210,28 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           size: 16,
         })
         .then((colors) => {
+          const detectedMode = detectTerminalMode(colors)
+          const nextMode = store.lock ? store.mode : (detectedMode ?? mode)
+          if (!store.lock && detectedMode && store.mode !== detectedMode) {
+            kv.set("theme_mode", detectedMode)
+          }
           if (!colors.palette[0]) {
-            if (store.active === "system") {
-              setStore(
-                produce((draft) => {
+            setStore(
+              produce((draft) => {
+                draft.mode = nextMode
+                if (draft.active === "system") {
                   draft.active = "github"
                   draft.ready = true
-                }),
-              )
-            }
+                }
+              }),
+            )
             return
           }
           setStore(
             produce((draft) => {
-              draft.themes.system = generateSystem(colors, mode)
-              if (store.active === "system") {
+              draft.mode = nextMode
+              draft.themes.system = generateSystem(colors, nextMode)
+              if (draft.active === "system") {
                 draft.ready = true
               }
             }),

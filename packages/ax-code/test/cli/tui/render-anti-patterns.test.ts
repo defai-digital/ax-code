@@ -5,6 +5,7 @@ import path from "path"
 const TUI_ROOT = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const RENDERER_SRC = path.join(TUI_ROOT, "renderer.ts")
+const SESSION_ROUTE_SRC = path.join(TUI_ROOT, "routes/session/index.tsx")
 const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/doctor-preload.ts")
 
 describe("tui OpenTUI stability guardrails", () => {
@@ -32,6 +33,18 @@ describe("tui OpenTUI stability guardrails", () => {
     const app = await fs.readFile(APP_SRC, "utf8")
 
     expect(app).toContain('renderer.externalOutputMode = "passthrough"')
+  })
+
+  test("does not block first paint on a pre-render terminal color probe", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).not.toContain("getTerminalBackgroundColor")
+  })
+
+  test("avoids async createEffect in the session startup path", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(session).not.toContain("createEffect(async")
   })
 
   test("keeps doctor checking the OpenTUI preload dependency with bundled-runtime awareness", async () => {

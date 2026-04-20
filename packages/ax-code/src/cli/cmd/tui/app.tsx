@@ -48,7 +48,8 @@ import { renderTui } from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
 import { Session } from "@tui/routes/session"
-import { Terminal } from "./util/terminal"
+
+const FALLBACK_COLOR_MODE = "dark" as const
 
 export type TuiInput = {
   url: string
@@ -68,11 +69,6 @@ export function tui(input: TuiInput) {
       const unguard = win32InstallCtrlCGuard()
       try {
         win32DisableProcessedInput()
-        const mode = await Terminal.getTerminalBackgroundColor()
-
-        // Re-clear after getTerminalBackgroundColor() — setRawMode(false) restores
-        // the original console mode which re-enables ENABLE_PROCESSED_INPUT.
-        win32DisableProcessedInput()
 
         const onExit = async () => {
           unguard?.()
@@ -82,45 +78,47 @@ export function tui(input: TuiInput) {
         renderTui(() => {
           return (
             <ErrorBoundary
-              fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}
+              fallback={(error, reset) => (
+                <ErrorComponent error={error} reset={reset} onExit={onExit} mode={FALLBACK_COLOR_MODE} />
+              )}
             >
               <ArgsProvider {...input.args}>
                 <ExitProvider onExit={onExit}>
                   <KVProvider>
                     <ToastProvider>
-                  <RouteProvider>
-                    <TuiConfigProvider config={input.config}>
-                      <SDKProvider
-                        url={input.url}
-                        directory={input.directory}
-                        fetch={input.fetch}
-                        headers={input.headers}
-                        events={input.events}
-                      >
-                        <SyncProvider>
-                          <ThemeProvider mode={mode}>
-                            <LocalProvider>
-                              <KeybindProvider>
-                                <PromptStashProvider>
-                                  <DialogProvider>
-                                    <CommandProvider>
-                                      <FrecencyProvider>
-                                        <PromptHistoryProvider>
-                                          <PromptRefProvider>
-                                            <App onSnapshot={input.onSnapshot} />
-                                          </PromptRefProvider>
-                                        </PromptHistoryProvider>
-                                      </FrecencyProvider>
-                                    </CommandProvider>
-                                  </DialogProvider>
-                                </PromptStashProvider>
-                              </KeybindProvider>
-                            </LocalProvider>
-                          </ThemeProvider>
-                        </SyncProvider>
-                      </SDKProvider>
-                    </TuiConfigProvider>
-                  </RouteProvider>
+                      <RouteProvider>
+                        <TuiConfigProvider config={input.config}>
+                          <SDKProvider
+                            url={input.url}
+                            directory={input.directory}
+                            fetch={input.fetch}
+                            headers={input.headers}
+                            events={input.events}
+                          >
+                            <SyncProvider>
+                              <ThemeProvider mode={FALLBACK_COLOR_MODE}>
+                                <LocalProvider>
+                                  <KeybindProvider>
+                                    <PromptStashProvider>
+                                      <DialogProvider>
+                                        <CommandProvider>
+                                          <FrecencyProvider>
+                                            <PromptHistoryProvider>
+                                              <PromptRefProvider>
+                                                <App onSnapshot={input.onSnapshot} />
+                                              </PromptRefProvider>
+                                            </PromptHistoryProvider>
+                                          </FrecencyProvider>
+                                        </CommandProvider>
+                                      </DialogProvider>
+                                    </PromptStashProvider>
+                                  </KeybindProvider>
+                                </LocalProvider>
+                              </ThemeProvider>
+                            </SyncProvider>
+                          </SDKProvider>
+                        </TuiConfigProvider>
+                      </RouteProvider>
                     </ToastProvider>
                   </KVProvider>
                 </ExitProvider>
@@ -421,7 +419,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         })
       }
     })
-
   })
 
   let continued = false
@@ -492,9 +489,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
             slash: {
               name: "workspaces",
             },
-      onSelect: () => {
-        void showWorkspaceListDialog()
-      },
+            onSelect: () => {
+              void showWorkspaceListDialog()
+            },
           },
         ]
       : []),
@@ -698,9 +695,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Open docs",
       value: "docs.open",
       onSelect: () => {
-        import("open")
-          .then(({ default: open }) => open("https://github.com/defai-digital/ax-code"))
-          .catch(() => {})
+        import("open").then(({ default: open }) => open("https://github.com/defai-digital/ax-code")).catch(() => {})
         dialog.clear()
       },
       category: "System",
@@ -805,10 +800,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: (dialog) => {
         const next = !sync.data.smartLlm
         sync.set("smartLlm", next)
-        void putJsonWithTimeout("/smart-llm", { enabled: next })
-          .catch(() => {
-            sync.set("smartLlm", !next)
-          })
+        void putJsonWithTimeout("/smart-llm", { enabled: next }).catch(() => {
+          sync.set("smartLlm", !next)
+        })
         dialog.clear()
       },
     },
@@ -820,10 +814,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: (dialog) => {
         const next = !sync.data.autonomous
         sync.set("autonomous", next)
-        void putJsonWithTimeout("/autonomous", { enabled: next })
-          .catch(() => {
-            sync.set("autonomous", !next)
-          })
+        void putJsonWithTimeout("/autonomous", { enabled: next }).catch(() => {
+          sync.set("autonomous", !next)
+        })
         dialog.clear()
       },
     },
@@ -844,11 +837,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           headers["x-ax-code-directory"] = encoded
           headers["x-opencode-directory"] = encoded
         }
-        void putJsonWithTimeout("/isolation", { mode: next }, headers)
-          .catch(() => {
-            sync.set("isolation", "mode", previousMode)
-            sync.set("isolation", "network", previousNetwork)
-          })
+        void putJsonWithTimeout("/isolation", { mode: next }, headers).catch(() => {
+          sync.set("isolation", "mode", previousMode)
+          sync.set("isolation", "network", previousNetwork)
+        })
         dialog.clear()
       },
     },

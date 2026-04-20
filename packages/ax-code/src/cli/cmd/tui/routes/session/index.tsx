@@ -92,7 +92,13 @@ import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
 import { EventQuery } from "@/replay/query"
 import { routeEvent } from "./route"
-import { codeDisplayView, compactDelegatedLabel, diffDisplayView, todoWriteView, userMessageMetadataDensity } from "./view-model"
+import {
+  codeDisplayView,
+  compactDelegatedLabel,
+  diffDisplayView,
+  todoWriteView,
+  userMessageMetadataDensity,
+} from "./view-model"
 import { SessionCodeRenderer, SessionDiffRenderer } from "./render-adapter"
 import { Log } from "@/util/log"
 import { firstCompactionMessageID, shouldShowCompactionNotice } from "./compaction-view-model"
@@ -200,7 +206,9 @@ export function Session() {
     return false
   })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() && wide() ? computeSidebarWidth(dimensions().width) : 0) - 4)
+  const contentWidth = createMemo(
+    () => dimensions().width - (sidebarVisible() && wide() ? computeSidebarWidth(dimensions().width) : 0) - 4,
+  )
 
   const scrollAcceleration = createMemo(() => {
     const tui = tuiConfig
@@ -218,24 +226,36 @@ export function Session() {
     sdk.setWorkspace(session()?.directory)
   })
 
-  createEffect(async () => {
-    await sync.session
-      .sync(route.sessionID)
-      .then(() => {
-        if (scroll) scroll.scrollBy(100_000)
-      })
-      .catch((e) => {
-        log.warn("session sync failed", { error: e, sessionID: route.sessionID })
-        toast.show({
-          message: `Session not found: ${route.sessionID}`,
-          variant: "error",
-        })
-        return navigate({ type: "home" })
-      })
-  })
-
   const toast = useToast()
   const sdk = useSDK()
+  let sessionSyncGeneration = 0
+  createEffect(
+    on(
+      () => route.sessionID,
+      (sessionID) => {
+        const generation = ++sessionSyncGeneration
+        void sync.session
+          .sync(sessionID)
+          .then(() => {
+            if (generation !== sessionSyncGeneration) return
+            if (scroll) scroll.scrollBy(100_000)
+          })
+          .catch((error) => {
+            if (generation !== sessionSyncGeneration) return
+            log.warn("session sync failed", { error, sessionID })
+            toast.show({
+              message: `Failed to load session: ${sessionID}`,
+              variant: "error",
+            })
+            navigate({ type: "home" })
+          })
+      },
+    ),
+  )
+  onCleanup(() => {
+    sessionSyncGeneration++
+  })
+
   const reconnectSession = createReconnectRecoveryGate({
     recover: () =>
       sync.session.sync(route.sessionID, { force: true }).catch((error) => {
@@ -1139,10 +1159,11 @@ function RouteIndicator(props: { messageID: string; sessionID: string }) {
     )
     if (matches.length === 0) return null
     // Prefer agent-switch/delegate events over complexity-only events (more informative)
-    const primary = matches.find((r) => {
-      const e = r.event_data
-      return e.type === "agent.route" && e.routeMode !== "complexity"
-    }) ?? matches[matches.length - 1]
+    const primary =
+      matches.find((r) => {
+        const e = r.event_data
+        return e.type === "agent.route" && e.routeMode !== "complexity"
+      }) ?? matches[matches.length - 1]
     if (!primary) return null
     return routeEvent(primary, sync.data.agent)
   })
@@ -1153,7 +1174,8 @@ function RouteIndicator(props: { messageID: string; sessionID: string }) {
         <box paddingLeft={4} paddingBottom={1} flexShrink={0}>
           <text fg={theme.textMuted}>
             <span style={{ fg: theme.accent }}>{item().icon}</span>{" "}
-            <span style={{ fg: theme.text }}>{item().title}</span>{" · "}
+            <span style={{ fg: theme.text }}>{item().title}</span>
+            {" · "}
             <span style={{ fg: theme.textMuted }}>{item().detail}</span>
           </text>
         </box>
