@@ -1445,7 +1445,7 @@ export function Prompt(props: PromptProps) {
                 fg={sync.data.smartLlm ? theme.primary : theme.textMuted}
                 onMouseUp={() => command.trigger("app.toggle.smart_llm")}
               >
-                {sync.data.smartLlm ? "● SmartLLM" : "○ SmartLLM"}
+                {sync.data.smartLlm ? "● Auto-route" : "○ Auto-route"}
               </text>
               {sync.data.autonomous ? (
                 <box

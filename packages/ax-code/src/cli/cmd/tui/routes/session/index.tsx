@@ -90,6 +90,8 @@ import { RevertNotice } from "./revert-notice"
 import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
+import { EventQuery } from "@/replay/query"
+import { routeEvent } from "./route"
 import { codeDisplayView, compactDelegatedLabel, diffDisplayView, todoWriteView, userMessageMetadataDensity } from "./view-model"
 import { SessionCodeRenderer, SessionDiffRenderer } from "./render-adapter"
 import { Log } from "@/util/log"
@@ -860,28 +862,31 @@ export function Session() {
                       <></>
                     </Match>
                     <Match when={message.role === "user"}>
-                      <UserMessage
-                        index={index()}
-                        onMouseUp={() => {
-                          if (renderer.getSelection()?.getSelectedText()) return
-                          dialog.replace(() => (
-                            <DialogMessage
-                              messageID={message.id}
-                              sessionID={route.sessionID}
-                              setPrompt={(promptInfo) => prompt.set(promptInfo)}
-                            />
-                          ))
-                        }}
-                        message={message as UserMessage}
-                        parts={sync.data.part[message.id] ?? []}
-                        pending={pending()}
-                        showCompactionNotice={shouldShowCompactionNotice({
-                          currentMessageID: message.id,
-                          firstMessageID: firstCompactionID(),
-                          dismissed: dismissedCompactionNotice(),
-                        })}
-                        onDismissCompactionNotice={dismissCompactionNotice}
-                      />
+                      <>
+                        <UserMessage
+                          index={index()}
+                          onMouseUp={() => {
+                            if (renderer.getSelection()?.getSelectedText()) return
+                            dialog.replace(() => (
+                              <DialogMessage
+                                messageID={message.id}
+                                sessionID={route.sessionID}
+                                setPrompt={(promptInfo) => prompt.set(promptInfo)}
+                              />
+                            ))
+                          }}
+                          message={message as UserMessage}
+                          parts={sync.data.part[message.id] ?? []}
+                          pending={pending()}
+                          showCompactionNotice={shouldShowCompactionNotice({
+                            currentMessageID: message.id,
+                            firstMessageID: firstCompactionID(),
+                            dismissed: dismissedCompactionNotice(),
+                          })}
+                          onDismissCompactionNotice={dismissCompactionNotice}
+                        />
+                        <RouteIndicator messageID={message.id} sessionID={route.sessionID} />
+                      </>
                     </Match>
                     <Match when={message.role === "assistant"}>
                       <AssistantMessage
@@ -1118,6 +1123,42 @@ function UserMessage(props: {
         <CompactionNotice onDismiss={props.onDismissCompactionNotice} />
       </Show>
     </>
+  )
+}
+
+function RouteIndicator(props: { messageID: string; sessionID: string }) {
+  const { theme } = useTheme()
+  const sync = useSync()
+
+  const info = createMemo(() => {
+    void sync.data.message[props.sessionID] // reactive: re-evaluate when messages update
+    const sid = props.sessionID as Parameters<typeof EventQuery.bySessionWithTimestamp>[0]
+    const rows = EventQuery.bySessionWithTimestamp(sid)
+    const matches = rows.filter(
+      (r) => r.event_data.type === "agent.route" && r.event_data.messageID === props.messageID,
+    )
+    if (matches.length === 0) return null
+    // Prefer agent-switch/delegate events over complexity-only events (more informative)
+    const primary = matches.find((r) => {
+      const e = r.event_data
+      return e.type === "agent.route" && e.routeMode !== "complexity"
+    }) ?? matches[matches.length - 1]
+    if (!primary) return null
+    return routeEvent(primary, sync.data.agent)
+  })
+
+  return (
+    <Show when={info()}>
+      {(item) => (
+        <box paddingLeft={4} paddingBottom={1} flexShrink={0}>
+          <text fg={theme.textMuted}>
+            <span style={{ fg: theme.accent }}>{item().icon}</span>{" "}
+            <span style={{ fg: theme.text }}>{item().title}</span>{" · "}
+            <span style={{ fg: theme.textMuted }}>{item().detail}</span>
+          </text>
+        </box>
+      )}
+    </Show>
   )
 }
 

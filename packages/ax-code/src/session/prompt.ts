@@ -30,7 +30,7 @@ import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
-import { route as routeAgent } from "../agent/router"
+import { analyzeMessage, type RouteResult } from "../agent/router"
 import { TuiEvent } from "../cli/cmd/tui/event"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
@@ -1287,6 +1287,7 @@ export namespace SessionPrompt {
     // Auto-route: select the best agent for each message based on content
     const messageID = input.messageID ?? MessageID.ascending()
     let agentName = input.agent || (await Agent.defaultAgent())
+    const initialAgentName = agentName // capture before any auto-route switch
     const cfg = await Config.get()
     const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === false ? "delegate" : "switch")
     const messageText = input.parts
@@ -1300,9 +1301,17 @@ export namespace SessionPrompt {
     const canSwitch = routingMode === "switch"
     const skipRouting = input.userSelectedAgent || hasAgentPart || routingMode === "off" || (!canSwitch && !canDelegate)
     const routedParts: PromptInput["parts"] = [...input.parts]
+    let routeResult: RouteResult | null = null
+    let messageComplexity: "low" | "medium" | "high" | null = null
     if (messageText && !skipRouting) {
-      const routeResult = await routeAgent(messageText, agentName)
-      if (routeResult) {
+      // analyzeMessage returns BOTH agent routing and complexity in one LLM call.
+      // Complexity is available even when no agent switch happens (e.g. simple general questions).
+      const analysis = await analyzeMessage(messageText, agentName)
+      routeResult = analysis.route
+      messageComplexity = analysis.complexity
+
+      // Only act on routing when the result points to a DIFFERENT agent
+      if (routeResult && routeResult.agent !== agentName) {
         Recorder.emit({
           type: "agent.route",
           sessionID: input.sessionID,
@@ -1312,6 +1321,7 @@ export namespace SessionPrompt {
           confidence: routeResult.confidence,
           routeMode: canSwitch ? "switch" : "delegate",
           matched: routeResult.matched,
+          complexity: messageComplexity ?? routeResult.complexity,
         })
         const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
         if (!routedAgent) {
@@ -1361,8 +1371,40 @@ export namespace SessionPrompt {
     }
     const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
 
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
-    const variant = input.variant ?? (!input.model && agent.variant ? agent.variant : undefined)
+    // Complexity routing: use small/fast model for simple tasks.
+    // messageComplexity comes from analyzeMessage() and covers the important case of
+    // simple general questions (no agent switch) that should use a fast model.
+    const effectiveComplexity = messageComplexity ?? routeResult?.complexity
+    let complexityModel: { providerID: ProviderID; modelID: ModelID } | undefined
+    if (effectiveComplexity === "low" && !input.model && !agent.model) {
+      const defaultM = await Provider.defaultModel().catch(() => undefined)
+      if (defaultM) {
+        const small = await Provider.getSmallModel(defaultM.providerID)
+        if (small) {
+          complexityModel = { providerID: small.providerID, modelID: small.id }
+          log.info("complexity-route", {
+            command: "session.prompt.complexity",
+            status: "ok",
+            sessionID: input.sessionID,
+            model: small.id,
+          })
+          // Emit a dedicated event so the thread indicator can show the fast-model decision
+          Recorder.emit({
+            type: "agent.route",
+            sessionID: input.sessionID,
+            messageID,
+            fromAgent: initialAgentName,
+            toAgent: initialAgentName,
+            confidence: 0,
+            routeMode: "complexity",
+            complexity: effectiveComplexity,
+          })
+        }
+      }
+    }
+
+    const model = complexityModel ?? input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    const variant = input.variant ?? (!input.model && !complexityModel && agent.variant ? agent.variant : undefined)
 
     const info: MessageV2.Info = {
       id: messageID,
@@ -2274,16 +2316,44 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       },
     })
 
+    const OUTPUT_HARD_CAP = 10 * 1024 * 1024
     let output = ""
+    let outputBytes = 0
+    let outputTruncated = false
+    let flushDirty = false
+    let flushRunning = false
     let pending = Promise.resolve()
-    const flush = () => {
-      if (part.state.status !== "running") return
-      part.state.metadata = { output, description: "" }
-      pending = pending
-        .then(async () => {
-          await Session.updatePart(part)
-        })
-        .catch((e) =>
+
+    const appendOutput = (chunk: Buffer | string) => {
+      const text = typeof chunk === "string" ? chunk : chunk.toString()
+      if (!text || outputTruncated) return
+      const chunkBytes = Buffer.byteLength(text, "utf-8")
+      if (outputBytes + chunkBytes <= OUTPUT_HARD_CAP) {
+        output += text
+        outputBytes += chunkBytes
+        return
+      }
+
+      let end = text.length
+      const remaining = OUTPUT_HARD_CAP - outputBytes
+      while (end > 0 && Buffer.byteLength(text.slice(0, end), "utf-8") > remaining) {
+        end--
+      }
+      if (end > 0) {
+        const slice = text.slice(0, end)
+        output += slice
+        outputBytes += Buffer.byteLength(slice, "utf-8")
+      }
+      output += "\n\n[output truncated at 10MB]"
+      outputTruncated = true
+    }
+
+    const drainFlush = async () => {
+      while (flushDirty) {
+        flushDirty = false
+        if (part.state.status !== "running") break
+        part.state.metadata = { output, description: "", outputTruncated }
+        await Session.updatePart(part).catch((e) =>
           log.warn("shell metadata write failed", {
             command: "session.prompt.shell",
             status: "error",
@@ -2291,15 +2361,29 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             error: e,
           }),
         )
+      }
+      flushRunning = false
+      if (flushDirty && !flushRunning) {
+        flushRunning = true
+        pending = drainFlush()
+      }
+    }
+
+    const flush = () => {
+      if (part.state.status !== "running") return
+      flushDirty = true
+      if (flushRunning) return
+      flushRunning = true
+      pending = drainFlush()
     }
 
     proc.stdout?.on("data", (chunk) => {
-      output += chunk.toString()
+      appendOutput(chunk)
       flush()
     })
 
     proc.stderr?.on("data", (chunk) => {
-      output += chunk.toString()
+      appendOutput(chunk)
       flush()
     })
 
@@ -2389,6 +2473,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               metadata: {
                 output,
                 description: "",
+                outputTruncated,
               },
             }
           : {
@@ -2402,6 +2487,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               metadata: {
                 output,
                 description: "",
+                outputTruncated,
               },
               output,
             }

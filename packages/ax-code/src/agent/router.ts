@@ -211,14 +211,51 @@ const RULES: RouteRule[] = [
     negatives: ["vulnerability", "cve", "owasp", "deploy", "docker", "kubernetes", "security scan", "security audit"],
     confidence: 0.7,
   }),
-  // react and plan are reasoning MODES, not topic domains
-  // Users should explicitly switch to them (e.g., /react, /plan)
+  rule({
+    agent: "react",
+    keywords: [
+      "step by step", "reason through", "think through", "systematically",
+      "carefully analyze", "trace through", "investigate thoroughly",
+      "complex debugging", "deliberate",
+    ],
+    patterns: [
+      /\bstep[- ]by[- ]step\b/i,
+      /\breason\s+(through|carefully|step)\b/i,
+      /\bthink\s+(through|carefully|step)\b/i,
+      /\bsystematic(ally)?\b.*\b(debug|analyz|investigat)/i,
+      /\bdeliberate(ly)?\b.*\b(approach|analyz|reason)/i,
+    ],
+    intents: ["analyze", "investigate", "trace", "debug", "reason"],
+    negatives: ["quick", "fast", "simple", "just", "briefly"],
+    confidence: 0.6,
+    requireIntent: true,
+  }),
+  rule({
+    agent: "plan",
+    keywords: [
+      "plan", "planning", "roadmap", "design first", "outline",
+      "before implementing", "think before", "draft a plan",
+      "create a plan", "write a plan",
+    ],
+    patterns: [
+      /\b(create|write|draft|make)\s+a?\s*plan\b/i,
+      /\bplan\s+(out|the|this|before)\b/i,
+      /\bdesign\s+(before|first|then)\b/i,
+      /\boutline\s+(the|a|an)\s+(approach|solution|steps?)\b/i,
+      /\bthink\s+before\s+(implement|cod|build)/i,
+    ],
+    intents: ["plan", "design", "outline", "draft"],
+    negatives: ["refactor", "fix", "implement now", "just do", "do it"],
+    confidence: 0.65,
+    requireIntent: false,
+  }),
 ]
 
 export interface RouteResult {
   agent: string
   confidence: number
   matched: string[]
+  complexity?: "low" | "medium" | "high"
 }
 
 /** Tier 1: Keyword + regex matching (<1ms) */
@@ -285,7 +322,7 @@ const LLM_TIMEOUT = 1500
 /** Max characters sent for classification. ~125 tokens is sufficient for intent detection. */
 const CLASSIFY_MAX_CHARS = 500
 
-const CLASSIFY_PROMPT = `You are an intent classifier for a coding assistant. Given a user message, classify which specialist agent should handle it and provide a confidence score.
+const CLASSIFY_PROMPT = `You are an intent classifier for a coding assistant. Given a user message, classify which specialist agent should handle it, provide a confidence score, and estimate task complexity.
 
 Agents:
 - security: Vulnerability scanning, secrets, OWASP, compliance, auth audits (ANALYSIS ONLY — cannot edit code)
@@ -294,19 +331,34 @@ Agents:
 - perf: Performance analysis, profiling, benchmarks, memory leak detection (ANALYSIS ONLY — cannot edit code)
 - devops: Docker, CI/CD, deployment, infrastructure, Kubernetes, monitoring
 - test: Writing tests, test coverage, TDD, test infrastructure, fixtures, mocking
-- none: General coding, refactoring, or any task requiring code changes
+- react: Step-by-step deliberate reasoning — multi-step investigation, careful analysis requiring structured thinking
+- plan: Planning before implementing — creating roadmaps, design outlines, or solution drafts before writing any code
+- none: General coding, refactoring, or any task requiring direct code changes
 
 IMPORTANT: If the user wants to CHANGE, FIX, REFACTOR, or MODIFY code, classify as "none" even if the topic relates to security, architecture, or performance. Only use analysis agents when the user wants a review, audit, or report without code changes.
 
-Respond with the agent name and a confidence score (0.0 to 1.0) indicating how certain you are.`
+Complexity:
+- low: Simple lookup, one-liner explanation, or basic question — minimal reasoning required
+- medium: Moderate reasoning, multi-file analysis, or standard debugging
+- high: Complex architecture decisions, deep investigation, or large-scale changes
+
+Respond with the agent name, a confidence score (0.0 to 1.0), and complexity level.`
 
 const classifySchema = z.object({
-  agent: z.enum(["security", "architect", "debug", "perf", "devops", "test", "none"]),
+  agent: z.enum(["security", "architect", "debug", "perf", "devops", "test", "react", "plan", "none"]),
   confidence: z.number().min(0).max(1),
+  complexity: z.enum(["low", "medium", "high"]).optional(),
 })
 
-/** Tier 2: LLM classification fallback (~200-500ms) */
-async function classifyWithLLM(message: string, currentAgent: string): Promise<RouteResult | null> {
+interface LLMClassification {
+  agent: string | null
+  confidence: number
+  matched: string[]
+  complexity: "low" | "medium" | "high" | null
+}
+
+/** Tier 2: LLM classification — returns agent intent AND complexity in one call */
+async function classifyWithLLM(message: string, currentAgent: string): Promise<LLMClassification | null> {
   const model = await Provider.defaultModel()
   const small = await Provider.getSmallModel(model.providerID)
   if (!small) {
@@ -329,11 +381,14 @@ async function classifyWithLLM(message: string, currentAgent: string): Promise<R
       ],
     }).then((r) => r.object)
 
-    if (result.agent === "none" || result.agent === currentAgent) return null
-    if (result.confidence < 0.3) return null
+    // Agent is null when "none", same as current, or low confidence — but we still carry complexity
+    const agent =
+      result.agent === "none" || result.agent === currentAgent || result.confidence < 0.3
+        ? null
+        : result.agent
 
-    log.info("llm-route", { agent: result.agent, confidence: result.confidence })
-    return { agent: result.agent, confidence: result.confidence, matched: ["llm-classification"] }
+    log.info("llm-classify", { agent, confidence: result.confidence, complexity: result.complexity })
+    return { agent, confidence: result.confidence, matched: ["llm-classification"], complexity: result.complexity ?? null }
   } finally {
     clearTimeout(timer)
   }
@@ -360,5 +415,52 @@ export async function route(message: string, currentAgent: string): Promise<Rout
     return null
   })
 
-  return llm ?? keyword
+  if (!llm?.agent) return keyword
+  return { agent: llm.agent, confidence: llm.confidence, matched: llm.matched, complexity: llm.complexity ?? undefined }
+}
+
+/**
+ * Analyse a message for both agent routing AND complexity classification in one pass.
+ *
+ * Unlike `route()`, this function always returns complexity when SmartLLM is on — even
+ * when no agent switch is needed. This is what enables model-tier routing: simple
+ * general questions (no specialist match) get `complexity: "low"` and can use a fast model.
+ *
+ * Activation logic:
+ * - High-confidence keyword match → trust keyword routing, skip LLM (no added latency)
+ * - Low/no keyword match + SmartLLM on → call LLM once for BOTH agent and complexity
+ * - SmartLLM off → keyword routing only, no complexity
+ */
+export interface MessageAnalysis {
+  route: RouteResult | null
+  complexity: "low" | "medium" | "high" | null
+}
+
+export async function analyzeMessage(message: string, currentAgent: string): Promise<MessageAnalysis> {
+  const keyword = keywordRoute(message, currentAgent)
+
+  // Very short messages: trivially simple, no LLM needed
+  if (message.length < 30) return { route: keyword, complexity: "low" }
+
+  // SmartLLM disabled: keyword routing only, complexity unknown
+  if (process.env["AX_CODE_SMART_LLM"] !== "true") return { route: keyword, complexity: null }
+
+  // High-confidence keyword hit: agent is already known — skip LLM to avoid latency.
+  // These are clear specialist requests (debug, test, devops…) that warrant the full model anyway.
+  if (keyword && keyword.confidence >= 0.5) return { route: keyword, complexity: null }
+
+  // Ambiguous or no keyword match: one LLM call covers both routing and complexity.
+  // This is the key path for "simple general questions → fast model".
+  const llm = await classifyWithLLM(message, currentAgent).catch((err) => {
+    log.info("llm-analyze-failed", { error: String(err) })
+    return null
+  })
+
+  if (!llm) return { route: keyword, complexity: null }
+
+  const agentRoute = llm.agent
+    ? { agent: llm.agent, confidence: llm.confidence, matched: llm.matched, complexity: llm.complexity ?? undefined }
+    : keyword
+
+  return { route: agentRoute, complexity: llm.complexity ?? null }
 }

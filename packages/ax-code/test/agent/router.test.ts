@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, test, expect, spyOn } from "bun:test"
-import { keywordRoute as route, route as tieredRoute } from "../../src/agent/router"
+import { keywordRoute as route, route as tieredRoute, analyzeMessage } from "../../src/agent/router"
 import { Provider } from "../../src/provider/provider"
 
 describe("explicit specialist intent routing", () => {
@@ -272,5 +272,71 @@ describe("action-intent negatives for read-only agents", () => {
   test("'improve the code organization' does NOT route to architect", () => {
     const result = route("improve the code organization in the utils folder", "build")
     expect(result?.agent).not.toBe("architect")
+  })
+})
+
+describe("analyzeMessage — combined routing + complexity", () => {
+  const origEnv = process.env["AX_CODE_SMART_LLM"]
+  const spies: Array<ReturnType<typeof spyOn>> = []
+
+  afterEach(() => {
+    if (origEnv === undefined) delete process.env["AX_CODE_SMART_LLM"]
+    else process.env["AX_CODE_SMART_LLM"] = origEnv
+    spies.forEach((s) => s.mockRestore())
+    spies.length = 0
+  })
+
+  test("short messages return low complexity without LLM call", async () => {
+    delete process.env["AX_CODE_SMART_LLM"]
+    const defaultModelSpy = spyOn(Provider, "defaultModel")
+    spies.push(defaultModelSpy)
+    const result = await analyzeMessage("fix bug", "build")
+    expect(result.complexity).toBe("low")
+    expect(defaultModelSpy).not.toHaveBeenCalled()
+  })
+
+  test("SmartLLM disabled returns keyword route with null complexity", async () => {
+    delete process.env["AX_CODE_SMART_LLM"]
+    const result = await analyzeMessage("write unit tests for the auth module", "build")
+    expect(result.route).not.toBeNull()
+    expect(result.route!.agent).toBe("test")
+    expect(result.complexity).toBeNull()
+  })
+
+  test("high-confidence keyword match skips LLM and returns null complexity", async () => {
+    process.env["AX_CODE_SMART_LLM"] = "true"
+    const defaultModelSpy = spyOn(Provider, "defaultModel")
+    spies.push(defaultModelSpy)
+    // This message has strong keyword signals (confidence >= 0.5) → no LLM call
+    const result = await analyzeMessage("write unit tests for the auth module", "build")
+    expect(result.route).not.toBeNull()
+    expect(result.route!.agent).toBe("test")
+    expect(result.complexity).toBeNull()
+    expect(defaultModelSpy).not.toHaveBeenCalled()
+  })
+
+  test("ambiguous message calls LLM when SmartLLM enabled; returns null route + null complexity when no small model", async () => {
+    process.env["AX_CODE_SMART_LLM"] = "true"
+    spies.push(spyOn(Provider, "defaultModel").mockResolvedValue({ providerID: "test", modelID: "test-model" } as any))
+    spies.push(spyOn(Provider, "getSmallModel").mockResolvedValue(undefined as any))
+    // No keyword match → LLM path, but no small model → falls through
+    const result = await analyzeMessage("what does this function return when the input is empty", "build")
+    expect(result.route).toBeNull()
+    expect(result.complexity).toBeNull()
+  })
+
+  test("falls back gracefully when LLM throws", async () => {
+    process.env["AX_CODE_SMART_LLM"] = "true"
+    spies.push(spyOn(Provider, "defaultModel").mockRejectedValue(new Error("network error")))
+    const result = await analyzeMessage("explain why this module has so many circular dependencies in detail", "build")
+    expect(result.route).toBeNull() // no keyword match for this message
+    expect(result.complexity).toBeNull()
+  })
+
+  test("route and complexity are both null when SmartLLM off and no keyword match", async () => {
+    delete process.env["AX_CODE_SMART_LLM"]
+    const result = await analyzeMessage("what does this function return when the input is empty", "build")
+    expect(result.route).toBeNull()
+    expect(result.complexity).toBeNull()
   })
 })

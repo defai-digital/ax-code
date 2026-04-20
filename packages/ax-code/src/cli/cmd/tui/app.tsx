@@ -798,7 +798,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
-      title: sync.data.smartLlm ? "Turn smart LLM off" : "Turn smart LLM on",
+      title: sync.data.smartLlm ? "Turn auto-route off" : "Turn auto-route on",
       value: "app.toggle.smart_llm",
       category: "System",
       slash: { name: "smart-llm", aliases: ["toggle-smart-llm"] },
