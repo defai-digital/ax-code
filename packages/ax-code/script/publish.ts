@@ -46,6 +46,7 @@ await Bun.file(`${distDir}/package.json`).write(
   JSON.stringify(
     {
       name: npmName,
+      type: "module",
       bin: {
         [pkg.name]: `./bin/${pkg.name}`,
       },

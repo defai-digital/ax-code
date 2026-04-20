@@ -198,7 +198,7 @@ for (const item of targets) {
       AX_CODE_VERSION: `'${Script.version}'`,
       AX_CODE_MIGRATIONS: JSON.stringify(migrations),
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
-      AX_CODE_WORKER_PATH: workerPath,
+      AX_CODE_WORKER_PATH: bunfsRoot + workerPath.replace(/^\.\//, ""),
       AX_CODE_CHANNEL: `'${Script.channel}'`,
       AX_CODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
     },

@@ -162,8 +162,10 @@ export const TuiThreadCommand = cmd({
       })
       DiagnosticLog.recordProcess("tui.workerSpawned", { target: String(file) })
       worker.onerror = (e) => {
-        DiagnosticLog.recordProcess("tui.workerError", { error: e })
+        DiagnosticLog.recordProcess("tui.workerError", { error: e, target: String(file) })
         Log.Default.error(e)
+        UI.error(`Worker failed to load (${String(file)}): ${e instanceof ErrorEvent ? e.message : String(e)}`)
+        process.exit(1)
       }
       worker.onmessageerror = (e) => {
         DiagnosticLog.recordProcess("tui.workerMessageError", { error: e })
