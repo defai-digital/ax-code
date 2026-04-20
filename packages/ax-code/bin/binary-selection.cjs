@@ -2,6 +2,7 @@ const childProcess = require("child_process")
 const fs = require("fs")
 const path = require("path")
 const os = require("os")
+const NPM_SCOPE = "@defai.digital"
 
 function normalizePlatform(value = os.platform()) {
   return (
@@ -96,6 +97,7 @@ function candidatePackageNames(options = {}) {
   const arch = normalizeArch(options.arch)
   const base = "ax-code-" + platform + "-" + arch
   const binary = platform === "windows" ? "ax-code.exe" : "ax-code"
+  const scoped = (names) => names.map((name) => `${NPM_SCOPE}/${name}`)
 
   if (platform === "darwin" && arch !== "arm64") {
     return {
@@ -115,38 +117,43 @@ function candidatePackageNames(options = {}) {
 
     if (musl) {
       if (arch === "x64") {
-        const names = baseline
+        const names = scoped(
+          baseline
           ? [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base]
-          : [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`]
+          : [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`],
+        )
         return { platform, arch, binary, names }
       }
-      return { platform, arch, binary, names: [`${base}-musl`, base] }
+      return { platform, arch, binary, names: scoped([`${base}-musl`, base]) }
     }
 
     if (arch === "x64") {
-      const names = baseline
+      const names = scoped(
+        baseline
         ? [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`]
-        : [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`]
+        : [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`],
+      )
       return { platform, arch, binary, names }
     }
-    return { platform, arch, binary, names: [base, `${base}-musl`] }
+    return { platform, arch, binary, names: scoped([base, `${base}-musl`]) }
   }
 
   if (arch === "x64") {
-    return { platform, arch, binary, names: [base] }
+    return { platform, arch, binary, names: scoped([base]) }
   }
 
-  return { platform, arch, binary, names: [base] }
+  return { platform, arch, binary, names: scoped([base]) }
 }
 
 function findBinary(startDir, options = {}) {
   const { names, binary } = candidatePackageNames(options)
+  const fallbackNames = names.map((name) => name.replace(/^@[^/]+\//, ""))
   let current = startDir
 
   for (;;) {
     const modules = path.join(current, "node_modules")
     if (fs.existsSync(modules)) {
-      for (const name of names) {
+      for (const name of [...names, ...fallbackNames]) {
         const candidate = path.join(modules, name, "bin", binary)
         if (fs.existsSync(candidate)) return candidate
       }

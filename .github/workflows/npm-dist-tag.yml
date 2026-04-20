@@ -43,21 +43,20 @@ jobs:
           # carry the same dist-tag as the meta package, otherwise the
           # postinstall optionalDependencies resolution falls back to the
           # wrong build.
-          # The meta package is scoped (@defai.digital/ax-code) but the
-          # platform binary subpackages are published unscoped as
-          # `ax-code-<platform>` — see packages/ax-code/script/publish.ts
-          # which uses the binary `package.json` name verbatim.
+          # All canonical npm packages live under the @defai.digital scope.
+          # Platform binaries keep unscoped directory/archive names in build
+          # output, but their published npm package names are scoped.
           PACKAGES=(
             "@defai.digital/ax-code"
-            "ax-code-darwin-arm64"
-            "ax-code-linux-arm64"
-            "ax-code-linux-arm64-musl"
-            "ax-code-linux-x64"
-            "ax-code-linux-x64-musl"
-            "ax-code-linux-x64-baseline"
-            "ax-code-linux-x64-baseline-musl"
-            "ax-code-windows-arm64"
-            "ax-code-windows-x64"
+            "@defai.digital/ax-code-darwin-arm64"
+            "@defai.digital/ax-code-linux-arm64"
+            "@defai.digital/ax-code-linux-arm64-musl"
+            "@defai.digital/ax-code-linux-x64"
+            "@defai.digital/ax-code-linux-x64-musl"
+            "@defai.digital/ax-code-linux-x64-baseline"
+            "@defai.digital/ax-code-linux-x64-baseline-musl"
+            "@defai.digital/ax-code-windows-arm64"
+            "@defai.digital/ax-code-windows-x64"
           )
 
           retag() {

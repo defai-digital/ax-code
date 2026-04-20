@@ -15,6 +15,7 @@ process.chdir(dir)
 
 import { Script } from "@ax-code/script"
 import pkg from "../package.json"
+import { scopePackageName } from "./package-names"
 
 const modelsUrl = process.env.AX_CODE_MODELS_URL || "https://models.dev"
 const snapshotPath = path.join(dir, "src/provider/models-snapshot.json")
@@ -155,7 +156,7 @@ if (!skipInstall) {
   await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`.cwd(repoRoot)
 }
 for (const item of targets) {
-  const name = [
+  const legacyName = [
     pkg.name,
     // changing to win32 flags npm for some reason
     item.os === "win32" ? "windows" : item.os,
@@ -165,8 +166,9 @@ for (const item of targets) {
   ]
     .filter(Boolean)
     .join("-")
-  console.log(`building ${name}`)
-  await $`mkdir -p dist/${name}/bin`
+  const packageName = scopePackageName(legacyName)
+  console.log(`building ${packageName}`)
+  await $`mkdir -p dist/${legacyName}/bin`
 
   const localPath = path.resolve(dir, "node_modules/@opentui/core/parser.worker.js")
   const rootPath = path.resolve(dir, "../../node_modules/@opentui/core/parser.worker.js")
@@ -186,8 +188,8 @@ for (const item of targets) {
       autoloadDotenv: false,
       autoloadTsconfig: true,
       autoloadPackageJson: true,
-      target: name.replace(pkg.name, "bun") as any,
-      outfile: `dist/${name}/bin/ax-code`,
+      target: legacyName.replace(pkg.name, "bun") as any,
+      outfile: `dist/${legacyName}/bin/ax-code`,
       execArgv: [`--user-agent=ax-code/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
     },
@@ -202,7 +204,7 @@ for (const item of targets) {
     },
   })
 
-  const binaryPath = `dist/${name}/bin/ax-code`
+  const binaryPath = `dist/${legacyName}/bin/ax-code`
 
   if (item.os === "darwin" && process.platform === "darwin") {
     try {
@@ -221,37 +223,41 @@ for (const item of targets) {
       const versionOutput = await $`${binaryPath} --version`.text()
       console.log(`Smoke test passed: ${versionOutput.trim()}`)
     } catch (e) {
-      console.error(`Smoke test failed for ${name}:`, e)
+      console.error(`Smoke test failed for ${packageName}:`, e)
       process.exit(1)
     }
   }
 
-  await $`rm -rf ./dist/${name}/bin/tui`
-  await Bun.file(`dist/${name}/package.json`).write(
+  await $`rm -rf ./dist/${legacyName}/bin/tui`
+  await Bun.file(`dist/${legacyName}/package.json`).write(
     JSON.stringify(
       {
-        name,
+        name: packageName,
         version: Script.version,
         os: [item.os],
         cpu: [item.arch],
+        publishConfig: {
+          access: "public",
+        },
       },
       null,
       2,
     ),
   )
-  binaries[name] = Script.version
+  binaries[packageName] = Script.version
 }
 
 if (Script.release) {
   for (const key of Object.keys(binaries)) {
-    if (key.includes("linux")) {
-      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
-    } else if (key.includes("windows")) {
-      const src = path.resolve(`dist/${key}/bin`)
-      const dest = path.resolve(`dist/${key}.zip`)
+    const legacyName = key.replace(/^@[^/]+\//, "")
+    if (legacyName.includes("linux")) {
+      await $`tar -czf ../../${legacyName}.tar.gz *`.cwd(`dist/${legacyName}/bin`)
+    } else if (legacyName.includes("windows")) {
+      const src = path.resolve(`dist/${legacyName}/bin`)
+      const dest = path.resolve(`dist/${legacyName}.zip`)
       await $`powershell -Command "Compress-Archive -Path '${src}/*' -DestinationPath '${dest}' -Force"`
     } else {
-      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
+      await $`zip -r ../../${legacyName}.zip *`.cwd(`dist/${legacyName}/bin`)
     }
   }
   // Archive upload is handled by the CI workflow's "Upload release assets" step.

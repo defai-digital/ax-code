@@ -3,6 +3,7 @@ import { $ } from "bun"
 import pkg from "../package.json"
 import { Script } from "@ax-code/script"
 import { fileURLToPath } from "url"
+import { META_PACKAGE_NAME, isScopedBinaryPackageName } from "./package-names"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
@@ -13,7 +14,7 @@ for (const filepath of new Bun.Glob("*/package.json").scanSync({ cwd: "./dist" }
   if (typeof binaryPkg.name !== "string" || typeof binaryPkg.version !== "string") {
     continue
   }
-  if (!binaryPkg.name.startsWith(`${pkg.name}-`)) {
+  if (!isScopedBinaryPackageName(binaryPkg.name, pkg.name)) {
     continue
   }
   binaries[binaryPkg.name] = binaryPkg.version
@@ -28,7 +29,7 @@ if (versions.size > 1) {
 }
 const version = [...versions][0]!
 
-const npmName = "@defai.digital/ax-code"
+const npmName = META_PACKAGE_NAME
 const distDir = `./dist/${pkg.name}`
 
 await $`mkdir -p ${distDir}`
@@ -47,6 +48,9 @@ await Bun.file(`${distDir}/package.json`).write(
       },
       version: version,
       license: pkg.license,
+      publishConfig: {
+        access: "public",
+      },
       optionalDependencies: binaries,
     },
     null,
@@ -75,7 +79,7 @@ await Promise.all(tasks)
 await $`cd ${distDir} && pnpm pack && npm publish *.tgz --access public --tag ${Script.channel}`.catch((err) => {
   const msg = String(err?.stderr ?? err)
   if (msg.includes("previously published") || msg.includes("cannot publish over")) {
-    console.warn(`@defai.digital/ax-code@${version} already published, skipping`)
+    console.warn(`${npmName}@${version} already published, skipping`)
   } else {
     throw err
   }

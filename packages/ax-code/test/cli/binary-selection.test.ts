@@ -15,15 +15,26 @@ const { candidatePackageNames, findBinary } = require("../../bin/binary-selectio
 }
 
 describe("binary selection", () => {
+  test("returns scoped canonical package names", () => {
+    const selection = candidatePackageNames({ platform: "linux", arch: "x64", avx2: true, musl: false })
+
+    expect(selection.names).toEqual([
+      "@defai.digital/ax-code-linux-x64",
+      "@defai.digital/ax-code-linux-x64-baseline",
+      "@defai.digital/ax-code-linux-x64-musl",
+      "@defai.digital/ax-code-linux-x64-baseline-musl",
+    ])
+  })
+
   test("prefers baseline musl binaries on non-AVX2 musl Linux x64", () => {
     const selection = candidatePackageNames({ platform: "linux", arch: "x64", avx2: false, musl: true })
 
     expect(selection.binary).toBe("ax-code")
     expect(selection.names).toEqual([
-      "ax-code-linux-x64-baseline-musl",
-      "ax-code-linux-x64-musl",
-      "ax-code-linux-x64-baseline",
-      "ax-code-linux-x64",
+      "@defai.digital/ax-code-linux-x64-baseline-musl",
+      "@defai.digital/ax-code-linux-x64-musl",
+      "@defai.digital/ax-code-linux-x64-baseline",
+      "@defai.digital/ax-code-linux-x64",
     ])
   })
 
@@ -37,10 +48,25 @@ describe("binary selection", () => {
   test("does not select a Windows baseline package", () => {
     const selection = candidatePackageNames({ platform: "windows", arch: "x64", avx2: false })
 
-    expect(selection.names).toEqual(["ax-code-windows-x64"])
+    expect(selection.names).toEqual(["@defai.digital/ax-code-windows-x64"])
   })
 
-  test("resolves fallback packages in wrapper order", async () => {
+  test("resolves scoped packages in wrapper order", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ax-code-binary-selection-"))
+    const binary = path.join(dir, "node_modules", "@defai.digital", "ax-code-linux-x64", "bin", "ax-code")
+    await mkdir(path.dirname(binary), { recursive: true })
+    await writeFile(binary, "#!/bin/sh\n")
+    await chmod(binary, 0o755)
+
+    expect(findBinary(path.join(dir, "node_modules", "@defai.digital", "ax-code"), {
+      platform: "linux",
+      arch: "x64",
+      avx2: false,
+      musl: false,
+    })).toBe(binary)
+  })
+
+  test("falls back to legacy unscoped binary packages during migration", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "ax-code-binary-selection-"))
     const binary = path.join(dir, "node_modules", "ax-code-linux-x64", "bin", "ax-code")
     await mkdir(path.dirname(binary), { recursive: true })
@@ -50,7 +76,7 @@ describe("binary selection", () => {
     expect(findBinary(path.join(dir, "node_modules", "@defai.digital", "ax-code"), {
       platform: "linux",
       arch: "x64",
-      avx2: false,
+      avx2: true,
       musl: false,
     })).toBe(binary)
   })
