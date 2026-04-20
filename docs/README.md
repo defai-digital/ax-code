@@ -13,9 +13,11 @@ This folder holds **product-facing** documentation: user guides, architecture po
 
 ## Guides
 
-| Document                   | Summary                                                                      |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| [Sandbox Mode](sandbox.md) | Execution sandbox — toggle, configuration, isolation modes, enforcement details |
+| Document                          | Summary                                                                                   |
+| --------------------------------- | ----------------------------------------------------------------------------------------- |
+| [Sandbox Mode](sandbox.md)        | Execution sandbox — toggle, configuration, isolation modes, enforcement details           |
+| [Auto-Route](auto-route.md)       | LLM-enhanced agent routing and complexity-based model selection — configuration and trade-offs |
+| [Autonomous Mode](autonomous.md)  | Unattended execution — how it works, safety boundaries, and when to use it                |
 
 ## Specs
 

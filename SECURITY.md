@@ -8,8 +8,9 @@ to the current minor before reporting a vulnerability.
 
 | Version | Supported |
 | ------- | --------- |
-| 2.3.x   | Yes       |
-| < 2.3   | No        |
+| 3.2.x   | Yes       |
+| 3.1.x   | Yes       |
+| < 3.1   | No        |
 
 ## Reporting a Vulnerability
 
