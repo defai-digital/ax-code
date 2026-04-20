@@ -62,7 +62,7 @@ import { DialogActivity } from "./dialog-activity"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
-import { Sidebar } from "./sidebar"
+import { computeSidebarWidth, Sidebar } from "./sidebar"
 import { Flag } from "@/flag/flag"
 import parsers from "../../../../../../parsers-config.ts"
 import { Toast, useToast } from "../../ui/toast"
@@ -84,9 +84,11 @@ import { RevertNotice } from "./revert-notice"
 import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
-import { codeDisplayView, diffDisplayView, todoWriteView } from "./view-model"
+import { codeDisplayView, compactDelegatedLabel, diffDisplayView, todoWriteView, userMessageMetadataDensity } from "./view-model"
 import { SessionCodeRenderer, SessionDiffRenderer } from "./render-adapter"
 import { Log } from "@/util/log"
+import { firstCompactionMessageID, shouldShowCompactionNotice } from "./compaction-view-model"
+import { createReconnectRecoveryGate } from "../../util/reconnect-recovery"
 
 addDefaultParsers(parsers.parsers)
 
@@ -110,6 +112,7 @@ const context = createContext<{
   showTimestamps: () => boolean
   showDetails: () => boolean
   showGenericToolOutput: () => boolean
+  userMetadataPreference: () => "auto" | "full" | "compact"
   diffWrapMode: () => "word" | "none"
   sync: ReturnType<typeof useSync>
   tui: ReturnType<typeof useTuiConfig>
@@ -162,6 +165,10 @@ export function Session() {
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
   const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
+  const [metadataDensity, setMetadataDensity] = kv.signal<"auto" | "full" | "compact">(
+    "user_message_metadata_density",
+    "auto",
+  )
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", true)
@@ -178,7 +185,7 @@ export function Session() {
     return false
   })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() && wide() ? 42 : 0) - 4)
+  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() && wide() ? computeSidebarWidth(dimensions().width) : 0) - 4)
 
   const scrollAcceleration = createMemo(() => {
     const tui = tuiConfig
@@ -214,6 +221,22 @@ export function Session() {
 
   const toast = useToast()
   const sdk = useSDK()
+  const reconnectSession = createReconnectRecoveryGate({
+    recover: () =>
+      sync.session.sync(route.sessionID, { force: true }).catch((error) => {
+        log.warn("session resync after reconnect failed", { error, sessionID: route.sessionID })
+        toast.show({
+          message: "Reconnected, but refreshing the session state failed",
+          variant: "error",
+        })
+      }),
+  })
+  createEffect(
+    on(
+      () => sdk.sseConnected,
+      (connected) => reconnectSession.onConnectionChange(connected),
+    ),
+  )
 
   let lastSwitch: string | undefined = undefined
   const unsubAgentSwitch = sdk.event.on("message.part.updated", (evt) => {
@@ -374,8 +397,10 @@ export function Session() {
       setShowThinking,
       setSidebar,
       setSidebarOpen,
+      setMetadataDensity: (next) => setMetadataDensity(() => next),
       setTimestamps,
       shareEnabled: sync.data.config.share !== "disabled",
+      metadataDensity,
       showAssistantMetadata,
       showDetails,
       showGenericToolOutput,
@@ -662,6 +687,19 @@ export function Session() {
 
   const revert = createMemo(() => revertState(revertInfo(), messages()))
   const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID()))
+  const firstCompactionID = createMemo(() => firstCompactionMessageID(messages(), sync.data.part))
+  const dismissedCompactionNotice = createMemo(() => {
+    const dismissed = kv.get("compaction_notice_dismissed", {}) as Record<string, boolean>
+    return !!dismissed[route.sessionID]
+  })
+
+  function dismissCompactionNotice() {
+    const dismissed = kv.get("compaction_notice_dismissed", {}) as Record<string, boolean>
+    kv.set("compaction_notice_dismissed", {
+      ...dismissed,
+      [route.sessionID]: true,
+    })
+  }
 
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
@@ -678,6 +716,7 @@ export function Session() {
         showTimestamps,
         showDetails,
         showGenericToolOutput,
+        userMetadataPreference: metadataDensity,
         diffWrapMode,
         sync,
         tui: tuiConfig,
@@ -764,6 +803,12 @@ export function Session() {
                         message={message as UserMessage}
                         parts={sync.data.part[message.id] ?? []}
                         pending={pending()}
+                        showCompactionNotice={shouldShowCompactionNotice({
+                          currentMessageID: message.id,
+                          firstMessageID: firstCompactionID(),
+                          dismissed: dismissedCompactionNotice(),
+                        })}
+                        onDismissCompactionNotice={dismissCompactionNotice}
                       />
                     </Match>
                     <Match when={message.role === "assistant"}>
@@ -851,6 +896,8 @@ function UserMessage(props: {
   onMouseUp: () => void
   index: number
   pending?: string
+  showCompactionNotice: boolean
+  onDismissCompactionNotice: () => void
 }) {
   const ctx = use()
   const local = useLocal()
@@ -864,6 +911,13 @@ function UserMessage(props: {
   const queuedFg = createMemo(() => selectedForeground(theme, color()))
   const route = createMemo(() => userRoute(props.message, props.parts, sync.data.agent))
   const showPrimary = createMemo(() => props.message.agent !== "build" || route().delegated.length > 0)
+  const metadataDensity = createMemo(() =>
+    userMessageMetadataDensity({
+      width: ctx.width,
+      preference: ctx.userMetadataPreference(),
+    }),
+  )
+  const compactDelegated = createMemo(() => compactDelegatedLabel(route().delegated.length))
   const metadataVisible = createMemo(
     () => queued() || ctx.showTimestamps() || showPrimary() || route().delegated.length > 0,
   )
@@ -915,40 +969,66 @@ function UserMessage(props: {
               </box>
             </Show>
             <Show when={metadataVisible()}>
-              <box flexDirection="row" gap={1} flexWrap="wrap">
-                <Show when={showPrimary()}>
-                  <text fg={theme.textMuted}>
-                    <span style={{ bg: color(), fg: queuedFg(), bold: true }}> {route().primary.label} </span>
-                  </text>
-                </Show>
-                <For each={route().delegated}>
-                  {(item) => {
-                    const bg = createMemo(() => local.agent.color(item.name))
-                    const fg = createMemo(() => selectedForeground(theme, bg()))
-                    return (
+              <Switch>
+                <Match when={metadataDensity() === "compact"}>
+                  <box flexDirection="row" gap={1} flexWrap="wrap">
+                    <Show when={showPrimary()}>
                       <text fg={theme.textMuted}>
-                        <span style={{ bg: bg(), fg: fg(), bold: true }}> DELEGATED {item.label} </span>
-                      </text>
-                    )
-                  }}
-                </For>
-                <Show
-                  when={queued()}
-                  fallback={
-                    <Show when={ctx.showTimestamps()}>
-                      <text fg={theme.textMuted}>
-                        <span style={{ fg: theme.textMuted }}>
-                          {Locale.todayTimeOrDateTime(props.message.time.created)}
-                        </span>
+                        <span style={{ fg: color() }}>●</span> {route().primary.label}
                       </text>
                     </Show>
-                  }
-                >
-                  <text fg={theme.textMuted}>
-                    <span style={{ bg: color(), fg: queuedFg(), bold: true }}> QUEUED </span>
-                  </text>
-                </Show>
-              </box>
+                    <Show when={compactDelegated()}>
+                      <text fg={theme.textMuted}>↳ {compactDelegated()}</text>
+                    </Show>
+                    <Show
+                      when={queued()}
+                      fallback={
+                        <Show when={ctx.showTimestamps()}>
+                          <text fg={theme.textMuted}>{Locale.todayTimeOrDateTime(props.message.time.created)}</text>
+                        </Show>
+                      }
+                    >
+                      <text fg={color()}>queued</text>
+                    </Show>
+                  </box>
+                </Match>
+                <Match when={true}>
+                  <box flexDirection="row" gap={1} flexWrap="wrap">
+                    <Show when={showPrimary()}>
+                      <text fg={theme.textMuted}>
+                        <span style={{ bg: color(), fg: queuedFg(), bold: true }}> {route().primary.label} </span>
+                      </text>
+                    </Show>
+                    <For each={route().delegated}>
+                      {(item) => {
+                        const bg = createMemo(() => local.agent.color(item.name))
+                        const fg = createMemo(() => selectedForeground(theme, bg()))
+                        return (
+                          <text fg={theme.textMuted}>
+                            <span style={{ bg: bg(), fg: fg(), bold: true }}> DELEGATED {item.label} </span>
+                          </text>
+                        )
+                      }}
+                    </For>
+                    <Show
+                      when={queued()}
+                      fallback={
+                        <Show when={ctx.showTimestamps()}>
+                          <text fg={theme.textMuted}>
+                            <span style={{ fg: theme.textMuted }}>
+                              {Locale.todayTimeOrDateTime(props.message.time.created)}
+                            </span>
+                          </text>
+                        </Show>
+                      }
+                    >
+                      <text fg={theme.textMuted}>
+                        <span style={{ bg: color(), fg: queuedFg(), bold: true }}> QUEUED </span>
+                      </text>
+                    </Show>
+                  </box>
+                </Match>
+              </Switch>
             </Show>
           </box>
         </box>
@@ -962,7 +1042,30 @@ function UserMessage(props: {
           borderColor={theme.borderActive}
         />
       </Show>
+      <Show when={props.showCompactionNotice}>
+        <CompactionNotice onDismiss={props.onDismissCompactionNotice} />
+      </Show>
     </>
+  )
+}
+
+function CompactionNotice(props: { onDismiss: () => void }) {
+  const { theme } = useTheme()
+  return (
+    <box
+      marginTop={1}
+      border={["left"]}
+      borderColor={theme.borderActive}
+      customBorderChars={SplitBorder.customBorderChars}
+    >
+      <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
+        <text fg={theme.text}>Session compacted to free context space.</text>
+        <text fg={theme.textMuted}>Older messages were summarized. The session can continue normally.</text>
+        <text fg={theme.textMuted} onMouseUp={props.onDismiss}>
+          dismiss
+        </text>
+      </box>
+    </box>
   )
 }
 
@@ -993,7 +1096,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     <>
       <Show when={isThinking()}>
         <box paddingLeft={3} marginTop={1} flexDirection="row" gap={1}>
-          <text fg={theme.textMuted}>⋯ Thinking</text>
+          <Spinner color={theme.textMuted}>Thinking</Spinner>
         </box>
       </Show>
       <For each={props.parts}>
@@ -1045,7 +1148,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
                       : local.agent.color(props.message.agent),
                 }}
               >
-                ▣{" "}
+                ◦{" "}
               </span>{" "}
               <span style={{ fg: theme.text }}>
                 {sync.data.agent.find((a) => a.name === props.message.agent)?.displayName ??
@@ -1078,7 +1181,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   const content = createMemo(() => {
     // Filter out redacted reasoning chunks from OpenRouter
     // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
-    return props.part.text.replace("[REDACTED]", "").trim()
+    return props.part.text.replaceAll("[REDACTED]", "").trim()
   })
   const display = createMemo(() =>
     codeDisplayView({
@@ -1095,7 +1198,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         flexDirection="column"
         border={["left"]}
         customBorderChars={SplitBorder.customBorderChars}
-        borderColor={theme.backgroundElement}
+        borderColor={theme.borderSubtle}
       >
         <SessionCodeRenderer
           display={display()}
@@ -1298,7 +1401,7 @@ function ToolTitle(props: { fallback: string; when: any; icon: string; children:
   const { theme } = useTheme()
   return (
     <text paddingLeft={3} fg={props.when ? theme.textMuted : theme.text}>
-      <Show fallback={<>~ {props.fallback}</>} when={props.when}>
+      <Show fallback={<>… {props.fallback}</>} when={props.when}>
         <span style={{ bold: true }}>{props.icon}</span> {props.children}
       </Show>
     </text>
@@ -1384,7 +1487,7 @@ function InlineTool(props: {
         </Match>
         <Match when={true}>
           <text paddingLeft={3} fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
-            <Show fallback={<>~ {props.pending}</>} when={props.complete}>
+            <Show fallback={<>… {props.pending}</>} when={props.complete}>
               <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
             </Show>
           </text>
@@ -1418,7 +1521,7 @@ function BlockTool(props: {
       gap={1}
       backgroundColor={hover() ? theme.backgroundMenu : theme.backgroundPanel}
       customBorderChars={SplitBorder.customBorderChars}
-      borderColor={theme.background}
+      borderColor={theme.borderSubtle}
       onMouseOver={() => props.onClick && setHover(true)}
       onMouseOut={() => setHover(false)}
       onMouseUp={() => {

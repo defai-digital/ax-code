@@ -53,4 +53,22 @@ describe("control-plane/sse", () => {
       },
     ])
   })
+
+  test("emits an unterminated trailing event only once at EOF", async () => {
+    const events: unknown[] = []
+    const stop = new AbortController()
+
+    await parseSSE(
+      stream(['data: {"type":"tail","properties":{"ok":true}}']),
+      stop.signal,
+      (event) => events.push(event),
+    )
+
+    expect(events).toEqual([
+      {
+        type: "tail",
+        properties: { ok: true },
+      },
+    ])
+  })
 })

@@ -6,6 +6,7 @@ export async function parseSSE(
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buf = ""
+  let flushTrailing = false
   const cancel = () => {
     void reader.cancel().catch(() => {})
   }
@@ -68,7 +69,10 @@ export async function parseSSE(
   try {
     while (!signal.aborted) {
       const next = await reader.read()
-      if (next.done) break
+      if (next.done) {
+        flushTrailing = true
+        break
+      }
       buf += decoder.decode(next.value, { stream: true })
 
       while (true) {
@@ -84,14 +88,14 @@ export async function parseSSE(
         emit(block)
       }
     }
-
-    buf += decoder.decode()
-    if (buf.trim()) emit(buf)
+    if (!signal.aborted) flushTrailing = true
   } finally {
-    // Drain any remaining buffered data before canceling — abort may
-    // have broken the loop while partial events were still in `buf`.
-    buf += decoder.decode()
-    if (buf.trim()) emit(buf)
+    // Flush decoder state once on normal EOF. Aborted or exceptional
+    // exits should not emit a trailing partial event.
+    if (flushTrailing && !signal.aborted) {
+      buf += decoder.decode()
+      if (buf.trim()) emit(buf)
+    }
     buf = ""
     signal.removeEventListener("abort", cancel)
     await reader.cancel().catch(() => {})

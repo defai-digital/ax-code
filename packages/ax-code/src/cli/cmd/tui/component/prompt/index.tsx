@@ -1,5 +1,5 @@
 import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes, t, dim, fg } from "@opentui/core"
-import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
+import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match, For } from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
@@ -35,6 +35,9 @@ import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { isPromptExitCommand, promptSubmissionView } from "./view-model"
+import { summarizedPasteViews } from "./paste-view-model"
+import { withTimeout } from "@/util/timeout"
+import { footerSessionStatusView } from "../../routes/session/footer-view-model"
 
 const log = Log.create({ service: "tui.prompt" })
 
@@ -61,6 +64,8 @@ export type PromptRef = {
 
 const PLACEHOLDERS = ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"]
 const SHELL_PLACEHOLDERS = ["ls -la", "git status", "pwd"]
+const SUBMIT_ACCEPT_TIMEOUT_MS = 10_000
+type AsyncSessionRoute = "prompt_async" | "command_async" | "shell_async"
 
 export function Prompt(props: PromptProps) {
   let input: TextareaRenderable
@@ -81,6 +86,10 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
+  const [submitPending, setSubmitPending] = createSignal(false)
+  const [expandedPastes, setExpandedPastes] = createSignal<Set<number>>(new Set<number>())
+  const inputBlocked = createMemo(() => props.disabled || submitPending())
+  const [statusTick, setStatusTick] = createSignal(0)
 
   function promptModelWarning() {
     if (!sync.data.provider_loaded) {
@@ -154,8 +163,16 @@ export function Prompt(props: PromptProps) {
   onCleanup(() => unsubPromptAppend())
 
   createEffect(() => {
-    if (props.disabled) input.cursorColor = theme.backgroundElement
-    if (!props.disabled) input.cursorColor = theme.text
+    if (inputBlocked()) input.cursorColor = theme.backgroundElement
+    if (!inputBlocked()) input.cursorColor = theme.text
+  })
+
+  onMount(() => {
+    const timer = setInterval(() => {
+      if (status().type === "idle") return
+      setStatusTick((value) => value + 1)
+    }, 1000)
+    onCleanup(() => clearInterval(timer))
   })
 
   const lastUserMessage = createMemo(() => {
@@ -187,10 +204,40 @@ export function Prompt(props: PromptProps) {
       () => props.sessionID,
       () => {
         setStore("placeholder", Math.floor(Math.random() * PLACEHOLDERS.length))
+        setExpandedPastes(new Set<number>())
       },
       { defer: true },
     ),
   )
+
+  const pasteViews = createMemo(() => summarizedPasteViews(store.prompt.parts))
+  const allPastesExpanded = createMemo(() => {
+    const views = pasteViews()
+    if (views.length === 0) return false
+    const expanded = expandedPastes()
+    return views.every((view) => expanded.has(view.partIndex))
+  })
+
+  createEffect(() => {
+    const valid = new Set<number>(pasteViews().map((view) => view.partIndex))
+    setExpandedPastes((current) => {
+      const next = new Set<number>([...current].filter((partIndex) => valid.has(partIndex)))
+      return next.size === current.size ? current : next
+    })
+  })
+
+  function togglePastePreview(partIndex: number) {
+    setExpandedPastes((current) => {
+      const next = new Set<number>(current)
+      if (next.has(partIndex)) next.delete(partIndex)
+      else next.add(partIndex)
+      return next
+    })
+  }
+
+  function setAllPastePreviews(expanded: boolean) {
+    setExpandedPastes(expanded ? new Set<number>(pasteViews().map((view) => view.partIndex)) : new Set<number>())
+  }
 
   // Initialize agent/model/variant from last user message when session changes.
   // syncedAgentName tracks the agent from last message so we can detect
@@ -234,6 +281,12 @@ export function Prompt(props: PromptProps) {
         onSelect: (dialog) => {
           input.extmarks.clear()
           input.clear()
+          setStore("prompt", {
+            input: "",
+            parts: [],
+          })
+          setStore("extmarkToPartIndex", new Map())
+          setExpandedPastes(new Set<number>())
           dialog.clear()
         },
       },
@@ -395,6 +448,16 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
+        title: allPastesExpanded() ? "Collapse pasted previews" : "Expand pasted previews",
+        value: "prompt.paste.preview.toggle",
+        category: "Prompt",
+        enabled: pasteViews().length > 0,
+        onSelect: (dialog) => {
+          setAllPastePreviews(!allPastesExpanded())
+          dialog.clear()
+        },
+      },
+      {
         title: "Skills",
         value: "prompt.skills",
         category: "Prompt",
@@ -455,6 +518,7 @@ export function Prompt(props: PromptProps) {
         parts: [],
       })
       setStore("extmarkToPartIndex", new Map())
+      setExpandedPastes(new Set<number>())
     },
     submit() {
       submit()
@@ -560,6 +624,7 @@ export function Prompt(props: PromptProps) {
         input.clear()
         setStore("prompt", { input: "", parts: [] })
         setStore("extmarkToPartIndex", new Map())
+        setExpandedPastes(new Set<number>())
         dialog.clear()
       },
     },
@@ -574,6 +639,7 @@ export function Prompt(props: PromptProps) {
           input.setText(entry.input)
           setStore("prompt", { input: entry.input, parts: entry.parts })
           restoreExtmarksFromParts(entry.parts)
+          setExpandedPastes(new Set<number>())
           input.gotoBufferEnd()
         }
         dialog.clear()
@@ -595,6 +661,7 @@ export function Prompt(props: PromptProps) {
                   input.setText(entry.input)
                   setStore("prompt", { input: entry.input, parts: entry.parts })
                   restoreExtmarksFromParts(entry.parts)
+                  setExpandedPastes(new Set<number>())
                   input.gotoBufferEnd()
                 }}
               />
@@ -608,42 +675,69 @@ export function Prompt(props: PromptProps) {
     },
   ])
 
+  function requestHeaders() {
+    const headers: Record<string, string> = {
+      accept: "application/json",
+      "content-type": "application/json",
+    }
+    if (sdk.directory) {
+      const encoded = /[^\x00-\x7F]/.test(sdk.directory) ? encodeURIComponent(sdk.directory) : sdk.directory
+      headers["x-ax-code-directory"] = encoded
+      headers["x-opencode-directory"] = encoded
+    }
+    return headers
+  }
+
+  async function rejectionMessage(response: Response) {
+    const text = await response.text().catch(() => "")
+    if (!text) return `Request failed with status ${response.status}`
+    try {
+      const parsed = JSON.parse(text) as {
+        error?: unknown
+        message?: unknown
+      }
+      if (typeof parsed.message === "string" && parsed.message) return parsed.message
+      if (typeof parsed.error === "string" && parsed.error) return parsed.error
+      if (parsed.error && typeof parsed.error === "object") {
+        const error = parsed.error as {
+          message?: unknown
+          data?: { message?: unknown }
+        }
+        if (typeof error.message === "string" && error.message) return error.message
+        if (typeof error.data?.message === "string" && error.data.message) return error.data.message
+      }
+    } catch {}
+    return text
+  }
+
+  async function submitAsyncRoute(input: {
+    sessionID: string
+    path: AsyncSessionRoute
+    body: unknown
+    action: string
+  }) {
+    const response = await withTimeout(
+      sdk.fetch(`${sdk.url}/session/${encodeURIComponent(input.sessionID)}/${input.path}`, {
+        method: "POST",
+        headers: requestHeaders(),
+        body: JSON.stringify(input.body),
+      }),
+      SUBMIT_ACCEPT_TIMEOUT_MS,
+      `${input.action} acceptance timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
+    )
+
+    if (response.status === 202 || response.ok) return
+    throw new Error(await rejectionMessage(response))
+  }
+
   async function submit() {
-    if (props.disabled) return
+    if (inputBlocked()) return
     if (autocomplete?.visible) return
     if (!store.prompt.input) return
     if (isPromptExitCommand(store.prompt.input)) {
       exit()
       return
     }
-    const selectedModel = local.model.current()
-    if (!selectedModel) {
-      promptModelWarning()
-      return
-    }
-
-    let sessionID = props.sessionID
-    if (sessionID == null) {
-      const res = await sdk.client.session.create({}).catch((error: unknown) => {
-        reportSubmitFailure("Session creation", error)
-        return undefined
-      })
-      if (!res) return
-
-      if (res.error) {
-        log.error("session create failed", { error: res.error })
-        toast.show({
-          message: `Creating a session failed: ${errorMessage(res.error)}`,
-          variant: "error",
-        })
-
-        return
-      }
-
-      sessionID = res.data.id
-    }
-
-    const messageID = MessageID.ascending()
     const submission = promptSubmissionView({
       text: store.prompt.input,
       parts: store.prompt.parts,
@@ -655,52 +749,83 @@ export function Prompt(props: PromptProps) {
 
     // Capture mode before it gets reset
     const currentMode = store.mode
+    const firstLine = inputText.split("\n")[0]
+    const slashName = inputText.startsWith("/") ? firstLine.split(" ")[0].slice(1) : undefined
+    if (currentMode === "normal" && slashName && command.trySlash(slashName)) return
+
+    const selectedModel = local.model.current()
+    if (!selectedModel) {
+      promptModelWarning()
+      return
+    }
+
+    setSubmitPending(true)
+    let sessionID = props.sessionID
+    const messageID = MessageID.ascending()
     const variant = local.model.variant.current()
+    let submitAction = "Prompt submission"
 
     try {
-      if (store.mode === "shell") {
-        void sdk.client.session
-          .shell({
-            sessionID,
+      if (sessionID == null) {
+        const res = await withTimeout(
+          sdk.client.session.create({}),
+          SUBMIT_ACCEPT_TIMEOUT_MS,
+          `Session creation timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
+        ).catch((error: unknown) => {
+          reportSubmitFailure("Session creation", error)
+          return undefined
+        })
+        if (!res) return
+
+        if (res.error) {
+          log.error("session create failed", { error: res.error })
+          toast.show({
+            message: `Creating a session failed: ${errorMessage(res.error)}`,
+            variant: "error",
+          })
+          return
+        }
+
+        sessionID = res.data.id
+      }
+
+      if (currentMode === "shell") {
+        submitAction = "Shell command submission"
+        await submitAsyncRoute({
+          sessionID,
+          path: "shell_async",
+          action: submitAction,
+          body: {
             agent: local.agent.current().name,
             model: {
               providerID: selectedModel.providerID,
               modelID: selectedModel.modelID,
             },
             command: inputText,
-          })
-          .then((res) => {
-            if (res.error) reportSubmitFailure("Shell command submission", res.error)
-          })
-          .catch((error: unknown) => reportSubmitFailure("Shell command submission", error))
+          },
+        })
         setStore("mode", "normal")
       } else if (
         inputText.startsWith("/") &&
         iife(() => {
-          const name = inputText.split("\n")[0].split(" ")[0].slice(1)
-          return command.trySlash(name)
-        })
-      ) {
-        // Client-side slash command handled by trySlash.
-      } else if (
-        inputText.startsWith("/") &&
-        iife(() => {
-          const firstLine = inputText.split("\n")[0]
           const command = firstLine.split(" ")[0].slice(1)
           return sync.data.command.some((x) => x.name === command)
         })
       ) {
         // Parse command from first line, preserve multi-line content in arguments
         const firstLineEnd = inputText.indexOf("\n")
-        const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
-        const [command, ...firstLineArgs] = firstLine.split(" ")
+        const commandLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
+        const [commandName, ...firstLineArgs] = commandLine.split(" ")
         const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
         const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
 
-        void sdk.client.session
-          .command({
-            sessionID,
-            command: command.slice(1),
+        submitAction = "Command submission"
+        await submitAsyncRoute({
+          sessionID,
+          path: "command_async",
+          action: submitAction,
+          body: {
+            command: commandName.slice(1),
             arguments: args,
             agent: local.agent.current().name,
             model: `${selectedModel.providerID}/${selectedModel.modelID}`,
@@ -712,37 +837,37 @@ export function Prompt(props: PromptProps) {
                 id: PartID.ascending(),
                 ...x,
               })),
-          })
-          .then((res) => {
-            if (res.error) reportSubmitFailure("Command submission", res.error)
-          })
-          .catch((error: unknown) => reportSubmitFailure("Command submission", error))
-      } else {
-        const res = await sdk.client.session.promptAsync({
-          sessionID,
-          ...selectedModel,
-          messageID,
-          agent: local.agent.current().name,
-          model: selectedModel,
-          variant,
-          parts: [
-            {
-              id: PartID.ascending(),
-              type: "text",
-              text: inputText,
-            },
-            ...nonTextParts.map(assign),
-          ],
-          ...(local.agent.current().name !== syncedAgentName ? ({ userSelectedAgent: true } as any) : {}),
+          },
         })
-        if (res.error) {
-          reportSubmitFailure("Prompt submission", res.error)
-          return
-        }
+      } else {
+        submitAction = "Prompt submission"
+        await submitAsyncRoute({
+          sessionID,
+          path: "prompt_async",
+          action: submitAction,
+          body: {
+            ...selectedModel,
+            messageID,
+            agent: local.agent.current().name,
+            model: selectedModel,
+            variant,
+            parts: [
+              {
+                id: PartID.ascending(),
+                type: "text",
+                text: inputText,
+              },
+              ...nonTextParts.map(assign),
+            ],
+            ...(local.agent.current().name !== syncedAgentName ? ({ userSelectedAgent: true } as any) : {}),
+          },
+        })
       }
     } catch (error) {
-      reportSubmitFailure("Prompt submission", error)
+      reportSubmitFailure(submitAction, error)
       return
+    } finally {
+      setSubmitPending(false)
     }
 
     history.append({
@@ -755,6 +880,7 @@ export function Prompt(props: PromptProps) {
       parts: [],
     })
     setStore("extmarkToPartIndex", new Map())
+    setExpandedPastes(new Set<number>())
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent
@@ -902,6 +1028,16 @@ export function Prompt(props: PromptProps) {
     return pct !== undefined ? `${formatted} (${pct}%)` : formatted
   })
 
+  const busyStatus = createMemo(() => {
+    statusTick()
+    const current = status()
+    if (current.type !== "busy") return
+    return footerSessionStatusView({
+      status: current,
+      now: Date.now(),
+    })
+  })
+
   return (
     <>
       <Autocomplete
@@ -956,7 +1092,7 @@ export function Prompt(props: PromptProps) {
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e) => {
-                if (props.disabled) {
+                if (inputBlocked()) {
                   e.preventDefault()
                   return
                 }
@@ -1036,7 +1172,7 @@ export function Prompt(props: PromptProps) {
               }}
               onSubmit={submit}
               onPaste={async (event: PasteEvent) => {
-                if (props.disabled) {
+                if (inputBlocked()) {
                   event.preventDefault()
                   return
                 }
@@ -1112,7 +1248,7 @@ export function Prompt(props: PromptProps) {
                 setTimeout(() => {
                   // setTimeout is a workaround and needs to be addressed properly
                   if (!input || input.isDestroyed) return
-                  input.cursorColor = theme.text
+                  input.cursorColor = inputBlocked() ? theme.backgroundElement : theme.text
                 }, 0)
               }}
               onMouseDown={(r: MouseEvent) => r.target?.focus()}
@@ -1143,6 +1279,47 @@ export function Prompt(props: PromptProps) {
                 </box>
               </Show>
             </box>
+            <Show when={pasteViews().length > 0}>
+              <box flexDirection="column" gap={1} paddingTop={1}>
+                <For each={pasteViews()}>
+                  {(view) => {
+                    const expanded = createMemo(() => expandedPastes().has(view.partIndex))
+                    const previewText = createMemo(() => {
+                      if (expanded()) return view.text
+                      const lines = [...view.previewLines]
+                      if (view.hiddenLineCount > 0) {
+                        lines.push(`… ${view.hiddenLineCount} more line${view.hiddenLineCount === 1 ? "" : "s"}`)
+                      }
+                      return lines.join("\n")
+                    })
+
+                    return (
+                      <box
+                        border={["left"]}
+                        borderColor={theme.warning}
+                        customBorderChars={EmptyBorder}
+                        backgroundColor={theme.backgroundPanel}
+                        onMouseUp={() => {
+                          if (renderer.getSelection()?.getSelectedText()) return
+                          togglePastePreview(view.partIndex)
+                        }}
+                      >
+                        <box paddingLeft={2} paddingRight={1} paddingTop={1} paddingBottom={1}>
+                          <text fg={theme.text}>
+                            <span style={{ fg: theme.warning }}>▣ </span>
+                            {view.label}
+                          </text>
+                          <text fg={theme.textMuted}>{previewText()}</text>
+                          <text fg={theme.textMuted}>
+                            {expanded() ? "Click to collapse" : "Click to expand"}
+                          </text>
+                        </box>
+                      </box>
+                    )
+                  }}
+                </For>
+              </box>
+            </Show>
           </box>
         </box>
         <box
@@ -1172,7 +1349,14 @@ export function Prompt(props: PromptProps) {
           />
         </box>
         <box flexDirection="row" justifyContent="space-between">
-          <Show when={status().type !== "idle"} fallback={<text />}>
+          <Show
+            when={status().type !== "idle"}
+            fallback={
+              <Show when={submitPending()} fallback={<text />}>
+                <text fg={theme.textMuted}>Submitting...</text>
+              </Show>
+            }
+          >
             <box
               flexDirection="row"
               gap={1}
@@ -1186,6 +1370,9 @@ export function Prompt(props: PromptProps) {
                   </Show>
                 </box>
                 <box flexDirection="row" gap={1} flexShrink={0}>
+                  <Show when={busyStatus()?.label}>
+                    <text fg={busyStatus()?.stale ? theme.warning : theme.textMuted}>{busyStatus()?.label}</text>
+                  </Show>
                   {(() => {
                     const retry = createMemo(() => {
                       const s = status()
@@ -1255,10 +1442,10 @@ export function Prompt(props: PromptProps) {
           <Show when={status().type !== "retry"}>
             <box gap={2} flexDirection="row">
               <text
-                fg={sync.data.smartLlm ? "magenta" : theme.text}
+                fg={sync.data.smartLlm ? theme.primary : theme.textMuted}
                 onMouseUp={() => command.trigger("app.toggle.smart_llm")}
               >
-                {sync.data.smartLlm ? "SmartLLM \u2714" : "SmartLLM \u24E7"}
+                {sync.data.smartLlm ? "● SmartLLM" : "○ SmartLLM"}
               </text>
               {sync.data.autonomous ? (
                 <box
@@ -1268,19 +1455,19 @@ export function Prompt(props: PromptProps) {
                   onMouseUp={() => command.trigger("app.toggle.autonomous")}
                 >
                   <text fg="red">
-                    <b>Autonomous {"\u2714"}</b>
+                    <b>● Autonomous</b>
                   </text>
                 </box>
               ) : (
-                <text fg={theme.success} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
-                  Autonomous {"\u24E7"}
+                <text fg={theme.textMuted} onMouseUp={() => command.trigger("app.toggle.autonomous")}>
+                  ○ Autonomous
                 </text>
               )}
               <text
                 fg={sync.data.isolation.mode === "full-access" ? theme.error : theme.success}
                 onMouseUp={() => command.trigger("app.toggle.sandbox")}
               >
-                {sync.data.isolation.mode === "full-access" ? "Sandbox \u24E7" : "Sandbox \u2714"}
+                {sync.data.isolation.mode === "full-access" ? "○ Sandbox" : "● Sandbox"}
               </text>
               <Switch>
                 <Match when={store.mode === "normal"}>

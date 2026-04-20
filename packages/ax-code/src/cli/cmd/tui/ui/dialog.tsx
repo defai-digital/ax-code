@@ -49,6 +49,8 @@ export function Dialog(
         maxWidth={dimensions().width - 2}
         backgroundColor={theme.backgroundPanel}
         paddingTop={1}
+        border={["top"]}
+        borderColor={theme.borderActive}
       >
         {props.children}
       </box>
@@ -84,6 +86,14 @@ function init() {
 
   let focus: Renderable | null
   let refocusTimer: ReturnType<typeof setTimeout> | undefined
+  function closeItem(item?: { onClose?: () => void }) {
+    if (!item?.onClose) return
+    try {
+      item.onClose()
+    } catch {
+      // Keep the dialog stack consistent even if a close callback throws.
+    }
+  }
   function refocus() {
     clearTimeout(refocusTimer)
     refocusTimer = setTimeout(() => {
@@ -106,7 +116,7 @@ function init() {
   return {
     clear() {
       for (const item of store.stack) {
-        if (item.onClose) item.onClose()
+        closeItem(item)
       }
       batch(() => {
         setStore("size", "medium")
@@ -120,7 +130,7 @@ function init() {
         focus?.blur()
       }
       for (const item of store.stack) {
-        if (item.onClose) item.onClose()
+        closeItem(item)
       }
       setStore("size", "medium")
       setStore("stack", [

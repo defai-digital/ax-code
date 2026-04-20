@@ -22,45 +22,69 @@ interface ScannerState {
   isMovingForward: boolean
 }
 
+function colorInputToRgba(input: ColorInput | undefined, fallback: string): RGBA {
+  if (input instanceof RGBA) {
+    return RGBA.fromValues(input.r, input.g, input.b, input.a)
+  }
+  if (typeof input === "number") {
+    return RGBA.fromHex(`#${(input >>> 0).toString(16).padStart(6, "0").slice(-6)}`)
+  }
+  return RGBA.fromHex(input ?? fallback)
+}
+
 function getScannerState(
   frameIndex: number,
   totalChars: number,
   options: Pick<AdvancedGradientOptions, "direction" | "holdFrames">,
 ): ScannerState {
   const { direction = "forward", holdFrames = {} } = options
+  if (totalChars <= 0) {
+    return {
+      activePosition: 0,
+      isHolding: false,
+      holdProgress: 0,
+      holdTotal: 0,
+      movementProgress: 0,
+      movementTotal: 0,
+      isMovingForward: true,
+    }
+  }
 
   if (direction === "bidirectional") {
     const forwardFrames = totalChars
     const holdEndFrames = holdFrames.end ?? 0
-    const backwardFrames = totalChars - 1
+    const backwardFrames = Math.max(totalChars - 1, 0)
+    const holdStartFrames = holdFrames.start ?? 0
+    const totalFrames = forwardFrames + holdEndFrames + backwardFrames + holdStartFrames
+    const cycleFrame = totalFrames > 0 ? ((frameIndex % totalFrames) + totalFrames) % totalFrames : 0
 
-    if (frameIndex < forwardFrames) {
+    if (cycleFrame < forwardFrames) {
       // Moving forward
       return {
-        activePosition: frameIndex,
+        activePosition: cycleFrame,
         isHolding: false,
         holdProgress: 0,
         holdTotal: 0,
-        movementProgress: frameIndex,
+        movementProgress: cycleFrame,
         movementTotal: forwardFrames,
         isMovingForward: true,
       }
-    } else if (frameIndex < forwardFrames + holdEndFrames) {
+    } else if (cycleFrame < forwardFrames + holdEndFrames) {
       // Holding at end
       return {
         activePosition: totalChars - 1,
         isHolding: true,
-        holdProgress: frameIndex - forwardFrames,
+        holdProgress: cycleFrame - forwardFrames,
         holdTotal: holdEndFrames,
         movementProgress: 0,
         movementTotal: 0,
         isMovingForward: true,
       }
-    } else if (frameIndex < forwardFrames + holdEndFrames + backwardFrames) {
+    } else if (cycleFrame < forwardFrames + holdEndFrames + backwardFrames) {
       // Moving backward
-      const backwardIndex = frameIndex - forwardFrames - holdEndFrames
+      const backwardIndex = cycleFrame - forwardFrames - holdEndFrames
       return {
-        activePosition: totalChars - 2 - backwardIndex,
+        activePosition: Math.max(0, totalChars - 2 - backwardIndex),
         isHolding: false,
         holdProgress: 0,
         holdTotal: 0,
@@ -73,8 +97,8 @@ function getScannerState(
       return {
         activePosition: 0,
         isHolding: true,
-        holdProgress: frameIndex - forwardFrames - holdEndFrames - backwardFrames,
-        holdTotal: holdFrames.start ?? 0,
+        holdProgress: cycleFrame - forwardFrames - holdEndFrames - backwardFrames,
+        holdTotal: holdStartFrames,
         movementProgress: 0,
         movementTotal: 0,
         isMovingForward: false,
@@ -141,10 +165,7 @@ function calculateColorIndex(
 function createKnightRiderTrail(options: AdvancedGradientOptions): ColorGenerator {
   const { colors, defaultColor, enableFading = true, minAlpha = 0 } = options
 
-  // Use the provided defaultColor if it's an RGBA instance, otherwise convert/default
-  // We use RGBA.fromHex for the fallback to ensure we have an RGBA object.
-  // Note: If defaultColor is a string, we convert it once here.
-  const defaultRgba = defaultColor instanceof RGBA ? defaultColor : RGBA.fromHex((defaultColor as string) || "#000000")
+  const defaultRgba = colorInputToRgba(defaultColor, "#000000")
 
   // Store the base alpha from the inactive factor
   const baseInactiveAlpha = defaultRgba.a
@@ -178,15 +199,13 @@ function createKnightRiderTrail(options: AdvancedGradientOptions): ColorGenerato
       }
     }
 
-    // Combine base inactive alpha with the fade factor
-    // This ensures inactiveFactor is respected while still allowing fading animation
-    defaultRgba.a = baseInactiveAlpha * fadeFactor
+    const inactiveColor = RGBA.fromValues(defaultRgba.r, defaultRgba.g, defaultRgba.b, baseInactiveAlpha * fadeFactor)
 
     if (index === -1) {
-      return defaultRgba
+      return inactiveColor
     }
 
-    return colors[index] ?? defaultRgba
+    return colors[index] ?? inactiveColor
   }
 }
 
@@ -197,7 +216,7 @@ function createKnightRiderTrail(options: AdvancedGradientOptions): ColorGenerato
  * @returns Array of RGBA colors with alpha-based trail fade (background-independent)
  */
 export function deriveTrailColors(brightColor: ColorInput, steps: number = 6): RGBA[] {
-  const baseRgba = brightColor instanceof RGBA ? brightColor : RGBA.fromHex(brightColor as string)
+  const baseRgba = colorInputToRgba(brightColor, "#ff0000")
 
   const colors: RGBA[] = []
 
@@ -237,7 +256,7 @@ export function deriveTrailColors(brightColor: ColorInput, steps: number = 6): R
  * @returns The same color with reduced alpha for background-independent dimming
  */
 export function deriveInactiveColor(brightColor: ColorInput, factor: number = 0.2): RGBA {
-  const baseRgba = brightColor instanceof RGBA ? brightColor : RGBA.fromHex(brightColor as string)
+  const baseRgba = colorInputToRgba(brightColor, "#ff0000")
 
   // Use the full color brightness but adjust alpha for background-independent dimming
   return RGBA.fromValues(baseRgba.r, baseRgba.g, baseRgba.b, factor)

@@ -134,14 +134,16 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     moveTo(dialogSelectMoveIndex(store.selected, direction, flat().length), true)
   }
 
+  function optionID(index: number) {
+    return `dialog-select-option-${index}`
+  }
+
   function moveTo(next: number, center = false) {
     setStore("selected", next)
     const option = selected()
     if (option) props.onMove?.(option)
     if (!scroll) return
-    const target = scroll.getChildren().find((child) => {
-      return child.id === JSON.stringify(selected()?.value)
-    })
+    const target = scroll.getChildren().find((child) => child.id === optionID(next))
     if (!target) return
     const y = target.y - scroll.y
     if (center) {
@@ -153,7 +155,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       }
       if (y < 0) {
         scroll.scrollBy(y)
-        if (isDeepEqual(flat()[0].value, selected()?.value)) {
+        const first = flat()[0]
+        if (first && isDeepEqual(first.value, selected()?.value)) {
           scroll.scrollTo(0)
         }
       }
@@ -225,7 +228,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                 props.onFilter?.(e)
               })
             }}
-            focusedBackgroundColor={theme.backgroundPanel}
+            focusedBackgroundColor={theme.backgroundElement}
             cursorColor={theme.primary}
             focusedTextColor={theme.textMuted}
             ref={(r) => {
@@ -268,11 +271,12 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                 </Show>
                 <For each={options}>
                   {(option) => {
+                    const optionIndex = createMemo(() => flat().findIndex((x) => isDeepEqual(x.value, option.value)))
                     const active = createMemo(() => isDeepEqual(option.value, selected()?.value))
                     const current = createMemo(() => isDeepEqual(option.value, props.current))
                     return (
                       <box
-                        id={JSON.stringify(option.value)}
+                        id={optionIndex() >= 0 ? optionID(optionIndex()) : undefined}
                         flexDirection="row"
                         onMouseMove={() => {
                           setStore("input", "mouse")

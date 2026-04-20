@@ -1,5 +1,6 @@
 import path from "path"
 import fsPromises from "fs/promises"
+import { randomUUID } from "crypto"
 import { Effect, Layer, Record, Result, Schema, ServiceMap } from "effect"
 import { makeRunPromise } from "@/effect/run-service"
 import { zod } from "@/util/effect-zod"
@@ -15,33 +16,107 @@ export const OAUTH_DUMMY_KEY = "ax-code-oauth-dummy-key"
 
 const file = path.join(Global.Path.data, "auth.json")
 const lockFile = `${file}.lock`
+const LOCK_TIMEOUT_MS = 5_000
+const LOCK_POLL_MS = 20
+const LOCK_STALE_MS = 60 * 60 * 1000
+
+type AuthLockBody = {
+  host: string
+  pid: number
+  startedAt: number
+  token: string
+}
 
 // Cross-process advisory lock using exclusive file creation.
 // Prevents two concurrent ax-code processes (e.g. CLI + desktop app)
 // from racing on auth.json. Falls back to in-process Lock.write("auth")
 // for same-process mutual exclusion.
 async function acquireFileLock(): Promise<() => void> {
-  const deadline = Date.now() + 5_000
-  while (Date.now() < deadline) {
+  const body: AuthLockBody = {
+    host: process.env.HOSTNAME ?? "",
+    pid: process.pid,
+    startedAt: Date.now(),
+    token: randomUUID(),
+  }
+
+  async function tryCreate() {
+    const fd = await fsPromises.open(lockFile, "wx")
     try {
-      const fd = await fsPromises.open(lockFile, "wx")
+      await fd.writeFile(JSON.stringify(body))
+      return true
+    } finally {
       await fd.close()
-      return () => fsPromises.unlink(lockFile).catch(() => {})
-    } catch (e: any) {
-      if (e.code !== "EEXIST") throw e
-      await new Promise<void>((r) => setTimeout(r, 20))
     }
   }
-  // Stale lock: remove and retry once, keeping the EEXIST guard so a
-  // concurrent process that won the unlink-then-open race is detected.
-  await fsPromises.unlink(lockFile).catch(() => {})
-  try {
-    const fd = await fsPromises.open(lockFile, "wx")
-    await fd.close()
-    return () => fsPromises.unlink(lockFile).catch(() => {})
-  } catch (e: any) {
-    if (e.code !== "EEXIST") throw e
-    throw new Error("Failed to acquire auth lock: still held after stale-lock cleanup")
+
+  async function readBody() {
+    const text = await fsPromises.readFile(lockFile, "utf-8").catch(() => undefined)
+    if (!text) return undefined
+    try {
+      const parsed = JSON.parse(text) as Partial<AuthLockBody>
+      if (
+        typeof parsed.pid !== "number" ||
+        typeof parsed.startedAt !== "number" ||
+        typeof parsed.host !== "string" ||
+        typeof parsed.token !== "string"
+      ) {
+        return undefined
+      }
+      return parsed as AuthLockBody
+    } catch {
+      return undefined
+    }
+  }
+
+  async function maybeSteal() {
+    const holder = await readBody()
+    if (!holder) {
+      await fsPromises.unlink(lockFile).catch(() => {})
+      return true
+    }
+
+    const sameHost = holder.host === body.host
+    if (sameHost && holder.pid !== process.pid) {
+      let alive = true
+      try {
+        process.kill(holder.pid, 0)
+      } catch (error) {
+        alive = (error as NodeJS.ErrnoException)?.code !== "ESRCH"
+      }
+      if (!alive) {
+        await fsPromises.unlink(lockFile).catch(() => {})
+        return true
+      }
+      return false
+    }
+
+    if (!sameHost && Date.now() - holder.startedAt > LOCK_STALE_MS) {
+      await fsPromises.unlink(lockFile).catch(() => {})
+      return true
+    }
+
+    return false
+  }
+
+  const deadline = Date.now() + LOCK_TIMEOUT_MS
+  while (true) {
+    try {
+      if (await tryCreate()) {
+        return async () => {
+          const current = await readBody()
+          if (!current || current.token !== body.token) return
+          await fsPromises.unlink(lockFile).catch(() => {})
+        }
+      }
+    } catch (e: any) {
+      if (e.code !== "EEXIST") throw e
+    }
+
+    if (await maybeSteal()) continue
+    if (Date.now() >= deadline) {
+      throw new Error("Failed to acquire auth lock: timed out waiting for active holder")
+    }
+    await new Promise<void>((r) => setTimeout(r, LOCK_POLL_MS))
   }
 }
 

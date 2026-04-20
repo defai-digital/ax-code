@@ -1,5 +1,6 @@
 import { useSync } from "@tui/context/sync"
 import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import type { AssistantMessage } from "@ax-code/sdk/v2"
@@ -28,11 +29,28 @@ export function activityColor(status: string, theme: ReturnType<typeof useTheme>
   }
 }
 
+// Returns the sidebar width in characters based on terminal width (3-tier).
+export function computeSidebarWidth(terminalWidth: number): number {
+  if (terminalWidth >= 200) return 52
+  if (terminalWidth >= 160) return 46
+  return 42
+}
+
+// Eighth-block characters for sub-pixel progress bar smoothness
+const EIGHTHS = ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+
 function bar(input: { pct?: number | null; busy: boolean; tick: number; width?: number }) {
   const width = input.width ?? 37
   const pct = Math.max(0, Math.min(100, input.pct ?? 0))
-  const fill = Math.max(0, Math.min(width, Math.round((pct / 100) * width)))
-  const cells: string[] = Array.from({ length: width }, (_, i) => (i < fill ? "█" : "░"))
+  const exact = (pct / 100) * width
+  const fill = Math.floor(exact)
+  const partialIdx = Math.floor((exact - fill) * 8) - 1 // -1 = no partial block
+
+  const cells: string[] = Array.from({ length: width }, (_, i) => {
+    if (i < fill) return "█"
+    if (i === fill && partialIdx >= 0) return EIGHTHS[partialIdx]
+    return "░"
+  })
 
   if (input.busy) {
     const pos = input.tick % width
@@ -51,6 +69,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
   const status = createMemo(() => sync.data.session_status?.[props.sessionID] ?? { type: "idle" as const })
+  const dimensions = useTerminalDimensions()
+  const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
+  // Bar widths scale with sidebar: full bar uses sidebar minus padding, half bar is half of that
+  const barWidth = createMemo(() => sidebarWidth() - 5)
+  const barWidthHalf = createMemo(() => Math.floor((sidebarWidth() - 6) / 2))
+
   const [tick, setTick] = createSignal(0)
   const [timerTick, setTimerTick] = createSignal(0)
   const [etaTick, setEtaTick] = createSignal(0)
@@ -223,6 +247,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       pct: context()?.percentage,
       busy: status().type !== "idle",
       tick: tick(),
+      width: barWidth(),
     })
   })
   // Half-width bars: only computed when ETA is active (two-column path)
@@ -232,15 +257,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       pct: context()?.percentage,
       busy: status().type !== "idle",
       tick: tick(),
-      width: 18,
+      width: barWidthHalf(),
     })
   })
   const etaBarHalf = createMemo(() => {
     const e = eta()
     if (!e) return ""
-    const width = 18
-    const filled = Math.max(0, Math.min(width, Math.round((e.remainPct / 100) * width)))
-    return Array.from({ length: width }, (_, i) => (i < filled ? "▓" : "·")).join("")
+    const w = barWidthHalf()
+    const filled = Math.max(0, Math.min(w, Math.round((e.remainPct / 100) * w)))
+    return Array.from({ length: w }, (_, i) => (i < filled ? "▓" : "·")).join("")
   })
   const usageBarColor = createMemo(() => {
     const pct = context()?.percentage ?? 0
@@ -268,7 +293,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       {(session) => (
         <box
           backgroundColor={theme.backgroundPanel}
-          width={42}
+          width={sidebarWidth()}
           height="100%"
           paddingTop={1}
           paddingBottom={1}
@@ -303,34 +328,34 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       {context()?.tokens ?? 0} tokens · {elapsed()}
                     </text>
                     <text fg={usageBarColor()}>{usageBar()}</text>
-                    <text fg={usageBarColor()}>📊 {context()?.percentage ?? 0}% used</text>
+                    <text fg={usageBarColor()}>ctx {context()?.percentage ?? 0}%</text>
                   </>
                 }
               >
                 {(etaValue) => (
                   <>
                     <box flexDirection="row" gap={1}>
-                      <text width={18} fg={theme.textMuted}>
+                      <text width={barWidthHalf()} fg={theme.textMuted}>
                         {context()?.tokens ?? 0} tokens
                       </text>
-                      <text width={18} fg={theme.textMuted}>
+                      <text width={barWidthHalf()} fg={theme.textMuted}>
                         Elapsed {elapsed()}
                       </text>
                     </box>
                     <box flexDirection="row" gap={1}>
-                      <text width={18} fg={usageBarColor()}>
+                      <text width={barWidthHalf()} fg={usageBarColor()}>
                         {usageBarHalf()}
                       </text>
-                      <text width={18} fg={etaBarColor()}>
+                      <text width={barWidthHalf()} fg={etaBarColor()}>
                         {etaBarHalf()}
                       </text>
                     </box>
                     <box flexDirection="row" gap={1}>
-                      <text width={18} fg={usageBarColor()}>
-                        📊 {context()?.percentage ?? 0}% used
+                      <text width={barWidthHalf()} fg={usageBarColor()}>
+                        ctx {context()?.percentage ?? 0}%
                       </text>
-                      <text width={18} fg={etaBarColor()}>
-                        ⏳ {etaValue().label}
+                      <text width={barWidthHalf()} fg={etaBarColor()}>
+                        {etaValue().label}
                       </text>
                     </box>
                   </>
@@ -350,7 +375,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   onMouseDown={() => mcpEntries().length > 2 && setExpanded("mcp", !expanded.mcp)}
                 >
                   <Show when={mcpEntries().length > 2}>
-                    <text fg={theme.text}>{expanded.mcp ? "▼" : "▶"}</text>
+                    <text fg={theme.text}>{expanded.mcp ? "−" : "+"}</text>
                   </Show>
                   <text fg={theme.text}>
                     <b>MCP</b>
@@ -410,7 +435,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 onMouseDown={() => sync.data.lsp.length > 2 && setExpanded("lsp", !expanded.lsp)}
               >
                 <Show when={sync.data.lsp.length > 2}>
-                  <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
+                  <text fg={theme.text}>{expanded.lsp ? "−" : "+"}</text>
                 </Show>
                 <text fg={theme.text}>
                   <b>LSP</b>
@@ -461,7 +486,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   onMouseDown={() => sync.data.debugEngine.plans.length > 2 && setExpanded("dre", !expanded.dre)}
                 >
                   <Show when={sync.data.debugEngine.plans.length > 2}>
-                    <text fg={theme.text}>{expanded.dre ? "▼" : "▶"}</text>
+                    <text fg={theme.text}>{expanded.dre ? "−" : "+"}</text>
                   </Show>
                   <text fg={theme.text}>
                     <b>DRE</b>
@@ -563,7 +588,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   onMouseDown={() => todo().length > 2 && setExpanded("todo", !expanded.todo)}
                 >
                   <Show when={todo().length > 2}>
-                    <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
+                    <text fg={theme.text}>{expanded.todo ? "−" : "+"}</text>
                   </Show>
                   <text fg={theme.text}>
                     <b>Todo</b>
@@ -584,7 +609,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 >
                   <box flexDirection="row" gap={1}>
                     <Show when={activity().length > 2}>
-                      <text fg={theme.text}>{expanded.activity ? "\u25BC" : "\u25B6"}</text>
+                      <text fg={theme.text}>{expanded.activity ? "−" : "+"}</text>
                     </Show>
                     <text fg={theme.text}>
                       <b>Activity</b>
@@ -632,7 +657,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 >
                   <box flexDirection="row" gap={1}>
                     <Show when={diff().length > 2}>
-                      <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
+                      <text fg={theme.text}>{expanded.diff ? "−" : "+"}</text>
                     </Show>
                     <text fg={theme.text}>
                       <b>Modified Files</b>

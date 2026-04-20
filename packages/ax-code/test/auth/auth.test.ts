@@ -1,12 +1,15 @@
 import path from "path"
 import { afterEach, expect, test } from "bun:test"
+import fs from "fs/promises"
 import { Auth } from "../../src/auth"
 import { Global } from "../../src/global"
 
 const file = path.join(Global.Path.data, "auth.json")
+const lockFile = `${file}.lock`
 
 afterEach(async () => {
   await Bun.write(file, "{}")
+  await fs.unlink(lockFile).catch(() => undefined)
 })
 
 test("set normalizes trailing slashes in keys", async () => {
@@ -84,4 +87,23 @@ test("all filters invalid auth entries and keeps valid ones", async () => {
   const data = await Auth.all()
   expect(data["anthropic"]).toMatchObject({ type: "api", key: "sk-test" })
   expect(data["broken"]).toBeUndefined()
+})
+
+test("set steals an abandoned auth lock owned by a dead process", async () => {
+  await fs.writeFile(
+    lockFile,
+    JSON.stringify({
+      host: process.env.HOSTNAME ?? "",
+      pid: 99999999,
+      startedAt: Date.now(),
+      token: "stale-lock",
+    }),
+  )
+
+  await Auth.set("anthropic", {
+    type: "api",
+    key: "sk-test",
+  })
+
+  expect(await Auth.get("anthropic")).toMatchObject({ type: "api", key: "sk-test" })
 })
