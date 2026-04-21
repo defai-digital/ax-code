@@ -12,7 +12,10 @@ const QUESTION_PROMPT_SRC = path.join(TUI_ROOT, "routes/session/question.tsx")
 const DIALOG_MESSAGE_SRC = path.join(TUI_ROOT, "routes/session/dialog-message.tsx")
 const DISPLAY_COMMANDS_SRC = path.join(TUI_ROOT, "routes/session/display-commands.ts")
 const TIMELINE_FORK_DIALOG_SRC = path.join(TUI_ROOT, "routes/session/dialog-fork-from-timeline.tsx")
+const TIMELINE_DIALOG_SRC = path.join(TUI_ROOT, "routes/session/dialog-timeline.tsx")
 const SIDEBAR_SRC = path.join(TUI_ROOT, "routes/session/sidebar.tsx")
+const SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-list.tsx")
+const WORKSPACE_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-workspace-list.tsx")
 const THEME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-theme-list.tsx")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")
 const AUTOCOMPLETE_SRC = path.join(TUI_ROOT, "component/prompt/autocomplete.tsx")
@@ -134,6 +137,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogMessage).toContain('message: error instanceof Error ? error.message : "Failed to copy message"')
     expect(dialogMessage).toContain('log.warn("dialog message fork failed"')
     expect(dialogMessage).toContain('message: error instanceof Error ? error.message : "Failed to fork session"')
+    expect(dialogMessage).toContain('message: "Message is no longer available"')
+    expect(dialogMessage).toContain("messageID: msg.id")
     expect(dialogMessage).toContain("promptState(sync.data.part[msg.id] ?? [])")
   })
 
@@ -143,6 +148,45 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(timelineForkDialog).toContain('log.warn("timeline fork failed"')
     expect(timelineForkDialog).toContain('message: error instanceof Error ? error.message : "Failed to fork session"')
     expect(timelineForkDialog).toContain("promptState(sync.data.part[message.id] ?? [])")
+    expect(timelineForkDialog).toContain('title: "No fork target available"')
+    expect(timelineForkDialog).toContain('description: "No user messages with text content are available to fork from."')
+    expect(timelineForkDialog).toContain("if (option.disabled) return")
+  })
+
+  test("keeps the timeline dialog from rendering as a blank empty state", async () => {
+    const timelineDialog = await fs.readFile(TIMELINE_DIALOG_SRC, "utf8")
+
+    expect(timelineDialog).toContain('title: "No timeline message available"')
+    expect(timelineDialog).toContain('description: "No user messages with text content are available in this session."')
+    expect(timelineDialog).toContain("disabled: true")
+    expect(timelineDialog).toContain("if (option.disabled) return")
+  })
+
+  test("handles session list deletion failures without leaking unhandled rejections", async () => {
+    const sessionListDialog = await fs.readFile(SESSION_LIST_DIALOG_SRC, "utf8")
+
+    expect(sessionListDialog).toContain(".catch(() => false)")
+    expect(sessionListDialog).toContain('message: "Failed to delete session"')
+    expect(sessionListDialog).toContain('sync.data.session.filter((session) => session.id !== option.value)')
+  })
+
+  test("handles workspace deletion failures without treating transport errors as success", async () => {
+    const workspaceListDialog = await fs.readFile(WORKSPACE_LIST_DIALOG_SRC, "utf8")
+
+    expect(workspaceListDialog).toContain(".then((result) => !result.error)")
+    expect(workspaceListDialog).toContain(".catch(() => false)")
+    expect(workspaceListDialog).toContain('message: "Failed to delete workspace"')
+  })
+
+  test("handles workspace open and create failures without leaking unhandled rejections", async () => {
+    const workspaceListDialog = await fs.readFile(WORKSPACE_LIST_DIALOG_SRC, "utf8")
+
+    expect(workspaceListDialog).toContain("await client.session.list({ roots: true, limit: 1 }).catch(() => undefined)")
+    expect(workspaceListDialog).toContain("if (!input.forceCreate && !listed) {")
+    expect(workspaceListDialog).toContain('message: "Failed to open workspace"')
+    expect(workspaceListDialog).toContain("await sync.workspace.sync()")
+    expect(workspaceListDialog).toContain("await props.onSelect(workspace.directory)")
+    expect(workspaceListDialog).toContain('message: error instanceof Error ? error.message : "Failed to open workspace"')
   })
 
   test("handles session summarize failures without leaking unhandled rejections", async () => {
@@ -266,6 +310,17 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogProvider).toContain("let cancelled = false")
   })
 
+  test("handles provider dialog async actions without leaking unhandled rejections", async () => {
+    const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
+
+    expect(dialogProvider).toContain("function runProviderDialogAction(")
+    expect(dialogProvider).toContain("void Promise.resolve()")
+    expect(dialogProvider).toContain('log.warn("provider dialog action failed"')
+    expect(dialogProvider).toContain('action: "select-provider"')
+    expect(dialogProvider).toContain('fallbackMessage: "Failed to complete provider authorization"')
+    expect(dialogProvider).toContain('fallbackMessage: "Failed to connect provider"')
+  })
+
   test("waits for provider and model readiness before home prompt auto-submit", async () => {
     const home = await fs.readFile(HOME_SRC, "utf8")
 
@@ -285,6 +340,11 @@ describe("tui OpenTUI stability guardrails", () => {
     const dialogSelect = await fs.readFile(DIALOG_SELECT_SRC, "utf8")
 
     expect(dialogSelect).toContain("scheduleMicrotaskTask")
+    expect(dialogSelect).toContain("function runDialogSelectAction(")
+    expect(dialogSelect).toContain('"dialog select action failed"')
+    expect(dialogSelect).toContain('"dialog select keybind failed"')
+    expect(dialogSelect).toContain('"Failed to complete the selected action"')
+    expect(dialogSelect).toContain("void Promise.resolve()")
     expect(dialogSelect).not.toContain("setTimeout(")
   })
 
@@ -295,6 +355,14 @@ describe("tui OpenTUI stability guardrails", () => {
       expect(text).toContain("scheduleMicrotaskTask")
       expect(text).not.toContain("setTimeout(")
     }
+  })
+
+  test("handles dialog prompt async confirms without leaking unhandled rejections", async () => {
+    const dialogPrompt = await fs.readFile(DIALOG_PROMPT_SRC, "utf8")
+
+    expect(dialogPrompt).toContain("function runDialogPromptAction(")
+    expect(dialogPrompt).toContain('log.warn("dialog prompt confirm failed"')
+    expect(dialogPrompt).toContain("void Promise.resolve()")
   })
 
   test("keeps doctor checking the OpenTUI preload dependency with bundled-runtime awareness", async () => {

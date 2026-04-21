@@ -41,9 +41,29 @@ export function DialogTimeline(props: {
         },
       })
     }
+    if (result.length === 0) {
+      return [
+        {
+          title: "No timeline message available",
+          value: "empty",
+          description: "No user messages with text content are available in this session.",
+          category: "Overview",
+          disabled: true,
+        },
+      ]
+    }
     result.reverse()
     return result
   })
 
-  return <DialogSelect onMove={(option) => props.onMove(option.value)} title="Timeline" options={options()} />
+  return (
+    <DialogSelect
+      onMove={(option) => {
+        if (option.disabled) return
+        props.onMove(option.value)
+      }}
+      title="Timeline"
+      options={options()}
+    />
+  )
 }

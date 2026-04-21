@@ -3,9 +3,11 @@ import { findByID, findWorkspace, sessionRuntimeStatus } from "./sync-query"
 export interface SyncResultStoreState<
   TSession extends { id: string } = { id: string },
   TMessage extends { role?: string; time?: object | undefined } = { role?: string; time?: object | undefined },
+  TRisk = unknown,
 > {
   status: "loading" | "partial" | "complete"
   session: TSession[]
+  session_risk: Record<string, TRisk>
   message: Record<string, TMessage[]>
   workspaceList: string[]
 }
@@ -25,6 +27,7 @@ export function createSyncContextValue<
 }) {
   type Session = TStore["session"][number]
   type Message = TStore["message"][string] extends Array<infer TItem> ? TItem : never
+  type Risk = TStore["session_risk"][string]
 
   const getSession = (sessionID: string): Session | undefined => findByID(input.store.session, sessionID) as Session | undefined
 
@@ -39,6 +42,9 @@ export function createSyncContextValue<
     },
     session: {
       get: getSession,
+      risk(sessionID: string): Risk | undefined {
+        return input.store.session_risk[sessionID] as Risk | undefined
+      },
       status(sessionID: string) {
         return sessionRuntimeStatus(
           getSession(sessionID) as (Session & { time?: { compacting?: unknown } | undefined }) | undefined,

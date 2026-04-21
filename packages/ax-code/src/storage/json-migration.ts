@@ -3,7 +3,9 @@ import { drizzle } from "drizzle-orm/bun-sqlite"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { ProjectTable } from "../project/project.sql"
+import { ProjectID } from "../project/schema"
 import { SessionTable, MessageTable, PartTable, TodoTable, PermissionTable } from "../session/session.sql"
+import { MessageID, PartID, SessionID } from "../session/schema"
 import { SessionShareTable } from "../share/share.sql"
 import path from "path"
 import { existsSync } from "fs"
@@ -22,6 +24,14 @@ export namespace JsonMigration {
   type Options = {
     progress?: (event: Progress) => void
   }
+
+  type ProjectInsert = typeof ProjectTable.$inferInsert
+  type SessionInsert = typeof SessionTable.$inferInsert
+  type MessageInsert = typeof MessageTable.$inferInsert
+  type PartInsert = typeof PartTable.$inferInsert
+  type TodoInsert = typeof TodoTable.$inferInsert
+  type PermissionInsert = typeof PermissionTable.$inferInsert
+  type SessionShareInsert = typeof SessionShareTable.$inferInsert
 
   export async function run(sqlite: Database, options?: Options) {
     const storageDir = path.join(Global.Path.data, "storage")
@@ -94,10 +104,10 @@ export namespace JsonMigration {
       return items
     }
 
-    function insert(values: any[], table: any, label: string) {
+    function insert<T>(values: T[], execute: (values: T[]) => void, label: string) {
       if (values.length === 0) return 0
       try {
-        db.insert(table).values(values).onConflictDoNothing().run()
+        execute(values)
         return values.length
       } catch (e) {
         const msg = `failed to migrate ${label} batch (${values.length} records): ${e}`
@@ -153,8 +163,8 @@ export namespace JsonMigration {
 
     // Migrate projects first (no FK deps)
     // Derive all IDs from file paths, not JSON content
-    const projectIds = new Set<string>()
-    const projectValues = [] as any[]
+    const projectIds = new Set<ProjectID>()
+    const projectValues: ProjectInsert[] = []
     for (let i = 0; i < projectFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, projectFiles.length)
       const batch = await read(projectFiles, i, end)
@@ -162,7 +172,7 @@ export namespace JsonMigration {
       for (let j = 0; j < batch.length; j++) {
         const data = batch[j]
         if (!data) continue
-        const id = path.basename(projectFiles[i + j], ".json")
+        const id = ProjectID.make(path.basename(projectFiles[i + j], ".json"))
         projectIds.add(id)
         projectValues.push({
           id,
@@ -178,7 +188,11 @@ export namespace JsonMigration {
           commands: data.commands,
         })
       }
-      stats.projects += insert(projectValues, ProjectTable, "project")
+      stats.projects += insert(
+        projectValues,
+        (values) => db.insert(ProjectTable).values(values).onConflictDoNothing().run(),
+        "project",
+      )
       step("projects", end - i)
     }
     log.info("migrated projects", { count: stats.projects, duration: Math.round(performance.now() - start) })
@@ -186,9 +200,9 @@ export namespace JsonMigration {
     // Migrate sessions (depends on projects)
     // Derive all IDs from directory/file paths, not JSON content, since earlier
     // migrations may have moved sessions to new directories without updating the JSON
-    const sessionProjects = sessionFiles.map((file) => path.basename(path.dirname(file)))
-    const sessionIds = new Set<string>()
-    const sessionValues = [] as any[]
+    const sessionProjects = sessionFiles.map((file) => ProjectID.make(path.basename(path.dirname(file))))
+    const sessionIds = new Set<SessionID>()
+    const sessionValues: SessionInsert[] = []
     for (let i = 0; i < sessionFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, sessionFiles.length)
       const batch = await read(sessionFiles, i, end)
@@ -196,7 +210,7 @@ export namespace JsonMigration {
       for (let j = 0; j < batch.length; j++) {
         const data = batch[j]
         if (!data) continue
-        const id = path.basename(sessionFiles[i + j], ".json")
+        const id = SessionID.make(path.basename(sessionFiles[i + j], ".json"))
         const projectID = sessionProjects[i + j]
         if (!projectIds.has(projectID)) {
           orphans.sessions++
@@ -224,7 +238,11 @@ export namespace JsonMigration {
           time_archived: data.time?.archived ?? null,
         })
       }
-      stats.sessions += insert(sessionValues, SessionTable, "session")
+      stats.sessions += insert(
+        sessionValues,
+        (values) => db.insert(SessionTable).values(values).onConflictDoNothing().run(),
+        "session",
+      )
       step("sessions", end - i)
     }
     log.info("migrated sessions", { count: stats.sessions })
@@ -233,11 +251,11 @@ export namespace JsonMigration {
     }
 
     // Migrate messages using pre-scanned file map
-    const allMessageFiles = [] as string[]
-    const allMessageSessions = [] as string[]
-    const messageSessions = new Map<string, string>()
+    const allMessageFiles: string[] = []
+    const allMessageSessions: SessionID[] = []
+    const messageSessions = new Map<MessageID, SessionID>()
     for (const file of messageFiles) {
-      const sessionID = path.basename(path.dirname(file))
+      const sessionID = SessionID.make(path.basename(path.dirname(file)))
       if (!sessionIds.has(sessionID)) continue
       allMessageFiles.push(file)
       allMessageSessions.push(sessionID)
@@ -246,13 +264,13 @@ export namespace JsonMigration {
     for (let i = 0; i < allMessageFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, allMessageFiles.length)
       const batch = await read(allMessageFiles, i, end)
-      const values = new Array(batch.length)
+      const values = new Array<MessageInsert>(batch.length)
       let count = 0
       for (let j = 0; j < batch.length; j++) {
         const data = batch[j]
         if (!data) continue
         const file = allMessageFiles[i + j]
-        const id = path.basename(file, ".json")
+        const id = MessageID.make(path.basename(file, ".json"))
         const sessionID = allMessageSessions[i + j]
         messageSessions.set(id, sessionID)
         const rest = data
@@ -267,7 +285,11 @@ export namespace JsonMigration {
         }
       }
       values.length = count
-      stats.messages += insert(values, MessageTable, "message")
+      stats.messages += insert(
+        values,
+        (next) => db.insert(MessageTable).values(next).onConflictDoNothing().run(),
+        "message",
+      )
       step("messages", end - i)
     }
     log.info("migrated messages", { count: stats.messages })
@@ -276,14 +298,14 @@ export namespace JsonMigration {
     for (let i = 0; i < partFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, partFiles.length)
       const batch = await read(partFiles, i, end)
-      const values = new Array(batch.length)
+      const values = new Array<PartInsert>(batch.length)
       let count = 0
       for (let j = 0; j < batch.length; j++) {
         const data = batch[j]
         if (!data) continue
         const file = partFiles[i + j]
-        const id = path.basename(file, ".json")
-        const messageID = path.basename(path.dirname(file))
+        const id = PartID.make(path.basename(file, ".json"))
+        const messageID = MessageID.make(path.basename(path.dirname(file)))
         const sessionID = messageSessions.get(messageID)
         if (!sessionID) {
           errs.push(`part missing message session: ${file}`)
@@ -304,17 +326,21 @@ export namespace JsonMigration {
         }
       }
       values.length = count
-      stats.parts += insert(values, PartTable, "part")
+      stats.parts += insert(
+        values,
+        (next) => db.insert(PartTable).values(next).onConflictDoNothing().run(),
+        "part",
+      )
       step("parts", end - i)
     }
     log.info("migrated parts", { count: stats.parts })
 
     // Migrate todos
-    const todoSessions = todoFiles.map((file) => path.basename(file, ".json"))
+    const todoSessions = todoFiles.map((file) => SessionID.make(path.basename(file, ".json")))
     for (let i = 0; i < todoFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, todoFiles.length)
       const batch = await read(todoFiles, i, end)
-      const values = [] as any[]
+      const values: TodoInsert[] = []
       for (let j = 0; j < batch.length; j++) {
         const data = batch[j]
         if (!data) continue
@@ -341,7 +367,11 @@ export namespace JsonMigration {
           })
         }
       }
-      stats.todos += insert(values, TodoTable, "todo")
+      stats.todos += insert(
+        values,
+        (next) => db.insert(TodoTable).values(next).onConflictDoNothing().run(),
+        "todo",
+      )
       step("todos", end - i)
     }
     log.info("migrated todos", { count: stats.todos })
@@ -350,8 +380,8 @@ export namespace JsonMigration {
     }
 
     // Migrate permissions
-    const permProjects = permFiles.map((file) => path.basename(file, ".json"))
-    const permValues = [] as any[]
+    const permProjects = permFiles.map((file) => ProjectID.make(path.basename(file, ".json")))
+    const permValues: PermissionInsert[] = []
     for (let i = 0; i < permFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, permFiles.length)
       const batch = await read(permFiles, i, end)
@@ -366,7 +396,11 @@ export namespace JsonMigration {
         }
         permValues.push({ project_id: projectID, data })
       }
-      stats.permissions += insert(permValues, PermissionTable, "permission")
+      stats.permissions += insert(
+        permValues,
+        (values) => db.insert(PermissionTable).values(values).onConflictDoNothing().run(),
+        "permission",
+      )
       step("permissions", end - i)
     }
     log.info("migrated permissions", { count: stats.permissions })
@@ -375,8 +409,8 @@ export namespace JsonMigration {
     }
 
     // Migrate session shares
-    const shareSessions = shareFiles.map((file) => path.basename(file, ".json"))
-    const shareValues = [] as any[]
+    const shareSessions = shareFiles.map((file) => SessionID.make(path.basename(file, ".json")))
+    const shareValues: SessionShareInsert[] = []
     for (let i = 0; i < shareFiles.length; i += batchSize) {
       const end = Math.min(i + batchSize, shareFiles.length)
       const batch = await read(shareFiles, i, end)
@@ -395,7 +429,11 @@ export namespace JsonMigration {
         }
         shareValues.push({ session_id: sessionID, id: data.id, secret: data.secret, url: data.url })
       }
-      stats.shares += insert(shareValues, SessionShareTable, "session_share")
+      stats.shares += insert(
+        shareValues,
+        (values) => db.insert(SessionShareTable).values(values).onConflictDoNothing().run(),
+        "session_share",
+      )
       step("shares", end - i)
     }
     log.info("migrated session shares", { count: stats.shares })

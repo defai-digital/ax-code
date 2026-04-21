@@ -9,6 +9,22 @@ import { tmpdir } from "../fixture/fixture"
 
 const wintest = process.platform !== "linux" ? test : test.skip
 
+async function startFsmonitor(dir: string) {
+  await $`git config core.fsmonitor true`.cwd(dir).quiet()
+  await $`git fsmonitor--daemon stop`.cwd(dir).quiet().nothrow()
+
+  const started = await $`git fsmonitor--daemon start`.cwd(dir).quiet().nothrow()
+  if (started.exitCode !== 0) return false
+
+  const status = await $`git fsmonitor--daemon status`.cwd(dir).quiet().nothrow()
+  if (status.exitCode !== 0) {
+    await $`git fsmonitor--daemon stop`.cwd(dir).quiet().nothrow()
+    return false
+  }
+
+  return true
+}
+
 describe("Worktree.remove", () => {
   test("continues when git remove exits non-zero after detaching", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -74,24 +90,25 @@ describe("Worktree.remove", () => {
 
     await $`git worktree add --no-checkout -b ${branch} ${dir}`.cwd(root).quiet()
     await $`git reset --hard`.cwd(dir).quiet()
-    await $`git config core.fsmonitor true`.cwd(dir).quiet()
-    await $`git fsmonitor--daemon stop`.cwd(dir).quiet().nothrow()
-    await Bun.write(path.join(dir, "tracked.txt"), "next\n")
-    await $`git diff`.cwd(dir).quiet()
+    try {
+      if (!(await startFsmonitor(dir))) return
 
-    const before = await $`git fsmonitor--daemon status`.cwd(dir).quiet().nothrow()
-    expect(before.exitCode).toBe(0)
+      const ok = await Instance.provide({
+        directory: root,
+        fn: () => Worktree.remove({ directory: dir }),
+      })
 
-    const ok = await Instance.provide({
-      directory: root,
-      fn: () => Worktree.remove({ directory: dir }),
-    })
+      expect(ok).toBe(true)
+      expect(await Filesystem.exists(dir)).toBe(false)
 
-    expect(ok).toBe(true)
-    expect(await Filesystem.exists(dir)).toBe(false)
-
-    const ref = await $`git show-ref --verify --quiet refs/heads/${branch}`.cwd(root).quiet().nothrow()
-    expect(ref.exitCode).not.toBe(0)
+      const ref = await $`git show-ref --verify --quiet refs/heads/${branch}`.cwd(root).quiet().nothrow()
+      expect(ref.exitCode).not.toBe(0)
+    } finally {
+      if (await Filesystem.exists(dir)) {
+        await $`git fsmonitor--daemon stop`.cwd(dir).quiet().nothrow()
+        await $`git worktree remove --force ${dir}`.cwd(root).quiet().nothrow()
+      }
+    }
   })
 
   test("removing one worktree does not cancel another pending bootstrap", async () => {

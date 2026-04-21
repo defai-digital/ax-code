@@ -4,11 +4,20 @@ import { SessionRisk } from "../../session/risk"
 import { SessionID } from "../../session/schema"
 
 export namespace RiskView {
+  type ReplayReadinessSummary = NonNullable<SessionRisk.QualityReadiness["review"]>
+
   function validation(input: SessionRisk.Detail["assessment"]["signals"]) {
     if (input.validationState === "passed") return "validation passed"
     if (input.validationState === "failed") return "validation failed"
     if (input.validationState === "partial") return "partial validation"
     return "validation unrecorded"
+  }
+
+  function qualityLine(workflow: "review" | "debug", summary: ReplayReadinessSummary) {
+    const state = summary.readyForBenchmark ? "benchmark ready" : "benchmark not ready"
+    const labels = `${summary.resolvedLabeledItems}/${summary.totalItems} resolved labels`
+    const next = summary.nextAction ? ` · next: ${summary.nextAction}` : ""
+    return `  ${workflow}: ${summary.overallStatus} · ${state} · ${labels}${next}`
   }
 
   export function lines(input: SessionRisk.Detail, explain = false) {
@@ -40,6 +49,18 @@ export namespace RiskView {
       .filter(Boolean)
       .join(" \u00b7 ")
     out.push(`  Scope:   ${scope}`)
+
+    const readinessLines = [
+      input.quality?.review ? qualityLine("review", input.quality.review) : null,
+      input.quality?.debug ? qualityLine("debug", input.quality.debug) : null,
+    ].filter((line): line is string => !!line)
+
+    if (readinessLines.length > 0) {
+      out.push("")
+      out.push("  Quality Readiness")
+      out.push("  " + "-".repeat(40))
+      out.push(...readinessLines)
+    }
 
     if (input.drivers.length > 0) {
       out.push("")
@@ -95,13 +116,18 @@ export const RiskCommand = cmd({
         type: "boolean",
         default: false,
       })
+      .option("quality", {
+        describe: "Include review/debug replay readiness when replay evidence exists",
+        type: "boolean",
+        default: true,
+      })
       .option("json", { describe: "Output as JSON", type: "boolean", default: false }),
   async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {
         const sessionID = SessionID.make(args.sessionID as string)
-        const detail = await SessionRisk.load(sessionID)
+        const detail = await SessionRisk.load(sessionID, { includeQuality: Boolean(args.quality) })
 
         if (args.json) {
           console.log(JSON.stringify(detail, null, 2))

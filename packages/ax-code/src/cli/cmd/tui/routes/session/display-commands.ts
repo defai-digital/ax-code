@@ -41,6 +41,7 @@ export function displayCommands(input: {
   dialogReplaceCompare: (dialog: DialogContext) => void
   dialogReplaceDre: (dialog: DialogContext) => void
   dialogReplaceDreGraph: (dialog: DialogContext) => void
+  dialogReplaceQuality: (dialog: DialogContext) => void
   dialogReplaceRollback: (dialog: DialogContext) => void
   dialogReplaceTimeline: (dialog: DialogContext) => void
   dialogReplaceFork: (dialog: DialogContext) => void
@@ -83,6 +84,7 @@ export function displayCommands(input: {
   showThinking: Accessor<boolean>
   showTimestamps: Accessor<boolean>
   agents: Array<{ name: string; displayName?: string }>
+  hasQualityReadiness: Accessor<boolean>
   sidebarVisible: Accessor<boolean>
   suggested: boolean
   toast: Toast
@@ -169,6 +171,17 @@ export function displayCommands(input: {
         aliases: ["dre", "risk"],
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceDre(dialog),
+    },
+    {
+      title: "View quality readiness",
+      value: "session.quality",
+      category: "Session",
+      enabled: input.hasQualityReadiness(),
+      slash: {
+        name: "quality",
+        aliases: ["readiness"],
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceQuality(dialog),
     },
     {
       title: "View execution graph (DRE)",

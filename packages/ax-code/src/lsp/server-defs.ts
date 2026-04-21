@@ -460,7 +460,7 @@ export const ElixirLS: Info = {
         })
 
         const cwd = path.join(Global.Path.bin, "elixir-ls-master")
-        const env = { MIX_ENV: "prod", ...process.env }
+        const env = { MIX_ENV: "prod", ...Env.sanitize() }
         await Process.run(["mix", "deps.get"], { cwd, env })
         await Process.run(["mix", "compile"], { cwd, env })
         await Process.run(["mix", "elixir_ls.release2", "-o", "release"], { cwd, env })

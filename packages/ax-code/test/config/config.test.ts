@@ -667,6 +667,42 @@ Nested agent prompt`,
   })
 })
 
+test("rejects invalid modes from .ax-code/modes", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const opencodeDir = path.join(dir, ".ax-code")
+      const modesDir = path.join(opencodeDir, "modes")
+      await fs.mkdir(modesDir, { recursive: true })
+
+      await Filesystem.write(
+        path.join(modesDir, "broken.md"),
+        `---
+model: test/model
+temperature: invalid
+---
+Broken mode prompt`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      let error: unknown
+      try {
+        await Config.get()
+      } catch (cause) {
+        error = cause
+      }
+
+      expect(Config.InvalidError.isInstance(error)).toBe(true)
+      if (Config.InvalidError.isInstance(error)) {
+        expect(error.data.path).toBe(path.join(tmp.path, ".ax-code", "modes", "broken.md"))
+      }
+    },
+  })
+})
+
 test("loads commands from .ax-code/command (singular)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

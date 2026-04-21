@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach } from "bun:test"
+import { test, expect, mock, beforeEach, afterAll } from "bun:test"
 
 // Mock UnauthorizedError to match the SDK's class
 class MockUnauthorizedError extends Error {
@@ -22,6 +22,31 @@ const pendingOauthNames = new Map<string, string>()
 // Controls whether the mock transport simulates a 401 that triggers the SDK
 // auth flow (which calls provider.state()) or a simple UnauthorizedError.
 let simulateAuthFlow = true
+
+function assertMockPublicUrl(url: string) {
+  const hostname = new URL(url).hostname.toLowerCase()
+  if (hostname === "localhost" || hostname === "::1") {
+    throw new Error(`mock-ssrf: refusing private hostname ${hostname}`)
+  }
+
+  const ipv4 = hostname.split(".").map((part) => Number.parseInt(part, 10))
+  if (ipv4.length !== 4 || ipv4.some((part) => Number.isNaN(part))) return
+
+  const [a, b] = ipv4
+  if (
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  ) {
+    throw new Error(`mock-ssrf: refusing private address ${hostname}`)
+  }
+}
+
+afterAll(() => {
+  mock.restore()
+})
 
 // Mock the transport constructors to simulate OAuth auto-auth on 401
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
@@ -112,7 +137,10 @@ mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
 
 mock.module("../../src/util/ssrf", () => ({
   Ssrf: {
-    assertPublicUrl: async () => {},
+    assertPublicUrl: async (url: string) => {
+      assertMockPublicUrl(url)
+    },
+    pinnedFetch: (url: string | URL | Request, init?: RequestInit) => fetch(url, init),
   },
 }))
 

@@ -631,6 +631,7 @@ export namespace Config {
         }
         continue
       }
+      throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
     }
     return result
   }

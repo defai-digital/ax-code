@@ -7,8 +7,10 @@ import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { useToast } from "@tui/ui/toast"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
+import { Log } from "@/util/log"
 import {
   dialogSelectClampIndex,
   dialogSelectFlatOptions,
@@ -17,6 +19,8 @@ import {
   dialogSelectRows,
   dialogSelectVisibleHeight,
 } from "./dialog-select-view-model"
+
+const log = Log.create({ service: "tui.dialog-select" })
 
 export interface DialogSelectProps<T> {
   title: string
@@ -57,6 +61,7 @@ export type DialogSelectRef<T> = {
 
 export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const dialog = useDialog()
+  const toast = useToast()
   const { theme } = useTheme()
   const [store, setStore] = createStore({
     selected: 0,
@@ -164,6 +169,18 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     }
   }
 
+  function runDialogSelectAction(action: () => unknown, failureLabel: string, failureMessage: string) {
+    void Promise.resolve()
+      .then(action)
+      .catch((error) => {
+        log.warn(failureLabel, { error, title: props.title })
+        toast.show({
+          message: error instanceof Error ? error.message : failureMessage,
+          variant: "error",
+        })
+      })
+  }
+
   const keybind = useKeybind()
   useKeyboard((evt) => {
     setStore("input", "keyboard")
@@ -180,8 +197,14 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       if (option) {
         evt.preventDefault()
         evt.stopPropagation()
-        if (option.onSelect) option.onSelect(dialog)
-        props.onSelect?.(option)
+        runDialogSelectAction(
+          () => {
+            if (option.onSelect) option.onSelect(dialog)
+            props.onSelect?.(option)
+          },
+          "dialog select action failed",
+          "Failed to complete the selected action",
+        )
       }
     }
 
@@ -191,7 +214,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         const s = selected()
         if (s) {
           evt.preventDefault()
-          item.onTrigger(s)
+          runDialogSelectAction(
+            () => item.onTrigger(s),
+            "dialog select keybind failed",
+            `Failed to run ${item.title}`,
+          )
         }
       }
     }
@@ -283,8 +310,14 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           setStore("input", "mouse")
                         }}
                         onMouseUp={() => {
-                          option.onSelect?.(dialog)
-                          props.onSelect?.(option)
+                          runDialogSelectAction(
+                            () => {
+                              option.onSelect?.(dialog)
+                              props.onSelect?.(option)
+                            },
+                            "dialog select action failed",
+                            "Failed to complete the selected action",
+                          )
                         }}
                         onMouseOver={() => {
                           if (store.input !== "mouse") return

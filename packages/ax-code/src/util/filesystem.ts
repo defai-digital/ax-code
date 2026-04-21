@@ -1,4 +1,4 @@
-import { access, chmod, mkdir, readFile, rename, stat as statAsync, unlink, writeFile } from "fs/promises"
+import * as fs from "fs/promises"
 import { createWriteStream, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
@@ -9,13 +9,15 @@ import { Glob } from "./glob"
 
 export namespace Filesystem {
   export async function exists(p: string): Promise<boolean> {
-    return access(p)
+    return fs
+      .access(p)
       .then(() => true)
       .catch(() => false)
   }
 
   export async function isDir(p: string): Promise<boolean> {
-    return statAsync(p)
+    return fs
+      .stat(p)
       .then((stat) => stat.isDirectory())
       .catch(() => false)
   }
@@ -30,11 +32,11 @@ export namespace Filesystem {
   }
 
   export async function readText(p: string): Promise<string> {
-    return readFile(p, "utf-8")
+    return fs.readFile(p, "utf-8")
   }
 
   export async function readJson<T = any>(p: string): Promise<T> {
-    const text = await readFile(p, "utf-8")
+    const text = await fs.readFile(p, "utf-8")
     try {
       return JSON.parse(text) as T
     } catch (error) {
@@ -45,11 +47,11 @@ export namespace Filesystem {
   }
 
   export async function readBytes(p: string): Promise<Buffer> {
-    return readFile(p)
+    return fs.readFile(p)
   }
 
   export async function readArrayBuffer(p: string): Promise<ArrayBuffer> {
-    const buf = await readFile(p)
+    const buf = await fs.readFile(p)
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
   }
 
@@ -61,17 +63,23 @@ export namespace Filesystem {
     const dir = dirname(p)
     const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
     try {
-      await mkdir(dir, { recursive: true })
-      await writeFile(tmp, content, mode ? { mode } : undefined)
-      await rename(tmp, p)
-    } catch (e) {
-      if (isEnoent(e)) {
-        await mkdir(dir, { recursive: true })
-        await writeFile(tmp, content, mode ? { mode } : undefined)
-        await rename(tmp, p)
+      await fs.mkdir(dir, { recursive: true })
+      await fs.writeFile(tmp, content, mode ? { mode } : undefined)
+      await fs.rename(tmp, p)
+    } catch (error) {
+      if (isEnoent(error)) {
+        try {
+          await fs.mkdir(dir, { recursive: true })
+          await fs.writeFile(tmp, content, mode ? { mode } : undefined)
+          await fs.rename(tmp, p)
+        } catch (retryError) {
+          await fs.unlink(tmp).catch(() => {})
+          throw retryError
+        }
         return
       }
-      throw e
+      await fs.unlink(tmp).catch(() => {})
+      throw error
     }
   }
 
@@ -86,18 +94,18 @@ export namespace Filesystem {
   ): Promise<void> {
     const dir = dirname(p)
     const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
-    await mkdir(dir, { recursive: true })
+    await fs.mkdir(dir, { recursive: true })
 
     const nodeStream = stream instanceof ReadableStream ? Readable.fromWeb(stream as any) : stream
     try {
       const writeStream = createWriteStream(tmp, mode ? { mode } : undefined)
       await pipeline(nodeStream, writeStream)
       if (mode) {
-        await chmod(tmp, mode)
+        await fs.chmod(tmp, mode)
       }
-      await rename(tmp, p)
+      await fs.rename(tmp, p)
     } catch (error) {
-      await unlink(tmp).catch(() => {})
+      await fs.unlink(tmp).catch(() => {})
       throw error
     }
   }

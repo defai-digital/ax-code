@@ -200,31 +200,53 @@ describe("session.prompt flow", () => {
       hash: "snap-1",
       files: [path.join(tmp.path, "src/file.ts")],
     })
-    streamSpy = spyOn(LLM, "stream").mockResolvedValue({
-      fullStream: (async function* () {
-        yield { type: "start" }
-        yield { type: "start-step" }
-        yield { type: "tool-input-start", id: "call_1", toolName: "read" }
-        yield { type: "tool-call", toolCallId: "call_1", toolName: "read", input: { file: "src/file.ts" } }
-        yield {
-          type: "tool-result",
-          toolCallId: "call_1",
-          input: { file: "src/file.ts" },
-          output: {
-            output: "file body",
-            title: "Read src/file.ts",
-            metadata: {},
-            attachments: [],
-          },
-        }
-        yield {
-          type: "finish-step",
-          finishReason: "stop",
-          usage: { inputTokens: 20, outputTokens: 8, totalTokens: 28 },
-        }
-        yield { type: "finish" }
-      })(),
-    } as any)
+    let call = 0
+    streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+      call++
+      if (call === 1) {
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "tool-input-start", id: "call_1", toolName: "read" }
+            yield { type: "tool-call", toolCallId: "call_1", toolName: "read", input: { file: "src/file.ts" } }
+            yield {
+              type: "tool-result",
+              toolCallId: "call_1",
+              input: { file: "src/file.ts" },
+              output: {
+                output: "file body",
+                title: "Read src/file.ts",
+                metadata: {},
+                attachments: [],
+              },
+            }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 20, outputTokens: 8, totalTokens: 28 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      }
+
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text: "done" }
+          yield { type: "text-end", id: "text_1" }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 12, outputTokens: 4, totalTokens: 16 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -238,12 +260,20 @@ describe("session.prompt flow", () => {
         })
 
         expect(msg.info.role).toBe("assistant")
+        expect(msg.parts.some((part) => part.type === "text" && part.text === "done")).toBe(true)
 
         const stored = await Session.messages({ sessionID: session.id })
-        expect(stored[1]?.parts.some((part) => part.type === "tool" && part.state.status === "completed")).toBe(true)
-        expect(stored[1]?.parts.some((part) => part.type === "step-start")).toBe(true)
-        expect(stored[1]?.parts.some((part) => part.type === "step-finish" && part.reason === "tool-calls")).toBe(true)
-        expect(stored[1]?.parts.some((part) => part.type === "patch" && part.hash === "snap-1")).toBe(true)
+        expect(stored).toHaveLength(3)
+
+        const toolStep = stored.find(
+          (message) =>
+            message.info.role === "assistant" &&
+            message.parts.some((part) => part.type === "tool" && part.state.status === "completed"),
+        )
+        expect(toolStep).toBeDefined()
+        expect(toolStep?.parts.some((part) => part.type === "step-start")).toBe(true)
+        expect(toolStep?.parts.some((part) => part.type === "step-finish" && part.reason === "tool-calls")).toBe(true)
+        expect(toolStep?.parts.some((part) => part.type === "patch" && part.hash === "snap-1")).toBe(true)
 
         await Session.remove(session.id)
       },

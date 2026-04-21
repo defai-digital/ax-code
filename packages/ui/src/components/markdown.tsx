@@ -201,7 +201,10 @@ function setupCodeCopy(root: HTMLDivElement, labels: CopyLabels) {
     setCopyState(button, labels, true)
     const existing = timeouts.get(button)
     if (existing) clearTimeout(existing)
-    const timeout = setTimeout(() => setCopyState(button, labels, false), 2000)
+    const timeout = setTimeout(() => {
+      timeouts.delete(button)
+      setCopyState(button, labels, false)
+    }, 2000)
     timeouts.set(button, timeout)
   }
 

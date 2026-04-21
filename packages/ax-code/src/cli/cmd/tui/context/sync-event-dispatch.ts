@@ -23,12 +23,14 @@ export function applySessionDeleteEvent<
   TMessage extends { id: string },
   TPart,
   TDiff,
+  TRisk = unknown,
 >(
   store: {
     session: TSession[]
     permission: Record<string, TPermission[]>
     question: Record<string, TQuestion[]>
     session_status: Record<string, TStatus>
+    session_risk: Record<string, TRisk>
     session_diff: Record<string, TDiff[]>
     todo: Record<string, TTodo[]>
     message: Record<string, TMessage[]>

@@ -36,7 +36,16 @@ async function openWorkspace(input: {
     fetch: input.sdk.fetch,
     directory: input.workspaceID,
   })
-  const listed = input.forceCreate ? undefined : await client.session.list({ roots: true, limit: 1 })
+  const listed = input.forceCreate
+    ? undefined
+    : await client.session.list({ roots: true, limit: 1 }).catch(() => undefined)
+  if (!input.forceCreate && !listed) {
+    input.toast.show({
+      message: "Failed to open workspace",
+      variant: "error",
+    })
+    return
+  }
   const session = listed?.data?.[0]
   if (session?.id) {
     cacheSession(session)
@@ -122,19 +131,26 @@ function DialogWorkspaceCreate(props: { onSelect: (workspaceID: string) => Promi
     if (creating()) return
     setCreating(type)
 
-    const result = await sdk.client.worktree.create({ worktreeCreateInput: {} }).catch(() => undefined)
-    const workspace = result?.data
-    if (!workspace) {
-      setCreating(undefined)
+    try {
+      const result = await sdk.client.worktree.create({ worktreeCreateInput: {} }).catch(() => undefined)
+      const workspace = result?.data
+      if (!workspace) {
+        toast.show({
+          message: "Failed to create workspace",
+          variant: "error",
+        })
+        return
+      }
+      await sync.workspace.sync()
+      await props.onSelect(workspace.directory)
+    } catch (error) {
       toast.show({
-        message: "Failed to create workspace",
+        message: error instanceof Error ? error.message : "Failed to open workspace",
         variant: "error",
       })
-      return
+    } finally {
+      setCreating(undefined)
     }
-    await sync.workspace.sync()
-    await props.onSelect(workspace.directory)
-    setCreating(undefined)
   }
 
   return (
@@ -312,11 +328,12 @@ export function DialogWorkspaceList() {
               setToDelete(option.value)
               return
             }
-            const result = await sdk.client.worktree
+            const deleted = await sdk.client.worktree
               .remove({ worktreeRemoveInput: { directory: option.value } })
-              .catch(() => undefined)
+              .then((result) => !result.error)
+              .catch(() => false)
             setToDelete(undefined)
-            if (result?.error) {
+            if (!deleted) {
               toast.show({
                 message: "Failed to delete workspace",
                 variant: "error",

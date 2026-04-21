@@ -40,6 +40,7 @@ import { createSyncBootstrapFlow } from "./sync-bootstrap-flow"
 import { createSyncContextValue } from "./sync-result"
 import { subscribeStoreBackedSyncEvents } from "./sync-subscription"
 import { registerSyncLifecycle } from "./sync-lifecycle"
+import { parseSyncedSessionRisk } from "./sync-session-risk"
 
 const BOOTSTRAP_REQUEST_TIMEOUT_MS = 10_000
 const SESSION_SYNC_REQUEST_TIMEOUT_MS = 10_000
@@ -47,6 +48,13 @@ const MAX_SESSION_MESSAGES = 100
 
 function withSyncTimeout<T>(label: string, promise: Promise<T>, timeoutMs = BOOTSTRAP_REQUEST_TIMEOUT_MS) {
   return withTimeout(promise, timeoutMs, `${label} timed out after ${timeoutMs}ms`)
+}
+
+function sessionRiskURL(input: { baseUrl: string; sessionID: string; directory?: string }) {
+  const url = new URL(`${input.baseUrl}/session/${encodeURIComponent(input.sessionID)}/risk`)
+  url.searchParams.set("quality", "true")
+  if (input.directory) url.searchParams.set("directory", input.directory)
+  return url.toString()
 }
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
@@ -80,6 +88,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       fetchMessages: (sessionID) => sdk.client.session.messages({ sessionID, limit: 100 }),
       fetchTodo: (sessionID) => sdk.client.session.todo({ sessionID }),
       fetchDiff: (sessionID) => sdk.client.session.diff({ sessionID }),
+      fetchRisk: async (sessionID) => {
+        const response = await sdk.fetch(
+          sessionRiskURL({
+            baseUrl: sdk.url,
+            sessionID,
+            directory: sdk.directory,
+          }),
+        )
+        if (!response.ok) throw new Error(`session risk request failed: ${response.status}`)
+        return { data: parseSyncedSessionRisk(await response.json()) }
+      },
       onMissingSnapshot(sessionID) {
         Log.Default.warn("session sync returned no session data", { sessionID })
       },

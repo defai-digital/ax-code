@@ -13,6 +13,7 @@ describe("tui sync session store", () => {
         todo: [{ id: "todo_1" }],
         messages: [{ info: { id: "msg_1" }, parts: [{ id: "part_1" }] }],
         diff: [{ path: "file.ts" }],
+        risk: undefined,
       }),
     ).toBeUndefined()
   })
@@ -24,12 +25,14 @@ describe("tui sync session store", () => {
         todo: undefined,
         messages: undefined,
         diff: undefined,
+        risk: undefined,
       }),
     ).toEqual({
       session: { id: "ses_1", title: "current" },
       todo: [],
       messages: [],
       diff: [],
+      risk: undefined,
     })
   })
 
@@ -40,6 +43,7 @@ describe("tui sync session store", () => {
       message: Record<string, Array<{ id: string }>>
       part: Record<string, Array<{ id: string; text: string }>>
       session_diff: Record<string, Array<{ path: string }>>
+      session_risk: Record<string, { quality?: unknown }>
     } = {
       session: [{ id: "ses_1", title: "old" }],
       todo: { ses_1: [{ id: "todo_old" }] },
@@ -52,6 +56,7 @@ describe("tui sync session store", () => {
         msg_new: [{ id: "part_new_old", text: "replace" }],
       },
       session_diff: { ses_1: [{ path: "old.ts" }] },
+      session_risk: { ses_1: { quality: { review: null, debug: null } } },
     }
 
     applySessionSyncSnapshot(store, "ses_1", {
@@ -68,6 +73,19 @@ describe("tui sync session store", () => {
         },
       ],
       diff: [{ path: "new.ts" }],
+      risk: {
+        quality: {
+          review: {
+            workflow: "review",
+            overallStatus: "pass",
+            readyForBenchmark: true,
+            resolvedLabeledItems: 1,
+            totalItems: 1,
+            nextAction: null,
+          },
+          debug: null,
+        },
+      },
     })
 
     expect(store).toEqual({
@@ -81,6 +99,21 @@ describe("tui sync session store", () => {
         msg_new: [{ id: "part_new", text: "new" }],
       },
       session_diff: { ses_1: [{ path: "new.ts" }] },
+      session_risk: {
+        ses_1: {
+          quality: {
+            review: {
+              workflow: "review",
+              overallStatus: "pass",
+              readyForBenchmark: true,
+              resolvedLabeledItems: 1,
+              totalItems: 1,
+              nextAction: null,
+            },
+            debug: null,
+          },
+        },
+      },
     })
   })
 
@@ -90,6 +123,7 @@ describe("tui sync session store", () => {
       permission: Record<string, Array<{ id: string }>>
       question: Record<string, Array<{ id: string }>>
       session_status: Record<string, string>
+      session_risk: Record<string, { quality?: unknown }>
       session_diff: Record<string, Array<{ path: string }>>
       todo: Record<string, Array<{ id: string }>>
       message: Record<string, Array<{ id: string }>>
@@ -107,6 +141,32 @@ describe("tui sync session store", () => {
       session_status: {
         ses_1: "working",
         ses_2: "idle",
+      },
+      session_risk: {
+        ses_1: {
+          quality: {
+            review: {
+              workflow: "review",
+              overallStatus: "warn",
+              readyForBenchmark: false,
+              resolvedLabeledItems: 0,
+              totalItems: 1,
+              nextAction: "Record outcome labels for the exported artifacts.",
+            },
+          },
+        },
+        ses_2: {
+          quality: {
+            review: {
+              workflow: "review",
+              overallStatus: "pass",
+              readyForBenchmark: true,
+              resolvedLabeledItems: 1,
+              totalItems: 1,
+              nextAction: null,
+            },
+          },
+        },
       },
       session_diff: {
         ses_1: [{ path: "delete.ts" }],
@@ -139,6 +199,20 @@ describe("tui sync session store", () => {
       },
       session_status: {
         ses_2: "idle",
+      },
+      session_risk: {
+        ses_2: {
+          quality: {
+            review: {
+              workflow: "review",
+              overallStatus: "pass",
+              readyForBenchmark: true,
+              resolvedLabeledItems: 1,
+              totalItems: 1,
+              nextAction: null,
+            },
+          },
+        },
       },
       session_diff: {
         ses_2: [{ path: "keep.ts" }],

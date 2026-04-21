@@ -3,6 +3,10 @@ import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { onCleanup, onMount, type JSX } from "solid-js"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { useToast } from "./toast"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.dialog-prompt" })
 
 export type DialogPromptProps = {
   title: string
@@ -15,8 +19,21 @@ export type DialogPromptProps = {
 
 export function DialogPrompt(props: DialogPromptProps) {
   const dialog = useDialog()
+  const toast = useToast()
   const { theme } = useTheme()
   let textarea: TextareaRenderable
+
+  function runDialogPromptAction(action: () => unknown, failureMessage: string) {
+    void Promise.resolve()
+      .then(action)
+      .catch((error) => {
+        log.warn("dialog prompt confirm failed", { error, title: props.title })
+        toast.show({
+          message: error instanceof Error ? error.message : failureMessage,
+          variant: "error",
+        })
+      })
+  }
 
   onMount(() => {
     dialog.setSize("medium")
@@ -42,7 +59,10 @@ export function DialogPrompt(props: DialogPromptProps) {
         {props.description}
         <textarea
           onSubmit={() => {
-            props.onConfirm?.(textarea.plainText)
+            runDialogPromptAction(
+              () => props.onConfirm?.(textarea.plainText),
+              `Failed to confirm ${props.title.toLowerCase()}`,
+            )
           }}
           height={3}
           keyBindings={[{ name: "return", action: "submit" }]}

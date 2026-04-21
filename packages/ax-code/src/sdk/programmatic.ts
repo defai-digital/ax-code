@@ -8,6 +8,7 @@
  *   import { createAgent } from "ax-code/sdk/programmatic"
  */
 
+import z from "zod"
 import { Log } from "../util/log.js"
 import { bootstrap } from "../cli/bootstrap.js"
 import { Server } from "../server/server.js"
@@ -18,6 +19,14 @@ import { setLanguage, t } from "../i18n/index.js"
 import { createOpencodeClient } from "@ax-code/sdk/v2/client"
 import type { OpencodeClient } from "@ax-code/sdk/v2/client"
 import { internalBaseUrl } from "../util/internal-url.js"
+import type {
+  ApiError,
+  Message as ApiMessage,
+  Part as ApiPart,
+  Provider as ApiProvider,
+  Session as ApiSession,
+  SessionMessagesResponse,
+} from "../../../sdk/js/src/v2/gen/types.gen.js"
 import type {
   Agent,
   AgentOptions,
@@ -48,10 +57,65 @@ export {
   DisposedError,
 } from "../../../sdk/js/src/programmatic/types.js"
 
+function last<T, S extends T>(list: T[], test: (item: T) => item is S): S | undefined
 function last<T>(list: T[], test: (item: T) => boolean): T | undefined {
   for (let i = list.length - 1; i >= 0; i--) {
     if (test(list[i]!)) return list[i]
   }
+}
+
+type SessionMessageRecord = SessionMessagesResponse[number]
+type AssistantMessageRecord = SessionMessageRecord & {
+  info: Extract<ApiMessage, { role: "assistant" }>
+}
+
+function isAssistantMessageRecord(message: SessionMessageRecord): message is AssistantMessageRecord {
+  return message.info.role === "assistant"
+}
+
+function isTextPart(part: ApiPart): part is Extract<ApiPart, { type: "text" }> {
+  return part.type === "text"
+}
+
+function lastAssistantMessage(messages: SessionMessagesResponse | undefined): AssistantMessageRecord | undefined {
+  return last(messages ?? [], isAssistantMessageRecord)
+}
+
+function getSessionUsage(message: AssistantMessageRecord | undefined) {
+  const tokens = message?.info.tokens
+  if (!tokens) return { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+  return {
+    promptTokens: tokens.input ?? 0,
+    completionTokens: tokens.output ?? 0,
+    totalTokens: tokens.total ?? (tokens.input ?? 0) + (tokens.output ?? 0),
+  }
+}
+
+function getFinalAssistantText(message: AssistantMessageRecord | undefined) {
+  const textPart = last(message?.parts ?? [], (part): part is Extract<ApiPart, { type: "text" }> => {
+    return isTextPart(part) && part.text.length > 0
+  })
+  return textPart?.text
+}
+
+function getToolOutput(state: Extract<ApiPart, { type: "tool" }>["state"]) {
+  return state.status === "completed" ? state.output : ""
+}
+
+function getErrorMessage(error: unknown) {
+  if (!error || typeof error !== "object") return "Unknown error"
+  if ("data" in error && error.data && typeof error.data === "object") {
+    const message = (error.data as Record<string, unknown>)["message"]
+    if (typeof message === "string") return message
+  }
+  if ("message" in error && typeof error.message === "string") return error.message
+  return "Unknown error"
+}
+
+function requireSessionID(session: ApiSession | undefined, action: string) {
+  const sessionID = session?.id
+  if (!sessionID) throw new Error(`Failed to ${action} session`)
+  return sessionID
 }
 
 // Local `withTimeout` that wraps a promise so post-timeout rejections
@@ -312,7 +376,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal, onAbort?: () => 
 // ERROR CLASSIFICATION (Enhancement #1)
 // ============================================================
 
-function classifyError(errMsg: string, rawError?: any): Error {
+function classifyError(errMsg: string): Error {
   const lower = errMsg.toLowerCase()
 
   // Agent not found
@@ -373,13 +437,13 @@ function classifyError(errMsg: string, rawError?: any): Error {
 // the SDK's event stream.
 
 function fromSdkTool(sdkTool: SdkTool): Tool.Info {
-  const z = sdkTool.parameters as any
+  const parameters = sdkTool.parameters as z.ZodType<unknown>
   return {
     id: sdkTool.name,
     init: async () => ({
       description: sdkTool.description,
-      parameters: z,
-      async execute(args: any) {
+      parameters,
+      async execute(args: unknown) {
         const result = await sdkTool.execute(args)
         let output: string
         if (typeof result === "string") {
@@ -427,9 +491,7 @@ function createInProcessClient(directory: string): OpencodeClient {
 type EventStream = Awaited<ReturnType<OpencodeClient["event"]["subscribe"]>>
 
 async function closeEvents(events: EventStream) {
-  if (typeof (events.stream as any).return === "function") {
-    await (events.stream as any).return()
-  }
+  await events.stream.return?.(undefined)
 }
 
 async function collectResult(
@@ -448,7 +510,7 @@ async function collectResult(
   try {
     for await (const event of events.stream) {
       if (event.type === "message.updated") {
-        const info = (event as any).properties.info
+        const info = event.properties.info
         if (info.role === "assistant") {
           agent = info.agent ?? ""
           modelInfo = { providerID: info.providerID ?? "", modelID: info.modelID ?? "" }
@@ -457,7 +519,7 @@ async function collectResult(
       }
 
       if (event.type === "message.part.updated") {
-        const part = (event as any).properties.part
+        const part = event.properties.part
         if (part.sessionID !== sessionID) continue
 
         if (part.type === "text" && part.time?.end) {
@@ -472,26 +534,24 @@ async function collectResult(
             toolCalls.push({
               tool: part.tool,
               input: part.state.input,
-              output: part.state.output ?? "",
+              output: getToolOutput(part.state),
               status: part.state.status,
             })
             if (hooks?.onToolResult) {
-              await hooks.onToolResult(part.tool, part.state.output ?? "")
+              await hooks.onToolResult(part.tool, getToolOutput(part.state))
             }
           }
         }
       }
 
       if (event.type === "session.error") {
-        const errProps = (event as any).properties.error
-        const errMsg = errProps?.data?.message ?? errProps?.message ?? "Unknown error"
-        const err = classifyError(errMsg, errProps)
+        const err = classifyError(getErrorMessage(event.properties.error))
         if (hooks?.onError) hooks.onError(err)
         throw err
       }
 
       if (event.type === "permission.asked") {
-        const perm = (event as any).properties
+        const perm = event.properties
         if (perm.sessionID !== sessionID) continue
         const hookReply = hooks?.onPermissionRequest
           ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
@@ -501,18 +561,10 @@ async function collectResult(
       }
 
       if (event.type === "session.status") {
-        const props = (event as any).properties
+        const props = event.properties
         if (props.sessionID === sessionID && props.status.type === "idle") {
           const msgs = await sdk.session.messages({ sessionID })
-          const lastAssistant = last((msgs.data as any[]) ?? [], (m: any) => m.info?.role === "assistant")
-          if (lastAssistant?.info?.tokens) {
-            const t = lastAssistant.info.tokens
-            usage = {
-              promptTokens: t.input ?? 0,
-              completionTokens: t.output ?? 0,
-              totalTokens: t.total ?? (t.input ?? 0) + (t.output ?? 0),
-            }
-          }
+          usage = getSessionUsage(lastAssistantMessage(msgs.data))
           break
         }
       }
@@ -538,7 +590,7 @@ async function* streamEvents(
   let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   for await (const event of events.stream) {
     if (event.type === "message.updated") {
-      const info = (event as any).properties.info
+      const info = event.properties.info
       if (info.role === "assistant") {
         agent = info.agent ?? ""
         modelInfo = { providerID: info.providerID ?? "", modelID: info.modelID ?? "" }
@@ -547,7 +599,7 @@ async function* streamEvents(
     }
 
     if (event.type === "message.part.updated") {
-      const part = (event as any).properties.part
+      const part = event.properties.part
       if (part.sessionID !== sessionID) continue
 
       if (part.type === "text") {
@@ -575,15 +627,15 @@ async function* streamEvents(
       }
 
       if (part.type === "step-start") {
-        yield { type: "step-start", index: part.step ?? 0 }
+        yield { type: "step-start", index: 0 }
       }
 
       if (part.type === "step-finish") {
-        yield { type: "step-finish", index: part.step ?? 0 }
+        yield { type: "step-finish", index: 0 }
       }
 
       if (part.type === "tool") {
-        if (part.state.status === "running" && !part.state.output) {
+        if (part.state.status === "running") {
           yield { type: "tool-call", tool: part.tool, input: part.state.input, id: part.id }
           if (hooks?.onToolCall) await hooks.onToolCall(part.tool, part.state.input)
         }
@@ -591,32 +643,30 @@ async function* streamEvents(
           toolCalls.push({
             tool: part.tool,
             input: part.state.input,
-            output: part.state.output ?? "",
+            output: getToolOutput(part.state),
             status: part.state.status,
           })
           yield {
             type: "tool-result",
             tool: part.tool,
-            output: part.state.output ?? "",
+            output: getToolOutput(part.state),
             id: part.id,
             status: part.state.status,
           }
-          if (hooks?.onToolResult) await hooks.onToolResult(part.tool, part.state.output ?? "")
+          if (hooks?.onToolResult) await hooks.onToolResult(part.tool, getToolOutput(part.state))
         }
       }
     }
 
     if (event.type === "session.error") {
-      const errProps = (event as any).properties.error
-      const errMsg = errProps?.data?.message ?? errProps?.message ?? "Unknown error"
-      const err = classifyError(errMsg, errProps)
+      const err = classifyError(getErrorMessage(event.properties.error))
       if (hooks?.onError) hooks.onError(err)
       yield { type: "error", error: err }
       return
     }
 
     if (event.type === "permission.asked") {
-      const perm = (event as any).properties
+      const perm = event.properties
       if (perm.sessionID !== sessionID) continue
       const hookReply = hooks?.onPermissionRequest
         ? await hooks.onPermissionRequest({ id: perm.id, permission: perm.permission, patterns: perm.patterns })
@@ -626,23 +676,13 @@ async function* streamEvents(
     }
 
     if (event.type === "session.status") {
-      const props = (event as any).properties
+      const props = event.properties
       if (props.sessionID === sessionID && props.status.type === "idle") {
         const msgs = await sdk.session.messages({ sessionID })
-        const lastAssistant = last((msgs.data as any[]) ?? [], (m: any) => m.info?.role === "assistant")
-        if (lastAssistant?.info?.tokens) {
-          const t = lastAssistant.info.tokens
-          usage = {
-            promptTokens: t.input ?? 0,
-            completionTokens: t.output ?? 0,
-            totalTokens: t.total ?? (t.input ?? 0) + (t.output ?? 0),
-          }
-        }
+        const lastAssistant = lastAssistantMessage(msgs.data)
+        usage = getSessionUsage(lastAssistant)
         // Get the final text from the stored message parts (not streamed text which may have echoes)
-        if (lastAssistant?.parts) {
-          const textPart = last((lastAssistant.parts as any[]) ?? [], (p: any) => p.type === "text" && p.text)
-          if (textPart?.text) text = textPart.text
-        }
+        text = getFinalAssistantText(lastAssistant) ?? text
         yield { type: "done", result: { text, agent, model: modelInfo, usage, toolCalls, sessionID, messageID } }
         return
       }
@@ -744,9 +784,7 @@ function createSessionHandle(
     async fork(): Promise<SessionHandle> {
       if (isDisposed?.()) throw new DisposedError()
       const result = await sdk.session.fork({ sessionID })
-      const newID = (result.data as any)?.id
-      if (!newID) throw new Error("Failed to fork session")
-      return createSessionHandle(sdk, newID, opts, isDisposed)
+      return createSessionHandle(sdk, requireSessionID(result.data, "fork"), opts, isDisposed)
     },
 
     async abort() {
@@ -861,8 +899,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
       if (disposed) throw new DisposedError()
       const exec = async () => {
         const session = await sdk.session.create()
-        const sessionID = (session.data as any)?.id
-        if (!sessionID) throw new Error("Failed to create session")
+        const sessionID = requireSessionID(session.data, "create")
         return createSessionHandle(sdk, sessionID, opts, () => disposed).run(message, runOptions)
       }
       if (runOptions?.timeout) {
@@ -876,25 +913,24 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
       if (disposed) throw new DisposedError()
       const rawIterable: AsyncIterable<StreamEvent> = {
         [Symbol.asyncIterator]() {
-          let gen: AsyncGenerator<StreamEvent> | undefined
+          let gen: AsyncIterator<StreamEvent> | undefined
           let started = false
           return {
             async next() {
               if (!started) {
                 started = true
                 const session = await sdk.session.create()
-                const sessionID = (session.data as any)?.id
-                if (!sessionID) throw new Error("Failed to create session")
+                const sessionID = requireSessionID(session.data, "create")
                 gen = createSessionHandle(sdk, sessionID, opts, () => disposed)
                   .stream(message, runOptions)
-                  [Symbol.asyncIterator]() as AsyncGenerator<StreamEvent>
+                  [Symbol.asyncIterator]()
               }
               return gen!.next()
             },
-            async return(v?: any) {
+            async return(v?: unknown) {
               return gen?.return?.(v) ?? { done: true as const, value: undefined }
             },
-            async throw(e?: any) {
+            async throw(e?: unknown) {
               return gen?.throw?.(e) ?? { done: true as const, value: undefined }
             },
           }
@@ -906,21 +942,19 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     async session(): Promise<SessionHandle> {
       if (disposed) throw new DisposedError()
       const session = await sdk.session.create()
-      const sessionID = (session.data as any)?.id
-      if (!sessionID) throw new Error("Failed to create session")
+      const sessionID = requireSessionID(session.data, "create")
       return createSessionHandle(sdk, sessionID, opts, () => disposed)
     },
 
     async tool(name: string, input: Record<string, unknown>): Promise<unknown> {
       if (disposed) throw new DisposedError()
       const toolsList = await sdk.tool.ids()
-      const available = Array.isArray(toolsList.data) ? (toolsList.data as string[]) : []
+      const available = toolsList.data ?? []
       if (!available.includes(name)) {
         throw new ToolError(name, `Not found. Available: ${available.join(", ")}`)
       }
       const session = await sdk.session.create()
-      const sessionID = (session.data as any)?.id
-      if (!sessionID) throw new Error("Failed to create session")
+      const sessionID = requireSessionID(session.data, "create")
       const events = await sdk.event.subscribe()
       const resultPromise = collectResult(sdk, events, sessionID, opts.hooks)
       try {
@@ -947,14 +981,11 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     async models(): Promise<string[]> {
       if (disposed) throw new DisposedError()
       const resp = await sdk.config.providers()
-      const wrapper = (resp.data as any) ?? {}
-      const providers = Array.isArray(wrapper.providers) ? wrapper.providers : []
+      const providers: ApiProvider[] = resp.data?.providers ?? []
       const models: string[] = []
       for (const provider of providers) {
-        if (provider?.id && provider?.models && typeof provider.models === "object") {
-          for (const modelID of Object.keys(provider.models)) {
-            models.push(`${provider.id}/${modelID}`)
-          }
+        for (const modelID of Object.keys(provider.models)) {
+          models.push(`${provider.id}/${modelID}`)
         }
       }
       return models.sort()
@@ -963,7 +994,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     async tools(): Promise<string[]> {
       if (disposed) throw new DisposedError()
       const result = await sdk.tool.ids()
-      return (result.data as string[]) ?? []
+      return result.data ?? []
     },
 
     async dispose() {

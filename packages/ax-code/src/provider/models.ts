@@ -72,7 +72,7 @@ export namespace ModelsDev {
     release_date: z.string(),
     attachment: z.boolean(),
     reasoning: z.boolean(),
-    temperature: z.boolean(),
+    temperature: z.boolean().default(false),
     tool_call: z.boolean(),
     interleaved: z
       .union([
@@ -89,16 +89,16 @@ export namespace ModelsDev {
       input: z.number().optional(),
       output: z.number(),
     }),
-    cost: Cost,
+    cost: Cost.default({ input: 0, output: 0 }),
     modalities: z
       .object({
         input: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),
         output: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),
       })
       .optional(),
-    experimental: z.boolean().optional(),
-    status: z.enum(["alpha", "beta", "deprecated"]).optional(),
-    options: z.record(z.string(), z.any()),
+    experimental: z.union([z.boolean(), z.record(z.string(), z.any())]).optional(),
+    status: z.enum(["alpha", "beta", "deprecated", "active"]).optional(),
+    options: z.record(z.string(), z.any()).optional(),
     headers: z.record(z.string(), z.string()).optional(),
     provider: z.object({ npm: z.string().optional(), api: z.string().optional() }).optional(),
     variants: z.record(z.string(), z.record(z.string(), z.any())).optional(),
@@ -116,10 +116,24 @@ export namespace ModelsDev {
 
   export type Provider = z.infer<typeof Provider>
 
+  const DataSchema = z.record(z.string(), Provider)
+
+  function parse(input: unknown, source: string) {
+    const result = DataSchema.safeParse(input)
+    if (!result.success) {
+      log.warn("invalid model data", {
+        source,
+        error: result.error.flatten(),
+      })
+      return
+    }
+    return result.data
+  }
+
   export const Data = lazy(async () => {
     const read = async (file: string, source: string) => {
       try {
-        return (await Filesystem.readJson(file)) as Record<string, unknown>
+        return await Filesystem.readJson(file)
       } catch (error: any) {
         const level = error?.code === "ENOENT" ? "debug" : "warn"
         log[level]("failed to load model data", { source, file, error })
@@ -129,7 +143,7 @@ export namespace ModelsDev {
     const file = process.env["AX_CODE_MODELS_PATH"]
     if (file) {
       log.info("loading model data from file", { file })
-      const data = await read(file, "file")
+      const data = parse(await read(file, "file"), "file")
       if (data) return data
     }
 
@@ -140,17 +154,20 @@ export namespace ModelsDev {
         await Ssrf.assertPublicUrl(url, "AX_CODE_MODELS_URL")
         const res = await Ssrf.pinnedFetch(url, { signal: AbortSignal.timeout(10_000) })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return (await res.json()) as Record<string, unknown>
+        const data = parse(await res.json(), "url")
+        if (data) return data
       } catch (error) {
         log.warn("failed to load model data", { source: "url", url, error })
       }
     }
 
     log.info("loading bundled model snapshot")
-    return (bundledSnapshot ?? {}) as Record<string, unknown>
+    const bundled = parse(bundledSnapshot ?? {}, "bundled")
+    if (bundled) return bundled
+    throw new Error("bundled model snapshot is invalid")
   })
 
   export async function get() {
-    return sanitize((await Data()) as Record<string, Provider>)
+    return sanitize(await Data())
   }
 }

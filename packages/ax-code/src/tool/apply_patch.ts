@@ -149,9 +149,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           }
 
           const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
+          await assertExternalDirectory(ctx, movePath)
           const moveExisted = movePath ? await fs.stat(movePath).then((stats) => !stats.isDirectory()).catch(() => false) : undefined
           const moveOldContent = moveExisted ? await fs.readFile(movePath!, "utf-8").catch(() => "") : undefined
-          await assertExternalDirectory(ctx, movePath)
           if (movePath && Filesystem.contains(Instance.directory, movePath)) {
             const moveStat = await fs.lstat(movePath).catch(() => null)
             if (moveStat?.isSymbolicLink()) {

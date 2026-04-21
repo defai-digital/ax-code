@@ -1,5 +1,6 @@
 import z from "zod"
 import { randomBytes } from "crypto"
+import { BASE62_ALPHABET } from "@ax-code/util/identifier"
 
 export namespace Identifier {
   const prefixes = {
@@ -52,19 +53,18 @@ export namespace Identifier {
   }
 
   function randomBase62(length: number): string {
-    const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     // Rejection sampling: `256 % 62 = 8`, so a naive `byte % 62` gives the
     // first 8 characters a slightly higher probability. Only accept bytes
     // below the largest multiple of 62 <= 256 (which is 248), rejecting
     // the rest. Oversample to keep the expected number of crypto reads
     // bounded even when many rejections happen.
-    const limit = 248 // 62 * 4
+    const limit = BASE62_ALPHABET.length * Math.floor(256 / BASE62_ALPHABET.length)
     let result = ""
     while (result.length < length) {
       const bytes = randomBytes(length * 2)
       for (let i = 0; i < bytes.length && result.length < length; i++) {
-        const byte = bytes[i]
-        if (byte < limit) result += chars[byte % 62]
+        const byte = bytes[i]!
+        if (byte < limit) result += BASE62_ALPHABET[byte % BASE62_ALPHABET.length]
       }
     }
     return result

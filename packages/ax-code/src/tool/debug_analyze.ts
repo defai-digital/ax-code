@@ -4,6 +4,9 @@ import DESCRIPTION from "./debug_analyze.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
 import { CodeNodeID } from "../code-intelligence/id"
+import { Session } from "../session"
+import { QualityShadow } from "../quality/shadow-runtime"
+import { Log } from "../util/log"
 
 // Tool wrapper around DebugEngine.analyzeBug. Audit trail is handled
 // automatically by the tool.call / tool.result events the session
@@ -13,6 +16,7 @@ import { CodeNodeID } from "../code-intelligence/id"
 // opted-in users while DRE matures. Registration lives in tool/registry.ts.
 
 const MAX_CHAIN_DEPTH = 8
+const log = Log.create({ service: "tool.debug_analyze" })
 
 function formatFrame(f: DebugEngine.StackFrame): string {
   const loc = `${f.file}:${f.line}`
@@ -36,7 +40,7 @@ export const DebugAnalyzeTool = Tool.define("debug_analyze", {
       .optional()
       .describe(`How deep to walk the caller chain (default 5, max ${MAX_CHAIN_DEPTH})`),
   }),
-  execute: async (args) => {
+  execute: async (args, ctx) => {
     const projectID = Instance.project.id
     const result = await DebugEngine.analyzeBug(projectID, {
       error: args.error,
@@ -61,16 +65,30 @@ export const DebugAnalyzeTool = Tool.define("debug_analyze", {
     )
     lines.push(`Graph queries consulted: ${result.explain.graphQueries.length}`)
 
+    const metadata = {
+      chainLength: result.chain.length,
+      resolvedCount: result.chain.filter((f) => f.symbol !== null).length,
+      confidence: result.confidence,
+      truncated: result.truncated,
+      result,
+    }
+
+    void Session.get(ctx.sessionID)
+      .then((session) => QualityShadow.captureDebugAnalyze({
+        session,
+        callID: ctx.callID ?? "debug_analyze",
+        error: args.error,
+        stackTrace: args.stackTrace,
+        metadata,
+      }))
+      .catch((err) => {
+        log.warn("quality debug shadow capture failed", { sessionID: ctx.sessionID, err })
+      })
+
     return {
       title: `debug_analyze ${args.error.slice(0, 60)}`,
       output: lines.join("\n"),
-      metadata: {
-        chainLength: result.chain.length,
-        resolvedCount: result.chain.filter((f) => f.symbol !== null).length,
-        confidence: result.confidence,
-        truncated: result.truncated,
-        result,
-      },
+      metadata,
     }
   },
 })

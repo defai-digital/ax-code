@@ -11,11 +11,13 @@ export function createSessionSyncSnapshot<
   TMessage,
   TPart,
   TDiff,
+  TRisk,
 >(input: {
   session: TSession | undefined
   todo: TTodo[] | undefined
   messages: Array<SyncedMessageParts<TMessage, TPart>> | undefined
   diff: TDiff[] | undefined
+  risk?: TRisk
 }) {
   if (!input.session) return
   return {
@@ -23,6 +25,7 @@ export function createSessionSyncSnapshot<
     todo: input.todo ?? [],
     messages: input.messages ?? [],
     diff: input.diff ?? [],
+    risk: input.risk,
   }
 }
 
@@ -32,6 +35,7 @@ export function applySessionSyncSnapshot<
   TMessage extends { id: string },
   TPart,
   TDiff,
+  TRisk,
 >(
   store: {
     session: TSession[]
@@ -39,6 +43,7 @@ export function applySessionSyncSnapshot<
     message: Record<string, TMessage[]>
     part: Record<string, TPart[]>
     session_diff: Record<string, TDiff[]>
+    session_risk: Record<string, TRisk>
   },
   sessionID: string,
   snapshot: {
@@ -46,6 +51,7 @@ export function applySessionSyncSnapshot<
     todo: TTodo[]
     messages: Array<SyncedMessageParts<TMessage, TPart>>
     diff: TDiff[]
+    risk?: TRisk
   },
 ) {
   upsert(store.session, snapshot.session)
@@ -56,6 +62,7 @@ export function applySessionSyncSnapshot<
 
   store.todo[sessionID] = snapshot.todo
   store.message[sessionID] = nextMessages
+  if (snapshot.risk !== undefined) store.session_risk[sessionID] = snapshot.risk
   for (const messageID of previousMessageIDs) {
     if (!nextMessageIDs.has(messageID)) {
       delete store.part[messageID]
@@ -76,12 +83,14 @@ export function applySessionDeleteCleanup<
   TMessage extends { id: string },
   TPart,
   TDiff,
+  TRisk,
 >(
   store: {
     session: TSession[]
     permission: Record<string, TPermission[]>
     question: Record<string, TQuestion[]>
     session_status: Record<string, TStatus>
+    session_risk: Record<string, TRisk>
     session_diff: Record<string, TDiff[]>
     todo: Record<string, TTodo[]>
     message: Record<string, TMessage[]>
@@ -99,6 +108,7 @@ export function applySessionDeleteCleanup<
   delete store.permission[sessionID]
   delete store.question[sessionID]
   delete store.session_status[sessionID]
+  delete store.session_risk[sessionID]
   delete store.session_diff[sessionID]
   delete store.todo[sessionID]
   delete store.message[sessionID]

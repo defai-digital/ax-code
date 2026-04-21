@@ -256,7 +256,8 @@ export const SessionRoutes = lazy(() =>
       describeRoute({
         summary: "Get session risk detail",
         tags: ["Session"],
-        description: "Return the explainable risk assessment, breakdown, and semantic change summary for a session.",
+        description:
+          "Return the explainable risk assessment, breakdown, and semantic change summary for a session. Optionally include replay readiness for review/debug workflows.",
         operationId: "session.risk",
         responses: {
           200: {
@@ -271,9 +272,18 @@ export const SessionRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ sessionID: SessionID.zod })),
+      validator(
+        "query",
+        z.object({
+          quality: z.coerce.boolean().optional().default(false).meta({
+            description: "Include replay readiness for review/debug when replay evidence exists",
+          }),
+        }),
+      ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        return c.json(await SessionRisk.load(sessionID))
+        const query = c.req.valid("query")
+        return c.json(await SessionRisk.load(sessionID, { includeQuality: query.quality }))
       },
     )
     .get(

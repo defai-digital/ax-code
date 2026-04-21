@@ -578,11 +578,11 @@ mod tests {
     #[test]
     fn parses_bracketed_paste_without_splitting_payload() {
         assert_eq!(
-            parse_input("a\x1b[200~hello\n世界\x1b[201~b"),
+            parse_input("a\x1b[200~hello\n\u{4e16}\u{754c}\x1b[201~b"),
             vec![
                 InputEvent::Text { text: "a".into() },
                 InputEvent::Paste {
-                    text: "hello\n世界".into()
+                    text: "hello\n\u{4e16}\u{754c}".into()
                 },
                 InputEvent::Text { text: "b".into() },
             ]
@@ -657,10 +657,10 @@ mod tests {
     #[test]
     fn wraps_wide_characters_without_splitting_cells() {
         let buffer =
-            CellBuffer::blank(Viewport::new(4, 2)).write_wrapped("ab界c", Style::default());
+            CellBuffer::blank(Viewport::new(4, 2)).write_wrapped("ab\u{754c}c", Style::default());
         assert_eq!(buffer.cells[0].text, "a");
         assert_eq!(buffer.cells[1].text, "b");
-        assert_eq!(buffer.cells[2].text, "界");
+        assert_eq!(buffer.cells[2].text, "\u{754c}");
         assert_eq!(buffer.cells[2].width, 2);
         assert_eq!(buffer.cells[3].width, 0);
         assert_eq!(buffer.cells[4].text, "c");

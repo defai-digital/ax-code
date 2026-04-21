@@ -134,25 +134,30 @@ export function DialogMessage(props: {
           description: "create a new session",
           category: "Actions",
           onSelect: async (dialog) => {
+            const msg = message()
+            if (!msg) {
+              toast.show({
+                message: "Message is no longer available",
+                variant: "warning",
+              })
+              dialog.clear()
+              return
+            }
+
             await sdk.client.session
               .fork({
                 sessionID: props.sessionID,
-                messageID: props.messageID,
+                messageID: msg.id,
               })
               .then((result) => {
                 if (!result.data) {
                   const errorMessage = typeof result.error === "string" ? result.error : "Failed to fork session"
                   throw new Error(errorMessage)
                 }
-                const initialPrompt = (() => {
-                  const msg = message()
-                  if (!msg) return undefined
-                  return promptState(sync.data.part[msg.id] ?? [])
-                })()
                 route.navigate({
                   sessionID: result.data.id,
                   type: "session",
-                  initialPrompt,
+                  initialPrompt: promptState(sync.data.part[msg.id] ?? []),
                 })
                 dialog.clear()
               })
@@ -160,7 +165,7 @@ export function DialogMessage(props: {
                 log.warn("dialog message fork failed", {
                   error,
                   sessionID: props.sessionID,
-                  messageID: props.messageID,
+                  messageID: msg.id,
                 })
                 toast.show({
                   message: error instanceof Error ? error.message : "Failed to fork session",

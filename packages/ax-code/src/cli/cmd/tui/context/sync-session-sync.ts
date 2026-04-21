@@ -9,12 +9,14 @@ export interface SessionSyncStoreState<
   TMessage extends { id: string },
   TPart,
   TDiff,
+  TRisk,
 > {
   session: TSession[]
   todo: Record<string, TTodo[]>
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
   session_diff: Record<string, TDiff[]>
+  session_risk: Record<string, TRisk>
 }
 
 export function createStoreBackedSessionSyncController<
@@ -23,7 +25,8 @@ export function createStoreBackedSessionSyncController<
   TMessage extends { id: string },
   TPart,
   TDiff,
-  TStore extends SessionSyncStoreState<TSession, TTodo, TMessage, TPart, TDiff>,
+  TRisk,
+  TStore extends SessionSyncStoreState<TSession, TTodo, TMessage, TPart, TDiff, TRisk>,
 >(input: {
   timeoutMs: number
   withTimeout: <T>(label: string, promise: Promise<T>, timeoutMs: number) => Promise<T>
@@ -32,10 +35,11 @@ export function createStoreBackedSessionSyncController<
   fetchMessages: (sessionID: string) => Promise<SessionSyncFetchResult<Array<SyncedMessageParts<TMessage, TPart>>>>
   fetchTodo: (sessionID: string) => Promise<SessionSyncFetchResult<TTodo[]>>
   fetchDiff: (sessionID: string) => Promise<SessionSyncFetchResult<TDiff[]>>
+  fetchRisk?: (sessionID: string) => Promise<SessionSyncFetchResult<TRisk>>
   onMissingSnapshot?: (sessionID: string) => void
 }) {
   const setStore = input.setStore as unknown as SetStoreFunction<
-    SessionSyncStoreState<TSession, TTodo, TMessage, TPart, TDiff>
+    SessionSyncStoreState<TSession, TTodo, TMessage, TPart, TDiff, TRisk>
   >
 
   return createSessionSyncController({
@@ -48,6 +52,7 @@ export function createStoreBackedSessionSyncController<
         fetchMessages: () => input.fetchMessages(sessionID),
         fetchTodo: () => input.fetchTodo(sessionID),
         fetchDiff: () => input.fetchDiff(sessionID),
+        fetchRisk: input.fetchRisk ? () => input.fetchRisk!(sessionID) : undefined,
       })
     },
     applySnapshot(sessionID, snapshot) {

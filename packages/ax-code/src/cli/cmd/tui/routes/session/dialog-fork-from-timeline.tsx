@@ -68,9 +68,29 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
         },
       })
     }
+    if (result.length === 0) {
+      return [
+        {
+          title: "No fork target available",
+          value: "empty",
+          description: "No user messages with text content are available to fork from.",
+          category: "Overview",
+          disabled: true,
+        },
+      ]
+    }
     result.reverse()
     return result
   })
 
-  return <DialogSelect onMove={(option) => props.onMove(option.value)} title="Fork from message" options={options()} />
+  return (
+    <DialogSelect
+      onMove={(option) => {
+        if (option.disabled) return
+        props.onMove(option.value)
+      }}
+      title="Fork from message"
+      options={options()}
+    />
+  )
 }

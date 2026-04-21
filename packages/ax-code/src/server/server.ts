@@ -449,9 +449,9 @@ export namespace Server {
         return raw
       }
     })()
-    const directory = path.resolve(decoded)
-    if (decoded === process.cwd()) return directory
+    if (decoded === process.cwd()) return Filesystem.resolve(decoded)
     if (!path.isAbsolute(decoded)) return c.json({ error: "directory must be absolute" }, 400)
+    const directory = Filesystem.resolve(decoded)
     const stat = (() => {
       try {
         return statSync(directory)

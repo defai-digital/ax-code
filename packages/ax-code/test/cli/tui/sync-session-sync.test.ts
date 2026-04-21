@@ -4,20 +4,23 @@ import {
   createStoreBackedSessionSyncController,
   type SessionSyncStoreState,
 } from "../../../src/cli/cmd/tui/context/sync-session-sync"
+import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
 
 type Session = { id: string; title: string }
 type Todo = { id: string }
 type Message = { id: string }
 type Part = { id: string }
 type Diff = { path: string }
+type Risk = SyncedSessionRisk
 
 function createState() {
-  return createStore<SessionSyncStoreState<Session, Todo, Message, Part, Diff>>({
+  return createStore<SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk>>({
     session: [],
     todo: {},
     message: {},
     part: {},
     session_diff: {},
+    session_risk: {},
   })
 }
 
@@ -32,7 +35,8 @@ describe("tui sync session sync", () => {
       Message,
       Part,
       Diff,
-      SessionSyncStoreState<Session, Todo, Message, Part, Diff>
+      Risk,
+      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk>
     >({
       timeoutMs: 10_000,
       withTimeout: async (_label, promise) => promise,
@@ -53,6 +57,25 @@ describe("tui sync session sync", () => {
         calls.push(`diff:${sessionID}`)
         return { data: [{ path: "file.ts" }] }
       },
+      fetchRisk: async (sessionID) => {
+        calls.push(`risk:${sessionID}`)
+        return {
+          data: {
+            id: `risk:${sessionID}`,
+            quality: {
+              review: {
+                workflow: "review",
+                overallStatus: "pass",
+                readyForBenchmark: true,
+                resolvedLabeledItems: 1,
+                totalItems: 1,
+                nextAction: null,
+              },
+              debug: null,
+            },
+          },
+        }
+      },
     })
 
     await controller.sync("ses_1")
@@ -62,6 +85,7 @@ describe("tui sync session sync", () => {
       "messages:ses_1",
       "todo:ses_1",
       "diff:ses_1",
+      "risk:ses_1",
     ])
     expect(store).toEqual({
       session: [{ id: "ses_1", title: "Session" }],
@@ -69,6 +93,22 @@ describe("tui sync session sync", () => {
       message: { ses_1: [{ id: "msg_1" }] },
       part: { msg_1: [{ id: "part_1" }] },
       session_diff: { ses_1: [{ path: "file.ts" }] },
+      session_risk: {
+        ses_1: {
+          id: "risk:ses_1",
+          quality: {
+            review: {
+              workflow: "review",
+              overallStatus: "pass",
+              readyForBenchmark: true,
+              resolvedLabeledItems: 1,
+              totalItems: 1,
+              nextAction: null,
+            },
+            debug: null,
+          },
+        },
+      },
     })
   })
 
@@ -82,7 +122,8 @@ describe("tui sync session sync", () => {
       Message,
       Part,
       Diff,
-      SessionSyncStoreState<Session, Todo, Message, Part, Diff>
+      Risk,
+      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk>
     >({
       timeoutMs: 10_000,
       withTimeout: async (_label, promise) => promise,
@@ -91,6 +132,7 @@ describe("tui sync session sync", () => {
       fetchMessages: async () => ({ data: [] }),
       fetchTodo: async () => ({ data: [] }),
       fetchDiff: async () => ({ data: [] }),
+      fetchRisk: async () => ({ data: undefined }),
       onMissingSnapshot(sessionID) {
         warnings.push(sessionID)
       },
@@ -105,6 +147,7 @@ describe("tui sync session sync", () => {
       message: {},
       part: {},
       session_diff: {},
+      session_risk: {},
     })
   })
 })

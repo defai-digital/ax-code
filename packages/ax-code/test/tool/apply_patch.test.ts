@@ -300,6 +300,45 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("prompts for external move destinations before reading their contents", async () => {
+    await using fixture = await tmpdir()
+    const outside = path.join(fixture.path, "..", `apply-patch-external-${Date.now()}.txt`)
+    const readPaths: string[] = []
+    const originalReadFile = fs.readFile.bind(fs)
+    const readSpy = spyOn(fs, "readFile").mockImplementation(((...args: any[]) => {
+      readPaths.push(String(args[0]))
+      return originalReadFile(args[0], args[1])
+    }) as any)
+    const ctx: ToolCtx = {
+      ...baseCtx,
+      ask: async (input) => {
+        if (input.permission === "external_directory") throw new Error("prompted")
+      },
+    }
+
+    try {
+      await Instance.provide({
+        directory: fixture.path,
+        fn: async () => {
+          const original = path.join(fixture.path, "old.txt")
+          await writeAndTrack(original, "from\n")
+          await fs.writeFile(outside, "outside\n", "utf-8")
+
+          const movePath = path.relative(fixture.path, outside).replaceAll("\\", "/")
+          const patchText =
+            `*** Begin Patch\n*** Update File: old.txt\n*** Move to: ${movePath}\n@@\n-from\n+new\n*** End Patch`
+
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("prompted")
+        },
+      })
+    } finally {
+      readSpy.mockRestore()
+      await fs.unlink(outside).catch(() => undefined)
+    }
+
+    expect(readPaths).not.toContain(outside)
+  })
+
   test("rejects add when the file appears between verification and write", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

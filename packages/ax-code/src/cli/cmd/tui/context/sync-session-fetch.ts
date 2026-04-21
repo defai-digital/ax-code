@@ -10,6 +10,7 @@ export interface SessionSyncSnapshotLoader<
   TMessage,
   TPart,
   TDiff,
+  TRisk,
 > {
   sessionID: string
   timeoutMs: number
@@ -18,6 +19,7 @@ export interface SessionSyncSnapshotLoader<
   fetchMessages: () => Promise<SessionSyncFetchResult<Array<SyncedMessageParts<TMessage, TPart>>>>
   fetchTodo: () => Promise<SessionSyncFetchResult<TTodo[]>>
   fetchDiff: () => Promise<SessionSyncFetchResult<TDiff[]>>
+  fetchRisk?: () => Promise<SessionSyncFetchResult<TRisk>>
 }
 
 export async function fetchSessionSyncSnapshot<
@@ -26,8 +28,9 @@ export async function fetchSessionSyncSnapshot<
   TMessage,
   TPart,
   TDiff,
->(input: SessionSyncSnapshotLoader<TSession, TTodo, TMessage, TPart, TDiff>) {
-  const [session, messages, todo, diff] = await Promise.all([
+  TRisk = unknown,
+>(input: SessionSyncSnapshotLoader<TSession, TTodo, TMessage, TPart, TDiff, TRisk>) {
+  const [session, messages, todo, diff, risk] = await Promise.all([
     input.withTimeout(
       `tui session sync ${input.sessionID} session.get`,
       input.fetchSession(),
@@ -48,6 +51,13 @@ export async function fetchSessionSyncSnapshot<
       input.fetchDiff(),
       input.timeoutMs,
     ),
+    input.fetchRisk
+      ? input.withTimeout(
+        `tui session sync ${input.sessionID} session.risk`,
+        input.fetchRisk(),
+        input.timeoutMs,
+      ).catch(() => undefined)
+      : Promise.resolve(undefined),
   ])
 
   return createSessionSyncSnapshot({
@@ -55,5 +65,6 @@ export async function fetchSessionSyncSnapshot<
     todo: todo.data,
     messages: messages.data,
     diff: diff.data,
+    risk: risk?.data,
   })
 }

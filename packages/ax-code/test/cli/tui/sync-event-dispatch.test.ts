@@ -26,6 +26,7 @@ describe("tui sync event dispatch", () => {
       permission: Record<string, Array<{ id: string }>>
       question: Record<string, Array<{ id: string }>>
       session_status: Record<string, string>
+      session_risk: Record<string, { quality?: unknown }>
       session_diff: Record<string, Array<{ path: string }>>
       todo: Record<string, Array<{ id: string }>>
       message: Record<string, Array<{ id: string }>>
@@ -35,6 +36,20 @@ describe("tui sync event dispatch", () => {
       permission: { ses_1: [{ id: "perm_1" }] },
       question: { ses_1: [{ id: "question_1" }] },
       session_status: { ses_1: "working" },
+      session_risk: {
+        ses_1: {
+          quality: {
+            review: {
+              workflow: "review",
+              overallStatus: "warn",
+              readyForBenchmark: false,
+              resolvedLabeledItems: 0,
+              totalItems: 1,
+              nextAction: "Record outcome labels for the exported artifacts.",
+            },
+          },
+        },
+      },
       session_diff: { ses_1: [{ path: "file.ts" }] },
       todo: { ses_1: [{ id: "todo_1" }] },
       message: { ses_1: [{ id: "msg_1" }] },
@@ -48,6 +63,7 @@ describe("tui sync event dispatch", () => {
       permission: {},
       question: {},
       session_status: {},
+      session_risk: {},
       session_diff: {},
       todo: {},
       message: {},

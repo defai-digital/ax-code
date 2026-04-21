@@ -1,5 +1,6 @@
 import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { produce, type SetStoreFunction } from "solid-js/store"
+import type { SyncedSessionRisk } from "./sync-session-risk"
 import {
   applyMessageDeleteEvent,
   applyMessageUpdateEvent,
@@ -26,6 +27,7 @@ export interface SyncEventStoreState<
   todo: Record<string, TTodo[]>
   session_diff: Record<string, TDiff[]>
   session_status: Record<string, TStatus>
+  session_risk: Record<string, SyncedSessionRisk>
   session: TSession[]
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>

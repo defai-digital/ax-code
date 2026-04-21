@@ -92,6 +92,9 @@ export namespace Flag {
   export const AX_CODE_EXPERIMENTAL_OXFMT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_OXFMT")
   export const AX_CODE_EXPERIMENTAL_LSP_TY = truthy("AX_CODE_EXPERIMENTAL_LSP_TY")
   export const AX_CODE_EXPERIMENTAL_LSP_TOOL = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_LSP_TOOL")
+  export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW: boolean
+  export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL: string | undefined
+  export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS: string | undefined
   // Code Intelligence (v3 graph-backed symbol index) and the Debugging &
   // Refactoring Engine default to ON as of v2.3.4. DRE depends on code
   // intelligence, so they graduate together — shipping DRE on without
@@ -199,6 +202,39 @@ Object.defineProperty(Flag, "AX_CODE_ISOLATION_NETWORK", {
     if (v === "true" || v === "1") return true
     if (v === "false" || v === "0") return false
     return undefined
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_EXPERIMENTAL_QUALITY_SHADOW
+// This must be evaluated at access time so tests and internal tools can
+// enable or disable live shadow logging without reloading the module graph.
+Object.defineProperty(Flag, "AX_CODE_EXPERIMENTAL_QUALITY_SHADOW", {
+  get() {
+    return truthy("AX_CODE_EXPERIMENTAL_QUALITY_SHADOW")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS
+// The path is consumed by the runtime shadow logger and may be injected
+// by wrappers or tests after module load.
+Object.defineProperty(Flag, "AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL", {
+  get() {
+    return process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS
+// The path is consumed by the runtime shadow logger and may be injected
+// by wrappers or tests after module load.
+Object.defineProperty(Flag, "AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS", {
+  get() {
+    return process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS"]
   },
   enumerable: true,
   configurable: false,

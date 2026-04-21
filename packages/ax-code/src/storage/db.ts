@@ -1,6 +1,7 @@
 import { type SQLiteBunDatabase } from "drizzle-orm/bun-sqlite"
 import { migrate } from "drizzle-orm/bun-sqlite/migrator"
 import { type SQLiteTransaction } from "drizzle-orm/sqlite-core"
+import type { DrizzleTypeError } from "drizzle-orm"
 export * from "drizzle-orm"
 import { Context } from "../util/context"
 import { lazy } from "../util/lazy"
@@ -122,6 +123,9 @@ export namespace Database {
   }
 
   export type TxOrDb = Transaction | Client
+  type SyncTransactionResult<T> = T extends Promise<any>
+    ? DrizzleTypeError<"Sync drivers can't use async functions in transactions!">
+    : T
 
   const ctx = Context.create<{
     tx: TxOrDb
@@ -174,15 +178,15 @@ export namespace Database {
     }
   }
 
-  export function transaction<T>(callback: (tx: TxOrDb) => T): T {
+  export function transaction<T>(callback: (tx: TxOrDb) => T): SyncTransactionResult<T> {
     try {
-      return callback(ctx.use().tx)
+      return callback(ctx.use().tx) as SyncTransactionResult<T>
     } catch (err) {
       if (err instanceof Context.NotFound) {
         const effects: (() => void | Promise<void>)[] = []
-        const result = (Client().transaction as any)((tx: TxOrDb) => {
-          return ctx.provide({ tx, effects }, () => callback(tx))
-        })
+        const result = Client().transaction<T>((tx) => {
+          return ctx.provide({ tx, effects }, () => callback(tx)) as SyncTransactionResult<T>
+        }) as SyncTransactionResult<T>
         runEffects(effects)
         return result
       }

@@ -62,6 +62,7 @@ import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
 import { DialogActivity } from "./dialog-activity"
 import { DialogTimeline } from "./dialog-timeline"
+import { DialogQuality } from "./dialog-quality"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { DialogDre } from "./dialog-dre"
@@ -151,6 +152,11 @@ export function Session() {
   const { theme } = useTheme()
   const promptRef = usePromptRef()
   const session = createMemo(() => sync.session.get(route.sessionID))
+  const risk = createMemo(() => sync.session.risk(route.sessionID))
+  const hasQualityReadiness = createMemo(() => {
+    const quality = risk()?.quality
+    return !!quality?.review || !!quality?.debug
+  })
   const children = createMemo(() => {
     const s = session()
     if (!s) return []
@@ -412,6 +418,16 @@ export function Session() {
       dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
       dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
       dialogReplaceDreGraph: (dialog) => dialog.replace(() => <DialogDreGraph sessionID={route.sessionID} />),
+      dialogReplaceQuality: (dialog) =>
+        dialog.replace(() => (
+          <DialogQuality
+            sessionID={route.sessionID}
+            setPrompt={(promptInfo) => {
+              prompt.set(promptInfo)
+              prompt.focus()
+            }}
+          />
+        )),
       dialogReplaceBranch: (dialog) =>
         dialog.replace(() => (
           <DialogBranch
@@ -516,6 +532,7 @@ export function Session() {
       showTimestamps,
       sidebarVisible,
       agents: sync.data.agent,
+      hasQualityReadiness,
       suggested: route.type === "session",
       toast,
     }),

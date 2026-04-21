@@ -20,6 +20,7 @@ import { SessionSemanticDiff } from "@/session/semantic-diff"
 import type { FooterSessionStatus } from "./footer-view-model"
 import { estimateContextEta, formatContextEtaLabel } from "./sidebar-eta"
 import { computeSidebarWidth } from "./layout"
+import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 
 export function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
@@ -34,6 +35,12 @@ export function activityColor(status: string, theme: ReturnType<typeof useTheme>
     default:
       return theme.textMuted
   }
+}
+
+function qualityColor(status: SyncedSessionQualityReadiness["overallStatus"], theme: ReturnType<typeof useTheme>["theme"]) {
+  if (status === "pass") return theme.success
+  if (status === "warn") return theme.warning
+  return theme.error
 }
 
 // Eighth-block characters for sub-pixel progress bar smoothness
@@ -65,6 +72,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const { theme } = useTheme()
   const command = useCommandDialog()
   const session = createMemo(() => sync.session.get(props.sessionID))
+  const risk = createMemo(() => sync.session.risk(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
@@ -179,6 +187,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   })
 
   const semantic = createMemo(() => SessionSemanticDiff.summarize(diff()))
+  const qualityReadiness = createMemo(() => {
+    const quality = risk()?.quality
+    return [
+      quality?.review ? { workflow: "review" as const, summary: quality.review } : null,
+      quality?.debug ? { workflow: "debug" as const, summary: quality.debug } : null,
+    ].filter((item): item is { workflow: "review" | "debug"; summary: SyncedSessionQualityReadiness } => !!item)
+  })
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
@@ -654,6 +669,39 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <Show when={todo().length <= 2 || expanded.todo}>
                     <For each={todo()}>{(item) => <TodoItem status={item.status} content={item.content} />}</For>
                   </Show>
+                </box>
+              </Show>
+              <Show when={qualityReadiness().length > 0}>
+                <box>
+                  <box flexDirection="row" justifyContent="space-between">
+                    <text fg={theme.text}>
+                      <b>Quality</b>
+                    </text>
+                    <text
+                      fg={theme.textMuted}
+                      onMouseUp={() => {
+                        command.trigger("session.quality")
+                      }}
+                    >
+                      view all
+                    </text>
+                  </box>
+                  <For each={qualityReadiness()}>
+                    {({ workflow, summary }) => (
+                      <box flexDirection="row" gap={1}>
+                        <text flexShrink={0} style={{ fg: qualityColor(summary.overallStatus, theme) }}>
+                          {workflow === "review" ? "R" : "D"}
+                        </text>
+                        <text fg={theme.textMuted} wrapMode="word">
+                          {workflow} · {summary.readyForBenchmark ? "benchmark ready" : "benchmark not ready"} ·{" "}
+                          {summary.resolvedLabeledItems}/{summary.totalItems} resolved
+                          <Show when={summary.nextAction}>
+                            {(next) => <> · {next()}</>}
+                          </Show>
+                        </text>
+                      </box>
+                    )}
+                  </For>
                 </box>
               </Show>
               <Show when={activity().length > 0}>

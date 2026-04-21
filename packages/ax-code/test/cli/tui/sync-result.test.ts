@@ -14,6 +14,20 @@ describe("tui sync result", () => {
         { id: "ses_1", time: {} },
         { id: "ses_2", time: { compacting: true } },
       ],
+      session_risk: {
+        ses_1: {
+          quality: {
+            review: {
+              workflow: "review",
+              overallStatus: "pass",
+              readyForBenchmark: true,
+              resolvedLabeledItems: 1,
+              totalItems: 1,
+              nextAction: null,
+            },
+          },
+        },
+      },
       message: {
         ses_1: [{ id: "msg_1", role: "user", time: {} }],
         ses_2: [{ id: "msg_2", role: "assistant", time: {} }],
@@ -35,6 +49,19 @@ describe("tui sync result", () => {
     expect(result.ready).toBe(false)
     expect(result.session.get("ses_1")).toEqual({ id: "ses_1", time: {} })
     expect(result.session.get("ses_missing")).toBeUndefined()
+    expect(result.session.risk("ses_1")).toEqual({
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "pass",
+          readyForBenchmark: true,
+          resolvedLabeledItems: 1,
+          totalItems: 1,
+          nextAction: null,
+        },
+      },
+    })
+    expect(result.session.risk("ses_missing")).toBeUndefined()
     expect(result.session.status("ses_1")).toBe("working")
     expect(result.session.status("ses_2")).toBe("compacting")
     expect(result.workspace.get("repo-b")).toBe("repo-b")
@@ -48,6 +75,7 @@ describe("tui sync result", () => {
     const store = {
       status: "loading" as "loading" | "partial" | "complete",
       session: [],
+      session_risk: {},
       message: {},
       workspaceList: [],
     }

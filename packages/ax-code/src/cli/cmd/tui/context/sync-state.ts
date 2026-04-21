@@ -20,6 +20,7 @@ import type {
 } from "@ax-code/sdk/v2"
 import type { Path } from "@ax-code/sdk"
 import type { Snapshot } from "@/snapshot"
+import type { SyncedSessionRisk } from "./sync-session-risk"
 
 export interface SyncStoreState {
   status: "loading" | "partial" | "complete"
@@ -37,6 +38,7 @@ export interface SyncStoreState {
   config: Config
   session: Session[]
   session_status: Record<string, SessionStatus>
+  session_risk: Record<string, SyncedSessionRisk>
   session_diff: Record<string, Snapshot.FileDiff[]>
   todo: Record<string, Todo[]>
   message: Record<string, Message[]>
@@ -99,6 +101,7 @@ export function createInitialSyncState(): SyncStoreState {
     provider_default: {},
     session: [],
     session_status: {},
+    session_risk: {},
     session_diff: {},
     todo: {},
     message: {},

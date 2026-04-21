@@ -85,6 +85,12 @@ function readiness(value: string) {
   return value.replaceAll("_", " ")
 }
 
+function qualityStatusKind(value: "pass" | "warn" | "fail") {
+  if (value === "pass") return "low"
+  if (value === "warn") return "medium"
+  return "high"
+}
+
 function validation(input: SessionRisk.Detail["assessment"]["signals"]) {
   if (input.validationState === "passed") return "validation passed"
   if (input.validationState === "failed") return "validation failed"
@@ -429,6 +435,35 @@ function validationSection(input: { risk: SessionRisk.Detail }) {
   ].join("")
 }
 
+function qualityReadinessSection(input: SessionRisk.Detail) {
+  const summaries = [
+    input.quality?.review ? { workflow: "review" as const, summary: input.quality.review } : null,
+    input.quality?.debug ? { workflow: "debug" as const, summary: input.quality.debug } : null,
+  ].filter((item): item is { workflow: "review" | "debug"; summary: NonNullable<SessionRisk.QualityReadiness["review"]> } => !!item)
+
+  if (summaries.length === 0) return ""
+
+  return [
+    `<div style="margin-top:20px"><h3>Quality Readiness</h3>`,
+    `<div class="validation-list">`,
+    summaries
+      .map(({ workflow, summary }) =>
+        [
+          `<div class="validation-item">`,
+          `<span class="validation-icon">${workflow === "review" ? "R" : "D"}</span>`,
+          `<span class="validation-cmd">`,
+          `<strong>${esc(workflow)}</strong> · ${esc(summary.readyForBenchmark ? "benchmark ready" : "benchmark not ready")} · ${summary.resolvedLabeledItems}/${summary.totalItems} resolved labels`,
+          summary.nextAction ? `<br><span class="muted">${esc(summary.nextAction)}</span>` : "",
+          `</span>`,
+          `<span class="validation-status">${chip({ label: summary.overallStatus, kind: qualityStatusKind(summary.overallStatus) })}</span>`,
+          `</div>`,
+        ].join(""),
+      )
+      .join(""),
+    `</div></div>`,
+  ].join("")
+}
+
 // ── Section 2: Risk Analysis ───────────────────────────────────────
 function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
   const detail = dre.detail
@@ -498,6 +533,7 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
       `</div>`,
     ].join("")).join(""),
     `</div>`,
+    qualityReadinessSection(input),
     input.assessment.breakdown.length
       ? [
           `<div style="margin-top:20px"><h3>Risk Factors</h3>`,
@@ -1296,6 +1332,24 @@ function sessionFingerprint(input: {
       evidence: input.risk.assessment.evidence.length,
       unknowns: input.risk.assessment.unknowns.length,
       mitigations: input.risk.assessment.mitigations.length,
+      quality: input.risk.quality
+        ? {
+            review: input.risk.quality.review
+              ? {
+                  status: input.risk.quality.review.overallStatus,
+                  ready: input.risk.quality.review.readyForBenchmark,
+                  resolvedLabels: input.risk.quality.review.resolvedLabeledItems,
+                }
+              : null,
+            debug: input.risk.quality.debug
+              ? {
+                  status: input.risk.quality.debug.overallStatus,
+                  ready: input.risk.quality.debug.readyForBenchmark,
+                  resolvedLabels: input.risk.quality.debug.resolvedLabeledItems,
+                }
+              : null,
+          }
+        : null,
     },
     rank: input.rank
       ? {
@@ -1420,27 +1474,34 @@ function live(input: { sessionID?: string; directory?: string }) {
     `  if (next === seen) return`,
     `  pull()`,
     `}`,
+    `let _liveSrc = null;`,
     `if (typeof EventSource !== "function") {`,
     `  set("manual refresh", "off")`,
     `} else {`,
     `  set("connecting", "")`,
     `  const src = new EventSource("/global/event")`,
+    `  _liveSrc = src`,
     `  src.onopen = () => set("live", "sync")`,
     `  src.onerror = () => set("offline", "off")`,
     `  src.onmessage = (event) => {`,
     `    const data = JSON.parse(event.data)`,
     `    if (keep(data)) pull()`,
     `  }`,
-    `  window.addEventListener("beforeunload", () => src.close(), { once: true })`,
     `}`,
-    `window.setInterval(() => {`,
+    `const _poll = window.setInterval(() => {`,
     `  if (document.visibilityState !== "visible") return`,
     `  sync().catch(() => {})`,
     `}, cfg.sessionID == null ? 5000 : 2000)`,
-    `document.addEventListener("visibilitychange", () => {`,
+    `const _onVisible = () => {`,
     `  if (document.visibilityState !== "visible") return`,
     `  sync().catch(() => {})`,
-    `})`,
+    `}`,
+    `document.addEventListener("visibilitychange", _onVisible)`,
+    `window.addEventListener("beforeunload", () => {`,
+    `  window.clearInterval(_poll)`,
+    `  document.removeEventListener("visibilitychange", _onVisible)`,
+    `  _liveSrc?.close()`,
+    `}, { once: true })`,
     `sync().catch(() => {})`,
     `})()`,
     `</script>`,
@@ -1510,7 +1571,8 @@ function mermaidScript(sid: string) {
     `  }`,
     `}`,
     `_renderGraph();`,
-    `window.setInterval(_renderGraph, 15000);`,
+    `const _refresh = window.setInterval(_renderGraph, 15000);`,
+    `window.addEventListener("beforeunload", () => window.clearInterval(_refresh), { once: true });`,
     `window._reinitGraph = function() { _last = null; _renderGraph(); };`,
     `</script>`,
   ].join("\n")
@@ -2353,14 +2415,21 @@ export const DreGraphRoutes = lazy(() =>
           sessionID: SessionID.zod,
         }),
       ),
+      validator(
+        "query",
+        z.object({
+          quality: z.coerce.boolean().optional().default(false),
+        }),
+      ),
       async (c) => {
         const sid = c.req.valid("param").sessionID
+        const query = c.req.valid("query")
         const session = await Session.get(sid)
         const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
         const [graphData, dre, riskData, rank, points] = await Promise.all([
           Promise.resolve(SessionGraph.snapshot(sid)),
           SessionDre.snapshot(sid),
-          SessionRisk.load(sid),
+          SessionRisk.load(sid, { includeQuality: query.quality }),
           SessionBranchRank.family(sid).catch(() => undefined),
           SessionRollback.points(sid),
         ])
@@ -2388,13 +2457,20 @@ export const DreGraphRoutes = lazy(() =>
           sessionID: SessionID.zod,
         }),
       ),
+      validator(
+        "query",
+        z.object({
+          quality: z.coerce.boolean().optional().default(false),
+        }),
+      ),
       async (c) => {
         const sid = c.req.valid("param").sessionID
+        const query = c.req.valid("query")
         const session = await Session.get(sid)
         const [graphData, dre, riskData, rank, points] = await Promise.all([
           Promise.resolve(SessionGraph.snapshot(sid)),
           SessionDre.snapshot(sid),
-          SessionRisk.load(sid),
+          SessionRisk.load(sid, { includeQuality: query.quality }),
           SessionBranchRank.family(sid).catch(() => undefined),
           SessionRollback.points(sid),
         ])

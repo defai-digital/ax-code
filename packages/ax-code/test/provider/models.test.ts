@@ -27,6 +27,28 @@ test("falls back to bundled snapshot when custom models file is corrupted", asyn
   expect(Object.keys(data).length).toBeGreaterThan(0)
 })
 
+test("falls back to bundled snapshot when custom models file has invalid schema", async () => {
+  await using tmp = await tmpdir()
+  const file = path.join(tmp.path, "bad-models.json")
+  await Bun.write(
+    file,
+    JSON.stringify({
+      broken: {
+        id: "broken",
+        models: {},
+      },
+    }),
+  )
+
+  process.env["AX_CODE_MODELS_PATH"] = file
+  delete process.env["AX_CODE_MODELS_URL"]
+  ModelsDev.Data.reset()
+
+  const data = await ModelsDev.get()
+  expect(Object.keys(data).length).toBeGreaterThan(0)
+  expect(data["broken"]).toBeUndefined()
+})
+
 test("filters Google Gemini models below version 3", async () => {
   const data = await ModelsDev.get()
   const google = data["google"]

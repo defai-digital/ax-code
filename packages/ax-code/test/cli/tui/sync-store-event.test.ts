@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createStore } from "solid-js/store"
 import { dispatchStoreBackedSyncEvent, type SyncEventStoreState } from "../../../src/cli/cmd/tui/context/sync-store-event"
+import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
 
 type Session = { id: string }
 type Todo = { id: string }
@@ -9,6 +10,21 @@ type Status = string
 type Message = { id: string; sessionID: string }
 type Part = { id: string; messageID: string; type?: string; text?: string }
 
+const reviewRisk: SyncedSessionRisk = {
+  id: "risk_1",
+  quality: {
+    review: {
+      workflow: "review",
+      overallStatus: "pass",
+      readyForBenchmark: true,
+      resolvedLabeledItems: 1,
+      totalItems: 1,
+      nextAction: null,
+    },
+    debug: null,
+  },
+}
+
 function createTestStore() {
   return createStore<SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>>({
     permission: {},
@@ -16,6 +32,7 @@ function createTestStore() {
     todo: {},
     session_diff: {},
     session_status: {},
+    session_risk: {},
     session: [],
     message: {},
     part: {},
@@ -119,6 +136,7 @@ describe("tui sync store event", () => {
       todo: { ses_1: [{ id: "todo_1" }] },
       session_diff: { ses_1: [{ path: "file.ts" }] },
       session_status: { ses_1: "working" },
+      session_risk: { ses_1: reviewRisk },
       session: [{ id: "ses_1" }],
       message: { ses_1: [{ id: "msg_1", sessionID: "ses_1" }] },
       part: { msg_1: [{ id: "part_1", messageID: "msg_1" }] },
@@ -155,6 +173,7 @@ describe("tui sync store event", () => {
       todo: {},
       session_diff: {},
       session_status: {},
+      session_risk: {},
       session: [],
       message: {},
       part: {},
