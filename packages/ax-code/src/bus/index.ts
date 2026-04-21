@@ -3,9 +3,11 @@ import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
+import { withTimeout } from "../util/timeout"
 
 export namespace Bus {
   const log = Log.create({ service: "bus" })
+  const BUS_SUBSCRIBER_TIMEOUT_MS = 10_000
   type Subscription = (event: any) => void
 
   export const InstanceDisposed = BusEvent.define(
@@ -57,9 +59,13 @@ export namespace Bus {
         // subscriber becomes a rejected promise instead of propagating up
         // and skipping later subscribers in the same publish cycle.
         pending.push(
-          Promise.resolve()
-            .then(() => sub(payload))
-            .catch((err) => log.error("subscriber threw", { type: def.type, err })),
+          withTimeout(
+            Promise.resolve()
+              .then(() => sub(payload))
+              .catch((err) => log.error("subscriber threw", { type: def.type, err })),
+            BUS_SUBSCRIBER_TIMEOUT_MS,
+            `Bus subscriber for "${def.type}" timed out after ${BUS_SUBSCRIBER_TIMEOUT_MS}ms`,
+          ).catch((err) => log.error("subscriber timed out", { type: def.type, err })),
         )
       }
     }

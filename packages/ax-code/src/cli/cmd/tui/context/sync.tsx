@@ -315,6 +315,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const fullSyncedSessions = new Set<string>()
     const inFlightSessions = new Set<string>()
     const unsubscribeEvents = sdk.event.listen((e) => {
+      try {
       const event = e.details
       switch (event.type) {
         case "server.instance.disposed":
@@ -597,6 +598,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           setStore("vcs", { branch: event.properties.branch })
           break
         }
+      }
+      } catch (err) {
+        Log.Default.error("sync event handler error", {
+          type: e.details?.type,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     })
     onCleanup(unsubscribeEvents)

@@ -687,7 +687,13 @@ export namespace Provider {
         // Default to 90s per-chunk timeout to detect dead sockets from
         // network interruptions. Generous enough for extended thinking
         // (servers send keepalive events) but prevents indefinite hangs.
-        const chunkTimeout = typeof options["chunkTimeout"] === "number" ? options["chunkTimeout"] : 90_000
+        // Explicit 0 or false disables the timeout.
+        const rawChunkTimeout = options["chunkTimeout"]
+        const chunkTimeout = rawChunkTimeout === false || rawChunkTimeout === 0
+          ? 0
+          : typeof rawChunkTimeout === "number"
+            ? rawChunkTimeout
+            : 90_000
         delete options["chunkTimeout"]
 
         options["fetch"] = async (input: string | Request | URL, init?: BunFetchRequestInit) => {

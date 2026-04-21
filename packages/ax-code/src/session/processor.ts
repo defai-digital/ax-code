@@ -459,6 +459,7 @@ export namespace SessionProcessor {
 
                 case "start-step":
                   usedTools = false
+                  receivedFinish = false
                   snapshot = undefined
                   stepStartTime = Date.now()
                   stepParts = []

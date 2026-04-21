@@ -970,12 +970,12 @@ export namespace MessageV2 {
   const TRANSIENT_CODES = new Set(["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EPIPE", "EAI_AGAIN"])
   const TRANSIENT_PATTERNS = [
     "socket hang up",
-    "network",
+    "network error",
+    "network request failed",
     "SSE read timed out",
     "Stream ended without finish event",
     "fetch failed",
-    "terminated",
-    "aborted",
+    "connection terminated",
   ]
 
   function isTransientNetworkError(e: unknown): boolean {
@@ -1032,19 +1032,6 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
-      case isTransientNetworkError(e):
-        return new MessageV2.APIError(
-          {
-            message: transientNetworkMessage(e),
-            isRetryable: true,
-            metadata: {
-              code: (e as SystemError)?.code ?? "",
-              syscall: (e as SystemError)?.syscall ?? "",
-              message: (e as SystemError)?.message ?? (e instanceof Error ? e.message : String(e)),
-            },
-          },
-          { cause: e },
-        ).toObject()
       case APICallError.isInstance(e):
         const parsed = ProviderError.parseAPICallError({
           providerID: ctx.providerID,
@@ -1068,6 +1055,19 @@ export namespace MessageV2 {
             responseHeaders: parsed.responseHeaders,
             responseBody: parsed.responseBody,
             metadata: parsed.metadata,
+          },
+          { cause: e },
+        ).toObject()
+      case isTransientNetworkError(e):
+        return new MessageV2.APIError(
+          {
+            message: transientNetworkMessage(e),
+            isRetryable: true,
+            metadata: {
+              code: (e as SystemError)?.code ?? "",
+              syscall: (e as SystemError)?.syscall ?? "",
+              message: (e as SystemError)?.message ?? (e instanceof Error ? e.message : String(e)),
+            },
           },
           { cause: e },
         ).toObject()

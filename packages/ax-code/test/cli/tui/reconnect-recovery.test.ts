@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { createReconnectRecoveryGate } from "../../../src/cli/cmd/tui/util/reconnect-recovery"
+import { createReconnectRecoveryGate, RECONNECT_STABILIZE_MS } from "../../../src/cli/cmd/tui/util/reconnect-recovery"
+
+// Wait long enough for the stabilization timer to fire.
+const STABILIZE_WAIT = RECONNECT_STABILIZE_MS + 50
 
 describe("createReconnectRecoveryGate", () => {
   test("skips the initial connect and recovers on the next reconnect", async () => {
@@ -16,12 +19,13 @@ describe("createReconnectRecoveryGate", () => {
 
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
+    await Bun.sleep(STABILIZE_WAIT)
     await gate.waitForIdle()
 
     expect(calls).toBe(1)
   })
 
-  test("deduplicates overlapping reconnect recoveries while one is already running", async () => {
+  test("deduplicates rapid reconnect flaps into a single recovery", async () => {
     let calls = 0
     let release: (() => void) | undefined
     const pending = new Promise<void>((resolve) => {
@@ -30,29 +34,35 @@ describe("createReconnectRecoveryGate", () => {
     const gate = createReconnectRecoveryGate({
       recover: async () => {
         calls++
-        await pending
+        if (calls === 1) await pending
       },
     })
 
+    // Initial connect
     gate.onConnectionChange(true)
+    // Rapid flaps: disconnect → reconnect → disconnect → reconnect
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
 
-    await Bun.sleep(0)
+    // Stabilization timer fires only for the last reconnect
+    await Bun.sleep(STABILIZE_WAIT)
     expect(calls).toBe(1)
 
+    // Release first recovery — no second queued because the flaps
+    // were deduplicated by the stabilization delay.
     release?.()
+    await gate.waitForIdle()
+    expect(calls).toBe(1)
+
+    // A new clean reconnect cycle triggers a fresh recovery
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+    await Bun.sleep(STABILIZE_WAIT)
     await gate.waitForIdle()
 
     expect(calls).toBe(2)
-
-    gate.onConnectionChange(false)
-    gate.onConnectionChange(true)
-    await gate.waitForIdle()
-
-    expect(calls).toBe(3)
   })
 
   test("re-runs recovery after an in-flight reconnect once the current pass finishes", async () => {
@@ -68,20 +78,48 @@ describe("createReconnectRecoveryGate", () => {
       },
     })
 
+    // Initial connect + first reconnect
     gate.onConnectionChange(true)
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(0)
+    await Bun.sleep(STABILIZE_WAIT)
     expect(calls).toEqual(["recover:1"])
 
+    // Second reconnect while first recovery is in-flight — queues
+    // a pendingReconnect that runs after the first recovery completes.
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(0)
+    await Bun.sleep(STABILIZE_WAIT)
+    // Still blocked on first recovery
     expect(calls).toEqual(["recover:1"])
 
     releaseFirst?.()
     await gate.waitForIdle()
 
     expect(calls).toEqual(["recover:1", "recover:2"])
+  })
+
+  test("cancels stabilization timer when connection drops before delay expires", async () => {
+    let calls = 0
+    const gate = createReconnectRecoveryGate({
+      recover: async () => {
+        calls++
+      },
+    })
+
+    gate.onConnectionChange(true) // initial connect
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true) // reconnect — starts stabilization timer
+
+    // Drop connection before stabilization completes
+    await Bun.sleep(RECONNECT_STABILIZE_MS / 2)
+    gate.onConnectionChange(false)
+
+    // Wait past where the timer would have fired
+    await Bun.sleep(STABILIZE_WAIT)
+    await gate.waitForIdle()
+
+    // Recovery should NOT have run — connection dropped during stabilization
+    expect(calls).toBe(0)
   })
 })
