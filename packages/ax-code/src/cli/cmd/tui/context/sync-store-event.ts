@@ -97,7 +97,12 @@ export function dispatchStoreBackedSyncEvent<
         setStore("session_diff", sessionID, diff)
       },
       setSessionStatus(sessionID, status) {
-        setStore("session_status", sessionID, status)
+        setStore(
+          "session_status",
+          produce((draft) => {
+            draft[sessionID] = status
+          }),
+        )
       },
       clearSessionSyncState(sessionID) {
         input.clearSessionSyncState(sessionID)

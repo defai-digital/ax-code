@@ -6,7 +6,15 @@ import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-se
 type Session = { id: string }
 type Todo = { id: string }
 type Diff = { path: string }
-type Status = string
+type Status =
+  | string
+  | {
+      type: "idle"
+    }
+  | {
+      type: "busy"
+      waitState?: "llm" | "tool"
+    }
 type Message = { id: string; sessionID: string }
 type Part = { id: string; messageID: string; type?: string; text?: string }
 
@@ -148,7 +156,15 @@ describe("tui sync store event", () => {
       vcs: undefined,
     })
 
-    const handled = dispatchStoreBackedSyncEvent({
+    const handled = dispatchStoreBackedSyncEvent<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
       event: {
         type: "session.deleted",
         properties: {
@@ -184,6 +200,39 @@ describe("tui sync store event", () => {
       part: {},
       vcs: undefined,
     })
+  })
+
+  test("applies session status idle updates so the TUI can clear thinking state after interrupt", () => {
+    const [store, setStore] = createTestStore()
+
+    setStore("session_status", "ses_1", {
+      type: "busy",
+      waitState: "llm",
+    })
+
+    const handled = dispatchStoreBackedSyncEvent({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: "ses_1",
+          status: { type: "idle" } as Status,
+        },
+      },
+      autonomous: false,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+    })
+
+    expect(handled).toBe(true)
+    expect(store.session_status.ses_1).toEqual({ type: "idle" })
   })
 
   test("applies runtime branch updates through the same store-backed dispatcher", () => {
