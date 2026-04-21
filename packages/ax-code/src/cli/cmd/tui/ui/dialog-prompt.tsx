@@ -26,6 +26,9 @@ export function DialogPrompt(props: DialogPromptProps) {
   function runDialogPromptAction(action: () => unknown, failureMessage: string) {
     void Promise.resolve()
       .then(action)
+      .then(() => {
+        dialog.clear()
+      })
       .catch((error) => {
         log.warn("dialog prompt confirm failed", { error, title: props.title })
         toast.show({

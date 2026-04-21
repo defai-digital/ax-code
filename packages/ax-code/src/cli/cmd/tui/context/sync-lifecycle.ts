@@ -18,7 +18,6 @@ export function registerSyncLifecycle(input: {
   })
   input.onMount(() => {
     input.startupCoordinator.start()
-    input.onCleanup(() => input.startupCoordinator.stop())
   })
   input.watchConnection(input.sseConnected, (connected) => {
     input.startupCoordinator.onConnectionChange(connected)

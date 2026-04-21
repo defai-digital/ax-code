@@ -15,14 +15,28 @@ const TIMELINE_FORK_DIALOG_SRC = path.join(TUI_ROOT, "routes/session/dialog-fork
 const TIMELINE_DIALOG_SRC = path.join(TUI_ROOT, "routes/session/dialog-timeline.tsx")
 const SIDEBAR_SRC = path.join(TUI_ROOT, "routes/session/sidebar.tsx")
 const SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-list.tsx")
+const WORKSPACE_SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/workspace/dialog-session-list.tsx")
+const SESSION_RENAME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-rename.tsx")
 const WORKSPACE_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-workspace-list.tsx")
+const DIALOG_COMMAND_SRC = path.join(TUI_ROOT, "component/dialog-command.tsx")
 const THEME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-theme-list.tsx")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")
+const PROMPT_SRC = path.join(TUI_ROOT, "component/prompt/index.tsx")
 const AUTOCOMPLETE_SRC = path.join(TUI_ROOT, "component/prompt/autocomplete.tsx")
+const PROMPT_HISTORY_SRC = path.join(TUI_ROOT, "component/prompt/history.tsx")
+const PROMPT_FRECENCY_SRC = path.join(TUI_ROOT, "component/prompt/frecency.tsx")
+const PROMPT_STASH_SRC = path.join(TUI_ROOT, "component/prompt/stash.tsx")
 const DIALOG_SELECT_SRC = path.join(TUI_ROOT, "ui/dialog-select.tsx")
 const DIALOG_SRC = path.join(TUI_ROOT, "ui/dialog.tsx")
 const DIALOG_PROMPT_SRC = path.join(TUI_ROOT, "ui/dialog-prompt.tsx")
+const DIALOG_CONFIRM_SRC = path.join(TUI_ROOT, "ui/dialog-confirm.tsx")
 const DIALOG_EXPORT_OPTIONS_SRC = path.join(TUI_ROOT, "ui/dialog-export-options.tsx")
+const DIALOG_HELP_SRC = path.join(TUI_ROOT, "ui/dialog-help.tsx")
+const TOAST_SRC = path.join(TUI_ROOT, "ui/toast.tsx")
+const LINK_SRC = path.join(TUI_ROOT, "ui/link.tsx")
+const CLIPBOARD_SRC = path.join(TUI_ROOT, "util/clipboard.ts")
+const LOCAL_SRC = path.join(TUI_ROOT, "context/local.tsx")
+const ROUTE_SRC = path.join(TUI_ROOT, "context/route.tsx")
 const SYNC_SRC = path.join(TUI_ROOT, "context/sync.tsx")
 const SYNC_BOOTSTRAP_FLOW_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-flow.ts")
 const SYNC_BOOTSTRAP_PLAN_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-plan.ts")
@@ -170,6 +184,33 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(sessionListDialog).toContain('sync.data.session.filter((session) => session.id !== option.value)')
   })
 
+  test("keeps session list dialogs resilient when listing or search requests fail", async () => {
+    const sessionListDialog = await fs.readFile(SESSION_LIST_DIALOG_SRC, "utf8")
+    const workspaceSessionListDialog = await fs.readFile(WORKSPACE_SESSION_LIST_DIALOG_SRC, "utf8")
+
+    expect(sessionListDialog).toContain('log.warn("session list search failed"')
+    expect(sessionListDialog).toContain('message: error instanceof Error ? error.message : "Failed to search sessions"')
+    expect(sessionListDialog).toContain("return info.value")
+
+    expect(workspaceSessionListDialog).toContain('log.warn("workspace session list load failed"')
+    expect(workspaceSessionListDialog).toContain('log.warn("workspace session list search failed"')
+    expect(workspaceSessionListDialog).toContain(
+      'message: error instanceof Error ? error.message : "Failed to load workspace sessions"',
+    )
+    expect(workspaceSessionListDialog).toContain(
+      'message: error instanceof Error ? error.message : "Failed to search sessions"',
+    )
+    expect(workspaceSessionListDialog).toContain("return info.value")
+  })
+
+  test("waits for session rename updates before clearing the dialog", async () => {
+    const sessionRenameDialog = await fs.readFile(SESSION_RENAME_DIALOG_SRC, "utf8")
+
+    expect(sessionRenameDialog).toContain("onConfirm={async (value) => {")
+    expect(sessionRenameDialog).toContain("await sdk.client.session.update({")
+    expect(sessionRenameDialog).toContain("dialog.clear()")
+  })
+
   test("handles workspace deletion failures without treating transport errors as success", async () => {
     const workspaceListDialog = await fs.readFile(WORKSPACE_LIST_DIALOG_SRC, "utf8")
 
@@ -184,9 +225,10 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(workspaceListDialog).toContain("await client.session.list({ roots: true, limit: 1 }).catch(() => undefined)")
     expect(workspaceListDialog).toContain("if (!input.forceCreate && !listed) {")
     expect(workspaceListDialog).toContain('message: "Failed to open workspace"')
+    expect(workspaceListDialog).toContain("listed = await client.session.list({ roots: true, limit: 1 })")
+    expect(workspaceListDialog).toContain('message: error instanceof Error ? error.message : "Failed to open workspace"')
     expect(workspaceListDialog).toContain("await sync.workspace.sync()")
     expect(workspaceListDialog).toContain("await props.onSelect(workspace.directory)")
-    expect(workspaceListDialog).toContain('message: error instanceof Error ? error.message : "Failed to open workspace"')
   })
 
   test("handles session summarize failures without leaking unhandled rejections", async () => {
@@ -197,6 +239,28 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(displayCommands).toContain('message: error instanceof Error ? error.message : "Failed to summarize session"')
     expect(displayCommands).toContain('message: "Connect a provider to summarize this session"')
     expect(displayCommands).toContain("dialog.clear()")
+  })
+
+  test("handles session share, DRE web, and unshare command failures without leaving stale dialogs behind", async () => {
+    const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(displayCommands).toContain('value: "session.share"')
+    expect(displayCommands).toContain('title: "Share session"')
+    expect(displayCommands).toContain('message: "Creating share URL..."')
+    expect(displayCommands).toContain('throw new Error("Share endpoint returned no URL")')
+    expect(displayCommands).toContain('message: error instanceof Error ? error.message : "Failed to share session"')
+    expect(displayCommands).toContain(".then(() => dialog.clear())")
+    expect(displayCommands).toContain("dialog.clear()")
+
+    expect(displayCommands).toContain('value: "session.dre.web"')
+    expect(displayCommands).toContain('message: "Failed to open DRE graph in the browser"')
+    expect(displayCommands).toContain(".finally(() => dialog.clear())")
+
+    expect(session).toContain('value: "session.unshare"')
+    expect(session).toContain('message: "Session unshared successfully"')
+    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to unshare session"')
+    expect(session).toContain("dialog.clear()")
   })
 
   test("closes transcript copy and export commands when the session is no longer available", async () => {
@@ -219,6 +283,10 @@ describe("tui OpenTUI stability guardrails", () => {
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
 
     expect(session).toContain("enabled: !!undoMessageID(messages(), session()?.revert?.messageID),")
+    expect(session).toContain('log.warn("session rollback abort failed"')
+    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to stop the running session before rollback"')
+    expect(session).toContain('log.warn("session undo abort failed"')
+    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to stop the running session before undo"')
     expect(session).toContain('log.warn("session undo failed"')
     expect(session).toContain('log.warn("session redo failed"')
     expect(session).toContain('message: error instanceof Error ? error.message : "Failed to undo previous message"')
@@ -233,6 +301,24 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(session).toContain("const reconnectSession = createReconnectRecoveryGate(")
     expect(session).toContain("onCleanup(() => reconnectSession.dispose())")
+  })
+
+  test("guards session route sync completions against stale route switches", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(session).toContain("let sessionSyncGeneration = 0")
+    expect(session).toContain("const generation = ++sessionSyncGeneration")
+    expect(session).toContain("if (generation !== sessionSyncGeneration) return")
+    expect(session).toContain("sessionSyncGeneration++")
+  })
+
+  test("returns home and shows a toast when the current session is deleted", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).toContain("sdk.event.on(SessionApi.Event.Deleted.type")
+    expect(app).toContain('if (route.data.type === "session" && route.data.sessionID === evt.properties.info.id)')
+    expect(app).toContain('route.navigate({ type: "home" })')
+    expect(app).toContain('message: "The current session was deleted"')
   })
 
   test("keeps startup routing scoped to session-list readiness instead of full sync completion", async () => {
@@ -321,6 +407,84 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogProvider).toContain('fallbackMessage: "Failed to connect provider"')
   })
 
+  test("refreshes provider-backed runtime state after connect and disconnect flows", async () => {
+    const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
+
+    expect(dialogProvider).toContain("await sdk.client.instance.dispose()")
+    expect(dialogProvider).toContain("await sync.bootstrap()")
+    expect(dialogProvider).toContain('toast.show({ variant: "success", message: `Disconnected ${provider.name}` })')
+    expect(dialogProvider).toContain('toast.show({ variant: "success", message: `Connected ${provider.name}` })')
+    expect(dialogProvider).toContain("dialog.replace(() => <DialogModel providerID={provider.id} />)")
+    expect(dialogProvider).toContain("dialog.clear()")
+  })
+
+  test("keeps app-level lazy dialog loaders marker-guarded and user-visible on failure", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+
+    expect(app).toContain("const marker = dialog.stack.at(-1)")
+    expect(app).toContain('if (dialog.stack.at(-1) !== marker) return')
+    expect(app).toContain('toast.show({ message: "Failed to open provider dialog", variant: "error" })')
+    expect(app).toContain('toast.show({ message: "Failed to open model dialog", variant: "error" })')
+    expect(app).toContain('toast.show({ message: "Failed to open session list", variant: "error" })')
+    expect(app).toContain('toast.show({ message: "Failed to open workspace list", variant: "error" })')
+    expect(app).toContain('toast.show({ message: "Failed to open agent list", variant: "error" })')
+    expect(app).toContain('toast.show({ message: "Failed to open MCP list", variant: "error" })')
+    expect(app).toContain('toast.show({ message: "Failed to open status", variant: "error" })')
+    expect(app).toContain('toast.show({ message: "Failed to open themes", variant: "error" })')
+    expect(app).toContain('toast.show({ message: "Failed to open help", variant: "error" })')
+
+    expect(prompt).toContain('if (dialog.stack.at(-1) !== marker) return')
+    expect(prompt).toContain('toast.show({ message: "Failed to open provider dialog", variant: "error" })')
+  })
+
+  test("opens docs through a failure-safe app command", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).toContain('value: "docs.open"')
+    expect(app).toContain('Log.Default.warn("failed to open docs", { error })')
+    expect(app).toContain('message: error instanceof Error ? error.message : "Failed to open docs"')
+    expect(app).toContain('dialog.clear()')
+  })
+
+  test("surfaces error-boundary issue URL copy failures instead of silently rejecting", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).toContain("const [copyError, setCopyError] = createSignal<string | undefined>()")
+    expect(app).toContain("void Clipboard.copy(issueURL.toString())")
+    expect(app).toContain('setCopyError(error instanceof Error ? error.message : "Failed to copy issue URL")')
+    expect(app).toContain("{copyError() && <text fg={colors.muted}>{copyError()}</text>}")
+  })
+
+  test("keeps startup and continue fork retries bounded, gated, and cancellable", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).toContain("const RETRY_DELAY_MS = 250")
+    expect(app).toContain("const MAX_SESSION_FORK_ATTEMPTS = 3")
+    expect(app).toContain("const retryTimers = new Set<ReturnType<typeof setTimeout>>()")
+    expect(app).toContain("let forkRetryDisposed = false")
+    expect(app).toContain("for (const timer of retryTimers) clearTimeout(timer)")
+    expect(app).toContain("retryTimers.clear()")
+    expect(app).toContain("retryTimers.delete(timer)")
+    expect(app).toContain("if (forkRetryDisposed) return")
+    expect(app).toContain('toast.show({ message: "Failed to fork session", variant: "error" })')
+    expect(app).toContain("if (continued || !sync.data.session_loaded || !args.continue) return")
+    expect(app).toContain("if (startupForkStarted || !sync.data.session_loaded || !args.sessionID || !args.fork) return")
+    expect(app).toContain('forkSessionWithRetries({ sessionID: match, source: "continue" })')
+    expect(app).toContain('forkSessionWithRetries({ sessionID: args.sessionID, source: "startup" })')
+  })
+
+  test("handles command dispatch async actions without leaking unhandled rejections", async () => {
+    const dialogCommand = await fs.readFile(DIALOG_COMMAND_SRC, "utf8")
+
+    expect(dialogCommand).toContain("function runCommandAction(")
+    expect(dialogCommand).toContain('log.warn("command action failed"')
+    expect(dialogCommand).toContain('runCommandAction(option, "keybind")')
+    expect(dialogCommand).toContain('runCommandAction(option, "trigger")')
+    expect(dialogCommand).toContain('runCommandAction(option, "slash")')
+    expect(dialogCommand).toContain("void Promise.resolve()")
+  })
+
   test("waits for provider and model readiness before home prompt auto-submit", async () => {
     const home = await fs.readFile(HOME_SRC, "utf8")
 
@@ -334,6 +498,27 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(autocomplete).toContain("scheduleMicrotaskTask")
     expect(autocomplete).not.toContain("setInterval(")
+  })
+
+  test("handles prompt session interrupts without leaking unhandled rejections", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+
+    expect(prompt).toContain('log.warn("prompt session interrupt failed"')
+    expect(prompt).toContain('message: error instanceof Error ? error.message : "Failed to interrupt session"')
+    expect(prompt).toContain("void sdk.client.session")
+    expect(prompt).toContain(".abort({")
+    expect(prompt).toContain(".catch((error) => {")
+  })
+
+  test("handles pasted SVG and image read failures without silently falling back to raw paths", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+
+    expect(prompt).toContain('log.warn("prompt svg paste read failed"')
+    expect(prompt).toContain('message: error instanceof Error ? error.message : "Failed to read pasted SVG"')
+    expect(prompt).toContain('log.warn("prompt image paste read failed"')
+    expect(prompt).toContain('message: error instanceof Error ? error.message : "Failed to read pasted image"')
+    expect(prompt).toContain("event.preventDefault()")
+    expect(prompt).toContain("return undefined")
   })
 
   test("keeps dialog selection post-update work on cancellable microtasks", async () => {
@@ -363,6 +548,129 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogPrompt).toContain("function runDialogPromptAction(")
     expect(dialogPrompt).toContain('log.warn("dialog prompt confirm failed"')
     expect(dialogPrompt).toContain("void Promise.resolve()")
+    expect(dialogPrompt).toContain("dialog.clear()")
+  })
+
+  test("handles dialog confirm async callbacks without leaking unhandled rejections", async () => {
+    const dialogConfirm = await fs.readFile(DIALOG_CONFIRM_SRC, "utf8")
+
+    expect(dialogConfirm).toContain("function runDialogConfirmAction(")
+    expect(dialogConfirm).toContain('log.warn("dialog confirm action failed"')
+    expect(dialogConfirm).toContain("void Promise.resolve()")
+  })
+
+  test("opens clicked tui links through a failure-safe browser launch path", async () => {
+    const link = await fs.readFile(LINK_SRC, "utf8")
+
+    expect(link).toContain('Log.Default.warn("link open failed"')
+    expect(link).toContain('message: error instanceof Error ? error.message : "Failed to open link"')
+    expect(link).toContain("void open(props.href).catch((error) => {")
+  })
+
+  test("keeps clipboard fallback writes from silently succeeding on failure or timeout", async () => {
+    const clipboard = await fs.readFile(CLIPBOARD_SRC, "utf8")
+
+    expect(clipboard).toContain('throw new Error("Timed out writing to clipboard")')
+    expect(clipboard).toContain('input.then(')
+    expect(clipboard).toContain('type: "error" as const')
+    expect(clipboard).toContain("await waitForWrite(clipboardy.write(text))")
+    expect(clipboard).not.toContain("await waitForWrite(clipboardy.write(text)).catch(() => {})")
+  })
+
+  test("clears console selections only after clipboard copy succeeds", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).toContain("renderer.console.onCopySelection = async (text: string) => {")
+    expect(app).toContain('.then(() => {')
+    expect(app).toContain('toast.show({ message: "Copied to clipboard", variant: "info" })')
+    expect(app).toContain("renderer.clearSelection()")
+  })
+
+  test("keeps session and permission derived state in component-scoped memos", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+    const permission = await fs.readFile(PERMISSION_PROMPT_SRC, "utf8")
+
+    expect(session).toContain("const subagentTasks = createMemo(() => {")
+    expect(session).not.toContain("const tasks = createMemo(() => {")
+    expect(permission).toContain("const permissionInfo = createMemo(() => {")
+    expect(permission).not.toContain("const current = info()")
+  })
+
+  test("keeps prompt editing and navigation resilient across duplicate summaries and wide characters", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
+    const question = await fs.readFile(QUESTION_PROMPT_SRC, "utf8")
+
+    expect(prompt).toContain("function stringIndexFromDisplayOffset(")
+    expect(prompt).toContain("const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)")
+    expect(prompt).toContain("input.cursorOffset === Bun.stringWidth(input.plainText)")
+    expect(prompt).toContain("input.cursorOffset = Bun.stringWidth(input.plainText)")
+    expect(autocomplete).toContain("const rawPath = selected.path ?? selected.value ?? selected.display")
+    expect(question).toContain("if (val.isDestroyed) return")
+  })
+
+  test("keeps dialogs, routes, and toasts following the guarded control flow", async () => {
+    const dialogExport = await fs.readFile(DIALOG_EXPORT_OPTIONS_SRC, "utf8")
+    const dialogHelp = await fs.readFile(DIALOG_HELP_SRC, "utf8")
+    const route = await fs.readFile(ROUTE_SRC, "utf8")
+    const toast = await fs.readFile(TOAST_SRC, "utf8")
+
+    expect(dialogExport).toContain("dialog.clear()")
+    expect(dialogHelp).not.toContain('evt.name === "return" || evt.name === "escape"')
+    expect(route).toContain("function parseInitialRoute(")
+    expect(toast).toContain("queue: [] as ToastOptions[]")
+    expect(toast).toContain("function scheduleNextToast(options: ToastOptions)")
+  })
+
+  test("surfaces local model preference persistence failures instead of silently dropping them", async () => {
+    const local = await fs.readFile(LOCAL_SRC, "utf8")
+
+    expect(local).toContain('const log = Log.create({ service: "tui.local" })')
+    expect(local).toContain('log.warn("failed to persist local model preferences"')
+    expect(local).toContain('message: error instanceof Error ? error.message : "Failed to save model preferences"')
+    expect(local).toContain("if (state.saveWarningShown) return")
+    expect(local).toContain("state.saveWarningShown = false")
+    expect(local).toContain('log.warn("failed to load local model preferences"')
+    expect(local).toContain('message: error instanceof Error ? error.message : "Failed to load model preferences"')
+    expect(local).toContain('"code" in error && error.code === "ENOENT"')
+  })
+
+  test("surfaces prompt history persistence failures instead of silently dropping them", async () => {
+    const history = await fs.readFile(PROMPT_HISTORY_SRC, "utf8")
+
+    expect(history).toContain('const log = Log.create({ service: "tui.prompt-history" })')
+    expect(history).toContain('log.warn("failed to load prompt history"')
+    expect(history).toContain('log.warn("failed to persist prompt history"')
+    expect(history).toContain('log.warn("failed to append prompt history"')
+    expect(history).toContain('message: error instanceof Error ? error.message : "Failed to load prompt history"')
+    expect(history).toContain('message: error instanceof Error ? error.message : "Failed to save prompt history"')
+    expect(history).toContain('"code" in error && error.code === "ENOENT"')
+    expect(history).toContain("if (writeWarningShown) return")
+  })
+
+  test("surfaces frecency persistence failures instead of silently dropping them", async () => {
+    const frecency = await fs.readFile(PROMPT_FRECENCY_SRC, "utf8")
+
+    expect(frecency).toContain('const log = Log.create({ service: "tui.frecency" })')
+    expect(frecency).toContain('log.warn("failed to load frecency data"')
+    expect(frecency).toContain('log.warn("failed to persist frecency data"')
+    expect(frecency).toContain('log.warn("failed to append frecency data"')
+    expect(frecency).toContain('message: error instanceof Error ? error.message : "Failed to load file frecency"')
+    expect(frecency).toContain('message: error instanceof Error ? error.message : "Failed to save file frecency"')
+    expect(frecency).toContain('"code" in error && error.code === "ENOENT"')
+    expect(frecency).toContain("if (writeWarningShown) return")
+  })
+
+  test("surfaces prompt stash persistence failures instead of silently dropping them", async () => {
+    const stash = await fs.readFile(PROMPT_STASH_SRC, "utf8")
+
+    expect(stash).toContain('const log = Log.create({ service: "tui.prompt-stash" })')
+    expect(stash).toContain('log.warn("failed to load prompt stash"')
+    expect(stash).toContain('log.warn("prompt stash write failed"')
+    expect(stash).toContain('message: error instanceof Error ? error.message : "Failed to load prompt stash"')
+    expect(stash).toContain('message: error instanceof Error ? error.message : "Failed to save prompt stash"')
+    expect(stash).toContain('"code" in error && error.code === "ENOENT"')
+    expect(stash).toContain("if (writeWarningShown) return")
   })
 
   test("keeps doctor checking the OpenTUI preload dependency with bundled-runtime awareness", async () => {

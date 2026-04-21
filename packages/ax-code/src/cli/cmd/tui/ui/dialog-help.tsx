@@ -69,7 +69,7 @@ export function DialogHelp() {
   const keybind = useKeybind()
 
   useKeyboard((evt) => {
-    if (evt.name === "return" || evt.name === "escape") {
+    if (evt.name === "return") {
       dialog.clear()
     }
   })

@@ -99,6 +99,36 @@ describe("createReconnectRecoveryGate", () => {
     expect(calls).toEqual(["recover:1", "recover:2"])
   })
 
+  test("clears a stale recovery error when a queued retry succeeds", async () => {
+    let attempts = 0
+    let releaseFirst: (() => void) | undefined
+    const firstPass = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const gate = createReconnectRecoveryGate({
+      recover: async () => {
+        attempts++
+        if (attempts === 1) {
+          await firstPass
+          throw new Error("first recovery failed")
+        }
+      },
+    })
+
+    gate.onConnectionChange(true)
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+    await Bun.sleep(STABILIZE_WAIT)
+
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+    await Bun.sleep(STABILIZE_WAIT)
+
+    releaseFirst?.()
+    await expect(gate.waitForIdle()).resolves.toBeUndefined()
+    expect(attempts).toBe(2)
+  })
+
   test("cancels stabilization timer when connection drops before delay expires", async () => {
     let calls = 0
     const gate = createReconnectRecoveryGate({
@@ -184,5 +214,40 @@ describe("createReconnectRecoveryGate", () => {
     await gate.waitForIdle()
 
     expect(calls).toBe(0)
+  })
+
+  test("route switch cleanup cancels the previous session recovery before the new route reconnects", async () => {
+    const recoveries: string[] = []
+    let oldSessionID = "session-old"
+    const oldRouteGate = createReconnectRecoveryGate({
+      recover: async () => {
+        recoveries.push(oldSessionID)
+      },
+    })
+
+    oldRouteGate.onConnectionChange(true)
+    oldRouteGate.onConnectionChange(false)
+    oldRouteGate.onConnectionChange(true)
+
+    await Bun.sleep(RECONNECT_STABILIZE_MS / 2)
+
+    oldRouteGate.dispose()
+    oldSessionID = "session-stale"
+
+    const newRouteGate = createReconnectRecoveryGate({
+      recover: async () => {
+        recoveries.push("session-new")
+      },
+    })
+
+    newRouteGate.onConnectionChange(true)
+    newRouteGate.onConnectionChange(false)
+    newRouteGate.onConnectionChange(true)
+
+    await Bun.sleep(STABILIZE_WAIT)
+    await oldRouteGate.waitForIdle()
+    await newRouteGate.waitForIdle()
+
+    expect(recoveries).toEqual(["session-new"])
   })
 })

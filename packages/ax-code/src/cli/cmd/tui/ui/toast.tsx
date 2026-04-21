@@ -50,20 +50,34 @@ export function Toast() {
 function init() {
   const [store, setStore] = createStore({
     currentToast: null as ToastOptions | null,
+    queue: [] as ToastOptions[],
   })
 
   let timeoutHandle: NodeJS.Timeout | null = null
 
+  function scheduleNextToast(options: ToastOptions) {
+    setStore("currentToast", options)
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+    timeoutHandle = setTimeout(() => {
+      timeoutHandle = null
+      const [nextToast, ...remaining] = store.queue
+      setStore("queue", remaining)
+      if (nextToast) {
+        scheduleNextToast(nextToast)
+        return
+      }
+      setStore("currentToast", null)
+    }, options.duration ?? 5000).unref()
+  }
+
   const toast = {
     show(options: ToastOptions) {
       const parsedOptions = TuiEvent.ToastShow.properties.parse(options)
-      const { duration, ...currentToast } = parsedOptions
-      setStore("currentToast", currentToast)
-      if (timeoutHandle) clearTimeout(timeoutHandle)
-      timeoutHandle = setTimeout(() => {
-        setStore("currentToast", null)
-        timeoutHandle = null
-      }, duration).unref()
+      if (store.currentToast) {
+        setStore("queue", (queue) => [...queue, parsedOptions])
+        return
+      }
+      scheduleNextToast(parsedOptions)
     },
     error: (err: any) => {
       if (err instanceof Error)
@@ -80,9 +94,12 @@ function init() {
       return store.currentToast
     },
     dispose() {
-      if (!timeoutHandle) return
-      clearTimeout(timeoutHandle)
-      timeoutHandle = null
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle)
+        timeoutHandle = null
+      }
+      setStore("currentToast", null)
+      setStore("queue", [])
     },
   }
   return toast

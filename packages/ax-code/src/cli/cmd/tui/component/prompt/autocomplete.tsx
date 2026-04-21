@@ -456,8 +456,8 @@ export function Autocomplete(props: {
     const input = props.input()
     const currentCursorOffset = input.cursorOffset
 
-    const displayText = selected.display.trimEnd()
-    const path = displayText.startsWith("@") ? displayText.slice(1) : displayText
+    const rawPath = selected.path ?? selected.value ?? selected.display
+    const path = rawPath.trimEnd().replace(/^@/, "")
 
     input.cursorOffset = store.index
     const startCursor = input.logicalCursor

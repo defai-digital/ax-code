@@ -425,6 +425,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                         ref={(val: TextareaRenderable) => {
                           textarea = val
                           queueMicrotask(() => {
+                            if (val.isDestroyed) return
                             val.focus()
                             val.gotoLineEnd()
                           })

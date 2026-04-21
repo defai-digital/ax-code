@@ -85,6 +85,33 @@ const SHELL_PLACEHOLDERS = ["ls -la", "git status", "pwd"]
 const SUBMIT_ACCEPT_TIMEOUT_MS = 10_000
 type AsyncSessionRoute = "prompt_async" | "command_async" | "shell_async"
 
+function stringIndexFromDisplayOffset(text: string, displayOffset: number) {
+  if (displayOffset <= 0) return 0
+  let width = 0
+  let index = 0
+  for (const char of text) {
+    if (width >= displayOffset) break
+    width += Bun.stringWidth(char)
+    index += char.length
+  }
+  return index
+}
+
+function isPastedImagePart(part: PromptInfo["parts"][number]) {
+  return part.type === "file" && part.mime.startsWith("image/") && part.url.startsWith("data:")
+}
+
+function expandPromptTextParts(input: string, parts: PromptInfo["parts"]) {
+  return parts
+    .filter((part): part is Extract<PromptInfo["parts"][number], { type: "text" }> => part.type === "text" && !!part.source?.text)
+    .toSorted((a, b) => b.source!.text.start - a.source!.text.start)
+    .reduce((text, part) => {
+      const start = stringIndexFromDisplayOffset(text, part.source!.text.start)
+      const end = stringIndexFromDisplayOffset(text, part.source!.text.end)
+      return text.slice(0, start) + part.text + text.slice(end)
+    }, input)
+}
+
 export function Prompt(props: PromptProps) {
   let input: TextareaRenderable
   let anchor: BoxRenderable
@@ -444,9 +471,20 @@ export function Prompt(props: PromptProps) {
           }
 
           if (nextInterrupt >= 2) {
-            sdk.client.session.abort({
-              sessionID: props.sessionID,
-            })
+            void sdk.client.session
+              .abort({
+                sessionID: props.sessionID,
+              })
+              .catch((error) => {
+                log.warn("prompt session interrupt failed", {
+                  error,
+                  sessionID: props.sessionID,
+                })
+                toast.show({
+                  message: error instanceof Error ? error.message : "Failed to interrupt session",
+                  variant: "error",
+                })
+              })
             setStore("interrupt", 0)
           } else {
             interruptTimer = setTimeout(() => {
@@ -468,13 +506,7 @@ export function Prompt(props: PromptProps) {
         onSelect: async (dialog) => {
           dialog.clear()
 
-          // replace summarized text parts with the actual text
-          const text = store.prompt.parts
-            .filter((p) => p.type === "text")
-            .reduce((acc, p) => {
-              if (!p.source) return acc
-              return acc.replace(p.source.text.value, p.text)
-            }, store.prompt.input)
+          const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)
 
           const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
 
@@ -641,7 +673,7 @@ export function Prompt(props: PromptProps) {
         start = part.source.text.start
         end = part.source.text.end
         virtualText = part.source.text.value
-        styleId = fileStyleId
+        styleId = isPastedImagePart(part) ? pasteStyleId : fileStyleId
       } else if (part.type === "agent" && part.source) {
         start = part.source.start
         end = part.source.end
@@ -1248,7 +1280,7 @@ export function Prompt(props: PromptProps) {
                 if (!autocomplete.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
-                    (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
+                    (keybind.match("history_next", e) && input.cursorOffset === Bun.stringWidth(input.plainText))
                   ) {
                     const direction = keybind.match("history_previous", e) ? -1 : 1
                     const item = history.move(direction, input.plainText)
@@ -1260,14 +1292,14 @@ export function Prompt(props: PromptProps) {
                       restoreExtmarksFromParts(item.parts)
                       e.preventDefault()
                       if (direction === -1) input.cursorOffset = 0
-                      if (direction === 1) input.cursorOffset = input.plainText.length
+                      if (direction === 1) input.cursorOffset = Bun.stringWidth(input.plainText)
                     }
                     return
                   }
 
                   if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
                   if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
-                    input.cursorOffset = input.plainText.length
+                    input.cursorOffset = Bun.stringWidth(input.plainText)
                 }
               }}
               onSubmit={submit}
@@ -1298,17 +1330,32 @@ export function Prompt(props: PromptProps) {
                     // Handle SVG as raw text content, not as base64 image
                     if (mime === "image/svg+xml") {
                       event.preventDefault()
-                      const content = await Filesystem.readText(filepath).catch(() => {})
+                      const content = await Filesystem.readText(filepath).catch((error) => {
+                        log.warn("prompt svg paste read failed", { error, filepath })
+                        toast.show({
+                          message: error instanceof Error ? error.message : "Failed to read pasted SVG",
+                          variant: "error",
+                        })
+                        return undefined
+                      })
                       if (content) {
                         pasteText(content, `[SVG: ${filename ?? "image"}]`)
                         return
                       }
+                      return
                     }
                     if (mime.startsWith("image/")) {
                       event.preventDefault()
                       const content = await Filesystem.readArrayBuffer(filepath)
                         .then((buffer) => Buffer.from(buffer).toString("base64"))
-                        .catch(() => {})
+                        .catch((error) => {
+                          log.warn("prompt image paste read failed", { error, filepath, mime })
+                          toast.show({
+                            message: error instanceof Error ? error.message : "Failed to read pasted image",
+                            variant: "error",
+                          })
+                          return undefined
+                        })
                       if (content) {
                         await pasteImage({
                           filename,
@@ -1317,6 +1364,7 @@ export function Prompt(props: PromptProps) {
                         })
                         return
                       }
+                      return
                     }
                   } catch {}
                 }

@@ -22,7 +22,7 @@ export function createSessionSyncController<TSnapshot>(input: {
       inFlightSessions.clear()
     },
     async sync(sessionID, options) {
-      if (!options?.force && (fullSyncedSessions.has(sessionID) || inFlightSessions.has(sessionID))) return
+      if ((!options?.force && fullSyncedSessions.has(sessionID)) || inFlightSessions.has(sessionID)) return
 
       inFlightSessions.add(sessionID)
       try {

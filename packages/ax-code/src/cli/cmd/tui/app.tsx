@@ -339,10 +339,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     if (!text || text.length === 0) return
 
     await Clipboard.copy(text)
-      .then(() => toast.show({ message: "Copied to clipboard", variant: "info" }))
+      .then(() => {
+        toast.show({ message: "Copied to clipboard", variant: "info" })
+        renderer.clearSelection()
+      })
       .catch(toast.error)
-
-    renderer.clearSelection()
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
 
@@ -748,7 +749,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Open docs",
       value: "docs.open",
       onSelect: () => {
-        import("open").then(({ default: open }) => open("https://github.com/defai-digital/ax-code")).catch(() => {})
+        void import("open")
+          .then(({ default: open }) => open("https://github.com/defai-digital/ax-code"))
+          .catch((error) => {
+            Log.Default.warn("failed to open docs", { error })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to open docs",
+              variant: "error",
+            })
+          })
         dialog.clear()
       },
       category: "System",
@@ -853,8 +862,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: (dialog) => {
         const next = !sync.data.smartLlm
         sync.set("smartLlm", next)
-        void putJsonWithTimeout("/smart-llm", { enabled: next }).catch(() => {
+        void putJsonWithTimeout("/smart-llm", { enabled: next }).catch((error) => {
+          Log.Default.warn("failed to update smart llm setting", { error, enabled: next })
           sync.set("smartLlm", !next)
+          toast.show({
+            message: error instanceof Error ? error.message : "Failed to save auto-route setting",
+            variant: "error",
+          })
         })
         dialog.clear()
       },
@@ -867,8 +881,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: (dialog) => {
         const next = !sync.data.autonomous
         sync.set("autonomous", next)
-        void putJsonWithTimeout("/autonomous", { enabled: next }).catch(() => {
+        void putJsonWithTimeout("/autonomous", { enabled: next }).catch((error) => {
+          Log.Default.warn("failed to update autonomous setting", { error, enabled: next })
           sync.set("autonomous", !next)
+          toast.show({
+            message: error instanceof Error ? error.message : "Failed to save autonomous setting",
+            variant: "error",
+          })
         })
         dialog.clear()
       },
@@ -888,9 +907,14 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           directory: sdk.directory,
           contentType: "application/json",
         })
-        void putJsonWithTimeout("/isolation", { mode: next }, headers).catch(() => {
+        void putJsonWithTimeout("/isolation", { mode: next }, headers).catch((error) => {
+          Log.Default.warn("failed to update sandbox setting", { error, mode: next })
           sync.set("isolation", "mode", previousMode)
           sync.set("isolation", "network", previousNetwork)
+          toast.show({
+            message: error instanceof Error ? error.message : "Failed to save sandbox setting",
+            variant: "error",
+          })
         })
         dialog.clear()
       },
@@ -1076,6 +1100,7 @@ function ErrorComponent(props: {
     }
   })
   const [copied, setCopied] = createSignal(false)
+  const [copyError, setCopyError] = createSignal<string | undefined>()
 
   const issueURL = new URL("https://github.com/defai-digital/ax-code/issues/new?template=bug-report.yml")
 
@@ -1102,9 +1127,15 @@ function ErrorComponent(props: {
   issueURL.searchParams.set("ax-code-version", Installation.VERSION)
 
   const copyIssueURL = () => {
-    Clipboard.copy(issueURL.toString()).then(() => {
-      setCopied(true)
-    })
+    void Clipboard.copy(issueURL.toString())
+      .then(() => {
+        setCopied(true)
+        setCopyError(undefined)
+      })
+      .catch((error) => {
+        setCopied(false)
+        setCopyError(error instanceof Error ? error.message : "Failed to copy issue URL")
+      })
   }
 
   return (
@@ -1119,6 +1150,7 @@ function ErrorComponent(props: {
           </text>
         </box>
         {copied() && <text fg={colors.muted}>Successfully copied</text>}
+        {copyError() && <text fg={colors.muted}>{copyError()}</text>}
       </box>
       <box flexDirection="row" gap={2} alignItems="center">
         <text fg={colors.text}>A fatal error occurred!</text>

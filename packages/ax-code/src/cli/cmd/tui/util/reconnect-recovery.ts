@@ -14,6 +14,7 @@ export function createReconnectRecoveryGate(input: {
   const runRecovery = () => {
     if (disposed || !connected || !pendingReconnect || inFlight) return inFlight
     pendingReconnect = false
+    pendingError = undefined
     inFlight = Promise.resolve()
       .then(input.recover)
       .catch((error) => {

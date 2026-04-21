@@ -1,4 +1,4 @@
-import { removeByID, upsert } from "./sync-util"
+import { mergeSorted, removeByID, upsert } from "./sync-util"
 
 export interface SyncedMessageParts<TMessage, TPart> {
   info: TMessage
@@ -56,12 +56,21 @@ export function applySessionSyncSnapshot<
 ) {
   upsert(store.session, snapshot.session)
 
-  const previousMessageIDs = new Set((store.message[sessionID] ?? []).map((message) => message.id))
+  const existingMessages = store.message[sessionID] ?? []
+  const previousMessageIDs = new Set(existingMessages.map((message) => message.id))
   const nextMessages = snapshot.messages.map((message) => message.info)
-  const nextMessageIDs = new Set(nextMessages.map((message) => message.id))
+  const lastSnapshotMatchIndex = existingMessages.reduce((index, message, currentIndex) => {
+    return nextMessages.some((next) => next.id === message.id) ? currentIndex : index
+  }, -1)
+  const liveTail =
+    lastSnapshotMatchIndex >= 0
+      ? existingMessages.slice(lastSnapshotMatchIndex + 1).filter((message) => !nextMessages.some((next) => next.id === message.id))
+      : []
+  const mergedMessages = mergeSorted(nextMessages, liveTail)
+  const nextMessageIDs = new Set(mergedMessages.map((message) => message.id))
 
   store.todo[sessionID] = snapshot.todo
-  store.message[sessionID] = nextMessages
+  store.message[sessionID] = mergedMessages
   if (snapshot.risk !== undefined) store.session_risk[sessionID] = snapshot.risk
   for (const messageID of previousMessageIDs) {
     if (!nextMessageIDs.has(messageID)) {

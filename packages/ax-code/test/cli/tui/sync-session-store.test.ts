@@ -117,6 +117,48 @@ describe("tui sync session store", () => {
     })
   })
 
+  test("preserves live tail messages that arrived after a snapshot fetch started", () => {
+    const store: {
+      session: Array<{ id: string; title: string }>
+      todo: Record<string, Array<{ id: string }>>
+      message: Record<string, Array<{ id: string }>>
+      part: Record<string, Array<{ id: string; text: string }>>
+      session_diff: Record<string, Array<{ path: string }>>
+      session_risk: Record<string, { quality?: unknown }>
+    } = {
+      session: [{ id: "ses_1", title: "old" }],
+      todo: { ses_1: [] },
+      message: {
+        ses_1: [{ id: "msg_1" }, { id: "msg_2" }],
+      },
+      part: {
+        msg_1: [{ id: "part_1_old", text: "replace" }],
+        msg_2: [{ id: "part_2_live", text: "keep" }],
+      },
+      session_diff: { ses_1: [] },
+      session_risk: {},
+    }
+
+    applySessionSyncSnapshot(store, "ses_1", {
+      session: { id: "ses_1", title: "new" },
+      todo: [],
+      messages: [
+        {
+          info: { id: "msg_1" },
+          parts: [{ id: "part_1_new", text: "fresh" }],
+        },
+      ],
+      diff: [],
+      risk: undefined,
+    })
+
+    expect(store.message.ses_1).toEqual([{ id: "msg_1" }, { id: "msg_2" }])
+    expect(store.part).toEqual({
+      msg_1: [{ id: "part_1_new", text: "fresh" }],
+      msg_2: [{ id: "part_2_live", text: "keep" }],
+    })
+  })
+
   test("removes all session-scoped data and message parts when a session is deleted", () => {
     const store: {
       session: Array<{ id: string }>

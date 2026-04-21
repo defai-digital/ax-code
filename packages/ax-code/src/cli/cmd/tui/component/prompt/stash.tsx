@@ -8,8 +8,10 @@ import { appendFile, writeFile } from "fs/promises"
 import type { PromptInfo } from "./history"
 import { Log } from "@/util/log"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
+import { useToast } from "../../ui/toast"
 
 export type StashEntry = {
+  id: string
   input: string
   parts: PromptInfo["parts"]
   timestamp: number
@@ -19,12 +21,6 @@ const MAX_STASH_ENTRIES = 50
 const STASH_LOAD_DELAY_MS = 50
 const log = Log.create({ service: "tui.prompt-stash" })
 
-function logStashWriteFailure(operation: string) {
-  return (error: unknown) => {
-    log.warn("prompt stash write failed", { operation, error })
-  }
-}
-
 function serialize(entries: StashEntry[]) {
   return entries.length > 0 ? entries.map((line) => JSON.stringify(line)).join("\n") + "\n" : ""
 }
@@ -33,16 +29,51 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
   name: "PromptStash",
   init: () => {
     const stashPath = path.join(Global.Path.state, "prompt-stash.jsonl")
+    const toast = useToast()
+    let writeWarningShown = false
+
+    const handleWriteFailure = (operation: string) => (error: unknown) => {
+      log.warn("prompt stash write failed", { operation, error, stashPath })
+      if (writeWarningShown) return
+      writeWarningShown = true
+      toast.show({
+        message: error instanceof Error ? error.message : "Failed to save prompt stash",
+        variant: "warning",
+        duration: 3000,
+      })
+    }
+
+    const persistStash = (content: string, operation: string) =>
+      writeFile(stashPath, content)
+        .then(() => {
+          writeWarningShown = false
+        })
+        .catch(handleWriteFailure(operation))
+
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(
         async () => {
-          const text = await Filesystem.readText(stashPath).catch(() => "")
+          const text = await Filesystem.readText(stashPath).catch((error) => {
+            if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
+            log.warn("failed to load prompt stash", { stashPath, error })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to load prompt stash",
+              variant: "warning",
+              duration: 3000,
+            })
+            return ""
+          })
           const lines = text
             .split("\n")
             .filter(Boolean)
             .map((line) => {
               try {
-                return JSON.parse(line)
+                const parsed = JSON.parse(line)
+                if (!parsed || typeof parsed !== "object") return null
+                return {
+                  ...parsed,
+                  id: typeof parsed.id === "string" ? parsed.id : crypto.randomUUID(),
+                }
               } catch {
                 return null
               }
@@ -58,7 +89,7 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
           // Rewrite file with only valid entries to self-heal corruption
           if (merged.length > 0) {
             const content = merged.map((line) => JSON.stringify(line)).join("\n") + "\n"
-            writeFile(stashPath, content).catch(logStashWriteFailure("rewrite"))
+            void persistStash(content, "rewrite")
           }
         },
         {
@@ -76,8 +107,14 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
       list() {
         return store.entries
       },
-      push(entry: Omit<StashEntry, "timestamp">) {
-        const stash = structuredClone(unwrap({ ...entry, timestamp: Date.now() }))
+      push(entry: Omit<StashEntry, "id" | "timestamp">) {
+        const stash = structuredClone(
+          unwrap({
+            ...entry,
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+          }),
+        )
         let trimmed = false
         let nextEntries: StashEntry[] = []
         setStore(
@@ -92,11 +129,15 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
         )
 
         if (trimmed) {
-          writeFile(stashPath, serialize(nextEntries)).catch(logStashWriteFailure("trim"))
+          void persistStash(serialize(nextEntries), "trim")
           return
         }
 
-        appendFile(stashPath, JSON.stringify(stash) + "\n").catch(logStashWriteFailure("append"))
+        void appendFile(stashPath, JSON.stringify(stash) + "\n")
+          .then(() => {
+            writeWarningShown = false
+          })
+          .catch(handleWriteFailure("append"))
       },
       pop() {
         if (store.entries.length === 0) return undefined
@@ -108,19 +149,24 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
             nextEntries = draft.entries.map((item) => structuredClone(unwrap(item)))
           }),
         )
-        writeFile(stashPath, serialize(nextEntries)).catch(logStashWriteFailure("pop"))
+        void persistStash(serialize(nextEntries), "pop")
         return entry
       },
-      remove(index: number) {
-        if (index < 0 || index >= store.entries.length) return
+      remove(id: string) {
+        if (!id) return
+        let removed = false
         let nextEntries: StashEntry[] = []
         setStore(
           produce((draft) => {
+            const index = draft.entries.findIndex((entry) => entry.id === id)
+            if (index < 0) return
+            removed = true
             draft.entries.splice(index, 1)
             nextEntries = draft.entries.map((item) => structuredClone(unwrap(item)))
           }),
         )
-        writeFile(stashPath, serialize(nextEntries)).catch(logStashWriteFailure("remove"))
+        if (!removed) return
+        void persistStash(serialize(nextEntries), "remove")
       },
     }
   },

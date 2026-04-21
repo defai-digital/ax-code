@@ -32,19 +32,19 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
   const { theme } = useTheme()
   const keybind = useKeybind()
 
-  const [toDelete, setToDelete] = createSignal<number>()
+  const [toDelete, setToDelete] = createSignal<string>()
 
   const options = createMemo(() => {
     const entries = stash.list()
     // Show most recent first
     return entries
       .map((entry, index) => {
-        const isDeleting = toDelete() === index
+        const isDeleting = toDelete() === entry.id
         const lineCount = (entry.input.match(/\n/g)?.length ?? 0) + 1
         return {
           title: isDeleting ? `Press ${keybind.print("stash_delete")} again to confirm` : getStashPreview(entry.input),
           bg: isDeleting ? theme.error : undefined,
-          value: index,
+          value: entry.id,
           description: getRelativeTime(entry.timestamp),
           footer: lineCount > 1 ? `~${lineCount} lines` : undefined,
         }
@@ -60,8 +60,7 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
         setToDelete(undefined)
       }}
       onSelect={(option) => {
-        const entries = stash.list()
-        const entry = entries[option.value]
+        const entry = stash.list().find((item) => item.id === option.value)
         if (entry) {
           stash.remove(option.value)
           props.onSelect(entry)

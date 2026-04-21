@@ -72,6 +72,7 @@ import { DialogCompare } from "./dialog-compare"
 import { DialogRollback } from "./dialog-rollback"
 import { SessionRollback } from "./rollback"
 import { Sidebar } from "./sidebar"
+import { sessionQualityActions, sessionQualityActionValue } from "./quality"
 import { computeSidebarWidth, computeSessionMainPaneWidth } from "./layout"
 import { Flag } from "@/flag/flag"
 import parsers from "../../../../../../parsers-config.ts"
@@ -157,6 +158,12 @@ export function Session() {
     const quality = risk()?.quality
     return !!quality?.review || !!quality?.debug
   })
+  const qualityActions = createMemo(() =>
+    sessionQualityActions({
+      sessionID: route.sessionID,
+      quality: risk()?.quality,
+    }),
+  )
   const children = createMemo(() => {
     const s = session()
     if (!s) return []
@@ -166,6 +173,21 @@ export function Session() {
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+  const subagentTasks = createMemo(() => {
+    const sessionMessages = sync.data.message[route.sessionID] ?? []
+    let running = 0
+    let done = 0
+    for (const message of sessionMessages) {
+      const parts = sync.data.part[message.id] ?? []
+      for (const part of parts) {
+        if (part.type !== "tool" || (part as any).tool !== "task") continue
+        const status = (part as any).state?.status
+        if (status === "running" || status === "pending") running++
+        else if (status === "completed") done++
+      }
+    }
+    return { running, done, total: running + done }
+  })
   const permissions = createMemo(() => {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.permission[x.id] ?? [])
@@ -451,8 +473,18 @@ export function Session() {
             messages={messagesWithParts()}
             onSelect={async (point) => {
               const status = sync.data.session_status?.[route.sessionID]
-              if (status?.type !== "idle")
-                await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
+              if (status?.type !== "idle") {
+                try {
+                  await sdk.client.session.abort({ sessionID: route.sessionID })
+                } catch (error) {
+                  log.warn("session rollback abort failed", { error, sessionID: route.sessionID })
+                  toast.show({
+                    message: error instanceof Error ? error.message : "Failed to stop the running session before rollback",
+                    variant: "error",
+                  })
+                  return
+                }
+              }
               return sdk.client.session
                 .revert({
                   sessionID: route.sessionID,
@@ -536,6 +568,16 @@ export function Session() {
       suggested: route.type === "session",
       toast,
     }),
+    ...qualityActions().map((action) => ({
+      title: action.title,
+      value: sessionQualityActionValue(action),
+      category: "Quality",
+      onSelect: (dialog: DialogContext) => {
+        prompt.set(action.prompt)
+        prompt.focus()
+        dialog.clear()
+      },
+    })),
     // ─── Debugging & Refactoring Engine slash commands ─────────────
     //
     // Gated on AX_CODE_EXPERIMENTAL_DEBUG_ENGINE so users who haven't
@@ -711,7 +753,18 @@ export function Session() {
       },
       onSelect: async (dialog) => {
         const status = sync.data.session_status?.[route.sessionID]
-        if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
+        if (status?.type !== "idle") {
+          try {
+            await sdk.client.session.abort({ sessionID: route.sessionID })
+          } catch (error) {
+            log.warn("session undo abort failed", { error, sessionID: route.sessionID })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to stop the running session before undo",
+              variant: "error",
+            })
+            return
+          }
+        }
         const messageID = undoMessageID(messages(), session()?.revert?.messageID)
         if (!messageID) {
           dialog.clear()
@@ -880,36 +933,17 @@ export function Session() {
             <Show when={showHeader() && (!sidebarVisible() || !wide())}>
               <Header />
             </Show>
-            {(() => {
-              const tasks = createMemo(() => {
-                const msgs = sync.data.message[route.sessionID] ?? []
-                let running = 0
-                let done = 0
-                for (const msg of msgs) {
-                  const parts = sync.data.part[msg.id] ?? []
-                  for (const part of parts) {
-                    if (part.type !== "tool" || (part as any).tool !== "task") continue
-                    const s = (part as any).state?.status
-                    if (s === "running" || s === "pending") running++
-                    else if (s === "completed") done++
-                  }
-                }
-                return { running, done, total: running + done }
-              })
-              return (
-                <Show when={tasks().total > 0}>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={theme.textMuted}>
-                      {tasks().total} subagent{tasks().total !== 1 ? "s" : ""}
-                      {tasks().running > 0 ? (
-                        <span style={{ fg: theme.primary }}> · {tasks().running} active</span>
-                      ) : null}
-                      {tasks().done > 0 ? <span style={{ fg: theme.success }}> · {tasks().done} done</span> : null}
-                    </text>
-                  </box>
-                </Show>
-              )
-            })()}
+            <Show when={subagentTasks().total > 0}>
+              <box flexShrink={0} paddingLeft={1}>
+                <text fg={theme.textMuted}>
+                  {subagentTasks().total} subagent{subagentTasks().total !== 1 ? "s" : ""}
+                  {subagentTasks().running > 0 ? (
+                    <span style={{ fg: theme.primary }}> · {subagentTasks().running} active</span>
+                  ) : null}
+                  {subagentTasks().done > 0 ? <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span> : null}
+                </text>
+              </box>
+            </Show>
             <scrollbox
               ref={(r) => (scroll = r)}
               viewportOptions={{

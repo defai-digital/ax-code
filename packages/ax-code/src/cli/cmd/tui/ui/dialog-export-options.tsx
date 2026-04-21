@@ -42,6 +42,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
       assistantMetadata: store.assistantMetadata,
       openWithoutSaving: store.openWithoutSaving,
     })
+    dialog.clear()
   }
 
   useKeyboard((evt) => {
