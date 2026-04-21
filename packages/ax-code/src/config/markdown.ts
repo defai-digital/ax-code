@@ -1,4 +1,4 @@
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import matter from "gray-matter"
 import { z } from "zod"
 import { NamedError } from "@ax-code/util/error"
@@ -7,6 +7,12 @@ import { Filesystem } from "../util/filesystem"
 export namespace ConfigMarkdown {
   export const FILE_REGEX = /(?<![\w`])@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)/g
   export const SHELL_REGEX = /!`([^`]+)`/g
+
+  class ReadError extends Schema.TaggedErrorClass<ReadError>()("ConfigMarkdownReadError", {
+    path: Schema.String,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+  }) {}
 
   export function files(template: string) {
     return Array.from(template.matchAll(FILE_REGEX))
@@ -95,7 +101,12 @@ export namespace ConfigMarkdown {
   export const parseEffect = Effect.fn("ConfigMarkdown.parse")(function* (file: string) {
     const text = yield* Effect.tryPromise({
       try: () => Filesystem.readText(file),
-      catch: (err) => err,
+      catch: (err) =>
+        new ReadError({
+          path: file,
+          message: `${file}: Failed to read markdown config`,
+          cause: err,
+        }),
     })
     return yield* load(file, text)
   })

@@ -13,6 +13,17 @@ export namespace Discovery {
   const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
   const SHA256_PATTERN = /^[a-f0-9]{64}$/i
 
+  class DiscoveryError extends Schema.TaggedErrorClass<DiscoveryError>()("SkillDiscoveryError", {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+  }) {}
+
+  const asDiscoveryError = (message: string, cause?: unknown) =>
+    new DiscoveryError({
+      message,
+      ...(cause === undefined ? {} : { cause }),
+    })
+
   class IndexSkillFile extends Schema.Class<IndexSkillFile>("IndexSkillFile")({
     path: Schema.String,
     sha256: Schema.optional(Schema.String),
@@ -50,42 +61,50 @@ export namespace Discovery {
       const verifyFile = (body: ArrayBuffer | Uint8Array, expectedSha256: string | undefined, source: string) => {
         const buffer = Buffer.from(body instanceof ArrayBuffer ? new Uint8Array(body) : body)
         if (buffer.byteLength > MAX_SKILL_FILE_BYTES) {
-          throw new Error(`skill-discovery: ${source} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
+          throw asDiscoveryError(`skill-discovery: ${source} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
         }
         if (!expectedSha256) return buffer
         const expected = expectedSha256.toLowerCase()
         if (!SHA256_PATTERN.test(expected)) {
-          throw new Error(`skill-discovery: invalid sha256 for ${source}`)
+          throw asDiscoveryError(`skill-discovery: invalid sha256 for ${source}`)
         }
         const actual = createHash("sha256").update(buffer).digest("hex")
         if (actual !== expected) {
-          throw new Error(`skill-discovery: sha256 mismatch for ${source}`)
+          throw asDiscoveryError(`skill-discovery: sha256 mismatch for ${source}`)
         }
         return buffer
+      }
+
+      const verifyCachedFile = (body: Uint8Array, expectedSha256: string, source: string) => {
+        try {
+          verifyFile(body, expectedSha256, source)
+          return true
+        } catch (err) {
+          log.warn("cached skill file failed integrity check", { source, err })
+          return false
+        }
       }
 
       const fetchArrayBuffer = (url: string, init?: RequestInit) =>
         Effect.tryPromise({
           try: async () => {
             const res = await Ssrf.pinnedFetch(url, { ...init, label: "skill-discovery" })
-            if (!res.ok) throw new Error(`skill-discovery: fetch failed for ${url}: HTTP ${res.status}`)
+            if (!res.ok) throw asDiscoveryError(`skill-discovery: fetch failed for ${url}: HTTP ${res.status}`)
             return res.arrayBuffer()
           },
-          catch: (err) => err,
+          catch: (err) =>
+            err instanceof DiscoveryError
+              ? err
+              : asDiscoveryError(`skill-discovery: fetch failed for ${url}`, err),
         })
 
       const download = Effect.fn("Discovery.download")(function* (url: string, dest: string, expectedSha256?: string) {
         if (yield* fs.exists(dest).pipe(Effect.orDie)) {
           if (!expectedSha256) return true
 
-          const cached = yield* fs.readFile(dest).pipe(Effect.catch(() => Effect.succeed(undefined)))
-          if (cached) {
-            try {
-              verifyFile(cached, expectedSha256, dest)
-              return true
-            } catch (err) {
-              log.warn("cached skill file failed integrity check", { url, dest, err })
-            }
+          const cached = yield* fs.readFile(dest).pipe(Effect.catch(() => Effect.void))
+          if (cached && verifyCachedFile(cached, expectedSha256, dest)) {
+            return true
           }
         }
 
@@ -93,7 +112,10 @@ export namespace Discovery {
           Effect.flatMap((body) =>
             Effect.try({
               try: () => verifyFile(body, expectedSha256, url),
-              catch: (err) => err,
+              catch: (err) =>
+                err instanceof DiscoveryError
+                  ? err
+                  : asDiscoveryError(`skill-discovery: integrity check failed for ${url}`, err),
             }),
           ),
           Effect.flatMap((body) => fs.writeWithDirs(dest, body)),

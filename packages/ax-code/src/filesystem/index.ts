@@ -7,6 +7,10 @@ import type { PlatformError } from "effect/PlatformError"
 import { Glob } from "../util/glob"
 
 export namespace AppFileSystem {
+  const JsonUnknown = Schema.fromJsonString(Schema.Unknown)
+  const decodeJson = Schema.decodeUnknownSync(JsonUnknown)
+  const encodeJson = Schema.encodeSync(JsonUnknown)
+
   export class FileSystemError extends Schema.TaggedErrorClass<FileSystemError>()("FileSystemError", {
     method: Schema.String,
     cause: Schema.optional(Schema.Defect),
@@ -47,11 +51,11 @@ export namespace AppFileSystem {
 
       const readJson = Effect.fn("FileSystem.readJson")(function* (path: string) {
         const text = yield* fs.readFileString(path)
-        return JSON.parse(text)
+        return decodeJson(text)
       })
 
       const writeJson = Effect.fn("FileSystem.writeJson")(function* (path: string, data: unknown, mode?: number) {
-        const content = JSON.stringify(data, null, 2)
+        const content = encodeJson(data)
         yield* fs.writeFileString(path, content)
         if (mode) yield* fs.chmod(path, mode)
       })

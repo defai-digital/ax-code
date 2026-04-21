@@ -149,17 +149,17 @@ export const make = Effect.gen(function* () {
     serr: ChildProcess.StderrConfig,
     extra: ReadonlyArray<{ fd: number; config: ChildProcess.AdditionalFdConfig }>,
   ): NodeChildProcess.StdioOptions => {
-    const pipe = (x: NodeChildProcess.IOType | undefined) =>
+    const toStdio = (x: NodeChildProcess.IOType | undefined) =>
       process.platform === "win32" && x === "pipe" ? "overlapped" : x
     const arr: Array<NodeChildProcess.IOType | undefined> = [
-      pipe(input(sin.stream)),
-      pipe(output(sout.stream)),
-      pipe(output(serr.stream)),
+      toStdio(input(sin.stream)),
+      toStdio(output(sout.stream)),
+      toStdio(output(serr.stream)),
     ]
     if (extra.length === 0) return arr as NodeChildProcess.StdioOptions
     const max = extra.reduce((acc, x) => Math.max(acc, x.fd), 2)
     for (let i = 3; i <= max; i++) arr[i] = "ignore"
-    for (const x of extra) arr[x.fd] = pipe("pipe")
+    for (const x of extra) arr[x.fd] = toStdio("pipe")
     return arr as NodeChildProcess.StdioOptions
   }
 
@@ -282,7 +282,8 @@ export const make = Effect.gen(function* () {
       proc.on("close", (code, signal2) => {
         if (end) return
         end = true
-        Deferred.doneUnsafe(signal, Exit.succeed(exit ?? [code, signal2]))
+        const finalExit: readonly [code: number | null, signal: NodeJS.Signals | null] = exit ?? [code, signal2]
+        Deferred.doneUnsafe(signal, Exit.succeed(finalExit))
       })
       proc.on("spawn", () => {
         resume(Effect.succeed([proc, signal]))
@@ -414,7 +415,7 @@ export const make = Effect.gen(function* () {
           // undefined here. Fail loudly with a platform error instead
           // of propagating `undefined as number` through ProcessId.
           if (proc.pid == null) {
-            return yield* Effect.fail(toPlatformError("spawn", new Error("Process PID not available"), command))
+            return yield* toPlatformError("spawn", new Error("Process PID not available"), command)
           }
           return makeHandle({
             pid: ProcessId(proc.pid),

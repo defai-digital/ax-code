@@ -7,7 +7,7 @@ import { Rpc } from "@/util/rpc"
 import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
-import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
+import { createOpencodeClient, type Event as OpencodeEvent } from "@ax-code/sdk/v2"
 import { Flag } from "@/flag/flag"
 import { writeHeapSnapshot } from "node:v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -15,6 +15,11 @@ import { internalBaseUrl } from "@/util/internal-url"
 import path from "node:path"
 import { tmpdir } from "node:os"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
+
+type GlobalEvent = {
+  directory?: string
+  payload: unknown
+}
 
 const debugEnabled = process.env.AX_CODE_DEBUG === "1"
 const debugDir = debugEnabled ? (process.env.AX_CODE_DEBUG_DIR ?? path.join(tmpdir(), "ax-code-debug")) : undefined
@@ -57,10 +62,12 @@ process.on("uncaughtException", (e) => {
   })
 })
 
-// Subscribe to global events and forward them via RPC
-GlobalBus.on("event", (event) => {
+const handleGlobalEvent = (event: GlobalEvent) => {
   Rpc.emit("global.event", event)
-})
+}
+
+// Subscribe to global events and forward them via RPC
+GlobalBus.on("event", handleGlobalEvent)
 
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 
@@ -94,7 +101,7 @@ const startEventStream = (input: { directory?: string }) => {
     Rpc.emit("event.status", status)
   }
 
-  void runResilientStream<Event>({
+  void runResilientStream<OpencodeEvent>({
     signal,
     subscribe: (connectionSignal) =>
       sdk.event.subscribe(
@@ -174,6 +181,7 @@ export const rpc = {
   async shutdown() {
     Log.Default.info("worker shutting down")
     if (eventStream.abort) eventStream.abort.abort()
+    GlobalBus.off("event", handleGlobalEvent)
     await Instance.disposeAll()
     if (server) await server.stop(true)
   },

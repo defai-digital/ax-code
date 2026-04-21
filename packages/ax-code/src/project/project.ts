@@ -192,7 +192,7 @@ export namespace Project {
         return yield* fsys.readFileString(pathSvc.join(dir, "ax-code")).pipe(
           Effect.map((x) => x.trim()),
           Effect.map(ProjectID.make),
-          Effect.catch(() => Effect.succeed(undefined)),
+          Effect.catch(() => Effect.void),
         )
       })
 

@@ -52,6 +52,26 @@ export namespace Pty {
     return out
   }
 
+  const trySend = (ws: Socket, data: string | Uint8Array | ArrayBuffer) => {
+    try {
+      ws.send(data)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const trySendBuffered = (ws: Socket, data: string) => {
+    try {
+      for (let i = 0; i < data.length; i += BUFFER_CHUNK) {
+        ws.send(data.slice(i, i + BUFFER_CHUNK))
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const pty = lazy(async () => {
     const { spawn } = await import("bun-pty")
     return spawn
@@ -344,21 +364,13 @@ export namespace Pty {
           return session.buffer.slice(offset)
         })()
 
-        if (data) {
-          try {
-            for (let i = 0; i < data.length; i += BUFFER_CHUNK) {
-              ws.send(data.slice(i, i + BUFFER_CHUNK))
-            }
-          } catch {
-            cleanup()
-            ws.close()
-            return
-          }
+        if (data && !trySendBuffered(ws, data)) {
+          cleanup()
+          ws.close()
+          return
         }
 
-        try {
-          ws.send(meta(end))
-        } catch {
+        if (!trySend(ws, meta(end))) {
           cleanup()
           ws.close()
           return
