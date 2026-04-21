@@ -2,6 +2,7 @@ import type { ChildProcessWithoutNullStreams } from "child_process"
 import path from "path"
 import fs from "fs/promises"
 import { createHash } from "crypto"
+import { gunzipSync } from "zlib"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Process } from "../util/process"
@@ -240,11 +241,25 @@ export const PINNED_GITHUB_LSP_RELEASES = {
   luaLs: { repo: "LuaLS/lua-language-server", tag: "3.15.0" },
   texlab: { repo: "latex-lsp/texlab", tag: "v5.24.0" },
   tinymist: { repo: "Myriad-Dreamin/tinymist", tag: "v0.14.0" },
+  elixirLs: { repo: "elixir-lsp/elixir-ls", tag: "v0.30.0" },
 } as const
 
 export const PINNED_CHECKSUM_LSP_RELEASES = {
+  jdtls: {
+    version: "1.58.0",
+    assetName: "jdt-language-server-1.58.0-202604151538.tar.gz",
+  },
   kotlinLs: { version: "262.2310.0" },
   terraformLs: { version: "0.38.6" },
+} as const
+
+export const PINNED_DIRECT_LSP_RELEASES = {
+  eslint: {
+    version: "3.0.24",
+    assetName: "vscode-eslint-3.0.24.vsix.gz",
+    sha256: "838bbd653b278529598a08374ba24c89d57994baebd217d0fb8667276a885e56",
+    url: "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/dbaeumer/vsextensions/vscode-eslint/3.0.24/vspackage",
+  },
 } as const
 
 // Keep auto-managed zls installs deterministic. Nightly/dev Zig builds
@@ -303,6 +318,7 @@ export const checksumManifestSha256 = (content: string, assetName?: string) => {
     const match = line.match(/^([a-f0-9]{64})(?:\s+\*?(.+))?$/i)
     if (!match) continue
     if (!assetName) return match[1].toLowerCase()
+    if (!match[2]) return match[1].toLowerCase()
     if (match[2]?.trim() === assetName) return match[1].toLowerCase()
   }
 }
@@ -492,6 +508,12 @@ export const kotlinLsChecksumUrl = (version: string, platform: string, arch: str
   return `https://download-cdn.jetbrains.com/kotlin-lsp/${version}/${asset}.sha256`
 }
 
+export const jdtlsAssetUrl = (assetName: string) =>
+  `https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/${PINNED_CHECKSUM_LSP_RELEASES.jdtls.version}/${assetName}`
+
+export const jdtlsChecksumUrl = (assetName: string) =>
+  `https://download.eclipse.org/jdtls/milestones/${PINNED_CHECKSUM_LSP_RELEASES.jdtls.version}/${assetName}.sha256`
+
 export const installPinnedGitHubReleaseAsset = async (input: {
   id: string
   repo: string
@@ -539,8 +561,12 @@ export const installPinnedChecksumReleaseAsset = async (input: {
   checksumUrl: string
   bin: string
   installDir?: string
+  verifyPath?: string
   platform?: string
   tarArgs?: string[]
+  archiveType?: "zip" | "tar"
+  inflateGzip?: boolean
+  skipChmod?: boolean
   fetchChecksum?: typeof fetchChecksumSha256
   installRelease?: typeof installReleaseBin
 }) => {
@@ -560,9 +586,13 @@ export const installPinnedChecksumReleaseAsset = async (input: {
     url: input.url,
     bin: input.bin,
     installDir: input.installDir,
+    verifyPath: input.verifyPath,
     platform: input.platform,
     sha256,
     tarArgs: input.tarArgs,
+    archiveType: input.archiveType,
+    inflateGzip: input.inflateGzip,
+    skipChmod: input.skipChmod,
   })
 }
 
@@ -572,9 +602,13 @@ export const installReleaseBin = async (input: {
   url: string
   bin: string
   installDir?: string
+  verifyPath?: string
   sha256?: string
   tarArgs?: string[]
   platform?: string
+  archiveType?: "zip" | "tar"
+  inflateGzip?: boolean
+  skipChmod?: boolean
   fetcher?: (url: string) => Promise<ReleaseResponse>
   write?: (path: string, content: string | Buffer | Uint8Array) => Promise<void>
   writeStream?: (path: string, body: any) => Promise<void>
@@ -601,6 +635,7 @@ export const installReleaseBin = async (input: {
   await fs.mkdir(installDir, { recursive: true })
 
   const temp = path.join(installDir, input.assetName)
+  let downloadedArchive: Buffer | undefined
   if (input.sha256) {
     if (!response.arrayBuffer) {
       log.error(`Failed to verify ${input.id} download integrity`)
@@ -616,20 +651,32 @@ export const installReleaseBin = async (input: {
       })
       return
     }
+    downloadedArchive = archive
     await (input.write ?? Filesystem.write)(temp, archive)
   } else if (response.body) {
     await (input.writeStream ?? Filesystem.writeStream)(temp, response.body)
   } else if (response.arrayBuffer) {
     const archive = Buffer.from(await response.arrayBuffer())
+    downloadedArchive = archive
     await (input.write ?? Filesystem.write)(temp, archive)
   } else {
     log.error(`Failed to download ${input.id}`)
     return
   }
 
+  const archiveType =
+    input.archiveType ?? (input.assetName.endsWith(".zip") || input.assetName.endsWith(".vsix") ? "zip" : "tar")
+  const extracted = input.inflateGzip ? path.join(installDir, input.assetName.replace(/\.gz$/i, "")) : undefined
+  const archive = extracted ?? temp
+
   try {
-    if (input.assetName.endsWith(".zip")) {
-      const ok = await (input.extractZip ?? Archive.extractZip)(temp, installDir)
+    if (extracted) {
+      const gz = downloadedArchive ?? (await fs.readFile(temp))
+      await (input.write ?? Filesystem.write)(extracted, gunzipSync(gz))
+    }
+
+    if (archiveType === "zip") {
+      const ok = await (input.extractZip ?? Archive.extractZip)(archive, installDir)
         .then(() => true)
         .catch((error) => {
           log.error(`Failed to extract ${input.id} archive`, { error })
@@ -638,7 +685,7 @@ export const installReleaseBin = async (input: {
       if (!ok) return
     } else {
       const tarArgs = input.tarArgs ?? ["-xf"]
-      const result = await (input.run ?? run)(["tar", tarArgs[0] ?? "-xf", temp, ...tarArgs.slice(1)], { cwd: installDir })
+      const result = await (input.run ?? run)(["tar", tarArgs[0] ?? "-xf", archive, ...tarArgs.slice(1)], { cwd: installDir })
       if (typeof result?.code === "number" && result.code !== 0) {
         log.error(`Failed to extract ${input.id} archive`, {
           code: result.code,
@@ -649,15 +696,19 @@ export const installReleaseBin = async (input: {
     }
   } finally {
     await (input.remove ?? fs.rm)(temp, { force: true })
+    if (extracted) {
+      await (input.remove ?? fs.rm)(extracted, { force: true })
+    }
   }
 
-  if (!(await (input.exists ?? Filesystem.exists)(input.bin))) {
+  const verifyPath = input.verifyPath ?? input.bin
+  if (!(await (input.exists ?? Filesystem.exists)(verifyPath))) {
     log.error(`Failed to extract ${input.id} binary`)
     return
   }
 
   const platform = input.platform ?? process.platform
-  if (platform !== "win32") {
+  if (!input.skipChmod && platform !== "win32") {
     await (input.chmod ?? fs.chmod)(input.bin, 0o755).catch(() => {})
   }
 

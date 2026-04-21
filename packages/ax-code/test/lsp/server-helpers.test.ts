@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
+import { gzipSync } from "zlib"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -9,10 +10,13 @@ import {
   fetchGitHubReleaseByTag,
   installPinnedChecksumReleaseAsset,
   installPinnedGitHubReleaseAsset,
+  jdtlsAssetUrl,
+  jdtlsChecksumUrl,
   llvmClangdAsset,
   llvmReleaseVersion,
   NearestRoot,
   PINNED_CHECKSUM_LSP_RELEASES,
+  PINNED_DIRECT_LSP_RELEASES,
   PINNED_GITHUB_LSP_RELEASES,
   bunServerArgs,
   globalBin,
@@ -113,14 +117,21 @@ describe("lsp server helpers", () => {
 
   test("maps pinned GitHub LSP releases explicitly", () => {
     expect(PINNED_GITHUB_LSP_RELEASES.clangd.tag).toBe("llvmorg-22.1.3")
+    expect(PINNED_GITHUB_LSP_RELEASES.elixirLs.tag).toBe("v0.30.0")
     expect(PINNED_GITHUB_LSP_RELEASES.texlab.tag).toBe("v5.24.0")
     expect(PINNED_GITHUB_LSP_RELEASES.tinymist.tag).toBe("v0.14.0")
     expect(PINNED_GITHUB_LSP_RELEASES.luaLs.tag).toBe("3.15.0")
   })
 
   test("maps pinned checksum-backed LSP releases explicitly", () => {
+    expect(PINNED_CHECKSUM_LSP_RELEASES.jdtls.version).toBe("1.58.0")
     expect(PINNED_CHECKSUM_LSP_RELEASES.kotlinLs.version).toBe("262.2310.0")
     expect(PINNED_CHECKSUM_LSP_RELEASES.terraformLs.version).toBe("0.38.6")
+  })
+
+  test("maps pinned direct-download LSP releases explicitly", () => {
+    expect(PINNED_DIRECT_LSP_RELEASES.eslint.version).toBe("3.0.24")
+    expect(PINNED_DIRECT_LSP_RELEASES.eslint.assetName).toBe("vscode-eslint-3.0.24.vsix.gz")
   })
 
   test("maps texlab assets for supported targets", () => {
@@ -177,6 +188,15 @@ describe("lsp server helpers", () => {
     expect(kotlinLsAsset("262.2310.0", "linux", "ia32")).toBeUndefined()
   })
 
+  test("builds pinned jdtls archive and checksum urls", () => {
+    expect(jdtlsAssetUrl("jdt-language-server-1.58.0-202604151538.tar.gz")).toBe(
+      "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/1.58.0/jdt-language-server-1.58.0-202604151538.tar.gz",
+    )
+    expect(jdtlsChecksumUrl("jdt-language-server-1.58.0-202604151538.tar.gz")).toBe(
+      "https://download.eclipse.org/jdtls/milestones/1.58.0/jdt-language-server-1.58.0-202604151538.tar.gz.sha256",
+    )
+  })
+
   test("finds a release asset by exact name", () => {
     expect(
       releaseAsset(
@@ -215,6 +235,12 @@ describe("lsp server helpers", () => {
         "terraform-ls_0.38.6_linux_arm64.zip",
       ),
     ).toBe("a44b3df099f0ad8e88c96ea1110f965affee6e69b68ec44df25a593f5ee66cf3")
+    expect(
+      checksumManifestSha256(
+        "2a5bbe55ec91b4325392050dc422cead3220a2459b3766be35e1fff45b4a50d9\n",
+        "jdt-language-server-1.58.0-202604151538.tar.gz",
+      ),
+    ).toBe("2a5bbe55ec91b4325392050dc422cead3220a2459b3766be35e1fff45b4a50d9")
   })
 
   test("fetches an exact GitHub release by tag", async () => {
@@ -343,6 +369,41 @@ describe("lsp server helpers", () => {
         "/tmp/tinymist-dir/tinymist-x86_64-unknown-linux-gnu.tar.gz",
         "--strip-components=1",
       ],
+    ])
+  })
+
+  test("inflates gzip-wrapped zip archives before extraction", async () => {
+    const calls: string[] = []
+    const archive = gzipSync(Buffer.from("zip-archive"))
+    const bin = await installReleaseBin({
+      id: "vscode-eslint",
+      assetName: "vscode-eslint-3.0.24.vsix.gz",
+      url: "https://example.com/vscode-eslint.vsix",
+      bin: "/tmp/vscode-eslint/extension/server/out/eslintServer.js",
+      verifyPath: "/tmp/vscode-eslint/extension/server/out/eslintServer.js",
+      installDir: "/tmp/vscode-eslint",
+      platform: "darwin",
+      archiveType: "zip",
+      inflateGzip: true,
+      fetcher: async () => ({
+        ok: true,
+        arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength),
+      }),
+      write: async (file) => void calls.push(`write:${file}`),
+      extractZip: async (from, to) => void calls.push(`zip:${from}:${to}`),
+      remove: async (file) => void calls.push(`rm:${file}`),
+      exists: async (file) => file === "/tmp/vscode-eslint/extension/server/out/eslintServer.js",
+      chmod: async (file, mode) => void calls.push(`chmod:${file}:${mode}`),
+    })
+
+    expect(bin).toBe("/tmp/vscode-eslint/extension/server/out/eslintServer.js")
+    expect(calls).toEqual([
+      "write:/tmp/vscode-eslint/vscode-eslint-3.0.24.vsix.gz",
+      "write:/tmp/vscode-eslint/vscode-eslint-3.0.24.vsix",
+      "zip:/tmp/vscode-eslint/vscode-eslint-3.0.24.vsix:/tmp/vscode-eslint",
+      "rm:/tmp/vscode-eslint/vscode-eslint-3.0.24.vsix.gz",
+      "rm:/tmp/vscode-eslint/vscode-eslint-3.0.24.vsix",
+      "chmod:/tmp/vscode-eslint/extension/server/out/eslintServer.js:493",
     ])
   })
 

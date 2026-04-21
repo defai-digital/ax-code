@@ -8,7 +8,6 @@ import fs from "fs/promises"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
-import { Archive } from "../util/archive"
 import { Process } from "../util/process"
 import { which } from "../util/which"
 import { Module } from "@ax-code/util/module"
@@ -16,12 +15,15 @@ import { spawn } from "./launch"
 import { JS_LOCKFILES } from "@/constants/lsp"
 import {
   PINNED_CHECKSUM_LSP_RELEASES,
+  PINNED_DIRECT_LSP_RELEASES,
   PINNED_GITHUB_LSP_RELEASES,
   bunServer,
   ensureTool,
   fetchGitHubReleaseByTag,
   globalBin,
   globalTool,
+  jdtlsAssetUrl,
+  jdtlsChecksumUrl,
   installReleaseBin,
   installPinnedChecksumReleaseAsset,
   installPinnedGitHubReleaseAsset,
@@ -142,58 +144,74 @@ export const ESLint: Info = {
   root: NearestRoot([...JS_LOCKFILES]),
   extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue"],
   async spawn(root) {
+    const pinned = PINNED_DIRECT_LSP_RELEASES.eslint
+    const platform = process.platform
+    const arch = process.arch
     const eslint = Module.resolve("eslint", Instance.directory)
     if (!eslint) return
     log.info("spawning eslint server")
-    const serverPath = path.join(Global.Path.bin, "vscode-eslint", "server", "out", "eslintServer.js")
-    if (!(await Filesystem.exists(serverPath))) {
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("downloading and building VS Code ESLint server")
-      const response = await fetch("https://github.com/microsoft/vscode-eslint/archive/refs/heads/main.zip", { signal: AbortSignal.timeout(60_000) })
-      if (!response.ok) return
-
-      const zipPath = path.join(Global.Path.bin, "vscode-eslint.zip")
-      if (response.body) await Filesystem.writeStream(zipPath, response.body)
-
-      const ok = await Archive.extractZip(zipPath, Global.Path.bin)
-        .then(() => true)
-        .catch((error) => {
-          log.error("Failed to extract vscode-eslint archive", { error })
-          return false
-        })
-      // Always clean up the ~50MB zip, even on extraction failure.
-      // Previously the cleanup only ran on the success path, so repeated
-      // failed installs would exhaust disk space with orphaned archives.
-      await fs.rm(zipPath, { force: true }).catch(() => {})
-      if (!ok) return
-
-      const extractedPath = path.join(Global.Path.bin, "vscode-eslint-main")
-      const finalPath = path.join(Global.Path.bin, "vscode-eslint")
-
-      const stats = await fs.stat(finalPath).catch(() => undefined)
-      if (stats) {
-        log.info("removing old eslint installation", { path: finalPath })
-        await fs.rm(finalPath, { force: true, recursive: true })
+    const managedServer = managedToolPath(
+      "vscode-eslint",
+      pinned.version,
+      path.join("extension", "server", "out", "eslintServer.js"),
+      platform,
+      arch,
+    )
+    if (await pathExists(managedServer)) {
+      return {
+        process: spawn(BunProc.which(), [managedServer, "--stdio"], {
+          cwd: root,
+          env: {
+            ...Env.sanitize(),
+            BUN_BE_BUN: "1",
+          },
+        }),
       }
-      await fs.rename(extractedPath, finalPath)
-
-      const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm"
-      await Process.run([npmCmd, "install"], { cwd: finalPath })
-      await Process.run([npmCmd, "run", "compile"], { cwd: finalPath })
-
-      log.info("installed VS Code ESLint server", { serverPath })
     }
 
-    const proc = spawn(BunProc.which(), [serverPath, "--stdio"], {
-      cwd: root,
-      env: {
-        ...Env.sanitize(),
-        BUN_BE_BUN: "1",
-      },
+    const legacyServer = path.join(Global.Path.bin, "vscode-eslint", "server", "out", "eslintServer.js")
+    if (await pathExists(legacyServer)) {
+      log.warn("using legacy unmanaged vscode-eslint install; remove shared-bin copy to switch to pinned managed installs", {
+        serverPath: legacyServer,
+      })
+      return {
+        process: spawn(BunProc.which(), [legacyServer, "--stdio"], {
+          cwd: root,
+          env: {
+            ...Env.sanitize(),
+            BUN_BE_BUN: "1",
+          },
+        }),
+      }
+    }
+
+    if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
+    log.info("downloading pinned VS Code ESLint server", {
+      version: pinned.version,
     })
 
+    const serverPath =
+      (await installReleaseBin({
+        id: "vscode-eslint",
+        assetName: pinned.assetName,
+        url: pinned.url,
+        bin: managedServer,
+        installDir: managedToolDir("vscode-eslint", pinned.version, platform, arch),
+        platform,
+        sha256: pinned.sha256,
+        archiveType: "zip",
+        inflateGzip: true,
+      })) ?? null
+    if (!serverPath) return
+
     return {
-      process: proc,
+      process: spawn(BunProc.which(), [serverPath, "--stdio"], {
+        cwd: root,
+        env: {
+          ...Env.sanitize(),
+          BUN_BE_BUN: "1",
+        },
+      }),
     }
   },
 }
@@ -445,60 +463,36 @@ export const ElixirLS: Info = {
   root: NearestRoot(["mix.exs", "mix.lock"]),
   async spawn(root) {
     let binary = which("elixir-ls")
-    if (!binary) {
-      const elixirLsPath = path.join(Global.Path.bin, "elixir-ls")
-      binary = path.join(
-        Global.Path.bin,
-        "elixir-ls-master",
-        "release",
-        process.platform === "win32" ? "language_server.bat" : "language_server.sh",
-      )
-
-      if (!(await Filesystem.exists(binary))) {
-        const elixir = which("elixir")
-        if (!elixir) {
-          log.error("elixir is required to run elixir-ls")
-          return
-        }
-
-        if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-        log.info("downloading elixir-ls from GitHub releases")
-
-        const response = await fetch("https://github.com/elixir-lsp/elixir-ls/archive/refs/heads/master.zip", { signal: AbortSignal.timeout(60_000) })
-        if (!response.ok) return
-        const zipPath = path.join(Global.Path.bin, "elixir-ls.zip")
-        if (response.body) await Filesystem.writeStream(zipPath, response.body)
-
-        const ok = await Archive.extractZip(zipPath, Global.Path.bin)
-          .then(() => true)
-          .catch((error) => {
-            log.error("Failed to extract elixir-ls archive", { error })
-            return false
-          })
-        if (!ok) return
-
-        await fs.rm(zipPath, {
-          force: true,
-          recursive: true,
-        })
-
-        const cwd = path.join(Global.Path.bin, "elixir-ls-master")
-        const env = { MIX_ENV: "prod", ...Env.sanitize() }
-        await Process.run(["mix", "deps.get"], { cwd, env })
-        await Process.run(["mix", "compile"], { cwd, env })
-        await Process.run(["mix", "elixir_ls.release2", "-o", "release"], { cwd, env })
-
-        log.info(`installed elixir-ls`, {
-          path: elixirLsPath,
-        })
+    if (binary) {
+      return {
+        process: spawn(binary, {
+          cwd: root,
+        }),
       }
     }
 
-    return {
-      process: spawn(binary, {
-        cwd: root,
-      }),
+    binary = path.join(
+      Global.Path.bin,
+      "elixir-ls-master",
+      "release",
+      process.platform === "win32" ? "language_server.bat" : "language_server.sh",
+    )
+    if (await pathExists(binary)) {
+      log.warn("using legacy unmanaged elixir-ls install; reinstall manually to replace the old runtime Mix.install path", {
+        bin: binary,
+      })
+      return {
+        process: spawn(binary, {
+          cwd: root,
+        }),
+      }
     }
+
+    log.error(
+      "Automatic elixir-ls installation is disabled because the upstream release still performs runtime Mix.install from GitHub. Install elixir-ls manually or configure a custom LSP command.",
+      { release: PINNED_GITHUB_LSP_RELEASES.elixirLs.tag },
+    )
+    return
   },
 }
 
@@ -863,6 +857,75 @@ export const Astro: Info = {
   },
 }
 
+const spawnJdtls = async (java: string, root: string, distPath: string, launcherDir: string) => {
+  const jarFileName =
+    (await fs.readdir(launcherDir).catch(() => []))
+      .find((item) => /^org\.eclipse\.equinox\.launcher_.*\.jar$/.test(item))
+      ?.trim()
+  if (!jarFileName) {
+    log.error(`Failed to locate the JDTLS launcher jar in: ${launcherDir}`)
+    return
+  }
+
+  const launcherJar = path.join(launcherDir, jarFileName)
+  if (!(await pathExists(launcherJar))) {
+    log.error(`Failed to locate the JDTLS launcher module in the installed directory: ${distPath}.`)
+    return
+  }
+
+  const configFile = path.join(
+    distPath,
+    (() => {
+      switch (process.platform) {
+        case "darwin":
+          return "config_mac"
+        case "linux":
+          return "config_linux"
+        case "win32":
+          return "config_win"
+        default:
+          return "config_linux"
+      }
+    })(),
+  )
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-jdtls-data"))
+  let proc
+  try {
+    proc = spawn(
+      java,
+      [
+        "-jar",
+        launcherJar,
+        "-configuration",
+        configFile,
+        "-data",
+        dataDir,
+        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+        "-Dosgi.bundles.defaultStartLevel=4",
+        "-Declipse.product=org.eclipse.jdt.ls.core.product",
+        "-Dlog.level=ALL",
+        "--add-modules=ALL-SYSTEM",
+        "--add-opens java.base/java.util=ALL-UNNAMED",
+        "--add-opens java.base/java.lang=ALL-UNNAMED",
+      ],
+      {
+        cwd: root,
+      },
+    )
+  } catch (err) {
+    // Avoid leaking temp dirs when spawn fails synchronously.
+    await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {})
+    throw err
+  }
+
+  proc.once("exit", () => {
+    fs.rm(dataDir, { recursive: true, force: true }).catch((err) =>
+      log.warn("failed to remove jdtls data dir", { dataDir, err }),
+    )
+  })
+  return { process: proc }
+}
+
 export const JDTLS: Info = {
   id: "jdtls",
   root: async (file) => {
@@ -891,6 +954,7 @@ export const JDTLS: Info = {
   },
   extensions: [".java"],
   async spawn(root) {
+    const pinned = PINNED_CHECKSUM_LSP_RELEASES.jdtls
     const java = which("java")
     if (!java) {
       log.error("Java 21 or newer is required to run the JDTLS. Please install it first.")
@@ -904,105 +968,43 @@ export const JDTLS: Info = {
       log.error("JDTLS requires at least Java 21.")
       return
     }
-    const distPath = path.join(Global.Path.bin, "jdtls")
+
+    const platform = process.platform
+    const arch = process.arch
+    const distPath = managedToolDir("jdtls", pinned.version, platform, arch)
     const launcherDir = path.join(distPath, "plugins")
-    const installed = await pathExists(launcherDir)
-    if (!installed) {
+    if (!(await pathExists(launcherDir))) {
+      const legacyDistPath = path.join(Global.Path.bin, "jdtls")
+      const legacyLauncherDir = path.join(legacyDistPath, "plugins")
+      if (await pathExists(legacyLauncherDir)) {
+        log.warn("using legacy unmanaged jdtls install; remove shared-bin copy to switch to pinned managed installs", {
+          distPath: legacyDistPath,
+        })
+        return spawnJdtls(java, root, legacyDistPath, legacyLauncherDir)
+      }
+
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("Downloading JDTLS LSP server.")
-      await fs.mkdir(distPath, { recursive: true })
-      const releaseURL =
-        "https://www.eclipse.org/downloads/download.php?file=/jdtls/snapshots/jdt-language-server-latest.tar.gz"
-      const archiveName = "release.tar.gz"
+      log.info("Downloading pinned JDTLS LSP server.", {
+        version: pinned.version,
+      })
 
-      log.info("Downloading JDTLS archive", { url: releaseURL, dest: distPath })
-      const download = await fetch(releaseURL, { signal: AbortSignal.timeout(60_000) })
-      if (!download.ok || !download.body) {
-        log.error("Failed to download JDTLS", { status: download.status, statusText: download.statusText })
-        return
-      }
-      await Filesystem.writeStream(path.join(distPath, archiveName), download.body)
+      const installed =
+        (await installPinnedChecksumReleaseAsset({
+          id: "jdtls",
+          assetName: pinned.assetName,
+          url: jdtlsAssetUrl(pinned.assetName),
+          checksumUrl: jdtlsChecksumUrl(pinned.assetName),
+          bin: distPath,
+          verifyPath: launcherDir,
+          installDir: distPath,
+          platform,
+          tarArgs: ["-xzf"],
+          skipChmod: true,
+        })) ?? null
+      if (!installed) return
+    }
 
-      log.info("Extracting JDTLS archive")
-      const tarResult = await run(["tar", "-xzf", archiveName], { cwd: distPath })
-      if (tarResult.code !== 0) {
-        log.error("Failed to extract JDTLS", { exitCode: tarResult.code, stderr: tarResult.stderr.toString() })
-        return
-      }
-
-      await fs.rm(path.join(distPath, archiveName), { force: true })
-      log.info("JDTLS download and extraction completed")
-    }
-    const jarFileName =
-      (await fs.readdir(launcherDir).catch(() => []))
-        .find((item) => /^org\.eclipse\.equinox\.launcher_.*\.jar$/.test(item))
-        ?.trim()
-    if (!jarFileName) {
-      log.error(`Failed to locate the JDTLS launcher jar in: ${launcherDir}`)
-      return
-    }
-    const launcherJar = path.join(launcherDir, jarFileName)
-    if (!(await pathExists(launcherJar))) {
-      log.error(`Failed to locate the JDTLS launcher module in the installed directory: ${distPath}.`)
-      return
-    }
-    const configFile = path.join(
-      distPath,
-      (() => {
-        switch (process.platform) {
-          case "darwin":
-            return "config_mac"
-          case "linux":
-            return "config_linux"
-          case "win32":
-            return "config_win"
-          default:
-            return "config_linux"
-        }
-      })(),
-    )
-    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-jdtls-data"))
-    let proc
-    try {
-      proc = spawn(
-        java,
-        [
-          "-jar",
-          launcherJar,
-          "-configuration",
-          configFile,
-          "-data",
-          dataDir,
-          "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-          "-Dosgi.bundles.defaultStartLevel=4",
-          "-Declipse.product=org.eclipse.jdt.ls.core.product",
-          "-Dlog.level=ALL",
-          "--add-modules=ALL-SYSTEM",
-          "--add-opens java.base/java.util=ALL-UNNAMED",
-          "--add-opens java.base/java.lang=ALL-UNNAMED",
-        ],
-        {
-          cwd: root,
-        },
-      )
-    } catch (err) {
-      // spawn() can throw synchronously (ENOENT on missing java, EACCES,
-      // etc.). Before this catch, the exit handler below was never
-      // registered and the mkdtemp'd directory leaked on every failed
-      // spawn — accumulating endlessly in $TMPDIR for users without
-      // Java installed who keep opening Java projects.
-      await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {})
-      throw err
-    }
-    // Clean up the JDTLS data directory once the language server exits.
-    // Previously these directories were left behind on every shutdown and
-    // accumulated indefinitely in $TMPDIR.
-    proc.once("exit", () => {
-      fs.rm(dataDir, { recursive: true, force: true }).catch((err) =>
-        log.warn("failed to remove jdtls data dir", { dataDir, err }),
-      )
-    })
-    return { process: proc }
+    return spawnJdtls(java, root, distPath, launcherDir)
   },
 }
 
