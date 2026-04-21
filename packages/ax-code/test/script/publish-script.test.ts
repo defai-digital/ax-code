@@ -8,10 +8,11 @@ const publishScripts = [
 ]
 
 describe("publish scripts", () => {
-  test("use npm pack instead of pnpm pack in release packaging flows", async () => {
+  test("disable workspaces for npm pack and npm publish in release packaging flows", async () => {
     for (const file of publishScripts) {
       const text = await Bun.file(file).text()
       expect(text).toContain("npm pack --workspaces=false")
+      expect(text).toContain("npm publish *.tgz --workspaces=false")
       expect(text).not.toContain("$`pnpm pack")
     }
   })
