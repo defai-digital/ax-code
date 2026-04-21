@@ -6,16 +6,24 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import {
   fetchGitHubReleaseByTag,
+  installPinnedGitHubReleaseAsset,
   NearestRoot,
+  PINNED_GITHUB_LSP_RELEASES,
   bunServerArgs,
   clangdAsset,
   globalBin,
   globalPath,
   installReleaseBin,
+  luaLsAsset,
+  luaLsReleaseTarget,
   managedToolBin,
+  managedToolPath,
   releaseAsset,
   releaseAssetSha256,
+  releaseVersion,
   spawnInfo,
+  texlabAsset,
+  tinymistAsset,
   toolBin,
   toolServer,
   venvBin,
@@ -81,6 +89,48 @@ describe("lsp server helpers", () => {
     expect(managedToolBin("zls", "0.16.0", "win32", "x64")).toBe(
       path.join(Global.Path.bin, ".managed", "zls", "0.16.0", "win32-x64", "zls.exe"),
     )
+  })
+
+  test("builds nested managed tool paths for directory-based installs", () => {
+    expect(managedToolPath("lua-language-server", "3.15.0", path.join("bin", "lua-language-server"), "darwin", "arm64")).toBe(
+      path.join(Global.Path.bin, ".managed", "lua-language-server", "3.15.0", "darwin-arm64", "bin", "lua-language-server"),
+    )
+  })
+
+  test("normalizes release tags into install versions", () => {
+    expect(releaseVersion("v5.24.0")).toBe("5.24.0")
+    expect(releaseVersion("3.15.0")).toBe("3.15.0")
+  })
+
+  test("maps pinned GitHub LSP releases explicitly", () => {
+    expect(PINNED_GITHUB_LSP_RELEASES.texlab.tag).toBe("v5.24.0")
+    expect(PINNED_GITHUB_LSP_RELEASES.tinymist.tag).toBe("v0.14.0")
+    expect(PINNED_GITHUB_LSP_RELEASES.luaLs.tag).toBe("3.15.0")
+  })
+
+  test("maps texlab assets for supported targets", () => {
+    expect(texlabAsset("darwin", "arm64")).toBe("texlab-aarch64-macos.tar.gz")
+    expect(texlabAsset("linux", "x64")).toBe("texlab-x86_64-linux.tar.gz")
+    expect(texlabAsset("win32", "x64")).toBe("texlab-x86_64-windows.zip")
+    expect(texlabAsset("linux", "ia32")).toBeUndefined()
+  })
+
+  test("maps tinymist assets for supported targets", () => {
+    expect(tinymistAsset("darwin", "arm64")).toBe("tinymist-aarch64-apple-darwin.tar.gz")
+    expect(tinymistAsset("linux", "x64")).toBe("tinymist-x86_64-unknown-linux-gnu.tar.gz")
+    expect(tinymistAsset("win32", "x64")).toBe("tinymist-x86_64-pc-windows-msvc.zip")
+    expect(tinymistAsset("linux", "ia32")).toBeUndefined()
+  })
+
+  test("maps lua-language-server targets and assets for supported platforms", () => {
+    expect(luaLsReleaseTarget("darwin", "arm64")).toEqual({
+      arch: "arm64",
+      ext: "tar.gz",
+      platform: "darwin",
+    })
+    expect(luaLsAsset("3.15.0", "linux", "x64")).toBe("lua-language-server-3.15.0-linux-x64.tar.gz")
+    expect(luaLsAsset("3.15.0", "win32", "ia32")).toBe("lua-language-server-3.15.0-win32-ia32.zip")
+    expect(luaLsReleaseTarget("linux", "ia32")).toBeUndefined()
   })
 
   test("prefers zip clangd asset when multiple valid assets exist", () => {
@@ -154,6 +204,48 @@ describe("lsp server helpers", () => {
     expect(calls).toEqual(["https://api.github.com/repos/zigtools/zls/releases/tags/0.16.0"])
     expect(release?.tag_name).toBe("0.16.0")
     expect(release?.assets?.[0]?.name).toBe("zls-aarch64-macos.tar.xz")
+  })
+
+  test("installs pinned GitHub release assets with verified digests", async () => {
+    const installs: Record<string, unknown>[] = []
+    const bin = await installPinnedGitHubReleaseAsset({
+      id: "texlab",
+      repo: "latex-lsp/texlab",
+      tag: "v5.24.0",
+      assetName: "texlab-aarch64-macos.tar.gz",
+      bin: "/tmp/texlab",
+      installDir: "/tmp/texlab-dir",
+      platform: "darwin",
+      tarArgs: ["-xzf"],
+      fetchRelease: async () => ({
+        tag_name: "v5.24.0",
+        assets: [
+          {
+            name: "texlab-aarch64-macos.tar.gz",
+            browser_download_url: "https://example.com/texlab.tar.gz",
+            digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          },
+        ],
+      }),
+      installRelease: async (input) => {
+        installs.push(input)
+        return input.bin
+      },
+    })
+
+    expect(bin).toBe("/tmp/texlab")
+    expect(installs).toEqual([
+      expect.objectContaining({
+        assetName: "texlab-aarch64-macos.tar.gz",
+        bin: "/tmp/texlab",
+        id: "texlab",
+        installDir: "/tmp/texlab-dir",
+        platform: "darwin",
+        sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        tarArgs: ["-xzf"],
+        url: "https://example.com/texlab.tar.gz",
+      }),
+    ])
   })
 
   test("builds bun run args for js-backed servers", () => {

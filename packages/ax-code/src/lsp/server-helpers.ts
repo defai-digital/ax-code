@@ -231,6 +231,15 @@ type GitHubRelease = {
   assets?: Asset[]
 }
 
+// These pins are intentionally explicit so runtime installs stay
+// reproducible. Update them deliberately after verifying upstream
+// release compatibility.
+export const PINNED_GITHUB_LSP_RELEASES = {
+  luaLs: { repo: "LuaLS/lua-language-server", tag: "3.15.0" },
+  texlab: { repo: "latex-lsp/texlab", tag: "v5.24.0" },
+  tinymist: { repo: "Myriad-Dreamin/tinymist", tag: "v0.14.0" },
+} as const
+
 // Keep auto-managed zls installs deterministic. Nightly/dev Zig builds
 // must provide their own zls because there is no stable pinned match.
 const ZLS_RELEASE_BY_ZIG_MINOR: Record<string, string> = {
@@ -247,12 +256,22 @@ export const managedToolDir = (
   arch = process.arch,
 ) => path.join(Global.Path.bin, ".managed", name, version, `${platform}-${arch}`)
 
+export const managedToolPath = (
+  name: string,
+  version: string,
+  relativePath: string,
+  platform = process.platform,
+  arch = process.arch,
+) => path.join(managedToolDir(name, version, platform, arch), relativePath)
+
 export const managedToolBin = (
   name: string,
   version: string,
   platform = process.platform,
   arch = process.arch,
 ) => path.join(managedToolDir(name, version, platform, arch), name + (platform === "win32" ? ".exe" : ""))
+
+export const releaseVersion = (tag: string) => tag.replace(/^v/, "")
 
 export const zlsReleaseForZig = (version: string) => {
   const stable = version.trim().match(/^(\d+)\.(\d+)\.(\d+)$/)
@@ -287,6 +306,104 @@ export const fetchGitHubReleaseByTag = async (input: {
   const release = (await response.json()) as GitHubRelease
   if (!Array.isArray(release.assets)) return
   return release
+}
+
+export const texlabAsset = (platform: string, arch: string) => {
+  const texArch = arch === "arm64" ? "aarch64" : arch === "x64" ? "x86_64" : undefined
+  const texPlatform = platform === "darwin" ? "macos" : platform === "linux" ? "linux" : platform === "win32" ? "windows" : undefined
+  if (!texArch || !texPlatform) return
+  const ext = platform === "win32" ? "zip" : "tar.gz"
+  return `texlab-${texArch}-${texPlatform}.${ext}`
+}
+
+export const tinymistAsset = (platform: string, arch: string) => {
+  const tinymistArch = arch === "arm64" ? "aarch64" : arch === "x64" ? "x86_64" : undefined
+  let tinymistPlatform: string | undefined
+  let ext: string | undefined
+
+  if (platform === "darwin") {
+    tinymistPlatform = "apple-darwin"
+    ext = "tar.gz"
+  } else if (platform === "win32") {
+    tinymistPlatform = "pc-windows-msvc"
+    ext = "zip"
+  } else if (platform === "linux") {
+    tinymistPlatform = "unknown-linux-gnu"
+    ext = "tar.gz"
+  }
+
+  if (!tinymistArch || !tinymistPlatform || !ext) return
+  return `tinymist-${tinymistArch}-${tinymistPlatform}.${ext}`
+}
+
+export const luaLsReleaseTarget = (platform: string, arch: string) => {
+  const luaPlatform = platform === "darwin" ? "darwin" : platform === "linux" ? "linux" : platform === "win32" ? "win32" : undefined
+  const luaArch = arch === "arm64" ? "arm64" : arch === "x64" ? "x64" : arch === "ia32" ? "ia32" : undefined
+  const ext = platform === "win32" ? "zip" : "tar.gz"
+  if (!luaPlatform || !luaArch) return
+
+  const supportedCombos = new Set([
+    "darwin-arm64.tar.gz",
+    "darwin-x64.tar.gz",
+    "linux-x64.tar.gz",
+    "linux-arm64.tar.gz",
+    "win32-x64.zip",
+    "win32-ia32.zip",
+  ])
+
+  const assetSuffix = `${luaPlatform}-${luaArch}.${ext}`
+  if (!supportedCombos.has(assetSuffix)) return
+  return {
+    arch: luaArch,
+    ext,
+    platform: luaPlatform,
+  }
+}
+
+export const luaLsAsset = (tag: string, platform: string, arch: string) => {
+  const target = luaLsReleaseTarget(platform, arch)
+  if (!target) return
+  return `lua-language-server-${tag}-${target.platform}-${target.arch}.${target.ext}`
+}
+
+export const installPinnedGitHubReleaseAsset = async (input: {
+  id: string
+  repo: string
+  tag: string
+  assetName: string
+  bin: string
+  installDir?: string
+  platform?: string
+  tarArgs?: string[]
+  fetchRelease?: typeof fetchGitHubReleaseByTag
+  installRelease?: typeof installReleaseBin
+}) => {
+  const release = await (input.fetchRelease ?? fetchGitHubReleaseByTag)({
+    repo: input.repo,
+    tag: input.tag,
+  })
+  if (!release) {
+    log.error(`Failed to fetch ${input.id} release info`, { repo: input.repo, tag: input.tag })
+    return
+  }
+
+  const asset = releaseAsset(release.assets ?? [], input.assetName)
+  const sha256 = asset ? releaseAssetSha256(asset) : undefined
+  if (!asset?.browser_download_url || !sha256) {
+    log.error(`Could not find a verifiable ${input.assetName} asset in ${input.id} release ${input.tag}`)
+    return
+  }
+
+  return (input.installRelease ?? installReleaseBin)({
+    id: input.id,
+    assetName: input.assetName,
+    url: asset.browser_download_url,
+    bin: input.bin,
+    installDir: input.installDir,
+    platform: input.platform,
+    sha256,
+    tarArgs: input.tarArgs,
+  })
 }
 
 export const installReleaseBin = async (input: {

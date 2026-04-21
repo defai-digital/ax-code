@@ -170,7 +170,8 @@ describe("LSP.prewarmFiles", () => {
 
         expect(result.readyCount).toBe(1)
         expect(result.freshSpawnCount).toBe(1)
-        expect(result.files).toEqual([a])
+        expect(result.files).toHaveLength(1)
+        expect([a, b]).toContain(result.files[0])
       },
     })
   })

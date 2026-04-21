@@ -15,6 +15,7 @@ import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
 import { JS_LOCKFILES } from "@/constants/lsp"
 import {
+  PINNED_GITHUB_LSP_RELEASES,
   bunServer,
   clangdAsset,
   ensureTool,
@@ -22,15 +23,23 @@ import {
   globalBin,
   globalTool,
   installReleaseBin,
+  installPinnedGitHubReleaseAsset,
+  luaLsAsset,
+  luaLsReleaseTarget,
   log,
   managedToolBin,
+  managedToolDir,
+  managedToolPath,
   NearestRoot,
   output,
   pathExists,
   releaseAsset,
   releaseAssetSha256,
+  releaseVersion,
   run,
   spawnInfo,
+  texlabAsset,
+  tinymistAsset,
   toolServer,
   toolBin,
   venvBin,
@@ -1165,135 +1174,90 @@ export const LuaLS: Info = {
   ]),
   extensions: [".lua"],
   async spawn(root) {
-    let bin = which("lua-language-server", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+    const pinned = PINNED_GITHUB_LSP_RELEASES.luaLs
+    const platform = process.platform
+    const arch = process.arch
+    const version = releaseVersion(pinned.tag)
+    const managedBin = managedToolPath(
+      "lua-language-server",
+      version,
+      path.join("bin", "lua-language-server" + (platform === "win32" ? ".exe" : "")),
+      platform,
+      arch,
+    )
+    const installedBin = which("lua-language-server")
+    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
+      return {
+        process: spawn(installedBin, {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (await pathExists(managedBin)) {
+      return {
+        process: spawn(managedBin, {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (installedBin) {
+      log.warn(
+        "using legacy unmanaged lua-language-server install; remove shared-bin copy to switch to pinned managed installs",
+        { bin: installedBin },
+      )
+      return {
+        process: spawn(installedBin, {
+          cwd: root,
+        }),
+      }
+    }
+
+    const target = luaLsReleaseTarget(platform, arch)
+    const legacyBin =
+      target &&
+      path.join(
+        Global.Path.bin,
+        `lua-language-server-${target.arch}-${target.platform}`,
+        "bin",
+        "lua-language-server" + (platform === "win32" ? ".exe" : ""),
+      )
+    if (legacyBin && (await pathExists(legacyBin))) {
+      log.warn(
+        "using legacy unmanaged lua-language-server install; remove shared-bin copy to switch to pinned managed installs",
+        { bin: legacyBin },
+      )
+      return {
+        process: spawn(legacyBin, {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
+    const assetName = luaLsAsset(pinned.tag, platform, arch)
+    if (!target || !assetName) {
+      log.error(`Platform ${platform} and architecture ${arch} is not supported by lua-language-server`)
+      return
+    }
+
+    log.info("downloading pinned lua-language-server release", {
+      tag: pinned.tag,
     })
 
-    if (!bin) {
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("downloading lua-language-server from GitHub releases")
-
-      const releaseResponse = await fetch("https://api.github.com/repos/LuaLS/lua-language-server/releases/latest", { signal: AbortSignal.timeout(30_000) })
-      if (!releaseResponse.ok) {
-        log.error("Failed to fetch lua-language-server release info")
-        return
-      }
-
-      const release = (await releaseResponse.json()) as {
-        tag_name: string
-        assets: { name: string; browser_download_url: string }[]
-      }
-
-      const platform = process.platform
-      const arch = process.arch
-      let assetName = ""
-
-      let lualsArch: string = arch
-      if (arch === "arm64") lualsArch = "arm64"
-      else if (arch === "x64") lualsArch = "x64"
-      else if (arch === "ia32") lualsArch = "ia32"
-
-      let lualsPlatform: string = platform
-      if (platform === "darwin") lualsPlatform = "darwin"
-      else if (platform === "linux") lualsPlatform = "linux"
-      else if (platform === "win32") lualsPlatform = "win32"
-
-      const ext = platform === "win32" ? "zip" : "tar.gz"
-
-      assetName = `lua-language-server-${release.tag_name}-${lualsPlatform}-${lualsArch}.${ext}`
-
-      const supportedCombos = [
-        "darwin-arm64.tar.gz",
-        "darwin-x64.tar.gz",
-        "linux-x64.tar.gz",
-        "linux-arm64.tar.gz",
-        "win32-x64.zip",
-        "win32-ia32.zip",
-      ]
-
-      const assetSuffix = `${lualsPlatform}-${lualsArch}.${ext}`
-      if (!supportedCombos.includes(assetSuffix)) {
-        log.error(`Platform ${platform} and architecture ${arch} is not supported by lua-language-server`)
-        return
-      }
-
-      const asset = release.assets.find((a) => a.name === assetName)
-      if (!asset) {
-        log.error(`Could not find asset ${assetName} in latest lua-language-server release`)
-        return
-      }
-
-      const downloadUrl = asset.browser_download_url
-      const downloadResponse = await fetch(downloadUrl, { signal: AbortSignal.timeout(60_000) })
-      if (!downloadResponse.ok) {
-        log.error("Failed to download lua-language-server")
-        return
-      }
-
-      const tempPath = path.join(Global.Path.bin, assetName)
-      if (downloadResponse.body) await Filesystem.writeStream(tempPath, downloadResponse.body)
-
-      // Unlike zls which is a single self-contained binary,
-      // lua-language-server needs supporting files (meta/, locale/, etc.)
-      // Extract entire archive to dedicated directory to preserve all files
-      const installDir = path.join(Global.Path.bin, `lua-language-server-${lualsArch}-${lualsPlatform}`)
-
-      // Remove old installation if exists
-      const stats = await fs.stat(installDir).catch(() => undefined)
-      if (stats) {
-        await fs.rm(installDir, { force: true, recursive: true })
-      }
-
-      await fs.mkdir(installDir, { recursive: true })
-
-      try {
-        if (ext === "zip") {
-          const ok = await Archive.extractZip(tempPath, installDir)
-            .then(() => true)
-            .catch((error) => {
-              log.error("Failed to extract lua-language-server archive", { error })
-              return false
-            })
-          if (!ok) return
-        } else {
-          const ok = await run(["tar", "-xzf", tempPath, "-C", installDir])
-            .then((result) => result.code === 0)
-            .catch((error: unknown) => {
-              log.error("Failed to extract lua-language-server archive", { error })
-              return false
-            })
-          if (!ok) return
-        }
-      } finally {
-        // Always remove the archive — previously only the happy path
-        // reached the rm call, leaving downloads wedged in the bin
-        // dir after every failed extraction.
-        await fs.rm(tempPath, { force: true }).catch(() => {})
-      }
-
-      // Binary is located in bin/ subdirectory within the extracted archive
-      bin = path.join(installDir, "bin", "lua-language-server" + (platform === "win32" ? ".exe" : ""))
-
-      if (!(await Filesystem.exists(bin))) {
-        log.error("Failed to extract lua-language-server binary")
-        return
-      }
-
-      if (platform !== "win32") {
-        const ok = await fs
-          .chmod(bin, 0o755)
-          .then(() => true)
-          .catch((error: unknown) => {
-            log.error("Failed to set executable permission for lua-language-server binary", {
-              error,
-            })
-            return false
-          })
-        if (!ok) return
-      }
-
-      log.info(`installed lua-language-server`, { bin })
-    }
+    const bin =
+      (await installPinnedGitHubReleaseAsset({
+        id: "lua-language-server",
+        repo: pinned.repo,
+        tag: pinned.tag,
+        assetName,
+        bin: managedBin,
+        installDir: managedToolDir("lua-language-server", version, platform, arch),
+        platform,
+        tarArgs: target.ext === "zip" ? undefined : ["-xzf"],
+      })) ?? null
+    if (!bin) return
 
     return {
       process: spawn(bin, {
@@ -1493,54 +1457,62 @@ export const TexLab: Info = {
   extensions: [".tex", ".bib"],
   root: NearestRoot([".latexmkrc", "latexmkrc", ".texlabroot", "texlabroot"]),
   async spawn(root) {
-    let bin = which("texlab", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+    const pinned = PINNED_GITHUB_LSP_RELEASES.texlab
+    const platform = process.platform
+    const arch = process.arch
+    const version = releaseVersion(pinned.tag)
+    const managedBin = managedToolBin("texlab", version, platform, arch)
+    const installedBin = which("texlab")
+    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
+      return {
+        process: spawn(installedBin, {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (await pathExists(managedBin)) {
+      return {
+        process: spawn(managedBin, {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (installedBin) {
+      log.warn("using legacy unmanaged texlab install; remove shared-bin copy to switch to pinned managed installs", {
+        bin: installedBin,
+      })
+      return {
+        process: spawn(installedBin, {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
+    const assetName = texlabAsset(platform, arch)
+    if (!assetName) {
+      log.error(`Platform ${platform} and architecture ${arch} is not supported by texlab`)
+      return
+    }
+
+    log.info("downloading pinned texlab release", {
+      tag: pinned.tag,
     })
 
-    if (!bin) {
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("downloading texlab from GitHub releases")
-
-      const response = await fetch("https://api.github.com/repos/latex-lsp/texlab/releases/latest", { signal: AbortSignal.timeout(30_000) })
-      if (!response.ok) {
-        log.error("Failed to fetch texlab release info")
-        return
-      }
-
-      const release = (await response.json()) as {
-        tag_name?: string
-        assets?: { name?: string; browser_download_url?: string }[]
-      }
-      const version = release.tag_name?.replace(/^v/, "")
-      if (!version) {
-        log.error("texlab release did not include a version tag")
-        return
-      }
-
-      const platform = process.platform
-      const arch = process.arch
-
-      const texArch = arch === "arm64" ? "aarch64" : "x86_64"
-      const texPlatform = platform === "darwin" ? "macos" : platform === "win32" ? "windows" : "linux"
-      const ext = platform === "win32" ? "zip" : "tar.gz"
-      const assetName = `texlab-${texArch}-${texPlatform}.${ext}`
-
-      const assets = release.assets ?? []
-      const asset = releaseAsset(assets, assetName)
-      if (!asset?.browser_download_url) {
-        log.error(`Could not find asset ${assetName} in texlab release`)
-        return
-      }
-      bin = (await installReleaseBin({
+    const bin =
+      (await installPinnedGitHubReleaseAsset({
         id: "texlab",
+        repo: pinned.repo,
+        tag: pinned.tag,
         assetName,
-        url: asset.browser_download_url,
-        bin: path.join(Global.Path.bin, "texlab" + (platform === "win32" ? ".exe" : "")),
+        bin: managedBin,
+        installDir: path.dirname(managedBin),
         platform,
-        tarArgs: ext === "tar.gz" ? ["-xzf"] : undefined,
+        tarArgs: platform === "win32" ? undefined : ["-xzf"],
       })) ?? null
-      if (!bin) return
-    }
+    if (!bin) return
 
     return {
       process: spawn(bin, {
@@ -1644,61 +1616,56 @@ export const Tinymist: Info = {
   extensions: [".typ", ".typc"],
   root: NearestRoot(["typst.toml"]),
   async spawn(root) {
-    let bin = which("tinymist", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+    const pinned = PINNED_GITHUB_LSP_RELEASES.tinymist
+    const platform = process.platform
+    const arch = process.arch
+    const version = releaseVersion(pinned.tag)
+    const managedBin = managedToolBin("tinymist", version, platform, arch)
+    const installedBin = which("tinymist")
+    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
+      return {
+        process: spawn(installedBin, { cwd: root }),
+      }
+    }
+
+    if (await pathExists(managedBin)) {
+      return {
+        process: spawn(managedBin, { cwd: root }),
+      }
+    }
+
+    if (installedBin) {
+      log.warn("using legacy unmanaged tinymist install; remove shared-bin copy to switch to pinned managed installs", {
+        bin: installedBin,
+      })
+      return {
+        process: spawn(installedBin, { cwd: root }),
+      }
+    }
+
+    if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
+    const assetName = tinymistAsset(platform, arch)
+    if (!assetName) {
+      log.error(`Platform ${platform} and architecture ${arch} is not supported by tinymist`)
+      return
+    }
+
+    log.info("downloading pinned tinymist release", {
+      tag: pinned.tag,
     })
 
-    if (!bin) {
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("downloading tinymist from GitHub releases")
-
-      const response = await fetch("https://api.github.com/repos/Myriad-Dreamin/tinymist/releases/latest", { signal: AbortSignal.timeout(30_000) })
-      if (!response.ok) {
-        log.error("Failed to fetch tinymist release info")
-        return
-      }
-
-      const release = (await response.json()) as {
-        tag_name?: string
-        assets?: { name?: string; browser_download_url?: string }[]
-      }
-
-      const platform = process.platform
-      const arch = process.arch
-
-      const tinymistArch = arch === "arm64" ? "aarch64" : "x86_64"
-      let tinymistPlatform: string
-      let ext: string
-
-      if (platform === "darwin") {
-        tinymistPlatform = "apple-darwin"
-        ext = "tar.gz"
-      } else if (platform === "win32") {
-        tinymistPlatform = "pc-windows-msvc"
-        ext = "zip"
-      } else {
-        tinymistPlatform = "unknown-linux-gnu"
-        ext = "tar.gz"
-      }
-
-      const assetName = `tinymist-${tinymistArch}-${tinymistPlatform}.${ext}`
-
-      const assets = release.assets ?? []
-      const asset = releaseAsset(assets, assetName)
-      if (!asset?.browser_download_url) {
-        log.error(`Could not find asset ${assetName} in tinymist release`)
-        return
-      }
-      bin = (await installReleaseBin({
+    const bin =
+      (await installPinnedGitHubReleaseAsset({
         id: "tinymist",
+        repo: pinned.repo,
+        tag: pinned.tag,
         assetName,
-        url: asset.browser_download_url,
-        bin: path.join(Global.Path.bin, "tinymist" + (platform === "win32" ? ".exe" : "")),
+        bin: managedBin,
+        installDir: path.dirname(managedBin),
         platform,
-        tarArgs: ext === "zip" ? undefined : ["-xzf", "--strip-components=1"],
+        tarArgs: platform === "win32" ? undefined : ["-xzf", "--strip-components=1"],
       })) ?? null
-      if (!bin) return
-    }
+    if (!bin) return
 
     return {
       process: spawn(bin, { cwd: root }),
