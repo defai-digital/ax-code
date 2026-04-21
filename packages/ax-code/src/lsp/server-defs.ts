@@ -18,13 +18,17 @@ import {
   bunServer,
   clangdAsset,
   ensureTool,
+  fetchGitHubReleaseByTag,
+  globalBin,
   globalTool,
   installReleaseBin,
   log,
+  managedToolBin,
   NearestRoot,
   output,
   pathExists,
   releaseAsset,
+  releaseAssetSha256,
   run,
   spawnInfo,
   toolServer,
@@ -32,6 +36,7 @@ import {
   venvBin,
   venvPython,
   zlsAsset,
+  zlsReleaseForZig,
   type ServerInfo,
 } from "./server-helpers"
 
@@ -484,54 +489,103 @@ export const Zls: Info = {
   extensions: [".zig", ".zon"],
   root: NearestRoot(["build.zig"]),
   async spawn(root) {
-    let bin = which("zls", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
-    })
-
-    if (!bin) {
-      const zig = which("zig")
-      if (!zig) {
-        log.error("Zig is required to use zls. Please install Zig first.")
-        return
+    let bin = which("zls")
+    if (bin) {
+      return {
+        process: spawn(bin, {
+          cwd: root,
+        }),
       }
+    }
 
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("downloading zls from GitHub releases")
-
-      const releaseResponse = await fetch("https://api.github.com/repos/zigtools/zls/releases/latest", { signal: AbortSignal.timeout(30_000) })
-      if (!releaseResponse.ok) {
-        log.error("Failed to fetch zls release info")
-        return
+    const legacyBin = globalBin("zls")
+    const hasLegacyBin = await pathExists(legacyBin)
+    const useLegacyBin = () => {
+      log.warn("using legacy unmanaged zls install; install zls on PATH or configure lsp.zls.command to pin it", {
+        bin: legacyBin,
+      })
+      return {
+        process: spawn(legacyBin, {
+          cwd: root,
+        }),
       }
+    }
 
-      const release = (await releaseResponse.json()) as {
-        tag_name: string
-        assets: { name: string; browser_download_url: string }[]
+    const zig = which("zig")
+    if (!zig) {
+      if (hasLegacyBin) return useLegacyBin()
+      log.error("Zig is required to use zls. Please install Zig first.")
+      return
+    }
+
+    const zigVersion = await output([zig, "version"])
+    if (zigVersion.code !== 0) {
+      if (hasLegacyBin) return useLegacyBin()
+      log.error("Failed to determine Zig version for zls compatibility")
+      return
+    }
+
+    const zlsTag = zlsReleaseForZig(zigVersion.text)
+    if (!zlsTag) {
+      if (hasLegacyBin) return useLegacyBin()
+      log.error("Automatic zls install only supports stable Zig releases with a pinned compatibility mapping", {
+        zigVersion: zigVersion.text.trim(),
+      })
+      return
+    }
+
+    const platform = process.platform
+    const arch = process.arch
+    const managedBin = managedToolBin("zls", zlsTag, platform, arch)
+    if (await pathExists(managedBin)) {
+      return {
+        process: spawn(managedBin, {
+          cwd: root,
+        }),
       }
+    }
 
-      const platform = process.platform
-      const arch = process.arch
+    if (!Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) {
+      log.info("downloading pinned zls release", {
+        zlsTag,
+        zigVersion: zigVersion.text.trim(),
+      })
+
       const assetName = zlsAsset(platform, arch)
       if (!assetName) {
         log.error(`Platform ${platform} and architecture ${arch} is not supported by zls`)
         return
       }
 
-      const asset = release.assets.find((a) => a.name === assetName)
-      if (!asset?.browser_download_url) {
-        log.error(`Could not find asset ${assetName} in latest zls release`)
-        return
+      const release = await fetchGitHubReleaseByTag({
+        repo: "zigtools/zls",
+        tag: zlsTag,
+      })
+      if (!release) {
+        log.error("Failed to fetch zls release info", { zlsTag })
+      } else {
+        const asset = releaseAsset(release.assets ?? [], assetName)
+        const sha256 = asset ? releaseAssetSha256(asset) : undefined
+        if (!asset?.browser_download_url || !sha256) {
+          log.error(`Could not find a verifiable ${assetName} asset in zls release ${zlsTag}`)
+        } else {
+          bin =
+            (await installReleaseBin({
+              id: "zls",
+              assetName,
+              url: asset.browser_download_url,
+              bin: managedBin,
+              installDir: path.dirname(managedBin),
+              platform,
+              sha256,
+              tarArgs: ["-xf"],
+            })) ?? null
+        }
       }
-      bin = (await installReleaseBin({
-        id: "zls",
-        assetName,
-        url: asset.browser_download_url,
-        bin: path.join(Global.Path.bin, "zls" + (platform === "win32" ? ".exe" : "")),
-        platform,
-        tarArgs: ["-xf"],
-      })) ?? null
-      if (!bin) return
     }
+
+    if (!bin && hasLegacyBin) return useLegacyBin()
+    if (!bin) return
 
     return {
       process: spawn(bin, {

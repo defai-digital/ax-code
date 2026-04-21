@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "child_process"
 import path from "path"
 import fs from "fs/promises"
+import { createHash } from "crypto"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Process } from "../util/process"
@@ -13,6 +14,7 @@ import { which } from "../util/which"
 import { spawn } from "./launch"
 import { Archive } from "../util/archive"
 import { Glob } from "../util/glob"
+import { Ssrf } from "../util/ssrf"
 
 export const log = Log.create({ service: "lsp.server" })
 
@@ -210,51 +212,166 @@ export const zlsAsset = (platform: string, arch: string) => {
 type Asset = {
   name?: string
   browser_download_url?: string
+  digest?: string
 }
 
 export const releaseAsset = (assets: Asset[], name: string) =>
   assets.find((item) => item.name === name && item.browser_download_url)
+
+type ReleaseResponse = {
+  ok: boolean
+  status?: number
+  body?: any
+  arrayBuffer?: () => Promise<ArrayBuffer>
+  json?: () => Promise<unknown>
+}
+
+type GitHubRelease = {
+  tag_name?: string
+  assets?: Asset[]
+}
+
+// Keep auto-managed zls installs deterministic. Nightly/dev Zig builds
+// must provide their own zls because there is no stable pinned match.
+const ZLS_RELEASE_BY_ZIG_MINOR: Record<string, string> = {
+  "0.13": "0.13.0",
+  "0.14": "0.14.0",
+  "0.15": "0.15.1",
+  "0.16": "0.16.0",
+}
+
+export const managedToolDir = (
+  name: string,
+  version: string,
+  platform = process.platform,
+  arch = process.arch,
+) => path.join(Global.Path.bin, ".managed", name, version, `${platform}-${arch}`)
+
+export const managedToolBin = (
+  name: string,
+  version: string,
+  platform = process.platform,
+  arch = process.arch,
+) => path.join(managedToolDir(name, version, platform, arch), name + (platform === "win32" ? ".exe" : ""))
+
+export const zlsReleaseForZig = (version: string) => {
+  const stable = version.trim().match(/^(\d+)\.(\d+)\.(\d+)$/)
+  if (!stable) return
+  return ZLS_RELEASE_BY_ZIG_MINOR[`${stable[1]}.${stable[2]}`]
+}
+
+export const releaseAssetSha256 = (asset: Asset) => {
+  const match = asset.digest?.match(/^sha256:([a-f0-9]{64})$/i)
+  return match?.[1].toLowerCase()
+}
+
+export const fetchGitHubReleaseByTag = async (input: {
+  repo: string
+  tag: string
+  fetcher?: (url: string) => Promise<ReleaseResponse>
+}) => {
+  const fetcher =
+    input.fetcher ??
+    ((url: string) =>
+      Ssrf.pinnedFetch(url, {
+        label: `github.release.${input.repo.replace("/", ".")}`,
+        headers: {
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        signal: AbortSignal.timeout(30_000),
+      }))
+  const response = await fetcher(`https://api.github.com/repos/${input.repo}/releases/tags/${input.tag}`)
+  if (!response.ok || !response.json) return
+
+  const release = (await response.json()) as GitHubRelease
+  if (!Array.isArray(release.assets)) return
+  return release
+}
 
 export const installReleaseBin = async (input: {
   id: string
   assetName: string
   url: string
   bin: string
+  installDir?: string
+  sha256?: string
   tarArgs?: string[]
   platform?: string
-  fetcher?: (url: string) => Promise<{ ok: boolean; body?: any }>
+  fetcher?: (url: string) => Promise<ReleaseResponse>
+  write?: (path: string, content: string | Buffer | Uint8Array) => Promise<void>
   writeStream?: (path: string, body: any) => Promise<void>
   extractZip?: (from: string, to: string) => Promise<unknown>
   run?: typeof run
-  remove?: (path: string, opts: { force: boolean }) => Promise<unknown>
+  remove?: (path: string, opts: { force: boolean; recursive?: boolean }) => Promise<unknown>
   exists?: (path: string) => Promise<boolean>
   chmod?: (path: string, mode: number) => Promise<unknown>
 }) => {
-  const fetcher = input.fetcher ?? fetch
+  const fetcher =
+    input.fetcher ??
+    ((url: string) =>
+      Ssrf.pinnedFetch(url, {
+        label: `lsp.release.${input.id}`,
+        signal: AbortSignal.timeout(60_000),
+      }))
   const response = await fetcher(input.url)
   if (!response.ok) {
     log.error(`Failed to download ${input.id}`)
     return
   }
 
-  const temp = path.join(Global.Path.bin, input.assetName)
-  if (response.body) {
-    await (input.writeStream ?? Filesystem.writeStream)(temp, response.body)
-  }
+  const installDir = input.installDir ?? path.dirname(input.bin)
+  await fs.mkdir(installDir, { recursive: true })
 
-  if (input.assetName.endsWith(".zip")) {
-    const ok = await (input.extractZip ?? Archive.extractZip)(temp, Global.Path.bin)
-      .then(() => true)
-      .catch((error) => {
-        log.error(`Failed to extract ${input.id} archive`, { error })
-        return false
+  const temp = path.join(installDir, input.assetName)
+  if (input.sha256) {
+    if (!response.arrayBuffer) {
+      log.error(`Failed to verify ${input.id} download integrity`)
+      return
+    }
+
+    const archive = Buffer.from(await response.arrayBuffer())
+    const actual = createHash("sha256").update(archive).digest("hex")
+    if (actual !== input.sha256.toLowerCase()) {
+      log.error(`Failed to verify ${input.id} download integrity`, {
+        actual,
+        expected: input.sha256.toLowerCase(),
       })
-    if (!ok) return
+      return
+    }
+    await (input.write ?? Filesystem.write)(temp, archive)
+  } else if (response.body) {
+    await (input.writeStream ?? Filesystem.writeStream)(temp, response.body)
+  } else if (response.arrayBuffer) {
+    const archive = Buffer.from(await response.arrayBuffer())
+    await (input.write ?? Filesystem.write)(temp, archive)
   } else {
-    await (input.run ?? run)(["tar", ...(input.tarArgs ?? ["-xf"]), temp], { cwd: Global.Path.bin })
+    log.error(`Failed to download ${input.id}`)
+    return
   }
 
-  await (input.remove ?? fs.rm)(temp, { force: true })
+  try {
+    if (input.assetName.endsWith(".zip")) {
+      const ok = await (input.extractZip ?? Archive.extractZip)(temp, installDir)
+        .then(() => true)
+        .catch((error) => {
+          log.error(`Failed to extract ${input.id} archive`, { error })
+          return false
+        })
+      if (!ok) return
+    } else {
+      const result = await (input.run ?? run)(["tar", ...(input.tarArgs ?? ["-xf"]), temp], { cwd: installDir })
+      if (typeof result?.code === "number" && result.code !== 0) {
+        log.error(`Failed to extract ${input.id} archive`, {
+          code: result.code,
+          stderr: result.stderr?.toString(),
+        })
+        return
+      }
+    }
+  } finally {
+    await (input.remove ?? fs.rm)(temp, { force: true })
+  }
 
   if (!(await (input.exists ?? Filesystem.exists)(input.bin))) {
     log.error(`Failed to extract ${input.id} binary`)

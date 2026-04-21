@@ -5,13 +5,16 @@ import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import {
+  fetchGitHubReleaseByTag,
   NearestRoot,
   bunServerArgs,
   clangdAsset,
   globalBin,
   globalPath,
   installReleaseBin,
+  managedToolBin,
   releaseAsset,
+  releaseAssetSha256,
   spawnInfo,
   toolBin,
   toolServer,
@@ -19,6 +22,7 @@ import {
   venvPaths,
   venvPython,
   zlsAsset,
+  zlsReleaseForZig,
 } from "../../src/lsp/server-helpers"
 
 describe("lsp server helpers", () => {
@@ -64,6 +68,21 @@ describe("lsp server helpers", () => {
     expect(zlsAsset("linux", "s390x")).toBeUndefined()
   })
 
+  test("maps stable zig versions to pinned zls releases", () => {
+    expect(zlsReleaseForZig("0.16.0")).toBe("0.16.0")
+    expect(zlsReleaseForZig("0.15.1")).toBe("0.15.1")
+    expect(zlsReleaseForZig("0.16.0-dev.99+abcd")).toBeUndefined()
+  })
+
+  test("builds versioned managed tool paths without colliding with flat binaries", () => {
+    expect(managedToolBin("zls", "0.16.0", "darwin", "arm64")).toBe(
+      path.join(Global.Path.bin, ".managed", "zls", "0.16.0", "darwin-arm64", "zls"),
+    )
+    expect(managedToolBin("zls", "0.16.0", "win32", "x64")).toBe(
+      path.join(Global.Path.bin, ".managed", "zls", "0.16.0", "win32-x64", "zls.exe"),
+    )
+  })
+
   test("prefers zip clangd asset when multiple valid assets exist", () => {
     expect(
       clangdAsset(
@@ -103,6 +122,38 @@ describe("lsp server helpers", () => {
         "b.zip",
       ),
     ).toEqual({ name: "b.zip", browser_download_url: "https://example.com/b" })
+  })
+
+  test("parses sha256 release digests from GitHub asset metadata", () => {
+    expect(
+      releaseAssetSha256({
+        name: "zls-aarch64-macos.tar.xz",
+        digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      }),
+    ).toBe("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+    expect(releaseAssetSha256({ name: "zls-aarch64-macos.tar.xz", digest: "md5:deadbeef" })).toBeUndefined()
+  })
+
+  test("fetches an exact GitHub release by tag", async () => {
+    const calls: string[] = []
+    const release = await fetchGitHubReleaseByTag({
+      repo: "zigtools/zls",
+      tag: "0.16.0",
+      fetcher: async (url) => {
+        calls.push(url)
+        return {
+          ok: true,
+          json: async () => ({
+            tag_name: "0.16.0",
+            assets: [{ name: "zls-aarch64-macos.tar.xz", browser_download_url: "https://example.com/zls.tar.xz" }],
+          }),
+        }
+      },
+    })
+
+    expect(calls).toEqual(["https://api.github.com/repos/zigtools/zls/releases/tags/0.16.0"])
+    expect(release?.tag_name).toBe("0.16.0")
+    expect(release?.assets?.[0]?.name).toBe("zls-aarch64-macos.tar.xz")
   })
 
   test("builds bun run args for js-backed servers", () => {
@@ -215,7 +266,28 @@ describe("lsp server helpers", () => {
     })
 
     expect(bin).toBe("/tmp/tinymist")
-    expect(calls).toEqual([["tar", "-xzf", "--strip-components=1", path.join(Global.Path.bin, "tinymist.tar.gz")]])
+    expect(calls).toEqual([["tar", "-xzf", "--strip-components=1", path.join("/tmp", "tinymist.tar.gz")]])
+  })
+
+  test("rejects release installs when sha256 verification fails", async () => {
+    const writes: string[] = []
+    const archive = Buffer.from("bad-archive")
+    const bin = await installReleaseBin({
+      id: "zls",
+      assetName: "zls.tar.xz",
+      url: "https://example.com/zls.tar.xz",
+      bin: "/tmp/zls",
+      sha256: "f".repeat(64),
+      fetcher: async () => ({
+        ok: true,
+        arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength),
+      }),
+      write: async (file) => void writes.push(file),
+      exists: async () => false,
+    })
+
+    expect(bin).toBeUndefined()
+    expect(writes).toEqual([])
   })
 
   test("matches nearest root for glob patterns", async () => {
