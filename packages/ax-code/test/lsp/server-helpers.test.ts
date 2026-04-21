@@ -5,15 +5,21 @@ import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import {
+  checksumManifestSha256,
   fetchGitHubReleaseByTag,
+  installPinnedChecksumReleaseAsset,
   installPinnedGitHubReleaseAsset,
+  llvmClangdAsset,
+  llvmReleaseVersion,
   NearestRoot,
+  PINNED_CHECKSUM_LSP_RELEASES,
   PINNED_GITHUB_LSP_RELEASES,
   bunServerArgs,
-  clangdAsset,
   globalBin,
   globalPath,
   installReleaseBin,
+  kotlinLsAsset,
+  kotlinLsChecksumUrl,
   luaLsAsset,
   luaLsReleaseTarget,
   managedToolBin,
@@ -22,6 +28,8 @@ import {
   releaseAssetSha256,
   releaseVersion,
   spawnInfo,
+  terraformLsAsset,
+  terraformLsChecksumUrl,
   texlabAsset,
   tinymistAsset,
   toolBin,
@@ -100,12 +108,19 @@ describe("lsp server helpers", () => {
   test("normalizes release tags into install versions", () => {
     expect(releaseVersion("v5.24.0")).toBe("5.24.0")
     expect(releaseVersion("3.15.0")).toBe("3.15.0")
+    expect(llvmReleaseVersion("llvmorg-22.1.3")).toBe("22.1.3")
   })
 
   test("maps pinned GitHub LSP releases explicitly", () => {
+    expect(PINNED_GITHUB_LSP_RELEASES.clangd.tag).toBe("llvmorg-22.1.3")
     expect(PINNED_GITHUB_LSP_RELEASES.texlab.tag).toBe("v5.24.0")
     expect(PINNED_GITHUB_LSP_RELEASES.tinymist.tag).toBe("v0.14.0")
     expect(PINNED_GITHUB_LSP_RELEASES.luaLs.tag).toBe("3.15.0")
+  })
+
+  test("maps pinned checksum-backed LSP releases explicitly", () => {
+    expect(PINNED_CHECKSUM_LSP_RELEASES.kotlinLs.version).toBe("262.2310.0")
+    expect(PINNED_CHECKSUM_LSP_RELEASES.terraformLs.version).toBe("0.38.6")
   })
 
   test("maps texlab assets for supported targets", () => {
@@ -133,33 +148,33 @@ describe("lsp server helpers", () => {
     expect(luaLsReleaseTarget("linux", "ia32")).toBeUndefined()
   })
 
-  test("prefers zip clangd asset when multiple valid assets exist", () => {
-    expect(
-      clangdAsset(
-        [
-          { name: "clangd-linux-20.1.0.tar.xz", browser_download_url: "https://example.com/tar" },
-          { name: "clangd-linux-20.1.0.zip", browser_download_url: "https://example.com/zip" },
-        ],
-        "20.1.0",
-        "linux",
-      ),
-    ).toEqual({
-      name: "clangd-linux-20.1.0.zip",
-      browser_download_url: "https://example.com/zip",
-    })
+  test("maps pinned LLVM clangd assets for supported targets", () => {
+    expect(llvmClangdAsset("llvmorg-22.1.3", "darwin", "arm64")).toBe("LLVM-22.1.3-macOS-ARM64.tar.xz")
+    expect(llvmClangdAsset("llvmorg-22.1.3", "linux", "x64")).toBe("LLVM-22.1.3-Linux-X64.tar.xz")
+    expect(llvmClangdAsset("llvmorg-22.1.3", "win32", "x64")).toBe(
+      "clang+llvm-22.1.3-x86_64-pc-windows-msvc.tar.xz",
+    )
+    expect(llvmClangdAsset("llvmorg-22.1.3", "darwin", "x64")).toBeUndefined()
   })
 
-  test("filters clangd assets by platform and tag", () => {
-    expect(
-      clangdAsset(
-        [
-          { name: "clangd-mac-20.1.0.zip", browser_download_url: "https://example.com/mac" },
-          { name: "clangd-linux-19.0.0.zip", browser_download_url: "https://example.com/old" },
-        ],
-        "20.1.0",
-        "linux",
-      ),
-    ).toBeUndefined()
+  test("maps terraform-ls assets for supported targets", () => {
+    expect(terraformLsAsset("0.38.6", "darwin", "arm64")).toBe("terraform-ls_0.38.6_darwin_arm64.zip")
+    expect(terraformLsAsset("0.38.6", "linux", "x64")).toBe("terraform-ls_0.38.6_linux_amd64.zip")
+    expect(terraformLsAsset("0.38.6", "win32", "arm64")).toBe("terraform-ls_0.38.6_windows_arm64.zip")
+    expect(terraformLsChecksumUrl("0.38.6")).toBe(
+      "https://releases.hashicorp.com/terraform-ls/0.38.6/terraform-ls_0.38.6_SHA256SUMS",
+    )
+    expect(terraformLsAsset("0.38.6", "darwin", "ia32")).toBeUndefined()
+  })
+
+  test("maps kotlin-lsp assets for supported targets", () => {
+    expect(kotlinLsAsset("262.2310.0", "darwin", "arm64")).toBe("kotlin-lsp-262.2310.0-mac-aarch64.zip")
+    expect(kotlinLsAsset("262.2310.0", "linux", "x64")).toBe("kotlin-lsp-262.2310.0-linux-x64.zip")
+    expect(kotlinLsAsset("262.2310.0", "win32", "arm64")).toBe("kotlin-lsp-262.2310.0-win-aarch64.zip")
+    expect(kotlinLsChecksumUrl("262.2310.0", "darwin", "arm64")).toBe(
+      "https://download-cdn.jetbrains.com/kotlin-lsp/262.2310.0/kotlin-lsp-262.2310.0-mac-aarch64.zip.sha256",
+    )
+    expect(kotlinLsAsset("262.2310.0", "linux", "ia32")).toBeUndefined()
   })
 
   test("finds a release asset by exact name", () => {
@@ -182,6 +197,24 @@ describe("lsp server helpers", () => {
       }),
     ).toBe("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     expect(releaseAssetSha256({ name: "zls-aarch64-macos.tar.xz", digest: "md5:deadbeef" })).toBeUndefined()
+  })
+
+  test("parses sha256 checksum manifests from single-asset and manifest files", () => {
+    expect(
+      checksumManifestSha256(
+        "11560eb4ecd766204363848cc5ee84b51c0fd03fbfd4bbedaba0f00af74309c7 *kotlin-lsp-262.2310.0-mac-aarch64.zip\n",
+        "kotlin-lsp-262.2310.0-mac-aarch64.zip",
+      ),
+    ).toBe("11560eb4ecd766204363848cc5ee84b51c0fd03fbfd4bbedaba0f00af74309c7")
+    expect(
+      checksumManifestSha256(
+        [
+          "79877f94a8eb175e6a58cf177839b0801acbfeccf968a2102e95d470fa3ad4a5  terraform-ls_0.38.6_linux_amd64.zip",
+          "a44b3df099f0ad8e88c96ea1110f965affee6e69b68ec44df25a593f5ee66cf3  terraform-ls_0.38.6_linux_arm64.zip",
+        ].join("\n"),
+        "terraform-ls_0.38.6_linux_arm64.zip",
+      ),
+    ).toBe("a44b3df099f0ad8e88c96ea1110f965affee6e69b68ec44df25a593f5ee66cf3")
   })
 
   test("fetches an exact GitHub release by tag", async () => {
@@ -245,6 +278,71 @@ describe("lsp server helpers", () => {
         tarArgs: ["-xzf"],
         url: "https://example.com/texlab.tar.gz",
       }),
+    ])
+  })
+
+  test("installs pinned checksum-backed release assets with verified digests", async () => {
+    const installs: Record<string, unknown>[] = []
+    const bin = await installPinnedChecksumReleaseAsset({
+      id: "terraform-ls",
+      assetName: "terraform-ls_0.38.6_linux_amd64.zip",
+      url: "https://example.com/terraform-ls.zip",
+      checksumUrl: "https://example.com/terraform-ls_SHA256SUMS",
+      bin: "/tmp/terraform-ls",
+      installDir: "/tmp/terraform-ls-dir",
+      platform: "linux",
+      fetchChecksum: async () => "79877f94a8eb175e6a58cf177839b0801acbfeccf968a2102e95d470fa3ad4a5",
+      installRelease: async (input) => {
+        installs.push(input)
+        return input.bin
+      },
+    })
+
+    expect(bin).toBe("/tmp/terraform-ls")
+    expect(installs).toEqual([
+      expect.objectContaining({
+        assetName: "terraform-ls_0.38.6_linux_amd64.zip",
+        bin: "/tmp/terraform-ls",
+        id: "terraform-ls",
+        installDir: "/tmp/terraform-ls-dir",
+        platform: "linux",
+        sha256: "79877f94a8eb175e6a58cf177839b0801acbfeccf968a2102e95d470fa3ad4a5",
+        url: "https://example.com/terraform-ls.zip",
+      }),
+    ])
+  })
+
+  test("passes tar archive before extra tar options during extraction", async () => {
+    const commands: string[][] = []
+    const bin = await installReleaseBin({
+      id: "tinymist",
+      assetName: "tinymist-x86_64-unknown-linux-gnu.tar.gz",
+      url: "https://example.com/tinymist.tar.gz",
+      bin: "/tmp/tinymist",
+      installDir: "/tmp/tinymist-dir",
+      tarArgs: ["-xzf", "--strip-components=1"],
+      fetcher: async () => ({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      }),
+      write: async () => {},
+      run: async (cmd) => {
+        commands.push(cmd)
+        return { code: 0, stderr: Buffer.alloc(0), stdout: Buffer.alloc(0) } as any
+      },
+      remove: async () => {},
+      exists: async () => true,
+      chmod: async () => {},
+    })
+
+    expect(bin).toBe("/tmp/tinymist")
+    expect(commands).toEqual([
+      [
+        "tar",
+        "-xzf",
+        "/tmp/tinymist-dir/tinymist-x86_64-unknown-linux-gnu.tar.gz",
+        "--strip-components=1",
+      ],
     ])
   })
 
@@ -358,7 +456,7 @@ describe("lsp server helpers", () => {
     })
 
     expect(bin).toBe("/tmp/tinymist")
-    expect(calls).toEqual([["tar", "-xzf", "--strip-components=1", path.join("/tmp", "tinymist.tar.gz")]])
+    expect(calls).toEqual([["tar", "-xzf", path.join("/tmp", "tinymist.tar.gz"), "--strip-components=1"]])
   })
 
   test("rejects release installs when sha256 verification fails", async () => {

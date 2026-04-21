@@ -224,6 +224,7 @@ type ReleaseResponse = {
   body?: any
   arrayBuffer?: () => Promise<ArrayBuffer>
   json?: () => Promise<unknown>
+  text?: () => Promise<string>
 }
 
 type GitHubRelease = {
@@ -235,9 +236,15 @@ type GitHubRelease = {
 // reproducible. Update them deliberately after verifying upstream
 // release compatibility.
 export const PINNED_GITHUB_LSP_RELEASES = {
+  clangd: { repo: "llvm/llvm-project", tag: "llvmorg-22.1.3" },
   luaLs: { repo: "LuaLS/lua-language-server", tag: "3.15.0" },
   texlab: { repo: "latex-lsp/texlab", tag: "v5.24.0" },
   tinymist: { repo: "Myriad-Dreamin/tinymist", tag: "v0.14.0" },
+} as const
+
+export const PINNED_CHECKSUM_LSP_RELEASES = {
+  kotlinLs: { version: "262.2310.0" },
+  terraformLs: { version: "0.38.6" },
 } as const
 
 // Keep auto-managed zls installs deterministic. Nightly/dev Zig builds
@@ -273,6 +280,8 @@ export const managedToolBin = (
 
 export const releaseVersion = (tag: string) => tag.replace(/^v/, "")
 
+export const llvmReleaseVersion = (tag: string) => tag.replace(/^llvmorg-/, "")
+
 export const zlsReleaseForZig = (version: string) => {
   const stable = version.trim().match(/^(\d+)\.(\d+)\.(\d+)$/)
   if (!stable) return
@@ -282,6 +291,44 @@ export const zlsReleaseForZig = (version: string) => {
 export const releaseAssetSha256 = (asset: Asset) => {
   const match = asset.digest?.match(/^sha256:([a-f0-9]{64})$/i)
   return match?.[1].toLowerCase()
+}
+
+export const checksumManifestSha256 = (content: string, assetName?: string) => {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  for (const line of lines) {
+    const match = line.match(/^([a-f0-9]{64})(?:\s+\*?(.+))?$/i)
+    if (!match) continue
+    if (!assetName) return match[1].toLowerCase()
+    if (match[2]?.trim() === assetName) return match[1].toLowerCase()
+  }
+}
+
+export const fetchChecksumSha256 = async (input: {
+  url: string
+  assetName?: string
+  label?: string
+  fetcher?: (url: string) => Promise<ReleaseResponse>
+}) => {
+  const fetcher =
+    input.fetcher ??
+    ((url: string) =>
+      Ssrf.pinnedFetch(url, {
+        label: input.label ?? "lsp.checksum",
+        signal: AbortSignal.timeout(30_000),
+      }))
+  const response = await fetcher(input.url)
+  if (!response.ok) return
+
+  const text =
+    (response.text && (await response.text())) ??
+    (response.arrayBuffer && Buffer.from(await response.arrayBuffer()).toString("utf8"))
+  if (!text) return
+
+  return checksumManifestSha256(text, input.assetName)
 }
 
 export const fetchGitHubReleaseByTag = async (input: {
@@ -366,6 +413,85 @@ export const luaLsAsset = (tag: string, platform: string, arch: string) => {
   return `lua-language-server-${tag}-${target.platform}-${target.arch}.${target.ext}`
 }
 
+export const llvmClangdAsset = (tag: string, platform: string, arch: string) => {
+  const version = llvmReleaseVersion(tag)
+  if (!version) return
+
+  if (platform === "darwin" && arch === "arm64") return `LLVM-${version}-macOS-ARM64.tar.xz`
+  if (platform === "linux" && arch === "arm64") return `LLVM-${version}-Linux-ARM64.tar.xz`
+  if (platform === "linux" && arch === "x64") return `LLVM-${version}-Linux-X64.tar.xz`
+  if (platform === "win32" && arch === "arm64") return `clang+llvm-${version}-aarch64-pc-windows-msvc.tar.xz`
+  if (platform === "win32" && arch === "x64") return `clang+llvm-${version}-x86_64-pc-windows-msvc.tar.xz`
+}
+
+export const terraformLsReleaseTarget = (platform: string, arch: string) => {
+  const tfPlatform = platform === "darwin" ? "darwin" : platform === "linux" ? "linux" : platform === "win32" ? "windows" : undefined
+  const tfArch = arch === "arm64" ? "arm64" : arch === "x64" ? "amd64" : arch === "ia32" ? "386" : arch === "arm" ? "arm" : undefined
+  if (!tfPlatform || !tfArch) return
+
+  const supportedCombos = new Set([
+    "darwin_amd64.zip",
+    "darwin_arm64.zip",
+    "linux_386.zip",
+    "linux_amd64.zip",
+    "linux_arm.zip",
+    "linux_arm64.zip",
+    "windows_386.zip",
+    "windows_amd64.zip",
+    "windows_arm64.zip",
+  ])
+
+  const assetSuffix = `${tfPlatform}_${tfArch}.zip`
+  if (!supportedCombos.has(assetSuffix)) return
+  return {
+    arch: tfArch,
+    platform: tfPlatform,
+  }
+}
+
+export const terraformLsAsset = (version: string, platform: string, arch: string) => {
+  const target = terraformLsReleaseTarget(platform, arch)
+  if (!target) return
+  return `terraform-ls_${version}_${target.platform}_${target.arch}.zip`
+}
+
+export const terraformLsAssetUrl = (version: string, platform: string, arch: string) => {
+  const asset = terraformLsAsset(version, platform, arch)
+  if (!asset) return
+  return `https://releases.hashicorp.com/terraform-ls/${version}/${asset}`
+}
+
+export const terraformLsChecksumUrl = (version: string) =>
+  `https://releases.hashicorp.com/terraform-ls/${version}/terraform-ls_${version}_SHA256SUMS`
+
+export const kotlinLsReleaseTarget = (platform: string, arch: string) => {
+  const kotlinPlatform = platform === "darwin" ? "mac" : platform === "linux" ? "linux" : platform === "win32" ? "win" : undefined
+  const kotlinArch = arch === "arm64" ? "aarch64" : arch === "x64" ? "x64" : undefined
+  if (!kotlinPlatform || !kotlinArch) return
+  return {
+    arch: kotlinArch,
+    platform: kotlinPlatform,
+  }
+}
+
+export const kotlinLsAsset = (version: string, platform: string, arch: string) => {
+  const target = kotlinLsReleaseTarget(platform, arch)
+  if (!target) return
+  return `kotlin-lsp-${version}-${target.platform}-${target.arch}.zip`
+}
+
+export const kotlinLsAssetUrl = (version: string, platform: string, arch: string) => {
+  const asset = kotlinLsAsset(version, platform, arch)
+  if (!asset) return
+  return `https://download-cdn.jetbrains.com/kotlin-lsp/${version}/${asset}`
+}
+
+export const kotlinLsChecksumUrl = (version: string, platform: string, arch: string) => {
+  const asset = kotlinLsAsset(version, platform, arch)
+  if (!asset) return
+  return `https://download-cdn.jetbrains.com/kotlin-lsp/${version}/${asset}.sha256`
+}
+
 export const installPinnedGitHubReleaseAsset = async (input: {
   id: string
   repo: string
@@ -398,6 +524,40 @@ export const installPinnedGitHubReleaseAsset = async (input: {
     id: input.id,
     assetName: input.assetName,
     url: asset.browser_download_url,
+    bin: input.bin,
+    installDir: input.installDir,
+    platform: input.platform,
+    sha256,
+    tarArgs: input.tarArgs,
+  })
+}
+
+export const installPinnedChecksumReleaseAsset = async (input: {
+  id: string
+  assetName: string
+  url: string
+  checksumUrl: string
+  bin: string
+  installDir?: string
+  platform?: string
+  tarArgs?: string[]
+  fetchChecksum?: typeof fetchChecksumSha256
+  installRelease?: typeof installReleaseBin
+}) => {
+  const sha256 = await (input.fetchChecksum ?? fetchChecksumSha256)({
+    assetName: input.assetName,
+    label: `lsp.checksum.${input.id}`,
+    url: input.checksumUrl,
+  })
+  if (!sha256) {
+    log.error(`Could not find a verifiable checksum for ${input.assetName} in ${input.id} release metadata`)
+    return
+  }
+
+  return (input.installRelease ?? installReleaseBin)({
+    id: input.id,
+    assetName: input.assetName,
+    url: input.url,
     bin: input.bin,
     installDir: input.installDir,
     platform: input.platform,
@@ -477,7 +637,8 @@ export const installReleaseBin = async (input: {
         })
       if (!ok) return
     } else {
-      const result = await (input.run ?? run)(["tar", ...(input.tarArgs ?? ["-xf"]), temp], { cwd: installDir })
+      const tarArgs = input.tarArgs ?? ["-xf"]
+      const result = await (input.run ?? run)(["tar", tarArgs[0] ?? "-xf", temp, ...tarArgs.slice(1)], { cwd: installDir })
       if (typeof result?.code === "number" && result.code !== 0) {
         log.error(`Failed to extract ${input.id} archive`, {
           code: result.code,
@@ -502,29 +663,6 @@ export const installReleaseBin = async (input: {
 
   log.info(`installed ${input.id}`, { bin: input.bin })
   return input.bin
-}
-
-export const clangdAsset = (assets: Asset[], tag: string, platform: string) => {
-  const token: Record<string, string> = {
-    darwin: "mac",
-    linux: "linux",
-    win32: "windows",
-  }
-  const host = token[platform]
-  if (!host) return
-
-  const valid = (item: Asset) => {
-    if (!item.name) return false
-    if (!item.browser_download_url) return false
-    if (!item.name.includes(host)) return false
-    return item.name.includes(tag)
-  }
-
-  return (
-    assets.find((item) => valid(item) && item.name?.endsWith(".zip")) ??
-    assets.find((item) => valid(item) && item.name?.endsWith(".tar.xz")) ??
-    assets.find((item) => valid(item))
-  )
 }
 
 export interface Handle {

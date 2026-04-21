@@ -15,15 +15,21 @@ import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
 import { JS_LOCKFILES } from "@/constants/lsp"
 import {
+  PINNED_CHECKSUM_LSP_RELEASES,
   PINNED_GITHUB_LSP_RELEASES,
   bunServer,
-  clangdAsset,
   ensureTool,
   fetchGitHubReleaseByTag,
   globalBin,
   globalTool,
   installReleaseBin,
+  installPinnedChecksumReleaseAsset,
   installPinnedGitHubReleaseAsset,
+  kotlinLsAsset,
+  kotlinLsAssetUrl,
+  kotlinLsChecksumUrl,
+  llvmClangdAsset,
+  llvmReleaseVersion,
   luaLsAsset,
   luaLsReleaseTarget,
   log,
@@ -38,6 +44,9 @@ import {
   releaseVersion,
   run,
   spawnInfo,
+  terraformLsAsset,
+  terraformLsAssetUrl,
+  terraformLsChecksumUrl,
   texlabAsset,
   tinymistAsset,
   toolServer,
@@ -719,21 +728,36 @@ export const Clangd: Info = {
   root: NearestRoot(["compile_commands.json", "compile_flags.txt", ".clangd", "CMakeLists.txt", "Makefile"]),
   extensions: [".c", ".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".h++"],
   async spawn(root) {
+    const pinned = PINNED_GITHUB_LSP_RELEASES.clangd
+    const platform = process.platform
+    const arch = process.arch
     const args = ["--background-index", "--clang-tidy"]
-    const fromPath = which("clangd")
-    if (fromPath) {
+    const ext = platform === "win32" ? ".exe" : ""
+    const version = llvmReleaseVersion(pinned.tag)
+    const managedBin = managedToolPath("clangd", version, path.join("bin", "clangd" + ext), platform, arch)
+    const installedBin = which("clangd")
+    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
       return {
-        process: spawn(fromPath, args, {
+        process: spawn(installedBin, args, {
           cwd: root,
         }),
       }
     }
 
-    const ext = process.platform === "win32" ? ".exe" : ""
-    const direct = path.join(Global.Path.bin, "clangd" + ext)
-    if (await Filesystem.exists(direct)) {
+    if (await pathExists(managedBin)) {
       return {
-        process: spawn(direct, args, {
+        process: spawn(managedBin, args, {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (installedBin) {
+      log.warn("using legacy unmanaged clangd install; remove shared-bin copy to switch to pinned managed installs", {
+        bin: installedBin,
+      })
+      return {
+        process: spawn(installedBin, args, {
           cwd: root,
         }),
       }
@@ -744,7 +768,10 @@ export const Clangd: Info = {
       if (!entry.isDirectory()) continue
       if (!entry.name.startsWith("clangd_")) continue
       const candidate = path.join(Global.Path.bin, entry.name, "bin", "clangd" + ext)
-      if (await Filesystem.exists(candidate)) {
+      if (await pathExists(candidate)) {
+        log.warn("using legacy unmanaged clangd install; remove extracted shared-bin copy to switch to pinned managed installs", {
+          bin: candidate,
+        })
         return {
           process: spawn(candidate, args, {
             cwd: root,
@@ -754,86 +781,28 @@ export const Clangd: Info = {
     }
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-    log.info("downloading clangd from GitHub releases")
-
-    const releaseResponse = await fetch("https://api.github.com/repos/clangd/clangd/releases/latest", { signal: AbortSignal.timeout(30_000) })
-    if (!releaseResponse.ok) {
-      log.error("Failed to fetch clangd release info")
+    const assetName = llvmClangdAsset(pinned.tag, platform, arch)
+    if (!assetName) {
+      log.error(`Platform ${platform} and architecture ${arch} is not supported by clangd`)
       return
     }
 
-    const release: {
-      tag_name?: string
-      assets?: { name?: string; browser_download_url?: string }[]
-    } = await releaseResponse.json()
+    log.info("downloading pinned clangd release", {
+      tag: pinned.tag,
+    })
 
-    const tag = release.tag_name
-    if (!tag) {
-      log.error("clangd release did not include a tag name")
-      return
-    }
-    const platform = process.platform
-    const assets = release.assets ?? []
-    const asset = clangdAsset(assets, tag, platform)
-    if (!asset) {
-      log.error("clangd could not match release asset", { tag, platform })
-      return
-    }
-    if (!asset?.name || !asset.browser_download_url) {
-      log.error("clangd could not match release asset", { tag, platform })
-      return
-    }
-
-    const name = asset.name
-    const downloadResponse = await fetch(asset.browser_download_url, { signal: AbortSignal.timeout(60_000) })
-    if (!downloadResponse.ok) {
-      log.error("Failed to download clangd")
-      return
-    }
-
-    const archive = path.join(Global.Path.bin, name)
-    const buf = await downloadResponse.arrayBuffer()
-    if (buf.byteLength === 0) {
-      log.error("Failed to write clangd archive")
-      return
-    }
-    await Filesystem.write(archive, Buffer.from(buf))
-
-    const zip = name.endsWith(".zip")
-    const tar = name.endsWith(".tar.xz")
-    if (!zip && !tar) {
-      log.error("clangd encountered unsupported asset", { asset: name })
-      return
-    }
-
-    if (zip) {
-      const ok = await Archive.extractZip(archive, Global.Path.bin)
-        .then(() => true)
-        .catch((error) => {
-          log.error("Failed to extract clangd archive", { error })
-          return false
-        })
-      if (!ok) return
-    }
-    if (tar) {
-      await run(["tar", "-xf", archive], { cwd: Global.Path.bin })
-    }
-    await fs.rm(archive, { force: true })
-
-    const bin = path.join(Global.Path.bin, "clangd_" + tag, "bin", "clangd" + ext)
-    if (!(await Filesystem.exists(bin))) {
-      log.error("Failed to extract clangd binary")
-      return
-    }
-
-    if (platform !== "win32") {
-      await fs.chmod(bin, 0o755).catch(() => {})
-    }
-
-    await fs.unlink(path.join(Global.Path.bin, "clangd")).catch(() => {})
-    await fs.symlink(bin, path.join(Global.Path.bin, "clangd")).catch(() => {})
-
-    log.info(`installed clangd`, { bin })
+    const bin =
+      (await installPinnedGitHubReleaseAsset({
+        id: "clangd",
+        repo: pinned.repo,
+        tag: pinned.tag,
+        assetName,
+        bin: managedBin,
+        installDir: managedToolDir("clangd", version, platform, arch),
+        platform,
+        tarArgs: ["-xJf", "--strip-components=1"],
+      })) ?? null
+    if (!bin) return
 
     return {
       process: spawn(bin, args, {
@@ -1054,88 +1023,79 @@ export const KotlinLS: Info = {
     return NearestRoot(["pom.xml"])(file)
   },
   async spawn(root) {
-    const distPath = path.join(Global.Path.bin, "kotlin-ls")
-    const launcherScript =
-      process.platform === "win32" ? path.join(distPath, "kotlin-lsp.cmd") : path.join(distPath, "kotlin-lsp.sh")
-    const installed = await Filesystem.exists(launcherScript)
-    if (!installed) {
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("Downloading Kotlin Language Server from GitHub.")
-
-      const releaseResponse = await fetch("https://api.github.com/repos/Kotlin/kotlin-lsp/releases/latest", { signal: AbortSignal.timeout(30_000) })
-      if (!releaseResponse.ok) {
-        log.error("Failed to fetch kotlin-lsp release info")
-        return
+    const pinned = PINNED_CHECKSUM_LSP_RELEASES.kotlinLs
+    const platform = process.platform
+    const arch = process.arch
+    const launcherName = platform === "win32" ? "kotlin-lsp.cmd" : "kotlin-lsp.sh"
+    const managedLauncher = managedToolPath("kotlin-ls", pinned.version, launcherName, platform, arch)
+    const installedLauncher =
+      which("kotlin-lsp") ?? (platform === "win32" ? which("kotlin-lsp.cmd") : which("kotlin-lsp.sh"))
+    if (installedLauncher && !installedLauncher.startsWith(Global.Path.bin)) {
+      return {
+        process: spawn(installedLauncher, ["--stdio"], {
+          cwd: root,
+        }),
       }
-
-      const release = await releaseResponse.json()
-      const version = release.name?.replace(/^v/, "")
-
-      if (!version) {
-        log.error("Could not determine Kotlin LSP version from release")
-        return
-      }
-
-      const platform = process.platform
-      const arch = process.arch
-
-      let kotlinArch: string = arch
-      if (arch === "arm64") kotlinArch = "aarch64"
-      else if (arch === "x64") kotlinArch = "x64"
-
-      let kotlinPlatform: string = platform
-      if (platform === "darwin") kotlinPlatform = "mac"
-      else if (platform === "linux") kotlinPlatform = "linux"
-      else if (platform === "win32") kotlinPlatform = "win"
-
-      const supportedCombos = ["mac-x64", "mac-aarch64", "linux-x64", "linux-aarch64", "win-x64", "win-aarch64"]
-
-      const combo = `${kotlinPlatform}-${kotlinArch}`
-
-      if (!supportedCombos.includes(combo)) {
-        log.error(`Platform ${platform}/${arch} is not supported by Kotlin LSP`)
-        return
-      }
-
-      const assetName = `kotlin-lsp-${version}-${kotlinPlatform}-${kotlinArch}.zip`
-      const releaseURL = `https://download-cdn.jetbrains.com/kotlin-lsp/${version}/${assetName}`
-
-      await fs.mkdir(distPath, { recursive: true })
-      const archivePath = path.join(distPath, "kotlin-ls.zip")
-      const download = await fetch(releaseURL, { signal: AbortSignal.timeout(60_000) })
-      if (!download.ok || !download.body) {
-        log.error("Failed to download Kotlin Language Server", {
-          status: download.status,
-          statusText: download.statusText,
-        })
-        return
-      }
-      await Filesystem.writeStream(archivePath, download.body)
-      try {
-        const ok = await Archive.extractZip(archivePath, distPath)
-          .then(() => true)
-          .catch((error) => {
-            log.error("Failed to extract Kotlin LS archive", { error })
-            return false
-          })
-        if (!ok) return
-      } finally {
-        // Always remove the downloaded archive — previously only the
-        // happy path deleted it, leaving ~10-100MB stuck in the bin
-        // directory after every failed extraction.
-        await fs.rm(archivePath, { force: true }).catch(() => {})
-      }
-      if (process.platform !== "win32") {
-        await fs.chmod(launcherScript, 0o755).catch(() => {})
-      }
-      log.info("Installed Kotlin Language Server", { path: launcherScript })
     }
-    if (!(await Filesystem.exists(launcherScript))) {
-      log.error(`Failed to locate the Kotlin LS launcher script in the installed directory: ${distPath}.`)
+
+    if (await pathExists(managedLauncher)) {
+      return {
+        process: spawn(managedLauncher, ["--stdio"], {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (installedLauncher) {
+      log.warn("using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs", {
+        bin: installedLauncher,
+      })
+      return {
+        process: spawn(installedLauncher, ["--stdio"], {
+          cwd: root,
+        }),
+      }
+    }
+
+    const legacyLauncher = path.join(Global.Path.bin, "kotlin-ls", launcherName)
+    if (await pathExists(legacyLauncher)) {
+      log.warn("using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs", {
+        bin: legacyLauncher,
+      })
+      return {
+        process: spawn(legacyLauncher, ["--stdio"], {
+          cwd: root,
+        }),
+      }
+    }
+
+    if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
+    const assetName = kotlinLsAsset(pinned.version, platform, arch)
+    const assetUrl = kotlinLsAssetUrl(pinned.version, platform, arch)
+    const checksumUrl = kotlinLsChecksumUrl(pinned.version, platform, arch)
+    if (!assetName || !assetUrl || !checksumUrl) {
+      log.error(`Platform ${platform}/${arch} is not supported by Kotlin LSP`)
       return
     }
+
+    log.info("downloading pinned kotlin-lsp release", {
+      version: pinned.version,
+    })
+
+    const launcher =
+      (await installPinnedChecksumReleaseAsset({
+        id: "kotlin-lsp",
+        assetName,
+        url: assetUrl,
+        checksumUrl,
+        bin: managedLauncher,
+        installDir: managedToolDir("kotlin-ls", pinned.version, platform, arch),
+        platform,
+      })) ?? null
+    if (!launcher) return
+
     return {
-      process: spawn(launcherScript, ["--stdio"], {
+      process: spawn(launcher, ["--stdio"], {
         cwd: root,
       }),
     }
@@ -1368,75 +1328,79 @@ export const TerraformLS: Info = {
   extensions: [".tf", ".tfvars"],
   root: NearestRoot([".terraform.lock.hcl", "terraform.tfstate", "main.tf"]),
   async spawn(root) {
-    let bin = which("terraform-ls", {
-      PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+    const pinned = PINNED_CHECKSUM_LSP_RELEASES.terraformLs
+    const platform = process.platform
+    const arch = process.arch
+    const managedBin = managedToolBin("terraform-ls", pinned.version, platform, arch)
+    const installedBin = which("terraform-ls")
+    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
+      return {
+        process: spawn(installedBin, ["serve"], {
+          cwd: root,
+        }),
+        initialization: {
+          experimentalFeatures: {
+            prefillRequiredFields: true,
+            validateOnSave: true,
+          },
+        },
+      }
+    }
+
+    if (await pathExists(managedBin)) {
+      return {
+        process: spawn(managedBin, ["serve"], {
+          cwd: root,
+        }),
+        initialization: {
+          experimentalFeatures: {
+            prefillRequiredFields: true,
+            validateOnSave: true,
+          },
+        },
+      }
+    }
+
+    if (installedBin) {
+      log.warn("using legacy unmanaged terraform-ls install; remove shared-bin copy to switch to pinned managed installs", {
+        bin: installedBin,
+      })
+      return {
+        process: spawn(installedBin, ["serve"], {
+          cwd: root,
+        }),
+        initialization: {
+          experimentalFeatures: {
+            prefillRequiredFields: true,
+            validateOnSave: true,
+          },
+        },
+      }
+    }
+
+    if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
+    const assetName = terraformLsAsset(pinned.version, platform, arch)
+    const assetUrl = terraformLsAssetUrl(pinned.version, platform, arch)
+    if (!assetName || !assetUrl) {
+      log.error(`Platform ${platform}/${arch} is not supported by terraform-ls`)
+      return
+    }
+
+    log.info("downloading pinned terraform-ls release", {
+      version: pinned.version,
     })
 
-    if (!bin) {
-      if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
-      log.info("downloading terraform-ls from HashiCorp releases")
-
-      const releaseResponse = await fetch("https://api.releases.hashicorp.com/v1/releases/terraform-ls/latest", { signal: AbortSignal.timeout(30_000) })
-      if (!releaseResponse.ok) {
-        log.error("Failed to fetch terraform-ls release info")
-        return
-      }
-
-      const release = (await releaseResponse.json()) as {
-        version?: string
-        builds?: { arch?: string; os?: string; url?: string }[]
-      }
-
-      const platform = process.platform
-      const arch = process.arch
-
-      const tfArch = arch === "arm64" ? "arm64" : "amd64"
-      const tfPlatform = platform === "win32" ? "windows" : platform
-
-      const builds = release.builds ?? []
-      const build = builds.find((b) => b.arch === tfArch && b.os === tfPlatform)
-      if (!build?.url) {
-        log.error(`Could not find build for ${tfPlatform}/${tfArch} terraform-ls release version ${release.version}`)
-        return
-      }
-
-      const downloadResponse = await fetch(build.url, { signal: AbortSignal.timeout(60_000) })
-      if (!downloadResponse.ok) {
-        log.error("Failed to download terraform-ls")
-        return
-      }
-
-      const tempPath = path.join(Global.Path.bin, "terraform-ls.zip")
-      if (downloadResponse.body) await Filesystem.writeStream(tempPath, downloadResponse.body)
-
-      try {
-        const ok = await Archive.extractZip(tempPath, Global.Path.bin)
-          .then(() => true)
-          .catch((error) => {
-            log.error("Failed to extract terraform-ls archive", { error })
-            return false
-          })
-        if (!ok) return
-      } finally {
-        // Always remove the downloaded archive — previously only the
-        // happy path reached this rm, leaving stuck downloads in the
-        // bin directory after every failed extraction.
-        await fs.rm(tempPath, { force: true }).catch(() => {})
-      }
-
-      bin = path.join(Global.Path.bin, "terraform-ls" + (platform === "win32" ? ".exe" : ""))
-
-      if (!(await Filesystem.exists(bin))) {
-        log.error("Failed to extract terraform-ls binary")
-        return
-      }
-
-      if (platform !== "win32") {
-        await fs.chmod(bin, 0o755).catch(() => {})
-      }
-
-      log.info(`installed terraform-ls`, { bin })
-    }
+    const bin =
+      (await installPinnedChecksumReleaseAsset({
+        id: "terraform-ls",
+        assetName,
+        url: assetUrl,
+        checksumUrl: terraformLsChecksumUrl(pinned.version),
+        bin: managedBin,
+        installDir: managedToolDir("terraform-ls", pinned.version, platform, arch),
+        platform,
+      })) ?? null
+    if (!bin) return
 
     return {
       process: spawn(bin, ["serve"], {
