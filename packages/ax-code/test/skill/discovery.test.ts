@@ -19,6 +19,7 @@ const fixturePath = path.join(import.meta.dir, "../fixture/skills")
 const cacheDir = path.join(Global.Path.cache, "skills")
 const safeSkillBody = "# Safe Skill"
 const safeSkillHash = createHash("sha256").update(safeSkillBody).digest("hex")
+const publicHost = new URL(origin).host
 
 beforeAll(async () => {
   await rm(cacheDir, { recursive: true, force: true })
@@ -88,8 +89,8 @@ beforeAll(async () => {
         return new Response(safeSkillBody)
       }
 
-      // route /.well-known/skills/* to the fixture directory
-      if (url.pathname.startsWith("/.well-known/skills/")) {
+      // Only serve the local fixture for the expected public test origin.
+      if ((host === publicHost || url.host === publicHost) && url.pathname.startsWith("/.well-known/skills/")) {
         const filePath = url.pathname.replace("/.well-known/skills/", "")
         const fullPath = path.join(fixturePath, filePath)
 
