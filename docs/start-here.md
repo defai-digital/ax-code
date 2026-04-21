@@ -1,0 +1,94 @@
+# Start Here
+
+Status: Active
+Scope: current-state
+Last reviewed: 2026-04-21
+Owner: ax-code runtime
+
+If the root [README](../README.md) is the fastest way to install AX Code, this page is the fastest way to understand it.
+
+## What AX Code Is
+
+AX Code is an AI coding runtime. It combines:
+
+- agents for different coding tasks
+- explicit tool execution
+- model and provider selection
+- persistent session state
+- configurable isolation and permissions
+- integration surfaces such as the TUI, SDK, server mode, and MCP
+
+That matters because AI coding is only useful in real repositories when you can control what the agent is allowed to do, preserve context across sessions, and reuse the same workflow outside a single chat window.
+
+## Where the Value Comes From
+
+- Control. You can choose `full-access`, `workspace-write`, or `read-only`, and specialist agents carry different permission presets.
+- Portability. The same workflow can run on hosted providers or local runtimes without changing tools.
+- Continuity. Sessions can be resumed, forked, compacted, exported, and replayed.
+- Context. `AGENTS.md` gives the runtime repository-specific instructions that can live with the code.
+- Extensibility. The same runtime powers the TUI, CLI, VS Code extension, SDK, and headless server.
+
+## Mental Model
+
+Think of AX Code as five layers:
+
+1. Provider layer: choose the model backend you want to run against.
+2. Agent layer: pick the right agent for the task, or let routing help.
+3. Tool layer: the agent acts through explicit tools rather than hidden capabilities.
+4. Session layer: the conversation, decisions, and state persist.
+5. Control layer: isolation, permissions, and audit behavior define the boundary.
+
+The rest of the documentation maps onto those layers.
+
+## Choose the Next Path
+
+### I want to try it quickly
+
+- Start with the [root README](../README.md) for install and first launch.
+- Use `/connect` or `ax-code providers login` to set a model.
+- Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
+- If you want tighter safety boundaries, enable [Sandbox Mode](sandbox.md) before broader edits.
+
+### I want to use it safely in a team or company repo
+
+- Read [Sandbox Mode](sandbox.md) for execution boundaries.
+- Read [Autonomous Mode](autonomous.md) if the agent will run unattended.
+- Read [Security Policy](../SECURITY.md) for threat model and credential storage details.
+- Read [Semantic Layer](architecture/semantic-layer.md) if provenance and replay matter for your workflow.
+
+### I want to embed or automate it
+
+- Use [`@ax-code/sdk`](../packages/sdk/js/README.md) for in-process TypeScript integration.
+- Use `ax-code serve` if you want a service boundary and HTTP-based integration.
+- Use [Project API Spec](specs/project.md) for the current project and session API shape.
+- Use `ax-code mcp add` when the agent needs external tools or services.
+
+### I want to understand the repo or contribute feedback
+
+- Read [Repository Structure](architecture/repo-structure.md).
+- Read [Testing Policy](architecture/testing-policy.md).
+- Read the [Documentation Hub](README.md) for the rest of the public docs.
+- Read [CONTRIBUTING.md](../CONTRIBUTING.md) for the current external contribution policy.
+
+## Common First Commands
+
+```bash
+ax-code
+ax-code providers login
+ax-code init
+ax-code index
+ax-code mcp add
+ax-code doctor
+```
+
+## Doc Map
+
+| Topic | Start here |
+| ----- | ---------- |
+| Product overview | [Start Here](start-here.md) |
+| Sandbox and permissions | [Sandbox Mode](sandbox.md) |
+| Unattended execution | [Autonomous Mode](autonomous.md) |
+| Smarter routing | [Auto-Route](auto-route.md) |
+| SDK embedding | [`@ax-code/sdk`](../packages/sdk/js/README.md) |
+| VS Code integration | [VS Code integration](../packages/integration-vscode/README.md) |
+| Architecture | [Semantic Layer](architecture/semantic-layer.md) |

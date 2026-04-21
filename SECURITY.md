@@ -38,12 +38,13 @@ ax-code includes a built-in execution isolation sandbox that restricts what the 
 | Mode                          | Behavior                                                                            |
 | ----------------------------- | ----------------------------------------------------------------------------------- |
 | **Read-only**                 | Blocks all file mutations and shell commands                                        |
-| **Workspace write** (default) | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
-| **Full access**               | Disables isolation entirely (explicit opt-in)                                       |
+| **Workspace write**           | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
+| **Full access** (default)     | Disables isolation entirely                                                          |
 
 Key properties:
 
-- **Default safe** — workspace-write mode with network disabled is the default
+- **Default behavior** — AX Code starts in `full-access` unless `--sandbox`, `AX_CODE_ISOLATION_MODE`, or config sets a different mode
+- **Recommended bounded mode** — use `workspace-write` when you want the agent confined to your project
 - **Tool-level enforcement** — all mutation tools (bash, edit, write, apply_patch) and network tools (webfetch, websearch, codesearch) check isolation policy before executing
 - **Protected paths** — `.git` and `.ax-code` directories are always protected from writes, even in workspace-write mode
 - **Escalation prompts** — isolation violations present an approval dialog instead of silently failing; users can allow a blocked operation once without changing their config
@@ -106,4 +107,4 @@ AX Code is designed for enterprise use with the following hardening features:
 
 For full enterprise governance (RBAC, policy-as-code, SIEM export, cryptographic audit), integrate with **AX Trust** (roadmap item).
 
-See [docs/sandbox.md](docs/sandbox.md) for configuration and [ADR-003](docs/adr/ADR-003-hardening-program-review.md) for hardening assessment.
+See [docs/sandbox.md](docs/sandbox.md) for isolation configuration and runtime behavior.

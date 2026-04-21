@@ -1,6 +1,6 @@
 # Sandbox Mode
 
-AX Code includes a built-in execution sandbox that restricts what the AI agent can do on your system. By default, the sandbox is **on** (`workspace-write`) — the agent is confined to your workspace. You can toggle it off if you need unrestricted access.
+AX Code includes a built-in execution sandbox that restricts what the AI agent can do on your system. By default, AX Code starts in **full-access**. Turn the sandbox on when you want workspace-only or read-only boundaries.
 
 ## Quick Start
 
@@ -65,13 +65,13 @@ In `ax-code.json`:
 
 ### Precedence
 
-CLI flag > environment variable > config file > default (workspace-write)
+CLI flag > environment variable > config file > default (full-access)
 
 ## Isolation Modes
 
 | Mode | Description |
 |---|---|
-| `workspace-write` | Writes confined to workspace. Network disabled. Protected paths enforced. **Default.** Shown as "sandbox on". |
+| `workspace-write` | Writes confined to workspace. Network disabled. Protected paths enforced. Shown as "sandbox on". |
 | `full-access` | No restrictions. Shown as "sandbox off". |
 | `read-only` | All mutations blocked. No bash. No writes. No network. |
 
