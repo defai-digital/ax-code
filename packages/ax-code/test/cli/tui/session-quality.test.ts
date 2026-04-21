@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import { sessionQualityActions } from "../../../src/cli/cmd/tui/routes/session/quality"
+import {
+  findSessionQualityAction,
+  renderSessionQualityBrief,
+  renderSessionQualityInlineSummary,
+  renderSessionQualityPrompt,
+  sessionQualityActions,
+  sessionQualityActionValue,
+  sessionQualityDetailItems,
+} from "../../../src/cli/cmd/tui/routes/session/quality"
 
 describe("tui session quality actions", () => {
   test("builds capture evidence actions when no replay items are exportable yet", () => {
@@ -10,9 +18,13 @@ describe("tui session quality actions", () => {
           workflow: "review",
           overallStatus: "fail",
           readyForBenchmark: false,
+          labeledItems: 0,
           resolvedLabeledItems: 0,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
           totalItems: 0,
           nextAction: "Capture review workflow activity before exporting replay again.",
+          gates: [],
         },
         debug: null,
       },
@@ -24,11 +36,44 @@ describe("tui session quality actions", () => {
       kind: "capture_evidence",
       title: "Capture Review Evidence",
     })
+    expect(actions[0]?.description).toBe("fail · no replay evidence yet")
+    expect(sessionQualityActionValue(actions[0]!)).toBe("session.quality.review.capture_evidence")
     expect(actions[0]?.prompt.input).toContain("session ses_capture")
     expect(actions[0]?.prompt.input).toContain("produce review workflow evidence")
   })
 
-  test("builds label coverage actions when replay evidence exists but labels are incomplete", () => {
+  test("uses a workflow-specific capture fallback when next action is missing", () => {
+    const actions = sessionQualityActions({
+      sessionID: "ses_capture_fallback",
+      quality: {
+        debug: {
+          workflow: "debug",
+          overallStatus: "fail",
+          readyForBenchmark: false,
+          labeledItems: 0,
+          resolvedLabeledItems: 0,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 0,
+          nextAction: null,
+          gates: [],
+        },
+        review: null,
+      },
+    })
+
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({
+      workflow: "debug",
+      kind: "capture_evidence",
+      footer: "Capture debug workflow activity before exporting replay again.",
+    })
+    expect(renderSessionQualityBrief(actions[0]!)).toContain(
+      "- next action: Capture debug workflow activity before exporting replay again.",
+    )
+  })
+
+  test("builds missing-label actions when replay evidence exists but outcome labels are not recorded yet", () => {
     const actions = sessionQualityActions({
       sessionID: "ses_label",
       quality: {
@@ -36,9 +81,19 @@ describe("tui session quality actions", () => {
           workflow: "review",
           overallStatus: "warn",
           readyForBenchmark: false,
+          labeledItems: 1,
           resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 0,
+          missingLabels: 2,
           totalItems: 3,
           nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "label-coverage",
+              status: "warn",
+              detail: "1 labeled, 2 missing, 0 unresolved",
+            },
+          ],
         },
         debug: null,
       },
@@ -48,10 +103,81 @@ describe("tui session quality actions", () => {
     expect(actions[0]).toMatchObject({
       workflow: "review",
       kind: "finish_label_coverage",
-      title: "Finish Review Label Coverage",
+      title: "Record Review Outcome Labels",
+      footer: "Record outcome labels for the remaining exported artifacts.",
     })
-    expect(actions[0]?.description).toContain("1/3 resolved labels")
-    expect(actions[0]?.prompt.input).toContain("still need resolved outcome labels")
+    expect(sessionQualityActionValue(actions[0]!)).toBe("session.quality.review.finish_label_coverage")
+    expect(actions[0]?.description).toContain("1/3 resolved labels · 2 missing")
+    expect(actions[0]?.prompt.input).toContain("2 missing label(s), 0 unresolved label(s)")
+    expect(actions[0]?.prompt.input).toContain("record the missing outcome labels")
+  })
+
+  test("infers missing labels from legacy counts when missing label metadata is absent", () => {
+    const actions = sessionQualityActions({
+      sessionID: "ses_label_legacy",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 1,
+          resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 3,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [],
+        },
+        debug: null,
+      },
+    })
+
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({
+      workflow: "review",
+      kind: "finish_label_coverage",
+      title: "Record Review Outcome Labels",
+      footer: "Record outcome labels for the remaining exported artifacts.",
+    })
+    expect(actions[0]?.description).toContain("1/3 resolved labels · 2 missing")
+  })
+
+  test("builds unresolved-label actions when labels exist but outcomes still need to be resolved", () => {
+    const actions = sessionQualityActions({
+      sessionID: "ses_unresolved",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 3,
+          resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 2,
+          missingLabels: 0,
+          totalItems: 3,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "label-coverage",
+              status: "warn",
+              detail: "3 labeled, 0 missing, 2 unresolved",
+            },
+          ],
+        },
+        debug: null,
+      },
+    })
+
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({
+      workflow: "review",
+      kind: "finish_label_coverage",
+      title: "Resolve Review Outcome Labels",
+      footer: "Revisit unresolved outcome labels using the current session evidence.",
+    })
+    expect(actions[0]?.description).toContain("1/3 resolved labels · 2 unresolved")
+    expect(actions[0]?.prompt.input).toContain("revisit unresolved outcome labels")
+    expect(actions[0]?.prompt.input).toContain("0 missing label(s), 2 unresolved label(s)")
   })
 
   test("builds benchmark actions when workflow readiness is benchmark-ready", () => {
@@ -63,9 +189,19 @@ describe("tui session quality actions", () => {
           workflow: "debug",
           overallStatus: "pass",
           readyForBenchmark: true,
+          labeledItems: 2,
           resolvedLabeledItems: 2,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
           totalItems: 2,
           nextAction: null,
+          gates: [
+            {
+              name: "benchmark-readiness",
+              status: "pass",
+              detail: "2 resolved label(s) available for calibration or benchmark work",
+            },
+          ],
         },
       },
     })
@@ -77,6 +213,408 @@ describe("tui session quality actions", () => {
       title: "Benchmark Debug Replay",
       footer: "Ready to benchmark the current replay export.",
     })
-    expect(actions[0]?.prompt.input).toContain("benchmark flow for session ses_benchmark and workflow debug")
+    expect(sessionQualityActionValue(actions[0]!)).toBe("session.quality.debug.benchmark")
+    expect(actions[0]?.prompt.input).toContain("Quality readiness context for session ses_benchmark:")
+    expect(actions[0]?.prompt.input).toContain("Prepare the next benchmark step for the current debug replay evidence.")
+  })
+
+  test("switches to replay-readiness guidance when labels are complete but benchmarking is still blocked", () => {
+    const actions = sessionQualityActions({
+      sessionID: "ses_readiness_blocked",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 3,
+          resolvedLabeledItems: 3,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 3,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "refresh-required",
+              status: "warn",
+              detail: "refresh replay readiness after recent session activity",
+            },
+          ],
+        },
+        debug: null,
+      },
+    })
+
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({
+      workflow: "review",
+      kind: "finish_label_coverage",
+      title: "Check Review Replay Readiness",
+      footer: "Review replay readiness gates before benchmarking.",
+      description: "warn · label coverage complete · 3/3 resolved labels",
+    })
+    expect(renderSessionQualityInlineSummary(actions[0]!)).toBe(
+      "review replay readiness · warn · label coverage complete · 3/3 resolved labels",
+    )
+    expect(renderSessionQualityPrompt(actions[0]!, "ses_readiness_blocked")).toContain(
+      "review the remaining replay-readiness gates",
+    )
+    expect(sessionQualityDetailItems(actions[0]!)[1]).toMatchObject({
+      title: "Replay readiness incomplete",
+      footer: "Review replay readiness gates before benchmarking.",
+    })
+  })
+
+  test("derives detail items that explain status and expose the next-step action", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_detail",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 1,
+          resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 0,
+          missingLabels: 2,
+          totalItems: 3,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "label-coverage",
+              status: "warn",
+              detail: "1 labeled, 2 missing, 0 unresolved",
+            },
+          ],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    const items = sessionQualityDetailItems(action)
+    expect(items).toHaveLength(3)
+    expect(items[0]).toMatchObject({
+      category: "Next Step",
+      title: "Record Review Outcome Labels",
+      action,
+    })
+    expect(items[1]).toMatchObject({
+      category: "Status",
+      title: "Label coverage incomplete",
+      description: "warn · 1/3 resolved labels · 2 missing",
+      footer: "Record outcome labels for the remaining exported artifacts.",
+    })
+    expect(items[2]).toMatchObject({
+      category: "Gate",
+      title: "[warn] label-coverage",
+      description: "1 labeled, 2 missing, 0 unresolved",
+    })
+  })
+
+  test("uses a capture-evidence status summary without misleading zero label ratios", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_capture_detail",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "fail",
+          readyForBenchmark: false,
+          labeledItems: 0,
+          resolvedLabeledItems: 0,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 0,
+          nextAction: "Capture review workflow activity before exporting replay again.",
+          gates: [],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    const items = sessionQualityDetailItems(action)
+    expect(items[1]).toMatchObject({
+      category: "Status",
+      title: "Replay evidence missing",
+      description: "fail · no replay evidence yet",
+    })
+  })
+
+  test("finds the current action by workflow and kind", () => {
+    const action = findSessionQualityAction({
+      sessionID: "ses_lookup",
+      workflow: "debug",
+      kind: "benchmark",
+      quality: {
+        review: null,
+        debug: {
+          workflow: "debug",
+          overallStatus: "pass",
+          readyForBenchmark: true,
+          labeledItems: 2,
+          resolvedLabeledItems: 2,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 2,
+          nextAction: null,
+          gates: [],
+        },
+      },
+    })
+
+    expect(action).toMatchObject({
+      workflow: "debug",
+      kind: "benchmark",
+      title: "Benchmark Debug Replay",
+    })
+  })
+
+  test("renders a clipboard-friendly readiness brief", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_brief",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 1,
+          resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 0,
+          missingLabels: 2,
+          totalItems: 3,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "label-coverage",
+              status: "warn",
+              detail: "1 labeled, 2 missing, 0 unresolved",
+            },
+          ],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    expect(renderSessionQualityBrief(action)).toBe(
+      [
+        "Quality readiness · review",
+        "- overall status: warn",
+        "- benchmark ready: no",
+        "- missing labels: 2",
+        "- unresolved labels: 0",
+        "- resolved labels: 1/3 resolved labels",
+        "- next action: Record outcome labels for the remaining exported artifacts.",
+        "- gates:",
+        "  - [warn] label-coverage: 1 labeled, 2 missing, 0 unresolved",
+      ].join("\n"),
+    )
+  })
+
+  test("renders a capture-evidence brief without misleading zero label ratios", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_brief_capture",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "fail",
+          readyForBenchmark: false,
+          labeledItems: 0,
+          resolvedLabeledItems: 0,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 0,
+          nextAction: "Capture review workflow activity before exporting replay again.",
+          gates: [],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    expect(renderSessionQualityBrief(action)).toBe(
+      [
+        "Quality readiness · review",
+        "- overall status: fail",
+        "- benchmark ready: no",
+        "- replay items: none yet",
+        "- next action: Capture review workflow activity before exporting replay again.",
+      ].join("\n"),
+    )
+  })
+
+  test("renders an inline summary for compact surfaces like the sidebar", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_inline",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 1,
+          resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 0,
+          missingLabels: 2,
+          totalItems: 3,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    expect(renderSessionQualityInlineSummary(action)).toBe(
+      "record outcome labels · warn · 1/3 resolved labels · 2 missing",
+    )
+  })
+
+  test("renders a capture-evidence inline summary without redundant label counts", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_inline_capture",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "fail",
+          readyForBenchmark: false,
+          labeledItems: 0,
+          resolvedLabeledItems: 0,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 0,
+          nextAction: "Capture review workflow activity before exporting replay again.",
+          gates: [],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    expect(renderSessionQualityInlineSummary(action)).toBe(
+      "capture evidence · fail · no replay evidence yet",
+    )
+  })
+
+  test("renders a concrete capture-evidence prompt scaffold", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_prompt_capture",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "fail",
+          readyForBenchmark: false,
+          labeledItems: 0,
+          resolvedLabeledItems: 0,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 0,
+          nextAction: "Capture review workflow activity before exporting replay again.",
+          gates: [
+            {
+              name: "exportable-session-shape",
+              status: "fail",
+              detail: "no anchor items exported for workflow review",
+            },
+          ],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    const prompt = renderSessionQualityPrompt(action, "ses_prompt_capture")
+    expect(prompt).toContain("Quality readiness context for session ses_prompt_capture:")
+    expect(prompt).toContain("- replay items: none yet")
+    expect(prompt).not.toContain("resolved labels: 0/0")
+    expect(prompt).toContain("Use the current session to produce review workflow evidence")
+    expect(prompt).toContain("Focus on the failing or warning readiness gates first.")
+    expect(prompt).toContain("Do not fabricate results")
+  })
+
+  test("renders a concrete label-coverage prompt scaffold", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_prompt_label",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 1,
+          resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 0,
+          missingLabels: 2,
+          totalItems: 3,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "label-coverage",
+              status: "warn",
+              detail: "1 labeled, 2 missing, 0 unresolved",
+            },
+          ],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    const prompt = renderSessionQualityPrompt(action, "ses_prompt_label")
+    expect(prompt).toContain("Use the current session's review replay evidence to record the missing outcome labels.")
+    expect(prompt).toContain("2 missing label(s), 0 unresolved label(s)")
+    expect(prompt).toContain("Identify which exported artifacts are still missing labels.")
+    expect(prompt).toContain("do not invent final outcomes")
+  })
+
+  test("renders a concrete benchmark prompt scaffold", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_prompt_benchmark",
+      quality: {
+        review: null,
+        debug: {
+          workflow: "debug",
+          overallStatus: "pass",
+          readyForBenchmark: true,
+          labeledItems: 2,
+          resolvedLabeledItems: 2,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 2,
+          nextAction: null,
+          gates: [
+            {
+              name: "benchmark-readiness",
+              status: "pass",
+              detail: "2 resolved label(s) available for calibration or benchmark work",
+            },
+          ],
+        },
+      },
+    })[0]!
+
+    const prompt = renderSessionQualityPrompt(action, "ses_prompt_benchmark")
+    expect(prompt).toContain("Prepare the next benchmark step for the current debug replay evidence.")
+    expect(prompt).toContain("Identify any missing inputs that would still block benchmarking.")
+    expect(prompt).toContain("Do not invent benchmark results or calibration outcomes.")
+  })
+
+  test("clamps malformed readiness counts before rendering summaries", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_malformed_counts",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 7,
+          resolvedLabeledItems: 5,
+          unresolvedLabeledItems: 4,
+          missingLabels: 2,
+          totalItems: 3,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    expect(action.description).toBe("warn · label coverage complete · 3/3 resolved labels")
+    expect(renderSessionQualityInlineSummary(action)).toBe(
+      "review replay readiness · warn · label coverage complete · 3/3 resolved labels",
+    )
+    expect(renderSessionQualityBrief(action)).toContain("- resolved labels: 3/3 resolved labels")
+    expect(renderSessionQualityBrief(action)).toContain("- missing labels: 0")
+    expect(renderSessionQualityBrief(action)).toContain("- unresolved labels: 0")
   })
 })
