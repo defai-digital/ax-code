@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
 
 const publishScripts = [
-  "/Users/akiralam/code/ax-code/packages/ax-code/script/publish.ts",
-  "/Users/akiralam/code/ax-code/packages/plugin/script/publish.ts",
-  "/Users/akiralam/code/ax-code/packages/sdk/js/script/publish.ts",
+  path.resolve(import.meta.dir, "../../script/publish.ts"),
+  path.resolve(import.meta.dir, "../../../plugin/script/publish.ts"),
+  path.resolve(import.meta.dir, "../../../sdk/js/script/publish.ts"),
 ]
 
 describe("publish scripts", () => {
