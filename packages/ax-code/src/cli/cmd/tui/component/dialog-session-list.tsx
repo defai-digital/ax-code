@@ -11,6 +11,7 @@ import { DialogSessionRename } from "./dialog-session-rename"
 import { useKV } from "../context/kv"
 import { createDebouncedSignal } from "../util/signal"
 import { Spinner } from "./spinner"
+import { createAbortableResourceFetcher } from "../util/abortable-resource"
 
 export function DialogSessionList() {
   const dialog = useDialog()
@@ -24,11 +25,11 @@ export function DialogSessionList() {
   const [toDelete, setToDelete] = createSignal<string>()
   const [search, setSearch] = createDebouncedSignal("", 150)
 
-  const [searchResults] = createResource(search, async (query) => {
+  const [searchResults] = createResource(search, createAbortableResourceFetcher(async (query: string, signal) => {
     if (!query) return undefined
-    const result = await sdk.client.session.list({ search: query, limit: 30 })
+    const result = await sdk.client.session.list({ search: query, limit: 30 }, { signal })
     return result.data ?? []
-  })
+  }))
 
   const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
 

@@ -6,6 +6,7 @@ import { Locale } from "@/util/locale"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useDialog } from "../../ui/dialog"
+import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
 import { promptState } from "./messages"
 
@@ -16,6 +17,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
   const dialog = useDialog()
   const sdk = useSDK()
   const route = useRoute()
+  const toast = useToast()
 
   onMount(() => {
     dialog.setSize("large")
@@ -35,20 +37,34 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
         value: message.id,
         footer: Locale.time(message.time.created),
         onSelect: async (dialog) => {
-          const forked = await sdk.client.session.fork({
-            sessionID: props.sessionID,
-            messageID: message.id,
-          })
-          if (!forked.data) {
-            log.warn("session fork failed", { sessionID: props.sessionID, messageID: message.id, error: forked.error })
-            return
-          }
-          route.navigate({
-            sessionID: forked.data.id,
-            type: "session",
-            initialPrompt: promptState(sync.data.part[message.id]),
-          })
-          dialog.clear()
+          await sdk.client.session
+            .fork({
+              sessionID: props.sessionID,
+              messageID: message.id,
+            })
+            .then((forked) => {
+              if (!forked.data) {
+                const errorMessage = typeof forked.error === "string" ? forked.error : "Failed to fork session"
+                throw new Error(errorMessage)
+              }
+              route.navigate({
+                sessionID: forked.data.id,
+                type: "session",
+                initialPrompt: promptState(sync.data.part[message.id] ?? []),
+              })
+              dialog.clear()
+            })
+            .catch((error) => {
+              log.warn("timeline fork failed", {
+                error,
+                sessionID: props.sessionID,
+                messageID: message.id,
+              })
+              toast.show({
+                message: error instanceof Error ? error.message : "Failed to fork session",
+                variant: "error",
+              })
+            })
         },
       })
     }

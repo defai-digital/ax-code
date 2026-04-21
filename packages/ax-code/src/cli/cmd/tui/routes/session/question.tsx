@@ -9,12 +9,17 @@ import { useSDK } from "../../context/sdk"
 import { SplitBorder } from "../../component/border"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
+import { useToast } from "../../ui/toast"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.question" })
 
 export function QuestionPrompt(props: { request: QuestionRequest }) {
   const sdk = useSDK()
   const { theme } = useTheme()
   const keybind = useKeybind()
   const bindings = useTextareaKeybindings()
+  const toast = useToast()
 
   const questions = createMemo(() => props.request.questions)
   const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
@@ -43,18 +48,40 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     return store.answers[store.tab]?.includes(value) ?? false
   })
 
+  function submitQuestionRequest(run: () => Promise<unknown>, failureLabel: string, failureMessage: string) {
+    void Promise.resolve()
+      .then(run)
+      .catch((error) => {
+        log.warn(failureLabel, { error, requestID: props.request.id })
+        toast.show({
+          message: error instanceof Error ? error.message : failureMessage,
+          variant: "error",
+        })
+      })
+  }
+
   function submit() {
     const answers = questions().map((_, i) => store.answers[i] ?? [])
-    sdk.client.question.reply({
-      requestID: props.request.id,
-      answers,
-    })
+    submitQuestionRequest(
+      () =>
+        sdk.client.question.reply({
+          requestID: props.request.id,
+          answers,
+        }),
+      "question prompt reply failed",
+      "Failed to submit question response",
+    )
   }
 
   function reject() {
-    sdk.client.question.reject({
-      requestID: props.request.id,
-    })
+    submitQuestionRequest(
+      () =>
+        sdk.client.question.reject({
+          requestID: props.request.id,
+        }),
+      "question prompt reject failed",
+      "Failed to reject question",
+    )
   }
 
   function pick(answer: string, custom: boolean = false) {
@@ -67,10 +94,15 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       setStore("custom", inputs)
     }
     if (single()) {
-      sdk.client.question.reply({
-        requestID: props.request.id,
-        answers: [[answer]],
-      })
+      submitQuestionRequest(
+        () =>
+          sdk.client.question.reply({
+            requestID: props.request.id,
+            answers: [[answer]],
+          }),
+        "question prompt reply failed",
+        "Failed to submit question response",
+      )
       return
     }
     setStore("tab", store.tab + 1)
@@ -219,6 +251,18 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       const total = opts.length + (custom() ? 1 : 0)
       const max = Math.min(total, 9)
       const digit = Number(evt.name)
+
+      if (total === 0) {
+        if (evt.name === "escape" || keybind.match("app_exit", evt)) {
+          evt.preventDefault()
+          reject()
+          return
+        }
+        if (evt.name === "return" || evt.name === "up" || evt.name === "down" || evt.name === "j" || evt.name === "k") {
+          evt.preventDefault()
+        }
+        return
+      }
 
       if (!Number.isNaN(digit) && digit >= 1 && digit <= max) {
         evt.preventDefault()

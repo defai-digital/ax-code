@@ -14,9 +14,13 @@ import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
 import { Global } from "@/global"
 import { useDialog } from "../../ui/dialog"
+import { useToast } from "../../ui/toast"
 import { useTuiConfig } from "../../context/tui-config"
 import { diffDisplayView } from "./view-model"
 import { SessionDiffRenderer } from "./render-adapter"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.permission" })
 
 type PermissionStage = "permission" | "always" | "reject"
 
@@ -181,6 +185,7 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
 export function PermissionPrompt(props: { request: PermissionRequest }) {
   const sdk = useSDK()
   const sync = useSync()
+  const toast = useToast()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
   })
@@ -200,6 +205,22 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   })
 
   const { theme } = useTheme()
+
+  function submitPermissionReply(
+    run: () => Promise<unknown>,
+    failureLabel: string,
+    failureMessage: string,
+  ) {
+    void Promise.resolve()
+      .then(run)
+      .catch((error) => {
+        log.warn(failureLabel, { error, requestID: props.request.id })
+        toast.show({
+          message: error instanceof Error ? error.message : failureMessage,
+          variant: "error",
+        })
+      })
+  }
 
   return (
     <Switch>
@@ -233,21 +254,31 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           onSelect={(option) => {
             setStore("stage", "permission")
             if (option === "cancel") return
-            sdk.client.permission.reply({
-              reply: "always",
-              requestID: props.request.id,
-            })
+            submitPermissionReply(
+              () =>
+                sdk.client.permission.reply({
+                  reply: "always",
+                  requestID: props.request.id,
+                }),
+              "permission prompt always-reply failed",
+              "Failed to allow permission permanently",
+            )
           }}
         />
       </Match>
       <Match when={store.stage === "reject"}>
         <RejectPrompt
           onConfirm={(message) => {
-            sdk.client.permission.reply({
-              reply: "reject",
-              requestID: props.request.id,
-              message: message || undefined,
-            })
+            submitPermissionReply(
+              () =>
+                sdk.client.permission.reply({
+                  reply: "reject",
+                  requestID: props.request.id,
+                  message: message || undefined,
+                }),
+              "permission prompt reject failed",
+              "Failed to reject permission",
+            )
           }}
           onCancel={() => {
             setStore("stage", "permission")
@@ -516,16 +547,26 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                     setStore("stage", "reject")
                     return
                   }
-                  sdk.client.permission.reply({
-                    reply: "reject",
-                    requestID: props.request.id,
-                  })
+                  submitPermissionReply(
+                    () =>
+                      sdk.client.permission.reply({
+                        reply: "reject",
+                        requestID: props.request.id,
+                      }),
+                    "permission prompt reject failed",
+                    "Failed to reject permission",
+                  )
                   return
                 }
-                sdk.client.permission.reply({
-                  reply: "once",
-                  requestID: props.request.id,
-                })
+                submitPermissionReply(
+                  () =>
+                    sdk.client.permission.reply({
+                      reply: "once",
+                      requestID: props.request.id,
+                    }),
+                  "permission prompt once-reply failed",
+                  "Failed to allow permission once",
+                )
               }}
             />
           )

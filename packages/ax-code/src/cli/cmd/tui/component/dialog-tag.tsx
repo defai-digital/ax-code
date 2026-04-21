@@ -3,6 +3,7 @@ import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { useSDK } from "@tui/context/sdk"
 import { createStore } from "solid-js/store"
+import { createAbortableResourceFetcher } from "../util/abortable-resource"
 
 export function DialogTag(props: { onSelect?: (value: string) => void }) {
   const sdk = useSDK()
@@ -14,14 +15,14 @@ export function DialogTag(props: { onSelect?: (value: string) => void }) {
 
   const [files] = createResource(
     () => [store.filter],
-    async () => {
+    createAbortableResourceFetcher(async (_filter: string[], signal) => {
       const result = await sdk.client.find.files({
         query: store.filter,
-      })
+      }, { signal })
       if (result.error) return []
       const sliced = (result.data ?? []).slice(0, 5)
       return sliced
-    },
+    }),
   )
 
   const options = createMemo(() =>

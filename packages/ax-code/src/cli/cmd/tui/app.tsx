@@ -50,6 +50,7 @@ import { renderTui } from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
 import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
+import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
 
@@ -883,12 +884,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         const next = previousMode === "full-access" ? "workspace-write" : "full-access"
         sync.set("isolation", "mode", next)
         sync.set("isolation", "network", next === "full-access")
-        const headers: Record<string, string> = { "content-type": "application/json" }
-        if (sdk.directory) {
-          const encoded = /[^\x00-\x7F]/.test(sdk.directory) ? encodeURIComponent(sdk.directory) : sdk.directory
-          headers["x-ax-code-directory"] = encoded
-          headers["x-opencode-directory"] = encoded
-        }
+        const headers = directoryRequestHeaders({
+          directory: sdk.directory,
+          contentType: "application/json",
+        })
         void putJsonWithTimeout("/isolation", { mode: next }, headers).catch(() => {
           sync.set("isolation", "mode", previousMode)
           sync.set("isolation", "network", previousNetwork)

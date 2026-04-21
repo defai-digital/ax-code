@@ -7,6 +7,11 @@ const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const HELPER_SRC = path.join(TUI_ROOT, "context/helper.tsx")
 const RENDERER_SRC = path.join(TUI_ROOT, "renderer.ts")
 const SESSION_ROUTE_SRC = path.join(TUI_ROOT, "routes/session/index.tsx")
+const PERMISSION_PROMPT_SRC = path.join(TUI_ROOT, "routes/session/permission.tsx")
+const QUESTION_PROMPT_SRC = path.join(TUI_ROOT, "routes/session/question.tsx")
+const DIALOG_MESSAGE_SRC = path.join(TUI_ROOT, "routes/session/dialog-message.tsx")
+const DISPLAY_COMMANDS_SRC = path.join(TUI_ROOT, "routes/session/display-commands.ts")
+const TIMELINE_FORK_DIALOG_SRC = path.join(TUI_ROOT, "routes/session/dialog-fork-from-timeline.tsx")
 const SIDEBAR_SRC = path.join(TUI_ROOT, "routes/session/sidebar.tsx")
 const THEME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-theme-list.tsx")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")
@@ -16,6 +21,11 @@ const DIALOG_SRC = path.join(TUI_ROOT, "ui/dialog.tsx")
 const DIALOG_PROMPT_SRC = path.join(TUI_ROOT, "ui/dialog-prompt.tsx")
 const DIALOG_EXPORT_OPTIONS_SRC = path.join(TUI_ROOT, "ui/dialog-export-options.tsx")
 const SYNC_SRC = path.join(TUI_ROOT, "context/sync.tsx")
+const SYNC_BOOTSTRAP_FLOW_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-flow.ts")
+const SYNC_BOOTSTRAP_PLAN_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-plan.ts")
+const SYNC_BOOTSTRAP_PHASE_PLAN_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-phase-plan.ts")
+const SYNC_BOOTSTRAP_REQUEST_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-request.ts")
+const SYNC_BOOTSTRAP_RUNNER_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-runner.ts")
 const HOME_SRC = path.join(TUI_ROOT, "routes/home.tsx")
 const STARTUP_TRACE_SRC = path.join(TUI_ROOT, "util/startup-trace.ts")
 const DEFERRED_STARTUP_SRCS = [
@@ -73,6 +83,114 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(session).not.toContain("createEffect(async")
   })
 
+  test("handles delegated task preview session sync failures without unhandled rejections", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(session).toContain('void sync.session.sync(id).catch((error) => {')
+    expect(session).toContain('log.warn("task child session preview sync failed"')
+  })
+
+  test("handles question prompt replies and rejects without leaking unhandled failures", async () => {
+    const question = await fs.readFile(QUESTION_PROMPT_SRC, "utf8")
+
+    expect(question).toContain("function submitQuestionRequest(")
+    expect(question).toContain("void Promise.resolve()")
+    expect(question).toContain('log.warn(failureLabel, { error, requestID: props.request.id })')
+    expect(question).toContain('"question prompt reply failed"')
+    expect(question).toContain('"question prompt reject failed"')
+    expect(question).toContain('"Failed to submit question response"')
+    expect(question).toContain('"Failed to reject question"')
+    expect(question).toContain("if (total === 0) {")
+  })
+
+  test("handles permission prompt replies without leaking unhandled failures", async () => {
+    const permission = await fs.readFile(PERMISSION_PROMPT_SRC, "utf8")
+
+    expect(permission).toContain("function submitPermissionReply(")
+    expect(permission).toContain("void Promise.resolve()")
+    expect(permission).toContain('log.warn(failureLabel, { error, requestID: props.request.id })')
+    expect(permission).toContain('"permission prompt once-reply failed"')
+    expect(permission).toContain('"permission prompt always-reply failed"')
+    expect(permission).toContain('"permission prompt reject failed"')
+    expect(permission).toContain('"Failed to allow permission once"')
+    expect(permission).toContain('"Failed to allow permission permanently"')
+    expect(permission).toContain('"Failed to reject permission"')
+  })
+
+  test("handles dialog message revert failures without leaking stale prompt state", async () => {
+    const dialogMessage = await fs.readFile(DIALOG_MESSAGE_SRC, "utf8")
+
+    expect(dialogMessage).toContain('log.warn("dialog message revert failed"')
+    expect(dialogMessage).toContain('message: error instanceof Error ? error.message : "Failed to revert message"')
+    expect(dialogMessage).toContain("props.setPrompt(promptState(sync.data.part[msg.id] ?? []))")
+    expect(dialogMessage).toContain('message: "Message is no longer available"')
+    expect(dialogMessage).toContain("dialog.clear()")
+  })
+
+  test("handles dialog message copy and fork failures without leaking unhandled rejections", async () => {
+    const dialogMessage = await fs.readFile(DIALOG_MESSAGE_SRC, "utf8")
+
+    expect(dialogMessage).toContain('log.warn("dialog message copy failed"')
+    expect(dialogMessage).toContain('message: error instanceof Error ? error.message : "Failed to copy message"')
+    expect(dialogMessage).toContain('log.warn("dialog message fork failed"')
+    expect(dialogMessage).toContain('message: error instanceof Error ? error.message : "Failed to fork session"')
+    expect(dialogMessage).toContain("promptState(sync.data.part[msg.id] ?? [])")
+  })
+
+  test("handles timeline fork failures without leaking unhandled rejections", async () => {
+    const timelineForkDialog = await fs.readFile(TIMELINE_FORK_DIALOG_SRC, "utf8")
+
+    expect(timelineForkDialog).toContain('log.warn("timeline fork failed"')
+    expect(timelineForkDialog).toContain('message: error instanceof Error ? error.message : "Failed to fork session"')
+    expect(timelineForkDialog).toContain("promptState(sync.data.part[message.id] ?? [])")
+  })
+
+  test("handles session summarize failures without leaking unhandled rejections", async () => {
+    const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
+
+    expect(displayCommands).toContain("void Promise.resolve()")
+    expect(displayCommands).toContain("input.sdk.client.session.summarize({")
+    expect(displayCommands).toContain('message: error instanceof Error ? error.message : "Failed to summarize session"')
+    expect(displayCommands).toContain('message: "Connect a provider to summarize this session"')
+    expect(displayCommands).toContain("dialog.clear()")
+  })
+
+  test("closes transcript copy and export commands when the session is no longer available", async () => {
+    const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
+
+    expect(displayCommands).toContain('input.toast.show({ message: "Session is no longer available", variant: "warning" })')
+    expect(displayCommands).toContain("if (!data) {")
+    expect(displayCommands).toContain("dialog.clear()")
+  })
+
+  test("closes jump-to-last-user after moving the session view", async () => {
+    const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
+
+    expect(displayCommands).toContain('value: "session.messages_last_user"')
+    expect(displayCommands).toContain("input.jumpToLastUser()")
+    expect(displayCommands).toContain("dialog.clear()")
+  })
+
+  test("handles undo and redo session revert failures without leaking stale prompt state", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(session).toContain("enabled: !!undoMessageID(messages(), session()?.revert?.messageID),")
+    expect(session).toContain('log.warn("session undo failed"')
+    expect(session).toContain('log.warn("session redo failed"')
+    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to undo previous message"')
+    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to redo the previous message"')
+    expect(session).toContain("prompt.set(promptState(sync.data.part[messageID] ?? []))")
+    expect(session).toContain("if (!messageID) {")
+    expect(session).toContain("dialog.clear()")
+  })
+
+  test("disposes the session reconnect recovery gate on route cleanup", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(session).toContain("const reconnectSession = createReconnectRecoveryGate(")
+    expect(session).toContain("onCleanup(() => reconnectSession.dispose())")
+  })
+
   test("keeps startup routing scoped to session-list readiness instead of full sync completion", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
     const sync = await fs.readFile(SYNC_SRC, "utf8")
@@ -85,21 +203,30 @@ describe("tui OpenTUI stability guardrails", () => {
   })
 
   test("defers lower-priority sync hydration out of the initial bootstrap burst", async () => {
-    const sync = await fs.readFile(SYNC_SRC, "utf8")
-    const coreStart = sync.indexOf("const coreBootstrapTasks = [")
-    const deferredStart = sync.indexOf("const deferredBootstrapTasks = [")
-    const coreBlock = coreStart >= 0 && deferredStart > coreStart ? sync.slice(coreStart, deferredStart) : ""
+    const requests = await fs.readFile(SYNC_BOOTSTRAP_REQUEST_SRC, "utf8")
+    const plan = await fs.readFile(SYNC_BOOTSTRAP_PLAN_SRC, "utf8")
+    const phasePlan = await fs.readFile(SYNC_BOOTSTRAP_PHASE_PLAN_SRC, "utf8")
+    const coreStart = plan.indexOf("export function createCoreBootstrapPhaseTasks")
+    const deferredStart = plan.indexOf("export function createDeferredBootstrapPhaseTasks")
+    const coreBlock = coreStart >= 0 && deferredStart > coreStart ? plan.slice(coreStart, deferredStart) : ""
+    const deferredBlock = deferredStart >= 0 ? plan.slice(deferredStart) : ""
 
-    expect(sync).toContain("const coreBootstrapTasks = [")
-    expect(sync).toContain("const deferredBootstrapTasks = [")
-    expect(sync).toContain('"tui bootstrap debug-engine"')
-    expect(sync).toContain('"tui bootstrap worktree.list"')
-    expect(sync).toContain('"tui bootstrap mcp.status"')
-    expect(sync).toContain('setStore("status", "complete")')
-    expect(coreBlock).not.toContain('"tui bootstrap lsp.status"')
-    expect(coreBlock).not.toContain('"tui bootstrap mcp.status"')
-    expect(coreBlock).not.toContain('"tui bootstrap resource.list"')
-    expect(coreBlock).not.toContain('"tui bootstrap formatter.status"')
+    expect(requests).toContain('"tui bootstrap debug-engine"')
+    expect(requests).toContain('"tui bootstrap worktree.list"')
+    expect(requests).toContain('"tui bootstrap mcp.status"')
+    expect(coreBlock).not.toContain("input.lspPromise")
+    expect(coreBlock).not.toContain("input.mcpPromise")
+    expect(coreBlock).not.toContain("input.resourcePromise")
+    expect(coreBlock).not.toContain("input.formatterPromise")
+    expect(coreBlock).not.toContain("input.workspacesTask")
+    expect(coreBlock).not.toContain("input.debugEngineTask")
+    expect(deferredBlock).toContain("input.lspPromise")
+    expect(deferredBlock).toContain("input.mcpPromise")
+    expect(deferredBlock).toContain("input.resourcePromise")
+    expect(deferredBlock).toContain("input.formatterPromise")
+    expect(deferredBlock).toContain("input.workspacesTask")
+    expect(deferredBlock).toContain("input.debugEngineTask")
+    expect(phasePlan).toContain('input.setStatus("complete")')
   })
 
   test("does not gate context providers on a generic ready flag", async () => {
@@ -183,6 +310,9 @@ describe("tui OpenTUI stability guardrails", () => {
     const startupTrace = await fs.readFile(STARTUP_TRACE_SRC, "utf8")
     const app = await fs.readFile(APP_SRC, "utf8")
     const sync = await fs.readFile(SYNC_SRC, "utf8")
+    const bootstrapFlow = await fs.readFile(SYNC_BOOTSTRAP_FLOW_SRC, "utf8")
+    const bootstrapPhasePlan = await fs.readFile(SYNC_BOOTSTRAP_PHASE_PLAN_SRC, "utf8")
+    const bootstrapRunner = await fs.readFile(SYNC_BOOTSTRAP_RUNNER_SRC, "utf8")
     const home = await fs.readFile(HOME_SRC, "utf8")
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
 
@@ -192,9 +322,13 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).toContain("beginTuiStartup")
     expect(app).toContain("tui.startup.renderDispatched")
     expect(app).toContain('createTuiStartupSpan("tui.startup.sessionRouteImport"')
-    expect(sync).toContain('createTuiStartupSpan("tui.startup.bootstrap"')
-    expect(sync).toContain('recordTuiStartupOnce("tui.startup.sessionListReady"')
-    expect(sync).toContain('recordTuiStartupOnce("tui.startup.bootstrapDeferredReady"')
+    expect(sync).toContain("createSpan: createTuiStartupSpan")
+    expect(sync).toContain("recordStartup: recordTuiStartupOnce")
+    expect(bootstrapRunner).toContain('input.createSpan("tui.startup.bootstrap")')
+    expect(bootstrapRunner).toContain('createNamedSpan("tui.startup.bootstrapCore")')
+    expect(bootstrapRunner).toContain('createNamedSpan("tui.startup.bootstrapDeferred")')
+    expect(bootstrapFlow).toContain('input.recordStartup("tui.startup.sessionListReady")')
+    expect(bootstrapPhasePlan).toContain('input.recordStartup("tui.startup.bootstrapDeferredReady"')
     expect(home).toContain('recordTuiStartupOnce("tui.startup.homeMounted"')
     expect(home).toContain('recordTuiStartupOnce("tui.startup.homePromptReady"')
     expect(session).toContain('recordTuiStartupOnce("tui.startup.sessionMounted"')

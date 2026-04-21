@@ -8,6 +8,7 @@ import { EventQuery } from "@/replay/query"
 import { messageRoute } from "./route"
 import { Log } from "@/util/log"
 import { promptState } from "./messages"
+import { useToast } from "@tui/ui/toast"
 
 const log = Log.create({ service: "tui.dialog-message" })
 
@@ -18,6 +19,7 @@ export function DialogMessage(props: {
 }) {
   const sync = useSync()
   const sdk = useSDK()
+  const toast = useToast()
   const message = createMemo(() => sync.data.message[props.sessionID]?.find((x) => x.id === props.messageID))
   const routeInfo = createMemo(() => {
     const msg = message()
@@ -50,20 +52,39 @@ export function DialogMessage(props: {
           title: "Revert",
           value: "session.revert",
           description: "undo messages and file changes",
-          onSelect: (dialog) => {
+          onSelect: async (dialog) => {
             const msg = message()
-            if (!msg) return
-
-            sdk.client.session.revert({
-              sessionID: props.sessionID,
-              messageID: msg.id,
-            })
-
-            if (props.setPrompt) {
-              props.setPrompt(promptState(sync.data.part[msg.id]))
+            if (!msg) {
+              toast.show({
+                message: "Message is no longer available",
+                variant: "warning",
+              })
+              dialog.clear()
+              return
             }
 
-            dialog.clear()
+            await sdk.client.session
+              .revert({
+                sessionID: props.sessionID,
+                messageID: msg.id,
+              })
+              .then(() => {
+                if (props.setPrompt) {
+                  props.setPrompt(promptState(sync.data.part[msg.id] ?? []))
+                }
+                dialog.clear()
+              })
+              .catch((error) => {
+                log.warn("dialog message revert failed", {
+                  error,
+                  sessionID: props.sessionID,
+                  messageID: msg.id,
+                })
+                toast.show({
+                  message: error instanceof Error ? error.message : "Failed to revert message",
+                  variant: "error",
+                })
+              })
           },
         },
         {
@@ -73,7 +94,14 @@ export function DialogMessage(props: {
           category: "Actions",
           onSelect: async (dialog) => {
             const msg = message()
-            if (!msg) return
+            if (!msg) {
+              toast.show({
+                message: "Message is no longer available",
+                variant: "warning",
+              })
+              dialog.clear()
+              return
+            }
 
             const parts = sync.data.part[msg.id] ?? []
             const text = parts.reduce((agg, part) => {
@@ -84,7 +112,20 @@ export function DialogMessage(props: {
             }, "")
 
             await Clipboard.copy(text)
-            dialog.clear()
+              .then(() => {
+                dialog.clear()
+              })
+              .catch((error) => {
+                log.warn("dialog message copy failed", {
+                  error,
+                  sessionID: props.sessionID,
+                  messageID: msg.id,
+                })
+                toast.show({
+                  message: error instanceof Error ? error.message : "Failed to copy message",
+                  variant: "error",
+                })
+              })
           },
         },
         {
@@ -93,29 +134,39 @@ export function DialogMessage(props: {
           description: "create a new session",
           category: "Actions",
           onSelect: async (dialog) => {
-            const result = await sdk.client.session.fork({
-              sessionID: props.sessionID,
-              messageID: props.messageID,
-            })
-            if (!result.data) {
-              log.warn("session fork failed", {
+            await sdk.client.session
+              .fork({
                 sessionID: props.sessionID,
                 messageID: props.messageID,
-                error: result.error,
               })
-              return
-            }
-            const initialPrompt = (() => {
-              const msg = message()
-              if (!msg) return undefined
-              return promptState(sync.data.part[msg.id])
-            })()
-            route.navigate({
-              sessionID: result.data.id,
-              type: "session",
-              initialPrompt,
-            })
-            dialog.clear()
+              .then((result) => {
+                if (!result.data) {
+                  const errorMessage = typeof result.error === "string" ? result.error : "Failed to fork session"
+                  throw new Error(errorMessage)
+                }
+                const initialPrompt = (() => {
+                  const msg = message()
+                  if (!msg) return undefined
+                  return promptState(sync.data.part[msg.id] ?? [])
+                })()
+                route.navigate({
+                  sessionID: result.data.id,
+                  type: "session",
+                  initialPrompt,
+                })
+                dialog.clear()
+              })
+              .catch((error) => {
+                log.warn("dialog message fork failed", {
+                  error,
+                  sessionID: props.sessionID,
+                  messageID: props.messageID,
+                })
+                toast.show({
+                  message: error instanceof Error ? error.message : "Failed to fork session",
+                  variant: "error",
+                })
+              })
           },
         },
       ]}

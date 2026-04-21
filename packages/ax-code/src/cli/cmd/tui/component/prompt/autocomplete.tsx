@@ -15,6 +15,7 @@ import { Agent } from "@/agent/agent"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
+import { createAbortableResourceFetcher } from "@tui/util/abortable-resource"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -211,7 +212,7 @@ export function Autocomplete(props: {
 
   const [files] = createResource(
     () => search(),
-    async (query) => {
+    createAbortableResourceFetcher(async (query: string, signal) => {
       if (!store.visible || store.visible === "/") return []
 
       const { lineRange, baseQuery } = extractLineRange(query ?? "")
@@ -219,7 +220,7 @@ export function Autocomplete(props: {
       // Get files from SDK
       const result = await sdk.client.find.files({
         query: baseQuery,
-      })
+      }, { signal })
 
       const options: AutocompleteOption[] = []
 
@@ -280,7 +281,7 @@ export function Autocomplete(props: {
       }
 
       return options
-    },
+    }),
     {
       initialValue: [],
     },

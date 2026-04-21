@@ -55,6 +55,7 @@ import { selectedForeground } from "@tui/context/theme"
 import { footerToggleLabel } from "./footer-toggle"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
 import { computeSessionMainPaneWidth } from "../../routes/session/layout"
+import { directoryRequestHeaders } from "@tui/util/request-headers"
 
 const log = Log.create({ service: "tui.prompt" })
 
@@ -270,6 +271,7 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
   })
+  let interruptTimer: ReturnType<typeof setTimeout> | undefined
 
   const footerLayout = createMemo(() =>
     promptFooterLayout({
@@ -433,17 +435,24 @@ export function Prompt(props: PromptProps) {
           if (!input.focused) return
           if (!props.sessionID) return
 
-          setStore("interrupt", store.interrupt + 1)
+          const nextInterrupt = store.interrupt + 1
+          setStore("interrupt", nextInterrupt)
 
-          setTimeout(() => {
-            setStore("interrupt", 0)
-          }, 5000)
+          if (interruptTimer) {
+            clearTimeout(interruptTimer)
+            interruptTimer = undefined
+          }
 
-          if (store.interrupt >= 2) {
+          if (nextInterrupt >= 2) {
             sdk.client.session.abort({
               sessionID: props.sessionID,
             })
             setStore("interrupt", 0)
+          } else {
+            interruptTimer = setTimeout(() => {
+              interruptTimer = undefined
+              setStore("interrupt", 0)
+            }, 5000)
           }
           dialog.clear()
         },
@@ -764,16 +773,11 @@ export function Prompt(props: PromptProps) {
   ])
 
   function requestHeaders() {
-    const headers: Record<string, string> = {
+    return directoryRequestHeaders({
+      directory: sdk.directory,
       accept: "application/json",
-      "content-type": "application/json",
-    }
-    if (sdk.directory) {
-      const encoded = /[^\x00-\x7F]/.test(sdk.directory) ? encodeURIComponent(sdk.directory) : sdk.directory
-      headers["x-ax-code-directory"] = encoded
-      headers["x-opencode-directory"] = encoded
-    }
-    return headers
+      contentType: "application/json",
+    })
   }
 
   async function rejectionMessage(response: Response) {
@@ -987,6 +991,7 @@ export function Prompt(props: PromptProps) {
   const exit = useExit()
   let navigationTimer: ReturnType<typeof setTimeout> | undefined
   onCleanup(() => {
+    if (interruptTimer) clearTimeout(interruptTimer)
     if (navigationTimer) clearTimeout(navigationTimer)
   })
 

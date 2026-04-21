@@ -18,9 +18,9 @@ export function DialogDre(props: { sessionID: string }) {
     if (!detail) {
       return [
         {
-          title: "No trust data yet",
+          title: "No analysis data yet",
           value: "empty",
-          description: "Trust analysis populates after the session uses tools or agent routes. Keep chatting.",
+          description: "Analysis populates after the session uses tools or agent routes. Keep chatting.",
           category: "Overview",
         },
       ]

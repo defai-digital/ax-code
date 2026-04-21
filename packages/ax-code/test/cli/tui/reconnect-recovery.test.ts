@@ -122,4 +122,67 @@ describe("createReconnectRecoveryGate", () => {
     // Recovery should NOT have run — connection dropped during stabilization
     expect(calls).toBe(0)
   })
+
+  test("surfaces synchronous recover throws through waitForIdle instead of throwing from the timer callback", async () => {
+    let calls = 0
+    const gate = createReconnectRecoveryGate({
+      recover: () => {
+        calls++
+        throw new Error("sync recover failed")
+      },
+    })
+
+    gate.onConnectionChange(true)
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+
+    await Bun.sleep(STABILIZE_WAIT)
+    await expect(gate.waitForIdle()).rejects.toThrow("sync recover failed")
+    expect(calls).toBe(1)
+
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+    await Bun.sleep(STABILIZE_WAIT)
+    await expect(gate.waitForIdle()).rejects.toThrow("sync recover failed")
+    expect(calls).toBe(2)
+  })
+
+  test("surfaces asynchronous recover rejections through waitForIdle", async () => {
+    let calls = 0
+    const gate = createReconnectRecoveryGate({
+      recover: async () => {
+        calls++
+        throw new Error("async recover failed")
+      },
+    })
+
+    gate.onConnectionChange(true)
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+
+    await Bun.sleep(STABILIZE_WAIT)
+    await expect(gate.waitForIdle()).rejects.toThrow("async recover failed")
+    expect(calls).toBe(1)
+  })
+
+  test("dispose cancels pending stabilization so a late reconnect recovery never fires after cleanup", async () => {
+    let calls = 0
+    const gate = createReconnectRecoveryGate({
+      recover: async () => {
+        calls++
+      },
+    })
+
+    gate.onConnectionChange(true)
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+
+    await Bun.sleep(RECONNECT_STABILIZE_MS / 2)
+    gate.dispose()
+
+    await Bun.sleep(STABILIZE_WAIT)
+    await gate.waitForIdle()
+
+    expect(calls).toBe(0)
+  })
 })

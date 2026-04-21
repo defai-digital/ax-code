@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, Match, onCleanup, Show, Switch } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useSync } from "../../context/sync"
 import { useDirectory } from "../../context/directory"
@@ -73,27 +73,18 @@ export function Footer() {
     welcome: false,
   })
 
-  onMount(() => {
-    let pending: ReturnType<typeof setTimeout> | undefined
-
-    function tick() {
-      if (connected()) return
-      if (!store.welcome) {
-        setStore("welcome", true)
-        pending = setTimeout(() => tick(), 5000)
-        return
-      }
-
-      if (store.welcome) {
-        setStore("welcome", false)
-        pending = setTimeout(() => tick(), 10_000)
-        return
-      }
+  createEffect(() => {
+    if (connected()) {
+      if (store.welcome) setStore("welcome", false)
+      return
     }
-    pending = setTimeout(() => tick(), 10_000)
+
+    const pending = setTimeout(() => {
+      setStore("welcome", !store.welcome)
+    }, store.welcome ? 5000 : 10_000)
 
     onCleanup(() => {
-      if (pending !== undefined) clearTimeout(pending)
+      clearTimeout(pending)
     })
   })
 

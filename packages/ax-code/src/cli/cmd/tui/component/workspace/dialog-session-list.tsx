@@ -12,6 +12,7 @@ import { useKV } from "../../context/kv"
 import { createDebouncedSignal } from "../../util/signal"
 import { Spinner } from "../spinner"
 import { useToast } from "../../ui/toast"
+import { createAbortableResourceFetcher } from "../../util/abortable-resource"
 
 export function DialogSessionList(props: { workspaceID?: string; localOnly?: boolean } = {}) {
   const dialog = useDialog()
@@ -27,23 +28,23 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
 
   const [listed, listedActions] = createResource(
     () => props.workspaceID,
-    async (workspaceID) => {
+    createAbortableResourceFetcher(async (workspaceID: string | undefined, signal) => {
       if (!workspaceID) return undefined
-      const result = await sdk.client.session.list({ directory: workspaceID, roots: true })
+      const result = await sdk.client.session.list({ directory: workspaceID, roots: true }, { signal })
       return result.data ?? []
-    },
+    }),
   )
 
-  const [searchResults] = createResource(search, async (query) => {
+  const [searchResults] = createResource(search, createAbortableResourceFetcher(async (query: string, signal) => {
     if (!query || props.localOnly) return undefined
     const result = await sdk.client.session.list({
       directory: props.workspaceID,
       search: query,
       limit: 30,
       ...(props.workspaceID ? { roots: true } : {}),
-    })
+    }, { signal })
     return result.data ?? []
-  })
+  }))
 
   const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
 

@@ -2,6 +2,7 @@ import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { createResource, createMemo } from "solid-js"
 import { useDialog } from "@tui/ui/dialog"
 import { useSDK } from "@tui/context/sdk"
+import { createAbortableResourceFetcher } from "../util/abortable-resource"
 
 export type DialogSkillProps = {
   onSelect: (skill: string) => void
@@ -12,10 +13,10 @@ export function DialogSkill(props: DialogSkillProps) {
   const sdk = useSDK()
   dialog.setSize("large")
 
-  const [skills] = createResource(async () => {
-    const result = await sdk.client.app.skills()
+  const [skills] = createResource(createAbortableResourceFetcher(async (_ready: true, signal) => {
+    const result = await sdk.client.app.skills(undefined, { signal })
     return result.data ?? []
-  })
+  }))
 
   const options = createMemo<DialogSelectOption<string>[]>(() => {
     const list = skills() ?? []

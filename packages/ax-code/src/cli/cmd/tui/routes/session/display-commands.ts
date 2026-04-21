@@ -269,14 +269,26 @@ export function displayCommands(input: {
             message: "Connect a provider to summarize this session",
             duration: 3000,
           })
+          dialog.clear()
           return
         }
-        input.sdk.client.session.summarize({
-          sessionID: input.routeSessionID,
-          modelID: model.modelID,
-          providerID: model.providerID,
-        })
-        dialog.clear()
+        void Promise.resolve()
+          .then(() =>
+            input.sdk.client.session.summarize({
+              sessionID: input.routeSessionID,
+              modelID: model.modelID,
+              providerID: model.providerID,
+            }),
+          )
+          .then(() => {
+            dialog.clear()
+          })
+          .catch((error) => {
+            input.toast.show({
+              message: error instanceof Error ? error.message : "Failed to summarize session",
+              variant: "error",
+            })
+          })
       },
     },
     {
@@ -474,7 +486,10 @@ export function displayCommands(input: {
       keybind: "messages_last_user",
       category: "Session",
       hidden: true,
-      onSelect: () => input.jumpToLastUser(),
+      onSelect: (dialog: DialogContext) => {
+        input.jumpToLastUser()
+        dialog.clear()
+      },
     },
     {
       title: "Next message",
@@ -521,7 +536,11 @@ export function displayCommands(input: {
       onSelect: async (dialog: DialogContext) => {
         try {
           const data = input.session()
-          if (!data) return
+          if (!data) {
+            input.toast.show({ message: "Session is no longer available", variant: "warning" })
+            dialog.clear()
+            return
+          }
           const transcript = formatTranscript(data, transcriptItems(input.messages(), input.parts), {
             thinking: input.showThinking(),
             toolDetails: input.showDetails(),
@@ -547,7 +566,11 @@ export function displayCommands(input: {
       onSelect: async (dialog: DialogContext) => {
         try {
           const data = input.session()
-          if (!data) return
+          if (!data) {
+            input.toast.show({ message: "Session is no longer available", variant: "warning" })
+            dialog.clear()
+            return
+          }
           const options = await DialogExportOptions.show(
             dialog,
             transcriptFilename(data.id),

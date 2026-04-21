@@ -283,6 +283,7 @@ export function Session() {
       (connected) => reconnectSession.onConnectionChange(connected),
     ),
   )
+  onCleanup(() => reconnectSession.dispose())
 
   let lastSwitch: string | undefined = undefined
   const unsubAgentSwitch = sdk.event.on("message.part.updated", (evt) => {
@@ -687,6 +688,7 @@ export function Session() {
       value: "session.undo",
       keybind: "messages_undo",
       category: "Session",
+      enabled: !!undoMessageID(messages(), session()?.revert?.messageID),
       slash: {
         name: "undo",
       },
@@ -694,17 +696,27 @@ export function Session() {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
         const messageID = undoMessageID(messages(), session()?.revert?.messageID)
-        if (!messageID) return
-        sdk.client.session
+        if (!messageID) {
+          dialog.clear()
+          return
+        }
+        await sdk.client.session
           .revert({
             sessionID: route.sessionID,
             messageID,
           })
           .then(() => {
+            prompt.set(promptState(sync.data.part[messageID] ?? []))
             toBottom()
+            dialog.clear()
           })
-        prompt.set(promptState(sync.data.part[messageID]))
-        dialog.clear()
+          .catch((error) => {
+            log.warn("session undo failed", { error, sessionID: route.sessionID, messageID })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to undo previous message",
+              variant: "error",
+            })
+          })
       },
     },
     {
@@ -716,20 +728,38 @@ export function Session() {
       slash: {
         name: "redo",
       },
-      onSelect: (dialog) => {
+      onSelect: async (dialog) => {
         dialog.clear()
         const messageID = redoMessageID(messages(), session()?.revert?.messageID)
         if (!messageID) {
-          sdk.client.session.unrevert({
-            sessionID: route.sessionID,
-          })
-          prompt.set({ input: "", parts: [] })
+          await sdk.client.session
+            .unrevert({
+              sessionID: route.sessionID,
+            })
+            .then(() => {
+              prompt.set({ input: "", parts: [] })
+            })
+            .catch((error) => {
+              log.warn("session redo failed", { error, sessionID: route.sessionID })
+              toast.show({
+                message: error instanceof Error ? error.message : "Failed to redo the previous message",
+                variant: "error",
+              })
+            })
           return
         }
-        sdk.client.session.revert({
-          sessionID: route.sessionID,
-          messageID,
-        })
+        await sdk.client.session
+          .revert({
+            sessionID: route.sessionID,
+            messageID,
+          })
+          .catch((error) => {
+            log.warn("session redo failed", { error, sessionID: route.sessionID, messageID })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to redo the previous message",
+              variant: "error",
+            })
+          })
       },
     },
     {
@@ -1881,7 +1911,11 @@ function Task(props: ToolProps<typeof TaskTool>) {
     on(
       () => props.metadata.sessionId,
       (id) => {
-        if (id && !sync.data.message[id]?.length) sync.session.sync(id)
+        if (id && !sync.data.message[id]?.length) {
+          void sync.session.sync(id).catch((error) => {
+            log.warn("task child session preview sync failed", { error, sessionID: id })
+          })
+        }
       },
     ),
   )

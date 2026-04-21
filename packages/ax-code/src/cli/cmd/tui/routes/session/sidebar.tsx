@@ -489,7 +489,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         <text fg={theme.text}>{expanded.dre ? "−" : "+"}</text>
                       </Show>
                       <text fg={theme.text}>
-                        <b>Trust</b>
+                        <b>Analysis</b>
                         <Show when={dre()}>
                           {(summary) => (
                             <span

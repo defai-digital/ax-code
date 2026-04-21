@@ -5,22 +5,30 @@ export function createReconnectRecoveryGate(input: {
 }) {
   let hasConnectedOnce = false
   let connected = false
+  let disposed = false
   let inFlight: Promise<void> | undefined
+  let pendingError: unknown | undefined
   let pendingReconnect = false
   let stabilizeTimer: ReturnType<typeof setTimeout> | undefined
 
   const runRecovery = () => {
-    if (!connected || !pendingReconnect || inFlight) return inFlight
+    if (disposed || !connected || !pendingReconnect || inFlight) return inFlight
     pendingReconnect = false
-    inFlight = Promise.resolve(input.recover()).finally(() => {
-      inFlight = undefined
-      runRecovery()
-    })
+    inFlight = Promise.resolve()
+      .then(input.recover)
+      .catch((error) => {
+        pendingError = error
+      })
+      .finally(() => {
+        inFlight = undefined
+        runRecovery()
+      })
     return inFlight
   }
 
   return {
     onConnectionChange(nextConnected: boolean) {
+      if (disposed) return
       connected = nextConnected
       if (!connected) {
         // Connection dropped — cancel any pending stabilization so we
@@ -46,9 +54,23 @@ export function createReconnectRecoveryGate(input: {
         void runRecovery()
       }, RECONNECT_STABILIZE_MS)
     },
+    dispose() {
+      disposed = true
+      connected = false
+      pendingReconnect = false
+      if (stabilizeTimer) {
+        clearTimeout(stabilizeTimer)
+        stabilizeTimer = undefined
+      }
+    },
     async waitForIdle() {
       while (inFlight) {
         await inFlight
+      }
+      if (pendingError !== undefined) {
+        const error = pendingError
+        pendingError = undefined
+        throw error
       }
     },
   }
