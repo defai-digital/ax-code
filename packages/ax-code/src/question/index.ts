@@ -152,7 +152,7 @@ export namespace Question {
       tool: input.tool,
     }
     current.pending.set(id, { info, deferred })
-    void Bus.publish(Event.Asked, info)
+    Bus.publishDetached(Event.Asked, info)
 
     try {
       return await deferred.promise
@@ -170,7 +170,7 @@ export namespace Question {
     }
     pending.delete(input.requestID)
     log.info("replied", { requestID: input.requestID, answers: input.answers })
-    void Bus.publish(Event.Replied, {
+    Bus.publishDetached(Event.Replied, {
       sessionID: existing.info.sessionID,
       requestID: existing.info.id,
       answers: input.answers,
@@ -187,7 +187,7 @@ export namespace Question {
     }
     pending.delete(requestID)
     log.info("rejected", { requestID })
-    void Bus.publish(Event.Rejected, {
+    Bus.publishDetached(Event.Rejected, {
       sessionID: existing.info.sessionID,
       requestID: existing.info.id,
     })

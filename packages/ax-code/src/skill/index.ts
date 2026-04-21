@@ -71,7 +71,7 @@ export namespace Skill {
           ? err.data.message
           : `Failed to parse skill ${match}`
         const { Session } = await import("@/session")
-        Bus.publish(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
+        Bus.publishDetached(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
         log.error("failed to load skill", { skill: match, err })
         return undefined
       })

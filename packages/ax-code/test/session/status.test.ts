@@ -100,4 +100,48 @@ describe("SessionStatus", () => {
       },
     })
   })
+
+  test("does not wait for async status subscribers before returning", async () => {
+    await using tmp = await tmpdir()
+    const sessionID = SessionID.descending()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let release!: () => void
+        const blocked = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        let started = false
+        let completed = false
+        let finish!: () => void
+        const subscriberDone = new Promise<void>((resolve) => {
+          finish = resolve
+        })
+
+        const offStatus = Bus.subscribe(SessionStatus.Event.Status, async (evt) => {
+          if (evt.properties.sessionID !== sessionID) return
+          if (evt.properties.status.type !== "busy") return
+          started = true
+          await blocked
+          completed = true
+          finish()
+        })
+
+        try {
+          await SessionStatus.set(sessionID, { type: "busy", startedAt: 123 })
+
+          expect(started).toBe(true)
+          expect(completed).toBe(false)
+          expect(await SessionStatus.get(sessionID)).toEqual({ type: "busy", startedAt: 123 })
+
+          release()
+          await subscriberDone
+          expect(completed).toBe(true)
+        } finally {
+          offStatus()
+        }
+      },
+    })
+  })
 })

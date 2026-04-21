@@ -17,6 +17,7 @@ import { Script } from "@ax-code/script"
 import pkg from "../package.json"
 import { scopePackageName } from "./package-names"
 import { compiledBunfsModulePath } from "./embedded-path"
+import { collectBuildDependencyPackages, resolveInstalledPackagePath } from "./build-deps"
 
 const modelsUrl = process.env.AX_CODE_MODELS_URL || "https://models.dev"
 const snapshotPath = path.join(dir, "src/provider/models-snapshot.json")
@@ -72,6 +73,130 @@ const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const includeAbiFlag = process.argv.includes("--include-abi")
 const skipInstall = process.argv.includes("--skip-install")
+
+async function exists(target: string) {
+  return fs.promises
+    .access(target)
+    .then(() => true)
+    .catch(() => false)
+}
+
+async function materializePackage(target: string, sources: string[]) {
+  for (const source of sources) {
+    if (!(await exists(source))) continue
+    const resolvedSource = await fs.promises.realpath(source).catch(() => source)
+    await fs.promises.mkdir(path.dirname(target), { recursive: true })
+    await fs.promises.rm(target, { recursive: true, force: true })
+    await fs.promises.cp(resolvedSource, target, { recursive: true })
+    return true
+  }
+  return false
+}
+
+async function ensurePackageTargets(targets: string[], sources: string[]) {
+  const availableSources = [...sources]
+
+  for (const target of targets) {
+    if (await exists(target)) {
+      availableSources.unshift(target)
+      continue
+    }
+    const copied = await materializePackage(target, availableSources)
+    if (!copied) return false
+    availableSources.unshift(target)
+  }
+
+  return true
+}
+
+async function ensureBuildDependencies(targets: { os: string; arch: string }[]) {
+  const localNodeModules = path.join(dir, "node_modules")
+  const repoRoot = path.resolve(dir, "../..")
+  const repoNodeModules = path.join(repoRoot, "node_modules")
+  const repoStoreNodeModules = path.join(repoNodeModules, ".pnpm", "node_modules")
+  const opentuiPackage = JSON.parse(await Bun.file(path.join(localNodeModules, "@opentui/core/package.json")).text())
+  const requiredPackages = collectBuildDependencyPackages(opentuiPackage.optionalDependencies, pkg.devDependencies, targets)
+  const missingPackages = []
+
+  for (const dependency of requiredPackages) {
+    const targetPaths = [
+      resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
+      resolveInstalledPackagePath(localNodeModules, dependency.name),
+    ]
+    const hydrated = await ensurePackageTargets(targetPaths, [
+      resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
+      resolveInstalledPackagePath(localNodeModules, dependency.name),
+      resolveInstalledPackagePath(repoNodeModules, dependency.name),
+    ])
+    if (!hydrated) {
+      missingPackages.push(dependency)
+    }
+  }
+
+  if (missingPackages.length === 0) return
+
+  const tempRoot = path.join(dir, ".tmp", "build-deps")
+  const tempNodeModules = path.join(tempRoot, "node_modules")
+  const tempDir = path.join(tempRoot, "tmp")
+  const cacheDir = path.join(tempRoot, "cache")
+
+  await fs.promises.rm(tempRoot, { recursive: true, force: true })
+  await fs.promises.mkdir(tempRoot, { recursive: true })
+  await fs.promises.mkdir(tempDir, { recursive: true })
+  await fs.promises.mkdir(cacheDir, { recursive: true })
+  await Bun.write(
+    path.join(tempRoot, "package.json"),
+    JSON.stringify(
+      {
+        name: "ax-code-build-deps",
+        private: true,
+      },
+      null,
+      2,
+    ),
+  )
+
+  const previousEnv = {
+    TMPDIR: process.env.TMPDIR,
+    TMP: process.env.TMP,
+    TEMP: process.env.TEMP,
+    BUN_INSTALL_CACHE_DIR: process.env.BUN_INSTALL_CACHE_DIR,
+  }
+
+  Object.assign(process.env, {
+    TMPDIR: tempDir,
+    TMP: tempDir,
+    TEMP: tempDir,
+    BUN_INSTALL_CACHE_DIR: cacheDir,
+  })
+
+  try {
+    await $`bun add --os="*" --cpu="*" ${missingPackages.map((item) => `${item.name}@${item.version}`)}`.cwd(tempRoot)
+  } finally {
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+
+  for (const dependency of missingPackages) {
+    const copied = await ensurePackageTargets(
+      [
+        resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
+        resolveInstalledPackagePath(localNodeModules, dependency.name),
+      ],
+      [
+      resolveInstalledPackagePath(tempNodeModules, dependency.name),
+      resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
+      resolveInstalledPackagePath(localNodeModules, dependency.name),
+      resolveInstalledPackagePath(repoNodeModules, dependency.name),
+      ],
+    )
+    if (!copied) {
+      throw new Error(`Failed to materialize build dependency ${dependency.name}`)
+    }
+  }
+}
 
 const allTargets: {
   os: string
@@ -151,10 +276,7 @@ await $`rm -rf dist`
 
 const binaries: Record<string, string> = {}
 if (!skipInstall) {
-  // Run from repo root so bun can resolve pnpm workspace deps
-  const repoRoot = path.resolve(dir, "../..")
-  await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`.cwd(repoRoot)
-  await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`.cwd(repoRoot)
+  await ensureBuildDependencies(targets)
 }
 for (const item of targets) {
   const legacyName = [

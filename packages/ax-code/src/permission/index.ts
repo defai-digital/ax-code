@@ -236,7 +236,7 @@ export namespace Permission {
     signal?.addEventListener("abort", onAbort, { once: true })
     if (signal?.aborted) onAbort()
 
-    void Bus.publish(Event.Asked, info)
+    Bus.publishDetached(Event.Asked, info)
     if (Recorder.active(info.sessionID)) {
       Recorder.emit({
         type: "permission.ask",
@@ -261,7 +261,7 @@ export namespace Permission {
     if (!existing) return
 
     pending.delete(input.requestID)
-    void Bus.publish(Event.Replied, {
+    Bus.publishDetached(Event.Replied, {
       sessionID: existing.info.sessionID,
       requestID: existing.info.id,
       reply: input.reply,
@@ -281,7 +281,7 @@ export namespace Permission {
       for (const [id, item] of pending.entries()) {
         if (item.info.sessionID !== existing.info.sessionID) continue
         pending.delete(id)
-        void Bus.publish(Event.Replied, {
+        Bus.publishDetached(Event.Replied, {
           sessionID: item.info.sessionID,
           requestID: item.info.id,
           reply: "reject",
@@ -334,7 +334,7 @@ export namespace Permission {
       const ok = item.info.patterns.every((pattern) => evaluate(item.info.permission, pattern, approved).action === "allow")
       if (!ok) continue
       pending.delete(id)
-      void Bus.publish(Event.Replied, {
+      Bus.publishDetached(Event.Replied, {
         sessionID: item.info.sessionID,
         requestID: item.info.id,
         reply: "always",

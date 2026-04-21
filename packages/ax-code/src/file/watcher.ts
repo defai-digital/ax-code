@@ -157,7 +157,7 @@ export namespace FileWatcher {
               pollErrorCount = 0
               for (const evt of events) {
                 const file = path.resolve(dir, evt.path)
-                void Bus.publish(Event.Updated, { file, event: evt.eventType as "add" | "change" | "unlink" })
+                Bus.publishDetached(Event.Updated, { file, event: evt.eventType as "add" | "change" | "unlink" })
               }
             } catch (error) {
               pollErrorCount++

@@ -492,7 +492,7 @@ export namespace LSP {
           // process is already gone so Process.stop is a no-op.
           client.shutdown().catch(() => {})
         }
-        Bus.publish(Event.Updated, {})
+        Bus.publishDetached(Event.Updated, {})
       }, HEALTH_CHECK_INTERVAL_MS)
       s.healthCheck.unref?.()
 
@@ -685,7 +685,7 @@ export namespace LSP {
         const client = resolved[i]
         if (!client) continue
         result.push(client)
-        if (pending[i].fresh) Bus.publish(Event.Updated, {})
+        if (pending[i].fresh) Bus.publishDetached(Event.Updated, {})
       }
     }
 
@@ -762,7 +762,7 @@ export namespace LSP {
         const client = resolved[i]
         if (!client) continue
         result.push(client)
-        if (pending[i].fresh) Bus.publish(Event.Updated, {})
+        if (pending[i].fresh) Bus.publishDetached(Event.Updated, {})
       }
     }
 
@@ -916,7 +916,7 @@ export namespace LSP {
             const client = resolved[i]
             if (!client) continue
             readyCount++
-            if (pending[i]?.fresh) Bus.publish(Event.Updated, {})
+            if (pending[i]?.fresh) Bus.publishDetached(Event.Updated, {})
           }
         }
 

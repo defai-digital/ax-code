@@ -115,7 +115,7 @@ export namespace SessionCompaction {
               .values({ id, message_id: messageID, session_id: sessionID, time_created: part.state.time?.start ?? Date.now(), data })
               .onConflictDoUpdate({ target: PartTable.id, set: { data } })
               .run()
-            Database.effect(() => Bus.publish(MessageV2.Event.PartUpdated, { part: { ...part } }))
+            Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
           }
         })
       } catch (e) {
@@ -304,7 +304,7 @@ When constructing the summary, try to stick to this template:
               data,
             })
             .run()
-          Database.effect(() => Bus.publish(MessageV2.Event.Updated, { info: replayMsg }))
+          Database.effect(() => Bus.publishDetached(MessageV2.Event.Updated, { info: replayMsg }))
           for (const item of replay.parts) {
             if (item.type === "compaction") continue
             const replayPart =
@@ -327,7 +327,7 @@ When constructing the summary, try to stick to this template:
                 data,
               })
               .run()
-            Database.effect(() => Bus.publish(MessageV2.Event.PartUpdated, { part: { ...part } }))
+            Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
           }
         })
       } else {
@@ -366,7 +366,7 @@ When constructing the summary, try to stick to this template:
               data,
             })
             .run()
-          Database.effect(() => Bus.publish(MessageV2.Event.Updated, { info: continueMsg }))
+          Database.effect(() => Bus.publishDetached(MessageV2.Event.Updated, { info: continueMsg }))
           const { id: partID, messageID, sessionID: partSessionID, ...partData } = part
           db.insert(PartTable)
             .values({
@@ -377,7 +377,7 @@ When constructing the summary, try to stick to this template:
               data: partData,
             })
             .run()
-          Database.effect(() => Bus.publish(MessageV2.Event.PartUpdated, { part: { ...part } }))
+          Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
         })
       }
     }

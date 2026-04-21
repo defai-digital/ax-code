@@ -364,7 +364,7 @@ export namespace Session {
         .get()
       if (!row) throw new NotFoundError({ message: `Session not found: ${sessionID}` })
       const info = fromRow(row)
-      Database.effect(() => Bus.publish(Event.Updated, { info }))
+      Database.effect(() => Bus.publishDetached(Event.Updated, { info }))
     })
   })
 
@@ -393,7 +393,7 @@ export namespace Session {
     Database.use((db) => {
       db.insert(SessionTable).values(toRow(result)).run()
       Database.effect(() =>
-        Bus.publish(Event.Created, {
+        Bus.publishDetached(Event.Created, {
           info: result,
         }),
       )
@@ -433,7 +433,7 @@ export namespace Session {
       const row = db.update(SessionTable).set({ share_url: share.url }).where(eq(SessionTable.id, id)).returning().get()
       if (!row) throw new NotFoundError({ message: `Session not found: ${id}` })
       const info = fromRow(row)
-      Database.effect(() => Bus.publish(Event.Updated, { info }))
+      Database.effect(() => Bus.publishDetached(Event.Updated, { info }))
     })
     return share
   })
@@ -446,7 +446,7 @@ export namespace Session {
       const row = db.update(SessionTable).set({ share_url: null }).where(eq(SessionTable.id, id)).returning().get()
       if (!row) throw new NotFoundError({ message: `Session not found: ${id}` })
       const info = fromRow(row)
-      Database.effect(() => Bus.publish(Event.Updated, { info }))
+      Database.effect(() => Bus.publishDetached(Event.Updated, { info }))
     })
   })
 
@@ -455,7 +455,7 @@ export namespace Session {
       const row = db.update(SessionTable).set(fields).where(eq(SessionTable.id, sessionID)).returning().get()
       if (!row) throw new NotFoundError({ message: `Session not found: ${sessionID}` })
       const info = fromRow(row)
-      Database.effect(() => Bus.publish(Event.Updated, { info }))
+      Database.effect(() => Bus.publishDetached(Event.Updated, { info }))
       return info
     })
   }
@@ -696,9 +696,9 @@ export namespace Session {
     // Publish events after the transaction commits so subscribers never
     // observe a deletion event while the rows are still present.
     for (const desc of allDescendants) {
-      Database.effect(() => Bus.publish(Event.Deleted, { info: desc }))
+      Database.effect(() => Bus.publishDetached(Event.Deleted, { info: desc }))
     }
-    Database.effect(() => Bus.publish(Event.Deleted, { info: session }))
+    Database.effect(() => Bus.publishDetached(Event.Deleted, { info: session }))
     const items = [...allDescendants, session]
     for (const item of items) {
       await unshare(item.id).catch((e) => log.warn("session unshare failed", { sessionID: item.id, error: e }))
@@ -747,7 +747,7 @@ export namespace Session {
         .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
         .run()
       Database.effect(() =>
-        Bus.publish(MessageV2.Event.Updated, {
+        Bus.publishDetached(MessageV2.Event.Updated, {
           info: msg,
         }),
       )
@@ -767,7 +767,7 @@ export namespace Session {
           .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
           .run()
         Database.effect(() =>
-          Bus.publish(MessageV2.Event.Removed, {
+          Bus.publishDetached(MessageV2.Event.Removed, {
             sessionID: input.sessionID,
             messageID: input.messageID,
           }),
@@ -795,7 +795,7 @@ export namespace Session {
           )
           .run()
         Database.effect(() =>
-          Bus.publish(MessageV2.Event.PartRemoved, {
+          Bus.publishDetached(MessageV2.Event.PartRemoved, {
             sessionID: input.sessionID,
             messageID: input.messageID,
             partID: input.partID,
@@ -823,7 +823,7 @@ export namespace Session {
         .onConflictDoUpdate({ target: PartTable.id, set: { data } })
         .run()
       Database.effect(() =>
-        Bus.publish(MessageV2.Event.PartUpdated, {
+        Bus.publishDetached(MessageV2.Event.PartUpdated, {
           part: { ...part },
         }),
       )
@@ -854,7 +854,7 @@ export namespace Session {
           .get(),
       )
       if (!part) throw new NotFoundError({ message: `Part not found: ${input.partID}` })
-      Bus.publish(MessageV2.Event.PartDelta, input)
+      Bus.publishDetached(MessageV2.Event.PartDelta, input)
     },
   )
 

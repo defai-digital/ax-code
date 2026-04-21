@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach } from "bun:test"
+import { test, expect, mock, beforeEach, afterAll } from "bun:test"
 
 // Track what options were passed to each transport constructor
 const transportCalls: Array<{
@@ -46,6 +46,17 @@ beforeEach(() => {
 const { MCP } = await import("../../src/mcp/index")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
+const { Ssrf } = await import("../../src/util/ssrf")
+const originalAssertPublicUrl = Ssrf.assertPublicUrl
+
+beforeEach(() => {
+  Ssrf.assertPublicUrl = mock(async () => {})
+})
+
+afterAll(() => {
+  Ssrf.assertPublicUrl = originalAssertPublicUrl
+  mock.restore()
+})
 
 test("headers are passed to transports when oauth is enabled (default)", async () => {
   await using tmp = await tmpdir({

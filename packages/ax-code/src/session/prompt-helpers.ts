@@ -272,7 +272,7 @@ export async function agentInfo<T extends AgentLike = AgentInfo>(input: {
   const error = new NamedError.Unknown({ message: `Agent not found: "${input.name}".${hint}` })
   if (input.report) input.report(input.sessionID, error.toObject())
   if (!input.report)
-    Bus.publish(Session.Event.Error, {
+    Bus.publishDetached(Session.Event.Error, {
       sessionID: input.sessionID,
       error: error.toObject(),
     })
@@ -297,7 +297,7 @@ export async function modelInfo<T = ModelInfo>(input: {
       }).toObject()
       if (input.report) input.report(input.sessionID, payload)
       if (!input.report)
-        Bus.publish(Session.Event.Error, {
+        Bus.publishDetached(Session.Event.Error, {
           sessionID: input.sessionID,
           error: payload,
         })

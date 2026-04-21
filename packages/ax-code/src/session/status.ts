@@ -65,12 +65,12 @@ export namespace SessionStatus {
     // Update state before publishing events so subscribers see current state.
     if (status.type === "idle") {
       data.delete(sessionID)
-      await Bus.publish(Event.Status, { sessionID, status })
-      await Bus.publish(Event.Idle, { sessionID })
+      Bus.publishDetached(Event.Status, { sessionID, status })
+      Bus.publishDetached(Event.Idle, { sessionID })
       return
     }
 
     data.set(sessionID, status)
-    await Bus.publish(Event.Status, { sessionID, status })
+    Bus.publishDetached(Event.Status, { sessionID, status })
   }
 }

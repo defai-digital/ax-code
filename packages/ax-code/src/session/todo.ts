@@ -41,7 +41,7 @@ export namespace Todo {
         )
         .run()
     })
-    Bus.publish(Event.Updated, input)
+    Bus.publishDetached(Event.Updated, input)
   }
 
   export function get(sessionID: SessionID) {

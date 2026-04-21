@@ -138,21 +138,21 @@ export namespace AutoIndex {
         }
       }
     }
-    // Fire-and-forget: a publish failure on an observability event
-    // must never affect the index run. Bus.publish already catches
-    // subscriber errors internally.
-    void Bus.publish(Event.State, {
+    // Fire-and-forget: an observability event must never affect the
+    // index run. Detached bus publishes still isolate subscriber
+    // errors and timeouts for this path.
+    Bus.publishDetached(Event.State, {
       projectID: key,
       state: next.state,
       error: next.error ?? undefined,
-    }).catch(() => {})
+    })
   }
 
   export function reportProgress(projectID: ProjectID, completed: number, total: number): void {
     const key = projectID as unknown as string
     const prev = getState(projectID)
     stateByProject.set(key, { ...prev, completed, total })
-    void Bus.publish(Event.Progress, { projectID: key, completed, total }).catch(() => {})
+    Bus.publishDetached(Event.Progress, { projectID: key, completed, total })
   }
 
   // Projects currently being auto-indexed. Keyed by project id as a

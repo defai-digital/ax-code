@@ -630,7 +630,7 @@ export namespace SessionPrompt {
           sessionID,
           continuations,
         })
-        Bus.publish(Session.Event.Error, {
+        Bus.publishDetached(Session.Event.Error, {
           sessionID,
           error: new NamedError.Unknown({
             message:
@@ -974,7 +974,7 @@ export namespace SessionPrompt {
               to: `${fallback.providerID}/${fallback.modelID}`,
               reason: err.data?.message,
             })
-            Bus.publish(Session.Event.Error, {
+            Bus.publishDetached(Session.Event.Error, {
               sessionID,
               error: new NamedError.Unknown({
                 message: `Provider ${lastUser.model.providerID} failed: ${err.data?.message ?? "unknown error"}. Switching to ${fallback.providerID}/${fallback.modelID}.`,
@@ -1004,7 +1004,7 @@ export namespace SessionPrompt {
             consecutiveErrors,
             sessionID,
           })
-          Bus.publish(Session.Event.Error, {
+          Bus.publishDetached(Session.Event.Error, {
             sessionID,
             error: new NamedError.Unknown({
               message: `Agent encountered ${consecutiveErrors} consecutive errors at step ${step}. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
@@ -1363,12 +1363,12 @@ export namespace SessionPrompt {
               confidence: routeResult.confidence,
               mode: "switch",
             })
-            Bus.publish(TuiEvent.ToastShow, {
+            Bus.publishDetached(TuiEvent.ToastShow, {
               title: "Primary Agent Auto-Switched",
               message: `Switched the primary agent to "${routedLabel}" for this task`,
               variant: "info",
               duration: 5000,
-            }).catch(() => {})
+            })
           } else if (canDelegate) {
             routedParts.push({
               type: "subtask",
@@ -1384,12 +1384,12 @@ export namespace SessionPrompt {
               confidence: routeResult.confidence,
               mode: "delegate",
             })
-            Bus.publish(TuiEvent.ToastShow, {
+            Bus.publishDetached(TuiEvent.ToastShow, {
               title: "Specialist Auto-Delegated",
               message: `Kept the primary agent active and delegated "${routedLabel}" as a specialist`,
               variant: "info",
               duration: 5000,
-            }).catch(() => {})
+            })
           }
         }
       }
@@ -1726,7 +1726,7 @@ export namespace SessionPrompt {
                       error,
                     })
                     const message = error instanceof Error ? error.message : error.toString()
-                    Bus.publish(Session.Event.Error, {
+                    Bus.publishDetached(Session.Event.Error, {
                       sessionID: input.sessionID,
                       error: new NamedError.Unknown({
                         message,
@@ -1790,7 +1790,7 @@ export namespace SessionPrompt {
                       error,
                     })
                     const message = error instanceof Error ? error.message : error.toString()
-                    Bus.publish(Session.Event.Error, {
+                    Bus.publishDetached(Session.Event.Error, {
                       sessionID: input.sessionID,
                       error: new NamedError.Unknown({
                         message,
@@ -1843,7 +1843,7 @@ export namespace SessionPrompt {
                   error,
                 })
                 const message = error instanceof Error ? error.message : String(error)
-                Bus.publish(Session.Event.Error, {
+                Bus.publishDetached(Session.Event.Error, {
                   sessionID: input.sessionID,
                   error: new NamedError.Unknown({
                     message,
@@ -2558,7 +2558,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       const available = await Command.list().then((cmds) => cmds.map((c) => c.name))
       const hint = available.length ? ` Available commands: ${available.join(", ")}` : ""
       const error = new NamedError.Unknown({ message: `Command not found: "${input.command}".${hint}` })
-      Bus.publish(Session.Event.Error, {
+      Bus.publishDetached(Session.Event.Error, {
         sessionID: input.sessionID,
         error: error.toObject(),
       })
@@ -2593,7 +2593,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       variant: input.variant,
     })) as MessageV2.WithParts
 
-    Bus.publish(Command.Event.Executed, {
+    Bus.publishDetached(Command.Event.Executed, {
       name: input.command,
       sessionID: input.sessionID,
       arguments: input.arguments,

@@ -28773,6 +28773,40 @@
           "output": 16384
         }
       },
+      "moonshotai/kimi-k2.6": {
+        "id": "moonshotai/kimi-k2.6",
+        "name": "Kimi K2.6",
+        "family": "kimi",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-20",
+        "last_updated": "2026-04-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.95,
+          "output": 4,
+          "cache_read": 0.16
+        },
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
       "moonshotai/kimi-k2-0905:exacto": {
         "id": "moonshotai/kimi-k2-0905:exacto",
         "name": "Kimi K2 Instruct 0905 (exacto)",
@@ -71219,6 +71253,30 @@
           "output": 65536
         }
       },
+      "kimi-k2.6:cloud": {
+        "id": "kimi-k2.6:cloud",
+        "name": "kimi-k2.6:cloud",
+        "family": "kimi",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "release_date": "2026-04-20",
+        "last_updated": "2026-04-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
       "nemotron-3-nano:30b": {
         "id": "nemotron-3-nano:30b",
         "name": "nemotron-3-nano:30b",
@@ -77621,6 +77679,40 @@
         "limit": {
           "context": 1000000,
           "output": 32768
+        }
+      },
+      "kimi-k2-6": {
+        "id": "kimi-k2-6",
+        "name": "Kimi K2.6",
+        "family": "kimi",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-20",
+        "last_updated": "2026-04-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.56,
+          "output": 3.5,
+          "cache_read": 0.11
+        },
+        "limit": {
+          "context": 256000,
+          "output": 65536
         }
       },
       "kimi-k2-thinking": {

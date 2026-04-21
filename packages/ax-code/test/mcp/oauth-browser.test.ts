@@ -104,8 +104,14 @@ const { Bus } = await import("../../src/bus")
 const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
+const { Ssrf } = await import("../../src/util/ssrf")
+const originalAssertPublicUrl = Ssrf.assertPublicUrl
 
-afterAll(() => McpOAuthCallback.stop())
+afterAll(async () => {
+  Ssrf.assertPublicUrl = originalAssertPublicUrl
+  await McpOAuthCallback.stop()
+  mock.restore()
+})
 
 const ensureSpy = spyOn(McpOAuthCallback, "ensureRunning")
 const waitSpy = spyOn(McpOAuthCallback, "waitForCallback")
@@ -115,6 +121,7 @@ let rejectAuth: ((error: Error) => void) | undefined
 
 beforeEach(() => {
   rejectAuth = undefined
+  Ssrf.assertPublicUrl = mock(async () => {})
   ensureSpy.mockResolvedValue(undefined)
   waitSpy.mockImplementation(
     () =>

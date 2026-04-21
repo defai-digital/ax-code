@@ -1068,7 +1068,7 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         SessionPrompt.prompt({ ...body, sessionID }).catch((err) => {
           log.error("prompt_async failed", { sessionID, error: err })
-          Bus.publish(Session.Event.Error, {
+          Bus.publishDetached(Session.Event.Error, {
             sessionID,
             error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
           })
@@ -1101,7 +1101,7 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         SessionPrompt.command({ ...body, sessionID }).catch((err) => {
           log.error("command_async failed", { sessionID, error: err })
-          Bus.publish(Session.Event.Error, {
+          Bus.publishDetached(Session.Event.Error, {
             sessionID,
             error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
           })
@@ -1171,7 +1171,7 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         SessionPrompt.shell({ ...body, sessionID }).catch((err) => {
           log.error("shell_async failed", { sessionID, error: err })
-          Bus.publish(Session.Event.Error, {
+          Bus.publishDetached(Session.Event.Error, {
             sessionID,
             error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
           })

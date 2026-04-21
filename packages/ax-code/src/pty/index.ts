@@ -166,10 +166,10 @@ export namespace Pty {
         log.info("removing session", { id })
         if (session.info.status !== "exited") {
           session.info.status = "exited"
-          void Bus.publish(Event.Exited, { id, exitCode: 0 })
+          Bus.publishDetached(Event.Exited, { id, exitCode: 0 })
         }
         teardown(session)
-        void Bus.publish(Event.Deleted, { id: session.info.id })
+        Bus.publishDetached(Event.Deleted, { id: session.info.id })
       })
 
       const list = Effect.fn("Pty.list")(function* () {
@@ -271,7 +271,7 @@ export namespace Pty {
               if (session.info.status === "exited") return
               log.info("session exited", { id, exitCode })
               session.info.status = "exited"
-              void Bus.publish(Event.Exited, { id, exitCode })
+              Bus.publishDetached(Event.Exited, { id, exitCode })
               Effect.runFork(remove(id))
             }),
           )

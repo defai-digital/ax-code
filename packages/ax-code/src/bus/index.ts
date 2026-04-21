@@ -9,6 +9,7 @@ export namespace Bus {
   const log = Log.create({ service: "bus" })
   const BUS_SUBSCRIBER_TIMEOUT_MS = 10_000
   type Subscription = (event: any) => void
+  type Pending = Promise<unknown>[]
 
   export const InstanceDisposed = BusEvent.define(
     "server.instance.disposed",
@@ -40,10 +41,7 @@ export namespace Bus {
     },
   )
 
-  export async function publish<Definition extends BusEvent.Definition>(
-    def: Definition,
-    properties: z.output<Definition["properties"]>,
-  ) {
+  function prepare<Definition extends BusEvent.Definition>(def: Definition, properties: z.output<Definition["properties"]>) {
     const payload = {
       type: def.type,
       properties,
@@ -51,7 +49,7 @@ export namespace Bus {
     log.debug("publishing", {
       type: def.type,
     })
-    const pending = []
+    const pending: Pending = []
     for (const key of [def.type, "*"]) {
       const match = [...(state().subscriptions.get(key) ?? [])]
       for (const sub of match) {
@@ -69,11 +67,37 @@ export namespace Bus {
         )
       }
     }
+    return { payload, pending }
+  }
+
+  function emitGlobal(payload: { type: string; properties: unknown }) {
     GlobalBus.emit("event", {
       directory: Instance.directory,
       payload,
     })
+  }
+
+  export async function publish<Definition extends BusEvent.Definition>(
+    def: Definition,
+    properties: z.output<Definition["properties"]>,
+  ) {
+    const { payload, pending } = prepare(def, properties)
+    emitGlobal(payload)
     return Promise.all(pending)
+  }
+
+  /**
+   * Publish without waiting for subscribers to finish. Use only when the
+   * authoritative state has already been committed and eventual delivery is
+   * sufficient for observers.
+   */
+  export function publishDetached<Definition extends BusEvent.Definition>(
+    def: Definition,
+    properties: z.output<Definition["properties"]>,
+  ) {
+    const { payload, pending } = prepare(def, properties)
+    emitGlobal(payload)
+    void Promise.all(pending)
   }
 
   export function subscribe<Definition extends BusEvent.Definition>(

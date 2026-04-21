@@ -115,7 +115,7 @@ export namespace MCP {
   function registerNotificationHandlers(client: MCPClient, serverName: string) {
     client.setNotificationHandler(ToolListChangedNotificationSchema, async () => {
       log.info("tools list changed notification received", { server: serverName })
-      Bus.publish(ToolsChanged, { server: serverName })
+      Bus.publishDetached(ToolsChanged, { server: serverName })
     })
   }
 
@@ -479,24 +479,24 @@ export namespace MCP {
                 error: "Server does not support dynamic client registration. Please provide clientId in config.",
               }
               // Show toast for needs_client_registration
-              Bus.publish(TuiEvent.ToastShow, {
+              Bus.publishDetached(TuiEvent.ToastShow, {
                 title: "MCP Authentication Required",
                 message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
                 variant: "warning",
                 duration: 8000,
-              }).catch((e) => log.debug("failed to show toast", { error: e }))
+              })
             } else {
               // Store transport for later finishAuth call
               pendingOAuthTransportCleanup()
               pendingOAuthTransports.set(key, transport)
               status = { status: "needs_auth" as const }
               // Show toast for needs_auth
-              Bus.publish(TuiEvent.ToastShow, {
+              Bus.publishDetached(TuiEvent.ToastShow, {
                 title: "MCP Authentication Required",
                 message: `Server "${key}" requires authentication. Run: ax-code mcp auth ${key}`,
                 variant: "warning",
                 duration: 8000,
-              }).catch((e) => log.debug("failed to show toast", { error: e }))
+              })
             }
             break
           }
@@ -1045,7 +1045,7 @@ export namespace MCP {
       // Browser opening failed (e.g., in remote/headless sessions like SSH, devcontainers)
       // Emit event so CLI can display the URL for manual opening
       log.warn("failed to open browser, user must open URL manually", { mcpName, error })
-      Bus.publish(BrowserOpenFailed, { mcpName, url: authorizationUrl })
+      Bus.publishDetached(BrowserOpenFailed, { mcpName, url: authorizationUrl })
     }
 
     // Wait for callback using the already-registered promise

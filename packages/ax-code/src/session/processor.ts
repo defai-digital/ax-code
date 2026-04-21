@@ -40,7 +40,13 @@ export namespace SessionProcessor {
     const flush = () => {
       timer = undefined
       for (const [partID, chunks] of pending) {
-        Bus.publish(MessageV2.Event.PartDelta, { sessionID, messageID, partID, field: "text", delta: chunks.join("") })
+        Bus.publishDetached(MessageV2.Event.PartDelta, {
+          sessionID,
+          messageID,
+          partID,
+          field: "text",
+          delta: chunks.join(""),
+        })
       }
       pending.clear()
     }
@@ -729,7 +735,7 @@ export namespace SessionProcessor {
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             if (MessageV2.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
-              Bus.publish(Session.Event.Error, {
+              Bus.publishDetached(Session.Event.Error, {
                 sessionID: input.sessionID,
                 error,
               })
@@ -761,7 +767,7 @@ export namespace SessionProcessor {
               } else {
                 input.assistantMessage.error ??= error
               }
-              Bus.publish(Session.Event.Error, {
+              Bus.publishDetached(Session.Event.Error, {
                 sessionID: input.assistantMessage.sessionID,
                 error: input.assistantMessage.error,
               })
