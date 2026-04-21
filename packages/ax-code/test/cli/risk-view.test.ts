@@ -83,10 +83,37 @@ describe("RiskView.lines", () => {
           ],
         }),
         debug: null,
+        qa: ProbabilisticRollout.ReplayReadinessSummary.parse({
+          schemaVersion: 1,
+          kind: "ax-code-quality-replay-readiness-summary",
+          workflow: "qa",
+          sessionID: "ses_456",
+          projectID: "proj_1",
+          exportedAt: "2026-04-21T00:00:00.000Z",
+          totalItems: 1,
+          anchorItems: 1,
+          evidenceItems: 0,
+          toolSummaryCount: 1,
+          labeledItems: 1,
+          resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          readyForBenchmark: true,
+          overallStatus: "pass",
+          nextAction: null,
+          gates: [
+            {
+              name: "targeted-test-recommendation",
+              status: "pass",
+              detail: "prioritize these QA command(s): bun test test/auth.test.ts",
+            },
+          ],
+        }),
       },
     } as any)
 
     expect(lines).toContain("  Quality Readiness")
     expect(lines).toContain("  review: pass · benchmark ready · 2/2 resolved labels")
+    expect(lines).toContain("  qa: pass · benchmark ready · 1/1 resolved labels · first: bun test test/auth.test.ts")
   })
 })

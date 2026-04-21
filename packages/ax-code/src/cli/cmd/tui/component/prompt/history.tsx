@@ -7,6 +7,8 @@ import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
 import type { AgentPart, FilePart, TextPart } from "@ax-code/sdk/v2"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
+import { useToast } from "../../ui/toast"
+import { Log } from "@/util/log"
 
 export type PromptInfo = {
   input: string
@@ -28,15 +30,44 @@ export type PromptInfo = {
 
 const MAX_HISTORY_ENTRIES = 50
 const HISTORY_LOAD_DELAY_MS = 100
+const log = Log.create({ service: "tui.prompt-history" })
 
 export const { use: usePromptHistory, provider: PromptHistoryProvider } = createSimpleContext({
   name: "PromptHistory",
   init: () => {
     const historyPath = path.join(Global.Path.state, "prompt-history.jsonl")
+    const toast = useToast()
+    let writeWarningShown = false
+
+    const persistHistory = (content: string) =>
+      writeFile(historyPath, content)
+        .then(() => {
+          writeWarningShown = false
+        })
+        .catch((error) => {
+          log.warn("failed to persist prompt history", { historyPath, error })
+          if (writeWarningShown) return
+          writeWarningShown = true
+          toast.show({
+            message: error instanceof Error ? error.message : "Failed to save prompt history",
+            variant: "warning",
+            duration: 3000,
+          })
+        })
+
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(
         async () => {
-          const text = await Filesystem.readText(historyPath).catch(() => "")
+          const text = await Filesystem.readText(historyPath).catch((error) => {
+            if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
+            log.warn("failed to load prompt history", { historyPath, error })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to load prompt history",
+              variant: "warning",
+              duration: 3000,
+            })
+            return ""
+          })
           const lines = text
             .split("\n")
             .filter(Boolean)
@@ -56,7 +87,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
           // Rewrite file with only valid entries to self-heal corruption
           if (merged.length > 0) {
             const content = merged.map((line) => JSON.stringify(line)).join("\n") + "\n"
-            writeFile(historyPath, content).catch(() => {})
+            void persistHistory(content)
           }
         },
         {
@@ -110,11 +141,24 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
 
         if (trimmed) {
           const content = store.history.map((line) => JSON.stringify(line)).join("\n") + "\n"
-          writeFile(historyPath, content).catch(() => {})
+          void persistHistory(content)
           return
         }
 
-        appendFile(historyPath, JSON.stringify(entry) + "\n").catch(() => {})
+        void appendFile(historyPath, JSON.stringify(entry) + "\n")
+          .then(() => {
+            writeWarningShown = false
+          })
+          .catch((error) => {
+            log.warn("failed to append prompt history", { historyPath, error })
+            if (writeWarningShown) return
+            writeWarningShown = true
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to save prompt history",
+              variant: "warning",
+              duration: 3000,
+            })
+          })
       },
     }
   },

@@ -14,6 +14,12 @@ const REVIEW_TOOLS = new Set([
   "dedup_scan",
 ])
 
+const QA_TEST_COMMAND_PATTERNS = [
+  /\b(?:bun|pnpm|npm|yarn)\s+(?:run\s+)?test\b/i,
+  /\b(?:vitest|jest|mocha|ava|pytest|rspec|phpunit)\b/i,
+  /\b(?:go test|cargo test|deno test|swift test|dotnet test)\b/i,
+]
+
 export namespace ProbabilisticRollout {
   type EventRow = ReturnType<typeof EventQuery.bySessionWithTimestamp>[number]
   type ReviewFindingExtract = {
@@ -22,11 +28,19 @@ export namespace ProbabilisticRollout {
     tool: string
     finding: Record<string, unknown>
   }
+  type QARunExtract = {
+    callID: string
+    command: string
+    failed: boolean
+    framework: string | null
+    output: string
+    summary: ToolSummary
+  }
 
-  export const Workflow = z.enum(["review", "debug"])
+  export const Workflow = z.enum(["review", "debug", "qa"])
   export type Workflow = z.output<typeof Workflow>
 
-  export const ArtifactKind = z.enum(["review_run", "review_finding", "debug_case", "debug_hypothesis"])
+  export const ArtifactKind = z.enum(["review_run", "review_finding", "debug_case", "debug_hypothesis", "qa_run", "qa_failure"])
   export type ArtifactKind = z.output<typeof ArtifactKind>
 
   export const LabelSource = z.enum(["human", "system", "imported"])
@@ -35,6 +49,8 @@ export namespace ProbabilisticRollout {
   export const ReviewRunOutcome = z.enum(["clean", "findings_accepted", "findings_dismissed", "unresolved"])
   export const ReviewFindingOutcome = z.enum(["accepted", "dismissed", "superseded", "unresolved"])
   export const DebugOutcome = z.enum(["validated", "rejected", "superseded", "unresolved"])
+  export const QARunOutcome = z.enum(["passed", "failed", "flaky", "unresolved"])
+  export const QAFailureOutcome = z.enum(["reproduced", "resolved", "not_reproduced", "unresolved"])
 
   const LabelBase = z.object({
     labelID: z.string(),
@@ -72,11 +88,25 @@ export namespace ProbabilisticRollout {
     outcome: DebugOutcome,
   })
 
+  export const QARunLabel = LabelBase.extend({
+    artifactKind: z.literal("qa_run"),
+    workflow: z.literal("qa"),
+    outcome: QARunOutcome,
+  })
+
+  export const QAFailureLabel = LabelBase.extend({
+    artifactKind: z.literal("qa_failure"),
+    workflow: z.literal("qa"),
+    outcome: QAFailureOutcome,
+  })
+
   export const Label = z.discriminatedUnion("artifactKind", [
     ReviewRunLabel,
     ReviewFindingLabel,
     DebugCaseLabel,
     DebugHypothesisLabel,
+    QARunLabel,
+    QAFailureLabel,
   ])
   export type Label = z.output<typeof Label>
 
@@ -436,6 +466,10 @@ export namespace ProbabilisticRollout {
     return typeof value === "boolean" ? value : undefined
   }
 
+  function toolCallCommand(call: ToolCall | undefined) {
+    return stringField(call?.input, "command") ?? stringField(call?.input, "cmd")
+  }
+
   function toolSummary(
     row: ReturnType<typeof EventQuery.bySessionWithTimestamp>[number],
     call: ToolCall | undefined,
@@ -490,6 +524,88 @@ export namespace ProbabilisticRollout {
         tool,
         finding,
       }))
+  }
+
+  function isQATestCommand(command: string) {
+    return QA_TEST_COMMAND_PATTERNS.some((pattern) => pattern.test(command))
+  }
+
+  function qaFramework(command: string) {
+    const normalized = command.toLowerCase()
+    if (/\bvitest\b/.test(normalized)) return "vitest"
+    if (/\bjest\b/.test(normalized)) return "jest"
+    if (/\bpytest\b/.test(normalized)) return "pytest"
+    if (/\bcargo test\b/.test(normalized)) return "cargo"
+    if (/\bgo test\b/.test(normalized)) return "go"
+    if (/\bbun(?:\s+run)?\s+test\b/.test(normalized)) return "bun"
+    if (/\bpnpm(?:\s+run)?\s+test\b/.test(normalized)) return "pnpm"
+    if (/\bnpm(?:\s+run)?\s+test\b/.test(normalized)) return "npm"
+    if (/\byarn(?:\s+run)?\s+test\b/.test(normalized)) return "yarn"
+    return null
+  }
+
+  function qaCommandFailed(input: {
+    command: string
+    status: "completed" | "error"
+    output: string
+    error?: string
+  }) {
+    if (input.status === "error") return true
+    if (!isQATestCommand(input.command)) return false
+
+    const text = `${input.output}\n${input.error ?? ""}`.toLowerCase()
+    if (/\b0\s+fail(?:ed|ures?)?\b/.test(text) || /\b0\s+errors?\b/.test(text)) return false
+
+    return (
+      /\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(text)
+      || /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output)
+      || /\bFAIL\b/.test(input.output)
+      || /\bfailed\b/.test(text)
+    )
+  }
+
+  function qaRecommendationCommands(runs: QARunExtract[]) {
+    const prioritized = runs.filter((run) => run.failed)
+    const selected = prioritized.length > 0 ? prioritized : runs
+    return [...new Set(selected.map((run) => run.command.trim()).filter(Boolean))].slice(0, 3)
+  }
+
+  function extractQARuns(
+    rows: ReturnType<typeof toolResultRows>,
+    calls: Map<string, ToolCall>,
+  ): QARunExtract[] {
+    return rows.flatMap((row) => {
+      if (row.event_data.tool !== "bash") return []
+      const call = calls.get(row.event_data.callID)
+      const command = toolCallCommand(call)
+      if (!command || !isQATestCommand(command)) return []
+      const summary = toolSummary(row, call)
+      if (!summary) return []
+      const output = row.event_data.output ?? ""
+      return [{
+        callID: row.event_data.callID,
+        command,
+        failed: qaCommandFailed({
+          command,
+          status: row.event_data.status,
+          output,
+          error: row.event_data.error,
+        }),
+        framework: qaFramework(command),
+        output,
+        summary,
+      }]
+    })
+  }
+
+  function readinessKinds(workflow: Workflow) {
+    if (workflow === "review") {
+      return { anchorKind: "review_run" as const, evidenceKind: "review_finding" as const }
+    }
+    if (workflow === "debug") {
+      return { anchorKind: "debug_case" as const, evidenceKind: "debug_hypothesis" as const }
+    }
+    return { anchorKind: "qa_run" as const, evidenceKind: "qa_failure" as const }
   }
 
   function predictionMap(predictions: Prediction[] | undefined) {
@@ -749,6 +865,67 @@ export namespace ProbabilisticRollout {
       }
     }
 
+    if (workflow === "qa") {
+      const qaRuns = extractQARuns(toolRows, calls)
+      if (qaRuns.length > 0) {
+        const recommendedCommands = qaRecommendationCommands(qaRuns)
+        const failingRuns = qaRuns.filter((run) => run.failed)
+
+        items.push({
+          schemaVersion: 1,
+          kind: "ax-code-quality-replay-item",
+          workflow: "qa",
+          artifactKind: "qa_run",
+          artifactID: `qa:${sessionID}`,
+          ...common,
+          baseline: {
+            source: "qa_replay",
+            confidence: failingRuns.length > 0 ? 0.85 : 0.6,
+            score: null,
+            readiness: failingRuns.length > 0 ? "needs_review" : "ready",
+            rank: null,
+          },
+          evidence: {
+            toolSummaries: qaRuns.map((run) => run.summary),
+            summary: {
+              runCount: qaRuns.length,
+              failingRunCount: failingRuns.length,
+              passingRunCount: qaRuns.length - failingRuns.length,
+              recommendedCommands,
+            },
+          },
+        })
+
+        for (const [index, run] of failingRuns.entries()) {
+          items.push({
+            schemaVersion: 1,
+            kind: "ax-code-quality-replay-item",
+            workflow: "qa",
+            artifactKind: "qa_failure",
+            artifactID: `qa:${sessionID}:failure:${run.callID}`,
+            ...common,
+            title: run.command,
+            baseline: {
+              source: "qa_replay",
+              confidence: 0.9,
+              score: null,
+              readiness: "needs_review",
+              rank: index + 1,
+            },
+            evidence: {
+              toolSummaries: [run.summary],
+              summary: {
+                command: run.command,
+                framework: run.framework,
+                recommendedCommand: run.command,
+                failureReason: run.summary.status === "error" ? "tool_error" : "test_failure",
+              },
+            },
+          })
+        }
+      }
+    }
+
     return {
       schemaVersion: 1,
       kind: "ax-code-quality-replay-export",
@@ -764,8 +941,7 @@ export namespace ProbabilisticRollout {
       label.sessionID === input.replay.sessionID && label.workflow === input.replay.workflow
     ))
     const labelMap = new Map(labels.map((label) => [label.artifactID, label]))
-    const anchorKind = input.replay.workflow === "review" ? "review_run" : "debug_case"
-    const evidenceKind = input.replay.workflow === "review" ? "review_finding" : "debug_hypothesis"
+    const { anchorKind, evidenceKind } = readinessKinds(input.replay.workflow)
     const anchorItems = input.replay.items.filter((item) => item.artifactKind === anchorKind).length
     const evidenceItems = input.replay.items.filter((item) => item.artifactKind === evidenceKind).length
     const toolSummaryCount = input.replay.items.reduce((sum, item) => sum + item.evidence.toolSummaries.length, 0)
@@ -782,6 +958,15 @@ export namespace ProbabilisticRollout {
 
     const exportable = input.replay.items.length > 0 && anchorItems > 0
     const hasWorkflowEvidence = evidenceItems > 0 || toolSummaryCount > 0
+    const qaRecommendedCommands = input.replay.workflow !== "qa"
+      ? []
+      : [...new Set(input.replay.items.flatMap((item) => {
+          const directCommand = stringField(item.evidence.summary, "command")
+          if (item.artifactKind === "qa_failure" && directCommand) return [directCommand]
+          const recommended = item.evidence.summary?.["recommendedCommands"]
+          if (!Array.isArray(recommended)) return []
+          return recommended.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        }))].slice(0, 3)
 
     const gates: ReplayReadinessGate[] = [
       {
@@ -816,17 +1001,39 @@ export namespace ProbabilisticRollout {
       },
     ]
 
+    if (input.replay.workflow === "qa") {
+      gates.push({
+        name: "targeted-test-recommendation",
+        status: qaRecommendedCommands.length > 0 ? "pass" : "warn",
+        detail: qaRecommendedCommands.length > 0
+          ? `prioritize these QA command(s): ${qaRecommendedCommands.join(" | ")}`
+          : "no targeted QA command recommendation could be derived from the recorded test evidence",
+      })
+    }
+
     const nextAction = !exportable
-      ? `Capture ${input.replay.workflow} workflow activity before exporting replay again.`
+      ? input.replay.workflow === "qa"
+        ? "Run one or more test commands in this session to capture QA evidence."
+        : `Capture ${input.replay.workflow} workflow activity before exporting replay again.`
       : !hasWorkflowEvidence
-        ? `Run the ${input.replay.workflow} workflow until it produces evidence-bearing tool output.`
+        ? input.replay.workflow === "qa"
+          ? "Run the project's test workflow until this session records test output."
+          : `Run the ${input.replay.workflow} workflow until it produces evidence-bearing tool output.`
         : labeledItems === 0
-          ? "Record outcome labels for the exported artifacts."
+          ? input.replay.workflow === "qa"
+            ? "Record QA outcomes for the exported test artifacts."
+            : "Record outcome labels for the exported artifacts."
           : resolvedLabeledItems === 0
-            ? "Resolve at least one exported artifact label before benchmarking."
+            ? input.replay.workflow === "qa"
+              ? "Resolve at least one QA label before benchmarking."
+              : "Resolve at least one exported artifact label before benchmarking."
             : missingLabels > 0 || unresolvedLabeledItems > 0
-              ? "Finish label coverage for the remaining exported artifacts."
-              : null
+              ? input.replay.workflow === "qa"
+                ? "Finish QA label coverage for the remaining exported test artifacts."
+                : "Finish label coverage for the remaining exported artifacts."
+              : input.replay.workflow === "qa" && qaRecommendedCommands.length > 0
+                ? `Run targeted QA verification first: ${qaRecommendedCommands.join(" | ")}`
+                : null
 
     return ReplayReadinessSummary.parse({
       schemaVersion: 1,
@@ -877,9 +1084,24 @@ export namespace ProbabilisticRollout {
     return lines.join("\n")
   }
 
+  export function targetedTestRecommendations(summary: Pick<ReplayReadinessSummary, "workflow" | "gates">) {
+    if (summary.workflow !== "qa") return []
+    const gate = summary.gates.find((item) => item.name === "targeted-test-recommendation")
+    if (!gate) return []
+    const separator = gate.detail.indexOf(":")
+    if (separator === -1) return []
+    return gate.detail
+      .slice(separator + 1)
+      .split("|")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  }
+
   function actualPositive(label: Label) {
     if (label.artifactKind === "review_run") return label.outcome === "findings_accepted"
     if (label.artifactKind === "review_finding") return label.outcome === "accepted"
+    if (label.artifactKind === "qa_run") return label.outcome === "failed" || label.outcome === "flaky"
+    if (label.artifactKind === "qa_failure") return label.outcome === "reproduced"
     return label.outcome === "validated"
   }
 

@@ -15,6 +15,9 @@ import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
 import { resolveCurrentAgent } from "./local-util"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.local" })
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
@@ -158,6 +161,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const filePath = path.join(Global.Path.state, "model.json")
       const state = {
         pending: false,
+        saveWarningShown: false,
       }
 
       function save() {
@@ -170,9 +174,21 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           recent: modelStore.recent,
           favorite: modelStore.favorite,
           variant: modelStore.variant,
-        }).catch(() => {
-          state.pending = true
         })
+          .then(() => {
+            state.saveWarningShown = false
+          })
+          .catch((error) => {
+            state.pending = true
+            log.warn("failed to persist local model preferences", { filePath, error })
+            if (state.saveWarningShown) return
+            state.saveWarningShown = true
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to save model preferences",
+              variant: "warning",
+              duration: 3000,
+            })
+          })
       }
 
       Filesystem.readJson(filePath)
@@ -181,7 +197,15 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           if (Array.isArray(x.favorite)) setModelStore("favorite", x.favorite)
           if (typeof x.variant === "object" && x.variant !== null) setModelStore("variant", x.variant)
         })
-        .catch(() => {})
+        .catch((error) => {
+          if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return
+          log.warn("failed to load local model preferences", { filePath, error })
+          toast.show({
+            message: error instanceof Error ? error.message : "Failed to load model preferences",
+            variant: "warning",
+            duration: 3000,
+          })
+        })
         .finally(() => {
           setModelStore("ready", true)
           if (state.pending) save()

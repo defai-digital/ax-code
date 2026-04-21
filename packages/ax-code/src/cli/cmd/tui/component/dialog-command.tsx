@@ -11,6 +11,10 @@ import {
 } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import { type KeybindKey, useKeybind } from "@tui/context/keybind"
+import { useToast } from "@tui/ui/toast"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.dialog-command" })
 
 type Context = ReturnType<typeof init>
 const ctx = createContext<Context>()
@@ -33,6 +37,7 @@ function init() {
   const [suspendCount, setSuspendCount] = createSignal(0)
   const dialog = useDialog()
   const keybind = useKeybind()
+  const toast = useToast()
 
   const entries = createMemo(() => {
     const all = registrations().flatMap((x) => x())
@@ -57,6 +62,22 @@ function init() {
   )
   const suspended = () => suspendCount() > 0
 
+  function runCommandAction(option: CommandOption, route: "keybind" | "trigger" | "slash") {
+    void Promise.resolve()
+      .then(() => option.onSelect?.(dialog))
+      .catch((error) => {
+        log.warn("command action failed", {
+          error,
+          route,
+          value: option.value,
+        })
+        toast.show({
+          message: error instanceof Error ? error.message : `Failed to run ${option.title}`,
+          variant: "error",
+        })
+      })
+  }
+
   useKeyboard((evt) => {
     if (suspended()) return
     if (dialog.stack.length > 0) return
@@ -64,7 +85,7 @@ function init() {
       if (!isEnabled(option)) continue
       if (option.keybind && keybind.match(option.keybind, evt)) {
         evt.preventDefault()
-        option.onSelect?.(dialog)
+        runCommandAction(option, "keybind")
         return
       }
     }
@@ -75,7 +96,7 @@ function init() {
       for (const option of entries()) {
         if (option.value === name) {
           if (!isEnabled(option)) return
-          option.onSelect?.(dialog)
+          runCommandAction(option, "trigger")
           return
         }
       }
@@ -97,7 +118,7 @@ function init() {
         if (!option.slash) continue
         if (!isEnabled(option)) continue
         if (option.slash.name === name || option.slash.aliases?.includes(name)) {
-          option.onSelect?.(dialog)
+          runCommandAction(option, "slash")
           return true
         }
       }

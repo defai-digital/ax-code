@@ -2,6 +2,7 @@ import { cmd } from "./cmd"
 import { Instance } from "../../project/instance"
 import { SessionRisk } from "../../session/risk"
 import { SessionID } from "../../session/schema"
+import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
 
 export namespace RiskView {
   type ReplayReadinessSummary = NonNullable<SessionRisk.QualityReadiness["review"]>
@@ -13,11 +14,13 @@ export namespace RiskView {
     return "validation unrecorded"
   }
 
-  function qualityLine(workflow: "review" | "debug", summary: ReplayReadinessSummary) {
+  function qualityLine(workflow: "review" | "debug" | "qa", summary: ReplayReadinessSummary) {
     const state = summary.readyForBenchmark ? "benchmark ready" : "benchmark not ready"
     const labels = `${summary.resolvedLabeledItems}/${summary.totalItems} resolved labels`
+    const recommended = ProbabilisticRollout.targetedTestRecommendations(summary)[0]
+    const first = recommended ? ` · first: ${recommended}` : ""
     const next = summary.nextAction ? ` · next: ${summary.nextAction}` : ""
-    return `  ${workflow}: ${summary.overallStatus} · ${state} · ${labels}${next}`
+    return `  ${workflow}: ${summary.overallStatus} · ${state} · ${labels}${first}${next}`
   }
 
   export function lines(input: SessionRisk.Detail, explain = false) {
@@ -53,6 +56,7 @@ export namespace RiskView {
     const readinessLines = [
       input.quality?.review ? qualityLine("review", input.quality.review) : null,
       input.quality?.debug ? qualityLine("debug", input.quality.debug) : null,
+      input.quality?.qa ? qualityLine("qa", input.quality.qa) : null,
     ].filter((line): line is string => !!line)
 
     if (readinessLines.length > 0) {
@@ -117,7 +121,7 @@ export const RiskCommand = cmd({
         default: false,
       })
       .option("quality", {
-        describe: "Include review/debug replay readiness when replay evidence exists",
+        describe: "Include review/debug/qa replay readiness when replay evidence exists",
         type: "boolean",
         default: true,
       })

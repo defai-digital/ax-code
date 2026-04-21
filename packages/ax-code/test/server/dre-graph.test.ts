@@ -78,6 +78,23 @@ describe("dre graph quality readiness", () => {
             durationMs: 12,
           })
           Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call-qa",
+            input: { command: "bun test test/auth.test.ts" },
+          })
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call-qa",
+            status: "completed",
+            output: "3 passed, 0 failed",
+            metadata: {},
+            durationMs: 10,
+          })
+          Recorder.emit({
             type: "session.end",
             sessionID: sid,
             reason: "completed",
@@ -88,6 +105,7 @@ describe("dre graph quality readiness", () => {
           await new Promise((resolve) => setTimeout(resolve, 50))
 
           const replay = await ProbabilisticRollout.exportReplay(sid, "review")
+          const qaReplay = await ProbabilisticRollout.exportReplay(sid, "qa")
           await QualityLabelStore.appendMany([
             {
               labelID: `label-review-run-${sid}`,
@@ -113,6 +131,18 @@ describe("dre graph quality readiness", () => {
               labelVersion: 1,
               outcome: "accepted",
             },
+            {
+              labelID: `label-qa-run-${sid}`,
+              artifactID: qaReplay.items[0]!.artifactID,
+              artifactKind: "qa_run",
+              workflow: "qa",
+              projectID,
+              sessionID: sid,
+              labeledAt: "2026-04-21T00:00:02.000Z",
+              labelSource: "human",
+              labelVersion: 1,
+              outcome: "passed",
+            },
           ])
 
           const base = await app.request(`/dre-graph/session/${sid}`)
@@ -125,7 +155,9 @@ describe("dre graph quality readiness", () => {
           const enrichedHtml = await enriched.text()
           expect(enrichedHtml).toContain("Quality Readiness")
           expect(enrichedHtml).toContain("review")
+          expect(enrichedHtml).toContain("qa")
           expect(enrichedHtml).toContain("benchmark ready")
+          expect(enrichedHtml).toContain("first: bun test test/auth.test.ts")
 
           const baseFingerprint = await app.request(`/dre-graph/session/${sid}/fingerprint`)
           const enrichedFingerprint = await app.request(`/dre-graph/session/${sid}/fingerprint?quality=true`)
@@ -139,6 +171,11 @@ describe("dre graph quality readiness", () => {
             status: "pass",
             ready: true,
             resolvedLabels: 2,
+          })
+          expect(enrichedFingerprintBody.risk.quality.qa).toMatchObject({
+            status: "pass",
+            ready: true,
+            resolvedLabels: 1,
           })
         } finally {
           EventQuery.deleteBySession(sid)

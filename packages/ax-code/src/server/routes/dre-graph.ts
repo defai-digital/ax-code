@@ -6,6 +6,7 @@ import { SessionBranchRank } from "../../session/branch"
 import { SessionDre } from "../../session/dre"
 import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
+import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
@@ -439,7 +440,8 @@ function qualityReadinessSection(input: SessionRisk.Detail) {
   const summaries = [
     input.quality?.review ? { workflow: "review" as const, summary: input.quality.review } : null,
     input.quality?.debug ? { workflow: "debug" as const, summary: input.quality.debug } : null,
-  ].filter((item): item is { workflow: "review" | "debug"; summary: NonNullable<SessionRisk.QualityReadiness["review"]> } => !!item)
+    input.quality?.qa ? { workflow: "qa" as const, summary: input.quality.qa } : null,
+  ].filter((item): item is { workflow: "review" | "debug" | "qa"; summary: NonNullable<SessionRisk.QualityReadiness["review"]> } => !!item)
 
   if (summaries.length === 0) return ""
 
@@ -447,18 +449,21 @@ function qualityReadinessSection(input: SessionRisk.Detail) {
     `<div style="margin-top:20px"><h3>Quality Readiness</h3>`,
     `<div class="validation-list">`,
     summaries
-      .map(({ workflow, summary }) =>
-        [
+      .map(({ workflow, summary }) => {
+        const first = ProbabilisticRollout.targetedTestRecommendations(summary)[0]
+        const firstLine = first ? `<br><span class="muted">first: ${esc(first)}</span>` : ""
+        return [
           `<div class="validation-item">`,
-          `<span class="validation-icon">${workflow === "review" ? "R" : "D"}</span>`,
+          `<span class="validation-icon">${workflow === "review" ? "R" : workflow === "debug" ? "D" : "Q"}</span>`,
           `<span class="validation-cmd">`,
           `<strong>${esc(workflow)}</strong> · ${esc(summary.readyForBenchmark ? "benchmark ready" : "benchmark not ready")} · ${summary.resolvedLabeledItems}/${summary.totalItems} resolved labels`,
+          firstLine,
           summary.nextAction ? `<br><span class="muted">${esc(summary.nextAction)}</span>` : "",
           `</span>`,
           `<span class="validation-status">${chip({ label: summary.overallStatus, kind: qualityStatusKind(summary.overallStatus) })}</span>`,
           `</div>`,
-        ].join(""),
-      )
+        ].join("")
+      })
       .join(""),
     `</div></div>`,
   ].join("")
@@ -1346,6 +1351,13 @@ function sessionFingerprint(input: {
                   status: input.risk.quality.debug.overallStatus,
                   ready: input.risk.quality.debug.readyForBenchmark,
                   resolvedLabels: input.risk.quality.debug.resolvedLabeledItems,
+                }
+              : null,
+            qa: input.risk.quality.qa
+              ? {
+                  status: input.risk.quality.qa.overallStatus,
+                  ready: input.risk.quality.qa.readyForBenchmark,
+                  resolvedLabels: input.risk.quality.qa.resolvedLabeledItems,
                 }
               : null,
           }

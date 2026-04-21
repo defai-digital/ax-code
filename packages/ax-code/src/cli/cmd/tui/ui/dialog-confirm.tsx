@@ -4,7 +4,11 @@ import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { For } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
+import { useToast } from "./toast"
 import { Locale } from "@/util/locale"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.dialog-confirm" })
 
 export type DialogConfirmProps = {
   title: string
@@ -18,15 +22,32 @@ export type DialogConfirmResult = boolean | undefined
 
 export function DialogConfirm(props: DialogConfirmProps) {
   const dialog = useDialog()
+  const toast = useToast()
   const { theme } = useTheme()
   const [store, setStore] = createStore({
     active: "confirm" as "confirm" | "cancel",
   })
 
+  function runDialogConfirmAction(action: () => unknown, failureMessage: string) {
+    void Promise.resolve()
+      .then(action)
+      .catch((error) => {
+        log.warn("dialog confirm action failed", { error, title: props.title })
+        toast.show({
+          message: error instanceof Error ? error.message : failureMessage,
+          variant: "error",
+        })
+      })
+  }
+
   useKeyboard((evt) => {
     if (evt.name === "return") {
-      if (store.active === "confirm") props.onConfirm?.()
-      if (store.active === "cancel") props.onCancel?.()
+      if (store.active === "confirm") {
+        runDialogConfirmAction(() => props.onConfirm?.(), `Failed to confirm ${props.title.toLowerCase()}`)
+      }
+      if (store.active === "cancel") {
+        runDialogConfirmAction(() => props.onCancel?.(), `Failed to cancel ${props.title.toLowerCase()}`)
+      }
       dialog.clear()
     }
 
@@ -55,8 +76,12 @@ export function DialogConfirm(props: DialogConfirmProps) {
               paddingRight={1}
               backgroundColor={key === store.active ? theme.primary : undefined}
               onMouseUp={(evt) => {
-                if (key === "confirm") props.onConfirm?.()
-                if (key === "cancel") props.onCancel?.()
+                if (key === "confirm") {
+                  runDialogConfirmAction(() => props.onConfirm?.(), `Failed to confirm ${props.title.toLowerCase()}`)
+                }
+                if (key === "cancel") {
+                  runDialogConfirmAction(() => props.onCancel?.(), `Failed to cancel ${props.title.toLowerCase()}`)
+                }
                 dialog.clear()
               }}
             >

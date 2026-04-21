@@ -81,6 +81,15 @@ async function exists(target: string) {
     .catch(() => false)
 }
 
+async function cleanupBunBuildArtifacts() {
+  const entries = await fs.promises.readdir(dir, { withFileTypes: true })
+  await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && entry.name.startsWith(".") && entry.name.endsWith(".bun-build"))
+      .map((entry) => fs.promises.rm(path.join(dir, entry.name), { force: true })),
+  )
+}
+
 async function materializePackage(target: string, sources: string[]) {
   for (const source of sources) {
     if (!(await exists(source))) continue
@@ -302,30 +311,35 @@ for (const item of targets) {
   const bunfsRoot = item.os === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/"
   const workerRelativePath = path.relative(dir, parserWorker).replaceAll("\\", "/")
 
-  await Bun.build({
-    conditions: ["browser"],
-    tsconfig: "./tsconfig.json",
-    plugins: [solidPlugin],
-    compile: {
-      autoloadBunfig: false,
-      autoloadDotenv: false,
-      autoloadTsconfig: true,
-      autoloadPackageJson: true,
-      target: legacyName.replace(pkg.name, "bun") as any,
-      outfile: `dist/${legacyName}/bin/ax-code`,
-      execArgv: [`--user-agent=ax-code/${Script.version}`, "--use-system-ca", "--"],
-      windows: {},
-    },
-    entrypoints: ["./src/index.ts", parserWorker, workerPath],
-    define: {
-      AX_CODE_VERSION: `'${Script.version}'`,
-      AX_CODE_MIGRATIONS: JSON.stringify(migrations),
-      OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
-      AX_CODE_WORKER_PATH: compiledBunfsModulePath(bunfsRoot, workerPath),
-      AX_CODE_CHANNEL: `'${Script.channel}'`,
-      AX_CODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
-    },
-  })
+  await cleanupBunBuildArtifacts()
+  try {
+    await Bun.build({
+      conditions: ["browser"],
+      tsconfig: "./tsconfig.json",
+      plugins: [solidPlugin],
+      compile: {
+        autoloadBunfig: false,
+        autoloadDotenv: false,
+        autoloadTsconfig: true,
+        autoloadPackageJson: true,
+        target: legacyName.replace(pkg.name, "bun") as any,
+        outfile: `dist/${legacyName}/bin/ax-code`,
+        execArgv: [`--user-agent=ax-code/${Script.version}`, "--use-system-ca", "--"],
+        windows: {},
+      },
+      entrypoints: ["./src/index.ts", parserWorker, workerPath],
+      define: {
+        AX_CODE_VERSION: `'${Script.version}'`,
+        AX_CODE_MIGRATIONS: JSON.stringify(migrations),
+        OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
+        AX_CODE_WORKER_PATH: compiledBunfsModulePath(bunfsRoot, workerPath),
+        AX_CODE_CHANNEL: `'${Script.channel}'`,
+        AX_CODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
+      },
+    })
+  } finally {
+    await cleanupBunBuildArtifacts()
+  }
 
   const binaryPath = `dist/${legacyName}/bin/ax-code`
 

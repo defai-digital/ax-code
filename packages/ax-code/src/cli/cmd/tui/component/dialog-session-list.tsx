@@ -13,6 +13,10 @@ import { createDebouncedSignal } from "../util/signal"
 import { Spinner } from "./spinner"
 import { useToast } from "../ui/toast"
 import { createAbortableResourceFetcher } from "../util/abortable-resource"
+import { Log } from "@/util/log"
+import type { Session } from "@ax-code/sdk/v2"
+
+const log = Log.create({ service: "tui.dialog-session-list" })
 
 export function DialogSessionList() {
   const dialog = useDialog()
@@ -27,22 +31,34 @@ export function DialogSessionList() {
   const [toDelete, setToDelete] = createSignal<string>()
   const [search, setSearch] = createDebouncedSignal("", 150)
 
-  const [searchResults] = createResource(search, createAbortableResourceFetcher(async (query: string, signal) => {
-    if (!query) return undefined
-    const result = await sdk.client.session.list({ search: query, limit: 30 }, { signal })
-    return result.data ?? []
-  }))
+  const [searchResults] = createResource(
+    search,
+    createAbortableResourceFetcher<string, Session[]>(async (query: string, signal, info) => {
+      if (!query) return undefined
+      try {
+        const result = await sdk.client.session.list({ search: query, limit: 30 }, { signal })
+        return result.data ?? []
+      } catch (error) {
+        log.warn("session list search failed", { error, query })
+        toast.show({
+          message: error instanceof Error ? error.message : "Failed to search sessions",
+          variant: "error",
+        })
+        return info.value
+      }
+    }),
+  )
 
   const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
 
-  const sessions = createMemo(() => searchResults() ?? sync.data.session)
+  const sessions = createMemo<Session[]>(() => searchResults() ?? sync.data.session)
 
   const options = createMemo(() => {
     const today = new Date().toDateString()
     return sessions()
-      .filter((x) => x.parentID === undefined)
-      .toSorted((a, b) => b.time.updated - a.time.updated)
-      .map((x) => {
+      .filter((x: Session) => x.parentID === undefined)
+      .toSorted((a: Session, b: Session) => b.time.updated - a.time.updated)
+      .map((x: Session) => {
         const date = new Date(x.time.updated)
         let category = date.toDateString()
         if (category === today) {

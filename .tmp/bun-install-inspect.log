@@ -1,0 +1,4 @@
+bun add v1.3.13 (bf2e2cec)
+Resolving dependencies
+Resolved, downloaded and extracted [6]
+error: ConnectionRefused downloading package manifest @opentui/core-linux-arm64

@@ -257,7 +257,7 @@ export const SessionRoutes = lazy(() =>
         summary: "Get session risk detail",
         tags: ["Session"],
         description:
-          "Return the explainable risk assessment, breakdown, and semantic change summary for a session. Optionally include replay readiness for review/debug workflows.",
+          "Return the explainable risk assessment, breakdown, and semantic change summary for a session. Optionally include replay readiness for review/debug/qa workflows.",
         operationId: "session.risk",
         responses: {
           200: {
@@ -276,7 +276,7 @@ export const SessionRoutes = lazy(() =>
         "query",
         z.object({
           quality: z.coerce.boolean().optional().default(false).meta({
-            description: "Include replay readiness for review/debug when replay evidence exists",
+            description: "Include replay readiness for review/debug/qa when replay evidence exists",
           }),
         }),
       ),

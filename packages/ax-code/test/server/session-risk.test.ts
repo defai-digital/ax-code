@@ -78,6 +78,23 @@ describe("session risk endpoint", () => {
             durationMs: 12,
           })
           Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call-qa",
+            input: { command: "bun test test/auth.test.ts" },
+          })
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call-qa",
+            status: "completed",
+            output: "3 passed, 0 failed",
+            metadata: {},
+            durationMs: 10,
+          })
+          Recorder.emit({
             type: "session.end",
             sessionID: sid,
             reason: "completed",
@@ -88,6 +105,7 @@ describe("session risk endpoint", () => {
           await new Promise((resolve) => setTimeout(resolve, 50))
 
           const replay = await ProbabilisticRollout.exportReplay(sid, "review")
+          const qaReplay = await ProbabilisticRollout.exportReplay(sid, "qa")
           await QualityLabelStore.appendMany([
             {
               labelID: `label-review-run-${sid}`,
@@ -113,6 +131,18 @@ describe("session risk endpoint", () => {
               labelVersion: 1,
               outcome: "accepted",
             },
+            {
+              labelID: `label-qa-run-${sid}`,
+              artifactID: qaReplay.items[0]!.artifactID,
+              artifactKind: "qa_run",
+              workflow: "qa",
+              projectID,
+              sessionID: sid,
+              labeledAt: "2026-04-21T00:00:02.000Z",
+              labelSource: "human",
+              labelVersion: 1,
+              outcome: "passed",
+            },
           ])
 
           const base = await app.request(`/session/${sid}/risk`)
@@ -130,6 +160,11 @@ describe("session risk endpoint", () => {
                 resolvedLabeledItems: number
               } | null
               debug?: unknown
+              qa?: {
+                overallStatus: string
+                readyForBenchmark: boolean
+                resolvedLabeledItems: number
+              } | null
             }
           }
           expect(enrichedBody.quality?.review).toMatchObject({
@@ -138,6 +173,11 @@ describe("session risk endpoint", () => {
             resolvedLabeledItems: 2,
           })
           expect(enrichedBody.quality?.debug).toBeNull()
+          expect(enrichedBody.quality?.qa).toMatchObject({
+            overallStatus: "pass",
+            readyForBenchmark: true,
+            resolvedLabeledItems: 1,
+          })
         } finally {
           EventQuery.deleteBySession(sid)
           await clearSessionLabels(sid)

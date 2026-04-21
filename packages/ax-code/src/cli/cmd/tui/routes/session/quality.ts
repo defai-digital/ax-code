@@ -1,7 +1,17 @@
 import type { PromptInfo } from "../../component/prompt/history"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
+import { ProbabilisticRollout } from "@/quality/probabilistic-rollout"
 
-export type SessionQualityWorkflow = "review" | "debug"
+export type SessionQualityWorkflow = "review" | "debug" | "qa"
+
+type SessionQualitySet =
+  | {
+      review?: SyncedSessionQualityReadiness | null
+      debug?: SyncedSessionQualityReadiness | null
+      qa?: SyncedSessionQualityReadiness | null
+    }
+  | null
+  | undefined
 
 export type SessionQualityActionKind = "capture_evidence" | "finish_label_coverage" | "benchmark"
 
@@ -23,13 +33,7 @@ export function findSessionQualityAction(input: {
   sessionID: string
   workflow: SessionQualityWorkflow
   kind: SessionQualityActionKind
-  quality:
-    | {
-        review?: SyncedSessionQualityReadiness | null
-        debug?: SyncedSessionQualityReadiness | null
-      }
-    | null
-    | undefined
+  quality: SessionQualitySet
 }) {
   return sessionQualityActions({
     sessionID: input.sessionID,
@@ -46,8 +50,28 @@ export type SessionQualityDetailItem = {
   action?: SessionQualityAction
 }
 
-function workflowLabel(workflow: SessionQualityWorkflow) {
-  return workflow === "review" ? "Review" : "Debug"
+export function sessionQualityWorkflowLabel(workflow: SessionQualityWorkflow) {
+  if (workflow === "review") return "Review"
+  if (workflow === "debug") return "Debug"
+  return "QA"
+}
+
+export function sessionQualityWorkflowIcon(workflow: SessionQualityWorkflow) {
+  if (workflow === "review") return "R"
+  if (workflow === "debug") return "D"
+  return "Q"
+}
+
+function workflowPromptLabel(workflow: SessionQualityWorkflow) {
+  return workflow === "qa" ? "QA" : workflow
+}
+
+function workflowInlineLabel(workflow: SessionQualityWorkflow) {
+  return workflow === "qa" ? "qa" : workflow
+}
+
+function targetedQATestRecommendations(summary: SyncedSessionQualityReadiness) {
+  return ProbabilisticRollout.targetedTestRecommendations(summary)
 }
 
 function actionKind(summary: SyncedSessionQualityReadiness): SessionQualityActionKind {
@@ -114,7 +138,7 @@ function labelCoverageMode(summary: SyncedSessionQualityReadiness) {
 }
 
 function labelCoverageTitle(workflow: SessionQualityWorkflow, summary: SyncedSessionQualityReadiness) {
-  const label = workflowLabel(workflow)
+  const label = sessionQualityWorkflowLabel(workflow)
   switch (labelCoverageMode(summary)) {
     case "complete":
       return `Check ${label} Replay Readiness`
@@ -130,7 +154,7 @@ function labelCoverageTitle(workflow: SessionQualityWorkflow, summary: SyncedSes
 function labelCoverageFooter(summary: SyncedSessionQualityReadiness) {
   switch (labelCoverageMode(summary)) {
     case "complete":
-      return "Review replay readiness gates before benchmarking."
+      return `Check ${workflowPromptLabel(summary.workflow)} replay readiness gates before benchmarking.`
     case "missing_only":
       return "Record outcome labels for the remaining exported artifacts."
     case "unresolved_only":
@@ -141,7 +165,7 @@ function labelCoverageFooter(summary: SyncedSessionQualityReadiness) {
 }
 
 function captureEvidenceFooter(summary: SyncedSessionQualityReadiness) {
-  return `Capture ${summary.workflow} workflow activity before exporting replay again.`
+  return `Capture ${workflowPromptLabel(summary.workflow)} workflow activity before exporting replay again.`
 }
 
 function normalizedNextAction(input: {
@@ -168,7 +192,7 @@ function inlineActionLabel(action: SessionQualityAction) {
 
   switch (labelCoverageMode(action.summary)) {
     case "complete":
-      return "review replay readiness"
+      return `${workflowInlineLabel(action.workflow)} replay readiness`
     case "missing_only":
       return "record outcome labels"
     case "unresolved_only":
@@ -192,6 +216,11 @@ function actionSummaryDetail(action: Pick<SessionQualityAction, "kind" | "summar
   }
 
   return labelCoverageStatusSummary(action.summary)
+}
+
+function targetedRecommendationInlineSuffix(action: Pick<SessionQualityAction, "summary">) {
+  const first = targetedQATestRecommendations(action.summary)[0]
+  return first ? ` · first: ${first}` : ""
 }
 
 function actionStatusTitle(action: Pick<SessionQualityAction, "kind" | "summary">) {
@@ -222,25 +251,20 @@ function promptForAction(input: {
 
 export function sessionQualityActions(input: {
   sessionID: string
-  quality:
-    | {
-        review?: SyncedSessionQualityReadiness | null
-        debug?: SyncedSessionQualityReadiness | null
-      }
-    | null
-    | undefined
+  quality: SessionQualitySet
 }): SessionQualityAction[] {
   const items = [
     input.quality?.review ? ({ workflow: "review" as const, summary: input.quality.review }) : null,
     input.quality?.debug ? ({ workflow: "debug" as const, summary: input.quality.debug }) : null,
+    input.quality?.qa ? ({ workflow: "qa" as const, summary: input.quality.qa }) : null,
   ].filter((item): item is { workflow: SessionQualityWorkflow; summary: SyncedSessionQualityReadiness } => !!item)
 
   return items.map(({ workflow, summary }) => {
     const kind = actionKind(summary)
     const title = kind === "benchmark"
-      ? `Benchmark ${workflowLabel(workflow)} Replay`
+      ? `Benchmark ${sessionQualityWorkflowLabel(workflow)} Replay`
       : kind === "capture_evidence"
-        ? `Capture ${workflowLabel(workflow)} Evidence`
+        ? `Capture ${sessionQualityWorkflowLabel(workflow)} Evidence`
         : labelCoverageTitle(workflow, summary)
 
     const description = `${summary.overallStatus} · ${actionSummaryDetail({ kind, summary })}`
@@ -294,6 +318,7 @@ export function sessionQualityDetailItems(action: SessionQualityAction): Session
 }
 
 export function renderSessionQualityBrief(action: SessionQualityAction) {
+  const recommended = targetedQATestRecommendations(action.summary)
   const lines = [
     `Quality readiness · ${action.workflow}`,
     `- overall status: ${action.summary.overallStatus}`,
@@ -312,6 +337,10 @@ export function renderSessionQualityBrief(action: SessionQualityAction) {
     lines.splice(3, 0, `- resolved labels: ${resolvedLabelsSummary(action.summary)}`)
   }
 
+  if (recommended.length > 0) {
+    lines.splice(3, 0, `- recommended tests: ${recommended.join(" | ")}`)
+  }
+
   if ((action.summary.gates ?? []).length > 0) {
     lines.push("- gates:")
     for (const gate of action.summary.gates ?? []) {
@@ -323,19 +352,25 @@ export function renderSessionQualityBrief(action: SessionQualityAction) {
 }
 
 export function renderSessionQualityInlineSummary(action: SessionQualityAction) {
-  return `${inlineActionLabel(action)} · ${action.summary.overallStatus} · ${actionSummaryDetail(action)}`
+  return `${inlineActionLabel(action)} · ${action.summary.overallStatus} · ${actionSummaryDetail(action)}${targetedRecommendationInlineSuffix(action)}`
 }
 
 export function renderSessionQualityPrompt(action: SessionQualityAction, sessionID: string) {
+  const recommended = targetedQATestRecommendations(action.summary)
   const lines = [
     `Quality readiness context for session ${sessionID}:`,
     renderSessionQualityBrief(action),
     "",
   ]
 
+  if (recommended.length > 0) {
+    lines.push(`Targeted QA recommendation: run ${recommended[0]} first.`)
+    lines.push("")
+  }
+
   if (action.kind === "capture_evidence") {
     lines.push(
-      `Use the current session to produce ${action.workflow} workflow evidence that will unblock replay readiness.`,
+      `Use the current session to produce ${workflowPromptLabel(action.workflow)} workflow evidence that will unblock replay readiness.`,
       "1. Focus on the failing or warning readiness gates first.",
       "2. Run or continue the relevant workflow until evidence-bearing output exists in the session.",
       "3. Summarize what new evidence was captured and whether readiness should be refreshed.",
@@ -346,7 +381,7 @@ export function renderSessionQualityPrompt(action: SessionQualityAction, session
 
   if (action.kind === "benchmark") {
     lines.push(
-      `Prepare the next benchmark step for the current ${action.workflow} replay evidence.`,
+      `Prepare the next benchmark step for the current ${workflowPromptLabel(action.workflow)} replay evidence.`,
       "1. Confirm which evidence and labels are already available from this session.",
       "2. Identify any missing inputs that would still block benchmarking.",
       "3. If the inputs are complete, describe the next benchmark step and expected outputs.",
@@ -359,7 +394,7 @@ export function renderSessionQualityPrompt(action: SessionQualityAction, session
 
   if (labelCoverageMode(action.summary) === "missing_only") {
     lines.push(
-      `Use the current session's ${action.workflow} replay evidence to record the missing outcome labels.`,
+      `Use the current session's ${workflowPromptLabel(action.workflow)} replay evidence to record the missing outcome labels.`,
       `1. Start from the current backlog: ${coverage.missingLabels} missing label(s), ${coverage.unresolvedLabeledItems} unresolved label(s).`,
       "2. Identify which exported artifacts are still missing labels.",
       "3. Summarize the available session evidence for each unlabeled artifact.",
@@ -371,7 +406,7 @@ export function renderSessionQualityPrompt(action: SessionQualityAction, session
 
   if (labelCoverageMode(action.summary) === "unresolved_only") {
     lines.push(
-      `Use the current session's ${action.workflow} replay evidence to revisit unresolved outcome labels.`,
+      `Use the current session's ${workflowPromptLabel(action.workflow)} replay evidence to revisit unresolved outcome labels.`,
       `1. Start from the current backlog: ${coverage.missingLabels} missing label(s), ${coverage.unresolvedLabeledItems} unresolved label(s).`,
       "2. Identify which labeled artifacts still need a resolved outcome.",
       "3. Summarize the current session evidence that could resolve each unresolved label.",
@@ -383,7 +418,7 @@ export function renderSessionQualityPrompt(action: SessionQualityAction, session
 
   if (labelCoverageMode(action.summary) === "complete") {
     lines.push(
-      `Use the current session's ${action.workflow} replay evidence to review the remaining replay-readiness gates.`,
+      `Use the current session's ${workflowPromptLabel(action.workflow)} replay evidence to review the remaining replay-readiness gates.`,
       "1. Confirm that the current exported artifacts already have resolved outcome labels.",
       "2. Inspect the failing or warning readiness gates that still block benchmarking.",
       "3. Summarize what additional evidence, refresh, or workflow activity is still needed.",
@@ -393,7 +428,7 @@ export function renderSessionQualityPrompt(action: SessionQualityAction, session
   }
 
   lines.push(
-    `Use the current session's ${action.workflow} replay evidence to prepare the remaining labeling work.`,
+    `Use the current session's ${workflowPromptLabel(action.workflow)} replay evidence to prepare the remaining labeling work.`,
     `1. Start from the current backlog: ${coverage.missingLabels} missing label(s), ${coverage.unresolvedLabeledItems} unresolved label(s).`,
     "2. Separate artifacts that are missing labels from artifacts that already have unresolved labels.",
     "3. Summarize the evidence available from this session for each unresolved or unlabeled artifact.",

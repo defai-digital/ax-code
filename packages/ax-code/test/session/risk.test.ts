@@ -90,6 +90,23 @@ describe("session.risk", () => {
             durationMs: 12,
           })
           Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call-qa",
+            input: { command: "bun test test/auth.test.ts" },
+          })
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call-qa",
+            status: "completed",
+            output: "3 passed, 0 failed",
+            metadata: {},
+            durationMs: 10,
+          })
+          Recorder.emit({
             type: "session.end",
             sessionID: sid,
             reason: "completed",
@@ -101,6 +118,8 @@ describe("session.risk", () => {
 
           const replay = await ProbabilisticRollout.exportReplay(sid, "review")
           expect(replay.items.map((item) => item.artifactKind)).toEqual(["review_run", "review_finding"])
+          const qaReplay = await ProbabilisticRollout.exportReplay(sid, "qa")
+          expect(qaReplay.items.map((item) => item.artifactKind)).toEqual(["qa_run"])
 
           await QualityLabelStore.appendMany([
             {
@@ -127,6 +146,18 @@ describe("session.risk", () => {
               labelVersion: 1,
               outcome: "accepted",
             },
+            {
+              labelID: `label-qa-run-${sid}`,
+              artifactID: qaReplay.items[0]!.artifactID,
+              artifactKind: "qa_run",
+              workflow: "qa",
+              projectID,
+              sessionID: sid,
+              labeledAt: "2026-04-21T00:00:02.000Z",
+              labelSource: "human",
+              labelVersion: 1,
+              outcome: "passed",
+            },
           ])
 
           const detail = await SessionRisk.load(sid, { includeQuality: true })
@@ -140,6 +171,15 @@ describe("session.risk", () => {
             nextAction: null,
           })
           expect(detail.quality?.debug).toBeNull()
+          expect(detail.quality?.qa).toMatchObject({
+            workflow: "qa",
+            overallStatus: "pass",
+            readyForBenchmark: true,
+            totalItems: 1,
+            labeledItems: 1,
+            resolvedLabeledItems: 1,
+            nextAction: "Run targeted QA verification first: bun test test/auth.test.ts",
+          })
         } finally {
           EventQuery.deleteBySession(sid)
           await clearSessionLabels(sid)

@@ -6,6 +6,8 @@ import { createStore } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
+import { useToast } from "../../ui/toast"
+import { Log } from "@/util/log"
 
 function calculateFrecency(entry?: { frequency: number; lastOpen: number }): number {
   if (!entry) return 0
@@ -17,15 +19,34 @@ function calculateFrecency(entry?: { frequency: number; lastOpen: number }): num
 const MAX_FRECENCY_ENTRIES = 1000
 const FRECENCY_LOAD_DELAY_MS = 75
 const FRECENCY_COMPACT_WRITE_THRESHOLD = 100
+const log = Log.create({ service: "tui.frecency" })
 
 export const { use: useFrecency, provider: FrecencyProvider } = createSimpleContext({
   name: "Frecency",
   init: () => {
     const frecencyPath = path.join(Global.Path.state, "frecency.jsonl")
+    const toast = useToast()
     const [store, setStore] = createStore({
       data: {} as Record<string, { frequency: number; lastOpen: number }>,
     })
     let writesSinceCompact = 0
+    let writeWarningShown = false
+
+    const persistFrecency = (content: string) =>
+      writeFile(frecencyPath, content)
+        .then(() => {
+          writeWarningShown = false
+        })
+        .catch((error) => {
+          log.warn("failed to persist frecency data", { frecencyPath, error })
+          if (writeWarningShown) return
+          writeWarningShown = true
+          toast.show({
+            message: error instanceof Error ? error.message : "Failed to save file frecency",
+            variant: "warning",
+            duration: 3000,
+          })
+        })
 
     function compact(entries = store.data) {
       const sorted = Object.entries(entries)
@@ -35,13 +56,22 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
       writesSinceCompact = 0
       const content =
         sorted.map(([entryPath, entry]) => JSON.stringify({ path: entryPath, ...entry })).join("\n") + "\n"
-      writeFile(frecencyPath, content).catch(() => {})
+      void persistFrecency(content)
     }
 
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(
         async () => {
-          const text = await Filesystem.readText(frecencyPath).catch(() => "")
+          const text = await Filesystem.readText(frecencyPath).catch((error) => {
+            if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
+            log.warn("failed to load frecency data", { frecencyPath, error })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to load file frecency",
+              variant: "warning",
+              duration: 3000,
+            })
+            return ""
+          })
           const lines = text
             .split("\n")
             .filter(Boolean)
@@ -87,7 +117,7 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
 
           if (merged.length > 0) {
             const content = merged.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
-            writeFile(frecencyPath, content).catch(() => {})
+            void persistFrecency(content)
           }
         },
         {
@@ -105,7 +135,20 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
       }
       setStore("data", absolutePath, newEntry)
       writesSinceCompact += 1
-      appendFile(frecencyPath, JSON.stringify({ path: absolutePath, ...newEntry }) + "\n").catch(() => {})
+      void appendFile(frecencyPath, JSON.stringify({ path: absolutePath, ...newEntry }) + "\n")
+        .then(() => {
+          writeWarningShown = false
+        })
+        .catch((error) => {
+          log.warn("failed to append frecency data", { frecencyPath, error })
+          if (writeWarningShown) return
+          writeWarningShown = true
+          toast.show({
+            message: error instanceof Error ? error.message : "Failed to save file frecency",
+            variant: "warning",
+            duration: 3000,
+          })
+        })
 
       if (
         Object.keys(store.data).length > MAX_FRECENCY_ENTRIES ||

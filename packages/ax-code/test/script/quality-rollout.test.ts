@@ -9,6 +9,7 @@ import { Session } from "../../src/session"
 import { QualityRolloutProjectScope } from "../../script/quality-rollout"
 import { QualityModelRegistry } from "../../src/quality/model-registry"
 import { QualityLabelStore } from "../../src/quality/label-store"
+import { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
 import { Storage } from "../../src/storage/storage"
 import { tmpdir } from "../fixture/fixture"
 
@@ -323,6 +324,96 @@ describe("script.quality-rollout replay readiness", () => {
         const file = JSON.parse(await Bun.file(summaryOut).text())
         expect(file.summaries).toHaveLength(1)
         expect(file.summaries[0].missingLabels).toBe(1)
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
+  test("supports qa replay readiness from recorded test evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        const projectID = Instance.project.id
+
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "qa",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "bash",
+          callID: "call-qa",
+          input: { command: "bun test test/auth.test.ts" },
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "bash",
+          callID: "call-qa",
+          status: "completed",
+          output: "1 failed, 2 passed",
+          metadata: {},
+          durationMs: 9,
+        })
+        Recorder.emit({
+          type: "session.end",
+          sessionID: sid,
+          reason: "completed",
+          totalSteps: 0,
+        })
+        Recorder.end(sid)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const replay = await ProbabilisticRollout.exportReplay(sid, "qa")
+        await QualityLabelStore.append({
+          labelID: `label-${sid}-qa-run`,
+          artifactID: replay.items[0]!.artifactID,
+          artifactKind: "qa_run",
+          workflow: "qa",
+          projectID,
+          sessionID: sid,
+          labeledAt: "2026-04-21T00:20:00.000Z",
+          labelSource: "human",
+          labelVersion: 1,
+          outcome: "failed",
+        })
+
+        const summaryOut = path.join(tmp.path, "qa-replay-readiness.json")
+        const result = Bun.spawnSync({
+          cmd: [
+            "bun",
+            "run",
+            path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+            "--mode",
+            "replay-readiness",
+            "--workflow",
+            "qa",
+            "--session",
+            sid,
+            "--out",
+            summaryOut,
+          ],
+          cwd: path.join(import.meta.dir, "../.."),
+          env: process.env,
+        })
+
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout.toString()).toContain("workflow: qa")
+        expect(result.stdout.toString()).toContain("targeted-test-recommendation")
+        expect(result.stdout.toString()).toContain("bun test test/auth.test.ts")
+        const file = JSON.parse(await Bun.file(summaryOut).text())
+        expect(file.summaries).toHaveLength(1)
+        expect(file.summaries[0].workflow).toBe("qa")
 
         EventQuery.deleteBySession(sid)
       },

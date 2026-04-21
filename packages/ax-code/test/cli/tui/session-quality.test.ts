@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import fs from "fs/promises"
+import path from "path"
 import {
   findSessionQualityAction,
   renderSessionQualityBrief,
@@ -8,6 +10,8 @@ import {
   sessionQualityActionValue,
   sessionQualityDetailItems,
 } from "../../../src/cli/cmd/tui/routes/session/quality"
+
+const SESSION_ROUTE_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/index.tsx")
 
 describe("tui session quality actions", () => {
   test("builds capture evidence actions when no replay items are exportable yet", () => {
@@ -218,6 +222,51 @@ describe("tui session quality actions", () => {
     expect(actions[0]?.prompt.input).toContain("Prepare the next benchmark step for the current debug replay evidence.")
   })
 
+  test("builds qa actions with targeted test recommendation context", () => {
+    const actions = sessionQualityActions({
+      sessionID: "ses_qa",
+      quality: {
+        review: null,
+        debug: null,
+        qa: {
+          workflow: "qa",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 1,
+          resolvedLabeledItems: 0,
+          unresolvedLabeledItems: 1,
+          missingLabels: 1,
+          totalItems: 2,
+          nextAction: "Finish QA label coverage for the remaining exported test artifacts.",
+          gates: [
+            {
+              name: "targeted-test-recommendation",
+              status: "pass",
+              detail: "prioritize these QA command(s): bun test test/auth.test.ts",
+            },
+          ],
+        },
+      },
+    })
+
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({
+      workflow: "qa",
+      kind: "finish_label_coverage",
+      title: "Finish QA Label Coverage",
+      footer: "Finish QA label coverage for the remaining exported test artifacts.",
+    })
+    expect(actions[0]?.prompt.input).toContain("Use the current session's QA replay evidence")
+    expect(actions[0]?.prompt.input).toContain("Targeted QA recommendation: run bun test test/auth.test.ts first.")
+    expect(renderSessionQualityBrief(actions[0]!)).toContain("- recommended tests: bun test test/auth.test.ts")
+    expect(renderSessionQualityBrief(actions[0]!)).toContain(
+      "[pass] targeted-test-recommendation: prioritize these QA command(s): bun test test/auth.test.ts",
+    )
+    expect(renderSessionQualityInlineSummary(actions[0]!)).toBe(
+      "finish label coverage · warn · 0/2 resolved labels · 1 missing · 1 unresolved · first: bun test test/auth.test.ts",
+    )
+  })
+
   test("switches to replay-readiness guidance when labels are complete but benchmarking is still blocked", () => {
     const actions = sessionQualityActions({
       sessionID: "ses_readiness_blocked",
@@ -249,7 +298,7 @@ describe("tui session quality actions", () => {
       workflow: "review",
       kind: "finish_label_coverage",
       title: "Check Review Replay Readiness",
-      footer: "Review replay readiness gates before benchmarking.",
+      footer: "Check review replay readiness gates before benchmarking.",
       description: "warn · label coverage complete · 3/3 resolved labels",
     })
     expect(renderSessionQualityInlineSummary(actions[0]!)).toBe(
@@ -260,8 +309,75 @@ describe("tui session quality actions", () => {
     )
     expect(sessionQualityDetailItems(actions[0]!)[1]).toMatchObject({
       title: "Replay readiness incomplete",
-      footer: "Review replay readiness gates before benchmarking.",
+      footer: "Check review replay readiness gates before benchmarking.",
     })
+  })
+
+  test("uses workflow-aware replay-readiness wording for QA and debug flows", () => {
+    const qaAction = sessionQualityActions({
+      sessionID: "ses_qa_readiness",
+      quality: {
+        review: null,
+        debug: null,
+        qa: {
+          workflow: "qa",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 2,
+          resolvedLabeledItems: 2,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 2,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "benchmark-readiness",
+              status: "warn",
+              detail: "refresh QA replay evidence before benchmarking",
+            },
+          ],
+        },
+      },
+    })[0]!
+
+    const debugAction = sessionQualityActions({
+      sessionID: "ses_debug_readiness",
+      quality: {
+        review: null,
+        debug: {
+          workflow: "debug",
+          overallStatus: "warn",
+          readyForBenchmark: false,
+          labeledItems: 1,
+          resolvedLabeledItems: 1,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 1,
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "benchmark-readiness",
+              status: "warn",
+              detail: "refresh debug replay evidence before benchmarking",
+            },
+          ],
+        },
+        qa: null,
+      },
+    })[0]!
+
+    expect(qaAction).toMatchObject({
+      title: "Check QA Replay Readiness",
+      footer: "Check QA replay readiness gates before benchmarking.",
+    })
+    expect(renderSessionQualityInlineSummary(qaAction)).toContain("qa replay readiness")
+    expect(renderSessionQualityBrief(qaAction)).toContain("- next action: Check QA replay readiness gates before benchmarking.")
+
+    expect(debugAction).toMatchObject({
+      title: "Check Debug Replay Readiness",
+      footer: "Check debug replay readiness gates before benchmarking.",
+    })
+    expect(renderSessionQualityInlineSummary(debugAction)).toContain("debug replay readiness")
   })
 
   test("derives detail items that explain status and expose the next-step action", () => {
@@ -616,5 +732,11 @@ describe("tui session quality actions", () => {
     expect(renderSessionQualityBrief(action)).toContain("- resolved labels: 3/3 resolved labels")
     expect(renderSessionQualityBrief(action)).toContain("- missing labels: 0")
     expect(renderSessionQualityBrief(action)).toContain("- unresolved labels: 0")
+  })
+
+  test("keeps QA-only readiness discoverable from the session route command gating", async () => {
+    const sessionRoute = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(sessionRoute).toContain("const hasQualityReadiness = createMemo(() => qualityActions().length > 0)")
   })
 })

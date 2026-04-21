@@ -214,7 +214,16 @@ export function DialogWorkspaceList() {
       fetch: sdk.fetch,
       directory: workspaceID,
     })
-    const listed = await client.session.list({ roots: true, limit: 1 }).catch(() => undefined)
+    let listed: Awaited<ReturnType<typeof client.session.list>>
+    try {
+      listed = await client.session.list({ roots: true, limit: 1 })
+    } catch (error) {
+      toast.show({
+        message: error instanceof Error ? error.message : "Failed to open workspace",
+        variant: "error",
+      })
+      return
+    }
     if (listed?.data?.length) {
       dialog.replace(() => <DialogSessionList workspaceID={workspaceID} />)
       return

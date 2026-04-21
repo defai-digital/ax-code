@@ -53,7 +53,16 @@ async function waitForExit(proc: { exited: Promise<unknown>; kill(): void }) {
 async function waitForWrite(input: Promise<unknown>) {
   const timeout = createTimeout(5_000)
   try {
-    await Promise.race([input, timeout.promise])
+    const result = await Promise.race([
+      input.then(
+        () => ({ type: "done" as const }),
+        (error) => ({ type: "error" as const, error }),
+      ),
+      timeout.promise.then(() => ({ type: "timeout" as const })),
+    ])
+
+    if (result.type === "error") throw result.error
+    if (result.type === "timeout") throw new Error("Timed out writing to clipboard")
   } finally {
     timeout.clear()
   }
@@ -207,7 +216,7 @@ export namespace Clipboard {
     }
 
     return async (text: string) => {
-      await waitForWrite(clipboardy.write(text)).catch(() => {})
+      await waitForWrite(clipboardy.write(text))
     }
   })
 

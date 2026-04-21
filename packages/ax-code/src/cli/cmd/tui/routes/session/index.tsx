@@ -154,16 +154,13 @@ export function Session() {
   const promptRef = usePromptRef()
   const session = createMemo(() => sync.session.get(route.sessionID))
   const risk = createMemo(() => sync.session.risk(route.sessionID))
-  const hasQualityReadiness = createMemo(() => {
-    const quality = risk()?.quality
-    return !!quality?.review || !!quality?.debug
-  })
   const qualityActions = createMemo(() =>
     sessionQualityActions({
       sessionID: route.sessionID,
       quality: risk()?.quality,
     }),
   )
+  const hasQualityReadiness = createMemo(() => qualityActions().length > 0)
   const children = createMemo(() => {
     const s = session()
     if (!s) return []

@@ -15,6 +15,7 @@ export namespace SessionRisk {
   export const QualityReadiness = z.object({
     review: z.lazy(() => ProbabilisticRollout.ReplayReadinessSummary).nullable(),
     debug: z.lazy(() => ProbabilisticRollout.ReplayReadinessSummary).nullable(),
+    qa: z.lazy(() => ProbabilisticRollout.ReplayReadinessSummary).nullable(),
   })
   export type QualityReadiness = z.output<typeof QualityReadiness>
 
@@ -59,11 +60,12 @@ export namespace SessionRisk {
   }
 
   async function loadQualityReadiness(sessionID: SessionID) {
-    const [review, debug] = await Promise.all([
+    const [review, debug, qa] = await Promise.all([
       replayReadiness(sessionID, "review"),
       replayReadiness(sessionID, "debug"),
+      replayReadiness(sessionID, "qa"),
     ])
-    return QualityReadiness.parse({ review, debug })
+    return QualityReadiness.parse({ review, debug, qa })
   }
 
   export async function load(sessionID: SessionID, options?: { includeQuality?: boolean }) {

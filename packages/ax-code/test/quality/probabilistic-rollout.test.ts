@@ -207,6 +207,71 @@ describe("ProbabilisticRollout.exportReplay", () => {
       },
     })
   })
+
+  test("exports qa run and failure items from recorded test commands", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        const projectID = Instance.project.id
+
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "qa",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "bash",
+          callID: "call_qa",
+          input: { command: "bun test test/auth.test.ts" },
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "bash",
+          callID: "call_qa",
+          status: "completed",
+          output: "1 failed, 2 passed",
+          metadata: {},
+          durationMs: 14,
+        })
+        Recorder.emit({
+          type: "session.end",
+          sessionID: sid,
+          reason: "completed",
+          totalSteps: 0,
+        })
+        Recorder.end(sid)
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const exported = await ProbabilisticRollout.exportReplay(sid, "qa")
+        expect(exported.workflow).toBe("qa")
+        expect(exported.items.map((item) => item.artifactKind)).toEqual(["qa_run", "qa_failure"])
+        expect(exported.items[0]?.evidence.summary).toMatchObject({
+          runCount: 1,
+          failingRunCount: 1,
+          recommendedCommands: ["bun test test/auth.test.ts"],
+        })
+        expect(exported.items[1]?.evidence.summary).toMatchObject({
+          command: "bun test test/auth.test.ts",
+          recommendedCommand: "bun test test/auth.test.ts",
+          failureReason: "test_failure",
+        })
+        expect(exported.items[1]?.title).toBe("bun test test/auth.test.ts")
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
 })
 
 describe("ProbabilisticRollout.summarizeReplayReadiness", () => {
@@ -429,6 +494,114 @@ describe("ProbabilisticRollout.summarizeReplayReadiness", () => {
     expect(summary.readyForBenchmark).toBe(true)
     expect(summary.resolvedLabeledItems).toBe(2)
     expect(summary.nextAction).toBeNull()
+  })
+
+  test("adds targeted qa recommendation detail when qa replay captures failing test commands", () => {
+    const replay = ProbabilisticRollout.ReplayExport.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-replay-export",
+      workflow: "qa",
+      sessionID: "session-qa-1",
+      exportedAt: "2026-04-21T00:00:00.000Z",
+      items: [
+        {
+          schemaVersion: 1,
+          kind: "ax-code-quality-replay-item",
+          workflow: "qa",
+          artifactKind: "qa_run",
+          artifactID: "qa:session-qa-1",
+          sessionID: "session-qa-1",
+          projectID: "project-qa",
+          title: "qa session",
+          createdAt: "2026-04-21T00:00:00.000Z",
+          baseline: {
+            source: "qa_replay",
+            confidence: 0.85,
+            score: null,
+            readiness: "needs_review",
+            rank: null,
+          },
+          context: {
+            directory: "/repo",
+            graphCommitSha: "qa123",
+            touchedFiles: ["test/auth.test.ts"],
+            diffSummary: { files: 1, additions: 4, deletions: 1 },
+            eventCount: 2,
+            toolCount: 1,
+          },
+          evidence: {
+            toolSummaries: [
+              {
+                tool: "bash",
+                callID: "call-qa-1",
+                status: "completed",
+                timeCreated: 1,
+                durationMs: 14,
+                input: { command: "bun test test/auth.test.ts" },
+              },
+            ],
+            summary: {
+              runCount: 1,
+              failingRunCount: 1,
+              passingRunCount: 0,
+              recommendedCommands: ["bun test test/auth.test.ts"],
+            },
+          },
+        },
+        {
+          schemaVersion: 1,
+          kind: "ax-code-quality-replay-item",
+          workflow: "qa",
+          artifactKind: "qa_failure",
+          artifactID: "qa:session-qa-1:failure:call-qa-1",
+          sessionID: "session-qa-1",
+          projectID: "project-qa",
+          title: "bun test test/auth.test.ts",
+          createdAt: "2026-04-21T00:00:00.000Z",
+          baseline: {
+            source: "qa_replay",
+            confidence: 0.9,
+            score: null,
+            readiness: "needs_review",
+            rank: 1,
+          },
+          context: {
+            directory: "/repo",
+            graphCommitSha: "qa123",
+            touchedFiles: ["test/auth.test.ts"],
+            diffSummary: { files: 1, additions: 4, deletions: 1 },
+            eventCount: 2,
+            toolCount: 1,
+          },
+          evidence: {
+            toolSummaries: [
+              {
+                tool: "bash",
+                callID: "call-qa-1",
+                status: "completed",
+                timeCreated: 1,
+                durationMs: 14,
+                input: { command: "bun test test/auth.test.ts" },
+              },
+            ],
+            summary: {
+              command: "bun test test/auth.test.ts",
+              recommendedCommand: "bun test test/auth.test.ts",
+              failureReason: "test_failure",
+            },
+          },
+        },
+      ],
+    })
+
+    const summary = ProbabilisticRollout.summarizeReplayReadiness({ replay })
+    expect(summary.workflow).toBe("qa")
+    expect(summary.nextAction).toBe("Record QA outcomes for the exported test artifacts.")
+    expect(summary.gates).toContainEqual({
+      name: "targeted-test-recommendation",
+      status: "pass",
+      detail: "prioritize these QA command(s): bun test test/auth.test.ts",
+    })
   })
 })
 

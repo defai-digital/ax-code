@@ -17,11 +17,16 @@ const reviewRisk: SyncedSessionRisk = {
       workflow: "review",
       overallStatus: "pass",
       readyForBenchmark: true,
+      labeledItems: 1,
       resolvedLabeledItems: 1,
+      unresolvedLabeledItems: 0,
+      missingLabels: 0,
       totalItems: 1,
       nextAction: null,
+      gates: [],
     },
     debug: null,
+    qa: null,
   },
 }
 
