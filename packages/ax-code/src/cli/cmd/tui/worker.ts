@@ -45,7 +45,7 @@ await Log.init({
     if (Installation.isLocal()) return "DEBUG"
     return "INFO"
   })(),
-  ...(debugDir ? { dir: debugDir, name: "tui-worker" } : {}),
+  ...(debugDir ? { dir: debugDir, name: "tui-worker" } : { name: Log.stampedName("tui-worker") }),
 })
 
 process.on("unhandledRejection", (e) => {

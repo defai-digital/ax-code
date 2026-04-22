@@ -131,7 +131,7 @@ export async function init(opts: Opts, dep: InitDep = {}) {
     print: argv.includes("--print-logs"),
     dev: local,
     level: level(opts.logLevel, local, debug.enabled),
-    ...(debugDir ? { dir: debugDir, name: "main" } : {}),
+    ...(debugDir ? { dir: debugDir, name: "main" } : { name: Log.stampedName("main", now) }),
   })
   NativePerf.install()
 

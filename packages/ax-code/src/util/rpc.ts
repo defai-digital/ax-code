@@ -1,6 +1,32 @@
 export namespace Rpc {
+  type SerializedError = {
+    name?: string
+    message: string
+    stack?: string
+  }
+
   type Definition = {
     [method: string]: (input: any) => any
+  }
+
+  function serializeError(error: unknown): SerializedError {
+    if (error instanceof Error) {
+      return {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      }
+    }
+    return {
+      message: typeof error === "string" ? error : String(error),
+    }
+  }
+
+  function hydrateError(error: SerializedError | undefined) {
+    const result = new Error(error?.message ?? "RPC request failed")
+    if (error?.name) result.name = error.name
+    if (error?.stack) result.stack = error.stack
+    return result
   }
 
   export function listen(rpc: Definition) {
@@ -17,8 +43,12 @@ export namespace Rpc {
       if (parsed.type === "rpc.request") {
         const handler = rpc[parsed.method]
         if (typeof handler !== "function") return
-        const result = await handler(parsed.input)
-        postMessage(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
+        try {
+          const result = await handler(parsed.input)
+          postMessage(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
+        } catch (error) {
+          postMessage(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }))
+        }
       }
     }
   }
@@ -55,12 +85,16 @@ export namespace Rpc {
       } catch {
         return
       }
-      if (parsed.type === "rpc.result") {
+      if (parsed.type === "rpc.result" || parsed.type === "rpc.error") {
         const entry = pending.get(parsed.id)
         if (entry) {
           clearTimeout(entry.timer)
           pending.delete(parsed.id)
-          entry.resolve(parsed.result)
+          if (parsed.type === "rpc.error") {
+            entry.reject(hydrateError(parsed.error))
+          } else {
+            entry.resolve(parsed.result)
+          }
         }
       }
       if (parsed.type === "rpc.event") {

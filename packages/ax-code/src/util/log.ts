@@ -14,6 +14,8 @@ export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
   export type Level = z.infer<typeof Level>
 
+  const STAMPED_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{6}(?:-\d{3})?(?:-[A-Za-z0-9_-]+)*\.log$/
+
   const levelPriority: Record<Level, number> = {
     DEBUG: 0,
     INFO: 1,
@@ -55,6 +57,20 @@ export namespace Log {
     name?: string
   }
 
+  function stamp(now = new Date()) {
+    const [head, fraction = "000Z"] = now.toISOString().split(".")
+    const millis = fraction.slice(0, 3)
+    return `${head.replace(/:/g, "")}-${millis}`
+  }
+
+  function randomSuffix() {
+    return crypto.randomUUID().replace(/-/g, "").slice(0, 8)
+  }
+
+  export function stampedName(component: string, now = new Date(), unique = randomSuffix()) {
+    return `${stamp(now)}-${component}-${unique}`
+  }
+
   let logpath = ""
   export function file() {
     return logpath
@@ -84,7 +100,7 @@ export namespace Log {
       ? `${options.name}.log`
       : options.dev
         ? "dev.log"
-        : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log"
+        : `${stampedName("runtime")}.log`
     logpath = path.join(dir, name)
     await fs.truncate(logpath).catch(() => {})
     // Drain and close the previous stream before opening a new one.
@@ -143,10 +159,14 @@ export namespace Log {
   }
 
   async function cleanup(dir: string) {
-    const files = await Glob.scan("????-??-??T??????.log", {
+    const files = (await Glob.scan("*.log", {
       cwd: dir,
       absolute: true,
       include: "file",
+    })).filter((file) => {
+      const name = path.basename(file)
+      if (name.endsWith(".json.log")) return false
+      return STAMPED_LOG_PATTERN.test(name)
     })
     if (files.length <= 5) return
 
