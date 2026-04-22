@@ -1,6 +1,6 @@
 import { CliRenderEvents, SyntaxStyle, RGBA, type TerminalColors } from "@opentui/core"
 import path from "path"
-import { createEffect, createMemo, onCleanup, onMount } from "solid-js"
+import { createEffect, createMemo, on, onCleanup, onMount } from "solid-js"
 import { createSimpleContext } from "./helper"
 import { Glob } from "../../../../util/glob"
 import { DEFAULT_THEMES, type ThemeColors, type ThemeJson, type ColorValue } from "./theme-defaults"
@@ -216,8 +216,21 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       return customThemesPromise
     }
 
+    createEffect(
+      on(
+        () => store.active,
+        (active) => {
+          if (active !== "system") return
+          setStore("ready", false)
+          const cancel = scheduleDeferredStartupTask(() => resolveSystemTheme(store.mode), {
+            delayMs: THEME_DISCOVERY_DELAY_MS,
+          })
+          onCleanup(cancel)
+        },
+      ),
+    )
+
     onMount(() => {
-      resolveSystemTheme(store.mode)
       const cancel = scheduleDeferredStartupTask(() => ensureCustomThemesLoaded(), {
         delayMs: THEME_DISCOVERY_DELAY_MS,
       })

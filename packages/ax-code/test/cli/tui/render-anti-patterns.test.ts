@@ -40,6 +40,7 @@ const CLIPBOARD_SRC = path.join(TUI_ROOT, "util/clipboard.ts")
 const LOCAL_SRC = path.join(TUI_ROOT, "context/local.tsx")
 const ROUTE_SRC = path.join(TUI_ROOT, "context/route.tsx")
 const SYNC_SRC = path.join(TUI_ROOT, "context/sync.tsx")
+const THEME_SRC = path.join(TUI_ROOT, "context/theme.tsx")
 const SYNC_BOOTSTRAP_FLOW_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-flow.ts")
 const SYNC_BOOTSTRAP_PLAN_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-plan.ts")
 const SYNC_BOOTSTRAP_PHASE_PLAN_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-phase-plan.ts")
@@ -90,6 +91,15 @@ describe("tui OpenTUI stability guardrails", () => {
     const app = await fs.readFile(APP_SRC, "utf8")
 
     expect(app).not.toContain("getTerminalBackgroundColor")
+  })
+
+  test("does not probe the terminal palette unless the system theme is active", async () => {
+    const theme = await fs.readFile(THEME_SRC, "utf8")
+
+    expect(theme).toContain('() => store.active')
+    expect(theme).toContain('if (active !== "system") return')
+    expect(theme).toContain("scheduleDeferredStartupTask(() => resolveSystemTheme(store.mode)")
+    expect(theme).not.toContain("onMount(() => {\n      resolveSystemTheme(store.mode)")
   })
 
   test("does not eagerly import the heavy session route on app startup", async () => {
