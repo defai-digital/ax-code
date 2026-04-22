@@ -57,6 +57,13 @@ import { footerToggleLabel } from "./footer-toggle"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
 import { computeSessionMainPaneWidth } from "../../routes/session/layout"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
+import {
+  createSubmitAbortError,
+  isSubmitAbortError,
+  pendingSubmitKeyIntent,
+  pendingSubmitStatusText,
+  type SubmitStage,
+} from "./submit-state"
 
 const log = Log.create({ service: "tui.prompt" })
 
@@ -134,10 +141,22 @@ export function Prompt(props: PromptProps) {
   const { theme, syntax } = useTheme()
   const kv = useKV()
   const [submitPending, setSubmitPending] = createSignal(false)
+  const [submitStage, setSubmitStage] = createSignal<SubmitStage | undefined>()
+  const [draftSessionID, setDraftSessionID] = createSignal<string | undefined>()
   const [expandedPastes, setExpandedPastes] = createSignal<Set<number>>(new Set<number>())
   const inputBlocked = createMemo(() => props.disabled || submitPending())
   const [statusTick, setStatusTick] = createSignal(0)
   const [sidebarPreference] = kv.signal<"auto" | "hide">("sidebar", "auto")
+  const pendingCancelHint = createMemo(() => {
+    const hints = new Set<string>()
+    const sessionInterrupt = keybind.print("session_interrupt")
+    const appExit = keybind.print("app_exit")
+    if (sessionInterrupt) hints.add(sessionInterrupt)
+    if (appExit) hints.add(appExit)
+    return [...hints].join("/")
+  })
+  let submitAbort: AbortController | undefined
+  let submitRunID = 0
 
   function upsertSessionInStore(session: (typeof sync.data.session)[number]) {
     sync.set(
@@ -309,6 +328,32 @@ export function Prompt(props: PromptProps) {
     interrupt: 0,
   })
   let interruptTimer: ReturnType<typeof setTimeout> | undefined
+
+  createEffect(
+    on(
+      () => props.sessionID,
+      (sessionID) => {
+        if (sessionID) setDraftSessionID(undefined)
+      },
+      { defer: true },
+    ),
+  )
+
+  function cancelPendingSubmit(message = "Prompt submission cancelled") {
+    if (!submitPending()) return false
+    const abort = submitAbort
+    submitAbort = undefined
+    setSubmitPending(false)
+    setSubmitStage(undefined)
+    abort?.abort(createSubmitAbortError(message))
+    toast.show({
+      message,
+      variant: "info",
+      duration: 2000,
+    })
+    syncInputCursorColor()
+    return true
+  }
 
   const footerLayout = createMemo(() =>
     promptFooterLayout({
@@ -849,12 +894,14 @@ export function Prompt(props: PromptProps) {
     path: AsyncSessionRoute
     body: unknown
     action: string
+    signal: AbortSignal
   }) {
     const response = await withTimeout(
       sdk.fetch(`${sdk.url}/session/${encodeURIComponent(input.sessionID)}/${input.path}`, {
         method: "POST",
         headers: requestHeaders(),
         body: JSON.stringify(input.body),
+        signal: input.signal,
       }),
       SUBMIT_ACCEPT_TIMEOUT_MS,
       `${input.action} acceptance timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
@@ -893,43 +940,40 @@ export function Prompt(props: PromptProps) {
       return
     }
 
+    const runID = ++submitRunID
     setSubmitPending(true)
-    let sessionID = props.sessionID
+    let sessionID = props.sessionID ?? draftSessionID()
     const messageID = MessageID.ascending()
     const variant = local.model.variant.current()
     let submitAction = "Prompt submission"
+    const nextSubmitAbort = new AbortController()
+    submitAbort = nextSubmitAbort
 
     try {
       if (sessionID == null) {
+        submitAction = "Session creation"
+        setSubmitStage("creating-session")
         const res = await withTimeout(
-          sdk.client.session.create({}),
+          sdk.client.session.create({}, { signal: nextSubmitAbort.signal }),
           SUBMIT_ACCEPT_TIMEOUT_MS,
           `Session creation timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
-        ).catch((error: unknown) => {
-          reportSubmitFailure("Session creation", error)
-          return undefined
-        })
-        if (!res) return
-
-        if (res.error) {
-          log.error("session create failed", { error: res.error })
-          toast.show({
-            message: `Creating a session failed: ${errorMessage(res.error)}`,
-            variant: "error",
-          })
-          return
-        }
+        )
+        if (res.error) throw new Error(errorMessage(res.error))
 
         upsertSessionInStore(res.data as (typeof sync.data.session)[number])
         sessionID = res.data.id
+        setDraftSessionID(sessionID)
+        if (nextSubmitAbort.signal.aborted) return
       }
 
+      setSubmitStage("dispatching")
       if (currentMode === "shell") {
         submitAction = "Shell command submission"
         await submitAsyncRoute({
           sessionID,
           path: "shell_async",
           action: submitAction,
+          signal: nextSubmitAbort.signal,
           body: {
             agent: local.agent.current().name,
             model: {
@@ -959,6 +1003,7 @@ export function Prompt(props: PromptProps) {
           sessionID,
           path: "command_async",
           action: submitAction,
+          signal: nextSubmitAbort.signal,
           body: {
             command: commandName.slice(1),
             arguments: args,
@@ -980,6 +1025,7 @@ export function Prompt(props: PromptProps) {
           sessionID,
           path: "prompt_async",
           action: submitAction,
+          signal: nextSubmitAbort.signal,
           body: {
             ...selectedModel,
             messageID,
@@ -999,11 +1045,18 @@ export function Prompt(props: PromptProps) {
         })
       }
     } catch (error) {
+      if (isSubmitAbortError(error)) return
       reportSubmitFailure(submitAction, error)
       return
     } finally {
-      setSubmitPending(false)
+      if (submitRunID === runID) {
+        if (submitAbort === nextSubmitAbort) submitAbort = undefined
+        setSubmitPending(false)
+        setSubmitStage(undefined)
+      }
     }
+
+    if (nextSubmitAbort.signal.aborted) return
 
     history.append({
       ...store.prompt,
@@ -1019,6 +1072,7 @@ export function Prompt(props: PromptProps) {
     props.onSubmit?.()
 
     if (!props.sessionID) {
+      setDraftSessionID(undefined)
       scheduleMicrotaskTask(() => {
         route.navigate({
           type: "session",
@@ -1031,6 +1085,7 @@ export function Prompt(props: PromptProps) {
   const exit = useExit()
   onCleanup(() => {
     if (interruptTimer) clearTimeout(interruptTimer)
+    submitAbort?.abort(createSubmitAbortError())
   })
 
   function pasteText(text: string, virtualText: string) {
@@ -1230,7 +1285,17 @@ export function Prompt(props: PromptProps) {
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e) => {
-                if (inputBlocked()) {
+                const pendingIntent = pendingSubmitKeyIntent({
+                  pending: submitPending(),
+                  appExit: keybind.match("app_exit", e),
+                  sessionInterrupt: keybind.match("session_interrupt", e),
+                })
+                if (pendingIntent === "cancel") {
+                  e.preventDefault()
+                  cancelPendingSubmit()
+                  return
+                }
+                if (pendingIntent === "block" || props.disabled) {
                   e.preventDefault()
                   return
                 }
@@ -1500,7 +1565,10 @@ export function Prompt(props: PromptProps) {
             when={status().type !== "idle"}
             fallback={
               <Show when={submitPending()} fallback={<text />}>
-                <text fg={theme.textMuted}>Submitting...</text>
+                <text fg={theme.textMuted}>
+                  {pendingSubmitStatusText(submitStage())}
+                  {pendingCancelHint() ? ` ${pendingCancelHint()} to cancel` : ""}
+                </text>
               </Show>
             }
           >

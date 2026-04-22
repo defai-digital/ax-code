@@ -531,6 +531,18 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain(".catch((error) => {")
   })
 
+  test("keeps pending prompt submission cancellable with explicit stage state", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+
+    expect(prompt).toContain("pendingSubmitKeyIntent")
+    expect(prompt).toContain("cancelPendingSubmit")
+    expect(prompt).toContain("new AbortController()")
+    expect(prompt).toContain("setSubmitStage(\"creating-session\")")
+    expect(prompt).toContain("setSubmitStage(\"dispatching\")")
+    expect(prompt).toContain("setDraftSessionID(sessionID)")
+    expect(prompt).toContain("pendingSubmitStatusText(submitStage())")
+  })
+
   test("handles pasted SVG and image read failures without silently falling back to raw paths", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
