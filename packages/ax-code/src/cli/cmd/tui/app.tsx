@@ -46,7 +46,7 @@ import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
-import { renderTui } from "./renderer"
+import { clearTuiTerminalTitle, getTuiRenderProfile, renderTui, setTuiTerminalTitle } from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
 import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
@@ -74,12 +74,14 @@ export function tui(input: TuiInput) {
       const unguard = win32InstallCtrlCGuard()
       const unresize = installResizeInputGuard()
       try {
+        const renderProfile = getTuiRenderProfile()
         beginTuiStartup({
           continue: !!input.args.continue,
           fork: !!input.args.fork,
           hasPrompt: !!input.args.prompt,
           hasSessionID: !!input.args.sessionID,
         })
+        recordTuiStartupOnce("tui.startup.rendererProfile", renderProfile)
         win32DisableProcessedInput()
 
         const onExit = async () => {
@@ -153,6 +155,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
+  const renderProfile = getTuiRenderProfile()
   renderer.externalOutputMode = "passthrough"
   const dialog = useDialog()
   const local = useLocal()
@@ -369,24 +372,27 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   // Update terminal window title based on current route and session
   createEffect(() => {
-    if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL) return
-    if (!terminalTitleEnabled() || Flag.AX_CODE_DISABLE_TERMINAL_TITLE) return
+    if (!terminalTitleEnabled()) {
+      clearTuiTerminalTitle(renderer, renderProfile)
+      return
+    }
+    if (!renderProfile.allowTerminalTitle) return
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("ax-code")
+      setTuiTerminalTitle(renderer, "ax-code", renderProfile)
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || SessionApi.isDefaultTitle(session.title)) {
-        renderer.setTerminalTitle("ax-code")
+        setTuiTerminalTitle(renderer, "ax-code", renderProfile)
         return
       }
 
       // Truncate title to 40 chars max
       const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-      renderer.setTerminalTitle(`ax-code | ${title}`)
+      setTuiTerminalTitle(renderer, `ax-code | ${title}`, renderProfile)
     }
   })
 
@@ -858,7 +864,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         setTerminalTitleEnabled((prev) => {
           const next = !prev
           kv.set("terminal_title_enabled", next)
-          if (!next) renderer.setTerminalTitle("")
+          if (!next) clearTuiTerminalTitle(renderer, renderProfile)
           return next
         })
         dialog.clear()
@@ -1111,13 +1117,14 @@ function ErrorComponent(props: {
 }) {
   const term = useTerminalDimensions()
   const renderer = useRenderer()
+  const renderProfile = getTuiRenderProfile()
 
   createEffect(() => {
     DiagnosticLog.recordProcess("tui.errorBoundary", { error: props.error })
   })
 
   const handleExit = async () => {
-    renderer.setTerminalTitle("")
+    clearTuiTerminalTitle(renderer, renderProfile)
     renderer.destroy()
     win32FlushInputBuffer()
     await props.onExit()

@@ -39,6 +39,7 @@ const LINK_SRC = path.join(TUI_ROOT, "ui/link.tsx")
 const CLIPBOARD_SRC = path.join(TUI_ROOT, "util/clipboard.ts")
 const LOCAL_SRC = path.join(TUI_ROOT, "context/local.tsx")
 const ROUTE_SRC = path.join(TUI_ROOT, "context/route.tsx")
+const EXIT_CONTEXT_SRC = path.join(TUI_ROOT, "context/exit.tsx")
 const SYNC_SRC = path.join(TUI_ROOT, "context/sync.tsx")
 const THEME_SRC = path.join(TUI_ROOT, "context/theme.tsx")
 const SYNC_BOOTSTRAP_FLOW_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-flow.ts")
@@ -65,7 +66,8 @@ describe("tui OpenTUI stability guardrails", () => {
     const app = await fs.readFile(APP_SRC, "utf8")
     const renderer = await fs.readFile(RENDERER_SRC, "utf8")
 
-    expect(app).toContain('import { renderTui } from "./renderer"')
+    expect(app).toContain('from "./renderer"')
+    expect(app).toContain("getTuiRenderProfile")
     expect(app).not.toMatch(/runNativeTuiSlice|AX_CODE_TUI_NATIVE/i)
     expect(renderer).toContain('from "@opentui/solid"')
     expect(renderer).toContain("render(root, createTuiRenderOptions(options))")
@@ -74,15 +76,19 @@ describe("tui OpenTUI stability guardrails", () => {
   test("keeps renderer startup configured for terminal stability", async () => {
     const renderer = await fs.readFile(RENDERER_SRC, "utf8")
 
+    expect(renderer).toContain("resolveTuiRenderProfile")
+    expect(renderer).toContain("createTuiRenderOptionsFromProfile")
     expect(renderer).toContain("targetFps: 60")
     expect(renderer).toContain("exitOnCtrlC: false")
-    expect(renderer).toContain("testing: !advancedTerminal")
+    expect(renderer).toContain("testing: false")
     expect(renderer).toContain("useThread: advancedTerminal")
     expect(renderer).toContain('screenMode: advancedTerminal ? "alternate-screen" : "main-screen"')
+    expect(renderer).toContain("allowTerminalTitle: advancedTerminal && !terminalTitleDisabled")
     expect(renderer).toContain("autoFocus: false")
     expect(renderer).toContain("openConsoleOnError: false")
     expect(renderer).toContain("useMouse: advancedTerminal")
-    expect(renderer).toContain("useKittyKeyboard: advancedTerminal ? {} : null")
+    expect(renderer).toContain("useKittyKeyboard: advancedTerminal")
+    expect(renderer).toContain("useKittyKeyboard: profile.useKittyKeyboard ? {} : null")
   })
 
   test("keeps passthrough external output enabled in the app runtime", async () => {
@@ -109,9 +115,15 @@ describe("tui OpenTUI stability guardrails", () => {
 
   test("keeps terminal title writes behind the advanced terminal profile", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
+    const exitContext = await fs.readFile(EXIT_CONTEXT_SRC, "utf8")
+    const renderer = await fs.readFile(RENDERER_SRC, "utf8")
 
-    expect(app).toContain("if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL) return")
-    expect(app).toContain("renderer.setTerminalTitle")
+    expect(renderer).toContain("allowTerminalTitle")
+    expect(renderer).toContain("setTuiTerminalTitle")
+    expect(renderer).toContain("clearTuiTerminalTitle")
+    expect(app).toContain("setTuiTerminalTitle")
+    expect(app).toContain("clearTuiTerminalTitle")
+    expect(exitContext).toContain("clearTuiTerminalTitle(renderer)")
   })
 
   test("does not eagerly import the heavy session route on app startup", async () => {
@@ -784,6 +796,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(startupTrace).toContain("createTuiStartupSpan")
     expect(startupTrace).toContain("elapsedMs")
     expect(app).toContain("beginTuiStartup")
+    expect(app).toContain('recordTuiStartupOnce("tui.startup.rendererProfile", renderProfile)')
     expect(app).toContain("tui.startup.renderDispatched")
     expect(app).toContain('createTuiStartupSpan("tui.startup.sessionRouteImport"')
     expect(sync).toContain("createSpan: createTuiStartupSpan")
