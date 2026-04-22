@@ -80,6 +80,7 @@ describe("cli.boot.init", () => {
     const env: Record<string, string> = {}
     const log: unknown[] = []
     const info: unknown[] = []
+    const now = new Date("2026-04-22T02:15:00.123Z")
 
     await init(
       { logLevel: "ERROR", sandbox: "read-only" },
@@ -88,19 +89,20 @@ describe("cli.boot.init", () => {
         local: false,
         version: "1.2.3",
         pid: 9,
+        now,
         env,
         log: async (opts) => void log.push(opts),
         info: (msg, extra) => void info.push({ msg, extra }),
       },
     )
 
-    expect(log).toEqual([
-      {
-        print: true,
-        dev: false,
-        level: "ERROR",
-      },
-    ])
+    expect(log).toHaveLength(1)
+    expect(log[0]).toMatchObject({
+      print: true,
+      dev: false,
+      level: "ERROR",
+    })
+    expect((log[0] as { name?: string }).name).toMatch(/^2026-04-22T021500-123-main-[a-z0-9]{8}$/)
     expect(info).toEqual([
       {
         msg: "ax-code",
