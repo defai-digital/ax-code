@@ -55,6 +55,7 @@ export function TextField(props: TextFieldProps) {
   ])
   const [copied, setCopied] = createSignal(false)
   let copiedTimer: ReturnType<typeof setTimeout> | undefined
+  let inputWrapper: HTMLDivElement | undefined
 
   onCleanup(() => {
     if (copiedTimer) clearTimeout(copiedTimer)
@@ -73,7 +74,10 @@ export function TextField(props: TextFieldProps) {
   }
 
   async function handleCopy() {
-    const value = local.value ?? local.defaultValue ?? ""
+    const node = inputWrapper?.querySelector("input, textarea")
+    const currentValue =
+      node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement ? node.value : undefined
+    const value = local.value ?? currentValue ?? local.defaultValue ?? ""
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
@@ -106,7 +110,7 @@ export function TextField(props: TextFieldProps) {
           {local.label}
         </Kobalte.Label>
       </Show>
-      <div data-slot="input-wrapper">
+      <div data-slot="input-wrapper" ref={inputWrapper}>
         <Show
           when={local.multiline}
           fallback={<Kobalte.Input {...others} data-slot="input-input" class={local.class} />}

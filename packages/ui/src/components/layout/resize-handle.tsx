@@ -1,4 +1,4 @@
-import { splitProps, type JSX } from "solid-js"
+import { onCleanup, splitProps, type JSX } from "solid-js"
 
 export interface ResizeHandleProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, "onResize"> {
   direction: "horizontal" | "vertical"
@@ -24,9 +24,11 @@ export function ResizeHandle(props: ResizeHandleProps) {
     "class",
     "classList",
   ])
+  let activeCleanup: (() => void) | undefined
 
   const handleMouseDown = (e: MouseEvent) => {
     e.preventDefault()
+    activeCleanup?.()
     const edge = local.edge ?? (local.direction === "vertical" ? "start" : "end")
     const start = local.direction === "horizontal" ? e.clientX : e.clientY
     const startSize = local.size
@@ -37,6 +39,15 @@ export function ResizeHandle(props: ResizeHandleProps) {
 
     document.body.style.userSelect = "none"
     document.body.style.overflow = "hidden"
+
+    const cleanup = () => {
+      document.body.style.userSelect = originalUserSelect
+      document.body.style.overflow = originalOverflow
+      document.removeEventListener("mousemove", onMouseMove)
+      document.removeEventListener("mouseup", onMouseUp)
+      window.removeEventListener("blur", onMouseUp)
+      activeCleanup = undefined
+    }
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const pos = local.direction === "horizontal" ? moveEvent.clientX : moveEvent.clientY
@@ -56,11 +67,7 @@ export function ResizeHandle(props: ResizeHandleProps) {
     const onMouseUp = () => {
       if (finished) return
       finished = true
-      document.body.style.userSelect = originalUserSelect
-      document.body.style.overflow = originalOverflow
-      document.removeEventListener("mousemove", onMouseMove)
-      document.removeEventListener("mouseup", onMouseUp)
-      window.removeEventListener("blur", onMouseUp)
+      cleanup()
 
       const threshold = local.collapseThreshold ?? 0
       if (local.onCollapse && threshold > 0 && current < threshold) {
@@ -68,10 +75,15 @@ export function ResizeHandle(props: ResizeHandleProps) {
       }
     }
 
+    activeCleanup = cleanup
     window.addEventListener("blur", onMouseUp)
     document.addEventListener("mousemove", onMouseMove)
     document.addEventListener("mouseup", onMouseUp)
   }
+
+  onCleanup(() => {
+    activeCleanup?.()
+  })
 
   return (
     <div

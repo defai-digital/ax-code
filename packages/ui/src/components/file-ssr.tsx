@@ -25,6 +25,8 @@ function DiffSSRViewer<T>(props: SSRDiffFileProps<T>) {
   let fileDiffRef!: HTMLElement
   let fileDiffInstance: FileDiff<T> | undefined
   let sharedVirtualizer: NonNullable<ReturnType<typeof acquireVirtualizer>> | undefined
+  let selectedLinesFrame: number | undefined
+  let selectedLinesVersion = 0
 
   const ready = createReadyWatcher()
   const workerPool = useWorkerPool(props.diffStyle)
@@ -56,18 +58,36 @@ function DiffSSRViewer<T>(props: SSRDiffFileProps<T>) {
     return result.virtualizer
   }
 
-  const setSelectedLines = (range: DiffFileProps<T>["selectedLines"], attempt = 0) => {
+  const clearSelectedLinesFrame = () => {
+    if (selectedLinesFrame === undefined) return
+    cancelAnimationFrame(selectedLinesFrame)
+    selectedLinesFrame = undefined
+  }
+
+  const setSelectedLines = (range: DiffFileProps<T>["selectedLines"], attempt = 0, version = selectedLinesVersion) => {
     const diff = fileDiffInstance
     if (!diff) return
+    if (version !== selectedLinesVersion) return
 
     const fixed = fixDiffSelection(getRoot(), range ?? null)
     if (fixed === undefined) {
       if (attempt >= 120) return
-      requestAnimationFrame(() => setSelectedLines(range ?? null, attempt + 1))
+      clearSelectedLinesFrame()
+      selectedLinesFrame = requestAnimationFrame(() => {
+        selectedLinesFrame = undefined
+        setSelectedLines(range ?? null, attempt + 1, version)
+      })
       return
     }
 
+    clearSelectedLinesFrame()
     diff.setSelectedLines(fixed)
+  }
+
+  const syncSelectedLines = (range: DiffFileProps<T>["selectedLines"]) => {
+    selectedLinesVersion += 1
+    clearSelectedLinesFrame()
+    setSelectedLines(range ?? null, 0, selectedLinesVersion)
   }
 
   const notifyRendered = () => {
@@ -78,7 +98,7 @@ function DiffSSRViewer<T>(props: SSRDiffFileProps<T>) {
       isReady: (root) => root.querySelector("[data-line]") != null,
       settleFrames: 1,
       onReady: () => {
-        setSelectedLines(local.selectedLines ?? null)
+        syncSelectedLines(local.selectedLines ?? null)
         local.onRendered?.()
       },
     })
@@ -133,7 +153,7 @@ function DiffSSRViewer<T>(props: SSRDiffFileProps<T>) {
   })
 
   createEffect(() => {
-    setSelectedLines(local.selectedLines ?? null)
+    syncSelectedLines(local.selectedLines ?? null)
   })
 
   createEffect(() => {
@@ -147,6 +167,7 @@ function DiffSSRViewer<T>(props: SSRDiffFileProps<T>) {
 
   onCleanup(() => {
     clearReadyWatcher(ready)
+    clearSelectedLinesFrame()
     fileDiffInstance?.cleanUp()
     sharedVirtualizer?.release()
     sharedVirtualizer = undefined

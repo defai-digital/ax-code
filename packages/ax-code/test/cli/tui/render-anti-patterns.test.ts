@@ -3,7 +3,9 @@ import fs from "fs/promises"
 import path from "path"
 
 const TUI_ROOT = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui")
+const UI_ROOT = path.resolve(import.meta.dir, "../../../../ui/src")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
+const EVENT_SRC = path.join(TUI_ROOT, "event.ts")
 const HELPER_SRC = path.join(TUI_ROOT, "context/helper.tsx")
 const RENDERER_SRC = path.join(TUI_ROOT, "renderer.ts")
 const SESSION_ROUTE_SRC = path.join(TUI_ROOT, "routes/session/index.tsx")
@@ -52,6 +54,10 @@ const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "context/theme.tsx"),
 ]
 const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/doctor-preload.ts")
+const RESIZE_HANDLE_SRC = path.join(UI_ROOT, "components/layout/resize-handle.tsx")
+const TEXT_FIELD_SRC = path.join(UI_ROOT, "components/text-field.tsx")
+const SESSION_TURN_SRC = path.join(UI_ROOT, "components/session-turn.tsx")
+const FILE_SSR_SRC = path.join(UI_ROOT, "components/file-ssr.tsx")
 
 describe("tui OpenTUI stability guardrails", () => {
   test("keeps OpenTUI wired as the default renderer path", async () => {
@@ -94,10 +100,25 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).toContain("ensureSessionRouteLoaded")
   })
 
+  test("recovers from lazy session route load failures instead of hanging on the loading fallback", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).toContain("handleSessionRouteLoadFailure")
+    expect(app).toContain('ensureSessionRouteLoaded("route").catch((error) => {')
+    expect(app).toContain('ensureSessionRouteLoaded("startup-preload")')
+    expect(app).toContain('message: "Failed to load session view"')
+    expect(app).toContain('route.navigate({ type: "home" })')
+  })
+
   test("avoids async createEffect in the session startup path", async () => {
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
 
     expect(session).not.toContain("createEffect(async")
+    expect(session).toContain("runInitialSessionSync")
+    expect(session).toContain('sync(sessionID, { missing: "throw" })')
+    expect(session).toContain("createSessionEntrySyncRetryState")
+    expect(session).toContain("nextSessionEntrySyncRetry")
+    expect(session).not.toContain("MAX_SESSION_ENTRY_SYNC_ATTEMPTS")
   })
 
   test("handles delegated task preview session sync failures without unhandled rejections", async () => {
@@ -622,6 +643,29 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(toast).toContain("function scheduleNextToast(options: ToastOptions)")
   })
 
+  test("keeps UI copy, resize, and streaming indicators reading current runtime state", async () => {
+    const resizeHandle = await fs.readFile(RESIZE_HANDLE_SRC, "utf8")
+    const textField = await fs.readFile(TEXT_FIELD_SRC, "utf8")
+    const sessionTurn = await fs.readFile(SESSION_TURN_SRC, "utf8")
+
+    expect(resizeHandle).toContain("let activeCleanup: (() => void) | undefined")
+    expect(resizeHandle).toContain("onCleanup(() => {")
+    expect(textField).toContain('const node = inputWrapper?.querySelector("input, textarea")')
+    expect(textField).toContain("const value = local.value ?? currentValue ?? local.defaultValue ?? \"\"")
+    expect(sessionTurn).toContain("return assistantVisible() === 0")
+  })
+
+  test("keeps toast duration defaults and SSR line-selection retries under explicit caller control", async () => {
+    const event = await fs.readFile(EVENT_SRC, "utf8")
+    const fileSsr = await fs.readFile(FILE_SSR_SRC, "utf8")
+
+    expect(event).toContain('duration: z.number().optional().describe("Duration in milliseconds")')
+    expect(fileSsr).toContain("let selectedLinesFrame: number | undefined")
+    expect(fileSsr).toContain("let selectedLinesVersion = 0")
+    expect(fileSsr).toContain("const syncSelectedLines = (range: DiffFileProps<T>[\"selectedLines\"]) => {")
+    expect(fileSsr).toContain("clearSelectedLinesFrame()")
+  })
+
   test("surfaces local model preference persistence failures instead of silently dropping them", async () => {
     const local = await fs.readFile(LOCAL_SRC, "utf8")
 
@@ -671,6 +715,16 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(stash).toContain('message: error instanceof Error ? error.message : "Failed to save prompt stash"')
     expect(stash).toContain('"code" in error && error.code === "ENOENT"')
     expect(stash).toContain("if (writeWarningShown) return")
+  })
+
+  test("navigates new prompt sessions without a timer-based route handoff hack", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+
+    expect(prompt).toContain("upsertSessionInStore")
+    expect(prompt).toContain("scheduleMicrotaskTask(() => {")
+    expect(prompt).toContain('type: "session"')
+    expect(prompt).not.toContain("temporary hack to make sure the message is sent")
+    expect(prompt).not.toContain("navigationTimer = setTimeout")
   })
 
   test("keeps doctor checking the OpenTUI preload dependency with bundled-runtime awareness", async () => {

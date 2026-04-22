@@ -156,7 +156,9 @@ describe("dre graph quality readiness", () => {
           expect(enrichedHtml).toContain("Quality Readiness")
           expect(enrichedHtml).toContain("review")
           expect(enrichedHtml).toContain("qa")
-          expect(enrichedHtml).toContain("benchmark ready")
+          expect(enrichedHtml).toContain("review</strong> · ready · benchmark ready")
+          expect(enrichedHtml).toContain("qa</strong> · ready · benchmark ready")
+          expect(enrichedHtml).not.toContain(">pass<")
           expect(enrichedHtml).toContain("first: bun test test/auth.test.ts")
 
           const baseFingerprint = await app.request(`/dre-graph/session/${sid}/fingerprint`)
