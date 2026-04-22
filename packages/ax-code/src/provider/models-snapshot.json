@@ -26296,9 +26296,9 @@
         },
         "open_weights": false,
         "cost": {
-          "input": 7.5e-7,
-          "output": 0.0000045,
-          "cache_read": 7.5e-8
+          "input": 0.75,
+          "output": 4.5,
+          "cache_read": 0.075
         },
         "limit": {
           "context": 400000,
@@ -26393,9 +26393,9 @@
         },
         "open_weights": false,
         "cost": {
-          "input": 2e-7,
-          "output": 0.00000125,
-          "cache_read": 2e-8
+          "input": 0.2,
+          "output": 1.25,
+          "cache_read": 0.02
         },
         "limit": {
           "context": 400000,
@@ -80849,6 +80849,36 @@
         "limit": {
           "context": 1000000,
           "output": 64000
+        }
+      },
+      "kimi-k2-6": {
+        "id": "kimi-k2-6",
+        "name": "Kimi-K2.6",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "1970-01-01",
+        "last_updated": "1970-01-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "cost": {
+          "input": 0.95,
+          "output": 4,
+          "cache_read": 0.16
+        },
+        "limit": {
+          "context": 256000,
+          "output": 128000
         }
       },
       "gpt-5-3-codex": {

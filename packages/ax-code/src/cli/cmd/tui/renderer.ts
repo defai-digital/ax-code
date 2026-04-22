@@ -1,6 +1,7 @@
 import { render, type JSX } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
+import { Flag } from "@/flag/flag"
 
 const log = Log.create({ service: "tui.renderer" })
 
@@ -12,11 +13,22 @@ export function createTuiRenderOptions(
     copySelection?: (text: string) => Promise<void>
   } = {},
 ): TuiRenderOptions {
+  const advancedTerminal = Flag.AX_CODE_TUI_ADVANCED_TERMINAL
+
   return {
     targetFps: 60,
     gatherStats: false,
     exitOnCtrlC: false,
-    useKittyKeyboard: {},
+    // Keep the default profile compatibility-first. The full OpenTUI
+    // terminal setup performs startup capability probes and advanced
+    // protocol negotiation on the real TTY, which has been a source of
+    // install-time hangs on some terminals. Users who need the old
+    // behavior can opt back in with AX_CODE_TUI_ADVANCED_TERMINAL=1.
+    testing: !advancedTerminal,
+    useThread: advancedTerminal,
+    useMouse: advancedTerminal,
+    screenMode: advancedTerminal ? "alternate-screen" : "main-screen",
+    useKittyKeyboard: advancedTerminal ? {} : null,
     autoFocus: false,
     openConsoleOnError: false,
     consoleOptions: {

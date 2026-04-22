@@ -21,6 +21,10 @@ export namespace Flag {
   export const AX_CODE_ALWAYS_NOTIFY_UPDATE = truthy("AX_CODE_ALWAYS_NOTIFY_UPDATE")
   export const AX_CODE_DISABLE_PRUNE = truthy("AX_CODE_DISABLE_PRUNE")
   export const AX_CODE_DISABLE_TERMINAL_TITLE = truthy("AX_CODE_DISABLE_TERMINAL_TITLE")
+  // OpenTUI's full terminal setup enables alternate-screen, capability
+  // probes, Kitty keyboard negotiation, and a native render thread. Keep
+  // that profile opt-in until it is stable across direct-TTY environments.
+  export const AX_CODE_TUI_ADVANCED_TERMINAL = truthy("AX_CODE_TUI_ADVANCED_TERMINAL")
   export const AX_CODE_PERMISSION = process.env["AX_CODE_PERMISSION"]
   export const AX_CODE_DISABLE_DEFAULT_PLUGINS = truthy("AX_CODE_DISABLE_DEFAULT_PLUGINS")
   export const AX_CODE_DISABLE_LSP_DOWNLOAD = truthy("AX_CODE_DISABLE_LSP_DOWNLOAD")

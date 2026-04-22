@@ -76,9 +76,13 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(renderer).toContain("targetFps: 60")
     expect(renderer).toContain("exitOnCtrlC: false")
+    expect(renderer).toContain("testing: !advancedTerminal")
+    expect(renderer).toContain("useThread: advancedTerminal")
+    expect(renderer).toContain('screenMode: advancedTerminal ? "alternate-screen" : "main-screen"')
     expect(renderer).toContain("autoFocus: false")
     expect(renderer).toContain("openConsoleOnError: false")
-    expect(renderer).toContain("useKittyKeyboard: {}")
+    expect(renderer).toContain("useMouse: advancedTerminal")
+    expect(renderer).toContain("useKittyKeyboard: advancedTerminal ? {} : null")
   })
 
   test("keeps passthrough external output enabled in the app runtime", async () => {
@@ -98,8 +102,16 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(theme).toContain('() => store.active')
     expect(theme).toContain('if (active !== "system") return')
+    expect(theme).toContain("if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL)")
     expect(theme).toContain("scheduleDeferredStartupTask(() => resolveSystemTheme(store.mode)")
     expect(theme).not.toContain("onMount(() => {\n      resolveSystemTheme(store.mode)")
+  })
+
+  test("keeps terminal title writes behind the advanced terminal profile", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    expect(app).toContain("if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL) return")
+    expect(app).toContain("renderer.setTerminalTitle")
   })
 
   test("does not eagerly import the heavy session route on app startup", async () => {

@@ -369,6 +369,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   // Update terminal window title based on current route and session
   createEffect(() => {
+    if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL) return
     if (!terminalTitleEnabled() || Flag.AX_CODE_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {

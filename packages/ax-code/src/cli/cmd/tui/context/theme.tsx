@@ -11,6 +11,7 @@ import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
 import { useTuiConfig } from "./tui-config"
 import { scheduleDeferredStartupTask } from "../util/startup-task"
+import { Flag } from "@/flag/flag"
 
 type Theme = ThemeColors & {
   _hasSelectedListItemText: boolean
@@ -221,6 +222,10 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         () => store.active,
         (active) => {
           if (active !== "system") return
+          if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL) {
+            setStore("ready", true)
+            return
+          }
           setStore("ready", false)
           const cancel = scheduleDeferredStartupTask(() => resolveSystemTheme(store.mode), {
             delayMs: THEME_DISCOVERY_DELAY_MS,
@@ -277,6 +282,10 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       if (store.mode === mode) return
       setStore("mode", mode)
       renderer.clearPaletteCache()
+      if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL) {
+        setStore("ready", true)
+        return
+      }
       resolveSystemTheme(mode)
     }
 
