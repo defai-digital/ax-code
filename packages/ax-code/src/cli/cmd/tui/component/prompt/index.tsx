@@ -48,6 +48,7 @@ import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { isPromptExitCommand, promptSubmissionView } from "./view-model"
+import { applySessionUpsertEvent } from "../../context/sync-event-dispatch"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
 import { footerSessionStatusView } from "../../routes/session/footer-view-model"
@@ -137,6 +138,15 @@ export function Prompt(props: PromptProps) {
   const inputBlocked = createMemo(() => props.disabled || submitPending())
   const [statusTick, setStatusTick] = createSignal(0)
   const [sidebarPreference] = kv.signal<"auto" | "hide">("sidebar", "auto")
+
+  function upsertSessionInStore(session: (typeof sync.data.session)[number]) {
+    sync.set(
+      "session",
+      produce((draft) => {
+        applySessionUpsertEvent(draft, session)
+      }),
+    )
+  }
 
   function footerToggleChip(input: {
     label: string
@@ -910,6 +920,7 @@ export function Prompt(props: PromptProps) {
           return
         }
 
+        upsertSessionInStore(res.data as (typeof sync.data.session)[number])
         sessionID = res.data.id
       }
 
@@ -1007,24 +1018,19 @@ export function Prompt(props: PromptProps) {
     setExpandedPastes(new Set<number>())
     props.onSubmit?.()
 
-    // temporary hack to make sure the message is sent
     if (!props.sessionID) {
-      if (navigationTimer) clearTimeout(navigationTimer)
-      navigationTimer = setTimeout(() => {
-        navigationTimer = undefined
+      scheduleMicrotaskTask(() => {
         route.navigate({
           type: "session",
           sessionID,
         })
-      }, 50)
+      })
     }
     input.clear()
   }
   const exit = useExit()
-  let navigationTimer: ReturnType<typeof setTimeout> | undefined
   onCleanup(() => {
     if (interruptTimer) clearTimeout(interruptTimer)
-    if (navigationTimer) clearTimeout(navigationTimer)
   })
 
   function pasteText(text: string, virtualText: string) {

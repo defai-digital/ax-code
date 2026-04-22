@@ -84,7 +84,7 @@ export function createStoreBackedBootstrapTasks<TStore extends SyncBootstrapAsse
   const sessionTasks = createSessionBootstrapPhaseTasks({
     continueFromArgs: input.continueFromArgs,
     sessionListPromise: input.requests.sessionListPromise,
-    existingSessions: input.store.session,
+    getExistingSessions: () => input.store.session,
     applySessions: (sessions) => setStore("session", reconcile(sessions)),
   })
 

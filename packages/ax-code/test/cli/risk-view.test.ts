@@ -113,7 +113,72 @@ describe("RiskView.lines", () => {
     } as any)
 
     expect(lines).toContain("  Quality Readiness")
-    expect(lines).toContain("  review: pass · benchmark ready · 2/2 resolved labels")
-    expect(lines).toContain("  qa: pass · benchmark ready · 1/1 resolved labels · first: bun test test/auth.test.ts")
+    expect(lines).toContain(
+      "  review: ready · benchmark ready · 2/2 resolved labels · next: Ready to benchmark the current replay export.",
+    )
+    expect(lines).toContain(
+      "  qa: ready · benchmark ready · 1/1 resolved labels · first: bun test test/auth.test.ts · next: Ready to benchmark the current replay export.",
+    )
+  })
+
+  test("normalizes stale next-action wording for replay-readiness states", () => {
+    const lines = RiskView.lines({
+      id: "ses_789",
+      title: "Replay readiness session",
+      assessment: {
+        level: "MEDIUM",
+        score: 35,
+        readiness: "needs_review",
+        confidence: 0.71,
+        summary: "replay needs refresh",
+        signals: {
+          filesChanged: 1,
+          linesChanged: 12,
+          totalTools: 1,
+          apiEndpointsAffected: 0,
+          crossModule: false,
+          securityRelated: false,
+          validationState: "partial",
+          diffState: "recorded",
+        },
+      },
+      semantic: null,
+      drivers: [],
+      quality: {
+        review: ProbabilisticRollout.ReplayReadinessSummary.parse({
+          schemaVersion: 1,
+          kind: "ax-code-quality-replay-readiness-summary",
+          workflow: "review",
+          sessionID: "ses_789",
+          projectID: "proj_1",
+          exportedAt: "2026-04-21T00:00:00.000Z",
+          totalItems: 2,
+          anchorItems: 1,
+          evidenceItems: 1,
+          toolSummaryCount: 1,
+          labeledItems: 2,
+          resolvedLabeledItems: 2,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          readyForBenchmark: false,
+          overallStatus: "warn",
+          nextAction: "Finish label coverage for the remaining exported artifacts.",
+          gates: [
+            {
+              name: "benchmark-readiness",
+              status: "warn",
+              detail: "refresh review replay evidence before benchmarking",
+            },
+          ],
+        }),
+        debug: null,
+        qa: null,
+      },
+    } as any)
+
+    expect(lines).toContain(
+      "  review: not ready · label coverage complete · 2/2 resolved labels · next: Check review replay readiness gates before benchmarking.",
+    )
+    expect(lines.join("\n")).not.toContain("next: Finish label coverage for the remaining exported artifacts.")
   })
 })

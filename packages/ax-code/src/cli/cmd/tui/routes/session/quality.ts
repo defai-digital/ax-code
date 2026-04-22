@@ -75,30 +75,14 @@ function targetedQATestRecommendations(summary: SyncedSessionQualityReadiness) {
 }
 
 function actionKind(summary: SyncedSessionQualityReadiness): SessionQualityActionKind {
-  if (summary.readyForBenchmark) return "benchmark"
-  if (summary.totalItems === 0) return "capture_evidence"
+  const readiness = ProbabilisticRollout.readinessState(summary)
+  if (readiness === "ready") return "benchmark"
+  if (readiness === "blocked") return "capture_evidence"
   return "finish_label_coverage"
 }
 
 function normalizedLabelCounts(summary: SyncedSessionQualityReadiness) {
-  const totalItems = Math.max(summary.totalItems, 0)
-  const resolvedLabeledItems = Math.min(Math.max(summary.resolvedLabeledItems, 0), totalItems)
-  const declaredLabeledItems = Math.max(summary.labeledItems ?? 0, 0)
-  const declaredUnresolvedLabeledItems = Math.max(summary.unresolvedLabeledItems ?? 0, 0)
-  const labeledItems = Math.min(totalItems, Math.max(declaredLabeledItems, resolvedLabeledItems + declaredUnresolvedLabeledItems))
-  const unresolvedLabeledItems = Math.min(
-    totalItems - resolvedLabeledItems,
-    Math.max(declaredUnresolvedLabeledItems, labeledItems - resolvedLabeledItems),
-  )
-  const missingLabels = Math.max(0, totalItems - labeledItems)
-
-  return {
-    totalItems,
-    resolvedLabeledItems,
-    labeledItems,
-    unresolvedLabeledItems,
-    missingLabels,
-  }
+  return ProbabilisticRollout.readinessCounts(summary)
 }
 
 function labelCoverageBreakdown(summary: SyncedSessionQualityReadiness) {
@@ -111,22 +95,15 @@ function labelCoverageBreakdown(summary: SyncedSessionQualityReadiness) {
 }
 
 function resolvedLabelsSummary(summary: SyncedSessionQualityReadiness) {
-  const counts = normalizedLabelCounts(summary)
-  return `${counts.resolvedLabeledItems}/${counts.totalItems} resolved labels`
+  return ProbabilisticRollout.readinessResolvedLabelsSummary(summary)
 }
 
 function labelCoverageStatusSummary(summary: SyncedSessionQualityReadiness) {
-  const breakdown = labelCoverageBreakdown(summary)
-  const detail = [resolvedLabelsSummary(summary)]
+  return ProbabilisticRollout.readinessDetailLabel(summary)
+}
 
-  if (breakdown.missingLabels > 0) {
-    detail.push(`${breakdown.missingLabels} missing`)
-  }
-  if (breakdown.unresolvedLabeledItems > 0) {
-    detail.push(`${breakdown.unresolvedLabeledItems} unresolved`)
-  }
-
-  return detail.join(" · ")
+function captureEvidenceStatusSummary(summary: SyncedSessionQualityReadiness) {
+  return ProbabilisticRollout.readinessDetailLabel(summary)
 }
 
 function labelCoverageMode(summary: SyncedSessionQualityReadiness) {
@@ -151,39 +128,11 @@ function labelCoverageTitle(workflow: SessionQualityWorkflow, summary: SyncedSes
   }
 }
 
-function labelCoverageFooter(summary: SyncedSessionQualityReadiness) {
-  switch (labelCoverageMode(summary)) {
-    case "complete":
-      return `Check ${workflowPromptLabel(summary.workflow)} replay readiness gates before benchmarking.`
-    case "missing_only":
-      return "Record outcome labels for the remaining exported artifacts."
-    case "unresolved_only":
-      return "Revisit unresolved outcome labels using the current session evidence."
-    default:
-      return "Finish label coverage for the remaining exported artifacts."
-  }
-}
-
-function captureEvidenceFooter(summary: SyncedSessionQualityReadiness) {
-  return `Capture ${workflowPromptLabel(summary.workflow)} workflow activity before exporting replay again.`
-}
-
-function normalizedNextAction(input: {
-  kind: SessionQualityActionKind
-  summary: SyncedSessionQualityReadiness
-}) {
-  const nextAction = input.summary.nextAction?.trim()
-  if (input.kind !== "finish_label_coverage") {
-    if (nextAction) return nextAction
-    return input.kind === "benchmark" ? "Ready to benchmark the current replay export." : captureEvidenceFooter(input.summary)
-  }
-
-  const fallback = labelCoverageFooter(input.summary)
-  if (!nextAction) return fallback
-  if (nextAction === "Finish label coverage for the remaining exported artifacts.") {
-    return fallback
-  }
-  return nextAction
+function normalizedNextAction(summary: SyncedSessionQualityReadiness) {
+  return ProbabilisticRollout.readinessNextActionLabel({
+    ...summary,
+    nextAction: summary.nextAction ?? null,
+  })
 }
 
 function inlineActionLabel(action: SessionQualityAction) {
@@ -203,19 +152,11 @@ function inlineActionLabel(action: SessionQualityAction) {
 }
 
 function actionSummaryDetail(action: Pick<SessionQualityAction, "kind" | "summary">) {
-  if (action.kind === "capture_evidence") {
-    return "no replay evidence yet"
-  }
+  return ProbabilisticRollout.readinessDetailLabel(action.summary)
+}
 
-  if (action.kind === "benchmark") {
-    return `benchmark ready · ${resolvedLabelsSummary(action.summary)}`
-  }
-
-  if (labelCoverageMode(action.summary) === "complete") {
-    return `label coverage complete · ${resolvedLabelsSummary(action.summary)}`
-  }
-
-  return labelCoverageStatusSummary(action.summary)
+function actionReadinessState(action: Pick<SessionQualityAction, "summary">) {
+  return ProbabilisticRollout.readinessStateLabel(action.summary)
 }
 
 function targetedRecommendationInlineSuffix(action: Pick<SessionQualityAction, "summary">) {
@@ -267,9 +208,9 @@ export function sessionQualityActions(input: {
         ? `Capture ${sessionQualityWorkflowLabel(workflow)} Evidence`
         : labelCoverageTitle(workflow, summary)
 
-    const description = `${summary.overallStatus} · ${actionSummaryDetail({ kind, summary })}`
+    const description = `${actionReadinessState({ summary })} · ${actionSummaryDetail({ kind, summary })}`
 
-    const footer = normalizedNextAction({ kind, summary }) ?? "No additional next action recorded."
+    const footer = normalizedNextAction(summary) ?? "No additional next action recorded."
 
     const action = {
       workflow,
@@ -304,7 +245,7 @@ export function sessionQualityDetailItems(action: SessionQualityAction): Session
     {
       id: `${sessionQualityActionValue(action)}.status`,
       title: actionStatusTitle(action),
-      description: `${action.summary.overallStatus} · ${actionSummaryDetail(action)}`,
+      description: `${actionReadinessState(action)} · ${actionSummaryDetail(action)}`,
       footer: action.footer,
       category: "Status",
     },
@@ -321,13 +262,20 @@ export function renderSessionQualityBrief(action: SessionQualityAction) {
   const recommended = targetedQATestRecommendations(action.summary)
   const lines = [
     `Quality readiness · ${action.workflow}`,
-    `- overall status: ${action.summary.overallStatus}`,
+    `- readiness state: ${actionReadinessState(action)}`,
     `- benchmark ready: ${action.summary.readyForBenchmark ? "yes" : "no"}`,
     `- next action: ${action.footer}`,
   ]
 
   if (action.kind === "capture_evidence") {
-    lines.splice(3, 0, "- replay items: none yet")
+    const captureSummary = captureEvidenceStatusSummary(action.summary)
+    lines.splice(
+      3,
+      0,
+      captureSummary === "no replay evidence yet"
+        ? "- replay items: none yet"
+        : `- readiness blocker: ${captureSummary}`,
+    )
   } else if (action.kind === "finish_label_coverage") {
     const breakdown = labelCoverageBreakdown(action.summary)
     lines.splice(3, 0, `- missing labels: ${breakdown.missingLabels}`)
@@ -352,7 +300,7 @@ export function renderSessionQualityBrief(action: SessionQualityAction) {
 }
 
 export function renderSessionQualityInlineSummary(action: SessionQualityAction) {
-  return `${inlineActionLabel(action)} · ${action.summary.overallStatus} · ${actionSummaryDetail(action)}${targetedRecommendationInlineSuffix(action)}`
+  return `${inlineActionLabel(action)} · ${actionReadinessState(action)} · ${actionSummaryDetail(action)}${targetedRecommendationInlineSuffix(action)}`
 }
 
 export function renderSessionQualityPrompt(action: SessionQualityAction, sessionID: string) {

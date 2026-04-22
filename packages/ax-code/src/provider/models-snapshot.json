@@ -30643,9 +30643,6 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
         "temperature": true,
         "knowledge": "2025-04",
         "release_date": "2026-04-02",
@@ -30672,7 +30669,7 @@
           "output": 65536
         },
         "provider": {
-          "npm": "@ai-sdk/alibaba"
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "glm-5.1": {
@@ -30821,9 +30818,6 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
         "temperature": true,
         "knowledge": "2025-04",
         "release_date": "2026-02-16",
@@ -30850,7 +30844,7 @@
           "output": 65536
         },
         "provider": {
-          "npm": "@ai-sdk/alibaba"
+          "npm": "@ai-sdk/anthropic"
         }
       }
     }
@@ -61730,9 +61724,6 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
         "temperature": true,
         "knowledge": "2025-04",
         "release_date": "2026-04-02",
@@ -61759,7 +61750,7 @@
           "output": 65536
         },
         "provider": {
-          "npm": "@ai-sdk/alibaba"
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "gpt-5.4-mini": {
@@ -62788,9 +62779,6 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
         "temperature": true,
         "knowledge": "2025-04",
         "release_date": "2026-02-16",
@@ -62817,7 +62805,7 @@
           "output": 65536
         },
         "provider": {
-          "npm": "@ai-sdk/alibaba"
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "mimo-v2-pro-free": {

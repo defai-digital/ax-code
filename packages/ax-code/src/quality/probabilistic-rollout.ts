@@ -218,6 +218,10 @@ export namespace ProbabilisticRollout {
   })
   export type ReplayReadinessFile = z.output<typeof ReplayReadinessFile>
 
+  export const UserFacingReadinessState = z.enum(["blocked", "needs_labels", "not_ready", "ready"])
+  export type UserFacingReadinessState = z.output<typeof UserFacingReadinessState>
+  export type UserFacingReadinessKind = "low" | "medium" | "high"
+
   export const CalibrationRecord = z.object({
     artifactID: z.string(),
     sessionID: z.string(),
@@ -711,6 +715,187 @@ export namespace ProbabilisticRollout {
     return highest === 2 ? "fail" : highest === 1 ? "warn" : "pass"
   }
 
+  function normalizedReadinessCounts(
+    summary: Pick<
+      ReplayReadinessSummary,
+      "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels"
+    >,
+  ) {
+    const totalItems = Math.max(summary.totalItems, 0)
+    const resolvedLabeledItems = Math.min(Math.max(summary.resolvedLabeledItems, 0), totalItems)
+    const declaredLabeledItems = Math.max(summary.labeledItems ?? 0, 0)
+    const declaredUnresolvedLabeledItems = Math.max(summary.unresolvedLabeledItems ?? 0, 0)
+    const labeledItems = Math.min(totalItems, Math.max(declaredLabeledItems, resolvedLabeledItems + declaredUnresolvedLabeledItems))
+    const unresolvedLabeledItems = Math.min(
+      totalItems - resolvedLabeledItems,
+      Math.max(declaredUnresolvedLabeledItems, labeledItems - resolvedLabeledItems),
+    )
+    const missingLabels = Math.max(0, totalItems - labeledItems)
+
+    return {
+      totalItems,
+      resolvedLabeledItems,
+      labeledItems,
+      unresolvedLabeledItems,
+      missingLabels,
+    }
+  }
+
+  function workflowPromptLabel(workflow: Workflow) {
+    return workflow === "qa" ? "QA" : workflow
+  }
+
+  function normalizedLabelCoverageMode(
+    summary: Pick<
+      ReplayReadinessSummary,
+      "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels"
+    >,
+  ) {
+    const counts = normalizedReadinessCounts(summary)
+    if (counts.missingLabels === 0 && counts.unresolvedLabeledItems === 0) return "complete" as const
+    if (counts.missingLabels > 0 && counts.unresolvedLabeledItems === 0) return "missing_only" as const
+    if (counts.missingLabels === 0 && counts.unresolvedLabeledItems > 0) return "unresolved_only" as const
+    return "mixed" as const
+  }
+
+  export function readinessState(
+    summary: Pick<
+      ReplayReadinessSummary,
+      "readyForBenchmark" | "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels" | "gates"
+    >,
+  ): UserFacingReadinessState {
+    const counts = normalizedReadinessCounts(summary)
+    const blockingGate = (summary.gates ?? []).find((gate) =>
+      gate.status === "fail" && (gate.name === "exportable-session-shape" || gate.name === "workflow-evidence-present"))
+      ?? (summary.gates ?? []).find((gate) => gate.status === "fail")
+    if (summary.readyForBenchmark) return "ready"
+    if (blockingGate) return "blocked"
+    if (counts.totalItems === 0) return "blocked"
+    if (counts.missingLabels > 0 || counts.unresolvedLabeledItems > 0) return "needs_labels"
+    return "not_ready"
+  }
+
+  export function readinessStateLabel(
+    summary: Pick<
+      ReplayReadinessSummary,
+      "readyForBenchmark" | "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels" | "gates"
+    >,
+  ) {
+    const state = readinessState(summary)
+    if (state === "needs_labels") return "needs labels"
+    if (state === "not_ready") return "not ready"
+    return state
+  }
+
+  export function readinessStateKind(
+    summary: Pick<
+      ReplayReadinessSummary,
+      | "overallStatus"
+      | "readyForBenchmark"
+      | "totalItems"
+      | "labeledItems"
+      | "resolvedLabeledItems"
+      | "unresolvedLabeledItems"
+      | "missingLabels"
+      | "gates"
+    >,
+  ): UserFacingReadinessKind {
+    if (summary.overallStatus === "fail") return "high"
+    if (summary.overallStatus === "warn") return "medium"
+    return "low"
+  }
+
+  export function readinessCounts(
+    summary: Pick<
+      ReplayReadinessSummary,
+      "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels"
+    >,
+  ) {
+    return normalizedReadinessCounts(summary)
+  }
+
+  export function readinessResolvedLabelsSummary(
+    summary: Pick<
+      ReplayReadinessSummary,
+      "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels"
+    >,
+  ) {
+    const counts = normalizedReadinessCounts(summary)
+    return `${counts.resolvedLabeledItems}/${counts.totalItems} resolved labels`
+  }
+
+  export function readinessDetailLabel(
+    summary: Pick<
+      ReplayReadinessSummary,
+      "readyForBenchmark" | "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels" | "gates"
+    >,
+  ) {
+    const state = readinessState(summary)
+    if (state === "blocked") {
+      const blockingGate = (summary.gates ?? []).find((gate) =>
+        gate.status === "fail" && (gate.name === "exportable-session-shape" || gate.name === "workflow-evidence-present"))
+        ?? (summary.gates ?? []).find((gate) => gate.status === "fail")
+      return blockingGate?.detail ?? "no replay evidence yet"
+    }
+    if (state === "ready") return `benchmark ready · ${readinessResolvedLabelsSummary(summary)}`
+    if (state === "not_ready") return `label coverage complete · ${readinessResolvedLabelsSummary(summary)}`
+
+    const counts = normalizedReadinessCounts(summary)
+    const detail = [readinessResolvedLabelsSummary(summary)]
+    if (counts.missingLabels > 0) detail.push(`${counts.missingLabels} missing`)
+    if (counts.unresolvedLabeledItems > 0) detail.push(`${counts.unresolvedLabeledItems} unresolved`)
+    return detail.join(" · ")
+  }
+
+  export function readinessNextActionLabel(
+    summary: Pick<
+      ReplayReadinessSummary,
+      | "workflow"
+      | "nextAction"
+      | "readyForBenchmark"
+      | "totalItems"
+      | "labeledItems"
+      | "resolvedLabeledItems"
+      | "unresolvedLabeledItems"
+      | "missingLabels"
+      | "gates"
+    >,
+  ): string | null {
+    const nextAction = summary.nextAction?.trim() || null
+    const state = readinessState(summary)
+
+    if (state === "ready") {
+      return nextAction || "Ready to benchmark the current replay export."
+    }
+
+    if (state === "blocked") {
+      return nextAction || `Capture ${workflowPromptLabel(summary.workflow)} workflow activity before exporting replay again.`
+    }
+
+    const coverageMode = normalizedLabelCoverageMode(summary)
+    const fallback = coverageMode === "complete"
+      ? `Check ${workflowPromptLabel(summary.workflow)} replay readiness gates before benchmarking.`
+      : coverageMode === "missing_only"
+        ? "Record outcome labels for the remaining exported artifacts."
+        : coverageMode === "unresolved_only"
+          ? "Revisit unresolved outcome labels using the current session evidence."
+          : "Finish label coverage for the remaining exported artifacts."
+
+    if (!nextAction) return fallback
+
+    if (
+      nextAction === "Finish label coverage for the remaining exported artifacts."
+      || nextAction === "Finish QA label coverage for the remaining exported test artifacts."
+      || nextAction === "Record QA outcomes for the exported test artifacts."
+      || nextAction === "Resolve at least one QA label before benchmarking."
+      || nextAction === "Resolve at least one exported artifact label before benchmarking."
+    ) {
+      return fallback
+    }
+
+    return nextAction
+  }
+
   export async function exportReplay(sessionID: SessionID, workflow: Workflow): Promise<ReplayExport> {
     const [session, diffs] = await Promise.all([Session.get(sessionID), Session.diff(sessionID)])
     const events = EventQuery.bySessionWithTimestamp(sessionID)
@@ -1075,7 +1260,7 @@ export namespace ProbabilisticRollout {
     lines.push(`- unresolved labels: ${summary.unresolvedLabeledItems}`)
     lines.push(`- missing labels: ${summary.missingLabels}`)
     lines.push(`- ready for benchmark: ${summary.readyForBenchmark}`)
-    lines.push(`- next action: ${summary.nextAction ?? "none"}`)
+    lines.push(`- next action: ${readinessNextActionLabel(summary) ?? "none"}`)
     lines.push("")
     for (const gate of summary.gates) {
       lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)

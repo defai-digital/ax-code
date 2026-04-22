@@ -109,6 +109,8 @@ import { Log } from "@/util/log"
 import { firstCompactionMessageID, shouldShowCompactionNotice } from "./compaction-view-model"
 import { createReconnectRecoveryGate } from "../../util/reconnect-recovery"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
+import { isMissingSessionSnapshotError } from "../../context/sync-session-coordinator"
+import { createSessionEntrySyncRetryState, nextSessionEntrySyncRetry, type SessionEntrySyncRetryState } from "./entry-sync"
 
 addDefaultParsers(parsers.parsers)
 
@@ -265,36 +267,67 @@ export function Session() {
   const toast = useToast()
   const sdk = useSDK()
   let sessionSyncGeneration = 0
+  const sessionSyncRetryTimers = new Set<ReturnType<typeof setTimeout>>()
+
+  function scheduleSessionSyncRetry(fn: () => void, delay: number) {
+    const timer = setTimeout(() => {
+      sessionSyncRetryTimers.delete(timer)
+      fn()
+    }, delay)
+    sessionSyncRetryTimers.add(timer)
+  }
+
+  function runInitialSessionSync(
+    sessionID: string,
+    generation: number,
+    retryState: SessionEntrySyncRetryState,
+    attempt = 1,
+  ) {
+    void sync.session
+      .sync(sessionID, { missing: "throw" })
+      .then(() => {
+        if (generation !== sessionSyncGeneration) return
+        if (scroll) scroll.scrollBy(100_000)
+      })
+      .catch((error) => {
+        if (generation !== sessionSyncGeneration) return
+        if (isMissingSessionSnapshotError(error)) {
+          const nextRetry = nextSessionEntrySyncRetry(retryState)
+          if (nextRetry) {
+            scheduleSessionSyncRetry(
+              () => runInitialSessionSync(sessionID, generation, nextRetry.state, attempt + 1),
+              nextRetry.delayMs,
+            )
+            return
+          }
+        }
+        log.warn("session sync failed", { error, sessionID, attempt })
+        toast.show({
+          message: `Failed to load session: ${sessionID}`,
+          variant: "error",
+        })
+        navigate({ type: "home" })
+      })
+  }
+
   createEffect(
     on(
       () => route.sessionID,
       (sessionID) => {
         const generation = ++sessionSyncGeneration
-        void sync.session
-          .sync(sessionID)
-          .then(() => {
-            if (generation !== sessionSyncGeneration) return
-            if (scroll) scroll.scrollBy(100_000)
-          })
-          .catch((error) => {
-            if (generation !== sessionSyncGeneration) return
-            log.warn("session sync failed", { error, sessionID })
-            toast.show({
-              message: `Failed to load session: ${sessionID}`,
-              variant: "error",
-            })
-            navigate({ type: "home" })
-          })
+        runInitialSessionSync(sessionID, generation, createSessionEntrySyncRetryState())
       },
     ),
   )
   onCleanup(() => {
     sessionSyncGeneration++
+    for (const timer of sessionSyncRetryTimers) clearTimeout(timer)
+    sessionSyncRetryTimers.clear()
   })
 
   const reconnectSession = createReconnectRecoveryGate({
     recover: () =>
-      sync.session.sync(route.sessionID, { force: true }).catch((error) => {
+      sync.session.sync(route.sessionID, { force: true, missing: "throw" }).catch((error) => {
         log.warn("session resync after reconnect failed", { error, sessionID: route.sessionID })
         toast.show({
           message: "Reconnected, but refreshing the session state failed",

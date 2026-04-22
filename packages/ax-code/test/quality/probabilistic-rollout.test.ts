@@ -603,6 +603,143 @@ describe("ProbabilisticRollout.summarizeReplayReadiness", () => {
       detail: "prioritize these QA command(s): bun test test/auth.test.ts",
     })
   })
+
+  test("derives shared user-facing readiness states from replay summaries", () => {
+    const blocked = ProbabilisticRollout.ReplayReadinessSummary.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-replay-readiness-summary",
+      workflow: "qa",
+      sessionID: "session-qa-blocked",
+      projectID: "project-qa",
+      exportedAt: "2026-04-21T00:00:00.000Z",
+      totalItems: 0,
+      anchorItems: 0,
+      evidenceItems: 0,
+      toolSummaryCount: 0,
+      labeledItems: 0,
+      resolvedLabeledItems: 0,
+      unresolvedLabeledItems: 0,
+      missingLabels: 0,
+      readyForBenchmark: false,
+      overallStatus: "fail",
+      nextAction: "Run one or more test commands in this session to capture QA evidence.",
+      gates: [],
+    })
+    const needsLabels = ProbabilisticRollout.ReplayReadinessSummary.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-replay-readiness-summary",
+      workflow: "qa",
+      sessionID: "session-qa-labels",
+      projectID: "project-qa",
+      exportedAt: "2026-04-21T00:00:00.000Z",
+      totalItems: 2,
+      anchorItems: 1,
+      evidenceItems: 1,
+      toolSummaryCount: 1,
+      labeledItems: 1,
+      resolvedLabeledItems: 0,
+      unresolvedLabeledItems: 1,
+      missingLabels: 1,
+      readyForBenchmark: false,
+      overallStatus: "warn",
+      nextAction: "Finish QA label coverage for the remaining exported test artifacts.",
+      gates: [],
+    })
+    const notReady = ProbabilisticRollout.ReplayReadinessSummary.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-replay-readiness-summary",
+      workflow: "review",
+      sessionID: "session-review-not-ready",
+      projectID: "project-review",
+      exportedAt: "2026-04-21T00:00:00.000Z",
+      totalItems: 2,
+      anchorItems: 1,
+      evidenceItems: 1,
+      toolSummaryCount: 1,
+      labeledItems: 2,
+      resolvedLabeledItems: 2,
+      unresolvedLabeledItems: 0,
+      missingLabels: 0,
+      readyForBenchmark: false,
+      overallStatus: "warn",
+      nextAction: "Check review replay readiness gates before benchmarking.",
+      gates: [],
+    })
+    const ready = ProbabilisticRollout.ReplayReadinessSummary.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-replay-readiness-summary",
+      workflow: "debug",
+      sessionID: "session-debug-ready",
+      projectID: "project-debug",
+      exportedAt: "2026-04-21T00:00:00.000Z",
+      totalItems: 1,
+      anchorItems: 1,
+      evidenceItems: 1,
+      toolSummaryCount: 1,
+      labeledItems: 1,
+      resolvedLabeledItems: 1,
+      unresolvedLabeledItems: 0,
+      missingLabels: 0,
+      readyForBenchmark: true,
+      overallStatus: "pass",
+      nextAction: null,
+      gates: [],
+    })
+
+    expect(ProbabilisticRollout.readinessStateLabel(blocked)).toBe("blocked")
+    expect(ProbabilisticRollout.readinessStateLabel(needsLabels)).toBe("needs labels")
+    expect(ProbabilisticRollout.readinessStateLabel(notReady)).toBe("not ready")
+    expect(ProbabilisticRollout.readinessStateLabel(ready)).toBe("ready")
+    expect(ProbabilisticRollout.readinessNextActionLabel(blocked)).toBe(
+      "Run one or more test commands in this session to capture QA evidence.",
+    )
+    expect(ProbabilisticRollout.readinessNextActionLabel(needsLabels)).toBe(
+      "Finish label coverage for the remaining exported artifacts.",
+    )
+    expect(ProbabilisticRollout.readinessNextActionLabel(notReady)).toBe(
+      "Check review replay readiness gates before benchmarking.",
+    )
+    expect(ProbabilisticRollout.readinessNextActionLabel(ready)).toBe("Ready to benchmark the current replay export.")
+    expect(ProbabilisticRollout.readinessDetailLabel(blocked)).toBe("no replay evidence yet")
+    expect(ProbabilisticRollout.readinessDetailLabel(needsLabels)).toBe("0/2 resolved labels · 1 missing · 1 unresolved")
+    expect(ProbabilisticRollout.readinessDetailLabel(notReady)).toBe("label coverage complete · 2/2 resolved labels")
+    expect(ProbabilisticRollout.readinessDetailLabel(ready)).toBe("benchmark ready · 1/1 resolved labels")
+  })
+
+  test("treats fail gates as blocked even when malformed counts would otherwise look label-complete", () => {
+    const blockedByGate = ProbabilisticRollout.ReplayReadinessSummary.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-replay-readiness-summary",
+      workflow: "review",
+      sessionID: "session-review-blocked-gate",
+      projectID: "project-review",
+      exportedAt: "2026-04-21T00:00:00.000Z",
+      totalItems: 2,
+      anchorItems: 0,
+      evidenceItems: 0,
+      toolSummaryCount: 0,
+      labeledItems: 2,
+      resolvedLabeledItems: 2,
+      unresolvedLabeledItems: 0,
+      missingLabels: 0,
+      readyForBenchmark: false,
+      overallStatus: "fail",
+      nextAction: "Capture review workflow activity before exporting replay again.",
+      gates: [
+        {
+          name: "exportable-session-shape",
+          status: "fail",
+          detail: "no anchor items exported for workflow review",
+        },
+      ],
+    })
+
+    expect(ProbabilisticRollout.readinessStateLabel(blockedByGate)).toBe("blocked")
+    expect(ProbabilisticRollout.readinessDetailLabel(blockedByGate)).toBe(
+      "no anchor items exported for workflow review",
+    )
+    expect(ProbabilisticRollout.readinessStateKind(blockedByGate)).toBe("high")
+  })
 })
 
 describe("ProbabilisticRollout.summarizeCalibration", () => {

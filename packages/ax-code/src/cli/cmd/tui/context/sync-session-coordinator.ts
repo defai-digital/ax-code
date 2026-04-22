@@ -1,7 +1,26 @@
+export class MissingSessionSnapshotError extends Error {
+  readonly sessionID: string
+
+  constructor(sessionID: string) {
+    super(`Session snapshot unavailable: ${sessionID}`)
+    this.name = "MissingSessionSnapshotError"
+    this.sessionID = sessionID
+  }
+}
+
+export function isMissingSessionSnapshotError(error: unknown): error is MissingSessionSnapshotError {
+  return error instanceof MissingSessionSnapshotError
+}
+
+export interface SessionSyncOptions {
+  force?: boolean
+  missing?: "ignore" | "throw"
+}
+
 export interface SessionSyncController<TSnapshot> {
   clear: (sessionID: string) => void
   reset: () => void
-  sync: (sessionID: string, input?: { force?: boolean }) => Promise<void>
+  sync: (sessionID: string, input?: SessionSyncOptions) => Promise<void>
 }
 
 export function createSessionSyncController<TSnapshot>(input: {
@@ -29,6 +48,7 @@ export function createSessionSyncController<TSnapshot>(input: {
         const snapshot = await input.fetchSnapshot(sessionID)
         if (!snapshot) {
           input.onMissingSnapshot?.(sessionID)
+          if (options?.missing === "throw") throw new MissingSessionSnapshotError(sessionID)
           return
         }
         input.applySnapshot(sessionID, snapshot)

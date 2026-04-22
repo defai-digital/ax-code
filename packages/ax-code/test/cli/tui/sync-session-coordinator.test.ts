@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { createSessionSyncController } from "../../../src/cli/cmd/tui/context/sync-session-coordinator"
+import {
+  createSessionSyncController,
+  isMissingSessionSnapshotError,
+} from "../../../src/cli/cmd/tui/context/sync-session-coordinator"
 
 describe("tui sync session coordinator", () => {
   test("applies a fetched snapshot once and skips repeated syncs until cleared or forced", async () => {
@@ -77,6 +80,20 @@ describe("tui sync session coordinator", () => {
 
     expect(fetches).toEqual(["ses_3", "ses_3"])
     expect(missing).toEqual(["ses_3", "ses_3"])
+  })
+
+  test("can surface missing snapshots as explicit failures for entry-critical syncs", async () => {
+    const controller = createSessionSyncController({
+      async fetchSnapshot() {
+        return undefined
+      },
+      applySnapshot: () => undefined,
+    })
+
+    const error = await controller.sync("ses_missing", { missing: "throw" }).catch((error) => error)
+
+    expect(isMissingSessionSnapshotError(error)).toBe(true)
+    expect((error as Error).message).toBe("Session snapshot unavailable: ses_missing")
   })
 
   test("clears in-flight state after fetch failures so a retry can run", async () => {

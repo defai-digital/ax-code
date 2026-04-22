@@ -14,7 +14,7 @@ describe("tui sync bootstrap plan", () => {
     const tasks = createSessionBootstrapPhaseTasks({
       continueFromArgs: true,
       sessionListPromise: () => Promise.resolve([{ id: "ses_2" }]),
-      existingSessions: [{ id: "ses_1" }],
+      getExistingSessions: () => [{ id: "ses_1" }],
       applySessions(sessions) {
         applied.push(sessions)
       },
@@ -34,7 +34,7 @@ describe("tui sync bootstrap plan", () => {
     const tasks = createSessionBootstrapPhaseTasks({
       continueFromArgs: false,
       sessionListPromise: () => Promise.resolve([{ id: "ses_2" }]),
-      existingSessions: [{ id: "ses_3" }],
+      getExistingSessions: () => [{ id: "ses_3" }],
       applySessions(sessions) {
         applied.push(sessions)
       },
@@ -46,6 +46,26 @@ describe("tui sync bootstrap plan", () => {
     await tasks.core[0]()
 
     expect(applied).toEqual([[{ id: "ses_2" }, { id: "ses_3" }]])
+  })
+
+  test("reads existing sessions when the bootstrap task runs so prompt-created sessions are preserved", async () => {
+    const applied: Array<Array<{ id: string }>> = []
+    let existing = [{ id: "ses_1" }]
+
+    const tasks = createSessionBootstrapPhaseTasks({
+      continueFromArgs: false,
+      sessionListPromise: () => Promise.resolve([{ id: "ses_1" }]),
+      getExistingSessions: () => existing,
+      applySessions(sessions) {
+        applied.push(sessions)
+      },
+    })
+
+    existing = [{ id: "ses_1" }, { id: "ses_new" }]
+
+    await tasks.core[0]()
+
+    expect(applied).toEqual([[{ id: "ses_1" }, { id: "ses_new" }]])
   })
 
   test("applies provider success state and reports readiness", async () => {

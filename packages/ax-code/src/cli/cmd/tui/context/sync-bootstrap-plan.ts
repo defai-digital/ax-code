@@ -55,12 +55,12 @@ export function createBootstrapResponsePlanTasks<
 export function createSessionBootstrapPhaseTasks<T extends { id: string }>(input: {
   continueFromArgs: boolean
   sessionListPromise: () => Promise<T[]>
-  existingSessions: T[]
+  getExistingSessions: () => T[]
   applySessions: (sessions: T[]) => void
 }) {
   const task = createBootstrapTask(
     input.sessionListPromise,
-    (sessions) => mergeBootstrapSessions(input.existingSessions, sessions),
+    (sessions) => mergeBootstrapSessions(input.getExistingSessions(), sessions),
     input.applySessions,
   )
 

@@ -166,6 +166,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
   let sessionRoutePromise: Promise<Component> | undefined
+  let sessionRouteLoadFailed = false
 
   onMount(() => {
     recordTuiStartupOnce("tui.startup.appMounted", { route: route.data.type })
@@ -181,6 +182,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     const finishSessionRouteImport = createTuiStartupSpan("tui.startup.sessionRouteImport", { source })
     sessionRoutePromise = import("@tui/routes/session")
       .then(({ Session }) => {
+        sessionRouteLoadFailed = false
         setSessionRoute(() => Session)
         recordTuiStartupOnce("tui.startup.sessionRouteReady", { source })
         return Session
@@ -195,6 +197,24 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       })
 
     return sessionRoutePromise
+  }
+
+  function handleSessionRouteLoadFailure(
+    error: unknown,
+    input: {
+      source: "route" | "startup-preload"
+      navigateHome?: boolean
+    },
+  ) {
+    Log.Default.warn("failed to load session route", {
+      source: input.source,
+      error,
+    })
+    if (!sessionRouteLoadFailed) {
+      sessionRouteLoadFailed = true
+      toast.show({ message: "Failed to load session view", variant: "error" })
+    }
+    if (input.navigateHome) route.navigate({ type: "home" })
   }
 
   async function showProviderDialog() {
@@ -373,12 +393,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   createEffect(() => {
     if (route.data.type !== "session") return
-    void ensureSessionRouteLoaded("route")
+    void ensureSessionRouteLoaded("route").catch((error) => {
+      handleSessionRouteLoadFailure(error, { source: "route", navigateHome: true })
+    })
   })
 
   onMount(() => {
-    if (!args.sessionID && !args.continue && !args.fork) return
-    const cancel = scheduleDeferredStartupTask(() => ensureSessionRouteLoaded("startup-preload").then(() => undefined))
+    const cancel = scheduleDeferredStartupTask(
+      () =>
+        ensureSessionRouteLoaded("startup-preload")
+          .then(() => undefined)
+          .catch((error) => {
+            handleSessionRouteLoadFailure(error, { source: "startup-preload" })
+          }),
+    )
     onCleanup(cancel)
   })
 

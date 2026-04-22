@@ -15,12 +15,13 @@ export namespace RiskView {
   }
 
   function qualityLine(workflow: "review" | "debug" | "qa", summary: ReplayReadinessSummary) {
-    const state = summary.readyForBenchmark ? "benchmark ready" : "benchmark not ready"
-    const labels = `${summary.resolvedLabeledItems}/${summary.totalItems} resolved labels`
+    const readiness = ProbabilisticRollout.readinessStateLabel(summary)
+    const detail = ProbabilisticRollout.readinessDetailLabel(summary)
     const recommended = ProbabilisticRollout.targetedTestRecommendations(summary)[0]
     const first = recommended ? ` · first: ${recommended}` : ""
-    const next = summary.nextAction ? ` · next: ${summary.nextAction}` : ""
-    return `  ${workflow}: ${summary.overallStatus} · ${state} · ${labels}${first}${next}`
+    const nextAction = ProbabilisticRollout.readinessNextActionLabel(summary)
+    const next = nextAction ? ` · next: ${nextAction}` : ""
+    return `  ${workflow}: ${readiness} · ${detail}${first}${next}`
   }
 
   export function lines(input: SessionRisk.Detail, explain = false) {

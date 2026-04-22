@@ -40,7 +40,7 @@ describe("tui session quality actions", () => {
       kind: "capture_evidence",
       title: "Capture Review Evidence",
     })
-    expect(actions[0]?.description).toBe("fail · no replay evidence yet")
+    expect(actions[0]?.description).toBe("blocked · no replay evidence yet")
     expect(sessionQualityActionValue(actions[0]!)).toBe("session.quality.review.capture_evidence")
     expect(actions[0]?.prompt.input).toContain("session ses_capture")
     expect(actions[0]?.prompt.input).toContain("produce review workflow evidence")
@@ -254,7 +254,7 @@ describe("tui session quality actions", () => {
       workflow: "qa",
       kind: "finish_label_coverage",
       title: "Finish QA Label Coverage",
-      footer: "Finish QA label coverage for the remaining exported test artifacts.",
+      footer: "Finish label coverage for the remaining exported artifacts.",
     })
     expect(actions[0]?.prompt.input).toContain("Use the current session's QA replay evidence")
     expect(actions[0]?.prompt.input).toContain("Targeted QA recommendation: run bun test test/auth.test.ts first.")
@@ -263,7 +263,7 @@ describe("tui session quality actions", () => {
       "[pass] targeted-test-recommendation: prioritize these QA command(s): bun test test/auth.test.ts",
     )
     expect(renderSessionQualityInlineSummary(actions[0]!)).toBe(
-      "finish label coverage · warn · 0/2 resolved labels · 1 missing · 1 unresolved · first: bun test test/auth.test.ts",
+      "finish label coverage · needs labels · 0/2 resolved labels · 1 missing · 1 unresolved · first: bun test test/auth.test.ts",
     )
   })
 
@@ -299,10 +299,10 @@ describe("tui session quality actions", () => {
       kind: "finish_label_coverage",
       title: "Check Review Replay Readiness",
       footer: "Check review replay readiness gates before benchmarking.",
-      description: "warn · label coverage complete · 3/3 resolved labels",
+      description: "not ready · label coverage complete · 3/3 resolved labels",
     })
     expect(renderSessionQualityInlineSummary(actions[0]!)).toBe(
-      "review replay readiness · warn · label coverage complete · 3/3 resolved labels",
+      "review replay readiness · not ready · label coverage complete · 3/3 resolved labels",
     )
     expect(renderSessionQualityPrompt(actions[0]!, "ses_readiness_blocked")).toContain(
       "review the remaining replay-readiness gates",
@@ -416,7 +416,7 @@ describe("tui session quality actions", () => {
     expect(items[1]).toMatchObject({
       category: "Status",
       title: "Label coverage incomplete",
-      description: "warn · 1/3 resolved labels · 2 missing",
+      description: "needs labels · 1/3 resolved labels · 2 missing",
       footer: "Record outcome labels for the remaining exported artifacts.",
     })
     expect(items[2]).toMatchObject({
@@ -450,8 +450,46 @@ describe("tui session quality actions", () => {
     expect(items[1]).toMatchObject({
       category: "Status",
       title: "Replay evidence missing",
-      description: "fail · no replay evidence yet",
+      description: "blocked · no replay evidence yet",
     })
+  })
+
+  test("prefers capture-evidence guidance when fail gates block readiness even with stale label counts", () => {
+    const action = sessionQualityActions({
+      sessionID: "ses_capture_gate_blocked",
+      quality: {
+        review: {
+          workflow: "review",
+          overallStatus: "fail",
+          readyForBenchmark: false,
+          labeledItems: 2,
+          resolvedLabeledItems: 2,
+          unresolvedLabeledItems: 0,
+          missingLabels: 0,
+          totalItems: 2,
+          nextAction: "Capture review workflow activity before exporting replay again.",
+          gates: [
+            {
+              name: "exportable-session-shape",
+              status: "fail",
+              detail: "no anchor items exported for workflow review",
+            },
+          ],
+        },
+        debug: null,
+      },
+    })[0]!
+
+    expect(action).toMatchObject({
+      kind: "capture_evidence",
+      title: "Capture Review Evidence",
+      description: "blocked · no anchor items exported for workflow review",
+      footer: "Capture review workflow activity before exporting replay again.",
+    })
+    expect(renderSessionQualityBrief(action)).toContain(
+      "- readiness blocker: no anchor items exported for workflow review",
+    )
+    expect(renderSessionQualityBrief(action)).not.toContain("- replay items: none yet")
   })
 
   test("finds the current action by workflow and kind", () => {
@@ -512,7 +550,7 @@ describe("tui session quality actions", () => {
     expect(renderSessionQualityBrief(action)).toBe(
       [
         "Quality readiness · review",
-        "- overall status: warn",
+        "- readiness state: needs labels",
         "- benchmark ready: no",
         "- missing labels: 2",
         "- unresolved labels: 0",
@@ -547,7 +585,7 @@ describe("tui session quality actions", () => {
     expect(renderSessionQualityBrief(action)).toBe(
       [
         "Quality readiness · review",
-        "- overall status: fail",
+        "- readiness state: blocked",
         "- benchmark ready: no",
         "- replay items: none yet",
         "- next action: Capture review workflow activity before exporting replay again.",
@@ -576,7 +614,7 @@ describe("tui session quality actions", () => {
     })[0]!
 
     expect(renderSessionQualityInlineSummary(action)).toBe(
-      "record outcome labels · warn · 1/3 resolved labels · 2 missing",
+      "record outcome labels · needs labels · 1/3 resolved labels · 2 missing",
     )
   })
 
@@ -601,7 +639,7 @@ describe("tui session quality actions", () => {
     })[0]!
 
     expect(renderSessionQualityInlineSummary(action)).toBe(
-      "capture evidence · fail · no replay evidence yet",
+      "capture evidence · blocked · no replay evidence yet",
     )
   })
 
@@ -633,7 +671,7 @@ describe("tui session quality actions", () => {
 
     const prompt = renderSessionQualityPrompt(action, "ses_prompt_capture")
     expect(prompt).toContain("Quality readiness context for session ses_prompt_capture:")
-    expect(prompt).toContain("- replay items: none yet")
+    expect(prompt).toContain("- readiness blocker: no anchor items exported for workflow review")
     expect(prompt).not.toContain("resolved labels: 0/0")
     expect(prompt).toContain("Use the current session to produce review workflow evidence")
     expect(prompt).toContain("Focus on the failing or warning readiness gates first.")
@@ -725,9 +763,9 @@ describe("tui session quality actions", () => {
       },
     })[0]!
 
-    expect(action.description).toBe("warn · label coverage complete · 3/3 resolved labels")
+    expect(action.description).toBe("not ready · label coverage complete · 3/3 resolved labels")
     expect(renderSessionQualityInlineSummary(action)).toBe(
-      "review replay readiness · warn · label coverage complete · 3/3 resolved labels",
+      "review replay readiness · not ready · label coverage complete · 3/3 resolved labels",
     )
     expect(renderSessionQualityBrief(action)).toContain("- resolved labels: 3/3 resolved labels")
     expect(renderSessionQualityBrief(action)).toContain("- missing labels: 0")

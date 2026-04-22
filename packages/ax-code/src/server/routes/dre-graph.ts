@@ -86,12 +86,6 @@ function readiness(value: string) {
   return value.replaceAll("_", " ")
 }
 
-function qualityStatusKind(value: "pass" | "warn" | "fail") {
-  if (value === "pass") return "low"
-  if (value === "warn") return "medium"
-  return "high"
-}
-
 function validation(input: SessionRisk.Detail["assessment"]["signals"]) {
   if (input.validationState === "passed") return "validation passed"
   if (input.validationState === "failed") return "validation failed"
@@ -452,15 +446,21 @@ function qualityReadinessSection(input: SessionRisk.Detail) {
       .map(({ workflow, summary }) => {
         const first = ProbabilisticRollout.targetedTestRecommendations(summary)[0]
         const firstLine = first ? `<br><span class="muted">first: ${esc(first)}</span>` : ""
+        const readiness = ProbabilisticRollout.readinessStateLabel(summary)
+        const detail = ProbabilisticRollout.readinessDetailLabel(summary)
+        const nextAction = ProbabilisticRollout.readinessNextActionLabel(summary)
         return [
           `<div class="validation-item">`,
           `<span class="validation-icon">${workflow === "review" ? "R" : workflow === "debug" ? "D" : "Q"}</span>`,
           `<span class="validation-cmd">`,
-          `<strong>${esc(workflow)}</strong> · ${esc(summary.readyForBenchmark ? "benchmark ready" : "benchmark not ready")} · ${summary.resolvedLabeledItems}/${summary.totalItems} resolved labels`,
+          `<strong>${esc(workflow)}</strong> · ${esc(readiness)} · ${esc(detail)}`,
           firstLine,
-          summary.nextAction ? `<br><span class="muted">${esc(summary.nextAction)}</span>` : "",
+          nextAction ? `<br><span class="muted">${esc(nextAction)}</span>` : "",
           `</span>`,
-          `<span class="validation-status">${chip({ label: summary.overallStatus, kind: qualityStatusKind(summary.overallStatus) })}</span>`,
+          `<span class="validation-status">${chip({
+            label: ProbabilisticRollout.readinessStateLabel(summary),
+            kind: ProbabilisticRollout.readinessStateKind(summary),
+          })}</span>`,
           `</div>`,
         ].join("")
       })
