@@ -13,8 +13,15 @@ import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { Permission } from "@/permission"
 import { Log } from "@/util/log"
+import { withTimeout } from "@/util/timeout"
 
 const MAX_DEPTH = 5
+// 10 minutes: subagent tasks that exceed this are likely stuck on a
+// non-responsive provider or in an infinite tool loop. The step limit
+// (200) catches runaway tool loops, but a provider that accepts the
+// request and then never streams tokens would hang forever without
+// this timeout.
+const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
 const log = Log.create({ service: "task-tool" })
 
 const parameters = z.object({
@@ -157,22 +164,26 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
         const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
 
-        result = await SessionPrompt.prompt({
-          messageID,
-          sessionID: session.id,
-          model: {
-            modelID: model.modelID,
-            providerID: model.providerID,
-          },
-          agent: agent.name,
-          tools: {
-            todowrite: false,
-            todoread: false,
-            ...(hasTaskPermission ? {} : { task: false }),
-            ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
-          },
-          parts: promptParts,
-        })
+        result = await withTimeout(
+          SessionPrompt.prompt({
+            messageID,
+            sessionID: session.id,
+            model: {
+              modelID: model.modelID,
+              providerID: model.providerID,
+            },
+            agent: agent.name,
+            tools: {
+              todowrite: false,
+              todoread: false,
+              ...(hasTaskPermission ? {} : { task: false }),
+              ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
+            },
+            parts: promptParts,
+          }),
+          SUBAGENT_TIMEOUT_MS,
+          `Subagent timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes — provider may be unresponsive`,
+        )
       } catch (e) {
         await Session.remove(session.id).catch((error) => {
           log.warn("failed to remove session after task error", { sessionID: session.id, error })

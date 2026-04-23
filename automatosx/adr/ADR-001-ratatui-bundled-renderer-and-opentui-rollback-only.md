@@ -1,6 +1,6 @@
 # ADR-001: Ship ratatui as the bundled renderer and keep OpenTUI rollback-only
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-04-23
 **Deciders:** (to be filled by team)
 **Supersedes:** None
