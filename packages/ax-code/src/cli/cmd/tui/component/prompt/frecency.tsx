@@ -50,6 +50,8 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           })
         })
 
+    let lastAppend: Promise<void> | undefined
+
     function compact(entries = store.data) {
       const sorted = Object.entries(entries)
         .sort(([, a], [, b]) => b.lastOpen - a.lastOpen)
@@ -58,7 +60,10 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
       writesSinceCompact = 0
       const content =
         sorted.map(([entryPath, entry]) => JSON.stringify({ path: entryPath, ...entry })).join("\n") + "\n"
-      void persistFrecency(content)
+      // Await pending append before rewriting to prevent interleaving
+      const pending = lastAppend
+      lastAppend = undefined
+      void (pending ?? Promise.resolve()).then(() => persistFrecency(content))
     }
 
     onMount(() => {
@@ -139,7 +144,9 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
       }
       setStore("data", absolutePath, newEntry)
       writesSinceCompact += 1
-      void appendFile(frecencyPath, JSON.stringify({ path: absolutePath, ...newEntry }) + "\n")
+      // Track the pending write so compact() can await it before
+      // rewriting the file, preventing appendFile/writeFile interleaving.
+      lastAppend = appendFile(frecencyPath, JSON.stringify({ path: absolutePath, ...newEntry }) + "\n")
         .then(() => {
           writeWarningShown = false
         })

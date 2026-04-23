@@ -394,6 +394,7 @@ export function Session() {
   })
 
   const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => {
+    if (!scroll || scroll.isDestroyed) return
     const targetID = nextVisibleMessage({
       direction,
       children: scroll.getChildren(),
@@ -475,6 +476,7 @@ export function Session() {
           <DialogQuality
             sessionID={route.sessionID}
             setPrompt={(promptInfo) => {
+              if (!prompt) return
               prompt.set(promptInfo)
               prompt.focus()
             }}
@@ -603,8 +605,10 @@ export function Session() {
       value: sessionQualityActionValue(action),
       category: "Quality",
       onSelect: (dialog: DialogContext) => {
-        prompt.set(action.prompt)
-        prompt.focus()
+        if (prompt) {
+          prompt.set(action.prompt)
+          prompt.focus()
+        }
         dialog.clear()
       },
     })),
