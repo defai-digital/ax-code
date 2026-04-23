@@ -25,10 +25,12 @@ export type InitDep = {
   info?: (msg: string, data: Record<string, unknown>) => void
 }
 
-export function level(log?: string, local = Installation.isLocal(), debug = false): Log.Level {
+export function level(log?: string, _local = Installation.isLocal(), debug = false): Log.Level {
   if (debug) return "DEBUG"
   if (log) return log as Log.Level
-  if (local) return "DEBUG"
+  // Default to INFO even in local/dev mode. DEBUG output leaks into
+  // the TUI in compatible mode (main-screen) and confuses users.
+  // Use --print-logs or --debug to enable verbose logging explicitly.
   return "INFO"
 }
 

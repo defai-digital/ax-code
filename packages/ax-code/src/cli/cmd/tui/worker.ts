@@ -42,7 +42,6 @@ await Log.init({
   dev: Installation.isLocal(),
   level: (() => {
     if (debugDir) return "DEBUG"
-    if (Installation.isLocal()) return "DEBUG"
     return "INFO"
   })(),
   ...(debugDir ? { dir: debugDir, name: "tui-worker" } : { name: Log.stampedName("tui-worker") }),
