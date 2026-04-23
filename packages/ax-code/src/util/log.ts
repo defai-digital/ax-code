@@ -97,8 +97,11 @@ export namespace Log {
   // return a rejected promise — the logger call sites invoke `write`
   // without awaiting, so a rejection would become an unhandled promise
   // rejection and pollute test output / crash on `unhandledRejection`.
+  //
+  // Default to noop until Log.init() configures the real destination.
+  // The previous default wrote to process.stderr, which leaked log
+  // messages into the TUI in compatible mode (main-screen + passthrough).
   let write: (msg: string) => number | Promise<number> = (msg) => {
-    process.stderr.write(msg)
     return msg.length
   }
 
