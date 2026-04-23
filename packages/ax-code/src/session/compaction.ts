@@ -55,6 +55,7 @@ export namespace SessionCompaction {
         ? input.model.limit.input - reserved
         : context - ProviderTransform.maxOutputTokens(input.model),
     )
+    if (usable === 0) return false
     return count >= usable
   }
 

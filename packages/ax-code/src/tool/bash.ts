@@ -90,7 +90,9 @@ export const BashTool = Tool.define("bash", async () => {
         ),
     }),
     async execute(params, ctx) {
-      const cwd = params.workdir ? path.resolve(Instance.directory, params.workdir) : Instance.directory
+      const cwd = params.workdir
+        ? await fs.realpath(path.resolve(Instance.directory, params.workdir)).catch(() => path.resolve(Instance.directory, params.workdir))
+        : Instance.directory
       if (params.timeout !== undefined && (!Number.isFinite(params.timeout) || params.timeout < 1)) {
         // Reject NaN, Infinity, 0, and negatives: timeout=0 combined
         // with the `+ 100` in the kill timer fires ~100ms later,

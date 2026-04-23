@@ -47,7 +47,7 @@ export namespace Workspace {
   const CreateInput = z.object({
     projectID: ProjectID.zod,
     branch: z.string().optional(),
-    type: z.string().min(1).refine((t) => getAdaptor(t) !== undefined, { message: "Unknown workspace type" }).default("worktree"),
+    type: z.string().min(1).default("worktree"),
     name: z.string().optional(),
     directory: z.string().optional(),
     extra: z.record(z.string(), z.any()).optional(),
@@ -98,6 +98,12 @@ export namespace Workspace {
   export async function remove(id: WorkspaceID) {
     const row = get(id)
     if (!row) return
+    const adaptor = getAdaptor(row.type)
+    if (adaptor) {
+      await adaptor.remove(row.config).catch((err) =>
+        log.warn("adaptor cleanup failed during workspace removal", { id, type: row.type, err }),
+      )
+    }
     Database.use((db) => db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, id)).run())
     return row
   }

@@ -603,7 +603,7 @@ export namespace GraphFormat {
     lines.push("")
 
     const stepIndices = graph.nodes
-      .filter((n) => n.type === "step")
+      .filter((n) => n.type === "step" && n.stepIndex != null)
       .map((n) => n.stepIndex!)
       .sort((a, b) => a - b)
 

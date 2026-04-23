@@ -95,12 +95,15 @@ export async function parseSSE(
   } finally {
     // Flush decoder state once on normal EOF. Aborted or exceptional
     // exits should not emit a trailing partial event.
-    if (flushTrailing && !signal.aborted) {
-      buf += decoder.decode()
-      if (buf.trim()) emit(buf)
+    try {
+      if (flushTrailing && !signal.aborted) {
+        buf += decoder.decode()
+        if (buf.trim()) emit(buf)
+      }
+    } finally {
+      buf = ""
+      signal.removeEventListener("abort", cancel)
+      await reader.cancel().catch(() => {})
     }
-    buf = ""
-    signal.removeEventListener("abort", cancel)
-    await reader.cancel().catch(() => {})
   }
 }

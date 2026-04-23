@@ -17,10 +17,16 @@ function parse(text: string) {
     const value = JSON.parse(text)
     const next = Config.Info.safeParse(value)
     if (next.success) return next.data
-    log.warn("invalid project config, resetting to empty object", { issueCount: next.error.issues.length })
-    return {}
+    // Strip unknown keys but keep valid ones instead of resetting to {}
+    const stripped = Config.Info.strip().safeParse(value)
+    if (stripped.success) {
+      log.warn("project config had unknown keys, stripped to valid subset", { issueCount: next.error.issues.length })
+      return stripped.data
+    }
+    log.warn("project config validation failed, preserving raw object", { issueCount: next.error.issues.length })
+    return value as Config.Info
   } catch (error) {
-    log.warn("failed to parse project config, resetting to empty object", { error })
+    log.warn("failed to parse project config JSON", { error })
     return {}
   }
 }

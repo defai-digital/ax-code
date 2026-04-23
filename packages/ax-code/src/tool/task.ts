@@ -129,33 +129,33 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           ],
         })
       })
-      const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
-      if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
-
-      const model = agent.model ?? {
-        modelID: msg.info.modelID,
-        providerID: msg.info.providerID,
-      }
-
-      ctx.metadata({
-        title: params.description,
-        metadata: {
-          sessionId: session.id,
-          model,
-        },
-      })
-
-      const messageID = MessageID.ascending()
-
-      function cancel() {
-        SessionPrompt.cancel(session.id)
-      }
-      ctx.abort.addEventListener("abort", cancel, { once: true })
-      using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
-      const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
-
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>
       try {
+        const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
+        if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
+
+        const model = agent.model ?? {
+          modelID: msg.info.modelID,
+          providerID: msg.info.providerID,
+        }
+
+        ctx.metadata({
+          title: params.description,
+          metadata: {
+            sessionId: session.id,
+            model,
+          },
+        })
+
+        const messageID = MessageID.ascending()
+
+        function cancel() {
+          SessionPrompt.cancel(session.id)
+        }
+        ctx.abort.addEventListener("abort", cancel, { once: true })
+        using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
+        const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
+
         result = await SessionPrompt.prompt({
           messageID,
           sessionID: session.id,

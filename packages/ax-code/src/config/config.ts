@@ -828,6 +828,15 @@ export namespace Config {
         )
       }
       const data = parsed.data
+      if (data.plugin && options.trusted === false) {
+        // Filter untrusted plugins BEFORE resolving — resolve converts
+        // package names to file:// URLs which would bypass the filter.
+        data.plugin = data.plugin.filter((plugin) => {
+          if (plugin.startsWith("file://") || plugin.startsWith("/") || plugin.startsWith("./") || plugin.startsWith("../")) return true
+          log.warn("ignoring package plugin from untrusted config", { plugin, source })
+          return false
+        })
+      }
       if (data.plugin && isFile) {
         for (let i = 0; i < data.plugin.length; i++) {
           const plugin = data.plugin[i]
@@ -835,16 +844,10 @@ export namespace Config {
             data.plugin[i] = import.meta.resolve!(plugin, options.path)
           } catch (e) {
             try {
-              // import.meta.resolve sometimes fails with newly created node_modules
               const require = createRequire(options.path)
               const resolvedPath = require.resolve(plugin)
               data.plugin[i] = pathToFileURL(resolvedPath).href
             } catch (err) {
-              // Plugin may legitimately be a generic string identifier
-              // like "mcp-server" that the plugin loader resolves later.
-              // Log at debug so misspelled plugin paths can still be
-              // diagnosed by the user (previous empty catch left them
-              // wondering why their plugin never loaded).
               log.debug("plugin resolve failed — may be string identifier", {
                 plugin,
                 configPath: options.path,
@@ -853,13 +856,6 @@ export namespace Config {
             }
           }
         }
-      }
-      if (data.plugin && options.trusted === false) {
-        data.plugin = data.plugin.filter((plugin) => {
-          if (plugin.startsWith("file://")) return true
-          log.warn("ignoring unresolved package plugin from untrusted config", { plugin, source })
-          return false
-        })
       }
       return data
     }

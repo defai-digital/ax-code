@@ -287,7 +287,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           }
           await fs.mkdir(path.dirname(change.filePath), { recursive: true })
           await fs.writeFile(change.filePath, change.oldContent, "utf-8")
-        }).catch(() => undefined)
+        }).catch((err) => {
+          log.warn("apply_patch rollback failed for file", { file: change.filePath, error: err })
+        })
       }
     }
 
@@ -308,7 +310,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
               }
               activeDirty = true
-              await fs.writeFile(change.filePath, change.newContent, "utf-8")
+              await Filesystem.write(change.filePath, change.newContent)
             })
             await FileTime.read(ctx.sessionID, change.filePath)
             updates.push({ file: change.filePath, event: change.existed ? "change" : "add" })
@@ -320,7 +322,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               if (current !== undefined && current !== change.oldContent)
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
               activeDirty = true
-              await fs.writeFile(change.filePath, change.newContent, "utf-8")
+              await Filesystem.write(change.filePath, change.newContent)
             })
             await FileTime.read(ctx.sessionID, change.filePath)
             updates.push({ file: change.filePath, event: "change" })
@@ -338,7 +340,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                     throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
                   }
                   activeDirty = true
-                  await fs.writeFile(dest, change.newContent, "utf-8")
+                  await Filesystem.write(dest, change.newContent)
                   if (dest !== change.filePath) await fs.unlink(change.filePath)
                 })
               } else {
@@ -358,7 +360,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                       throw new Error(`apply_patch conflict: ${dest} was modified between verification and write`)
                     }
                     activeDirty = true
-                    await fs.writeFile(dest, change.newContent, "utf-8")
+                    await Filesystem.write(dest, change.newContent)
                     if (dest !== change.filePath) await fs.unlink(change.filePath)
                   })
                 })

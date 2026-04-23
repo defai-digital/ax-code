@@ -104,10 +104,25 @@ export const EditTool = Tool.define("edit", {
       contentOld = await Filesystem.readText(filePath)
 
       const ending = detectLineEnding(contentOld)
+      // Normalize oldString/newString to match the file's detected line ending.
+      // For mixed-ending files, also attempt matching against the raw content
+      // so that edits work regardless of which endings are in the target region.
       const old = convertToLineEnding(normalizeLineEndings(params.oldString), ending)
       const next = convertToLineEnding(normalizeLineEndings(params.newString), ending)
 
-      contentNew = replace(contentOld, old, next, params.replaceAll)
+      let replaced: string | undefined
+      try {
+        replaced = replace(contentOld, old, next, params.replaceAll)
+      } catch {
+        // If the converted ending doesn't match (mixed-ending file),
+        // try with normalized endings on both sides.
+        const normalizedContent = normalizeLineEndings(contentOld)
+        const normalizedOld = normalizeLineEndings(params.oldString)
+        const normalizedNext = normalizeLineEndings(params.newString)
+        const normalizedResult = replace(normalizedContent, normalizedOld, normalizedNext, params.replaceAll)
+        replaced = convertToLineEnding(normalizedResult, ending)
+      }
+      contentNew = replaced
 
       diff = trimDiff(
         createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),

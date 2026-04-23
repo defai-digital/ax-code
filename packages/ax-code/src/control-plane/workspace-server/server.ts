@@ -30,8 +30,10 @@ export namespace WorkspaceServer {
             }),
           )
 
+          const SSE_MAX_QUEUE = 1024
           const listener = (event: { directory?: string; payload: unknown }) => {
             if (workspaceID && event.directory && event.directory !== workspaceID) return
+            if (q.size >= SSE_MAX_QUEUE) return // backpressure: drop events when queue is full
             q.push(JSON.stringify(event.payload))
           }
 
