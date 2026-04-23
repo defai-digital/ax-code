@@ -69,10 +69,11 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.11+
+Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+
 
-`setup:cli` builds the current native bundled CLI and installs a launcher to it so the linked command matches npm/Homebrew behavior.
-Use `pnpm run setup:cli -- --source` only when you explicitly want the live source/dev launcher.
+`setup:cli` installs a source launcher that runs ax-code directly via `bun run`.
+This avoids known Bun compiled-binary bugs ([oven-sh/bun#26762](https://github.com/oven-sh/bun/issues/26762), [#27766](https://github.com/oven-sh/bun/issues/27766)) that can cause TUI hangs.
+Use `pnpm run setup:cli -- --bundled` if you need a compiled single-file binary for distribution.
 
 ---
 
