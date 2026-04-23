@@ -201,15 +201,14 @@ export function setupCli(input: SetupCliOptions = {}) {
     mkdirSync(binDir, { recursive: true })
   }
 
-  const sourceMode = args.includes("--source")
-  const bundledBinary = sourceMode ? undefined : ensureBundledBinary({ root, env, platform, arch, avx2, musl, version, exists, spawnSync, log })
-  const launcher = sourceMode
+  // Default to source launcher to avoid Bun compiled-binary bugs
+  // (oven-sh/bun#26762, #29124, #27766) that cause TUI hangs in
+  // Worker-based architectures. Use --bundled to opt into the compiled
+  // binary if needed for distribution.
+  const bundledMode = args.includes("--bundled")
+  const bundledBinary = bundledMode ? ensureBundledBinary({ root, env, platform, arch, avx2, musl, version, exists, spawnSync, log }) : undefined
+  const launcher = bundledMode
     ? {
-        unix: sourceLauncherScript({ root, windows: false }),
-        windows: sourceLauncherScript({ root, windows: true }),
-        mode: "source/dev",
-      }
-    : {
         unix: bundledLauncherScript({
           binaryPath: bundledBinary!,
           windows: false,
@@ -219,6 +218,11 @@ export function setupCli(input: SetupCliOptions = {}) {
           windows: true,
         }),
         mode: "bundled",
+      }
+    : {
+        unix: sourceLauncherScript({ root, windows: false }),
+        windows: sourceLauncherScript({ root, windows: true }),
+        mode: "source",
       }
 
   if (windows) {
@@ -242,10 +246,10 @@ export function setupCli(input: SetupCliOptions = {}) {
   log("  ax-code --help")
   log("  ax-code providers list")
   log("  ax-code mcp add")
-  if (!sourceMode) {
+  if (!bundledMode) {
     log("")
-    log("Need a live source/dev launcher instead?")
-    log("  pnpm run setup:cli -- --source")
+    log("Need a compiled binary launcher instead?")
+    log("  pnpm run setup:cli -- --bundled")
   }
   log("")
   log(`If "ax-code" is not found, ensure ${binDir} is in your PATH.`)

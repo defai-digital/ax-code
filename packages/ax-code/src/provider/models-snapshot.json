@@ -21233,6 +21233,37 @@
           "output": 65536
         }
       },
+      "Qwen/Qwen3.6-35B-A3B": {
+        "id": "Qwen/Qwen3.6-35B-A3B",
+        "name": "Qwen/Qwen3.6-35B-A3B",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-04-17",
+        "last_updated": "2026-04-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.23,
+          "output": 1.86
+        },
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
       "Qwen/Qwen2.5-72B-Instruct": {
         "id": "Qwen/Qwen2.5-72B-Instruct",
         "name": "Qwen/Qwen2.5-72B-Instruct",
@@ -22709,6 +22740,40 @@
           "output": 262000
         }
       },
+      "Pro/moonshotai/Kimi-K2.6": {
+        "id": "Pro/moonshotai/Kimi-K2.6",
+        "name": "Pro/moonshotai/Kimi-K2.6",
+        "family": "kimi",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-21",
+        "last_updated": "2026-04-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.95,
+          "output": 4,
+          "cache_read": 0.16
+        },
+        "limit": {
+          "context": 262000,
+          "output": 262000
+        }
+      },
       "Pro/moonshotai/Kimi-K2-Instruct-0905": {
         "id": "Pro/moonshotai/Kimi-K2-Instruct-0905",
         "name": "Pro/moonshotai/Kimi-K2-Instruct-0905",
@@ -22745,6 +22810,9 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-01-27",
@@ -22758,10 +22826,10 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "cost": {
-          "input": 0.55,
-          "output": 3
+          "input": 0.45,
+          "output": 2.25
         },
         "limit": {
           "context": 262000,
@@ -44488,6 +44556,42 @@
           "output": 32768
         }
       },
+      "moonshotai/Kimi-K2.6": {
+        "id": "moonshotai/Kimi-K2.6",
+        "name": "Kimi K2.6",
+        "family": "kimi",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2024-04",
+        "release_date": "2026-04-21",
+        "last_updated": "2026-04-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.75,
+          "output": 3.5,
+          "cache_read": 0.15
+        },
+        "limit": {
+          "context": 262144,
+          "output": 16384
+        }
+      },
       "moonshotai/Kimi-K2-Instruct": {
         "id": "moonshotai/Kimi-K2-Instruct",
         "name": "Kimi K2",
@@ -62634,6 +62738,36 @@
         },
         "provider": {
           "npm": "@ai-sdk/openai"
+        }
+      },
+      "hy3-preview-free": {
+        "id": "hy3-preview-free",
+        "name": "Hy3 Preview Free",
+        "family": "hy3-free",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-06",
+        "release_date": "2026-04-20",
+        "last_updated": "2026-04-20",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cache_read": 0
+        },
+        "limit": {
+          "context": 256000,
+          "output": 64000
         }
       },
       "minimax-m2.5": {
@@ -96659,6 +96793,40 @@
           "output": 262000
         }
       },
+      "moonshotai/Kimi-K2.6": {
+        "id": "moonshotai/Kimi-K2.6",
+        "name": "moonshotai/Kimi-K2.6",
+        "family": "kimi",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-21",
+        "last_updated": "2026-04-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0.95,
+          "output": 4,
+          "cache_read": 0.16
+        },
+        "limit": {
+          "context": 262000,
+          "output": 262000
+        }
+      },
       "moonshotai/Kimi-K2-Instruct": {
         "id": "moonshotai/Kimi-K2-Instruct",
         "name": "moonshotai/Kimi-K2-Instruct",
@@ -96724,6 +96892,9 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-01-27",
@@ -96737,10 +96908,10 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "cost": {
-          "input": 0.55,
-          "output": 3
+          "input": 0.45,
+          "output": 2.25
         },
         "limit": {
           "context": 262000,
@@ -113261,6 +113432,32 @@
           "output": 8192
         }
       },
+      "gemma-4-26b-a4b-it": {
+        "id": "gemma-4-26b-a4b-it",
+        "name": "Gemma 4 26B",
+        "family": "gemma",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-02",
+        "last_updated": "2026-04-02",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "output": 8192
+        }
+      },
       "gemini-2.5-flash-lite": {
         "id": "gemini-2.5-flash-lite",
         "name": "Gemini 2.5 Flash Lite",
@@ -113294,32 +113491,6 @@
         "limit": {
           "context": 1048576,
           "output": 65536
-        }
-      },
-      "gemma-4-26b-it": {
-        "id": "gemma-4-26b-it",
-        "name": "Gemma 4 26B",
-        "family": "gemma",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-02",
-        "last_updated": "2026-04-02",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 256000,
-          "output": 8192
         }
       },
       "gemini-2.5-flash-image-preview": {
@@ -115952,6 +116123,39 @@
         "limit": {
           "context": 262144,
           "output": 131072
+        }
+      },
+      "moonshotai/Kimi-K2.6": {
+        "id": "moonshotai/Kimi-K2.6",
+        "name": "Kimi K2.6",
+        "family": "kimi-k2.6",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-04-21",
+        "last_updated": "2026-04-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 1.2,
+          "output": 4.5,
+          "cache_read": 0.2
+        },
+        "limit": {
+          "context": 262144,
+          "output": 131000
         }
       },
       "moonshotai/Kimi-K2.5": {
