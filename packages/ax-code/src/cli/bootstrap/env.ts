@@ -66,6 +66,17 @@ export function apply(
   }
 }
 
+let shellEnvReady: Promise<void> | undefined
+
+/**
+ * Await this before accessing environment variables that may come from the
+ * user's shell profile (e.g., API keys set in .zshrc/.bashrc). The shell env
+ * is loaded in the background during init() so it doesn't block startup.
+ */
+export function ensureShellEnv() {
+  return shellEnvReady ?? Promise.resolve()
+}
+
 async function loadShellEnv(env: Record<string, string | undefined>) {
   if (process.platform === "win32") return
   const shell = env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash")
@@ -109,7 +120,10 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   const log = dep.log ?? Log.init
   const info = dep.info ?? ((msg: string, data: Record<string, unknown>) => Log.Default.info(msg, data))
 
-  await loadShellEnv(env)
+  // Start shell env loading in the background instead of blocking startup.
+  // Shell env is only needed for provider API keys and tool execution,
+  // not for CLI parsing or TUI rendering.
+  shellEnvReady = loadShellEnv(env)
 
   const debug = debugOptions(opts, cwd)
   const debugDir = debug.enabled && debug.baseDir ? debugRunDir(debug.baseDir, pid, now) : undefined

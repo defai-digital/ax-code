@@ -266,6 +266,9 @@ export namespace Provider {
 
   const state = Instance.state(async () => {
     using _ = log.time("state")
+    // Ensure shell env is loaded before reading API keys from process.env
+    const { ensureShellEnv } = await import("@/cli/bootstrap/env")
+    await ensureShellEnv()
     // Parallelize independent init calls — Config, ModelsDev, and Auth
     // have no cross-dependencies and each may involve network I/O.
     const [config, modelsDev, authEntries] = await Promise.all([Config.get(), ModelsDev.get(), Auth.all()])

@@ -99,10 +99,21 @@ export namespace SessionProcessor {
     let blocked = false
     let attempt = 0
     let needsCompaction = false
+    let lastStatusWrite = 0
+    let lastWaitState: string | undefined
+    const STATUS_THROTTLE_MS = 500
     const setBusyStatus = async (
       patch: Partial<Extract<SessionStatus.Info, { type: "busy" }>> = {},
     ) => {
       const now = Date.now()
+      // Throttle: skip redundant writes if the waitState hasn't changed
+      // and less than 500ms elapsed. Always write on state transitions
+      // (llm↔tool) and forced updates (step, startedAt).
+      const stateChanged = patch.waitState !== undefined && patch.waitState !== lastWaitState
+      const forced = patch.step !== undefined || patch.startedAt !== undefined
+      if (!stateChanged && !forced && now - lastStatusWrite < STATUS_THROTTLE_MS) return
+      lastStatusWrite = now
+      if (patch.waitState !== undefined) lastWaitState = patch.waitState
       const current = await SessionStatus.get(input.sessionID)
       const base: Extract<SessionStatus.Info, { type: "busy" }> =
         current.type === "busy"
