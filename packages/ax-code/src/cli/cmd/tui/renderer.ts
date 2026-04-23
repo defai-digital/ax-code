@@ -37,7 +37,11 @@ export function resolveTuiRenderProfile(input: {
     // Letting OpenTUI destroy the renderer directly bypasses that routing.
     exitOnCtrlC: false,
     useThread: advancedTerminal,
-    useMouse: advancedTerminal,
+    // Mouse support is safe in compatible mode — unlike kitty keyboard
+    // or the native render thread, it does not trigger terminal capability
+    // probes that can hang. Enable it so footer toggle buttons (Auto-route,
+    // Autonomous, Sandbox) are clickable in all terminal profiles.
+    useMouse: true,
     useKittyKeyboard: advancedTerminal,
     screenMode: advancedTerminal ? "alternate-screen" : "main-screen",
     allowTerminalTitle: advancedTerminal && !terminalTitleDisabled,

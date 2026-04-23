@@ -21,7 +21,7 @@ describe("tui renderer profile", () => {
     expect(options.testing).toBeFalse()
     expect(options.exitOnCtrlC).toBeFalse()
     expect(options.useThread).toBeFalse()
-    expect(options.useMouse).toBeFalse()
+    expect(options.useMouse).toBeTrue()
     expect(options.screenMode).toBe("main-screen")
     expect(options.useKittyKeyboard).toBeNull()
   })

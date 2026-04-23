@@ -86,7 +86,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(renderer).toContain("allowTerminalTitle: advancedTerminal && !terminalTitleDisabled")
     expect(renderer).toContain("autoFocus: false")
     expect(renderer).toContain("openConsoleOnError: false")
-    expect(renderer).toContain("useMouse: advancedTerminal")
+    expect(renderer).toContain("useMouse: true")
     expect(renderer).toContain("useKittyKeyboard: advancedTerminal")
     expect(renderer).toContain("useKittyKeyboard: profile.useKittyKeyboard ? {} : null")
   })
