@@ -15,6 +15,9 @@ import { Filesystem } from "../util/filesystem"
 import { FileTime } from "../file/time"
 import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "tool.apply_patch" })
 
 const PatchParams = z.object({
   patchText: z.string().describe("The full patch text that describes all changes to be made"),

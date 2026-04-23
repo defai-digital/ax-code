@@ -100,7 +100,7 @@ export namespace Workspace {
     if (!row) return
     const adaptor = getAdaptor(row.type)
     if (adaptor) {
-      await adaptor.remove(row.config).catch((err) =>
+      await adaptor.remove(row.extra).catch((err) =>
         log.warn("adaptor cleanup failed during workspace removal", { id, type: row.type, err }),
       )
     }

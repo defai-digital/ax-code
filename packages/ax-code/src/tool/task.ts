@@ -185,6 +185,11 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           `Subagent timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes — provider may be unresponsive`,
         )
       } catch (e) {
+        // Cancel the in-flight processor before removing the session.
+        // Without this, a timed-out subagent's processor continues
+        // running (making LLM calls, executing tools) in the background
+        // even though the parent has moved on.
+        await SessionPrompt.cancel(session.id).catch(() => {})
         await Session.remove(session.id).catch((error) => {
           log.warn("failed to remove session after task error", { sessionID: session.id, error })
         })
