@@ -152,8 +152,21 @@ export namespace SessionProcessor {
             })
             const stream = await LLM.stream(streamInput)
 
+            // Heartbeat: update lastActivityAt periodically during long
+            // streaming responses so the TUI doesn't show "no activity"
+            // while the model is actively generating text/reasoning.
+            let lastHeartbeat = Date.now()
+            const HEARTBEAT_INTERVAL_MS = 15_000
+
             for await (const value of stream.fullStream) {
               input.abort.throwIfAborted()
+
+              const now = Date.now()
+              if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+                lastHeartbeat = now
+                await setBusyStatus({ lastActivityAt: now })
+              }
+
               switch (value.type) {
                 case "start":
                   await setBusyStatus({

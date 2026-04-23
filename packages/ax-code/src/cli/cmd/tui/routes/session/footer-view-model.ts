@@ -89,8 +89,18 @@ export function footerSessionStatusView(input: {
     stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / 1000))) : undefined
   const text = elapsed ? `${label} · ${elapsed}` : label
 
+  if (!inactive) return { label: text, stale }
+
+  // Give context-aware stale messages instead of generic "no activity"
+  const staleHint =
+    status.waitState === "tool"
+      ? `tool may be stalled · ${inactive}`
+      : status.waitState === "llm"
+        ? `response delayed · ${inactive}`
+        : `no update · ${inactive}`
+
   return {
-    label: inactive ? `${text} · no activity ${inactive}` : text,
+    label: `${text} · ${staleHint}`,
     stale,
   }
 }
