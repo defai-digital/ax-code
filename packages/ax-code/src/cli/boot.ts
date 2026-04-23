@@ -1,9 +1,44 @@
 import { NamedError } from "@ax-code/util/error"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
-// Eager imports: only the default TUI command and run (used 99% of the time)
-import { TuiThreadCommand } from "./cmd/tui/thread"
+import { AcpCommand } from "./cmd/acp"
+import { AuditCommand } from "./cmd/audit"
+import { ReplayCommand } from "./cmd/replay"
+import { AgentCommand } from "./cmd/agent"
+import { ConsoleCommand } from "./cmd/account"
+import { AttachCommand } from "./cmd/tui/attach"
+import { ContextCommand } from "./cmd/context"
+import { DbCommand } from "./cmd/db"
+import { DebugCommand } from "./cmd/debug"
+import { DesignCheckCommand } from "./cmd/design-check"
+import { DoctorCommand } from "./cmd/doctor"
+import { TraceCommand } from "./cmd/trace"
+import { CompareCommand } from "./cmd/compare"
+import { RollbackCommand } from "./cmd/rollback"
+import { BranchCommand } from "./cmd/branch"
+import { ExportCommand } from "./cmd/export"
+import { GenerateCommand } from "./cmd/generate"
+import { GithubCommand } from "./cmd/github"
+import { GraphCommand } from "./cmd/graph"
+import { RiskCommand } from "./cmd/risk"
+import { DreGraphCommand } from "./cmd/dre-graph"
+import { ImportCommand } from "./cmd/import"
+import { IndexCommand } from "./cmd/index-graph"
+import { InitCommand } from "./cmd/init"
+import { McpCommand } from "./cmd/mcp"
+import { MemoryCommand } from "./cmd/memory"
+import { ModelsCommand } from "./cmd/models"
+import { PrCommand } from "./cmd/pr"
+import { ReleaseCommand } from "./cmd/release"
+import { ProvidersCommand } from "./cmd/providers"
+import { RestartCommand } from "./cmd/restart"
 import { RunCommand } from "./cmd/run"
+import { ServeCommand } from "./cmd/serve"
+import { SessionCommand } from "./cmd/session"
+import { StatsCommand } from "./cmd/stats"
+import { TuiThreadCommand } from "./cmd/tui/thread"
+import { UninstallCommand } from "./cmd/uninstall"
+import { UpgradeCommand } from "./cmd/upgrade"
 import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
 import { migrate } from "./bootstrap/migrate"
@@ -14,65 +49,46 @@ import { Log } from "../util/log"
 import { DiagnosticLog } from "../debug/diagnostic-log"
 import { isHarmlessEffectInterrupt } from "../effect/interrupt"
 
-// Lazy-loaded commands: only imported when the specific command is invoked.
-// This saves ~100-200ms on startup by deferring 35 module loads.
-const lazy = (load: () => Promise<{ default: any }>) => {
-  let cached: any
-  return {
-    get command() { return cached?.command },
-    get describe() { return cached?.describe },
-    get aliases() { return cached?.aliases },
-    get builder() { return cached?.builder },
-    async handler(args: any) {
-      if (!cached) cached = (await load()).default
-      return cached.handler(args)
-    },
-  }
-}
-
-const eagerCmds = [TuiThreadCommand, RunCommand]
-
-const lazyCmds = [
-  { command: "completion", describe: "generate shell completion script" },
-  { command: "acp", describe: "start ACP (Agent Client Protocol) server", handler: async (a: any) => (await import("./cmd/acp")).AcpCommand.handler(a) },
-  { command: "audit", describe: "audit trail tools", handler: async (a: any) => (await import("./cmd/audit")).AuditCommand.handler(a) },
-  { command: "replay <sessionID>", describe: "inspect a recorded session event log", handler: async (a: any) => (await import("./cmd/replay")).ReplayCommand.handler(a) },
-  { command: "mcp", describe: "manage MCP (Model Context Protocol) servers", handler: async (a: any) => (await import("./cmd/mcp")).McpCommand.handler(a), builder: (y: any) => import("./cmd/mcp").then(m => m.McpCommand.builder?.(y) ?? y) },
-  { command: "attach <url>", describe: "attach to a running ax-code server", handler: async (a: any) => (await import("./cmd/tui/attach")).AttachCommand.handler(a) },
-  { command: "debug", describe: "debugging and troubleshooting tools", handler: async (a: any) => (await import("./cmd/debug")).DebugCommand.handler(a), builder: (y: any) => import("./cmd/debug").then(m => m.DebugCommand.builder?.(y) ?? y) },
-  { command: "doctor", describe: "check system health and diagnose issues", handler: async (a: any) => (await import("./cmd/doctor")).DoctorCommand.handler(a) },
-  { command: "trace [sessionID]", describe: "analyze execution trace from structured logs", handler: async (a: any) => (await import("./cmd/trace")).TraceCommand.handler(a) },
-  { command: "compare <session1> <session2>", describe: "compare two session executions", handler: async (a: any) => (await import("./cmd/compare")).CompareCommand.handler(a) },
-  { command: "rollback <sessionID>", describe: "rollback file changes from a session", handler: async (a: any) => (await import("./cmd/rollback")).RollbackCommand.handler(a) },
-  { command: "branch <sessionID>", describe: "create an execution branch from a session", handler: async (a: any) => (await import("./cmd/branch")).BranchCommand.handler(a) },
-  { command: "providers", describe: "manage AI providers and credentials", aliases: ["auth"], handler: async (a: any) => (await import("./cmd/providers")).ProvidersCommand.handler(a), builder: (y: any) => import("./cmd/providers").then(m => m.ProvidersCommand.builder?.(y) ?? y) },
-  { command: "agent", describe: "manage agents", handler: async (a: any) => (await import("./cmd/agent")).AgentCommand.handler(a), builder: (y: any) => import("./cmd/agent").then(m => m.AgentCommand.builder?.(y) ?? y) },
-  { command: "upgrade [target]", describe: "upgrade ax-code to the latest or a specific version", handler: async (a: any) => (await import("./cmd/upgrade")).UpgradeCommand.handler(a) },
-  { command: "uninstall", describe: "uninstall ax-code and remove all related files", handler: async (a: any) => (await import("./cmd/uninstall")).UninstallCommand.handler(a) },
-  { command: "serve", describe: "starts a headless ax-code server", handler: async (a: any) => (await import("./cmd/serve")).ServeCommand.handler(a) },
-  { command: "restart", describe: "restart the running ax-code server instance", handler: async (a: any) => (await import("./cmd/restart")).RestartCommand.handler(a) },
-  { command: "models [provider]", describe: "list all available models", handler: async (a: any) => (await import("./cmd/models")).ModelsCommand.handler(a) },
-  { command: "stats", describe: "show token usage statistics", handler: async (a: any) => (await import("./cmd/stats")).StatsCommand.handler(a) },
-  { command: "export [sessionID]", describe: "export session data as JSON", handler: async (a: any) => (await import("./cmd/export")).ExportCommand.handler(a) },
-  { command: "import <file>", describe: "import session data from JSON file or URL", handler: async (a: any) => (await import("./cmd/import")).ImportCommand.handler(a) },
-  { command: "index", describe: "populate the Code Intelligence graph for this project", handler: async (a: any) => (await import("./cmd/index-graph")).IndexCommand.handler(a) },
-  { command: "github", describe: "manage GitHub agent", handler: async (a: any) => (await import("./cmd/github")).GithubCommand.handler(a), builder: (y: any) => import("./cmd/github").then(m => m.GithubCommand.builder?.(y) ?? y) },
-  { command: "graph [sessionID]", describe: "visualize session execution as a structured graph", handler: async (a: any) => (await import("./cmd/graph")).GraphCommand.handler(a) },
-  { command: "risk <sessionID>", describe: "inspect explainable risk detail for a session", handler: async (a: any) => (await import("./cmd/risk")).RiskCommand.handler(a) },
-  { command: "dre-graph [sessionID]", describe: "open a browser DRE graph view", handler: async (a: any) => (await import("./cmd/dre-graph")).DreGraphCommand.handler(a) },
-  { command: "pr <number>", describe: "fetch and checkout a GitHub PR branch, then run ax-code", handler: async (a: any) => (await import("./cmd/pr")).PrCommand.handler(a) },
-  { command: "init", describe: "Generate AGENTS.md project context for AI comprehension", handler: async (a: any) => (await import("./cmd/init")).InitCommand.handler(a) },
-  { command: "session", describe: "manage sessions", handler: async (a: any) => (await import("./cmd/session")).SessionCommand.handler(a), builder: (y: any) => import("./cmd/session").then(m => m.SessionCommand.builder?.(y) ?? y) },
-  { command: "generate", describe: "generate code from templates", handler: async (a: any) => (await import("./cmd/generate")).GenerateCommand.handler(a), builder: (y: any) => import("./cmd/generate").then(m => m.GenerateCommand.builder?.(y) ?? y) },
-  { command: "account", describe: "manage account", handler: async (a: any) => (await import("./cmd/account")).ConsoleCommand.handler(a) },
-  { command: "context", describe: "manage project context", handler: async (a: any) => (await import("./cmd/context")).ContextCommand.handler(a), builder: (y: any) => import("./cmd/context").then(m => m.ContextCommand.builder?.(y) ?? y) },
-  { command: "memory", describe: "manage memory", handler: async (a: any) => (await import("./cmd/memory")).MemoryCommand.handler(a), builder: (y: any) => import("./cmd/memory").then(m => m.MemoryCommand.builder?.(y) ?? y) },
-  { command: "release", describe: "manage releases", handler: async (a: any) => (await import("./cmd/release")).ReleaseCommand.handler(a), builder: (y: any) => import("./cmd/release").then(m => m.ReleaseCommand.builder?.(y) ?? y) },
-  { command: "design-check", describe: "run design checks", handler: async (a: any) => (await import("./cmd/design-check")).DesignCheckCommand.handler(a) },
-  { command: "db", describe: "database tools", handler: async (a: any) => (await import("./cmd/db")).DbCommand.handler(a), builder: (y: any) => import("./cmd/db").then(m => m.DbCommand.builder?.(y) ?? y) },
+const cmds = [
+  AcpCommand,
+  AuditCommand,
+  ReplayCommand,
+  McpCommand,
+  TuiThreadCommand,
+  AttachCommand,
+  RunCommand,
+  GenerateCommand,
+  DebugCommand,
+  DoctorCommand,
+  TraceCommand,
+  CompareCommand,
+  RollbackCommand,
+  BranchCommand,
+  ConsoleCommand,
+  ProvidersCommand,
+  AgentCommand,
+  UpgradeCommand,
+  UninstallCommand,
+  ServeCommand,
+  RestartCommand,
+  ModelsCommand,
+  StatsCommand,
+  ExportCommand,
+  ImportCommand,
+  IndexCommand,
+  GithubCommand,
+  GraphCommand,
+  RiskCommand,
+  DreGraphCommand,
+  PrCommand,
+  InitCommand,
+  ReleaseCommand,
+  SessionCommand,
+  DbCommand,
+  MemoryCommand,
+  DesignCheckCommand,
+  ContextCommand,
 ]
-
-const cmds = [...eagerCmds, ...lazyCmds]
 
 export function hooks() {
   process.on("unhandledRejection", (err) => {

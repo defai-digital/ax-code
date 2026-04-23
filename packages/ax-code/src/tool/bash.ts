@@ -91,7 +91,7 @@ export const BashTool = Tool.define("bash", async () => {
     }),
     async execute(params, ctx) {
       const cwd = params.workdir
-        ? await fs.realpath(path.resolve(Instance.directory, params.workdir)).catch(() => path.resolve(Instance.directory, params.workdir))
+        ? await fs.realpath(path.resolve(Instance.directory, params.workdir)).catch(() => path.resolve(Instance.directory, params.workdir!))
         : Instance.directory
       if (params.timeout !== undefined && (!Number.isFinite(params.timeout) || params.timeout < 1)) {
         // Reject NaN, Infinity, 0, and negatives: timeout=0 combined
