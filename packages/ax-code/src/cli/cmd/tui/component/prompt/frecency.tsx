@@ -6,6 +6,7 @@ import { createStore } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
+import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
 
@@ -38,11 +39,12 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           writeWarningShown = false
         })
         .catch((error) => {
-          log.warn("failed to persist frecency data", { frecencyPath, error })
           if (writeWarningShown) return
           writeWarningShown = true
+          log.warn("failed to persist frecency data", { frecencyPath, error })
+          if (!shouldSurfaceOptionalStateError(error)) return
           toast.show({
-            message: error instanceof Error ? error.message : "Failed to save file frecency",
+            message: optionalStateErrorMessage(error, "Failed to save file frecency"),
             variant: "warning",
             duration: 3000,
           })
@@ -65,11 +67,13 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           const text = await Filesystem.readText(frecencyPath).catch((error) => {
             if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
             log.warn("failed to load frecency data", { frecencyPath, error })
-            toast.show({
-              message: error instanceof Error ? error.message : "Failed to load file frecency",
-              variant: "warning",
-              duration: 3000,
-            })
+            if (shouldSurfaceOptionalStateError(error)) {
+              toast.show({
+                message: optionalStateErrorMessage(error, "Failed to load file frecency"),
+                variant: "warning",
+                duration: 3000,
+              })
+            }
             return ""
           })
           const lines = text
@@ -140,11 +144,12 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           writeWarningShown = false
         })
         .catch((error) => {
-          log.warn("failed to append frecency data", { frecencyPath, error })
           if (writeWarningShown) return
           writeWarningShown = true
+          log.warn("failed to append frecency data", { frecencyPath, error })
+          if (!shouldSurfaceOptionalStateError(error)) return
           toast.show({
-            message: error instanceof Error ? error.message : "Failed to save file frecency",
+            message: optionalStateErrorMessage(error, "Failed to save file frecency"),
             variant: "warning",
             duration: 3000,
           })

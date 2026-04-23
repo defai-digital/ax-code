@@ -96,6 +96,8 @@ export const ToolResultEvent = Base.extend({
   callID: z.string(),
   status: z.enum(["completed", "error"]),
   output: z.string().optional(),
+  errorCode: z.string().optional(),
+  errorMessage: z.string().optional(),
   error: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   durationMs: z.number(),

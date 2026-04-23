@@ -136,7 +136,7 @@ function summarizeCounts(entries: Array<{ label: string; count: number }>, limit
   return top.map((entry) => `${entry.label} (${entry.count}x)`).join(", ")
 }
 
-function classifyErrors(entries: DiagnosticEntry[]): DiagnosticIssue[] {
+export function classifyErrors(entries: DiagnosticEntry[]): DiagnosticIssue[] {
   const issues: DiagnosticIssue[] = []
 
   const byService = new Map<string, DiagnosticEntry[]>()
@@ -202,6 +202,13 @@ function classifyErrors(entries: DiagnosticEntry[]): DiagnosticIssue[] {
     }
     const otherToolErrors = toolErrors.filter((e) => !timeouts.includes(e))
     if (otherToolErrors.length > 0) {
+      const topToolProblems = summarizeCounts(
+        otherToolErrors.map((entry) => ({
+          label: entry.command ? `${entry.command}: ${entry.message || entry.errorCode || "unknown"}` : entry.message || entry.errorCode || "unknown",
+          count: entry.count,
+        })),
+        2,
+      )
       issues.push({
         severity: "info",
         category: "Tool",
@@ -211,7 +218,7 @@ function classifyErrors(entries: DiagnosticEntry[]): DiagnosticIssue[] {
             .filter(Boolean)
             .join(", ") || "various"
         })`,
-        rootCause: `${otherToolErrors.length} tool error(s) detected. These may be transient or related to specific file or permission states.`,
+        rootCause: `${otherToolErrors.length} tool error(s) detected. Most frequent: ${topToolProblems}. These may be transient or related to specific file or permission states.`,
         impact: "Individual tool calls failed but the session likely recovered via retry or an alternative approach.",
         suggestedFix: "Review errors with `ax-code trace --errors`. Most tool errors are self-correcting.",
         riskLevel: "low",
@@ -265,7 +272,7 @@ function classifyErrors(entries: DiagnosticEntry[]): DiagnosticIssue[] {
   return sortIssues(issues)
 }
 
-function scanStandardLogLines(lines: string[], isJson: boolean, session?: string): StandardLogScan {
+export function scanStandardLogLines(lines: string[], isJson: boolean, session?: string): StandardLogScan {
   const errorEntries: DiagnosticEntry[] = []
   let totalErrors = 0
   let totalWarnings = 0
@@ -309,7 +316,11 @@ function scanStandardLogLines(lines: string[], isJson: boolean, session?: string
     if (session && sessionID !== session) continue
 
     if (level >= 50 || parsed.status === "error") {
-      const key = `${asString(parsed.service) || "unknown"}:${asString(parsed.errorCode) || asString(parsed.command) || "general"}`
+      const service = asString(parsed.service) || "unknown"
+      const command = asString(parsed.command) || asString(parsed.toolName) || ""
+      const errorCode = asString(parsed.errorCode) || ""
+      const message = (asString(parsed.errorMessage) || String(parsed.msg || "")).slice(0, 200)
+      const key = `${service}:${command || "general"}:${errorCode || "general"}`
       const existing = errorMap.get(key)
       if (existing) {
         existing.count++
@@ -317,10 +328,10 @@ function scanStandardLogLines(lines: string[], isJson: boolean, session?: string
         continue
       }
       errorMap.set(key, {
-        service: asString(parsed.service) || "unknown",
-        command: asString(parsed.command) || "",
-        errorCode: asString(parsed.errorCode) || "",
-        message: String(parsed.msg || "").slice(0, 200),
+        service,
+        command,
+        errorCode,
+        message,
         count: 1,
         lastSeen: toISOTime(parsed.time),
         durationMs: asNumber(parsed.durationMs),
@@ -523,6 +534,13 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   const renderLoops: ProcessDebugRecord[] = []
 
   let threadStartedAt: number | undefined
+  let workerSpawnedAt: number | undefined
+  let startupBeginAt: number | undefined
+  let renderDispatchedAt: number | undefined
+  let appMountedAt: number | undefined
+  let bootstrapStartedAt: number | undefined
+  let bootstrapCoreReadyAt: number | undefined
+  let bootstrapReadyAt: number | undefined
   let nativeStartedAt: number | undefined
   let firstPaintAt: number | undefined
   let startupResolvedAt: number | undefined
@@ -530,12 +548,51 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   let transportMode: string | undefined
   let lastPromptSubmittedAt: number | undefined
   let lastHeartbeatMs: number | undefined
+  let rendererProfile:
+    | {
+        profile?: string
+        testing?: boolean
+        screenMode?: string
+        exitOnCtrlC?: boolean
+        useThread?: boolean
+      }
+    | undefined
 
   for (const record of records) {
     const timeMs = Date.parse(record.time)
     switch (record.eventType) {
       case "tui.threadStarted":
         if (threadStartedAt === undefined && Number.isFinite(timeMs)) threadStartedAt = timeMs
+        break
+      case "tui.workerSpawned":
+        if (workerSpawnedAt === undefined && Number.isFinite(timeMs)) workerSpawnedAt = timeMs
+        break
+      case "tui.startup.begin":
+        if (startupBeginAt === undefined && Number.isFinite(timeMs)) startupBeginAt = timeMs
+        break
+      case "tui.startup.rendererProfile":
+        rendererProfile = {
+          profile: asString(record.data.profile),
+          testing: asBoolean(record.data.testing),
+          screenMode: asString(record.data.screenMode),
+          exitOnCtrlC: asBoolean(record.data.exitOnCtrlC),
+          useThread: asBoolean(record.data.useThread),
+        }
+        break
+      case "tui.startup.renderDispatched":
+        if (renderDispatchedAt === undefined && Number.isFinite(timeMs)) renderDispatchedAt = timeMs
+        break
+      case "tui.startup.appMounted":
+        if (appMountedAt === undefined && Number.isFinite(timeMs)) appMountedAt = timeMs
+        break
+      case "tui.startup.bootstrap.start":
+        if (bootstrapStartedAt === undefined && Number.isFinite(timeMs)) bootstrapStartedAt = timeMs
+        break
+      case "tui.startup.bootstrapCoreReady":
+        if (bootstrapCoreReadyAt === undefined && Number.isFinite(timeMs)) bootstrapCoreReadyAt = timeMs
+        break
+      case "tui.startup.bootstrap.end":
+        if (bootstrapReadyAt === undefined && Number.isFinite(timeMs)) bootstrapReadyAt = timeMs
         break
       case "tui.threadTransportSelected":
         transportMode = asString(record.data.mode) ?? transportMode
@@ -603,6 +660,20 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
     }
   }
 
+  if (rendererProfile?.testing) {
+    issues.push({
+      severity: "critical",
+      category: "TUI",
+      title: "TUI renderer is misconfigured in testing mode",
+      rootCause: `Renderer profile \`${rendererProfile.profile ?? "unknown"}\` recorded \`testing: true\` with screen mode \`${rendererProfile.screenMode ?? "unknown"}\`. OpenTUI testing mode is not a production compatibility setting and can suppress real terminal output entirely.`,
+      impact: "The process can finish startup work normally while the user sees a blank or apparently hung terminal because no real frame is painted.",
+      suggestedFix:
+        "Disable OpenTUI testing mode in production renderer options. Keep compatibility changes scoped to screen mode, input features, or threading instead of using the test harness.",
+      riskLevel: "high",
+      occurrences: 1,
+    })
+  }
+
   if (startupFailures.length > 0) {
     const latest = startupFailures[startupFailures.length - 1]
     issues.push({
@@ -641,7 +712,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       severity: "warning",
       category: "TUI",
       title: "TUI backend requests failed",
-      rootCause: `Native TUI requests recorded ${httpFailures.length} backend failure${httpFailures.length === 1 ? "" : "s"} across ${summarizeProcessFailures(httpFailures)}.`,
+      rootCause: `TUI requests recorded ${httpFailures.length} backend failure${httpFailures.length === 1 ? "" : "s"} across ${summarizeProcessFailures(httpFailures)}.`,
       impact:
         "Session loading, workspace switching, dialogs, or prompt submission can look empty, stale, or stuck even when the renderer itself is still running.",
       suggestedFix:
@@ -684,6 +755,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   }
 
   if (!startupFailures.length && !stoppedAt) {
+    const startupAnchorAt = threadStartedAt ?? workerSpawnedAt ?? startupBeginAt
     if (
       threadStartedAt !== undefined &&
       nativeStartedAt === undefined &&
@@ -731,6 +803,53 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
           "The app can stay stuck in startup state with missing transcript, session metadata, or blocking overlays.",
         suggestedFix:
           "Inspect startup-related `tui.native.http*` failures first. If none exist, trace the async startup path for session resolution, transcript loading, and blocking-state hydration.",
+        riskLevel: "medium",
+        occurrences: 1,
+      })
+    } else if (
+      startupAnchorAt !== undefined &&
+      renderDispatchedAt === undefined &&
+      now - startupAnchorAt >= TUI_STARTUP_STALL_THRESHOLD_MS
+    ) {
+      issues.push({
+        severity: "warning",
+        category: "TUI",
+        title: "TUI never reached renderer dispatch",
+        rootCause: `Startup began, but no matching \`tui.startup.renderDispatched\` event arrived within ${formatDuration(TUI_STARTUP_STALL_THRESHOLD_MS)}.`,
+        impact:
+          "The process likely stalled before the Solid/OpenTUI render tree was handed to the renderer, often in worker startup, config resolution, or renderer setup.",
+        suggestedFix:
+          "Inspect the gap between `tui.workerSpawned`, `tui.startup.begin`, and `tui.startup.renderDispatched`. The first missing transition marks the failing startup boundary.",
+        riskLevel: "medium",
+        occurrences: 1,
+      })
+    } else if (renderDispatchedAt !== undefined && appMountedAt === undefined && now - renderDispatchedAt >= TUI_STARTUP_STALL_THRESHOLD_MS) {
+      issues.push({
+        severity: "warning",
+        category: "TUI",
+        title: "TUI render dispatched but app never mounted",
+        rootCause: `The renderer dispatch path started, but no matching \`tui.startup.appMounted\` event arrived within ${formatDuration(TUI_STARTUP_STALL_THRESHOLD_MS)}.`,
+        impact:
+          "The renderer accepted the root, but the app tree never reached its first mounted lifecycle, which can leave the terminal blank or partially initialized.",
+        suggestedFix:
+          "Inspect synchronous work between `renderTui(...)` and the first app mount, including lazy route imports, provider initialization, and any renderer bootstrap hooks.",
+        riskLevel: "medium",
+        occurrences: 1,
+      })
+    } else if (
+      bootstrapStartedAt !== undefined &&
+      bootstrapReadyAt === undefined &&
+      now - bootstrapStartedAt >= HANG_STALL_THRESHOLD_MS
+    ) {
+      issues.push({
+        severity: "warning",
+        category: "TUI",
+        title: "TUI startup bootstrap never completed",
+        rootCause: `The app mounted, but \`tui.startup.bootstrap.end\` never arrived within ${formatDuration(HANG_STALL_THRESHOLD_MS)}.`,
+        impact:
+          "The shell can render, but startup state stays incomplete, leaving session lists, route hydration, or provider-backed UI in a half-ready state.",
+        suggestedFix:
+          "Inspect the gap between `tui.startup.bootstrap.start`, `tui.startup.bootstrapCoreReady`, and `tui.startup.bootstrap.end` together with nearby worker request failures.",
         riskLevel: "medium",
         occurrences: 1,
       })

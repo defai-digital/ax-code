@@ -311,47 +311,54 @@ export namespace Project {
           { concurrency: "unbounded" },
         ).pipe(Effect.map((arr) => arr.filter((x): x is string => x !== undefined)))
 
-        yield* db((d) =>
-          d
-            .insert(ProjectTable)
-            .values({
-              id: result.id,
-              worktree: result.worktree,
-              vcs: result.vcs ?? null,
-              name: result.name,
-              icon_url: result.icon?.url,
-              icon_color: result.icon?.color,
-              time_created: result.time.created,
-              time_updated: result.time.updated,
-              time_initialized: result.time.initialized,
-              sandboxes: result.sandboxes,
-              commands: result.commands,
-            })
-            .onConflictDoUpdate({
-              target: ProjectTable.id,
-              set: {
+        try {
+          yield* db((d) =>
+            d
+              .insert(ProjectTable)
+              .values({
+                id: result.id,
                 worktree: result.worktree,
                 vcs: result.vcs ?? null,
                 name: result.name,
                 icon_url: result.icon?.url,
                 icon_color: result.icon?.color,
+                time_created: result.time.created,
                 time_updated: result.time.updated,
                 time_initialized: result.time.initialized,
                 sandboxes: result.sandboxes,
                 commands: result.commands,
-              },
-            })
-            .run(),
-        )
-
-        if (data.id !== ProjectID.global) {
-          yield* db((d) =>
-            d
-              .update(SessionTable)
-              .set({ project_id: data.id })
-              .where(and(eq(SessionTable.project_id, ProjectID.global), eq(SessionTable.directory, data.worktree)))
+              })
+              .onConflictDoUpdate({
+                target: ProjectTable.id,
+                set: {
+                  worktree: result.worktree,
+                  vcs: result.vcs ?? null,
+                  name: result.name,
+                  icon_url: result.icon?.url,
+                  icon_color: result.icon?.color,
+                  time_updated: result.time.updated,
+                  time_initialized: result.time.initialized,
+                  sandboxes: result.sandboxes,
+                  commands: result.commands,
+                },
+              })
               .run(),
           )
+
+          if (data.id !== ProjectID.global) {
+            yield* db((d) =>
+              d
+                .update(SessionTable)
+                .set({ project_id: data.id })
+                .where(and(eq(SessionTable.project_id, ProjectID.global), eq(SessionTable.directory, data.worktree)))
+                .run(),
+            )
+          }
+        } catch (error) {
+          log.warn("failed to persist discovered project", {
+            projectID: result.id,
+            error,
+          })
         }
 
         yield* emitUpdated(result)
@@ -649,47 +656,54 @@ export namespace Project {
       await Promise.all(result.sandboxes.map(async (sandbox) => ((await Filesystem.exists(sandbox)) ? sandbox : undefined)))
     ).filter((sandbox): sandbox is string => sandbox !== undefined)
 
-    Database.use((d) =>
-      d
-        .insert(ProjectTable)
-        .values({
-          id: result.id,
-          worktree: result.worktree,
-          vcs: result.vcs ?? null,
-          name: result.name,
-          icon_url: result.icon?.url,
-          icon_color: result.icon?.color,
-          time_created: result.time.created,
-          time_updated: result.time.updated,
-          time_initialized: result.time.initialized,
-          sandboxes: result.sandboxes,
-          commands: result.commands,
-        })
-        .onConflictDoUpdate({
-          target: ProjectTable.id,
-          set: {
+    try {
+      Database.use((d) =>
+        d
+          .insert(ProjectTable)
+          .values({
+            id: result.id,
             worktree: result.worktree,
             vcs: result.vcs ?? null,
             name: result.name,
             icon_url: result.icon?.url,
             icon_color: result.icon?.color,
+            time_created: result.time.created,
             time_updated: result.time.updated,
             time_initialized: result.time.initialized,
             sandboxes: result.sandboxes,
             commands: result.commands,
-          },
-        })
-        .run(),
-    )
-
-    if (data.id !== ProjectID.global) {
-      Database.use((d) =>
-        d
-          .update(SessionTable)
-          .set({ project_id: data.id })
-          .where(and(eq(SessionTable.project_id, ProjectID.global), eq(SessionTable.directory, data.worktree)))
+          })
+          .onConflictDoUpdate({
+            target: ProjectTable.id,
+            set: {
+              worktree: result.worktree,
+              vcs: result.vcs ?? null,
+              name: result.name,
+              icon_url: result.icon?.url,
+              icon_color: result.icon?.color,
+              time_updated: result.time.updated,
+              time_initialized: result.time.initialized,
+              sandboxes: result.sandboxes,
+              commands: result.commands,
+            },
+          })
           .run(),
       )
+
+      if (data.id !== ProjectID.global) {
+        Database.use((d) =>
+          d
+            .update(SessionTable)
+            .set({ project_id: data.id })
+            .where(and(eq(SessionTable.project_id, ProjectID.global), eq(SessionTable.directory, data.worktree)))
+            .run(),
+        )
+      }
+    } catch (error) {
+      log.warn("failed to persist discovered project", {
+        projectID: result.id,
+        error,
+      })
     }
 
     emitUpdated(result)

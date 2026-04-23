@@ -9,6 +9,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Permission } from "../../src/permission"
 import { Agent } from "../../src/agent/agent"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { Log } from "../../src/util/log"
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
 const LSP_FILE = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
@@ -201,6 +202,43 @@ describe("tool.read env file permissions", () => {
         },
       })
     })
+  })
+})
+
+describe("tool.read observability", () => {
+  test("logs named read failures with filepath and error message", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Log.init({ print: false, dir: tmp.path, name: "read-tool-observability" })
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const read = await ReadTool.init()
+          const missing = path.join(tmp.path, "missing.ts")
+
+          await expect(read.execute({ filePath: missing }, ctx)).rejects.toThrow(`File not found: ${missing}`)
+        },
+      })
+
+      const logPath = path.join(tmp.path, "read-tool-observability.log")
+      let rawLog = ""
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await sleep(10)
+        rawLog = await Bun.file(logPath).text()
+        if (rawLog.includes("service=tool.read") && rawLog.includes("service=tool toolName=read")) {
+          break
+        }
+      }
+
+      const missing = path.join(tmp.path, "missing.ts")
+      expect(rawLog).toContain("service=tool.read")
+      expect(rawLog).toContain("service=tool toolName=read")
+      expect(rawLog).toContain("errorCode=ReadFileNotFoundError")
+      expect(rawLog).toContain(`errorMessage=File not found: ${missing}`)
+    } finally {
+      await Log.init({ print: false })
+    }
   })
 })
 

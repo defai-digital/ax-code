@@ -78,7 +78,7 @@ export function footerSessionStatusView(input: {
   if (status.waitState === "tool") {
     label = status.activeTool ? `Running ${footerToolLabel(status.activeTool)}` : "Running tool"
   } else if (status.waitState === "llm") {
-    label = "Waiting for model"
+    label = "Waiting for response"
   }
 
   const staleAfterMs =

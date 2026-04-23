@@ -108,6 +108,46 @@ describe("DiagnosticLog", () => {
     })
   })
 
+  test("preserves structured tool error summaries in replay logs", async () => {
+    await using tmp = await tmpdir()
+
+    await DiagnosticLog.configure({
+      enabled: true,
+      dir: tmp.path,
+      includeContent: false,
+      manifest: { component: "test", pid: 789 },
+    })
+
+    DiagnosticLog.record(
+      {
+        type: "tool.result",
+        sessionID: "ses_2",
+        tool: "read",
+        callID: "call_1",
+        status: "error",
+        errorCode: "ReadFileNotFoundError",
+        errorMessage: "File not found: /Users/example/project/src/modules/quotation-comment.controller.ts",
+        error: "File not found: /Users/example/project/src/modules/quotation-comment.controller.ts",
+        durationMs: 1,
+      },
+      { id: "evt_2", sequence: 1, time: Date.parse("2026-04-12T00:00:01Z") },
+    )
+    await DiagnosticLog.flush()
+
+    const replayEvents = await readJsonLines(path.join(tmp.path, "events.jsonl"))
+    expect(replayEvents[0]).toMatchObject({
+      kind: "replay.event",
+      eventType: "tool.result",
+      event: {
+        errorCode: "ReadFileNotFoundError",
+      },
+    })
+    expect(replayEvents[0].event.errorMessage).toMatchObject({ redacted: true })
+    expect(replayEvents[0].event.error).toMatchObject({ redacted: true })
+    expect(replayEvents[0].event.errorMessage.bytes).toBeGreaterThan(0)
+    expect(replayEvents[0].event.error.bytes).toBeGreaterThan(0)
+  })
+
   test("redacts provider errors for normal logs", () => {
     const error = Object.assign(new Error("provider failed"), {
       body: { apiKey: "secret" },

@@ -79,22 +79,41 @@ export namespace Database {
     return sql.sort((a, b) => a.timestamp - b.timestamp)
   }
 
-  export const Client = lazy(() => {
-    log.info("opening database", { path: Path })
-
-    const db = init(Path)
-
-    db.run("PRAGMA journal_mode = WAL")
+  export function applyStartupPragmas(input: {
+    run: (sql: string) => unknown
+    warn?: (message: string, extra: Record<string, unknown>) => void
+    path?: string
+  }) {
+    input.run("PRAGMA journal_mode = WAL")
     // NORMAL (not FULL): ~10-20% faster writes. Trade-off: on an OS crash or
     // power loss (not app crash), the most recently committed transaction may
     // be silently rolled back. Acceptable for a local dev tool where the
     // database remains consistent (no corruption) and only the last action
     // is lost. Use FULL if write durability becomes critical.
-    db.run("PRAGMA synchronous = NORMAL")
-    db.run("PRAGMA busy_timeout = 15000")
-    db.run("PRAGMA cache_size = -64000")
-    db.run("PRAGMA foreign_keys = ON")
-    db.run("PRAGMA wal_checkpoint(PASSIVE)")
+    input.run("PRAGMA synchronous = NORMAL")
+    input.run("PRAGMA busy_timeout = 15000")
+    input.run("PRAGMA cache_size = -64000")
+    input.run("PRAGMA foreign_keys = ON")
+    try {
+      input.run("PRAGMA wal_checkpoint(PASSIVE)")
+    } catch (error) {
+      input.warn?.("failed to checkpoint wal during startup", {
+        path: input.path,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  export const Client = lazy(() => {
+    log.info("opening database", { path: Path })
+
+    const db = init(Path)
+
+    applyStartupPragmas({
+      run: (sql) => db.run(sql),
+      warn: (message, extra) => log.warn(message, extra),
+      path: Path,
+    })
 
     // Apply schema migrations
     const entries =

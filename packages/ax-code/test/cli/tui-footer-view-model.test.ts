@@ -21,7 +21,7 @@ describe("footerSessionStatusView", () => {
     })
 
     expect(view.stale).toBe(false)
-    expect(view.label).toContain("Waiting for model")
+    expect(view.label).toContain("Waiting for response")
     expect(view.label).not.toContain("no activity")
   })
 
@@ -38,7 +38,7 @@ describe("footerSessionStatusView", () => {
     })
 
     expect(view.stale).toBe(true)
-    expect(view.label).toContain("Waiting for model")
+    expect(view.label).toContain("Waiting for response")
     expect(view.label).toContain("no activity")
   })
 

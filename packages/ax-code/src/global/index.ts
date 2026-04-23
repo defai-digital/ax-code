@@ -26,6 +26,12 @@ const cache = path.join(fallback(xdgCache, "XDG_CACHE_HOME", ".cache"), app)
 const config = path.join(fallback(xdgConfig, "XDG_CONFIG_HOME", ".config"), app)
 const state = path.join(fallback(xdgState, "XDG_STATE_HOME", ".local/state"), app)
 
+function warnGlobalInit(message: string, error: unknown, extra?: Record<string, string>) {
+  const suffix = error instanceof Error ? error.message : String(error)
+  const detail = extra ? ` ${JSON.stringify(extra)}` : ""
+  console.error(`[ax-code global] ${message}: ${suffix}${detail}`)
+}
+
 export namespace Global {
   export const Path = {
     // Allow override via AX_CODE_TEST_HOME for test isolation
@@ -41,13 +47,27 @@ export namespace Global {
   }
 }
 
-await Promise.all([
+await Promise.allSettled([
   fs.mkdir(Global.Path.data, { recursive: true }),
   fs.mkdir(Global.Path.config, { recursive: true }),
   fs.mkdir(Global.Path.state, { recursive: true }),
   fs.mkdir(Global.Path.log, { recursive: true }),
   fs.mkdir(Global.Path.bin, { recursive: true }),
-])
+]).then((results) => {
+  const entries = [
+    ["data", Global.Path.data],
+    ["config", Global.Path.config],
+    ["state", Global.Path.state],
+    ["log", Global.Path.log],
+    ["bin", Global.Path.bin],
+  ] as const
+
+  for (const [index, result] of results.entries()) {
+    if (result.status === "fulfilled") continue
+    const [label, dir] = entries[index] ?? ["unknown", "unknown"]
+    warnGlobalInit("failed to prepare global directory", result.reason, { label, dir })
+  }
+})
 
 const CACHE_VERSION = "21"
 
@@ -72,9 +92,15 @@ if (version !== CACHE_VERSION) {
     )
   } catch (e) {
     cleaned = false
-    console.error("cache cleanup failed, leaving version marker unchanged:", e)
+    warnGlobalInit("cache cleanup failed, leaving version marker unchanged", e, {
+      cache: Global.Path.cache,
+    })
   }
   if (cleaned) {
-    await Filesystem.write(path.join(Global.Path.cache, "version"), CACHE_VERSION)
+    await Filesystem.write(path.join(Global.Path.cache, "version"), CACHE_VERSION).catch((error) => {
+      warnGlobalInit("failed to stamp cache version", error, {
+        cache: Global.Path.cache,
+      })
+    })
   }
 }

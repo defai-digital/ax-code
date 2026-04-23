@@ -14,6 +14,7 @@ import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
+import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { resolveCurrentAgent } from "./local-util"
 import { Log } from "@/util/log"
 
@@ -180,11 +181,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           })
           .catch((error) => {
             state.pending = true
-            log.warn("failed to persist local model preferences", { filePath, error })
             if (state.saveWarningShown) return
             state.saveWarningShown = true
+            log.warn("failed to persist local model preferences", { filePath, error })
+            if (!shouldSurfaceOptionalStateError(error)) return
             toast.show({
-              message: error instanceof Error ? error.message : "Failed to save model preferences",
+              message: optionalStateErrorMessage(error, "Failed to save model preferences"),
               variant: "warning",
               duration: 3000,
             })
@@ -200,11 +202,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         .catch((error) => {
           if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return
           log.warn("failed to load local model preferences", { filePath, error })
-          toast.show({
-            message: error instanceof Error ? error.message : "Failed to load model preferences",
-            variant: "warning",
-            duration: 3000,
-          })
+          if (shouldSurfaceOptionalStateError(error)) {
+            toast.show({
+              message: optionalStateErrorMessage(error, "Failed to load model preferences"),
+              variant: "warning",
+              duration: 3000,
+            })
+          }
         })
         .finally(() => {
           setModelStore("ready", true)

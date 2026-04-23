@@ -8,6 +8,7 @@ import { appendFile, writeFile } from "fs/promises"
 import type { PromptInfo } from "./history"
 import { Log } from "@/util/log"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
+import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
 
 export type StashEntry = {
@@ -33,11 +34,12 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
     let writeWarningShown = false
 
     const handleWriteFailure = (operation: string) => (error: unknown) => {
-      log.warn("prompt stash write failed", { operation, error, stashPath })
       if (writeWarningShown) return
       writeWarningShown = true
+      log.warn("prompt stash write failed", { operation, error, stashPath })
+      if (!shouldSurfaceOptionalStateError(error)) return
       toast.show({
-        message: error instanceof Error ? error.message : "Failed to save prompt stash",
+        message: optionalStateErrorMessage(error, "Failed to save prompt stash"),
         variant: "warning",
         duration: 3000,
       })
@@ -56,11 +58,13 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
           const text = await Filesystem.readText(stashPath).catch((error) => {
             if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
             log.warn("failed to load prompt stash", { stashPath, error })
-            toast.show({
-              message: error instanceof Error ? error.message : "Failed to load prompt stash",
-              variant: "warning",
-              duration: 3000,
-            })
+            if (shouldSurfaceOptionalStateError(error)) {
+              toast.show({
+                message: optionalStateErrorMessage(error, "Failed to load prompt stash"),
+                variant: "warning",
+                duration: 3000,
+              })
+            }
             return ""
           })
           const lines = text

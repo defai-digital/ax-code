@@ -38,7 +38,7 @@ await DiagnosticLog.configure({
 if (debugDir) DiagnosticLog.installProcessDiagnostics()
 
 await Log.init({
-  print: process.argv.includes("--print-logs"),
+  print: process.argv.includes("--print-logs") || process.env.AX_CODE_PRINT_LOGS === "1",
   dev: Installation.isLocal(),
   level: (() => {
     if (debugDir) return "DEBUG"

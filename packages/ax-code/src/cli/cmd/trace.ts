@@ -26,6 +26,7 @@ interface LogEntry {
   status?: string
   durationMs?: number
   errorCode?: string
+  errorMessage?: string
   sessionId?: string
   msg: string
   [key: string]: unknown
@@ -306,9 +307,11 @@ export const TraceCommand: CommandModule = {
         : entry.status === "ok" ? "\x1b[32mok\x1b[0m"
         : entry.status ? `\x1b[90m${entry.status}\x1b[0m`
         : ""
-      const msg = entry.msg || ""
+      const message = [entry.msg, entry.errorMessage]
+        .filter((value, index, all) => value && all.indexOf(value) === index)
+        .join(" - ")
 
-      const parts = [time, icon, service, command, msg, duration, status].filter(Boolean)
+      const parts = [time, icon, service, command, message, duration, status].filter(Boolean)
       console.log(`  ${parts.join("  ")}`)
     }
 

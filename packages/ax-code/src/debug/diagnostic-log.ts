@@ -210,6 +210,8 @@ export namespace DiagnosticLog {
         return {
           ...base,
           output: redactText(event.output),
+          errorCode: event.errorCode,
+          errorMessage: redactText(event.errorMessage),
           error: redactText(event.error),
           metadata: redactLogValue(event.metadata),
         }

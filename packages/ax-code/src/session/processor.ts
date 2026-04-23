@@ -395,6 +395,7 @@ export namespace SessionProcessor {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const errorMsg = value.error instanceof Error ? value.error.message : String(value.error)
+                    const errorCode = value.error instanceof Error ? value.error.name : "Unknown"
                     const toolErrorEnd = Date.now()
 
                     // Self-correction: analyze the failure BEFORE persisting
@@ -441,6 +442,8 @@ export namespace SessionProcessor {
                       tool: match.tool,
                       callID: value.toolCallId,
                       status: "error",
+                      errorCode,
+                      errorMessage: errorMsg.slice(0, 1000),
                       error: errorMsg.slice(0, 1000),
                       durationMs: toolErrorEnd - match.state.time.start,
                       stepIndex: attempt,

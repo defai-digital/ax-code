@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import {
   classifyProcessIssues,
+  classifyErrors,
   classifyReplayIssues,
   parseProcessEventLines,
   parseReplayEventLines,
+  scanStandardLogLines,
 } from "../../src/cli/cmd/debug/explain"
 
 describe("debug explain replay hang analysis", () => {
@@ -116,6 +118,157 @@ describe("debug explain replay hang analysis", () => {
 
     expect(issues.some((issue) => issue.title.includes("TUI startup failed"))).toBeTrue()
     expect(issues[0]?.rootCause).toContain("Unable to load session bootstrap")
+  })
+
+  test("uses structured tool error messages in standard log diagnostics", () => {
+    const scan = scanStandardLogLines(
+      [
+        JSON.stringify({
+          level: 50,
+          time: "2026-04-23T00:03:30.132Z",
+          service: "tool",
+          toolName: "read",
+          status: "error",
+          errorCode: "ReadFileNotFoundError",
+          errorMessage: "File not found: /Users/example/project/src/modules/quotation-comment.controller.ts",
+          msg: "tool failed",
+          sessionId: "ses_read_fail",
+        }),
+      ],
+      true,
+      "ses_read_fail",
+    )
+
+    expect(scan.errorEntries).toHaveLength(1)
+    expect(scan.errorEntries[0]?.command).toBe("read")
+    expect(scan.errorEntries[0]?.message).toContain("File not found:")
+
+    const issues = classifyErrors(scan.errorEntries)
+    const issue = issues.find((entry) => entry.category === "Tool")
+    expect(issue).toBeTruthy()
+    expect(issue?.rootCause).toContain("read: File not found:")
+  })
+
+  test("flags renderer testing mode as a critical TUI misconfiguration", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.workerSpawned",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.050Z",
+        eventType: "tui.startup.begin",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.060Z",
+        eventType: "tui.startup.rendererProfile",
+        data: { profile: "compatible", testing: true, screenMode: "main-screen" },
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.100Z",
+        eventType: "tui.startup.renderDispatched",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.200Z",
+        eventType: "tui.startup.appMounted",
+        data: {},
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:05.000Z"))
+
+    const issue = issues.find((entry) => entry.title.includes("misconfigured in testing mode"))
+    expect(issue).toBeTruthy()
+    expect(issue?.severity).toBe("critical")
+    expect(issue?.rootCause).toContain("testing: true")
+    expect(issue?.rootCause).toContain("main-screen")
+  })
+
+  test("classifies current startup traces when renderer dispatch never happens", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.workerSpawned",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.050Z",
+        eventType: "tui.startup.begin",
+        data: {},
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:20.000Z"))
+
+    const issue = issues.find((entry) => entry.title.includes("never reached renderer dispatch"))
+    expect(issue).toBeTruthy()
+    expect(issue?.rootCause).toContain("tui.startup.renderDispatched")
+  })
+
+  test("classifies current startup traces when bootstrap never completes", () => {
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.workerSpawned",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.050Z",
+        eventType: "tui.startup.begin",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.060Z",
+        eventType: "tui.startup.rendererProfile",
+        data: { profile: "compatible", testing: false, screenMode: "main-screen" },
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.100Z",
+        eventType: "tui.startup.renderDispatched",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.150Z",
+        eventType: "tui.startup.appMounted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.180Z",
+        eventType: "tui.startup.bootstrap.start",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:01.000Z",
+        eventType: "tui.startup.bootstrapCoreReady",
+        data: { rejected: 0 },
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:40.000Z"))
+
+    const issue = issues.find((entry) => entry.title.includes("startup bootstrap never completed"))
+    expect(issue).toBeTruthy()
+    expect(issue?.rootCause).toContain("tui.startup.bootstrap.end")
   })
 
   test("classifies TUI backend request failures and blank startup stalls", () => {

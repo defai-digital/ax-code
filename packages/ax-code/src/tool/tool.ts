@@ -8,6 +8,20 @@ import { Log } from "../util/log"
 
 const log = Log.create({ service: "tool" })
 
+function errorMetadata(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      errorCode: error.name,
+      errorMessage: error.message,
+    }
+  }
+
+  return {
+    errorCode: "Unknown",
+    errorMessage: String(error),
+  }
+}
+
 export namespace Tool {
   interface Metadata {
     [key: string]: any
@@ -77,7 +91,13 @@ export namespace Tool {
             result = await execute(validated, ctx)
           } catch (err) {
             const durationMs = Date.now() - toolStart
-            log.error("tool failed", { toolName: id, sessionId: ctx.sessionID, durationMs, status: "error", errorCode: err instanceof Error ? err.name : "Unknown" })
+            log.error("tool failed", {
+              toolName: id,
+              sessionId: ctx.sessionID,
+              durationMs,
+              status: "error",
+              ...errorMetadata(err),
+            })
             throw err
           }
           const durationMs = Date.now() - toolStart

@@ -71,6 +71,9 @@ cd ax-code && pnpm install && pnpm run setup:cli
 
 Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.11+
 
+`setup:cli` builds the current native bundled CLI and installs a launcher to it so the linked command matches npm/Homebrew behavior.
+Use `pnpm run setup:cli -- --source` only when you explicitly want the live source/dev launcher.
+
 ---
 
 ## Why AX Code

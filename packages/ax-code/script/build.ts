@@ -13,7 +13,6 @@ const dir = path.resolve(__dirname, "..")
 
 process.chdir(dir)
 
-import { Script } from "@ax-code/script"
 import pkg from "../package.json"
 import { scopePackageName } from "./package-names"
 import { compiledBunfsModulePath } from "./embedded-path"
@@ -73,6 +72,23 @@ const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const includeAbiFlag = process.argv.includes("--include-abi")
 const skipInstall = process.argv.includes("--skip-install")
+
+function buildChannelForVersion(version: string) {
+  const prerelease = version.split("-", 2)[1]
+  if (!prerelease) return "latest"
+  return prerelease.split(".", 1)[0] || "beta"
+}
+
+const buildVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
+const buildChannel = process.env.AX_CODE_CHANNEL ?? buildChannelForVersion(buildVersion)
+const buildInfo = {
+  channel: buildChannel,
+  version: buildVersion,
+  preview: buildChannel !== "latest",
+  release: process.env.AX_CODE_RELEASE === "1" || process.env.AX_CODE_RELEASE === "true",
+}
+
+console.log("ax-code build", JSON.stringify(buildInfo, null, 2))
 
 async function exists(target: string) {
   return fs.promises
@@ -324,16 +340,16 @@ for (const item of targets) {
         autoloadPackageJson: true,
         target: legacyName.replace(pkg.name, "bun") as any,
         outfile: `dist/${legacyName}/bin/ax-code`,
-        execArgv: [`--user-agent=ax-code/${Script.version}`, "--use-system-ca", "--"],
+        execArgv: [`--user-agent=ax-code/${buildVersion}`, "--use-system-ca", "--"],
         windows: {},
       },
       entrypoints: ["./src/index.ts", parserWorker, workerPath],
       define: {
-        AX_CODE_VERSION: `'${Script.version}'`,
+        AX_CODE_VERSION: `'${buildVersion}'`,
         AX_CODE_MIGRATIONS: JSON.stringify(migrations),
         OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
         AX_CODE_WORKER_PATH: compiledBunfsModulePath(bunfsRoot, workerPath),
-        AX_CODE_CHANNEL: `'${Script.channel}'`,
+        AX_CODE_CHANNEL: `'${buildChannel}'`,
         AX_CODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
       },
     })
@@ -370,7 +386,7 @@ for (const item of targets) {
     JSON.stringify(
       {
         name: packageName,
-        version: Script.version,
+        version: buildVersion,
         os: [item.os],
         cpu: [item.arch],
         publishConfig: {
@@ -381,10 +397,10 @@ for (const item of targets) {
       2,
     ),
   )
-  binaries[packageName] = Script.version
+  binaries[packageName] = buildVersion
 }
 
-if (Script.release) {
+if (buildInfo.release) {
   for (const key of Object.keys(binaries)) {
     const legacyName = key.replace(/^@[^/]+\//, "")
     if (legacyName.includes("linux")) {

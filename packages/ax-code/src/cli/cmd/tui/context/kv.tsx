@@ -4,6 +4,7 @@ import { Filesystem } from "@/util/filesystem"
 import { createSignal, type Setter } from "solid-js"
 import { createStore, unwrap } from "solid-js/store"
 import { createSimpleContext } from "./helper"
+import { optionalStateErrorCode } from "@tui/util/optional-state"
 import path from "path"
 
 const log = Log.create({ service: "tui.kv" })
@@ -15,12 +16,16 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
     const [store, setStore] = createStore<Record<string, any>>()
     const filePath = path.join(Global.Path.state, "kv.json")
     let writeQueue = Promise.resolve()
+    let writeFailureShown = false
 
     Filesystem.readJson(filePath)
       .then((x) => {
         setStore(x)
       })
-      .catch(() => {})
+      .catch((error) => {
+        if (optionalStateErrorCode(error) === "ENOENT") return
+        log.warn("failed to load kv store", { filePath, error })
+      })
       .finally(() => {
         setReady(true)
       })
@@ -50,9 +55,15 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
         setStore(key, value)
         const snapshot = structuredClone(unwrap(store))
         writeQueue = writeQueue.finally(() =>
-          Filesystem.writeJson(filePath, snapshot).catch((error) => {
-            log.warn("failed to persist kv store", { filePath, error })
-          }),
+          Filesystem.writeJson(filePath, snapshot)
+            .then(() => {
+              writeFailureShown = false
+            })
+            .catch((error) => {
+              if (writeFailureShown) return
+              writeFailureShown = true
+              log.warn("failed to persist kv store", { filePath, error })
+            }),
         )
       },
     }

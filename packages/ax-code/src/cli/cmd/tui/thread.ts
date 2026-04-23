@@ -157,6 +157,7 @@ export const TuiThreadCommand = cmd({
       const cwd = Filesystem.resolve(process.cwd())
 
       const sanitized = Env.sanitize()
+      if (process.argv.includes("--print-logs")) sanitized.AX_CODE_PRINT_LOGS = "1"
       const worker = new Worker(file, {
         env: Object.fromEntries(Object.entries(sanitized).filter((e): e is [string, string] => e[1] !== undefined)),
       })

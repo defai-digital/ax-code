@@ -105,6 +105,27 @@ describe("Project.fromDirectory", () => {
     expect(b.id).toBe(a.id)
   })
 
+  test("returns discovered project even when startup persistence is read-only", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const originalUse = Database.use
+    let calls = 0
+
+    ;(Database as typeof Database & { use: typeof Database.use }).use = ((fn) => {
+      calls += 1
+      if (calls >= 2) throw new Error("attempt to write a readonly database")
+      return originalUse(fn)
+    }) as typeof Database.use
+
+    try {
+      const { project } = await Project.fromDirectory(tmp.path)
+      expect(project.id).not.toBe(ProjectID.global)
+      expect(project.vcs).toBe("git")
+      expect(project.worktree).toBe(tmp.path)
+    } finally {
+      ;(Database as typeof Database & { use: typeof Database.use }).use = originalUse
+    }
+  })
+
   test("initGit is a no-op inside an existing git subdirectory", async () => {
     await using tmp = await tmpdir({ git: true })
     const subdir = path.join(tmp.path, "packages", "app")

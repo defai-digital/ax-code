@@ -16,7 +16,9 @@ import { NativeStore } from "../../code-intelligence/native-store"
 import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
+import { Database } from "../../storage/db"
 import { getTuiPreloadCheck } from "./doctor-preload"
+import { getDoctorDatabaseCheck } from "./doctor-storage"
 import path from "path"
 import fs from "fs/promises"
 
@@ -48,12 +50,7 @@ export const DoctorCommand: CommandModule = {
     })
 
     // 4. Data directory
-    const dataExists = await Bun.file(path.join(Global.Path.data, "ax-code.db")).exists()
-    checks.push({
-      name: "Data directory",
-      status: "ok",
-      detail: `${Global.Path.data} ${dataExists ? "(database exists)" : "(no database yet)"}`,
-    })
+    checks.push(await getDoctorDatabaseCheck({ databasePath: Database.Path }))
 
     // 5. Config
     try {

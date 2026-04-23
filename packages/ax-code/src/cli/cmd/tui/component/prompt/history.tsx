@@ -7,6 +7,7 @@ import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
 import type { AgentPart, FilePart, TextPart } from "@ax-code/sdk/v2"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
+import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
 
@@ -45,11 +46,12 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
           writeWarningShown = false
         })
         .catch((error) => {
-          log.warn("failed to persist prompt history", { historyPath, error })
           if (writeWarningShown) return
           writeWarningShown = true
+          log.warn("failed to persist prompt history", { historyPath, error })
+          if (!shouldSurfaceOptionalStateError(error)) return
           toast.show({
-            message: error instanceof Error ? error.message : "Failed to save prompt history",
+            message: optionalStateErrorMessage(error, "Failed to save prompt history"),
             variant: "warning",
             duration: 3000,
           })
@@ -61,11 +63,13 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
           const text = await Filesystem.readText(historyPath).catch((error) => {
             if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
             log.warn("failed to load prompt history", { historyPath, error })
-            toast.show({
-              message: error instanceof Error ? error.message : "Failed to load prompt history",
-              variant: "warning",
-              duration: 3000,
-            })
+            if (shouldSurfaceOptionalStateError(error)) {
+              toast.show({
+                message: optionalStateErrorMessage(error, "Failed to load prompt history"),
+                variant: "warning",
+                duration: 3000,
+              })
+            }
             return ""
           })
           const lines = text
@@ -150,11 +154,12 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
             writeWarningShown = false
           })
           .catch((error) => {
-            log.warn("failed to append prompt history", { historyPath, error })
             if (writeWarningShown) return
             writeWarningShown = true
+            log.warn("failed to append prompt history", { historyPath, error })
+            if (!shouldSurfaceOptionalStateError(error)) return
             toast.show({
-              message: error instanceof Error ? error.message : "Failed to save prompt history",
+              message: optionalStateErrorMessage(error, "Failed to save prompt history"),
               variant: "warning",
               duration: 3000,
             })
