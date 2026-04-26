@@ -1,4 +1,5 @@
 import path from "path"
+import { access } from "node:fs/promises"
 
 export type DoctorCheck = {
   name: string
@@ -10,7 +11,11 @@ export async function getDoctorDatabaseCheck(input: {
   databasePath: string
   exists?: (target: string) => Promise<boolean>
 }): Promise<DoctorCheck> {
-  const exists = input.exists ?? (async (target) => Bun.file(target).exists())
+  const exists =
+    input.exists ??
+    // fs.access avoids the Bun-runtime coupling; Bun.file().exists()
+    // is also implemented via a stat-style syscall under the hood.
+    (async (target) => access(target).then(() => true).catch(() => false))
   const databasePath = input.databasePath
   const databaseName = path.basename(databasePath)
   const dataDir = path.dirname(databasePath)

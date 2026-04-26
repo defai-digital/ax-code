@@ -7,8 +7,36 @@
  */
 
 import { Log } from "../util/log"
+import { Process } from "../util/process"
 
 const log = Log.create({ service: "mcp.discovery" })
+
+// Capability probe: spawn a short-lived process and report whether it
+// exits cleanly within the given budget. Used for "does this binary
+// work on this machine" checks during MCP discovery.
+//
+// Routed through Process.spawn (cross-spawn under the hood) instead of
+// Bun.spawn so the discovery path does not depend on bun-runtime APIs.
+// Discovery runs on every TUI startup and any bun-specific spawn quirk
+// would surface as an MCP regression.
+async function spawnExitsCleanly(
+  command: string,
+  args: string[],
+  options: { timeoutMs?: number } = {},
+): Promise<boolean> {
+  const { timeoutMs = 5000 } = options
+  try {
+    const proc = Process.spawn([command, ...args], {
+      stdout: "ignore",
+      stderr: "ignore",
+      timeout: timeoutMs,
+    })
+    const code = await proc.exited
+    return code === 0
+  } catch {
+    return false
+  }
+}
 
 export interface DiscoveredServer {
   name: string
@@ -36,14 +64,7 @@ const CANDIDATES: Candidate[] = [
     type: "stdio",
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
-    check: async () => {
-      try {
-        const proc = Bun.spawn(["npx", "--help"], { stdout: "ignore", stderr: "ignore" })
-        return (await proc.exited) === 0
-      } catch {
-        return false
-      }
-    },
+    check: () => spawnExitsCleanly("npx", ["--help"]),
   },
   {
     name: "github",
@@ -67,18 +88,12 @@ const CANDIDATES: Candidate[] = [
     type: "stdio",
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-puppeteer"],
-    check: async () => {
-      try {
-        const proc = Bun.spawn(["npx", "-y", "@modelcontextprotocol/server-puppeteer", "--help"], {
-          stdout: "ignore",
-          stderr: "ignore",
-          timeout: 5000,
-        })
-        return (await proc.exited) === 0
-      } catch {
-        return false
-      }
-    },
+    check: () =>
+      spawnExitsCleanly(
+        "npx",
+        ["-y", "@modelcontextprotocol/server-puppeteer", "--help"],
+        { timeoutMs: 5000 },
+      ),
   },
   {
     name: "exa",

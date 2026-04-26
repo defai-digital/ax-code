@@ -2,6 +2,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
+import { createHash } from "node:crypto"
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node"
 import type { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types"
 import { diffLines } from "diff"
@@ -14,6 +15,16 @@ import { NamedError } from "@ax-code/util/error"
 import { withTimeout } from "../util/timeout"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
+
+// Local-only content fingerprint. The hash never leaves the process — it
+// only compares the previous text content against the current one to skip
+// redundant diagnostics work. We use SHA-256-prefix instead of Bun.hash
+// so this code path stays bun-runtime-agnostic; the algorithm choice
+// does not affect correctness because both producer and comparer always
+// use the same function.
+function fingerprintHash(input: string | Uint8Array): string {
+  return createHash("sha256").update(input).digest("hex").slice(0, 16)
+}
 
 const DIAGNOSTICS_DEBOUNCE_MS = 150
 
@@ -343,14 +354,14 @@ export namespace LSPClient {
     } = {}
 
     function contentFingerprint(text: string) {
-      return { hash: Bun.hash(text).toString(), length: text.length, text }
+      return { hash: fingerprintHash(text), length: text.length, text }
     }
 
     function contentUnchanged(filePath: string, text: string) {
       const prev = lastContent[filePath]
       if (!prev) return false
       if (prev.length !== text.length) return false
-      return prev.hash === Bun.hash(text).toString()
+      return prev.hash === fingerprintHash(text)
     }
 
 

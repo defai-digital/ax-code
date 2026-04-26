@@ -1378,6 +1378,11 @@ export namespace LSP {
 
   async function hashFile(file: string): Promise<string | undefined> {
     try {
+      // Persistent cache key — kept on Bun.hash for backwards compat
+      // with cache entries written by older versions. Switching the
+      // algorithm here would invalidate every existing user's LSP
+      // cache on first run after upgrade. Not a correctness issue
+      // (just a one-time miss) but unnecessary churn.
       const buf = await Bun.file(file).arrayBuffer()
       return Bun.hash(new Uint8Array(buf)).toString()
     } catch (err) {
