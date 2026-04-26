@@ -9,6 +9,13 @@ import { TuiEvent } from "../event"
 
 export type ToastOptions = z.infer<typeof TuiEvent.ToastShow.properties>
 
+const VARIANT_ICON: Record<ToastOptions["variant"], string> = {
+  error: "▲",
+  warning: "▲",
+  success: "●",
+  info: "●",
+}
+
 export function Toast() {
   const toast = useToast()
   const { theme } = useTheme()
@@ -35,10 +42,14 @@ export function Toast() {
         >
           <Show when={current().title}>
             <text attributes={TextAttributes.BOLD} marginBottom={1} fg={theme.text}>
+              <span style={{ fg: theme[current().variant] }}>{VARIANT_ICON[current().variant]}</span>{" "}
               {current().title}
             </text>
           </Show>
           <text fg={theme.text} wrapMode="word" width="100%">
+            <Show when={!current().title}>
+              <span style={{ fg: theme[current().variant] }}>{VARIANT_ICON[current().variant]}</span>{" "}
+            </Show>
             {current().message}
           </text>
         </box>

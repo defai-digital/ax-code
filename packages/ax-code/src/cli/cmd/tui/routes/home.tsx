@@ -129,6 +129,11 @@ export function Home() {
           <Show when={showTips()}>
             <Tips />
           </Show>
+          <Show when={isFirstTimeUser()}>
+            <text fg={theme.textMuted}>
+              Type / for commands · /help for shortcuts
+            </text>
+          </Show>
         </box>
         <box flexGrow={1} minHeight={0} />
         <Toast />

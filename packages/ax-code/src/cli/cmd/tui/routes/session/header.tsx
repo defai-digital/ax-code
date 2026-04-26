@@ -15,9 +15,16 @@ import { computeSidebarWidth } from "./layout"
 const Title = (props: { session: Accessor<Session | undefined> }) => {
   const { theme } = useTheme()
   return (
-    <text fg={theme.text}>
-      <span style={{ bold: true }}>{props.session()?.title ?? "Loading session..."}</span>
-    </text>
+    <Show
+      when={props.session()?.title}
+      fallback={<text fg={theme.textMuted}>Loading session...</text>}
+    >
+      {(title) => (
+        <text fg={theme.text}>
+          <span style={{ bold: true }}>{title()}</span>
+        </text>
+      )}
+    </Show>
   )
 }
 

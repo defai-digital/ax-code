@@ -4,6 +4,7 @@ import { useSync } from "../../context/sync"
 import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/provider-state"
 import { useSDK } from "../../context/sdk"
+import { useKeybind } from "../../context/keybind"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
 import { Installation } from "@/installation"
@@ -40,6 +41,7 @@ export function Footer() {
   const directory = useDirectory()
   const connected = useConnected()
   const sdk = useSDK()
+  const keybind = useKeybind()
 
   // Show "reconnecting" badge only after the first successful connection —
   // avoids a false-alarm flash during initial startup. A 3-second debounce
@@ -143,15 +145,18 @@ export function Footer() {
             <text fg={theme.text}>
               <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
             </text>
-            <text fg={theme.textMuted}>/status</text>
+            <text fg={theme.textMuted}>/help · /status</text>
           </Match>
         </Switch>
+        <Show when={keybind.leader}>
+          <text fg={theme.warning}>[leader]</text>
+        </Show>
         <Show when={showReconnecting()}>
           <text fg={theme.warning}>reconnecting...</text>
         </Show>
-        <text fg={isolationMode() === "full-access" ? theme.error : theme.success}>
-          {isolationMode() === "full-access" ? "sandbox off" : "sandbox on"}
-        </text>
+        <Show when={isolationMode() === "full-access"}>
+          <text fg={theme.error}>sandbox off</text>
+        </Show>
         <text fg={theme.textMuted}>v{Installation.VERSION}</text>
       </box>
     </box>
