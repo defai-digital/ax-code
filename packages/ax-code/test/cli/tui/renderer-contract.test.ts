@@ -7,7 +7,13 @@ import { TUI_PERFORMANCE_CRITERIA } from "../../../src/cli/cmd/tui/performance-c
 const SRC_ROOT = path.resolve(import.meta.dir, "../../../src")
 const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
 const OPENTUI_RE = /(?:from\s+["'](?:@opentui\/|opentui-spinner)|import\s+["'](?:@opentui\/|opentui-spinner))/
-const OPENTUI_ALLOWED_OUTSIDE_TUI = new Set([path.join(SRC_ROOT, "cli/cmd/doctor.ts")])
+const OPENTUI_ALLOWED_OUTSIDE_TUI = new Set([
+  path.join(SRC_ROOT, "cli/cmd/doctor.ts"),
+  // Entry point must register the OpenTUI Solid transform plugin before
+  // boot for the source-bundle distribution (ADR-002), where bunfig.toml
+  // preloads aren't in scope. See comment in src/index.ts.
+  path.join(SRC_ROOT, "index.ts"),
+])
 
 const PURE_TUI_FILES = [
   "performance-criteria.ts",

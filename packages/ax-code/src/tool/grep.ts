@@ -1,5 +1,4 @@
 import z from "zod"
-import * as fs from "fs/promises"
 import { text } from "node:stream/consumers"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
@@ -9,7 +8,7 @@ import { Process } from "../util/process"
 import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
 import path from "path"
-import { assertExternalDirectory } from "./external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { MAX_LINE_LENGTH } from "@/constants/tool"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
@@ -40,17 +39,7 @@ export const GrepTool = Tool.define("grep", {
     let searchPath = params.path ?? Instance.directory
     searchPath = path.isAbsolute(searchPath) ? searchPath : path.resolve(Instance.directory, searchPath)
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
-    // Resolve symlinks and re-check containment. Without this, a
-    // symlink inside the project like `vendor -> /etc` would let grep
-    // search through system directories and return their contents.
-    // Only enforce when the original search path was inside the
-    // project — external grep is gated by the permission flow above.
-    if (Filesystem.contains(Instance.directory, searchPath)) {
-      const realSearchPath = await fs.realpath(searchPath).catch(() => null)
-      if (realSearchPath && !Filesystem.contains(Instance.directory, realSearchPath)) {
-        throw new Error("Access denied: symlink target escapes project directory")
-      }
-    }
+    await assertSymlinkInsideProject(searchPath)
 
     // Native fast-path: in-process search via Rust addon
     const native = NativeAddon.fs()

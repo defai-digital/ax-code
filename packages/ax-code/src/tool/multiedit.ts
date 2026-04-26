@@ -1,13 +1,12 @@
 import { createTwoFilesPatch, diffLines } from "diff"
 import path from "path"
-import fs from "fs"
 import z from "zod"
 import { FileTime } from "../file/time"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
 import { Filesystem } from "../util/filesystem"
 import { Tool } from "./tool"
-import { assertExternalDirectory } from "./external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { replace, trimDiff } from "./edit"
 import { Isolation } from "@/isolation"
@@ -46,12 +45,7 @@ export const MultiEditTool = Tool.define("multiedit", {
 
     for (const file of files) {
       await assertExternalDirectory(ctx, file)
-      if (Filesystem.contains(Instance.directory, file)) {
-        const realFile = await fs.promises.realpath(file).catch(() => null)
-        if (realFile && !Filesystem.contains(Instance.directory, realFile)) {
-          throw new Error("Access denied: symlink target escapes project directory")
-        }
-      }
+      await assertSymlinkInsideProject(file)
       Isolation.assertWrite(ctx.extra?.isolation, file, Instance.directory, Instance.worktree)
     }
 

@@ -35,7 +35,9 @@ export const readOnlyWithWeb = (whitelistedDirs: string[]) =>
     },
   })
 
-/** Read-only without web access — for perf agent */
+/** Read-only without web access — for the perf agent.
+ *  Performance analysis works against the local codebase only; web tools
+ *  would be both unnecessary and outside the agent's intended scope. */
 export const readOnlyNoWeb = (whitelistedDirs: string[]) =>
   Permission.fromConfig({
     "*": "deny",

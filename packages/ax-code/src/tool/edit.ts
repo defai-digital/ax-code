@@ -5,7 +5,6 @@
 
 import z from "zod"
 import * as path from "path"
-import * as fs from "fs"
 import { Tool } from "./tool"
 import { createTwoFilesPatch, diffLines } from "diff"
 import DESCRIPTION from "./edit.txt"
@@ -13,7 +12,7 @@ import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
-import { assertExternalDirectory } from "./external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
 import { NativePerf } from "../perf/native"
@@ -51,17 +50,7 @@ export const EditTool = Tool.define("edit", {
 
     const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     await assertExternalDirectory(ctx, filePath)
-    // Resolve symlinks and re-check containment so a symlink inside
-    // the project pointing to e.g. `~/.ssh/authorized_keys` cannot be
-    // edited through the symlink. Only enforce when the original
-    // path was inside the project — `assertExternalDirectory` above
-    // already gates external edits through the permission flow.
-    if (Filesystem.contains(Instance.directory, filePath)) {
-      const realFilePath = await fs.promises.realpath(filePath).catch(() => null)
-      if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {
-        throw new Error("Access denied: symlink target escapes project directory")
-      }
-    }
+    await assertSymlinkInsideProject(filePath)
     Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
 
     let diff = ""

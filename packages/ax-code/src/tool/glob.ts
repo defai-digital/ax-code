@@ -1,12 +1,11 @@
 import z from "zod"
 import path from "path"
-import * as fs from "fs/promises"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
 import DESCRIPTION from "./glob.txt"
 import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
-import { assertExternalDirectory } from "./external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 
@@ -35,16 +34,7 @@ export const GlobTool = Tool.define("glob", {
     let search = params.path ?? Instance.directory
     search = path.isAbsolute(search) ? search : path.resolve(Instance.directory, search)
     await assertExternalDirectory(ctx, search, { kind: "directory" })
-    // Resolve symlinks and re-check containment. A symlink like
-    // `vendor -> /etc` would otherwise let glob list files in system
-    // directories outside the project. Only enforce when the
-    // original search path was inside the project.
-    if (Filesystem.contains(Instance.directory, search)) {
-      const realSearch = await fs.realpath(search).catch(() => null)
-      if (realSearch && !Filesystem.contains(Instance.directory, realSearch)) {
-        throw new Error("Access denied: symlink target escapes project directory")
-      }
-    }
+    await assertSymlinkInsideProject(search)
 
     // Native fast-path: in-process glob via Rust addon
     const native = NativeAddon.fs()

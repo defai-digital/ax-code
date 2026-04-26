@@ -8,7 +8,7 @@ import { FileWatcher } from "../file/watcher"
 import { Instance } from "../project/instance"
 import { Patch } from "../patch"
 import { createTwoFilesPatch, diffLines } from "diff"
-import { assertExternalDirectory } from "./external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { trimDiff } from "./edit"
 import { Isolation } from "@/isolation"
 import { Filesystem } from "../util/filesystem"
@@ -74,21 +74,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     for (const hunk of hunks) {
       const filePath = path.resolve(Instance.directory, hunk.path)
       await assertExternalDirectory(ctx, filePath)
-      // Resolve symlinks and re-check containment so a symlink inside
-      // the project pointing to e.g. `~/.ssh/authorized_keys` cannot
-      // be patched through the symlink. Only enforce when the target
-      // was inside the project; external patches go through the
-      // external-directory permission flow.
       // BUG-293 DEFERRED: The symlink check and subsequent file write
       // are not atomic (TOCTOU). A true atomic fix requires OS-level
       // primitives (e.g. O_NOFOLLOW + openat). The existing check is
       // defense-in-depth and sufficient for the threat model.
-      if (Filesystem.contains(Instance.directory, filePath)) {
-        const realFilePath = await fs.realpath(filePath).catch(() => null)
-        if (realFilePath && !Filesystem.contains(Instance.directory, realFilePath)) {
-          throw new Error("Access denied: symlink target escapes project directory")
-        }
-      }
+      await assertSymlinkInsideProject(filePath)
       Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
 
       switch (hunk.type) {

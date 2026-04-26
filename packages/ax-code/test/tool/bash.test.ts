@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { BashTool } from "../../src/tool/bash"
@@ -171,7 +172,13 @@ describe("tool.bash permissions", () => {
         )
         const extDirReq = requests.find((r) => r.permission === "external_directory")
         expect(extDirReq).toBeDefined()
-        expect(extDirReq!.patterns).toContain(path.join(os.tmpdir(), "*"))
+        // bash.ts realpaths the workdir before constructing the permission
+        // pattern so a directory has a stable identity regardless of the
+        // symlink path used to reach it. On macOS this matters because
+        // os.tmpdir() returns "/var/folders/..." which is a symlink to
+        // "/private/var/folders/...".
+        const realTmp = await fs.realpath(os.tmpdir())
+        expect(extDirReq!.patterns).toContain(path.join(realTmp, "*"))
       },
     })
   })

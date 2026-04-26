@@ -1,16 +1,11 @@
-import { Env } from "../../util/env"
 import { which } from "../../util/which"
-import { CliLanguageModel } from "./cli-language-model"
+import { CliLanguageModel, cliEnv } from "./cli-language-model"
 import { getCliProviderDefinition, type CliProviderDefinition } from "./config"
 import { resolveCliModel, type CliModelInfo } from "./resolve"
 import { Process } from "../../util/process"
 
 export const CLI_CONNECT_TIMEOUT_MS = 15_000
 const CLI_CONNECT_PROMPT = "Reply with exactly OK."
-
-function cliEnv() {
-  return { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" }
-}
 
 async function checkClaudeAuth(binary: string): Promise<string | undefined> {
   try {

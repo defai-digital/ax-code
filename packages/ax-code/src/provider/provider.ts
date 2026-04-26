@@ -126,13 +126,7 @@ export namespace Provider {
     return sdk.responses === undefined && sdk.chat === undefined
   }
 
-  const Cost = z.object({
-    input: z.number(),
-    output: z.number(),
-    cache_read: z.number().optional(),
-    cache_write: z.number().optional(),
-    reasoning: z.number().optional(),
-  })
+  const Cost = ModelsDev.Cost
 
   export const Model = z
     .object({

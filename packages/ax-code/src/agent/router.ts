@@ -62,9 +62,14 @@ const ACTION_INTENT = [
   "split", "merge", "implement", "apply",
 ]
 
+/** Investigation/inspection verbs shared by review-style intent profiles.
+ *  Kept separate so REVIEW_INTENT and PERF_INTENT stay in lockstep when
+ *  the team adopts new analysis vocabulary. */
+const COMMON_ANALYSIS_INTENT = ["analyze", "investigate", "inspect", "review"]
+
 const REVIEW_INTENT = [
-  "analyze", "analysis", "review", "audit", "assess",
-  "investigate", "inspect", "check", "scan", "report",
+  ...COMMON_ANALYSIS_INTENT,
+  "analysis", "audit", "assess", "check", "scan", "report",
 ]
 
 const DEBUG_INTENT = [
@@ -73,8 +78,8 @@ const DEBUG_INTENT = [
 ]
 
 const PERF_INTENT = [
-  "profile", "benchmark", "measure", "investigate",
-  "analyze", "review", "inspect", "diagnose",
+  ...COMMON_ANALYSIS_INTENT,
+  "profile", "benchmark", "measure", "diagnose",
 ]
 
 const RULES: RouteRule[] = [

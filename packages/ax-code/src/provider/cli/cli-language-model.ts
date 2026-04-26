@@ -24,7 +24,7 @@ function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
     : `CLI exited with code ${code}`
 }
 
-function cliEnv() {
+export function cliEnv() {
   return { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" }
 }
 

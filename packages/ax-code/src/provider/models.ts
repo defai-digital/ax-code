@@ -8,7 +8,7 @@ import bundledSnapshot from "./models-snapshot.json"
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
 
-  const Cost = z.object({
+  export const Cost = z.object({
     input: z.number(),
     output: z.number(),
     cache_read: z.number().optional(),

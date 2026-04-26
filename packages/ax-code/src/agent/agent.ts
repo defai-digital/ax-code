@@ -315,7 +315,7 @@ export namespace Agent {
               permission: Permission.merge(
                 defaults,
                 policy("perf"),
-                readOnlyWithWeb(whitelistedDirs),
+                readOnlyNoWeb(whitelistedDirs),
                 user,
               ),
               options: {},
