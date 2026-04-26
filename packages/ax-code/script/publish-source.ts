@@ -32,6 +32,15 @@ process.chdir(dir)
 
 const SOURCE_DIST_TAG = process.env.AX_CODE_SOURCE_TAG ?? "source"
 const BUN_DEPENDENCY_RANGE = process.env.AX_CODE_BUN_RANGE ?? "^1.3.12"
+const OPENTUI_CORE_VERSION = pkg.dependencies["@opentui/core"]
+const OPENTUI_NATIVE_PACKAGES = [
+  "@opentui/core-darwin-arm64",
+  "@opentui/core-darwin-x64",
+  "@opentui/core-linux-arm64",
+  "@opentui/core-linux-x64",
+  "@opentui/core-win32-arm64",
+  "@opentui/core-win32-x64",
+] as const
 
 const buildVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
 
@@ -194,9 +203,10 @@ await fs.promises.writeFile(path.join(stageDir, "bin/postinstall.mjs"), postinst
 // Step 6: write the source-distribution package.json.
 //
 // Notes on the manifest:
-//   - `bun` is a regular dependency so npm always installs the runtime,
-//     even with --no-optional. This is the single concrete cost of the
-//     source distribution accepted in ADR-002 (~50 MB).
+//   - `bun` is a regular dependency so npm always installs the runtime.
+//   - OpenTUI's native packages stay optional so npm installs exactly the
+//     matching os/cpu package. The bundled JS still resolves that native
+//     package dynamically at TUI startup.
 //   - No other runtime deps are listed: the bundle inlines them.
 //   - `type: module` is required for the postinstall ESM file.
 //   - `os` and `cpu` are not constrained: bun handles per-platform
@@ -219,6 +229,7 @@ const sourcePackageManifest = {
   dependencies: {
     bun: BUN_DEPENDENCY_RANGE,
   },
+  optionalDependencies: Object.fromEntries(OPENTUI_NATIVE_PACKAGES.map((name) => [name, OPENTUI_CORE_VERSION])),
   license: pkg.license,
   homepage: "https://github.com/defai-digital/ax-code",
   repository: {

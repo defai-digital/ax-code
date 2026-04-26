@@ -31,10 +31,26 @@ describe("script.publish-source", () => {
     const depsBlockMatch = text.match(/dependencies:\s*\{[\s\S]*?\}/)
     expect(depsBlockMatch).not.toBeNull()
     expect(depsBlockMatch![0]).toContain("bun:")
-    // Manifest must not have an optionalDependencies key — match the
-    // exact field shape (allows "optionalDependencies" inside a comment
-    // explaining why we don't use it).
-    expect(text).not.toMatch(/optionalDependencies\s*:/)
+    const optionalDepsBlockMatch = text.match(/optionalDependencies:\s*Object\.fromEntries/)
+    expect(optionalDepsBlockMatch).not.toBeNull()
+    expect(text).not.toMatch(/optionalDependencies:\s*\{[\s\S]*?bun:/)
+  })
+
+  test("declares OpenTUI native packages as optional runtime dependencies", async () => {
+    const text = await Bun.file(publishSourcePath).text()
+    expect(text).toContain('const OPENTUI_CORE_VERSION = pkg.dependencies["@opentui/core"]')
+    expect(text).toContain("OPENTUI_NATIVE_PACKAGES")
+    for (const pkgName of [
+      "@opentui/core-darwin-arm64",
+      "@opentui/core-darwin-x64",
+      "@opentui/core-linux-arm64",
+      "@opentui/core-linux-x64",
+      "@opentui/core-win32-arm64",
+      "@opentui/core-win32-x64",
+    ]) {
+      expect(text).toContain(pkgName)
+    }
+    expect(text).toContain("optionalDependencies: Object.fromEntries")
   })
 
   test("unix shim resolves $0 through symlinks", async () => {

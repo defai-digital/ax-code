@@ -1,15 +1,13 @@
 import { useSync } from "@tui/context/sync"
-import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
-import type { AssistantMessage } from "@ax-code/sdk/v2"
 import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
 import { useCommandDialog } from "../../component/dialog-command"
-import { Usage } from "./usage"
 import { Flag } from "@/flag/flag"
 import { EventQuery } from "@/replay/query"
 import { activityItems as items } from "./activity"
@@ -18,7 +16,6 @@ import { SessionBranch } from "./branch"
 import { SessionRollback } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import type { FooterSessionStatus } from "./footer-view-model"
-import { estimateContextEta, formatContextEtaLabel } from "./sidebar-eta"
 import { computeSidebarWidth } from "./layout"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import {
@@ -49,30 +46,6 @@ function qualityColor(status: SyncedSessionQualityReadiness["overallStatus"], th
   return theme.error
 }
 
-// Eighth-block characters for sub-pixel progress bar smoothness
-const EIGHTHS = ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-
-function bar(input: { pct?: number | null; busy: boolean; tick: number; width?: number }) {
-  const width = input.width ?? 37
-  const pct = Math.max(0, Math.min(100, input.pct ?? 0))
-  const exact = (pct / 100) * width
-  const fill = Math.floor(exact)
-  const partialIdx = Math.floor((exact - fill) * 8) - 1 // -1 = no partial block
-
-  const cells: string[] = Array.from({ length: width }, (_, i) => {
-    if (i < fill) return "█"
-    if (i === fill && partialIdx >= 0) return EIGHTHS[partialIdx]
-    return "░"
-  })
-
-  if (input.busy) {
-    const pos = input.tick % width
-    cells[pos] = pos < fill ? "▓" : "▒"
-  }
-
-  return cells.join("")
-}
-
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
   const { theme } = useTheme()
@@ -87,53 +60,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   )
   const dimensions = useTerminalDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
-  // Bar widths scale with sidebar: full bar uses sidebar minus padding, half bar is half of that
-  const barWidth = createMemo(() => sidebarWidth() - 5)
-  const barWidthHalf = createMemo(() => Math.floor((sidebarWidth() - 6) / 2))
-
-  const [tick, setTick] = createSignal(0)
-  const [clockTick, setClockTick] = createSignal(0)
-  const [etaAnchor, setEtaAnchor] = createSignal<{
-    computedAt: number
-    remainSec: number
-    totalSec: number
-  }>()
-  let etaState: {
-    sessionID: string
-    run?: { startedAt: number; startTokens: number }
-    prevStatusType?: FooterSessionStatus["type"]
-    prevSample?: { time: number; tokens: number }
-    smoothRate?: number
-  } = {
-    sessionID: props.sessionID,
-  }
-
-  onMount(() => {
-    const animationId = setInterval(() => {
-      if (status().type === "idle") return
-      setTick((x) => x + 1)
-    }, 120)
-    const clockId = setInterval(() => setClockTick((x) => x + 1), 1_000)
-    onCleanup(() => {
-      clearInterval(animationId)
-      clearInterval(clockId)
-    })
-  })
-
-  const elapsed = createMemo(() => {
-    clockTick()
-    tick()
-    const s = session()
-    if (!s?.time?.created) return ""
-    const ms = Date.now() - s.time.created
-    const total = Math.floor(ms / 1000)
-    const h = Math.floor(total / 3600)
-    const m = Math.floor((total % 3600) / 60)
-    const sec = total % 60
-    if (h > 0) return `${h}h ${m}m`
-    if (m > 0) return `${m}m ${sec}s`
-    return `${sec}s`
-  })
 
   const [expanded, setExpanded] = createStore({
     mcp: true,
@@ -213,139 +139,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       ).length,
   )
 
-  const context = createMemo(() => {
-    const last = Usage.last(messages()) as AssistantMessage
-    if (!last) return
-    const total = Usage.total(last)
-    const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
-    return {
-      tokens: total.toLocaleString(),
-      percentage: model?.limit?.context ? Math.round((total / model.limit.context) * 100) : null,
-      raw: total,
-      limit: model?.limit?.context ?? 0,
-    }
-  })
-  createEffect(() => {
-    clockTick()
-    const sessionID = props.sessionID
-    const currentStatus = status()
-    const busy = currentStatus.type === "busy"
-    const ctx = context()
-    if (etaState.sessionID !== sessionID) {
-      etaState = { sessionID }
-      setEtaAnchor(undefined)
-    }
-    if (!busy) {
-      etaState = {
-        sessionID,
-        prevStatusType: currentStatus.type,
-      }
-      setEtaAnchor(undefined)
-      return
-    }
-    if (!ctx || !ctx.limit || !ctx.raw) {
-      etaState = {
-        sessionID,
-        prevStatusType: currentStatus.type,
-      }
-      setEtaAnchor(undefined)
-      return
-    }
-    const now = Date.now()
-    if (!etaState.run || etaState.prevStatusType !== "busy" || ctx.raw < etaState.run.startTokens) {
-      etaState = {
-        sessionID,
-        run: {
-          startedAt: currentStatus.startedAt ?? now,
-          startTokens: ctx.raw,
-        },
-        prevStatusType: currentStatus.type,
-        prevSample: { time: now, tokens: ctx.raw },
-        smoothRate: undefined,
-      }
-      setEtaAnchor(undefined)
-      return
-    }
-    const result = estimateContextEta({
-      now,
-      limit: ctx.limit,
-      totalTokens: ctx.raw,
-      run: etaState.run,
-      prevSample: etaState.prevSample,
-      smoothRate: etaState.smoothRate,
-    })
-    etaState = {
-      sessionID,
-      run: etaState.run,
-      prevStatusType: currentStatus.type,
-      prevSample: result.prevSample,
-      smoothRate: result.smoothRate,
-    }
-    if (!result.estimate) {
-      setEtaAnchor(undefined)
-      return
-    }
-    setEtaAnchor(result.estimate)
-  })
-
-  // Countdown display: ticks every 1s, counts down from last anchor
-  const eta = createMemo(() => {
-    clockTick()
-    const anchor = etaAnchor()
-    if (!anchor || anchor.remainSec <= 0) return
-    const sinceLast = Math.round((Date.now() - anchor.computedAt) / 1000)
-    const remainSec = anchor.remainSec - sinceLast
-    if (remainSec <= 0) return
-    const remainPct = Math.min(100, Math.round((remainSec / anchor.totalSec) * 100))
-    const label = formatContextEtaLabel(remainSec)
-    return { remainPct, label, remainSec }
-  })
-
-  // Track whether ETA is active as a signal to avoid bar memos subscribing to countdown
-  const etaActive = createMemo(() => !!eta())
-
-  // Full-width bar: only computed when ETA is not active (fallback path)
-  const usageBar = createMemo(() => {
-    if (etaActive()) return ""
-    return bar({
-      pct: context()?.percentage,
-      busy: status().type !== "idle",
-      tick: tick(),
-      width: barWidth(),
-    })
-  })
-  // Half-width bars: only computed when ETA is active (two-column path)
-  const usageBarHalf = createMemo(() => {
-    if (!etaActive()) return ""
-    return bar({
-      pct: context()?.percentage,
-      busy: status().type !== "idle",
-      tick: tick(),
-      width: barWidthHalf(),
-    })
-  })
-  const etaBarHalf = createMemo(() => {
-    const e = eta()
-    if (!e) return ""
-    const w = barWidthHalf()
-    const filled = Math.max(0, Math.min(w, Math.round((e.remainPct / 100) * w)))
-    return Array.from({ length: w }, (_, i) => (i < filled ? "▓" : "·")).join("")
-  })
-  const usageBarColor = createMemo(() => {
-    const pct = context()?.percentage ?? 0
-    if (pct >= 80) return theme.error
-    if (status().type === "idle") return theme.textMuted
-    if (pct < 30) return theme.success
-    return theme.primary
-  })
-  const etaBarColor = createMemo(() => {
-    const e = eta()
-    if (!e) return theme.textMuted
-    if (e.remainSec <= 180) return theme.success
-    if (e.remainSec <= 600) return theme.primary
-    return theme.warning
-  })
-
   const directory = useDirectory()
   const kv = useKV()
 
@@ -380,54 +173,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <b>{session().title}</b>
                 </text>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
-              </box>
-              <box>
-                <Show
-                  when={eta()}
-                  fallback={
-                    <>
-                      <text fg={theme.textMuted}>
-                        {context()?.tokens ?? 0} tokens · {elapsed()}
-                      </text>
-                      <text fg={usageBarColor()}>{usageBar()}</text>
-                      <text fg={usageBarColor()}>ctx {context()?.percentage ?? 0}%</text>
-                    </>
-                  }
-                >
-                  {(etaValue) => (
-                    <>
-                      <box flexDirection="row" gap={1}>
-                        <text width={barWidthHalf()} fg={theme.textMuted}>
-                          {context()?.tokens ?? 0} tokens
-                        </text>
-                        <text width={barWidthHalf()} fg={theme.textMuted}>
-                          Elapsed {elapsed()}
-                        </text>
-                      </box>
-                      <box flexDirection="row" gap={1}>
-                        <text width={barWidthHalf()} fg={usageBarColor()}>
-                          {usageBarHalf()}
-                        </text>
-                        <text width={barWidthHalf()} fg={etaBarColor()}>
-                          {etaBarHalf()}
-                        </text>
-                      </box>
-                      <box flexDirection="row" gap={1}>
-                        <text width={barWidthHalf()} fg={usageBarColor()}>
-                          ctx {context()?.percentage ?? 0}%
-                        </text>
-                        <text width={barWidthHalf()} fg={etaBarColor()}>
-                          {etaValue().label}
-                        </text>
-                      </box>
-                    </>
-                  )}
-                </Show>
-                <Show when={(context()?.percentage ?? 0) >= 80}>
-                  <text fg={(context()?.percentage ?? 0) >= 95 ? theme.error : theme.warning}>
-                    {(context()?.percentage ?? 0) >= 95 ? "Context nearly full — " : "Consider "}/compact
-                  </text>
-                </Show>
               </box>
               <Show when={mcpEntries().length > 0}>
                 <box>

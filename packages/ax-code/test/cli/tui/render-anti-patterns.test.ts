@@ -437,7 +437,12 @@ describe("tui OpenTUI stability guardrails", () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
     const matches = sidebar.match(/setInterval\(/g) ?? []
 
-    expect(matches.length).toBeLessThanOrEqual(2)
+    expect(matches.length).toBe(0)
+    expect(sidebar).not.toContain("clockTick")
+    expect(sidebar).not.toContain("Elapsed")
+    expect(sidebar).not.toContain("tokens")
+    expect(sidebar).not.toContain("sidebar-eta")
+    expect(sidebar).not.toContain("./usage")
   })
 
   test("keeps the theme dialog reactive while custom themes hydrate", async () => {
@@ -810,6 +815,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.workerTargetResolved"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.workerReady"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.threadTransportSelected"')
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.appImportStarted"')
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.appImportReady"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.appImportFailed"')
     expect(app).toContain("beginTuiStartup")
     expect(app).toContain('recordTuiStartupOnce("tui.startup.rendererProfile", renderProfile)')
@@ -862,15 +869,19 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain('new URL("./worker.ts", import.meta.url)')
   })
 
-  test("keeps the OpenTUI app import bounded before renderer startup", async () => {
+  test("keeps the OpenTUI app import diagnostic-only before renderer startup", async () => {
     const thread = await fs.readFile(THREAD_SRC, "utf8")
     const explain = await fs.readFile(DEBUG_EXPLAIN_SRC, "utf8")
 
-    expect(thread).toContain("DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS = 10_000")
     expect(thread).toContain('import("./app")')
-    expect(thread).toContain("TUI app module did not load after")
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.appImportStarted"')
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.appImportReady"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.appImportFailed"')
-    expect(thread).toContain("TUI app did not load.")
+    expect(thread).toContain("TUI app failed to load.")
+    expect(thread).toContain("elapsedMs")
+    expect(thread).not.toContain("DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS")
+    expect(thread).not.toContain("withTimeout(\n          import(\"./app\")")
     expect(explain).toContain('case "tui.appImportFailed":')
+    expect(explain).toContain("tui.appImportReady")
   })
 })

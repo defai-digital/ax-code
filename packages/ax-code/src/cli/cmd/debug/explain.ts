@@ -771,7 +771,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         impact:
           "The process likely stalled before the renderer booted, often in worker startup, transport setup, or renderer dispatch.",
         suggestedFix:
-          "Inspect the gap between `tui.threadStarted`, `tui.workerTargetResolved`, `tui.workerSpawned`, `tui.workerReady`, `tui.threadTransportSelected`, and any `tui.startup.*` events. The first missing transition marks the failing startup boundary.",
+          "Inspect the gap between `tui.threadStarted`, `tui.workerTargetResolved`, `tui.workerSpawned`, `tui.workerReady`, `tui.threadTransportSelected`, `tui.appImportStarted`, `tui.appImportReady`, and any `tui.startup.*` events. The first missing transition marks the failing startup boundary.",
         riskLevel: "medium",
         occurrences: 1,
       })

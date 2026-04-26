@@ -26,7 +26,6 @@ declare global {
 type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
-export const DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS = 10_000
 
 export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> = process.env) {
   const value = env.AX_CODE_TUI_WORKER_READY_TIMEOUT_MS
@@ -300,22 +299,21 @@ export const TuiThreadCommand = cmd({
       upgradeTimer.unref?.()
 
       try {
-        const app = await withTimeout(
-          import("./app"),
-          DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS,
-          `TUI app module did not load after ${DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS}ms`,
-        ).catch((error) => {
+        const appImportStartedAt = performance.now()
+        DiagnosticLog.recordProcess("tui.appImportStarted", {})
+        const app = await import("./app").catch((error) => {
+          const elapsedMs = Math.round(performance.now() - appImportStartedAt)
           DiagnosticLog.recordProcess("tui.appImportFailed", {
             error,
-            timeoutMs: DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS,
+            elapsedMs,
           })
           Log.Default.error("TUI app import failed", {
             error: error instanceof Error ? error.message : String(error),
-            timeoutMs: DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS,
+            elapsedMs,
           })
           UI.error(
             [
-              "TUI app did not load.",
+              "TUI app failed to load.",
               "This usually points to OpenTUI/Solid module startup or bundled-runtime packaging.",
               "Run with --debug --print-logs and inspect process.jsonl around tui.appImportFailed.",
             ].join("\n"),
@@ -324,6 +322,9 @@ export const TuiThreadCommand = cmd({
           return undefined
         })
         if (!app) return
+        DiagnosticLog.recordProcess("tui.appImportReady", {
+          elapsedMs: Math.round(performance.now() - appImportStartedAt),
+        })
         const { tui } = app
         await tui({
           url: transport.url,
