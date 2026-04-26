@@ -1171,6 +1171,10 @@ function UserMessage(props: {
             backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
             flexShrink={0}
           >
+            <text marginBottom={1}>
+              <span style={{ fg: color() }}>◆ </span>
+              <span style={{ fg: theme.text }}>you</span>
+            </text>
             <text fg={theme.text}>{text()?.text}</text>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
@@ -1394,7 +1398,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           customBorderChars={SplitBorder.customBorderChars}
           borderColor={theme.error}
         >
-          <text fg={theme.textMuted}>
+          <text fg={theme.text}>
             {props.message.error?.data?.message ?? "An error occurred"}
           </text>
         </box>
@@ -1428,6 +1432,9 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           </box>
         </Match>
       </Switch>
+      <Show when={!props.last && (final() || props.message.error)}>
+        <box marginTop={2} marginLeft={3} marginRight={3} border={["top"]} borderColor={theme.borderSubtle} />
+      </Show>
     </>
   )
 }
@@ -1866,15 +1873,29 @@ function Bash(props: ToolProps<typeof BashTool>) {
 
 function Write(props: ToolProps<typeof WriteTool>) {
   const { theme, syntax } = useTheme()
-  const display = createMemo(() => codeDisplayView({ filePath: props.input.filePath, content: props.input.content }))
+  const [expanded, setExpanded] = createSignal(false)
+  const lines = createMemo(() => (props.input.content ?? "").split("\n"))
+  const overflow = createMemo(() => lines().length > 20)
+  const visibleContent = createMemo(() => {
+    if (expanded() || !overflow()) return props.input.content
+    return lines().slice(0, 20).join("\n") + "\n…"
+  })
+  const display = createMemo(() => codeDisplayView({ filePath: props.input.filePath, content: visibleContent() }))
 
   return (
     <Switch>
       <Match when={props.metadata.diagnostics !== undefined}>
-        <BlockTool title={"# Wrote " + normalize(props.input.filePath)} part={props.part}>
+        <BlockTool
+          title={"# Wrote " + normalize(props.input.filePath)}
+          part={props.part}
+          onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
+        >
           <line_number fg={theme.textMuted} minWidth={3} paddingRight={1}>
             <SessionCodeRenderer display={display()} conceal={false} fg={theme.text} syntaxStyle={syntax()} />
           </line_number>
+          <Show when={overflow()}>
+            <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+          </Show>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
         </BlockTool>
       </Match>
@@ -2065,6 +2086,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
 function Edit(props: ToolProps<typeof EditTool>) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+  const [expanded, setExpanded] = createSignal(false)
 
   const view = createMemo(() => {
     return diffDisplayView({
@@ -2075,12 +2097,22 @@ function Edit(props: ToolProps<typeof EditTool>) {
     })
   })
 
-  const diffContent = createMemo(() => props.metadata.diff)
+  const rawDiff = createMemo(() => props.metadata.diff ?? "")
+  const diffLines = createMemo(() => rawDiff().split("\n"))
+  const overflow = createMemo(() => diffLines().length > 30)
+  const diffContent = createMemo(() => {
+    if (expanded() || !overflow()) return rawDiff()
+    return diffLines().slice(0, 30).join("\n") + "\n…"
+  })
 
   return (
     <Switch>
       <Match when={props.metadata.diff !== undefined}>
-        <BlockTool title={"← Edit " + normalize(props.input.filePath)} part={props.part}>
+        <BlockTool
+          title={"← Edit " + normalize(props.input.filePath)}
+          part={props.part}
+          onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
+        >
           <box paddingLeft={1}>
             <SessionDiffRenderer
               diff={diffContent()}
@@ -2100,6 +2132,9 @@ function Edit(props: ToolProps<typeof EditTool>) {
               }}
             />
           </box>
+          <Show when={overflow()}>
+            <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+          </Show>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
         </BlockTool>
       </Match>

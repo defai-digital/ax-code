@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
@@ -15,7 +15,7 @@ import { SessionDre } from "./dre"
 import { SessionBranch } from "./branch"
 import { SessionRollback } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
-import type { FooterSessionStatus } from "./footer-view-model"
+import { footerSessionStatusView, type FooterSessionStatus } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import {
@@ -46,6 +46,50 @@ function qualityColor(status: SyncedSessionQualityReadiness["overallStatus"], th
   return theme.error
 }
 
+function sidebarStatusText(input: {
+  status: FooterSessionStatus
+  hasMessages: boolean
+  now: number
+}) {
+  const view = footerSessionStatusView({
+    status: input.status,
+    now: input.now,
+  })
+
+  if (input.status.type === "retry") {
+    return {
+      label: "Retrying...",
+      stale: false,
+    }
+  }
+
+  if (input.status.type === "busy") {
+    if (view.stale) {
+      return {
+        label: input.status.waitState === "llm" ? "Thinking stalled" : "Processing stalled",
+        stale: true,
+      }
+    }
+
+    if (input.status.waitState === "llm") {
+      return {
+        label: "Thinking...",
+        stale: false,
+      }
+    }
+
+    return {
+      label: "Processing...",
+      stale: false,
+    }
+  }
+
+  return {
+    label: input.hasMessages ? "Finished" : "Ready",
+    stale: false,
+  }
+}
+
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
   const { theme } = useTheme()
@@ -58,8 +102,16 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const status = createMemo<FooterSessionStatus>(
     () => (sync.data.session_status?.[props.sessionID] as FooterSessionStatus | undefined) ?? { type: "idle" },
   )
+  const [statusTick, setStatusTick] = createSignal(0)
   const dimensions = useTerminalDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
+
+  createEffect(() => {
+    const current = status()
+    if (current.type === "idle") return
+    const timer = setInterval(() => setStatusTick((tick) => tick + 1), 30_000)
+    onCleanup(() => clearInterval(timer))
+  })
 
   const [expanded, setExpanded] = createStore({
     mcp: true,
@@ -144,6 +196,14 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
 
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
+  const titleStatus = createMemo(() => {
+    statusTick()
+    return sidebarStatusText({
+      status: status(),
+      hasMessages: messages().length > 0,
+      now: Date.now(),
+    })
+  })
 
   return (
     <Show when={session()}>
@@ -172,6 +232,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <text fg={theme.text}>
                   <b>{session().title}</b>
                 </text>
+                <text fg={titleStatus().stale ? theme.warning : theme.textMuted}>{titleStatus().label}</text>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
               </box>
               <Show when={mcpEntries().length > 0}>
@@ -195,6 +256,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       </Show>
                     </text>
                   </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
                   <Show when={mcpEntries().length <= 2 || expanded.mcp}>
                     <For each={mcpEntries()}>
                       {([key, item]) => (
@@ -242,7 +304,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 when the flag is off, no section appears. The empty-state
                 layout shows tool count and graph readiness. */}
               <Show when={Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE}>
-                <box>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box
                     flexDirection="row"
                     gap={1}
@@ -289,6 +351,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       dashboard
                     </text>
                   </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
                   <Show when={sync.data.debugEngine.plans.length <= 2 || expanded.dre}>
                     {/* Graph readiness indicator */}
                     <box flexDirection="row" gap={1}>
@@ -416,13 +479,14 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       <b>Todo</b>
                     </text>
                   </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
                   <Show when={todo().length <= 2 || expanded.todo}>
                     <For each={todo()}>{(item) => <TodoItem status={item.status} content={item.content} />}</For>
                   </Show>
                 </box>
               </Show>
               <Show when={qualityActions().length > 0}>
-                <box>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
                       <b>Quality</b>
@@ -436,6 +500,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       view all
                     </text>
                   </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
                   <For each={qualityActions()}>
                     {(action) => (
                       <box
@@ -488,6 +553,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       view all
                     </text>
                   </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
                   <Show when={activity().length <= 2 || expanded.activity}>
                     <For each={activity()}>
                       {(item) => (
@@ -505,7 +571,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </box>
               </Show>
               <Show when={diff().length > 0}>
-                <box>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box
                     flexDirection="row"
                     gap={1}
@@ -546,6 +612,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       </text>
                     </box>
                   </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
                   <Show when={diff().length <= 2 || expanded.diff}>
                     <Show when={rollback().length > 0}>
                       <box flexDirection="row" gap={1}>

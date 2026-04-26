@@ -125,16 +125,30 @@ export function Home() {
             workspaceID={route.workspaceID}
           />
         </box>
-        <box height={4} minHeight={0} width="100%" maxWidth={75} alignItems="center" paddingTop={3} flexShrink={1}>
-          <Show when={showTips()}>
+        <Show when={showTips()}>
+          <box height={4} minHeight={0} width="100%" maxWidth={75} alignItems="center" paddingTop={3} flexShrink={1}>
             <Tips />
-          </Show>
-          <Show when={isFirstTimeUser()}>
-            <text fg={theme.textMuted}>
-              Type / for commands · /help for shortcuts
+          </box>
+        </Show>
+        <Show when={isFirstTimeUser()}>
+          <box flexDirection="column" alignItems="flex-start" flexShrink={0} maxWidth={75} paddingLeft={2} paddingRight={2}>
+            <text>
+              <span style={{ fg: theme.accent }}>●</span>{"  "}
+              <span style={{ fg: theme.text }}>Ask anything</span>
+              <span style={{ fg: theme.textMuted }}> · just type your question</span>
             </text>
-          </Show>
-        </box>
+            <text>
+              <span style={{ fg: theme.accent }}>●</span>{"  "}
+              <span style={{ fg: theme.text }}>/help</span>
+              <span style={{ fg: theme.textMuted }}> · keyboard shortcuts and commands</span>
+            </text>
+            <text>
+              <span style={{ fg: theme.accent }}>●</span>{"  "}
+              <span style={{ fg: theme.text }}>@filename</span>
+              <span style={{ fg: theme.textMuted }}> · attach files from your project</span>
+            </text>
+          </box>
+        </Show>
         <box flexGrow={1} minHeight={0} />
         <Toast />
       </box>
