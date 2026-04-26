@@ -12,9 +12,11 @@
  *   - `bin/postinstall.mjs`  detects bun on PATH or in node_modules
  *   - `package.json`   declares `bun` as a regular dependency
  *
- * Phase 1 publishes under the `source` npm dist-tag. The `latest` tag
- * continues to point at the compiled platform binaries until ADR-002
- * Phase 3 flips it.
+ * Phase 1 publishes a distinct package (`@defai.digital/ax-code-source`)
+ * under the `source` npm dist-tag. The compiled meta package
+ * (`@defai.digital/ax-code`) keeps `latest` until ADR-002 Phase 3 flips
+ * the default. The separate package identity avoids npm's immutable
+ * name+version collision between compiled and source tarballs.
  *
  * See: automatosx/adr/ADR-002-distribution-source-plus-bun.md
  */
@@ -23,7 +25,7 @@ import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
 import pkg from "../package.json"
-import { META_PACKAGE_NAME } from "./package-names"
+import { SOURCE_PACKAGE_NAME } from "./package-names"
 
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 process.chdir(dir)
@@ -200,7 +202,7 @@ await fs.promises.writeFile(path.join(stageDir, "bin/postinstall.mjs"), postinst
 //   - `os` and `cpu` are not constrained: bun handles per-platform
 //     selection via its own optionalDependencies tree.
 const sourcePackageManifest = {
-  name: META_PACKAGE_NAME,
+  name: SOURCE_PACKAGE_NAME,
   version: buildVersion,
   type: "module",
   description: "AI coding runtime (source distribution; runs via bun)",
@@ -253,11 +255,11 @@ const publishResult = await $`npm publish *.tgz --workspaces=false --access publ
 if (publishResult.exitCode !== 0) {
   const stderr = String(publishResult.stderr ?? "")
   if (stderr.includes("previously published") || stderr.includes("cannot publish over")) {
-    console.warn(`${META_PACKAGE_NAME}@${buildVersion} (${SOURCE_DIST_TAG}) already published, skipping`)
+    console.warn(`${SOURCE_PACKAGE_NAME}@${buildVersion} (${SOURCE_DIST_TAG}) already published, skipping`)
   } else {
     console.error(stderr)
     process.exit(publishResult.exitCode)
   }
 }
 
-console.log(`Published ${META_PACKAGE_NAME}@${buildVersion} under tag '${SOURCE_DIST_TAG}'`)
+console.log(`Published ${SOURCE_PACKAGE_NAME}@${buildVersion} under tag '${SOURCE_DIST_TAG}'`)

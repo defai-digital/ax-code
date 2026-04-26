@@ -17,7 +17,9 @@
 set -euo pipefail
 
 VERSION="${GITHUB_REF_NAME#v}"
-TARBALL_URL="https://registry.npmjs.org/@defai.digital/ax-code/-/ax-code-${VERSION}.tgz"
+SOURCE_PACKAGE_PATH="@defai.digital/ax-code-source"
+SOURCE_TARBALL_NAME="ax-code-source"
+TARBALL_URL="https://registry.npmjs.org/${SOURCE_PACKAGE_PATH}/-/${SOURCE_TARBALL_NAME}-${VERSION}.tgz"
 
 # Wait briefly for the npm registry to converge — publish-source job
 # completes before this homebrew-source job runs, but the registry CDN

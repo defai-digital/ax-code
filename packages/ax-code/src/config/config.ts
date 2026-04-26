@@ -659,6 +659,26 @@ export namespace Config {
     }
   }
 
+  function resolvePluginSpecifier(plugin: string, configPath: string) {
+    try {
+      return { value: import.meta.resolve!(plugin, configPath) }
+    } catch {
+      try {
+        const require = createRequire(configPath)
+        return { value: pathToFileURL(require.resolve(plugin)).href }
+      } catch (err) {
+        return { value: plugin, err }
+      }
+    }
+  }
+
+  function isAllowedUntrustedPlugin(plugin: string, source: string, isFile: boolean) {
+    if (!isFile) return false
+    if (isLocalFilePlugin(plugin, Instance.worktree)) return true
+    log.warn("ignoring plugin from untrusted config", { plugin, source })
+    return false
+  }
+
   /**
    * Extracts a canonical plugin name from a plugin specifier.
    * - For file:// URLs: extracts filename without extension
@@ -828,34 +848,21 @@ export namespace Config {
         )
       }
       const data = parsed.data
-      if (data.plugin && options.trusted === false) {
-        // Filter untrusted plugins BEFORE resolving — resolve converts
-        // package names to file:// URLs which would bypass the filter.
-        data.plugin = data.plugin.filter((plugin) => {
-          if (plugin.startsWith("file://") || plugin.startsWith("/") || plugin.startsWith("./") || plugin.startsWith("../")) return true
-          log.warn("ignoring package plugin from untrusted config", { plugin, source })
-          return false
-        })
-      }
       if (data.plugin && isFile) {
         for (let i = 0; i < data.plugin.length; i++) {
-          const plugin = data.plugin[i]
-          try {
-            data.plugin[i] = import.meta.resolve!(plugin, options.path)
-          } catch (e) {
-            try {
-              const require = createRequire(options.path)
-              const resolvedPath = require.resolve(plugin)
-              data.plugin[i] = pathToFileURL(resolvedPath).href
-            } catch (err) {
-              log.debug("plugin resolve failed — may be string identifier", {
-                plugin,
-                configPath: options.path,
-                err,
-              })
-            }
+          const resolved = resolvePluginSpecifier(data.plugin[i], options.path)
+          data.plugin[i] = resolved.value
+          if (resolved.err) {
+            log.debug("plugin resolve failed — may be string identifier", {
+              plugin: data.plugin[i],
+              configPath: options.path,
+              err: resolved.err,
+            })
           }
         }
+      }
+      if (data.plugin && options.trusted === false) {
+        data.plugin = data.plugin.filter((plugin) => isAllowedUntrustedPlugin(plugin, source, isFile))
       }
       return data
     }

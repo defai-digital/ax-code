@@ -17,6 +17,12 @@ describe("script.publish-source", () => {
     expect(text).toContain("--tag ${SOURCE_DIST_TAG}")
   })
 
+  test("publishes a distinct source package to avoid npm name/version collisions", async () => {
+    const text = await Bun.file(publishSourcePath).text()
+    expect(text).toContain("SOURCE_PACKAGE_NAME")
+    expect(text).not.toContain("name: META_PACKAGE_NAME")
+  })
+
   test("declares bun as a regular dependency, not optional", async () => {
     // Optional deps can be skipped with --no-optional, which would break
     // the source distribution at runtime. ADR-002 explicitly requires bun

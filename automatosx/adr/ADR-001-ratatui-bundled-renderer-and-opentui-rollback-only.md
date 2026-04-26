@@ -4,7 +4,7 @@
 **Date:** 2026-04-23
 **Deciders:** (to be filled by team)
 **Supersedes:** None
-**Superseded by (rendering decision):** Strategic decision recorded in memory `project_tui_migration_strategy.md` and ADR-002 context section. ADR-001's rendering-layer decision is no longer in force; formal supersession ADR is pending.
+**Superseded by (rendering decision):** ADR-003: Keep OpenTUI and Bun as the mainline runtime and harden them directly.
 
 ---
 
@@ -27,7 +27,7 @@ Sections that are **no longer in force**:
 - "Consequences" — most negative consequences (release pressure, dual-renderer maintenance) no longer apply.
 - "Risks → Ratatui may not reach release quality" — moot; not shipping ratatui.
 
-A formal "ADR-003: Reverse ratatui migration; OpenTUI is the permanent renderer" should be written when the team is ready to lock this in formally. Until then, this Supersession Note + the strategic memory are the authoritative source.
+ADR-003 is now the authoritative rendering/runtime decision. This ADR remains as historical context and as a source of renderer guardrails that still apply to future experiments.
 
 ---
 

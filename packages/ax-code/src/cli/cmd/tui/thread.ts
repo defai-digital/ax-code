@@ -25,6 +25,15 @@ declare global {
 
 type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
 
+export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
+
+export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> = process.env) {
+  const value = env.AX_CODE_TUI_WORKER_READY_TIMEOUT_MS
+  if (!value) return DEFAULT_TUI_WORKER_READY_TIMEOUT_MS
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_TUI_WORKER_READY_TIMEOUT_MS
+}
+
 function createWorkerFetch(client: RpcClient): typeof fetch {
   const fn = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init)
@@ -139,6 +148,9 @@ export const TuiThreadCommand = cmd({
         process.exitCode = 1
         return
       }
+      DiagnosticLog.recordProcess("tui.threadStarted", {
+        args: process.argv.slice(2),
+      })
 
       // Resolve relative --project paths from the caller's original cwd, then
       // use the real cwd after chdir so the thread and worker share the same
@@ -148,6 +160,7 @@ export const TuiThreadCommand = cmd({
         ? Filesystem.resolve(path.isAbsolute(args.project) ? args.project : path.join(root, args.project))
         : root
       const file = await target()
+      DiagnosticLog.recordProcess("tui.workerTargetResolved", { target: String(file) })
       try {
         process.chdir(next)
       } catch {
@@ -174,6 +187,39 @@ export const TuiThreadCommand = cmd({
       }
 
       const client = Rpc.client<typeof rpc>(worker)
+      const workerReadyTimeoutMs = tuiWorkerReadyTimeoutMs()
+      const workerReady = await withTimeout(
+        client.call("health", undefined),
+        workerReadyTimeoutMs,
+        `TUI worker did not become ready after ${workerReadyTimeoutMs}ms`,
+      ).catch((error) => {
+        DiagnosticLog.recordProcess("tui.workerHandshakeFailed", {
+          error,
+          target: String(file),
+          timeoutMs: workerReadyTimeoutMs,
+        })
+        Log.Default.error("TUI worker failed readiness handshake", {
+          error: error instanceof Error ? error.message : String(error),
+          target: String(file),
+          timeoutMs: workerReadyTimeoutMs,
+        })
+        UI.error(
+          [
+            "TUI worker did not become ready.",
+            "This usually points to Bun Worker startup, OpenTUI preload, or runtime packaging.",
+            "Run with --debug --print-logs and inspect process.jsonl around tui.workerHandshakeFailed.",
+          ].join("\n"),
+        )
+        worker.terminate()
+        process.exitCode = 1
+        return undefined
+      })
+      if (!workerReady) return
+      DiagnosticLog.recordProcess("tui.workerReady", {
+        ...workerReady,
+        target: String(file),
+        timeoutMs: workerReadyTimeoutMs,
+      })
       const internalEvents = createEventSource(client)
       const error = (e: unknown) => {
         DiagnosticLog.recordProcess("tui.threadError", { error: e })
@@ -231,6 +277,10 @@ export const TuiThreadCommand = cmd({
             fetch: createWorkerFetch(client),
             events: internalEvents,
           }
+      DiagnosticLog.recordProcess("tui.threadTransportSelected", {
+        mode: external ? "external" : "internal",
+        url: transport.url,
+      })
 
       const upgradeTimer = setTimeout(() => {
         client.call("checkUpgrade", { directory: cwd }).catch(() => {})

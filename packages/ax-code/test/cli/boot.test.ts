@@ -12,8 +12,12 @@ describe("cli.boot.level", () => {
     expect(level("WARN", false)).toBe("WARN")
   })
 
-  test("uses DEBUG for local installs", () => {
-    expect(level(undefined, true)).toBe("DEBUG")
+  test("defaults to INFO even for local installs", () => {
+    // Production behavior changed (see env.ts:32-35): even in local/dev
+    // mode the default level is INFO because DEBUG output leaks into
+    // the TUI compatible-mode renderer and confuses users. Explicit
+    // --print-logs or --debug overrides remain the way to get DEBUG.
+    expect(level(undefined, true)).toBe("INFO")
   })
 
   test("uses INFO outside local installs", () => {

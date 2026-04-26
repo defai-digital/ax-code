@@ -633,6 +633,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         break
       case "tui.threadError":
       case "tui.workerError":
+      case "tui.workerHandshakeFailed":
       case "tui.workerMessageError":
       case "worker.eventStreamError":
       case "worker.unhandledRejection":
@@ -701,7 +702,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       rootCause: `Structured process diagnostics recorded ${summarizeCounts([...counts.entries()].map(([label, count]) => ({ label, count })))}.`,
       impact: "The renderer, worker bridge, or event stream may have stopped processing input and updates reliably.",
       suggestedFix:
-        "Inspect the matching worker/thread events in `process.jsonl`. Start with `worker.eventStreamError`, `tui.threadError`, or `tui.workerError`, then trace backward to the last successful `tui.native.*` event.",
+        "Inspect the matching worker/thread events in `process.jsonl`. Start with `tui.workerHandshakeFailed`, `worker.eventStreamError`, `tui.threadError`, or `tui.workerError`, then trace backward to the last successful startup marker.",
       riskLevel: "high",
       occurrences: runtimeErrors.length,
     })
@@ -769,7 +770,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         impact:
           "The process likely stalled before the renderer booted, often in worker startup, transport setup, or renderer dispatch.",
         suggestedFix:
-          "Inspect the gap between `tui.threadStarted`, `tui.threadTransportSelected`, `tui.threadLaunch*`, and any worker events. The first missing transition marks the failing startup boundary.",
+          "Inspect the gap between `tui.threadStarted`, `tui.workerTargetResolved`, `tui.workerSpawned`, `tui.workerReady`, `tui.threadTransportSelected`, and any `tui.startup.*` events. The first missing transition marks the failing startup boundary.",
         riskLevel: "medium",
         occurrences: 1,
       })

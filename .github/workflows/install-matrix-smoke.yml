@@ -93,13 +93,25 @@ jobs:
           set -e
           VERSION="${{ steps.version.outputs.version }}"
           CHANNEL="${{ matrix.channel }}"
-          echo "Installing @defai.digital/ax-code@$CHANNEL (version $VERSION)..."
-          npm install -g "@defai.digital/ax-code@$CHANNEL"
+          if [ "$CHANNEL" = "source" ]; then
+            PACKAGE="@defai.digital/ax-code-source"
+          else
+            PACKAGE="@defai.digital/ax-code"
+          fi
+          echo "Installing ${PACKAGE}@${VERSION} for channel ${CHANNEL}..."
+          npm install -g "${PACKAGE}@${VERSION}"
 
       - name: ax-code --version
         shell: bash
         run: |
-          ax-code --version
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          OUTPUT="$(ax-code --version)"
+          echo "$OUTPUT"
+          if [ "$OUTPUT" != "$VERSION" ] && [ "$OUTPUT" != "v$VERSION" ]; then
+            echo "FAIL: expected ax-code --version to be ${VERSION}, got ${OUTPUT}"
+            exit 1
+          fi
 
       - name: ax-code doctor — assert runtimeMode matches channel
         shell: bash

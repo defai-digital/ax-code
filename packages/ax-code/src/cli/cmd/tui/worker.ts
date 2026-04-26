@@ -133,6 +133,14 @@ const startEventStream = (input: { directory?: string }) => {
 }
 
 export const rpc = {
+  health() {
+    return {
+      version: Installation.VERSION,
+      runtimeMode: runtimeMode(),
+      pid: process.pid,
+      cwd: process.cwd(),
+    }
+  },
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
     const headers = { ...input.headers }
     const auth = getAuthorizationHeader()

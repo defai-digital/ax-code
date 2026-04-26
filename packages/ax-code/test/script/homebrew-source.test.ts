@@ -5,6 +5,7 @@ import fs from "fs"
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const homebrewSourceScript = path.join(repoRoot, ".github/scripts/update-homebrew-source.sh")
 const releaseWorkflow = path.join(repoRoot, ".github/workflows/release.yml")
+const installMatrixWorkflow = path.join(repoRoot, ".github/workflows/install-matrix-smoke.yml")
 
 describe("homebrew source formula generator", () => {
   test("script exists and is executable", () => {
@@ -27,7 +28,9 @@ describe("homebrew source formula generator", () => {
     // publish-source.ts uploads, otherwise the formula references a
     // tarball that does not exist.
     const text = await Bun.file(homebrewSourceScript).text()
-    expect(text).toContain("registry.npmjs.org/@defai.digital/ax-code/-/ax-code-")
+    expect(text).toContain('SOURCE_PACKAGE_PATH="@defai.digital/ax-code-source"')
+    expect(text).toContain('SOURCE_TARBALL_NAME="ax-code-source"')
+    expect(text).toContain("registry.npmjs.org/${SOURCE_PACKAGE_PATH}/-/${SOURCE_TARBALL_NAME}-${VERSION}.tgz")
     expect(text).not.toContain("github.com/defai-digital/ax-code/releases/download")
   })
 
@@ -82,6 +85,16 @@ describe("homebrew source formula generator", () => {
     const jobMatch = text.match(/homebrew-source:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
     expect(jobMatch).not.toBeNull()
     expect(jobMatch![0]).toContain("!contains(github.ref_name, '-')")
+  })
+
+  test("install matrix installs exact package versions, not stale dist-tags", async () => {
+    const text = await Bun.file(installMatrixWorkflow).text()
+    expect(text).toContain('PACKAGE="@defai.digital/ax-code-source"')
+    expect(text).toContain('PACKAGE="@defai.digital/ax-code"')
+    expect(text).toContain('npm install -g "${PACKAGE}@${VERSION}"')
+    expect(text).toContain('OUTPUT="$(ax-code --version)"')
+    expect(text).toContain('expected ax-code --version to be ${VERSION}')
+    expect(text).not.toContain('@defai.digital/ax-code@$CHANNEL')
   })
 
   test("existing ax-code (compiled) homebrew formula generator is untouched", async () => {

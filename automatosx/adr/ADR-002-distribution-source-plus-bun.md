@@ -4,7 +4,7 @@
 **Date:** 2026-04-25
 **Deciders:** (to be filled by team)
 **Supersedes:** None
-**Related:** ADR-001 (ratatui bundled renderer — partially obsoleted by ratatui rejection on UI/UX grounds; rendering-layer guidance is being revisited separately)
+**Related:** ADR-001 (historical ratatui migration decision), ADR-003 (OpenTUI + Bun mainline hardening)
 
 ---
 
@@ -23,7 +23,7 @@ Mitigations already in tree:
 
 Strategic constraints that make this decision urgent now:
 
-- The v4.1.0 ratatui migration plan in **ADR-001** anticipated replacing the OpenTUI/Worker rendering path, which would have eliminated the Bun-Worker exposure indirectly. That plan is no longer viable: ratatui has been prototyped and rejected on UI/UX grounds (memory: 2026-04-25). Even sidebar-only ratatui was evaluated and rejected — the hybrid-renderer cost (cursor/color/resize/mouse coordination plus dual maintenance surface) does not justify the partial benefit, and it does not solve install-channel hangs.
+- The v4.1.0 ratatui migration plan in **ADR-001** anticipated replacing the OpenTUI/Worker rendering path, which would have eliminated the Bun-Worker exposure indirectly. That plan is no longer viable: ratatui has been prototyped and rejected on UI/UX grounds. Even sidebar-only ratatui was evaluated and rejected — the hybrid-renderer cost (cursor/color/resize/mouse coordination plus dual maintenance surface) does not justify the partial benefit, and it does not solve install-channel hangs. **ADR-003** now records OpenTUI + Bun as the mainline runtime to harden directly.
 - OpenTUI is therefore the permanent rendering layer. The Bun-Worker exposure is not transitional — it is the steady state until upstream Bun fixes the compile×Worker bug class. We cannot wait.
 
 Available solutions were evaluated:
@@ -116,6 +116,7 @@ Reopen this decision if any of the following becomes true:
 
 ## Related
 
-- ADR-001: Ship ratatui as the bundled renderer — partially obsoleted by ratatui's rejection. The rendering-layer aspect of that ADR needs separate revision.
+- ADR-001: Ship ratatui as the bundled renderer — superseded for the rendering decision.
+- ADR-003: Keep OpenTUI and Bun as the mainline runtime and harden them directly.
 - Memory: `project_distribution_strategy.md`, `project_tui_migration_strategy.md`.
 - Phase 1+ implementation spec: `automatosx/prd/PRD-source-bun-distribution.md` (to be written; not yet implemented).

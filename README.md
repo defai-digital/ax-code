@@ -43,7 +43,7 @@ curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/ax-
 > ```bash
 > brew install defai-digital/ax-code/ax-code-source
 > # or
-> npm i -g @defai.digital/ax-code@source
+> npm i -g @defai.digital/ax-code-source
 > ```
 > Trade-off: ~80 MB install vs ~50 MB for the compiled binary. See [Channel comparison](#channel-comparison) below.
 
@@ -91,7 +91,7 @@ npm update -g @defai.digital/ax-code   # follows your installed dist-tag
 # Switch to source-bundle channel (if hitting hangs on the default)
 brew install defai-digital/ax-code/ax-code-source
 # or:
-npm i -g @defai.digital/ax-code@source
+npm i -g @defai.digital/ax-code-source
 ```
 
 ### Channel comparison
@@ -102,7 +102,7 @@ npm i -g @defai.digital/ax-code@source
 | Install size | ~50 MB | ~80 MB |
 | TUI stability on common terminals | stable | stable |
 | TUI stability on terminals that trigger Bun-Worker bugs | may hang on first launch | stable |
-| Updates via | `brew upgrade ax-code` / `npm update -g @defai.digital/ax-code` | `brew upgrade ax-code-source` / `npm update -g @defai.digital/ax-code` |
+| Updates via | `brew upgrade ax-code` / `npm update -g @defai.digital/ax-code` | `brew upgrade ax-code-source` / `npm update -g @defai.digital/ax-code-source` |
 | Verify with | `ax-code doctor` shows `(compiled)` | `ax-code doctor` shows `(bun-bundled)` |
 
 Both channels publish from the same release tag and ship identical features. The only difference is how the runtime is packaged.

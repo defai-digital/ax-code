@@ -4,6 +4,7 @@ import * as fs from "fs/promises"
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
 import { Instance } from "../../src/project/instance"
 import { FileTime } from "../../src/file/time"
+import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
 
@@ -481,14 +482,7 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
-  // TODO(release-blocker): pre-existing failure since pre-v4.0.14. The
-  // spyOn(fs, "writeFile") mock does not intercept apply_patch's
-  // fs.writeFile call, so the simulated "disk full" never propagates and
-  // the assertion that execute() rejects fails. Likely a Bun namespace-
-  // import spyOn quirk rather than an apply_patch regression. Skipped to
-  // unblock the v4.0.x release pipeline; do not skip without filing an
-  // issue and tracking the fix.
-  test.skip("rolls back earlier writes when a later apply fails", async () => {
+  test("rolls back earlier writes when a later apply fails", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
 
@@ -500,10 +494,15 @@ describe("tool.apply_patch freeform", () => {
         await writeAndTrack(first, "one\n")
         await writeAndTrack(second, "two\n")
 
-        const originalWriteFile = fs.writeFile.bind(fs)
-        const writeSpy = spyOn(fs, "writeFile").mockImplementation(async (filePath: any, data: any, options?: any) => {
-          if (String(filePath) === second) throw new Error("disk full")
-          await originalWriteFile(filePath, data, options)
+        // apply_patch writes via Filesystem.write (not fs.writeFile
+        // directly) — Filesystem.write does an atomic rename from a
+        // randomized .tmp path, so a spy on fs.writeFile keyed on the
+        // final destination would never match. Mock at the
+        // Filesystem.write level where apply_patch actually calls.
+        const originalWrite = Filesystem.write.bind(Filesystem)
+        const writeSpy = spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
+          if (p === second) throw new Error("disk full")
+          await originalWrite(p, c, m)
         })
 
         try {

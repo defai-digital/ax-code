@@ -163,7 +163,7 @@ Triggered after a release tag publishes. Matrix:
 
 Each cell:
 
-1. `npm i -g @defai.digital/ax-code@<channel>`
+1. `npm i -g @defai.digital/ax-code` for the compiled channel, or `npm i -g @defai.digital/ax-code-source` for the source channel
 2. `ax-code --version` — must print the published version
 3. `ax-code doctor` — must report `runtimeMode = compiled` for `latest`, `source` or `bun-bundled` for `source`
 4. `ax-code run "echo hello" --print` (or smallest possible non-interactive smoke) — must exit 0 within 30s
@@ -172,7 +172,7 @@ A failure in any source-channel cell **blocks Phase 3** (default flip).
 
 #### 1.5 — Acceptance criteria for Phase 1
 
-- `@defai.digital/ax-code@source` installs successfully on all 6 supported platforms in the install-matrix smoke
+- `@defai.digital/ax-code-source` installs successfully on all 6 supported platforms in the install-matrix smoke
 - `runtimeMode` correctly reports `bun-bundled` (or `source` if the user already had bun on PATH)
 - No regression in compiled-channel installs (still `runtimeMode = compiled`)
 - DiagnosticLog `runtimeMode` shows up in support telemetry
@@ -306,7 +306,7 @@ Phase 3 cannot execute until **all** items below are satisfied. Document each wi
   - Windows arm64 (source-only is acceptable)
 - [ ] `runtimeMode` telemetry from `ax-code doctor` / DiagnosticLog manifests on the source channel shows **no install-time bun-detection failures** (postinstall fail rate < 0.5%).
 - [ ] **Zero open critical-severity bug reports** filed against `@source` tag installs in the last release cycle.
-- [ ] Package size of source tarball stays within **80–120 MB after install** (compressed + bun runtime). Check `du -sh node_modules/@defai.digital` after a `npm i -g @defai.digital/ax-code@source` install.
+- [ ] Package size of source tarball stays within **80–120 MB after install** (compressed + bun runtime). Check `du -sh node_modules/@defai.digital` after a `npm i -g @defai.digital/ax-code-source` install.
 - [ ] README's "Source channel (early access)" section has been live for at least one release cycle (so opt-in users have had a chance to surface issues).
 
 ### Flip steps (when gates pass)

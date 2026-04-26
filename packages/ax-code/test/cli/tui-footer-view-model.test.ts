@@ -39,7 +39,11 @@ describe("footerSessionStatusView", () => {
 
     expect(view.stale).toBe(true)
     expect(view.label).toContain("Waiting for response")
-    expect(view.label).toContain("no activity")
+    // Production now uses context-aware stale messaging (see
+    // footer-view-model.ts:94-99 "Give context-aware stale messages
+    // instead of generic 'no activity'") — llm wait state surfaces
+    // "response delayed".
+    expect(view.label).toContain("response delayed")
   })
 
   test("gives tools a longer inactivity budget before warning", () => {
@@ -68,7 +72,9 @@ describe("footerSessionStatusView", () => {
     expect(recentTool.stale).toBe(false)
     expect(recentTool.label).toContain("Running Bash Tool")
     expect(staleTool.stale).toBe(true)
-    expect(staleTool.label).toContain("no activity")
+    // Tool wait state surfaces "tool may be stalled" (per
+    // footer-view-model.ts:97 context-aware stale messaging).
+    expect(staleTool.label).toContain("tool may be stalled")
   })
 })
 
