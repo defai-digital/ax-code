@@ -26,6 +26,7 @@ declare global {
 type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
+export const DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS = 10_000
 
 export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> = process.env) {
   const value = env.AX_CODE_TUI_WORKER_READY_TIMEOUT_MS
@@ -86,8 +87,19 @@ function createEventSource(client: RpcClient): EventSource {
 
 async function target() {
   if (typeof AX_CODE_WORKER_PATH !== "undefined") return AX_CODE_WORKER_PATH
+  // Compiled-binary layout (legacy fallback): worker is at cli/cmd/tui/worker.js
+  // relative to the entry point. Kept for backwards compatibility with builds
+  // that emit the source-tree directory shape.
   const dist = new URL("./cli/cmd/tui/worker.js", import.meta.url)
   if (await Filesystem.exists(fileURLToPath(dist))) return dist
+  // Source-bundle layout (ADR-002): build-source.ts emits flat-named outputs
+  // so worker.js sits next to the bundled index.js. Probe this before the
+  // source/dev .ts fallback so packaged users do not crash with a
+  // ModuleNotFound on worker.ts that does not exist in the tarball.
+  const flat = new URL("./worker.js", import.meta.url)
+  if (await Filesystem.exists(fileURLToPath(flat))) return flat
+  // Source/dev layout: worker.ts is the sibling source file under src/.
+  // Bun's runtime can load .ts directly, so this is the contributor path.
   return new URL("./worker.ts", import.meta.url)
 }
 
@@ -288,7 +300,31 @@ export const TuiThreadCommand = cmd({
       upgradeTimer.unref?.()
 
       try {
-        const { tui } = await import("./app")
+        const app = await withTimeout(
+          import("./app"),
+          DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS,
+          `TUI app module did not load after ${DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS}ms`,
+        ).catch((error) => {
+          DiagnosticLog.recordProcess("tui.appImportFailed", {
+            error,
+            timeoutMs: DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS,
+          })
+          Log.Default.error("TUI app import failed", {
+            error: error instanceof Error ? error.message : String(error),
+            timeoutMs: DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS,
+          })
+          UI.error(
+            [
+              "TUI app did not load.",
+              "This usually points to OpenTUI/Solid module startup or bundled-runtime packaging.",
+              "Run with --debug --print-logs and inspect process.jsonl around tui.appImportFailed.",
+            ].join("\n"),
+          )
+          process.exitCode = 1
+          return undefined
+        })
+        if (!app) return
+        const { tui } = app
         await tui({
           url: transport.url,
           async onSnapshot() {

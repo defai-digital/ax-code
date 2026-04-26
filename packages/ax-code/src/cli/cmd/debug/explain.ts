@@ -635,6 +635,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       case "tui.workerError":
       case "tui.workerHandshakeFailed":
       case "tui.workerMessageError":
+      case "tui.appImportFailed":
       case "worker.eventStreamError":
       case "worker.unhandledRejection":
       case "worker.uncaughtException":

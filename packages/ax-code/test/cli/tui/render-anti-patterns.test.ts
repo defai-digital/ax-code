@@ -58,6 +58,7 @@ const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "context/theme.tsx"),
 ]
 const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/doctor-preload.ts")
+const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/debug/explain.ts")
 const RESIZE_HANDLE_SRC = path.join(UI_ROOT, "components/layout/resize-handle.tsx")
 const TEXT_FIELD_SRC = path.join(UI_ROOT, "components/text-field.tsx")
 const SESSION_TURN_SRC = path.join(UI_ROOT, "components/session-turn.tsx")
@@ -809,6 +810,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.workerTargetResolved"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.workerReady"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.threadTransportSelected"')
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.appImportFailed"')
     expect(app).toContain("beginTuiStartup")
     expect(app).toContain('recordTuiStartupOnce("tui.startup.rendererProfile", renderProfile)')
     expect(app).toContain("tui.startup.renderDispatched")
@@ -837,5 +839,38 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain("worker.terminate()")
     expect(worker).toContain("health()")
     expect(worker).toContain("runtimeMode()")
+  })
+
+  test("worker target() resolves all three layouts: compiled binary, source-bundle, source-dev", async () => {
+    // Regression guard for ADR-002 source-bundle. The bundle emits flat
+    // worker.js next to index.js (build-source.ts uses `naming.entry =
+    // "[name].[ext]"`), so target() must probe ./worker.js BEFORE
+    // falling through to ./worker.ts. Without this, a packaged source-
+    // bundle install fails at TUI launch with a ModuleNotFound for
+    // worker.ts that does not exist in the tarball — and the install-
+    // matrix smoke does not catch it because it only exercises non-TUI
+    // commands (--version, doctor, debug config).
+    const thread = await fs.readFile(THREAD_SRC, "utf8")
+
+    // Compiled-binary path (bunfs-rooted absolute string, set by build.ts)
+    expect(thread).toContain("AX_CODE_WORKER_PATH")
+    // Compiled-binary-style nested layout (cli/cmd/tui/worker.js)
+    expect(thread).toContain('new URL("./cli/cmd/tui/worker.js", import.meta.url)')
+    // Source-bundle flat layout (worker.js sibling to bundled index.js)
+    expect(thread).toContain('new URL("./worker.js", import.meta.url)')
+    // Source/dev raw .ts layout (worker.ts sibling to thread.ts)
+    expect(thread).toContain('new URL("./worker.ts", import.meta.url)')
+  })
+
+  test("keeps the OpenTUI app import bounded before renderer startup", async () => {
+    const thread = await fs.readFile(THREAD_SRC, "utf8")
+    const explain = await fs.readFile(DEBUG_EXPLAIN_SRC, "utf8")
+
+    expect(thread).toContain("DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS = 10_000")
+    expect(thread).toContain('import("./app")')
+    expect(thread).toContain("TUI app module did not load after")
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.appImportFailed"')
+    expect(thread).toContain("TUI app did not load.")
+    expect(explain).toContain('case "tui.appImportFailed":')
   })
 })
