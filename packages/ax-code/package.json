@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "4.0.15",
+  "version": "4.0.16",
   "name": "ax-code",
   "type": "module",
   "license": "MIT",
@@ -21,6 +21,9 @@
     "perf:index": "bun run script/perf-index.ts",
     "perf:report": "bun run script/perf-report.ts",
     "build": "bun run script/build.ts",
+    "bundle:source": "bun run script/build-source.ts",
+    "bundle:source:smoke": "bun run script/build-source.ts && bun dist-source/bundle/index.js --version",
+    "bundle:source:pack": "AX_CODE_DRY_RUN=1 bun run script/publish-source.ts",
     "dev": "bun run --conditions=browser ./src/index.ts",
     "db": "bun drizzle-kit"
   },

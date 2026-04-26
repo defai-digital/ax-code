@@ -15,6 +15,7 @@ type ConfigureOptions = {
     pid?: number
     argv?: string[]
     cwd?: string
+    runtimeMode?: string
   }
 }
 
@@ -94,6 +95,7 @@ export namespace DiagnosticLog {
       pid: options.manifest?.pid ?? process.pid,
       cwd: options.includeContent ? options.manifest?.cwd : redactPath(options.manifest?.cwd),
       args: redactArgs(options.manifest?.argv ?? [], state.includeContent),
+      runtimeMode: options.manifest?.runtimeMode,
       includeContent: state.includeContent,
       files: {
         events: "events.jsonl",

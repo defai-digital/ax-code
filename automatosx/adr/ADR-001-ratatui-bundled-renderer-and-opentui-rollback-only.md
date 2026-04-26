@@ -1,9 +1,33 @@
 # ADR-001: Ship ratatui as the bundled renderer and keep OpenTUI rollback-only
 
-**Status:** Accepted
+**Status:** Partially Superseded (2026-04-25)
 **Date:** 2026-04-23
 **Deciders:** (to be filled by team)
 **Supersedes:** None
+**Superseded by (rendering decision):** Strategic decision recorded in memory `project_tui_migration_strategy.md` and ADR-002 context section. ADR-001's rendering-layer decision is no longer in force; formal supersession ADR is pending.
+
+---
+
+## Supersession Note (added 2026-04-25)
+
+The ratatui migration described below was prototyped end-to-end and **rejected by users on UI/UX grounds**. The team evaluated and also rejected sidebar-only ratatui (the hybrid renderer cost — cursor/color/resize/mouse coordination plus dual maintenance surface — does not justify the partial benefit, and it does not solve the install-channel hangs that motivated this ADR's release-correctness goal).
+
+Current strategic position (see `project_tui_migration_strategy.md` and ADR-002):
+
+- **OpenTUI is the permanent rendering layer.** Hardening it is mainline investment, not bridge work.
+- **The brew/npm install hang problem is solved by ADR-002 (source + bun distribution)**, not by replacing the renderer.
+- The renderer-abstraction infrastructure listed below in "Context" (`renderer-decision.ts`, `renderer-contract.ts`, `performance-criteria.ts`) stays useful as a boundary for future renderer experiments, but the ratatui target itself is retired.
+
+Sections of this ADR that are **still in force**:
+- "Non-negotiable implementation guardrails" applies to *any* renderer migration, not just ratatui — keep it as a contract for future renderer work.
+- "Alternatives Considered → Alternative 2: Stay on OpenTUI plus source launcher workaround" — this alternative has effectively been chosen (ADR-002 productionizes the source launcher), but for different reasons than originally weighed.
+
+Sections that are **no longer in force**:
+- The "Decision" section (ship ratatui, drop OpenTUI as bundled fallback) — reverted; OpenTUI is the only renderer.
+- "Consequences" — most negative consequences (release pressure, dual-renderer maintenance) no longer apply.
+- "Risks → Ratatui may not reach release quality" — moot; not shipping ratatui.
+
+A formal "ADR-003: Reverse ratatui migration; OpenTUI is the permanent renderer" should be written when the team is ready to lock this in formally. Until then, this Supersession Note + the strategic memory are the authoritative source.
 
 ---
 

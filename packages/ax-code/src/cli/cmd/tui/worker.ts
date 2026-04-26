@@ -1,4 +1,5 @@
 import { Installation } from "@/installation"
+import { runtimeMode } from "@/installation/runtime-mode"
 import { Server } from "@/server/server"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
@@ -33,6 +34,7 @@ await DiagnosticLog.configure({
     pid: process.pid,
     argv: process.argv.slice(2),
     cwd: process.cwd(),
+    runtimeMode: runtimeMode(),
   },
 })
 if (debugDir) DiagnosticLog.installProcessDiagnostics()

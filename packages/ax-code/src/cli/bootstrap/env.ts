@@ -1,4 +1,5 @@
 import { Installation } from "../../installation"
+import { runtimeMode } from "../../installation/runtime-mode"
 import { NativePerf } from "../../perf/native"
 import { Log } from "../../util/log"
 import path from "path"
@@ -139,6 +140,7 @@ export async function init(opts: Opts, dep: InitDep = {}) {
       pid,
       argv: argv.slice(2),
       cwd,
+      runtimeMode: runtimeMode(),
     },
   })
   if (debug.enabled) DiagnosticLog.installProcessDiagnostics()

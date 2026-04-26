@@ -10,6 +10,7 @@ node_modules
 playground
 tmp
 dist
+dist-source
 ts-dist
 .turbo
 **/.serena

@@ -185,6 +185,51 @@ jobs:
             [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
           done
 
+  # Source distribution publish — bundled JS + bun runtime, published under
+  # the `source` npm dist-tag. Runs in parallel to the compiled-binary
+  # publish job; both ship from the same release tag. ADR-002 Phase 1
+  # keeps the `source` tag on dual-publish until install-matrix smoke
+  # confirms parity, at which point Phase 3 flips `latest` to source.
+  publish-source:
+    needs: typecheck
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build and publish source distribution
+        working-directory: packages/ax-code
+        run: bun run script/publish-source.ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          AX_CODE_VERSION: ${{ github.ref_name }}
+          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+          # Phase 1 always publishes under the `source` tag, regardless of
+          # whether the release is `latest` or `beta`. Compiled artifacts
+          # continue to occupy `latest`/`beta` per the existing publish job.
+          AX_CODE_SOURCE_TAG: source
+          AX_CODE_RELEASE: "true"
+
   homebrew:
     needs: publish
     # Homebrew tracks stable releases only. Prerelease tags still publish to
@@ -200,3 +245,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
+
+  # Source-distribution Homebrew formula (ax-code-source) — opt-in
+  # alongside the default compiled formula. ADR-002 Phase 2: additive.
+  # Phase 3 will swap which one is the default `ax-code` formula.
+  homebrew-source:
+    needs: publish-source
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Update Homebrew source formula
+        env:
+          GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/update-homebrew-source.sh

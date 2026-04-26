@@ -1,0 +1,128 @@
+name: Install Matrix Smoke
+
+# Validates that ax-code installs and runs end-to-end on every supported
+# platform × distribution channel after a release tag publishes. Source
+# channel must pass on every platform before ADR-002 Phase 3 (default
+# flip from compiled to source) can proceed.
+#
+# Triggers:
+#   - `release_published`: each tag-driven release runs the matrix
+#   - `workflow_dispatch`: manual run for testing the workflow itself
+#     against an already-published version (provide `version` input).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Already-published version to smoke-test (e.g. 4.0.15)"
+        required: true
+        type: string
+      channel:
+        description: "Which channels to smoke-test"
+        required: true
+        type: choice
+        default: both
+        options:
+          - both
+          - source
+          - latest
+
+jobs:
+  smoke:
+    name: ${{ matrix.os }} / ${{ matrix.channel }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest        # darwin arm64
+          - ubuntu-latest       # linux x64 glibc
+          - ubuntu-24.04-arm    # linux arm64 glibc
+          - windows-latest      # windows x64
+        channel:
+          - source
+          - latest
+        include:
+          # Linux musl coverage via Alpine container; Windows arm64 is
+          # the ratchet platform and ships only on the source channel
+          # to start (compiled-binary builds are flaky on win32-arm64).
+          - os: ubuntu-latest
+            channel: source
+            container: alpine:3.20
+            label: linux-musl-x64
+          - os: windows-11-arm
+            channel: source
+            label: win32-arm64-source-only
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container || '' }}
+    steps:
+      - name: Resolve version under test
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Filter dispatch channel
+        if: ${{ inputs.channel != '' && inputs.channel != 'both' && inputs.channel != matrix.channel }}
+        shell: bash
+        run: |
+          echo "Skipping ${{ matrix.channel }} (workflow_dispatch requested ${{ inputs.channel }} only)"
+          exit 0
+
+      # Alpine container needs a few prereqs before npm/bash work.
+      - name: Alpine prereqs
+        if: ${{ matrix.container == 'alpine:3.20' }}
+        run: |
+          apk add --no-cache bash nodejs npm curl
+
+      - name: Install Node (host runner)
+        if: ${{ matrix.container == '' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install ax-code
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANNEL="${{ matrix.channel }}"
+          echo "Installing @defai.digital/ax-code@$CHANNEL (version $VERSION)..."
+          npm install -g "@defai.digital/ax-code@$CHANNEL"
+
+      - name: ax-code --version
+        shell: bash
+        run: |
+          ax-code --version
+
+      - name: ax-code doctor — assert runtimeMode matches channel
+        shell: bash
+        run: |
+          set -e
+          OUTPUT="$(ax-code doctor 2>&1)"
+          echo "$OUTPUT"
+          if [ "${{ matrix.channel }}" = "source" ]; then
+            # Source channel must report bun-bundled (or source if user
+            # had bun on PATH already, which is fine).
+            echo "$OUTPUT" | grep -E "Runtime: Bun .* \((bun-bundled|source)\)" \
+              || (echo "FAIL: source channel did not report bun-bundled/source runtimeMode" && exit 1)
+          else
+            # Latest channel ships the compiled binary, must report compiled.
+            echo "$OUTPUT" | grep -E "Runtime: Bun .* \(compiled\)" \
+              || (echo "FAIL: latest channel did not report compiled runtimeMode" && exit 1)
+          fi
+
+      - name: Smoke — non-interactive command
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          # Smallest non-interactive command that exercises CLI bootstrap
+          # without needing provider credentials. `debug config` reads
+          # config and exits.
+          ax-code debug config || true

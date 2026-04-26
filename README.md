@@ -29,22 +29,46 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 ### Install
 
 ```bash
-# macOS / Linux (Homebrew) — recommended
+# Homebrew (macOS / Linux)
 brew install defai-digital/ax-code/ax-code
 
 # npm (any platform)
 npm i -g @defai.digital/ax-code
 
-# curl (Linux / macOS)
+# curl (Linux / macOS — installs the same compiled binary as brew/npm above)
 curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/ax-code-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').tar.gz | tar -xz -C /usr/local/bin
 ```
+
+> **Hitting a TUI hang on first launch?** Some terminals trigger known bun-compile-binary bugs ([oven-sh/bun#26762](https://github.com/oven-sh/bun/issues/26762), [#27766](https://github.com/oven-sh/bun/issues/27766)). Install the **source-bundle channel** instead — it ships pre-bundled JavaScript plus the bun runtime and avoids the bug class entirely:
+> ```bash
+> brew install defai-digital/ax-code/ax-code-source
+> # or
+> npm i -g @defai.digital/ax-code@source
+> ```
+> Trade-off: ~80 MB install vs ~50 MB for the compiled binary. See [Channel comparison](#channel-comparison) below.
+
+### Verify
+
+```bash
+ax-code doctor
+```
+
+Look for the `Runtime` line:
+
+| Output | Meaning |
+| ------ | ------- |
+| `Runtime: Bun X.Y.Z (compiled)` | Default channel — single binary |
+| `Runtime: Bun X.Y.Z (bun-bundled)` | Source channel — bundled JS + bun runtime |
+| `Runtime: Bun X.Y.Z (source)` | Local checkout via `pnpm setup:cli` |
+
+If the TUI hangs and your runtime is `compiled`, switch to the source-bundle channel using the install hint above.
 
 ### Run
 
 ```bash
 # Set any provider key (pick one)
 export ANTHROPIC_API_KEY="your-key"              # Claude
-export GOOGLE_GENERATIVE_AI_API_KEY="your-key"  # Gemini
+export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Gemini
 export XAI_API_KEY="your-key"                    # Grok
 export OPENAI_API_KEY="your-key"                 # GPT
 
@@ -52,15 +76,36 @@ export OPENAI_API_KEY="your-key"                 # GPT
 ax-code
 ```
 
-That's it. No project setup or config file is required to get started. Run `ax-code`, then use `/connect` inside the TUI whenever you want to add or switch providers.
+That's it. No project setup or config file is required. Run `ax-code`, then use `/connect` inside the TUI to add or switch providers.
 
 ### Update
 
+`ax-code upgrade` and the package-manager update commands stay on whichever channel you installed from. To switch channels, install the new channel directly.
+
 ```bash
+# Stay on current channel
 ax-code upgrade
-brew upgrade ax-code
-npm update -g @defai.digital/ax-code
+brew upgrade ax-code            # or: brew upgrade ax-code-source
+npm update -g @defai.digital/ax-code   # follows your installed dist-tag
+
+# Switch to source-bundle channel (if hitting hangs on the default)
+brew install defai-digital/ax-code/ax-code-source
+# or:
+npm i -g @defai.digital/ax-code@source
 ```
+
+### Channel comparison
+
+| | Default (`ax-code`) | Source-bundle (`ax-code-source`) |
+| --- | --- | --- |
+| What ships | `bun build --compile` single binary | Pre-bundled JS + bun runtime |
+| Install size | ~50 MB | ~80 MB |
+| TUI stability on common terminals | stable | stable |
+| TUI stability on terminals that trigger Bun-Worker bugs | may hang on first launch | stable |
+| Updates via | `brew upgrade ax-code` / `npm update -g @defai.digital/ax-code` | `brew upgrade ax-code-source` / `npm update -g @defai.digital/ax-code` |
+| Verify with | `ax-code doctor` shows `(compiled)` | `ax-code doctor` shows `(bun-bundled)` |
+
+Both channels publish from the same release tag and ship identical features. The only difference is how the runtime is packaged.
 
 ### From Source (contributors)
 
@@ -69,11 +114,14 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+
+Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+. `setup:cli` installs a source launcher that runs ax-code directly via `bun run` from your checkout. `ax-code doctor` will report `Runtime: Bun X.Y.Z (source)`.
 
-`setup:cli` installs a source launcher that runs ax-code directly via `bun run`.
-This avoids known Bun compiled-binary bugs ([oven-sh/bun#26762](https://github.com/oven-sh/bun/issues/26762), [#27766](https://github.com/oven-sh/bun/issues/27766)) that can cause TUI hangs.
-Use `pnpm run setup:cli -- --bundled` if you need a compiled single-file binary for distribution.
+Build the same bundle that ships under the source channel:
+```bash
+pnpm --filter ax-code run bundle:source        # build only
+pnpm --filter ax-code run bundle:source:smoke  # build + run --version
+pnpm --filter ax-code run bundle:source:pack   # build + npm pack (dry-run)
+```
 
 ---
 

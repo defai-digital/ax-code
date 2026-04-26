@@ -13,6 +13,7 @@ import fs from "fs"
 import { createRequire } from "module"
 import os from "os"
 import path from "path"
+import { sourceLauncherScript as generateSourceLauncherScript } from "../packages/ax-code/script/source-launcher"
 
 export const ROOT = path.resolve(import.meta.dir, "..")
 const require = createRequire(import.meta.url)
@@ -101,13 +102,7 @@ export function buildChannelForVersion(version: string) {
 }
 
 export function sourceLauncherScript(input: { root?: string; windows?: boolean }) {
-  const root = input.root ?? ROOT
-  const cwdPath = path.join(root, "packages", "ax-code")
-  const entry = path.join(root, "packages", "ax-code", "src", "index.ts")
-  if (input.windows) {
-    return `@echo off\nset AX_CODE_ORIGINAL_CWD=%CD%\nbun run --cwd "${cwdPath}" --conditions=browser "${entry}" %*\n`
-  }
-  return `#!/bin/sh\nAX_CODE_ORIGINAL_CWD="\$(pwd)" exec bun run --cwd "${cwdPath.replace(/\\/g, "/")}" --conditions=browser "${entry.replace(/\\/g, "/")}" "$@"\n`
+  return generateSourceLauncherScript({ root: input.root ?? ROOT, windows: input.windows })
 }
 
 export function bundledLauncherScript(input: { binaryPath: string; windows?: boolean }) {

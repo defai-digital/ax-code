@@ -8,6 +8,7 @@
 import type { CommandModule } from "yargs"
 import { Config } from "../../config/config"
 import { Installation } from "../../installation"
+import { runtimeMode } from "../../installation/runtime-mode"
 import { Global } from "../../global"
 import { Flag } from "../../flag/flag"
 import { Auth } from "../../auth"
@@ -39,7 +40,7 @@ export const DoctorCommand: CommandModule = {
     checks.push({
       name: "Runtime",
       status: "ok",
-      detail: `Bun ${Bun.version}`,
+      detail: `Bun ${Bun.version} (${runtimeMode()})`,
     })
 
     // 3. Platform

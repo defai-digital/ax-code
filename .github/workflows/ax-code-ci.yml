@@ -156,6 +156,83 @@ jobs:
           path: packages/ax-code/.tmp/coverage-summary.json
           if-no-files-found: ignore
 
+  # Validate the source-distribution bundle on every PR so a regression
+  # in build-source.ts or publish-source.ts surfaces here, not at release
+  # time. ADR-002 Phase 1 made this the default channel — keeping it
+  # buildable is now a first-class concern.
+  bundle-source:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build source bundle
+        working-directory: packages/ax-code
+        run: bun run bundle:source
+
+      - name: Smoke — bundle prints version
+        working-directory: packages/ax-code
+        run: |
+          set -e
+          OUTPUT="$(bun dist-source/bundle/index.js --version)"
+          echo "version output: $OUTPUT"
+          # Expect a semver-shaped string. Tag refs prefix with "v";
+          # local builds use the package.json version directly.
+          if ! echo "$OUTPUT" | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+' >/dev/null; then
+            echo "FAIL: --version did not emit a semver-shaped string"
+            exit 1
+          fi
+
+      - name: Smoke — bundle reports bun-bundled or source runtime mode
+        working-directory: packages/ax-code
+        run: |
+          set -e
+          # Doctor exits non-zero if anything fails; allow that, we only
+          # care about the Runtime line.
+          OUTPUT="$(bun dist-source/bundle/index.js doctor 2>&1 || true)"
+          echo "$OUTPUT"
+          # CI runner has bun on PATH (setup-bun action), so runtimeMode
+          # may be "source" or "bun-bundled" depending on what
+          # process.execPath resolves to. Both are valid for this bundle.
+          if ! echo "$OUTPUT" | grep -E "Runtime: Bun .* \\((bun-bundled|source)\\)" >/dev/null; then
+            echo "FAIL: doctor did not report bun-bundled or source runtimeMode"
+            exit 1
+          fi
+
+      - name: Pack — verify publish-source assembles a valid tarball
+        working-directory: packages/ax-code
+        env:
+          AX_CODE_DRY_RUN: "1"
+        run: bun run bundle:source:pack
+
+      - name: Upload bundle artifact for inspection
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-source-bundle
+          path: |
+            packages/ax-code/dist-source/package/*.tgz
+          if-no-files-found: warn
+          retention-days: 7
+
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live
     runs-on: ubuntu-latest
