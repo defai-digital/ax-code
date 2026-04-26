@@ -5,6 +5,13 @@ import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
 import { nativeReadFilesBatch, nativeDetectSecurity } from "./native-scan"
+import {
+  DEFAULT_INCLUDE,
+  DEFAULT_MAX_FILES,
+  DEFAULT_MAX_PER_FILE,
+  isExcludedDir,
+  isTestFile,
+} from "./scanner-utils"
 
 // detect-security — AST-lite scanner for common security anti-patterns.
 //
@@ -23,21 +30,6 @@ export type DetectSecurityInput = {
   files?: string[]
   maxFiles?: number
   maxFindingsPerFile?: number
-}
-
-const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"]
-const DEFAULT_EXCLUDE_DIRS = ["node_modules", "dist", "build", ".cache", ".git", ".next", "coverage"]
-const DEFAULT_MAX_FILES = 500
-const DEFAULT_MAX_PER_FILE = 20
-
-function isTestFile(file: string): boolean {
-  return /(^|\/)(test|tests|__tests__|__mocks__|spec)\//.test(file) || /\.(test|spec)\.[jt]sx?$/.test(file)
-}
-
-function isExcludedDir(file: string, cwd: string): boolean {
-  const rel = path.relative(cwd, file)
-  const segments = rel.split(path.sep)
-  return segments.some((seg) => DEFAULT_EXCLUDE_DIRS.includes(seg))
 }
 
 const SUPPRESS_RE = /\/\/\s*@scan-suppress\s+security_scan/

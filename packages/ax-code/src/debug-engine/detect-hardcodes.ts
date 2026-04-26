@@ -5,6 +5,13 @@ import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
 import { nativeReadFilesBatch, nativeDetectHardcodes } from "./native-scan"
+import {
+  DEFAULT_INCLUDE,
+  DEFAULT_MAX_FILES,
+  DEFAULT_MAX_PER_FILE,
+  isExcludedDir,
+  isTestFile,
+} from "./scanner-utils"
 
 // detectHardcodes — DRE-owned AST-lite scan for common anti-patterns
 // that belong in configuration instead of code.
@@ -39,11 +46,6 @@ export type DetectHardcodesInput = {
   maxFindingsPerFile?: number
 }
 
-const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"]
-const DEFAULT_EXCLUDE_DIRS = ["node_modules", "dist", "build", ".cache", ".git", ".next", "coverage"]
-const DEFAULT_MAX_FILES = 500
-const DEFAULT_MAX_PER_FILE = 20
-
 // Numbers we consider "obviously fine" and never flag. 0/1/-1/2 cover
 // indexing, booleans, comparisons. 100/1000 occasionally make sense
 // but we keep them in the flag set and let severity sort them out.
@@ -67,16 +69,6 @@ function shannonEntropy(s: string): number {
     entropy -= p * Math.log2(p)
   }
   return entropy
-}
-
-function isTestFile(file: string): boolean {
-  return /(^|\/)(test|tests|__tests__|__mocks__|spec)\//.test(file) || /\.(test|spec)\.[jt]sx?$/.test(file)
-}
-
-function isExcludedDir(file: string, cwd: string): boolean {
-  const rel = path.relative(cwd, file)
-  const segments = rel.split(path.sep)
-  return segments.some((seg) => DEFAULT_EXCLUDE_DIRS.includes(seg))
 }
 
 // Strip single-line comments (both `//` and inline `/* ... */` that

@@ -8,6 +8,7 @@ import { lazy } from "../../util/lazy"
 import { AsyncQueue } from "../../util/queue"
 import { Instance } from "@/project/instance"
 import { pushSseFrame } from "../sse-queue"
+import { Event } from "../event"
 
 const log = Log.create({ service: "server" })
 const HEARTBEAT_INTERVAL_MS = 10_000
@@ -44,8 +45,11 @@ export const EventRoutes = lazy(() =>
           if (done) return
           done = true
           if (heartbeat) clearInterval(heartbeat)
-          unsub()
-          q.push(null)
+          try {
+            unsub()
+          } finally {
+            q.push(null)
+          }
           log.info("event disconnected")
         }
 
@@ -56,7 +60,7 @@ export const EventRoutes = lazy(() =>
         }
 
         push({
-          type: "server.connected",
+          type: Event.Connected.type,
           properties: {},
         })
 

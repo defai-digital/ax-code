@@ -1,6 +1,7 @@
 import { ExecutionGraph } from "@/graph"
 import { EventQuery } from "@/replay/query"
 import { SessionRollback as SessionRollbackCore } from "@/session/rollback"
+import { duration as formatDuration } from "./format"
 
 export namespace SessionRollback {
   export type Point = SessionRollbackCore.Point
@@ -12,14 +13,6 @@ export namespace SessionRollback {
     description?: string
     footer?: string
     category?: string
-  }
-
-  function format(ms?: number) {
-    if (ms == null) return "0s"
-    const sec = Math.floor(ms / 1000)
-    if (sec < 60) return `${sec}s`
-    const min = Math.floor(sec / 60)
-    return `${min}m ${sec % 60}s`
   }
 
   export function summary(input: Point[]) {
@@ -44,7 +37,7 @@ export namespace SessionRollback {
 
     for (const point of input) {
       const meta = [
-        format(point.duration),
+        formatDuration(point.duration),
         point.tokens ? `${point.tokens.input}/${point.tokens.output} tokens` : undefined,
         `${point.tools.length} tool${point.tools.length === 1 ? "" : "s"}`,
       ].filter(Boolean)
@@ -106,7 +99,7 @@ export namespace SessionRollback {
         seen.add(kind)
         const meta = [
           `step ${point.step}`,
-          format(point.duration),
+          formatDuration(point.duration),
           point.tokens ? `${point.tokens.input}/${point.tokens.output} tokens` : undefined,
         ].filter(Boolean)
         const query = kind.toLowerCase()

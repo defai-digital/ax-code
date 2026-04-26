@@ -3,6 +3,7 @@ import { CodeIntelligence } from "../code-intelligence"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
+import { isTestFile } from "./scanner-utils"
 
 // detectDuplicates — AST-signature bucketing with a Jaccard-similarity
 // fallback for near-matches.
@@ -85,13 +86,6 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   for (const t of a) if (b.has(t)) intersection++
   const union = a.size + b.size - intersection
   return union === 0 ? 0 : intersection / union
-}
-
-// Heuristic test-file detector. Avoids importing project-specific
-// glob config — any file whose path segment matches one of these is
-// considered test code and skipped when excludeTests is true.
-function isTestFile(file: string): boolean {
-  return /(^|\/)(test|tests|__tests__|__mocks__|spec)\//.test(file) || /\.(test|spec)\.[jt]sx?$/.test(file)
 }
 
 // Longest common prefix over a list of absolute file paths. Used to

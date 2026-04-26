@@ -1,4 +1,5 @@
 import { SessionDre as SessionDreCore } from "@/session/dre"
+import { duration as formatDuration } from "./format"
 
 export namespace SessionDre {
   export type Summary = SessionDreCore.Summary
@@ -30,13 +31,6 @@ export namespace SessionDre {
     } satisfies Detail
   }
 
-  function format(ms: number) {
-    const sec = Math.floor(ms / 1000)
-    if (sec < 60) return `${sec}s`
-    const min = Math.floor(sec / 60)
-    return `${min}m ${sec % 60}s`
-  }
-
   export function entries(input: Detail): Entry[] {
     const result = [] as Entry[]
 
@@ -44,7 +38,7 @@ export namespace SessionDre {
       id: "risk",
       title: `Risk ${input.level.toLowerCase()} (${input.score}/100)`,
       description: input.summary || "minimal change",
-      footer: `${input.stats} · ${input.readiness.replaceAll("_", " ")} · ${Math.round(input.confidence * 100)}% confidence · ${format(input.duration)} · ${input.tokens.input}/${input.tokens.output} tokens`,
+      footer: `${input.stats} · ${input.readiness.replaceAll("_", " ")} · ${Math.round(input.confidence * 100)}% confidence · ${formatDuration(input.duration)} · ${input.tokens.input}/${input.tokens.output} tokens`,
       category: "Overview",
     })
 

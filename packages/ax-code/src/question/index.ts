@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema, ServiceMap } from "effect"
+import { Schema } from "effect"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
@@ -13,13 +13,12 @@ export namespace Question {
 
   // Schemas
 
-  export const Option = z
+  const Option = z
     .object({
       label: z.string().describe("Display text (1-5 words, concise)"),
       description: z.string().describe("Explanation of choice"),
     })
     .meta({ ref: "QuestionOption" })
-  export type Option = z.infer<typeof Option>
 
   export const Info = z
     .object({
@@ -133,7 +132,7 @@ export namespace Question {
     return { promise, resolve, reject }
   }
 
-  async function askPromise(input: AskInput): Promise<Answer[]> {
+  export async function ask(input: AskInput): Promise<Answer[]> {
     if (process.env["AX_CODE_AUTONOMOUS"] === "true") {
       const answers = autonomousAnswers(input.questions)
       log.info("autonomous auto-answer", { questions: input.questions.length, answers })
@@ -161,7 +160,7 @@ export namespace Question {
     }
   }
 
-  async function replyPromise(input: { requestID: QuestionID; answers: Answer[] }) {
+  export async function reply(input: { requestID: QuestionID; answers: Answer[] }) {
     const pending = (await state()).pending
     const existing = pending.get(input.requestID)
     if (!existing) {
@@ -178,7 +177,7 @@ export namespace Question {
     existing.deferred.resolve(input.answers)
   }
 
-  async function rejectPromise(requestID: QuestionID) {
+  export async function reject(requestID: QuestionID) {
     const pending = (await state()).pending
     const existing = pending.get(requestID)
     if (!existing) {
@@ -194,57 +193,8 @@ export namespace Question {
     existing.deferred.reject(new RejectedError())
   }
 
-  async function listPromise() {
+  export async function list() {
     const pending = (await state()).pending
     return Array.from(pending.values(), (x) => x.info)
-  }
-
-  // Service
-
-  export interface Interface {
-    readonly ask: (input: AskInput) => Effect.Effect<Answer[], RejectedError>
-    readonly reply: (input: { requestID: QuestionID; answers: Answer[] }) => Effect.Effect<void>
-    readonly reject: (requestID: QuestionID) => Effect.Effect<void>
-    readonly list: () => Effect.Effect<Request[]>
-  }
-
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Question") {}
-
-  export const layer = Layer.effect(
-    Service,
-    Effect.sync(() => {
-      const ask = Effect.fn("Question.ask")((input: AskInput) =>
-        Effect.tryPromise({
-          try: () => askPromise(input),
-          catch: (error) => error as RejectedError,
-        }),
-      )
-
-      const reply = Effect.fn("Question.reply")((input: { requestID: QuestionID; answers: Answer[] }) =>
-        Effect.promise(() => replyPromise(input)),
-      )
-
-      const reject = Effect.fn("Question.reject")((requestID: QuestionID) => Effect.promise(() => rejectPromise(requestID)))
-
-      const list = Effect.fn("Question.list")(() => Effect.promise(() => listPromise()))
-
-      return Service.of({ ask, reply, reject, list })
-    }),
-  )
-
-  export async function ask(input: AskInput): Promise<Answer[]> {
-    return askPromise(input)
-  }
-
-  export async function reply(input: { requestID: QuestionID; answers: Answer[] }) {
-    return replyPromise(input)
-  }
-
-  export async function reject(requestID: QuestionID) {
-    return rejectPromise(requestID)
-  }
-
-  export async function list() {
-    return listPromise()
   }
 }

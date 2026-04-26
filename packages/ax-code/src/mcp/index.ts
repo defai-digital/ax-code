@@ -311,45 +311,33 @@ export namespace MCP {
     return name.replace(/[^a-zA-Z0-9_-]/g, "_")
   }
 
-  // Helper function to fetch prompts for a specific client
-  async function fetchPromptsForClient(clientName: string, client: Client) {
-    const prompts = await client.listPrompts().catch((e) => {
-      log.error("failed to get prompts", { clientName, error: NamedError.message(e) })
-      return undefined
+  function createClient() {
+    return new Client({
+      name: "ax-code",
+      version: Installation.VERSION,
     })
-
-    if (!prompts) {
-      return
-    }
-
-    const commands: Record<string, PromptInfo & { client: string }> = {}
-
-    for (const prompt of prompts.prompts) {
-      const key = sanitize(clientName) + ":" + sanitize(prompt.name)
-
-      commands[key] = { ...prompt, client: clientName }
-    }
-    return commands
   }
 
-  async function fetchResourcesForClient(clientName: string, client: Client) {
-    const resources = await client.listResources().catch((e) => {
-      log.error("failed to get resources", { clientName, error: NamedError.message(e) })
+  // Generic helper for prompts/resources: fetch the array, log on
+  // failure, key each item by `clientName:itemName`. Used by both
+  // prompts() and resources() — the only thing that varies per call
+  // site is the SDK fetcher and the label for the error log.
+  async function fetchItemsForClient<T extends { name: string }>(
+    clientName: string,
+    label: string,
+    fetcher: () => Promise<T[]>,
+  ): Promise<Record<string, T & { client: string }> | undefined> {
+    const items = await fetcher().catch((e) => {
+      log.error(`failed to get ${label}`, { clientName, error: NamedError.message(e) })
       return undefined
     })
-
-    if (!resources) {
-      return
+    if (!items) return
+    const result: Record<string, T & { client: string }> = {}
+    for (const item of items) {
+      const key = sanitize(clientName) + ":" + sanitize(item.name)
+      result[key] = { ...item, client: clientName }
     }
-
-    const commands: Record<string, ResourceInfo & { client: string }> = {}
-
-    for (const resource of resources.resources) {
-      const key = sanitize(clientName) + ":" + sanitize(resource.name)
-
-      commands[key] = { ...resource, client: clientName }
-    }
-    return commands
+    return result
   }
 
   export async function add(name: string, mcp: Config.Mcp) {
@@ -448,10 +436,7 @@ export namespace MCP {
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       for (const { name, transport } of transports) {
         try {
-          const client = new Client({
-            name: "ax-code",
-            version: Installation.VERSION,
-          })
+          const client = createClient()
           await withTimeout(client.connect(transport), connectTimeout)
           registerNotificationHandlers(client, key)
           mcpClient = client
@@ -548,10 +533,7 @@ export namespace MCP {
 
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       try {
-        const client = new Client({
-          name: "ax-code",
-          version: Installation.VERSION,
-        })
+        const client = createClient()
         await withTimeout(client.connect(transport), connectTimeout)
         registerNotificationHandlers(client, key)
         const close = client.close.bind(client)
@@ -823,7 +805,9 @@ export namespace MCP {
               return []
             }
 
-            return Object.entries((await fetchPromptsForClient(clientName, client)) ?? {})
+            return Object.entries(
+              (await fetchItemsForClient<PromptInfo>(clientName, "prompts", async () => (await client.listPrompts()).prompts)) ?? {},
+            )
           }),
         )
       ).flat(),
@@ -844,7 +828,9 @@ export namespace MCP {
               return []
             }
 
-            return Object.entries((await fetchResourcesForClient(clientName, client)) ?? {})
+            return Object.entries(
+              (await fetchItemsForClient<ResourceInfo>(clientName, "resources", async () => (await client.listResources()).resources)) ?? {},
+            )
           }),
         )
       ).flat(),
@@ -971,10 +957,7 @@ export namespace MCP {
 
     // Try to connect - this will trigger the OAuth flow
     try {
-      const client = new Client({
-        name: "ax-code",
-        version: Installation.VERSION,
-      })
+      const client = createClient()
       await client.connect(transport)
       // If we get here, we're already authenticated
       return { authorizationUrl: "" }

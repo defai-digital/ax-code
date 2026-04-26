@@ -34,24 +34,6 @@ export namespace Skill {
   })
   export type Info = z.infer<typeof Info>
 
-  export const InvalidError = NamedError.create(
-    "SkillInvalidError",
-    z.object({
-      path: z.string(),
-      message: z.string().optional(),
-      issues: z.custom<z.core.$ZodIssue[]>().optional(),
-    }),
-  )
-
-  export const NameMismatchError = NamedError.create(
-    "SkillNameMismatchError",
-    z.object({
-      path: z.string(),
-      expected: z.string(),
-      actual: z.string(),
-    }),
-  )
-
   type State = {
     skills: Record<string, Info>
     dirs: Set<string>

@@ -5,6 +5,13 @@ import { LSPServer } from "../lsp/server"
 
 const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
 
+const McpTimeout = z
+  .number()
+  .int()
+  .positive()
+  .optional()
+  .describe("Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.")
+
 export const McpLocal = z
   .object({
     type: z.literal("local").describe("Type of MCP server connection"),
@@ -14,12 +21,7 @@ export const McpLocal = z
       .optional()
       .describe("Environment variables to set when running the MCP server"),
     enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
-    timeout: z
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe("Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified."),
+    timeout: McpTimeout,
   })
   .strict()
   .meta({
@@ -53,12 +55,7 @@ export const McpRemote = z
       .describe(
         "OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.",
       ),
-    timeout: z
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe("Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified."),
+    timeout: McpTimeout,
   })
   .strict()
   .meta({
@@ -489,10 +486,7 @@ export const Provider = ModelsDev.Provider.partial()
               ),
             z.literal(false).describe("Disable timeout for this provider entirely."),
           ])
-          .optional()
-          .describe(
-            "Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout.",
-          ),
+          .optional(),
         chunkTimeout: z
           .number()
           .int()
@@ -680,7 +674,7 @@ export const Info = z
     permission: Permission.optional(),
     autonomous: z.boolean().optional().describe("Enable autonomous mode (default: true)"),
     isolation: Isolation.optional().describe("Execution isolation configuration"),
-    tools: z.record(z.string(), z.boolean()).optional(),
+    tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
     enterprise: z
       .object({
         url: z.string().optional().describe("Enterprise URL"),

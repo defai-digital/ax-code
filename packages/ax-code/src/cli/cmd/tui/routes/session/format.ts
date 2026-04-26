@@ -47,3 +47,15 @@ export const workdir = (base: string | undefined, home: string | undefined, inpu
   const match = absolute === home || absolute.startsWith(home + path.sep)
   return match ? absolute.replace(home, "~") : absolute
 }
+
+// Format a millisecond duration as "Xs" or "Xm Ys". Used by the
+// session graph/rollback/dre helpers — the existing util/format
+// formatDuration takes seconds, drops trailing "0s" / "0m", and adds
+// hour/day/week tiers, none of which match what the sidebar wants.
+export const duration = (ms?: number): string => {
+  if (ms == null) return "0s"
+  const sec = Math.floor(ms / 1000)
+  if (sec < 60) return `${sec}s`
+  const min = Math.floor(sec / 60)
+  return `${min}m ${sec % 60}s`
+}

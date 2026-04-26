@@ -14,10 +14,9 @@ import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { errors } from "../error"
 import { pushSseFrame } from "../sse-queue"
+import { Event } from "../event"
 
 const log = Log.create({ service: "server" })
-
-export const GlobalDisposedEvent = BusEvent.define("global.disposed", z.object({}))
 
 export const GlobalRoutes = lazy(() =>
   new Hono()
@@ -81,8 +80,11 @@ export const GlobalRoutes = lazy(() =>
             if (done) return
             done = true
             if (heartbeat) clearInterval(heartbeat)
-            GlobalBus.off("event", handler)
-            q.push(null)
+            try {
+              GlobalBus.off("event", handler)
+            } finally {
+              q.push(null)
+            }
             log.info("global event disconnected")
           }
 
@@ -93,7 +95,7 @@ export const GlobalRoutes = lazy(() =>
 
           push({
             payload: {
-              type: "server.connected",
+              type: Event.Connected.type,
               properties: {},
             },
           })
@@ -194,7 +196,7 @@ export const GlobalRoutes = lazy(() =>
         GlobalBus.emit("event", {
           directory: "global",
           payload: {
-            type: GlobalDisposedEvent.type,
+            type: Event.Disposed.type,
             properties: {},
           },
         })

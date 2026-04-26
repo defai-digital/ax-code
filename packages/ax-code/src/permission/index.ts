@@ -64,11 +64,6 @@ export namespace Permission {
   export const Reply = z.enum(["once", "always", "reject"])
   export type Reply = z.infer<typeof Reply>
 
-  export const Approval = z.object({
-    projectID: ProjectID.zod,
-    patterns: z.string().array(),
-  })
-
   export const Event = {
     Asked: BusEvent.define("permission.asked", Request),
     Replied: BusEvent.define(
@@ -410,19 +405,19 @@ export namespace Permission {
   }
 
   // R16: Local policy mode — .ax-code/policy.json
-  export const PolicyRule = z.object({
+  const PolicyRule = z.object({
     agent: z.string().optional().default("*"),
     tools: z.string().array(),
     files: z.string().array().optional().default(["*"]),
     action: Action,
   })
 
-  export const PolicyFile = z.object({
+  const PolicyFile = z.object({
     version: z.string(),
     name: z.string().optional(),
     rules: PolicyRule.array(),
   })
-  export type PolicyFile = z.infer<typeof PolicyFile>
+  type PolicyFile = z.infer<typeof PolicyFile>
 
   /** Convert a policy.json file into a Permission.Ruleset */
   export function fromPolicy(policy: PolicyFile, currentAgent?: string): Ruleset {

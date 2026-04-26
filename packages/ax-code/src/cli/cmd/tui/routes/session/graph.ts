@@ -1,6 +1,7 @@
 import { ExecutionGraph } from "@/graph"
 import { GraphFormat } from "@/graph/format"
 import { EventQuery } from "@/replay/query"
+import { duration as formatDuration } from "./format"
 
 export namespace SessionGraph {
   export type Entry = {
@@ -9,14 +10,6 @@ export namespace SessionGraph {
     description?: string
     footer?: string
     category?: string
-  }
-
-  function format(ms?: number) {
-    if (ms == null) return "0s"
-    const sec = Math.floor(ms / 1000)
-    if (sec < 60) return `${sec}s`
-    const min = Math.floor(sec / 60)
-    return `${min}m ${sec % 60}s`
   }
 
   function stat(n: number, txt: string) {
@@ -117,7 +110,7 @@ export namespace SessionGraph {
           stat(meta.tools.length, "tool"),
           stat(meta.errors, "error"),
         ].join(" · "),
-        footer: `${format(meta.duration)} · ${meta.tokens.input}/${meta.tokens.output} tokens`,
+        footer: `${formatDuration(meta.duration)} · ${meta.tokens.input}/${meta.tokens.output} tokens`,
         category: "Overview",
       },
     ] as Entry[]
@@ -157,7 +150,7 @@ export namespace SessionGraph {
           id: `step:${item.stepIndex ?? item.id}`,
           title: `Step ${item.stepIndex ?? "?"}`,
           description: `${list.length} child event${list.length === 1 ? "" : "s"}`,
-          footer: [format(item.duration), item.tokens ? `tokens ${item.tokens.input}/${item.tokens.output}` : undefined]
+          footer: [formatDuration(item.duration), item.tokens ? `tokens ${item.tokens.input}/${item.tokens.output}` : undefined]
             .filter(Boolean)
             .join(" · "),
           category: "Steps",
