@@ -323,7 +323,7 @@ export namespace QualityPromotionPortableExport {
     for (const file of exportArtifact.files) {
       const target = path.join(directory, file.path)
       await fs.mkdir(path.dirname(target), { recursive: true })
-      await Bun.write(target, file.content)
+      await fs.writeFile(target, file.content)
     }
     return {
       directory,

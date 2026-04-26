@@ -7,6 +7,7 @@
 
 import path from "path"
 import fs from "fs"
+import { readFile } from "node:fs/promises"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
 export type DepthLevel = "basic" | "standard" | "full" | "security"
@@ -115,7 +116,7 @@ async function readJson<T>(filepath: string): Promise<T | null> {
   // below already handles ENOENT. Removing the probe also means one
   // fewer syscall on the happy path.
   try {
-    return (await Bun.file(filepath).json()) as T
+    return JSON.parse(await readFile(filepath, "utf8")) as T
   } catch {
     return null
   }

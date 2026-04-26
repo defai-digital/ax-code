@@ -356,7 +356,7 @@ export namespace QualityPromotionSignedArchive {
     }
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     const content = JSON.stringify(archive, null, 2) + "\n"
-    await Bun.write(filePath, content)
+    await fs.writeFile(filePath, content)
     return {
       filePath,
       byteLength: Buffer.byteLength(content),

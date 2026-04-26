@@ -19,22 +19,32 @@ const log = Log.create({ service: "mcp.discovery" })
 // Bun.spawn so the discovery path does not depend on bun-runtime APIs.
 // Discovery runs on every TUI startup and any bun-specific spawn quirk
 // would surface as an MCP regression.
-async function spawnExitsCleanly(
+// Exported for unit tests — the helper has timeout, error, and exit-code
+// branches that are easier to exercise directly than via CANDIDATES.
+export async function spawnExitsCleanly(
   command: string,
   args: string[],
   options: { timeoutMs?: number } = {},
 ): Promise<boolean> {
   const { timeoutMs = 5000 } = options
+  // Process.spawn's `timeout` option is the SIGTERM→SIGKILL grace
+  // period after an abort fires, not a wall-clock budget. We need
+  // an explicit AbortController to actually cap how long the probe
+  // can run end-to-end.
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), timeoutMs)
   try {
     const proc = Process.spawn([command, ...args], {
       stdout: "ignore",
       stderr: "ignore",
-      timeout: timeoutMs,
+      abort: abort.signal,
     })
     const code = await proc.exited
     return code === 0
   } catch {
     return false
+  } finally {
+    clearTimeout(timer)
   }
 }
 

@@ -277,7 +277,7 @@ export namespace QualityPromotionPackagedArchive {
     }
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     const content = JSON.stringify(archive, null, 2) + "\n"
-    await Bun.write(filePath, content)
+    await fs.writeFile(filePath, content)
     return {
       filePath,
       byteLength: Buffer.byteLength(content),
@@ -293,7 +293,7 @@ export namespace QualityPromotionPackagedArchive {
     for (const entry of archive.entries) {
       const target = path.join(directory, entry.path)
       await fs.mkdir(path.dirname(target), { recursive: true })
-      await Bun.write(target, entry.content)
+      await fs.writeFile(target, entry.content)
     }
     return {
       directory,

@@ -5,6 +5,7 @@ import { bootstrap } from "../bootstrap"
 import { AuditExport } from "../../audit/export"
 import { EventQuery } from "../../replay/query"
 import { EOL } from "os"
+import { writeFile } from "node:fs/promises"
 
 const AuditPruneCommand = cmd({
   command: "prune",
@@ -127,7 +128,7 @@ const AuditReportCommand = cmd({
       process.stderr.write(`Generating audit report for session ${args.sessionID} (${count} events)${EOL}`)
       const report = await AuditReport.generate(sid)
       if (args.output) {
-        await Bun.write(args.output, report)
+        await writeFile(args.output, report)
         process.stderr.write(`Report written to ${args.output}${EOL}`)
       } else {
         process.stdout.write(report)
