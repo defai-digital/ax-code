@@ -11,8 +11,7 @@ import {
   SeverityEnum,
   WorkflowEnum,
 } from "../quality/finding"
-
-const AX_CODE_VERSION = "4.x.x"
+import { Installation } from "../installation"
 
 export const RegisterFindingTool = Tool.define("register_finding", {
   description: DESCRIPTION,
@@ -57,7 +56,7 @@ export const RegisterFindingTool = Tool.define("register_finding", {
       ruleId: args.ruleId,
       source: {
         tool: args.tool ?? "review",
-        version: AX_CODE_VERSION,
+        version: Installation.VERSION,
         runId: ctx.sessionID,
       },
     })

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { RegisterFindingTool } from "../../src/tool/register_finding"
 import { computeFindingId, FindingSchema } from "../../src/quality/finding"
+import { Installation } from "../../src/installation"
 
 const ctx = {
   sessionID: "ses_test_register_finding",
@@ -151,5 +152,12 @@ describe("RegisterFindingTool", () => {
     const customCtx = { ...ctx, sessionID: "ses_other_session" }
     const result = await tool.execute(validInput, customCtx)
     expect(result.metadata.finding.source.runId).toBe("ses_other_session")
+  })
+
+  test("source.version is sourced from Installation.VERSION (not hardcoded)", async () => {
+    const tool = await RegisterFindingTool.init()
+    const result = await tool.execute(validInput, ctx)
+    expect(result.metadata.finding.source.version).toBe(Installation.VERSION)
+    expect(result.metadata.finding.source.version).not.toBe("4.x.x")
   })
 })
