@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal, Match, onCleanup, Show, Switch } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import { useTheme } from "../../context/theme"
 import { useSync } from "../../context/sync"
 import { useDirectory } from "../../context/directory"
@@ -42,6 +43,13 @@ export function Footer() {
   const connected = useConnected()
   const sdk = useSDK()
   const keybind = useKeybind()
+  const dimensions = useTerminalDimensions()
+  // Width-adaptive chip visibility: drop low-priority decorations on narrow
+  // terminals so critical signals (permissions, reconnecting, sandbox-off,
+  // version) always survive.
+  const showHints = createMemo(() => dimensions().width >= 100)
+  const showLspChip = createMemo(() => dimensions().width >= 90)
+  const showDreChip = createMemo(() => dimensions().width >= 80)
 
   // Show "reconnecting" badge only after the first successful connection —
   // avoids a false-alarm flash during initial startup. A 3-second debounce
@@ -108,7 +116,7 @@ export function Footer() {
                 {permissions().length > 1 ? "s" : ""}
               </text>
             </Show>
-            <Show when={dreChipVisible()}>
+            <Show when={dreChipVisible() && showDreChip()}>
               <text fg={theme.text}>
                 <Switch>
                   <Match when={drePending() > 0}>
@@ -143,10 +151,14 @@ export function Footer() {
                 {mcp()} MCP
               </text>
             </Show>
-            <text fg={theme.text}>
-              <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
-            </text>
-            <text fg={theme.textMuted}>/help · /status</text>
+            <Show when={showLspChip()}>
+              <text fg={theme.text}>
+                <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
+              </text>
+            </Show>
+            <Show when={showHints()}>
+              <text fg={theme.textMuted}>/help · /status</text>
+            </Show>
           </Match>
         </Switch>
         <Show when={keybind.leader}>

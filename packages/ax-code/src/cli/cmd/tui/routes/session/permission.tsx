@@ -192,6 +192,15 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   const session = createMemo(() => sync.data.session.find((s) => s.id === props.request.sessionID))
 
+  const requestingAgent = createMemo(() => {
+    const tool = props.request.tool
+    if (!tool) return undefined
+    const messages = sync.data.message[props.request.sessionID] ?? []
+    const message = messages.find((m) => m.id === tool.messageID)
+    if (!message || message.role !== "assistant") return undefined
+    return message.agent
+  })
+
   const input = createMemo(() => {
     const tool = props.request.tool
     if (!tool) return {}
@@ -522,6 +531,11 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                 </text>
                 <text fg={theme.text}>{permissionInfo().title}</text>
               </box>
+              <Show when={requestingAgent()}>
+                <box paddingLeft={2} flexShrink={0}>
+                  <text fg={theme.textMuted}>Requested by {requestingAgent()} agent</text>
+                </box>
+              </Show>
             </box>
           }
           body={permissionInfo().body}

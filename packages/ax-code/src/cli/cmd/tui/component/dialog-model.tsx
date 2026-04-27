@@ -17,7 +17,7 @@ const FREE_PROVIDERS = new Set([
   "ax-code",
   "ollama",
   "lmstudio",
-  "ax-studio",
+  "ax-serving",
   "zai-coding-plan",
   "alibaba-coding-plan",
   "claude-code",

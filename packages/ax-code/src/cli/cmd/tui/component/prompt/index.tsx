@@ -1686,6 +1686,17 @@ export function Prompt(props: PromptProps) {
               </box>
               <Show
                 when={
+                  !footerLayout().stacked &&
+                  (footerLayout().showCommands ||
+                    footerLayout().showAgents ||
+                    footerLayout().showVariants ||
+                    footerLayout().showShellHint)
+                }
+              >
+                <text fg={theme.borderSubtle} flexShrink={0}>·</text>
+              </Show>
+              <Show
+                when={
                   footerLayout().showCommands ||
                   footerLayout().showAgents ||
                   footerLayout().showVariants ||

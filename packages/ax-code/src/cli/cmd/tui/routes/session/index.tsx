@@ -1027,6 +1027,18 @@ export function Session() {
               flexGrow={1}
               scrollAcceleration={scrollAcceleration()}
             >
+              <Show when={messages().length === 0 && !session()?.parentID}>
+                <box flexGrow={1} alignItems="center" justifyContent="center" paddingTop={4} paddingBottom={2}>
+                  <text>
+                    <span style={{ fg: theme.accent }}>◦</span>
+                    <span style={{ fg: theme.textMuted }}> Start typing to chat</span>
+                  </text>
+                  <text>
+                    <span style={{ fg: theme.accent }}>◦</span>
+                    <span style={{ fg: theme.textMuted }}> /help for commands</span>
+                  </text>
+                </box>
+              </Show>
               <For each={messages()}>
                 {(message, index) => (
                   <Switch>

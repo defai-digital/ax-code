@@ -23,9 +23,22 @@ const CLI_BINARIES: Record<string, string> = {
   "codex-cli": "codex",
 }
 
-const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama", "lmstudio"])
+const OFFLINE_PROVIDERS = new Set(["ax-serving", "ollama", "lmstudio"])
 const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "alibaba"])
+
+const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
+  "ax-serving": { envVar: "AX_SERVING_HOST", defaultHost: "http://localhost:11434" },
+  ollama: { envVar: "OLLAMA_HOST", defaultHost: "http://localhost:11434" },
+  lmstudio: { envVar: "LMSTUDIO_HOST", defaultHost: "http://localhost:1234" },
+}
+
+function offlineProviderHint(id: string): string {
+  const cfg = OFFLINE_PROVIDER_HOSTS[id]
+  if (!cfg) return "not running"
+  const host = process.env[cfg.envVar] ?? cfg.defaultHost
+  return `not running on ${host}`
+}
 const log = Log.create({ service: "tui.dialog-provider" })
 
 function runProviderDialogAction(input: {
@@ -64,16 +77,19 @@ export function createDialogProviderOptions() {
         (x) => (OFFLINE_PROVIDERS.has(x.id) ? 0 : CLI_PROVIDERS.has(x.id) ? 1 : 2),
         (x) => x.name,
       ),
-      map((provider) => ({
-        title: provider.name,
-        value: provider.id,
-        description: sync.data.provider_next.connected.includes(provider.id) ? "Connected" : undefined,
-        descriptionFg: sync.data.provider_next.connected.includes(provider.id) ? theme.warning : undefined,
-        category: OFFLINE_PROVIDERS.has(provider.id)
-          ? "Offline"
-          : CLI_PROVIDERS.has(provider.id)
-            ? "Online - CLI"
-            : "Online",
+      map((provider) => {
+        const isConnected = sync.data.provider_next.connected.includes(provider.id)
+        const isOfflineKind = OFFLINE_PROVIDERS.has(provider.id)
+        return {
+          title: provider.name,
+          value: provider.id,
+          description: isConnected
+            ? "Connected"
+            : isOfflineKind
+              ? offlineProviderHint(provider.id)
+              : undefined,
+          descriptionFg: isConnected ? theme.warning : isOfflineKind ? theme.textMuted : undefined,
+          category: isOfflineKind ? "Offline" : CLI_PROVIDERS.has(provider.id) ? "Online - CLI" : "Online",
         onSelect() {
           runProviderDialogAction({
             providerID: provider.id,
@@ -285,7 +301,8 @@ export function createDialogProviderOptions() {
             },
           })
         },
-      })),
+        }
+      }),
     )
   })
   return options
