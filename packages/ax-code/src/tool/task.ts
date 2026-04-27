@@ -65,10 +65,26 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       const config = await Config.get()
       let depth = 0
       let parent: SessionID | undefined = ctx.sessionID
+      let aborted = false
+
+      const markAborted = () => {
+        aborted = true
+      }
+      const ensureNotAborted = () => {
+        if (ctx.abort.aborted || aborted) throw new DOMException("Aborted", "AbortError")
+      }
+
+      ctx.abort.addEventListener("abort", markAborted, { once: true })
+      using _ = defer(() => ctx.abort.removeEventListener("abort", markAborted))
+
+      ensureNotAborted()
       while (parent) {
-        const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch(
-          () => undefined,
-        )
+        ensureNotAborted()
+        const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch((e) => {
+          log.warn("failed to look up parent session for depth check", { parent, error: e })
+          return undefined
+        })
+        ensureNotAborted()
         if (!current?.parentID) break
         depth++
         if (depth >= MAX_DEPTH) {
@@ -137,6 +153,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         })
       })
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
+      ensureNotAborted()
       if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
 
       const model = agent.model ?? {
@@ -146,7 +163,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>
       try {
-
+        ensureNotAborted()
         ctx.metadata({
           title: params.description,
           metadata: {
@@ -162,6 +179,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         }
         ctx.abort.addEventListener("abort", cancel, { once: true })
         using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
+        ensureNotAborted()
         const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
 
         result = await withTimeout(

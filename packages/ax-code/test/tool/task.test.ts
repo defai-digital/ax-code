@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { TaskTool } from "../../src/tool/task"
+import { MessageV2 } from "../../src/session/message-v2"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -82,6 +84,157 @@ describe("tool.task", () => {
             } as any,
           ),
         ).rejects.toThrow("Maximum subagent nesting depth")
+      },
+    })
+  })
+
+  test("does not launch a subagent prompt when already aborted before prompt setup", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const controller = new AbortController()
+        controller.abort()
+
+        const promptSpy = spyOn(SessionPrompt, "prompt")
+        const tool = await TaskTool.init()
+
+        try {
+          await expect(
+            tool.execute(
+              {
+                description: "aborted task",
+                prompt: "do work",
+                subagent_type: "general",
+              },
+              {
+                sessionID: parent.id,
+                messageID: assistant.id,
+                callID: "",
+                agent: "build",
+                abort: controller.signal,
+                messages: [],
+                metadata: () => {},
+                ask: async () => {},
+                extra: {},
+              } as any,
+            ),
+          ).rejects.toThrow(/AbortError|Aborted/)
+          expect(promptSpy).not.toHaveBeenCalled()
+        } finally {
+          promptSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("does not launch a subagent prompt if abort happens while resolving task depth", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const root = await Session.create({})
+        const child = await Session.create({ parentID: root.id })
+
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: root.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: root.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const controller = new AbortController()
+        const originalGet = Session.get
+        const getSpy = spyOn(Session, "get").mockImplementation(async (...args: Parameters<typeof originalGet>) => {
+          const result = await originalGet(...args)
+          if (result?.id === root.id) {
+            await new Promise((resolve) => setTimeout(resolve, 10))
+            controller.abort()
+          }
+          return result
+        })
+
+        const promptSpy = spyOn(SessionPrompt, "prompt")
+        try {
+          await expect(
+            (await TaskTool.init()).execute(
+              {
+                description: "aborted task",
+                prompt: "do work",
+                subagent_type: "general",
+              },
+              {
+                sessionID: child.id,
+                messageID: assistant.id,
+                callID: "",
+                agent: "build",
+                abort: controller.signal,
+                messages: [],
+                metadata: () => {},
+                ask: async () => {},
+                extra: {},
+              } as any,
+            ),
+          ).rejects.toThrow(/AbortError|Aborted/)
+          expect(promptSpy).not.toHaveBeenCalled()
+        } finally {
+          getSpy.mockRestore()
+          promptSpy.mockRestore()
+        }
       },
     })
   })
