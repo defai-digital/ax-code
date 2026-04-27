@@ -697,18 +697,21 @@ export const Info = z
           .enum(["off", "delegate", "switch"])
           .optional()
           .describe(
-            "How specialist routing behaves: off disables auto-routing, delegate runs the specialist as a subtask while keeping the primary agent, switch replaces the primary agent (default: switch)",
+            "@deprecated No-op since the keyword/intent agent auto-router was removed. Use @-mentions to invoke specialists. Field is accepted but ignored.",
           ),
-        auto_switch: z.boolean().optional().describe("@deprecated Legacy alias for routing.mode='switch' when true"),
+        auto_switch: z
+          .boolean()
+          .optional()
+          .describe("@deprecated No-op since the agent auto-router was removed. Field is accepted but ignored."),
         llm: z
           .boolean()
           .optional()
           .describe(
-            "Enable LLM-based agent classification as fallback when keyword routing has low confidence (default: true)",
+            "Enable LLM-based message-complexity classification so simple queries use a small/fast model. Default: true.",
           ),
       })
       .optional()
-      .describe("Agent routing configuration"),
+      .describe("Message-complexity routing for fast-model selection"),
     compaction: z
       .object({
         auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),

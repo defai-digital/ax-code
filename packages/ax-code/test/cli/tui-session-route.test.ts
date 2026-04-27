@@ -70,7 +70,10 @@ describe("tui session routing helpers", () => {
     expect(routeNote(user("u1", "build"), [])).toBe("")
   })
 
-  test("formats replayed route events for activity history", () => {
+  test("renders complexity events as the fast-model indicator", () => {
+    // Only "complexity" events are emitted now; agent-routing was removed.
+    // Legacy "switch"/"delegate" rows from older sessions still render as the same
+    // fast-model indicator so historical replays don't crash.
     const item = routeEvent({
       time_created: 10,
       event_data: {
@@ -78,26 +81,26 @@ describe("tui session routing helpers", () => {
         sessionID: "s",
         messageID: "u1",
         fromAgent: "build",
-        toAgent: "perf",
-        confidence: 0.92,
-        routeMode: "delegate",
-        matched: ["performance", "profile"],
+        toAgent: "build",
+        confidence: 0,
+        routeMode: "complexity",
+        complexity: "low",
       },
     })
     expect(item).toEqual({
-      id: "route:10:perf",
-      mode: "delegate",
-      icon: "↳",
-      title: "Delegated Perf",
-      detail: "Kept Build active · performance, profile",
+      id: "route:10:complexity",
+      mode: "complexity",
+      icon: "⚡",
+      title: "Fast model",
+      detail: "simple task · Build",
       time: 10,
     })
   })
 
-  test("builds message-level routing details from exact message events", () => {
+  test("messageRoute returns the latest agent.route event for a message", () => {
     const item = messageRoute(
       user("u1"),
-      [subtask("p1", "u1", "perf")],
+      [],
       [
         {
           time_created: 10,
@@ -106,18 +109,18 @@ describe("tui session routing helpers", () => {
             sessionID: "s",
             messageID: "u1",
             fromAgent: "build",
-            toAgent: "perf",
-            confidence: 0.92,
-            routeMode: "delegate",
-            matched: ["performance", "profile"],
+            toAgent: "build",
+            confidence: 0,
+            routeMode: "complexity",
+            complexity: "low",
           },
         },
       ],
     )
     expect(item).toEqual({
-      title: "Routing: Delegated Perf",
-      description: "Kept Build active · performance, profile",
-      footer: "confidence 0.92 · performance, profile",
+      title: "Routing: Fast model",
+      description: "simple task · Build",
+      footer: "confidence 0.00",
     })
   })
 
@@ -132,16 +135,15 @@ describe("tui session routing helpers", () => {
             sessionID: "s",
             messageID: "u1",
             fromAgent: "build",
-            toAgent: "security",
-            confidence: 0.88,
-            routeMode: "switch",
-            matched: ["security", "scan"],
+            toAgent: "build",
+            confidence: 0,
+            routeMode: "complexity",
+            complexity: "low",
           },
         },
       ],
     )
-    expect(items.map((item) => item.label)).toEqual(["Switched primary to Security", "run bash"])
-    expect(items[0]?.status).toBe("switch")
+    expect(items.map((item) => item.label)).toEqual(["Fast model", "run bash"])
     expect(items[1]?.status).toBe("completed")
   })
 })

@@ -30,8 +30,7 @@ import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
-import { analyzeMessage, type RouteResult } from "../agent/router"
-import { TuiEvent } from "../cli/cmd/tui/event"
+import { classifyComplexity } from "../agent/router"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
@@ -1317,102 +1316,24 @@ export namespace SessionPrompt {
   export const createStructuredOutputTool = _createStructuredOutputTool
 
   async function createUserMessage(input: PromptInput) {
-    // Auto-route: select the best agent for each message based on content
     const messageID = input.messageID ?? MessageID.ascending()
-    let agentName = input.agent || (await Agent.defaultAgent())
-    const initialAgentName = agentName // capture before any auto-route switch
-    const cfg = await Config.get()
-    const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === false ? "delegate" : "switch")
+    const agentName = input.agent || (await Agent.defaultAgent())
     const messageText = input.parts
       .filter((p): p is typeof p & { type: "text" } => p.type === "text")
       .map((p) => p.text)
       .join(" ")
-    // Skip auto-routing when user explicitly selected an agent (Tab, dialog, @agent)
-    const hasAgentPart = input.parts.some((p) => p.type === "agent")
-    const hasNonTextPart = input.parts.some((p) => p.type !== "text")
-    const canDelegate = routingMode === "delegate" && !hasNonTextPart
-    const canSwitch = routingMode === "switch"
-    const skipRouting = input.userSelectedAgent || hasAgentPart || routingMode === "off" || (!canSwitch && !canDelegate)
     const routedParts: PromptInput["parts"] = [...input.parts]
-    let routeResult: RouteResult | null = null
-    let messageComplexity: "low" | "medium" | "high" | null = null
-    if (messageText && !skipRouting) {
-      // analyzeMessage returns BOTH agent routing and complexity in one LLM call.
-      // Complexity is available even when no agent switch happens (e.g. simple general questions).
-      const analysis = await analyzeMessage(messageText, agentName)
-      routeResult = analysis.route
-      messageComplexity = analysis.complexity
 
-      // Only act on routing when the result points to a DIFFERENT agent
-      if (routeResult && routeResult.agent !== agentName) {
-        // Verify target exists before emitting any event — otherwise an audit
-        // trail record + UI RouteIndicator would claim a switch/delegate that
-        // never happened (the actual mutation only fires inside this block).
-        const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
-        if (!routedAgent) {
-          log.warn("auto-route target not found", { agent: routeResult.agent })
-        } else {
-          const routedLabel = routedAgent.displayName ?? routeResult.agent
-          Recorder.emit({
-            type: "agent.route",
-            sessionID: input.sessionID,
-            messageID,
-            fromAgent: agentName,
-            toAgent: routeResult.agent,
-            confidence: routeResult.confidence,
-            routeMode: canSwitch ? "switch" : "delegate",
-            matched: routeResult.matched,
-            complexity: messageComplexity ?? routeResult.complexity,
-          })
-          if (canSwitch) {
-            agentName = routeResult.agent
-            log.info("auto-routed to agent", {
-              command: "session.prompt.route",
-              status: "ok",
-              sessionID: input.sessionID,
-              agent: routeResult.agent,
-              confidence: routeResult.confidence,
-              mode: "switch",
-            })
-            Bus.publishDetached(TuiEvent.ToastShow, {
-              title: "Primary Agent Auto-Switched",
-              message: `Switched the primary agent to "${routedLabel}" for this task`,
-              variant: "info",
-              duration: 8000,
-            })
-          } else if (canDelegate) {
-            routedParts.push({
-              type: "subtask",
-              agent: routeResult.agent,
-              description: `${routedLabel} specialist review`,
-              prompt: `Use your ${routedLabel} specialty for this request:\n\n${messageText}\n\nReturn concise findings and actionable guidance for the parent agent.`,
-            })
-            log.info("auto-delegated to agent", {
-              command: "session.prompt.route",
-              status: "ok",
-              sessionID: input.sessionID,
-              agent: routeResult.agent,
-              confidence: routeResult.confidence,
-              mode: "delegate",
-            })
-            Bus.publishDetached(TuiEvent.ToastShow, {
-              title: "Specialist Auto-Delegated",
-              message: `Kept the primary agent active and delegated "${routedLabel}" as a specialist`,
-              variant: "info",
-              duration: 8000,
-            })
-          }
-        }
-      }
-    }
+    // Classify message complexity for fast-model selection. Specialist agents
+    // are reachable via @-mention; primary-agent auto-switching was removed —
+    // the visible swap and read-only-specialist hijack outweighed the gain.
+    const messageComplexity = messageText ? (await classifyComplexity(messageText)).complexity : null
+
     const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
 
-    // Complexity routing: use small/fast model for simple tasks.
-    // messageComplexity comes from analyzeMessage() and covers the important case of
-    // simple general questions (no agent switch) that should use a fast model.
-    const effectiveComplexity = messageComplexity ?? routeResult?.complexity
+    // Use a small/fast model for simple tasks when the user/agent didn't pin one.
     let complexityModel: { providerID: ProviderID; modelID: ModelID } | undefined
-    if (effectiveComplexity === "low" && !input.model && !agent.model) {
+    if (messageComplexity === "low" && !input.model && !agent.model) {
       const defaultM = await Provider.defaultModel().catch(() => undefined)
       if (defaultM) {
         const small = await Provider.getSmallModel(defaultM.providerID)
@@ -1424,16 +1345,16 @@ export namespace SessionPrompt {
             sessionID: input.sessionID,
             model: small.id,
           })
-          // Emit a dedicated event so the thread indicator can show the fast-model decision
+          // Emit a dedicated event so the thread indicator can show the fast-model decision.
           Recorder.emit({
             type: "agent.route",
             sessionID: input.sessionID,
             messageID,
-            fromAgent: initialAgentName,
-            toAgent: initialAgentName,
+            fromAgent: agentName,
+            toAgent: agentName,
             confidence: 0,
             routeMode: "complexity",
-            complexity: effectiveComplexity,
+            complexity: messageComplexity,
           })
         }
       }

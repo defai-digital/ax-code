@@ -38,44 +38,18 @@ export function routeNote(msg: UserMessage, parts: Part[], agents?: AgentInfo[])
   return ""
 }
 
-export function routeEvent(
-  row: { event_data: ReplayEvent; time_created: number },
-  agents?: AgentInfo[],
-) {
+export function routeEvent(row: { event_data: ReplayEvent; time_created: number }, agents?: AgentInfo[]) {
   const event = row.event_data
   if (event.type !== "agent.route") return
-  const mode = event.routeMode ?? "switch"
-
-  if (mode === "complexity") {
-    return {
-      id: `route:${row.time_created}:complexity`,
-      mode,
-      icon: "⚡",
-      title: "Fast model",
-      detail: `simple task · ${agentLabel(event.fromAgent, agents)}`,
-      time: row.time_created,
-    }
-  }
-
-  const to = agentLabel(event.toAgent, agents)
-  const from = agentLabel(event.fromAgent, agents)
-  const matched = event.matched?.length ? ` · ${event.matched.join(", ")}` : ""
-  if (mode === "delegate") {
-    return {
-      id: `route:${row.time_created}:${event.toAgent}`,
-      mode,
-      icon: "↳",
-      title: `Delegated ${to}`,
-      detail: `Kept ${from} active${matched}`,
-      time: row.time_created,
-    }
-  }
+  // Only "complexity" events are emitted now; legacy "switch"/"delegate" rows from
+  // older sessions are tolerated but rendered as the same fast-model indicator
+  // (the agent-routing feature was removed; see src/agent/router.ts).
   return {
-    id: `route:${row.time_created}:${event.toAgent}`,
-    mode,
-    icon: "⇄",
-    title: `Switched primary to ${to}`,
-    detail: `From ${from}${matched}`,
+    id: `route:${row.time_created}:complexity`,
+    mode: event.routeMode ?? "complexity",
+    icon: "⚡",
+    title: "Fast model",
+    detail: `simple task · ${agentLabel(event.fromAgent, agents)}`,
     time: row.time_created,
   }
 }
@@ -87,12 +61,7 @@ export function messageRoute(
   agents?: AgentInfo[],
 ) {
   const matches = rows.filter((row) => row.event_data.type === "agent.route" && row.event_data.messageID === msg.id)
-  // Prefer agent-switch/delegate events over complexity-only events (more informative for display)
-  const row =
-    matches.find((r) => {
-      const e = r.event_data
-      return e.type === "agent.route" && e.routeMode !== "complexity"
-    }) ?? matches.at(-1)
+  const row = matches.at(-1)
   if (row) {
     const item = routeEvent(row, agents)
     if (item) {

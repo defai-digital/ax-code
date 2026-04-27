@@ -890,10 +890,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
-      title: sync.data.smartLlm ? "Turn auto-route off" : "Turn auto-route on",
+      title: sync.data.smartLlm ? "Turn fast-model routing off" : "Turn fast-model routing on",
       value: "app.toggle.smart_llm",
       category: "System",
-      slash: { name: "smart-llm", aliases: ["toggle-smart-llm"] },
+      slash: { name: "smart-llm", aliases: ["toggle-smart-llm", "fast-model"] },
       onSelect: (dialog) => {
         const previous = sync.data.smartLlm
         const next = !previous
@@ -904,7 +904,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           // otherwise we'd clobber a newer user action with our stale rollback.
           if (sync.data.smartLlm === next) sync.set("smartLlm", previous)
           toast.show({
-            message: error instanceof Error ? error.message : "Failed to save auto-route setting",
+            message: error instanceof Error ? error.message : "Failed to save fast-model routing setting",
             variant: "error",
           })
         })
