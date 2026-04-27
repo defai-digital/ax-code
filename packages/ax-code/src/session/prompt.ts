@@ -1322,7 +1322,7 @@ export namespace SessionPrompt {
     let agentName = input.agent || (await Agent.defaultAgent())
     const initialAgentName = agentName // capture before any auto-route switch
     const cfg = await Config.get()
-    const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === true ? "switch" : "delegate")
+    const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === false ? "delegate" : "switch")
     const messageText = input.parts
       .filter((p): p is typeof p & { type: "text" } => p.type === "text")
       .map((p) => p.text)
