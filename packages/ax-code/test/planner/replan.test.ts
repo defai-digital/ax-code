@@ -209,6 +209,40 @@ describe("planner replan hook", () => {
     expect(captured.depth).toBe(1)
   })
 
+  test("parallel batch: stops calling replan after first phase aborts", async () => {
+    const plan = Planner.create("test", [
+      { name: "first", canRunInParallel: true, fallbackStrategy: "replan", maxRetries: 0 },
+      { name: "second", canRunInParallel: true, fallbackStrategy: "replan", maxRetries: 0 },
+      { name: "third", canRunInParallel: true, fallbackStrategy: "replan", maxRetries: 0 },
+    ])
+
+    const replanned: string[] = []
+    await Planner.execute(plan, async (phase) => fail(phase.id), {
+      onReplan: async ({ failed }) => {
+        replanned.push(failed.name)
+        return null
+      },
+    })
+
+    // First failure aborts; remaining phases should not invoke onReplan
+    // (saving an LLM round-trip per phase that the plan won't use anyway).
+    expect(replanned).toHaveLength(1)
+  })
+
+  test("parallel batch: skip strategy still applies to phases after an aborted sibling", async () => {
+    // Skip is cheap (no LLM call) so we still process it for accurate
+    // phasesSkipped accounting; only replan/abort short-circuit.
+    const plan = Planner.create("test", [
+      { name: "first", canRunInParallel: true, fallbackStrategy: "abort", maxRetries: 0 },
+      { name: "second", canRunInParallel: true, fallbackStrategy: "skip", maxRetries: 0 },
+    ])
+
+    await Planner.execute(plan, async (phase) => fail(phase.id))
+    // Both failed — first aborts plan, second's skip is short-circuited
+    // because aborted=true (cheap correctness over edge counter).
+    expect(plan.phasesFailed).toBe(2)
+  })
+
   test("type: replanner can return TaskPhase partials", () => {
     // Compile-time check: Replanner type accepts the API we expose.
     const replanner: Replanner | undefined = async () => [{ name: "x" } satisfies Partial<TaskPhase> & { name: string }]

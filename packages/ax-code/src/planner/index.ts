@@ -185,6 +185,12 @@ export namespace Planner {
 
             if (succeeded) continue
 
+            // If a previous phase in this batch already aborted the plan,
+            // skip the fallback work for the remaining phases — replan in
+            // particular calls onReplan (often an LLM round-trip), and
+            // there's no point spending tokens on a plan that's stopping.
+            if (aborted) continue
+
             if (phase.fallbackStrategy === "replan") {
               const outcome = await runReplan(plan, phase, executor, options, error, 1, results, warnings)
               if (outcome.aborted) {
