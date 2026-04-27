@@ -410,26 +410,37 @@ export function Prompt(props: PromptProps) {
     setExpandedPastes(expanded ? new Set<number>(pasteViews().map((view) => view.partIndex)) : new Set<number>())
   }
 
-  // Initialize agent/model/variant from last user message when session changes.
+  // Sync local agent/model/variant from the latest user message:
+  // - On session change: pick up the session's last-known agent
+  // - On new message in the same session: catch server-side auto-routing
+  //   that swapped the primary agent for this turn (e.g., "fix this bug" →
+  //   debug agent). Without this, the bottom-left chip stays stale.
+  //
+  // Use `on()` so only sessionID and lastUserMessage trigger re-runs — reads
+  // of local.agent inside don't add dependencies, otherwise a manual Tab-
+  // switch would re-fire the effect and revert the user's choice.
   let syncedSessionID: string | undefined
-  createEffect(() => {
-    const sessionID = props.sessionID
-    const msg = lastUserMessage()
+  createEffect(
+    on([() => props.sessionID, lastUserMessage], ([sessionID, msg]) => {
+      const sessionChanged = sessionID !== syncedSessionID
+      if (sessionChanged) {
+        syncedSessionID = sessionID
+        if (!sessionID || !msg) return
+      } else {
+        // Same session: only sync when the message agent actually differs from
+        // what the chip shows (i.e., auto-route just changed it).
+        if (!msg?.agent || msg.agent === local.agent.current().name) return
+      }
 
-    if (sessionID !== syncedSessionID) {
-      if (!sessionID) return
-      syncedSessionID = sessionID
-      if (!msg) return
-
-      // Only set agent if it's a primary agent (not a subagent)
+      // Only adopt primary-tier agents — subagent results shouldn't change the picker.
       const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
       if (msg.agent && isPrimaryAgent) {
         local.agent.set(msg.agent)
         if (msg.model) local.model.set(msg.model)
         if (msg.variant) local.model.variant.set(msg.variant)
       }
-    }
-  })
+    }),
+  )
 
   command.register(() => {
     return [
