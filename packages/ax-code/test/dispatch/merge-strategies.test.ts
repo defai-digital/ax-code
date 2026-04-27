@@ -137,6 +137,45 @@ describe("dispatch merge strategies (ADR-005 P0)", () => {
     expect(results.every((r) => r.status === "cancelled")).toBe(true)
   })
 
+  test("results array is stable after dispatch resolves even with late completions (regression)", async () => {
+    // Direct test of the resolved-guard. Use an uncooperative slow
+    // executor that we resolve from outside, AFTER the dispatch has
+    // returned. With first-success + the guard, results[1] should
+    // stay "cancelled" even when slow eventually resolves.
+    let resolveSlow: ((val: { output: string }) => void) | null = null
+    const executor: DispatchExecutor = async (s, signal) => {
+      if (s.agent === "fast") {
+        await new Promise((r) => setTimeout(r, 5))
+        return { output: "fast-done" }
+      }
+      // slow honors the signal so dispatch can finalize promptly.
+      // But we still expose a resolver for the *post-finalize* scenario.
+      return new Promise<{ output: string }>((resolve, reject) => {
+        resolveSlow = resolve
+        signal.addEventListener("abort", () => reject(new Error("aborted")))
+      })
+    }
+
+    const results = await dispatch([spec("fast"), spec("slow")], executor, {
+      mergeStrategy: "first-success",
+      maxParallel: 2,
+    })
+
+    // Snapshot now.
+    const beforeStatus = results[1]!.status
+    expect(beforeStatus).toBe("cancelled")
+
+    // Now try to "complete" slow late. The runOne for slow has already
+    // rejected (signal aborted) and its .catch ran during dispatch,
+    // setting results[1] to status "cancelled". Calling resolveSlow now
+    // is a no-op on the underlying Promise (already rejected).
+    if (resolveSlow) (resolveSlow as (v: { output: string }) => void)({ output: "slow-late" })
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(results[1]!.status).toBe(beforeStatus)
+    expect(results[1]!.output).toBeUndefined()
+  })
+
   test("does not leak abort listeners on parent signal across many dispatches (regression)", async () => {
     // A long-lived parent signal that handles many dispatches must not
     // accumulate one "abort" handler per dispatch — the older

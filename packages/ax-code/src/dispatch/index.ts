@@ -220,6 +220,11 @@ async function dispatchUntil(
         inflight++
         runOne(spec, executor, { ...options, signal: localAc.signal })
           .then((result) => {
+            // If the dispatch already finalized (early termination via
+            // first-success / majority, or parent abort), don't mutate
+            // results[idx] — the caller has the resolved array now and
+            // a late write would change its contents under their feet.
+            if (resolved) return
             results[idx] = result
             inflight--
             if (result.status === "completed") {
@@ -237,6 +242,7 @@ async function dispatchUntil(
             // result. Be defensive: log and treat as failed so we don't
             // hang the dispatch.
             log.warn("runOne threw unexpectedly", { agent: spec.agent, error: String(err) })
+            if (resolved) return
             results[idx] = {
               agent: spec.agent,
               status: "failed",
