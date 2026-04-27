@@ -201,6 +201,30 @@ export const BashTool = Tool.define("bash", async () => {
                   }
                 }
               }
+              // Inner-tree redirect targets: `bash -c "echo > /etc/x"` and
+              // `eval "echo >> /etc/x"` would otherwise bypass the outer
+              // file_redirect scan because the redirect lives inside the
+              // string argument, not as a sibling AST node of the outer
+              // command.
+              for (const innerRedirect of innerTree.rootNode.descendantsOfType("file_redirect")) {
+                if (!innerRedirect) continue
+                for (let j = 0; j < innerRedirect.childCount; j++) {
+                  const c = innerRedirect.child(j)
+                  if (!c) continue
+                  if (!["word", "string", "raw_string", "concatenation"].includes(c.type)) continue
+                  const target = c.text.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
+                  if (!target || /\$\(|\$\{|`|^&/.test(target)) continue
+                  const resolved = await fs.realpath(path.resolve(cwd, target)).catch(() => path.resolve(cwd, target))
+                  if (!resolved) continue
+                  const normalized =
+                    process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
+                  resolvedPaths.add(normalized)
+                  if (!Instance.containsPath(normalized)) {
+                    const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
+                    directories.add(dir)
+                  }
+                }
+              }
             }
           }
 

@@ -64,7 +64,10 @@ export const AutonomousRoutes = lazy(() =>
       validator("json", z.object({ enabled: z.boolean() })),
       async (c) => {
         const { enabled } = c.req.valid("json")
-        process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
+        // Persist first; only then update the in-process env. Writing
+        // env before persistence created a window where in-process
+        // readers (Permission, Session) saw a value the disk hadn't
+        // committed, and a subsequent crash would silently revert.
         let persisted = true
         await updateProjectConfig((config) => {
           config.autonomous = enabled
@@ -74,6 +77,7 @@ export const AutonomousRoutes = lazy(() =>
         })
         log.info("autonomous mode changed", { enabled, persisted })
         if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
+        process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
         return c.json({ enabled })
       },
     ),

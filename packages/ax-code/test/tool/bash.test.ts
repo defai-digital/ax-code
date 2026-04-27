@@ -490,4 +490,34 @@ describe("tool.bash isolation", () => {
       },
     })
   })
+
+  test("rejects redirection target inside `bash -c` inner command", async () => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = {
+          ...ctx,
+          ask: async () => {},
+          extra: { isolation },
+        }
+        const outsideFile = path.join(outerTmp.path, "exfil.txt")
+        // The redirect lives inside the quoted `-c` argument and is
+        // parsed by the inner tree-sitter pass; outer file_redirect
+        // walking misses it.
+        await expect(
+          bash.execute(
+            {
+              command: `bash -c "echo pwned > ${outsideFile}"`,
+              description: "Attempt redirect outside workspace via bash -c",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+      },
+    })
+  })
 })
