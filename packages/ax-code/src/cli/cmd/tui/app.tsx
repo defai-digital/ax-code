@@ -895,11 +895,14 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
       slash: { name: "smart-llm", aliases: ["toggle-smart-llm"] },
       onSelect: (dialog) => {
-        const next = !sync.data.smartLlm
+        const previous = sync.data.smartLlm
+        const next = !previous
         sync.set("smartLlm", next)
         void putJsonWithTimeout("/smart-llm", { enabled: next }).catch((error) => {
           Log.Default.warn("failed to update smart llm setting", { error, enabled: next })
-          sync.set("smartLlm", !next)
+          // Only revert if no concurrent toggle has changed the state since we set it —
+          // otherwise we'd clobber a newer user action with our stale rollback.
+          if (sync.data.smartLlm === next) sync.set("smartLlm", previous)
           toast.show({
             message: error instanceof Error ? error.message : "Failed to save auto-route setting",
             variant: "error",

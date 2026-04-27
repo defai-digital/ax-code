@@ -15,6 +15,7 @@ import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { LSP } from "../../src/lsp"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
+import { Agent } from "../../src/agent/agent"
 
 Log.init({ print: false })
 
@@ -495,7 +496,7 @@ describe("session.agent-resolution", () => {
 })
 
 describe("session.prompt auto routing", () => {
-  test("switches the primary agent by default on the first user turn", async () => {
+  test("delegates to a specialist by default on the first user turn", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -519,8 +520,10 @@ describe("session.prompt auto routing", () => {
           parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
         })
         if (msg.info.role !== "user") throw new Error("expected user message")
-        expect(msg.info.agent).toBe("perf")
-        expect(msg.parts.some((part) => part.type === "subtask")).toBe(false)
+        expect(msg.info.agent).toBe("build")
+        const subtask = msg.parts.find((part) => part.type === "subtask")
+        expect(subtask).toBeDefined()
+        if (subtask?.type === "subtask") expect(subtask.agent).toBe("perf")
 
         await Session.remove(session.id)
       },
@@ -736,6 +739,49 @@ describe("session.prompt auto routing", () => {
 
         EventQuery.deleteBySession(session.id)
         await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("does not record agent.route when target agent is missing", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        routing: { mode: "delegate" },
+        agent: { build: { model: "openai/gpt-5.2" } },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const original = Agent.get
+        const spy = spyOn(Agent, "get").mockImplementation(async (name: string) => {
+          if (name === "perf") return undefined as never
+          return original(name)
+        })
+        try {
+          const session = await Session.create({})
+          Recorder.begin(session.id)
+          const msg = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            noReply: true,
+            parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
+          })
+          Recorder.end(session.id)
+          await new Promise((r) => setTimeout(r, 50))
+
+          if (msg.info.role !== "user") throw new Error("expected user message")
+          expect(msg.info.agent).toBe("build")
+          expect(msg.parts.some((part) => part.type === "subtask")).toBe(false)
+          expect(EventQuery.bySessionAndType(session.id, "agent.route")).toHaveLength(0)
+
+          EventQuery.deleteBySession(session.id)
+          await Session.remove(session.id)
+        } finally {
+          spy.mockRestore()
+        }
       },
     })
   })

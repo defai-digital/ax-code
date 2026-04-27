@@ -31,7 +31,10 @@ export function routeNote(msg: UserMessage, parts: Part[], agents?: AgentInfo[])
   if (route.delegated.length > 0) {
     return `Primary ${route.primary.label} · specialist ${route.delegated.map((item) => item.label).join(", ")}`
   }
-  if (msg.agent !== "build") return `Primary ${route.primary.label}`
+  // Agent.list sorts the configured default first (cfg.default_agent or "build"),
+  // so agents[0] is the user's actual default — fall back to "build" only when no list is supplied.
+  const defaultAgent = agents?.[0]?.name ?? "build"
+  if (msg.agent !== defaultAgent) return `Primary ${route.primary.label}`
   return ""
 }
 

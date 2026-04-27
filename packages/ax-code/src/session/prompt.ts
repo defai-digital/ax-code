@@ -1322,7 +1322,7 @@ export namespace SessionPrompt {
     let agentName = input.agent || (await Agent.defaultAgent())
     const initialAgentName = agentName // capture before any auto-route switch
     const cfg = await Config.get()
-    const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === false ? "delegate" : "switch")
+    const routingMode = cfg.routing?.mode ?? (cfg.routing?.auto_switch === true ? "switch" : "delegate")
     const messageText = input.parts
       .filter((p): p is typeof p & { type: "text" } => p.type === "text")
       .map((p) => p.text)
@@ -1345,22 +1345,25 @@ export namespace SessionPrompt {
 
       // Only act on routing when the result points to a DIFFERENT agent
       if (routeResult && routeResult.agent !== agentName) {
-        Recorder.emit({
-          type: "agent.route",
-          sessionID: input.sessionID,
-          messageID,
-          fromAgent: agentName,
-          toAgent: routeResult.agent,
-          confidence: routeResult.confidence,
-          routeMode: canSwitch ? "switch" : "delegate",
-          matched: routeResult.matched,
-          complexity: messageComplexity ?? routeResult.complexity,
-        })
+        // Verify target exists before emitting any event — otherwise an audit
+        // trail record + UI RouteIndicator would claim a switch/delegate that
+        // never happened (the actual mutation only fires inside this block).
         const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
         if (!routedAgent) {
           log.warn("auto-route target not found", { agent: routeResult.agent })
         } else {
           const routedLabel = routedAgent.displayName ?? routeResult.agent
+          Recorder.emit({
+            type: "agent.route",
+            sessionID: input.sessionID,
+            messageID,
+            fromAgent: agentName,
+            toAgent: routeResult.agent,
+            confidence: routeResult.confidence,
+            routeMode: canSwitch ? "switch" : "delegate",
+            matched: routeResult.matched,
+            complexity: messageComplexity ?? routeResult.complexity,
+          })
           if (canSwitch) {
             agentName = routeResult.agent
             log.info("auto-routed to agent", {

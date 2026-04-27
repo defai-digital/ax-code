@@ -60,6 +60,16 @@ describe("tui session routing helpers", () => {
     expect(routeNote(user("u1"), [])).toBe("")
   })
 
+  test("treats the first agent in the list as the default — no spurious note for custom defaults", () => {
+    // Agent.list sorts cfg.default_agent first; when user sets default to e.g. "engineer",
+    // a message on "engineer" should produce no note (same as build did before).
+    const agents = [{ name: "engineer" }, { name: "perf" }, { name: "security" }]
+    expect(routeNote(user("u1", "engineer"), [], agents)).toBe("")
+    expect(routeNote(user("u1", "perf"), [], agents)).toBe("Primary Perf")
+    // Without an agents list, falls back to "build" — preserves existing call sites that don't pass agents.
+    expect(routeNote(user("u1", "build"), [])).toBe("")
+  })
+
   test("formats replayed route events for activity history", () => {
     const item = routeEvent({
       time_created: 10,

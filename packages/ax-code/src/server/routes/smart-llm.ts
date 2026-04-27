@@ -13,6 +13,14 @@ const SmartLlmState = z
   })
   .meta({ ref: "SmartLlmState" })
 
+/** Auto-route LLM tier defaults to ON. Explicit config beats env beats default. */
+function resolveSmartLlmEnabled(configValue: boolean | undefined, envValue: string | undefined) {
+  if (typeof configValue === "boolean") return configValue
+  if (envValue === "true") return true
+  if (envValue === "false") return false
+  return true
+}
+
 export const SmartLlmRoutes = lazy(() =>
   new Hono()
     .get(
@@ -34,7 +42,7 @@ export const SmartLlmRoutes = lazy(() =>
       }),
       async (c) => {
         const config = await readProjectConfig()
-        const enabled = config?.routing?.llm === true || process.env["AX_CODE_SMART_LLM"] === "true"
+        const enabled = resolveSmartLlmEnabled(config?.routing?.llm, process.env["AX_CODE_SMART_LLM"])
         process.env["AX_CODE_SMART_LLM"] = String(enabled)
         return c.json({ enabled })
       },
