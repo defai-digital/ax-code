@@ -2,10 +2,14 @@ import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
 import { QualityLabelStore } from "../../src/quality/label-store"
+import { computeFindingId } from "../../src/quality/finding"
+import type { Finding } from "../../src/quality/finding"
+import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
 import { Session } from "../../src/session"
 import { SessionRisk } from "../../src/session/risk"
+import type { SessionID } from "../../src/session/schema"
 import { Storage } from "../../src/storage/storage"
 import { tmpdir } from "../fixture/fixture"
 
@@ -183,6 +187,174 @@ describe("session.risk", () => {
         } finally {
           EventQuery.deleteBySession(sid)
           await clearSessionLabels(sid)
+        }
+      },
+    })
+  })
+
+  // Integration coverage: SessionRisk.load with combinations of
+  // includeQuality / includeFindings / includeEnvelopes — the same shape
+  // the client sync polls via /risk?quality=true&findings=true&envelopes=true.
+  function buildFinding(sessionID: string): Finding {
+    const anchor = { kind: "line" as const, line: 42 }
+    return {
+      schemaVersion: 1,
+      findingId: computeFindingId({ workflow: "review", category: "bug", file: "src/foo.ts", anchor }),
+      workflow: "review",
+      category: "bug",
+      severity: "HIGH",
+      summary: "Off-by-one in pagination loop",
+      file: "src/foo.ts",
+      anchor,
+      rationale: "Loop runs n+1 times when limit equals total.",
+      evidence: ["src/foo.ts:42"],
+      suggestedNextAction: "Use `<` instead of `<=`.",
+      source: { tool: "review", version: "4.x.x", runId: sessionID },
+    }
+  }
+
+  function buildEnvelope(sessionID: string): VerificationEnvelope {
+    return {
+      schemaVersion: 1,
+      workflow: "qa",
+      scope: { kind: "file", paths: ["src/foo.ts"] },
+      command: { runner: "typecheck", argv: [], cwd: "/tmp/work" },
+      result: {
+        name: "typecheck",
+        type: "typecheck",
+        passed: false,
+        status: "failed",
+        issues: [],
+        duration: 0,
+        output: "src/foo.ts(10,4): error TS2322: type mismatch",
+      },
+      structuredFailures: [
+        { kind: "typecheck", file: "src/foo.ts", line: 10, column: 4, code: "TS2322", message: "type mismatch" },
+      ],
+      artifactRefs: [],
+      source: { tool: "refactor_apply", version: "4.x.x", runId: sessionID },
+    }
+  }
+
+  async function emitFindingAndEnvelope(sessionID: SessionID, directory: string) {
+    Recorder.begin(sessionID)
+    Recorder.emit({
+      type: "session.start",
+      sessionID,
+      agent: "build",
+      model: "test/model",
+      directory,
+    })
+    Recorder.emit({
+      type: "tool.result",
+      sessionID,
+      tool: "register_finding",
+      callID: "call-finding",
+      status: "completed",
+      output: "registered",
+      metadata: { findingId: buildFinding(sessionID).findingId, finding: buildFinding(sessionID) },
+      durationMs: 1,
+    })
+    Recorder.emit({
+      type: "tool.result",
+      sessionID,
+      tool: "refactor_apply",
+      callID: "call-apply",
+      status: "completed",
+      output: "applied",
+      metadata: { verificationEnvelopes: [buildEnvelope(sessionID)] },
+      durationMs: 5,
+    })
+    Recorder.emit({
+      type: "session.end",
+      sessionID,
+      reason: "completed",
+      totalSteps: 0,
+    })
+    Recorder.end(sessionID)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+
+  test("default load omits all opt-in fields (quality/findings/envelopes)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await emitFindingAndEnvelope(session.id, tmp.path)
+        try {
+          const detail = await SessionRisk.load(session.id)
+          expect(detail.quality).toBeUndefined()
+          expect(detail.findings).toBeUndefined()
+          expect(detail.envelopes).toBeUndefined()
+        } finally {
+          EventQuery.deleteBySession(session.id)
+        }
+      },
+    })
+  })
+
+  test("includeFindings: true populates findings without affecting envelopes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await emitFindingAndEnvelope(session.id, tmp.path)
+        try {
+          const detail = await SessionRisk.load(session.id, { includeFindings: true })
+          expect(detail.findings).toHaveLength(1)
+          expect(detail.findings?.[0].severity).toBe("HIGH")
+          expect(detail.findings?.[0].file).toBe("src/foo.ts")
+          expect(detail.envelopes).toBeUndefined()
+        } finally {
+          EventQuery.deleteBySession(session.id)
+        }
+      },
+    })
+  })
+
+  test("includeEnvelopes: true populates envelopes without affecting findings", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await emitFindingAndEnvelope(session.id, tmp.path)
+        try {
+          const detail = await SessionRisk.load(session.id, { includeEnvelopes: true })
+          expect(detail.envelopes).toHaveLength(1)
+          expect(detail.envelopes?.[0].command.runner).toBe("typecheck")
+          expect(detail.envelopes?.[0].result.status).toBe("failed")
+          expect(detail.findings).toBeUndefined()
+        } finally {
+          EventQuery.deleteBySession(session.id)
+        }
+      },
+    })
+  })
+
+  test("matches the client sync request shape (quality + findings + envelopes simultaneously)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await emitFindingAndEnvelope(session.id, tmp.path)
+        try {
+          const detail = await SessionRisk.load(session.id, {
+            includeQuality: true,
+            includeFindings: true,
+            includeEnvelopes: true,
+          })
+          // quality is allowed to be empty (no replay evidence yet) but the
+          // field must be present (parsed object) — the client sync schema
+          // validates it.
+          expect(detail.quality).toBeDefined()
+          expect(detail.findings).toHaveLength(1)
+          expect(detail.envelopes).toHaveLength(1)
+        } finally {
+          EventQuery.deleteBySession(session.id)
         }
       },
     })
