@@ -30,7 +30,8 @@ import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
-import { classifyComplexity } from "../agent/router"
+import { route as routeAgent, classifyComplexity } from "../agent/router"
+import { TuiEvent } from "../cli/cmd/tui/event"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
@@ -1328,13 +1329,56 @@ export namespace SessionPrompt {
 
   async function createUserMessage(input: PromptInput) {
     const messageID = input.messageID ?? MessageID.ascending()
-    const agentName = input.agent || (await Agent.defaultAgent())
+    let agentName = input.agent || (await Agent.defaultAgent())
     const messageText = input.parts
       .filter((p): p is typeof p & { type: "text" } => p.type === "text")
       .map((p) => p.text)
       .join(" ")
-    // Keyword auto-routing was removed — specialists are invoked via @-mention only.
-    // Classify message complexity so simple queries can use a small/fast model.
+
+    // v2-style auto agent switching: simple sync keyword route, fires whenever
+    // a topic keyword scores ≥ 0.4. Skipped only when the user explicitly named
+    // an agent (@-mention), or when routing.disable is set in config.
+    const cfg = await Config.get()
+    const hasAgentPart = input.parts.some((p) => p.type === "agent")
+    const routingDisabled = cfg.routing?.disable === true
+    if (messageText && !hasAgentPart && !routingDisabled) {
+      const routeResult = routeAgent(messageText, agentName)
+      if (routeResult) {
+        const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
+        if (routedAgent) {
+          const routedLabel = routedAgent.displayName ?? routeResult.agent
+          Recorder.emit({
+            type: "agent.route",
+            sessionID: input.sessionID,
+            messageID,
+            fromAgent: agentName,
+            toAgent: routeResult.agent,
+            confidence: routeResult.confidence,
+            routeMode: "switch",
+            matched: routeResult.matched,
+          })
+          agentName = routeResult.agent
+          log.info("auto-routed to agent", {
+            command: "session.prompt.route",
+            status: "ok",
+            sessionID: input.sessionID,
+            agent: routeResult.agent,
+            confidence: routeResult.confidence,
+          })
+          Bus.publishDetached(TuiEvent.ToastShow, {
+            title: "Agent Auto-Switched",
+            message: `Switched to "${routedLabel}" agent for this task`,
+            variant: "info",
+            duration: 5000,
+          })
+        } else {
+          log.warn("auto-route target not found", { agent: routeResult.agent })
+        }
+      }
+    }
+
+    // Classify message complexity (independent of agent routing) so simple
+    // queries can use a small/fast model.
     const messageComplexity = messageText ? (await classifyComplexity(messageText)).complexity : null
 
     const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
