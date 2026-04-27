@@ -7,6 +7,7 @@ import z from "zod"
 import { Config } from "../config/config"
 import { MCP } from "../mcp"
 import { Skill } from "../skill"
+import { Policy } from "../quality/policy"
 import { Log } from "../util/log"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
@@ -99,7 +100,13 @@ export namespace Command {
           description: "review changes [commit|branch|pr], defaults to uncommitted",
           source: "command",
           get template() {
-            return PROMPT_REVIEW.replace("${path}", ctx.worktree)
+            return (async () => {
+              const policy = await Policy.loadReviewPolicy({ worktree: ctx.worktree })
+              return PROMPT_REVIEW.replace("${path}", ctx.worktree).replace(
+                "${review_policy}",
+                policy ? policy.trim() : "(no project-specific review policy configured)",
+              )
+            })()
           },
           subtask: true,
           hints: hints(PROMPT_REVIEW),

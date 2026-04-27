@@ -121,3 +121,11 @@ Map each finding to the schema:
 Reserve prose for non-finding output: framing, summary of the change at a high level, questions you want the user to answer. Use the tool for everything you would otherwise turn into a bullet point under "issues found".
 
 If you have nothing actionable to report, do not call the tool. Say so plainly in prose.
+
+---
+
+## Project review policy
+
+The following policy was loaded from `.ax-code/review.md` in this project (or a parent directory). Treat it as additional review rules layered on top of the general guidance above. If the policy is silent on a topic, fall back to the general guidance. If the policy and the general guidance conflict, prefer the project policy — the team that wrote it knows their codebase.
+
+${review_policy}
