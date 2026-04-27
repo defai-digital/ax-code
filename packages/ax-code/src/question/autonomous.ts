@@ -57,7 +57,8 @@ export namespace AutonomousQuestion {
     const context = questionContext(question)
     const avoidsOverengineering = AVOID_OVERENGINEERING_MARKER.test(value)
     const contextAsksForBestPractice = CONTEXT_BEST_PRACTICE_MARKER.test(context)
-    const contextAsksForNegativeChoice = NEGATIVE_CHOICE_CONTEXT_MARKER.test(context) && !AVOID_OVERENGINEERING_CONTEXT_MARKER.test(context)
+    const contextAsksForNegativeChoice =
+      NEGATIVE_CHOICE_CONTEXT_MARKER.test(context) && !AVOID_OVERENGINEERING_CONTEXT_MARKER.test(context)
     const isBestPractice = BEST_PRACTICE_MARKER.test(value) || avoidsOverengineering
     const isRisk = RISK_MARKER.test(value) && !avoidsOverengineering
     const isLowScope = LOW_SCOPE_MARKER.test(value)
@@ -94,18 +95,26 @@ export namespace AutonomousQuestion {
     const contextAsksForBestPractice = CONTEXT_BEST_PRACTICE_MARKER.test(questionContext(question))
     const selected = question.options.filter((option) => answer.includes(option.label))
     const selectedText = selected.map(text).join(" ")
-    if (AVOID_OVERENGINEERING_MARKER.test(selectedText)) return `Selected an option that explicitly avoids over-engineering (${confidence} confidence).`
-    if (NEGATIVE_CHOICE_CONTEXT_MARKER.test(questionContext(question)) && !AVOID_OVERENGINEERING_CONTEXT_MARKER.test(questionContext(question))) {
+    if (AVOID_OVERENGINEERING_MARKER.test(selectedText))
+      return `Selected an option that explicitly avoids over-engineering (${confidence} confidence).`
+    if (
+      NEGATIVE_CHOICE_CONTEXT_MARKER.test(questionContext(question)) &&
+      !AVOID_OVERENGINEERING_CONTEXT_MARKER.test(questionContext(question))
+    ) {
       return `Selected the option most aligned with the question's avoid/skip context (${confidence} confidence).`
     }
-    if (BEST_PRACTICE_MARKER.test(selectedText)) return `Selected the strongest best-practice/default signal (${confidence} confidence).`
-    if (contextAsksForBestPractice && LOW_SCOPE_MARKER.test(selectedText)) return `Selected the lowest-scope option matching the question context (${confidence} confidence).`
-    if (selected.length > 0) return `Selected the highest-scoring option after risk and simplicity scoring (${confidence} confidence).`
+    if (BEST_PRACTICE_MARKER.test(selectedText))
+      return `Selected the strongest best-practice/default signal (${confidence} confidence).`
+    if (contextAsksForBestPractice && LOW_SCOPE_MARKER.test(selectedText))
+      return `Selected the lowest-scope option matching the question context (${confidence} confidence).`
+    if (selected.length > 0)
+      return `Selected the highest-scoring option after risk and simplicity scoring (${confidence} confidence).`
     return `Selected the returned answer, but it did not match a provided option (${confidence} confidence).`
   }
 
   function chooseDecision(question: QuestionLike): Decision {
-    if (question.options.length === 0) return { answer: [], confidence: "low", rationale: "No available options were provided." }
+    if (question.options.length === 0)
+      return { answer: [], confidence: "low", rationale: "No available options were provided." }
     const ranked = question.options
       .map((option, index) => ({ option, score: scoreOption(option, index, question) }))
       .sort((a, b) => b.score - a.score)

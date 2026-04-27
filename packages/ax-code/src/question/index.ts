@@ -1,11 +1,14 @@
 import { Schema } from "effect"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
+import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
+import { Recorder } from "@/replay/recorder"
 import { SessionID, MessageID } from "@/session/schema"
 import { Log } from "@/util/log"
 import z from "zod"
 import { AutonomousQuestion } from "./autonomous"
+import * as Clarify from "./clarify"
 import { QuestionID } from "./schema"
 
 export namespace Question {
@@ -55,6 +58,42 @@ export namespace Question {
 
   export function autonomousDecisions(questions: Info[]): AutonomousQuestion.Decision[] {
     return AutonomousQuestion.decisions(questions)
+  }
+
+  /** Heuristic ambiguity detection for proactive clarification. */
+  export function detectAmbiguity(message: string) {
+    return Clarify.detectAmbiguity(message)
+  }
+
+  export function shouldClarify(message: string): boolean {
+    return Clarify.shouldClarify(message)
+  }
+
+  /** Build a structured clarification question. The result is compatible with `ask()`. */
+  export function buildClarification(input: Clarify.ClarifyInput): Info {
+    return Clarify.build(input) as Info
+  }
+
+  /**
+   * Convert clarification Q&A pairs into constraint strings suitable for
+   * `Planner.create({ constraints })`. Strips the `(Recommended)` suffix
+   * that `buildClarification` adds so the resulting constraint reads cleanly.
+   *
+   * Mismatched lengths are tolerated — extra questions/answers are ignored.
+   */
+  export function toConstraints(questions: Info[], answers: Answer[]): string[] {
+    const out: string[] = []
+    const len = Math.min(questions.length, answers.length)
+    for (let i = 0; i < len; i++) {
+      const q = questions[i]
+      const a = answers[i]
+      if (!q || !a || a.length === 0) continue
+      const cleaned = a.map((label) => label.replace(/\s*\(Recommended\)\s*$/i, "").trim()).filter(Boolean)
+      if (cleaned.length === 0) continue
+      const header = (q.header ?? q.question).trim()
+      out.push(`${header}: ${cleaned.join(", ")}`)
+    }
+    return out
   }
 
   export const Reply = z.object({
@@ -134,9 +173,34 @@ export namespace Question {
 
   export async function ask(input: AskInput): Promise<Answer[]> {
     if (process.env["AX_CODE_AUTONOMOUS"] === "true") {
-      const answers = autonomousAnswers(input.questions)
-      log.info("autonomous auto-answer", { questions: input.questions.length, answers })
-      return answers
+      const decisions = autonomousDecisions(input.questions)
+      const escalateOnLow = (await Config.get()).experimental?.autonomous_escalate_low_confidence !== false
+      // A question with <= 1 options is not ambiguous — escalating would
+      // block forever without giving the user a meaningful choice. Skip
+      // escalation in that case even when the heuristic returns "low".
+      const lowConfidenceIndex = decisions.findIndex(
+        (d, i) => d.confidence === "low" && (input.questions[i]?.options.length ?? 0) > 1,
+      )
+      if (escalateOnLow && lowConfidenceIndex >= 0) {
+        const escalated = decisions[lowConfidenceIndex]
+        log.info("autonomous escalating to user", {
+          questions: input.questions.length,
+          lowConfidenceIndex,
+          rationale: escalated?.rationale,
+        })
+        Recorder.emit({
+          type: "autonomous.escalation",
+          sessionID: input.sessionID,
+          reason: "low_confidence",
+          questionHeader: input.questions[lowConfidenceIndex]?.header,
+          rationale: escalated?.rationale,
+        })
+        // Fall through to the human-ask path below.
+      } else {
+        const answers = decisions.map((d) => d.answer)
+        log.info("autonomous auto-answer", { questions: input.questions.length, answers })
+        return answers
+      }
     }
 
     const current = await state()
