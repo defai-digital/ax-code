@@ -7,19 +7,21 @@ const spec = (agent: string, prompt = "do thing", overrides: Partial<DispatchSpe
   ...overrides,
 })
 
-const slow = (ms: number, output = "ok"): DispatchExecutor => async (_, signal) =>
-  new Promise<{ output: string }>((resolve, reject) => {
-    const timer = setTimeout(() => resolve({ output }), ms)
-    if (signal.aborted) {
-      clearTimeout(timer)
-      reject(signal.reason ?? new Error("aborted"))
-      return
-    }
-    signal.addEventListener("abort", () => {
-      clearTimeout(timer)
-      reject(signal.reason ?? new Error("aborted"))
+const slow =
+  (ms: number, output = "ok"): DispatchExecutor =>
+  async (_, signal) =>
+    new Promise<{ output: string }>((resolve, reject) => {
+      const timer = setTimeout(() => resolve({ output }), ms)
+      if (signal.aborted) {
+        clearTimeout(timer)
+        reject(signal.reason ?? new Error("aborted"))
+        return
+      }
+      signal.addEventListener("abort", () => {
+        clearTimeout(timer)
+        reject(signal.reason ?? new Error("aborted"))
+      })
     })
-  })
 
 describe("dispatch merge strategies (ADR-005 P0)", () => {
   test("first-success cancels siblings as soon as one completes", async () => {
@@ -74,11 +76,10 @@ describe("dispatch merge strategies (ADR-005 P0)", () => {
       })
     }
 
-    const results = await dispatch(
-      [spec("a"), spec("b"), spec("c"), spec("d"), spec("e")],
-      executor,
-      { mergeStrategy: "majority", maxParallel: 5 },
-    )
+    const results = await dispatch([spec("a"), spec("b"), spec("c"), spec("d"), spec("e")], executor, {
+      mergeStrategy: "majority",
+      maxParallel: 5,
+    })
 
     expect(results).toHaveLength(5)
     expect(completedCount).toBeGreaterThanOrEqual(3) // > 5/2
@@ -119,11 +120,10 @@ describe("dispatch merge strategies (ADR-005 P0)", () => {
         inflight--
       }
     }
-    await dispatch(
-      [spec("a"), spec("b"), spec("c"), spec("d"), spec("e")],
-      executor,
-      { mergeStrategy: "all", maxParallel: 2 },
-    )
+    await dispatch([spec("a"), spec("b"), spec("c"), spec("d"), spec("e")], executor, {
+      mergeStrategy: "all",
+      maxParallel: 2,
+    })
     expect(peak).toBeLessThanOrEqual(2)
   })
 
@@ -135,6 +135,35 @@ describe("dispatch merge strategies (ADR-005 P0)", () => {
       signal: ac.signal,
     })
     expect(results.every((r) => r.status === "cancelled")).toBe(true)
+  })
+
+  test("does not leak abort listeners on parent signal across many dispatches (regression)", async () => {
+    // A long-lived parent signal that handles many dispatches must not
+    // accumulate one "abort" handler per dispatch — the older
+    // combineSignals helper had this bug. We can't easily count
+    // listeners directly, but if the parent eventually aborts after
+    // many dispatches and each handler still fires, ac.abort() runs N
+    // times — harmless functionally, but the held closures keep the
+    // already-resolved AbortControllers alive.
+    //
+    // Indirect smoke: run 50 first-success dispatches against the same
+    // parent, then abort the parent. Nothing should hang or throw.
+    const parent = new AbortController()
+    for (let i = 0; i < 50; i++) {
+      await dispatch([spec("a"), spec("b")], async (s) => ({ output: s.agent }), {
+        mergeStrategy: "first-success",
+        signal: parent.signal,
+      })
+    }
+    // Parent still un-aborted; abort it now and ensure no errors throw.
+    parent.abort()
+    // One more dispatch under the now-aborted parent should return
+    // cancelled stubs cleanly.
+    const results = await dispatch([spec("z")], slow(100), {
+      mergeStrategy: "first-success",
+      signal: parent.signal,
+    })
+    expect(results[0]!.status).toBe("cancelled")
   })
 })
 

@@ -75,4 +75,33 @@ describe("Critic.classifyForReplan (PRD v4.2.1 P2-2)", () => {
   test("empty findings never block", () => {
     expect(Critic.classifyForReplan([], 0, 5).block).toBe(false)
   })
+
+  test("NaN totalBudget does not cause infinite blocking (regression)", () => {
+    // NaN comparisons all evaluate to false, so without defensive
+    // handling `usedBudget >= totalBudget` would never short-circuit
+    // and MEDIUM findings would block forever.
+    const decision = Critic.classifyForReplan([makeFinding("MEDIUM")], 0, NaN)
+    expect(decision.block).toBe(false)
+  })
+
+  test("Infinity totalBudget treated as no budget rather than infinite budget", () => {
+    // We don't want a misconfigured Infinity to silently enable
+    // unlimited replans — fail closed to legacy behavior.
+    const decision = Critic.classifyForReplan([makeFinding("MEDIUM")], 0, Infinity)
+    expect(decision.block).toBe(false)
+  })
+
+  test("NaN usedBudget is treated as 0", () => {
+    const decision = Critic.classifyForReplan([makeFinding("MEDIUM")], NaN, 1)
+    expect(decision.block).toBe(true)
+    if (decision.block && decision.reason === "medium_budget") {
+      expect(decision.remaining).toBe(0)
+    }
+  })
+
+  test("HIGH still blocks even with NaN budgets", () => {
+    const decision = Critic.classifyForReplan([makeFinding("HIGH")], NaN, NaN)
+    expect(decision.block).toBe(true)
+    if (decision.block) expect(decision.reason).toBe("blocking")
+  })
 })

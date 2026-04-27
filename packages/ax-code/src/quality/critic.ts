@@ -204,7 +204,13 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
     getDiff: (phaseId: string) => Promise<string>
     mediumReplanBudget?: number
   }) {
-    const mediumBudget = Math.max(0, opts.mediumReplanBudget ?? 0)
+    // Clamp NaN/Infinity/negative to 0 = legacy behavior. Math.max(0, NaN)
+    // returns NaN per spec, which would make classifyForReplan's
+    // `usedBudget >= totalBudget` evaluate to false forever and MEDIUM
+    // findings block indefinitely. Use Number.isFinite to filter.
+    const rawBudget = opts.mediumReplanBudget
+    const mediumBudget =
+      typeof rawBudget === "number" && Number.isFinite(rawBudget) ? Math.max(0, Math.floor(rawBudget)) : 0
     const mediumUsedByPhase = new Map<string, number>()
     return async (phase: { id: string; description: string }, _result: unknown, _plan: unknown) => {
       if (!(await enabled())) return { block: false }
@@ -263,11 +269,15 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
         .join("; ")
       return { block: true, reason: "blocking", summary }
     }
-    if (totalBudget <= 0) return { block: false }
+    // Defensive: NaN comparisons all evaluate to false, so a NaN budget
+    // would skip both the `<= 0` and `>= totalBudget` short-circuits and
+    // block indefinitely. Treat any non-finite or non-positive budget as 0.
+    if (!Number.isFinite(totalBudget) || totalBudget <= 0) return { block: false }
+    const safeUsed = Number.isFinite(usedBudget) ? usedBudget : 0
     const mediums = findings.filter((f) => f.severity === "MEDIUM")
     if (mediums.length === 0) return { block: false }
-    if (usedBudget >= totalBudget) return { block: false }
-    const remaining = totalBudget - usedBudget - 1
+    if (safeUsed >= totalBudget) return { block: false }
+    const remaining = totalBudget - safeUsed - 1
     const summary = mediums
       .map(
         (f) =>

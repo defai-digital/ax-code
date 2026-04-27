@@ -176,14 +176,30 @@ async function dispatchUntil(
 ): Promise<DispatchResult[]> {
   const target = merge === "first-success" ? 1 : Math.floor(specs.length / 2) + 1
   const localAc = new AbortController()
-  const combinedSignal = combineSignals(options.signal, localAc.signal)
   const results: (DispatchResult | undefined)[] = new Array(specs.length).fill(undefined)
   let completedCount = 0
   let nextIndex = 0
   let inflight = 0
+  let resolved = false
+
+  // Forward parent abort to localAc with a single tracked handler so we
+  // can detach it in finalize. Avoids leaking a listener on long-lived
+  // parent signals (e.g. a session-scoped AbortSignal that handles many
+  // dispatches over its lifetime). Replaces the older combineSignals
+  // helper which left a listener on parent for every dispatch.
+  let parentAbortHandler: (() => void) | undefined
+  if (options.signal && !options.signal.aborted) {
+    parentAbortHandler = () => localAc.abort()
+    options.signal.addEventListener("abort", parentAbortHandler, { once: true })
+  }
 
   return new Promise<DispatchResult[]>((resolve) => {
     const finalize = () => {
+      if (resolved) return
+      resolved = true
+      if (parentAbortHandler && options.signal) {
+        options.signal.removeEventListener("abort", parentAbortHandler)
+      }
       // Backfill any spec that never started with a cancelled stub so the
       // result array is complete and order-preserving.
       for (let i = 0; i < specs.length; i++) {
@@ -202,7 +218,7 @@ async function dispatchUntil(
         const idx = nextIndex++
         const spec = specs[idx]!
         inflight++
-        runOne(spec, executor, { ...options, signal: combinedSignal })
+        runOne(spec, executor, { ...options, signal: localAc.signal })
           .then((result) => {
             results[idx] = result
             inflight--
@@ -234,7 +250,6 @@ async function dispatchUntil(
             else launchNext()
           })
       }
-      if (specs.length === 0) finalize()
     }
 
     if (options.signal?.aborted) {
@@ -243,24 +258,6 @@ async function dispatchUntil(
     }
     launchNext()
   })
-}
-
-/**
- * Build a derived AbortSignal that aborts when any of `parents` aborts.
- * Returns a no-op (never-abort) signal when all parents are undefined.
- */
-function combineSignals(...parents: (AbortSignal | undefined)[]): AbortSignal {
-  const real = parents.filter((s): s is AbortSignal => s !== undefined)
-  if (real.length === 0) return new AbortController().signal
-  const ac = new AbortController()
-  for (const s of real) {
-    if (s.aborted) {
-      ac.abort()
-      return ac.signal
-    }
-    s.addEventListener("abort", () => ac.abort(), { once: true })
-  }
-  return ac.signal
 }
 
 function safeCallback<T>(fn: ((arg: T) => void) | undefined, arg: T, label: string): void {
