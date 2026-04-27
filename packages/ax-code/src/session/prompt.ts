@@ -1378,7 +1378,7 @@ export namespace SessionPrompt {
               title: "Primary Agent Auto-Switched",
               message: `Switched the primary agent to "${routedLabel}" for this task`,
               variant: "info",
-              duration: 5000,
+              duration: 8000,
             })
           } else if (canDelegate) {
             routedParts.push({
@@ -1399,7 +1399,7 @@ export namespace SessionPrompt {
               title: "Specialist Auto-Delegated",
               message: `Kept the primary agent active and delegated "${routedLabel}" as a specialist`,
               variant: "info",
-              duration: 5000,
+              duration: 8000,
             })
           }
         }

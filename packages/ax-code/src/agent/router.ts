@@ -54,12 +54,12 @@ function rule(input: {
 }
 
 /** Words that signal the user wants code changes, not analysis.
- *  Applied as negatives to read-only agent rules (security, architect, perf). */
+ *  Applied as negatives to read-only agent rules (security, architect, perf).
+ *  Trimmed to unambiguous action verbs — "improve performance" / "clean up code"
+ *  are common analysis-then-fix asks that should still route to a specialist. */
 const ACTION_INTENT = [
-  "restructure", "refactor", "fix", "update", "change", "modify",
-  "rewrite", "convert", "migrate", "replace", "rename", "move",
-  "improve", "clean up", "simplify", "extract", "inline",
-  "split", "merge", "implement", "apply",
+  "refactor", "fix", "rewrite", "modify", "convert",
+  "migrate", "replace", "implement", "apply", "restructure",
 ]
 
 /** Investigation/inspection verbs shared by review-style intent profiles.
@@ -141,11 +141,18 @@ const RULES: RouteRule[] = [
       /\broot\s+cause\b/i,
       /\btroubleshoot/i,
       /\bstack\s+trace\b/i,
+      // Standalone high-signal nouns — these alone should be enough to route, since
+      // "I have a bug" / "the page crashes" / "throws an exception" are unambiguously
+      // programming-bug language. Generic words like "broken"/"failing" are kept out
+      // because they're too easily triggered by non-bug contexts.
+      /\b(bug|exception|crash|crashes|crashed|crashing)\b/i,
     ],
     intents: DEBUG_INTENT,
     negatives: ["test coverage", "write tests", "test plan", "test strategy", "build", "create", "scaffold", "new project", "from scratch"],
     confidence: 0.7,
-    requireIntent: true,
+    // No requireIntent — keywords like "bug", "error", "crash", "exception" are
+    // unambiguous specialist signals on their own; "I have a bug" should route.
+    requireIntent: false,
   }),
   rule({
     agent: "perf",
@@ -233,7 +240,9 @@ const RULES: RouteRule[] = [
     intents: ["analyze", "investigate", "trace", "debug", "reason"],
     negatives: ["quick", "fast", "simple", "just", "briefly"],
     confidence: 0.6,
-    requireIntent: true,
+    // No requireIntent — "step by step", "reason through", "deliberate" already
+    // self-describe deliberate-reasoning requests.
+    requireIntent: false,
   }),
   rule({
     agent: "plan",

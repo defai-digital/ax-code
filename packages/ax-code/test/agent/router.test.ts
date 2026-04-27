@@ -76,6 +76,24 @@ describe("word boundary matching", () => {
     expect(result).not.toBeNull()
     expect(result!.agent).toBe("debug")
   })
+
+  test("debug routes on bare bug/error/exception keywords without an analysis verb", () => {
+    expect(route("I have a bug in the login handler", "build")?.agent).toBe("debug")
+    expect(route("there's an exception when I open the page", "build")?.agent).toBe("debug")
+    expect(route("the stack trace shows it crashing here", "build")?.agent).toBe("debug")
+  })
+
+  test("react routes on self-describing reasoning phrases without an explicit intent verb", () => {
+    expect(route("walk me step by step through this", "build")?.agent).toBe("react")
+    expect(route("reason through this carefully", "build")?.agent).toBe("react")
+  })
+
+  test("trimmed ACTION_INTENT lets analysis-then-fix asks reach security/perf", () => {
+    // "improve" / "clean up" / "simplify" used to be negatives that blocked routing.
+    // They are common in mixed analyze-and-fix asks; let the specialist take the lead.
+    expect(route("improve the security review of our auth flow", "build")?.agent).toBe("security")
+    expect(route("review and clean up the architecture of this module", "build")?.agent).toBe("architect")
+  })
 })
 
 describe("negative keywords", () => {
