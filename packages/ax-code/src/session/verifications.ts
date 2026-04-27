@@ -1,4 +1,8 @@
-import { type VerificationEnvelope, VerificationEnvelopeSchema } from "../quality/verification-envelope"
+import {
+  computeEnvelopeId,
+  type VerificationEnvelope,
+  VerificationEnvelopeSchema,
+} from "../quality/verification-envelope"
 import { EventQuery } from "../replay/query"
 import { Log } from "../util/log"
 import type { SessionID } from "./schema"
@@ -40,5 +44,29 @@ export namespace SessionVerifications {
       }
     }
     return envelopes
+  }
+
+  // Same as load() but each envelope is paired with its derived envelopeId
+  // (computed via computeEnvelopeId). Useful for consumers that need to
+  // cross-reference findings.evidenceRefs[].kind === "verification" entries
+  // against the envelopes recorded in this session — see Phase 2 P2.5.
+  export type LoadedEnvelope = { envelope: VerificationEnvelope; envelopeId: string }
+
+  export function loadWithIds(sessionID: SessionID): LoadedEnvelope[] {
+    return load(sessionID).map((envelope) => ({
+      envelope,
+      envelopeId: computeEnvelopeId(envelope),
+    }))
+  }
+
+  // Returns the set of envelopeIds present in the session — for callers that
+  // only need to validate a referenced id exists (e.g. register_finding's
+  // strict evidenceRefs validator).
+  export function envelopeIdSet(sessionID: SessionID): Set<string> {
+    const ids = new Set<string>()
+    for (const envelope of load(sessionID)) {
+      ids.add(computeEnvelopeId(envelope))
+    }
+    return ids
   }
 }

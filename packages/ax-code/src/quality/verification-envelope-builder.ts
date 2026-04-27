@@ -55,17 +55,49 @@ function parseTypecheckFailures(text: string | undefined): StructuredFailure[] {
   return failures
 }
 
-// Lint and test parsing are deferred. ESLint and test-framework output formats
-// vary widely; populating them prematurely would either lock in a fragile
-// regex or pull in a per-formatter parser library. Until a real consumer
-// needs structured lint/test failures, the envelope.result.output raw text
-// is the source of truth.
-function parseLintFailures(_text: string | undefined): StructuredFailure[] {
-  return []
+// ESLint compact format: `<file>:<line>:<col>: <message> (<rule>)`. Other
+// formatters (stylish, codeframe, json) are not parsed — projects that use
+// them will see envelope.result.output preserved as raw text. To opt into
+// structured failures, configure ESLint with --format compact.
+const ESLINT_COMPACT_PATTERN = /^(.+?):(\d+):(\d+):\s*(?:(error|warning)\s*-\s*)?(.+?)\s*\(([\w-]+(?:\/[\w-]+)*)\)\s*$/gm
+
+function parseLintFailures(text: string | undefined): StructuredFailure[] {
+  if (!text) return []
+  const failures: StructuredFailure[] = []
+  for (const match of text.matchAll(ESLINT_COMPACT_PATTERN)) {
+    const [, file, line, , severityRaw, message, rule] = match
+    const severity = severityRaw === "warning" ? "warning" : "error"
+    failures.push({
+      kind: "lint",
+      file,
+      line: Number.parseInt(line, 10),
+      rule,
+      severity,
+      message: message.trim(),
+    })
+  }
+  return failures
 }
 
-function parseTestFailures(_text: string | undefined): StructuredFailure[] {
-  return []
+// bun:test failure header: `(fail) <describe path> > <test name> [<duration>]`.
+// We capture the path (everything between "(fail)" and the trailing duration
+// bracket) and split on " > " into a describe-path. The final segment is the
+// test name; everything before it is the describe chain. Other frameworks
+// (jest, vitest, mocha, pytest) are not parsed — same rationale as lint.
+const BUN_TEST_FAIL_PATTERN = /^\(fail\)\s+(.+?)\s*\[\d+(?:\.\d+)?(?:ms|s)\]\s*$/gm
+
+function parseTestFailures(text: string | undefined): StructuredFailure[] {
+  if (!text) return []
+  const failures: StructuredFailure[] = []
+  for (const match of text.matchAll(BUN_TEST_FAIL_PATTERN)) {
+    const fullPath = match[1].trim()
+    failures.push({
+      kind: "test",
+      framework: "bun:test",
+      testName: fullPath,
+    })
+  }
+  return failures
 }
 
 function source(sessionID: string) {

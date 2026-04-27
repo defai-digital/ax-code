@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { renderJson, renderTerminal } from "../../src/quality/finding-render"
 import type { Finding } from "../../src/quality/finding"
+import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -35,16 +36,12 @@ describe("renderTerminal", () => {
   })
 
   test("renders symbol anchors with the symbol id", () => {
-    const out = renderTerminal([
-      makeFinding({ anchor: { kind: "symbol", symbolId: "node://src/foo.ts#bar" } }),
-    ])
+    const out = renderTerminal([makeFinding({ anchor: { kind: "symbol", symbolId: "node://src/foo.ts#bar" } })])
     expect(out).toContain("node://src/foo.ts#bar")
   })
 
   test("renders endLine ranges when present", () => {
-    const out = renderTerminal([
-      makeFinding({ anchor: { kind: "line", line: 10, endLine: 14 } }),
-    ])
+    const out = renderTerminal([makeFinding({ anchor: { kind: "line", line: 10, endLine: 14 } })])
     expect(out).toContain("src/server/routes/list.ts:10-14")
   })
 
@@ -78,10 +75,7 @@ describe("renderTerminal", () => {
 
   test("group=file produces one header per file", () => {
     const out = renderTerminal(
-      [
-        makeFinding({ file: "src/a.ts", summary: "a-issue" }),
-        makeFinding({ file: "src/b.ts", summary: "b-issue" }),
-      ],
+      [makeFinding({ file: "src/a.ts", summary: "a-issue" }), makeFinding({ file: "src/b.ts", summary: "b-issue" })],
       { group: "file" },
     )
     expect(out).toContain("src/a.ts")
@@ -97,11 +91,84 @@ describe("renderTerminal", () => {
     const without = renderTerminal([makeFinding()])
     expect(without).not.toContain("confidence:")
     expect(without).not.toContain("rule:")
-    const withBoth = renderTerminal([
-      makeFinding({ confidence: 0.7, ruleId: "axcode:rule-x" }),
-    ])
+    const withBoth = renderTerminal([makeFinding({ confidence: 0.7, ruleId: "axcode:rule-x" })])
     expect(withBoth).toContain("confidence: 0.70")
     expect(withBoth).toContain("rule: axcode:rule-x")
+  })
+
+  test("evidenceRefs verification entries expand to a one-line envelope summary when envelopes are passed", () => {
+    const envelope: VerificationEnvelope = {
+      schemaVersion: 1,
+      workflow: "qa",
+      scope: { kind: "file", paths: ["src/foo.ts"] },
+      command: { runner: "typecheck", argv: [], cwd: "/tmp" },
+      result: {
+        name: "typecheck",
+        type: "typecheck",
+        passed: false,
+        status: "failed",
+        issues: [],
+        duration: 0,
+      },
+      structuredFailures: [
+        { kind: "typecheck", file: "src/foo.ts", line: 10, column: 4, code: "TS2322", message: "type mismatch" },
+      ],
+      artifactRefs: [],
+      source: { tool: "refactor_apply", version: "4.x.x", runId: "ses_test" },
+    }
+    const out = renderTerminal(
+      [makeFinding({ evidenceRefs: [{ kind: "verification", id: "envelope-id-1" }] })],
+      { envelopes: new Map([["envelope-id-1", envelope]]) },
+    )
+    expect(out).toContain("verified by: typecheck ✗ src/foo.ts:10 TS2322")
+  })
+
+  test("evidenceRefs verification entries fall back to plain '<kind>: <id>' when envelopes lookup is missing", () => {
+    const out = renderTerminal([
+      makeFinding({ evidenceRefs: [{ kind: "verification", id: "envelope-id-2" }] }),
+    ])
+    expect(out).toContain("verification: envelope-id-2")
+    expect(out).not.toContain("verified by:")
+  })
+
+  test("non-verification evidenceRefs render as plain '<kind>: <id>'", () => {
+    const out = renderTerminal([
+      makeFinding({
+        evidenceRefs: [
+          { kind: "log", id: "log-id-1" },
+          { kind: "graph", id: "graph-id-1" },
+          { kind: "diff", id: "diff-id-1" },
+        ],
+      }),
+    ])
+    expect(out).toContain("log: log-id-1")
+    expect(out).toContain("graph: graph-id-1")
+    expect(out).toContain("diff: diff-id-1")
+  })
+
+  test("verification with passed status uses ✓ glyph in summary", () => {
+    const passed: VerificationEnvelope = {
+      schemaVersion: 1,
+      workflow: "qa",
+      scope: { kind: "workspace" },
+      command: { runner: "lint", argv: [], cwd: "/tmp" },
+      result: {
+        name: "lint",
+        type: "lint",
+        passed: true,
+        status: "passed",
+        issues: [],
+        duration: 0,
+      },
+      structuredFailures: [],
+      artifactRefs: [],
+      source: { tool: "refactor_apply", version: "4.x.x", runId: "ses_test" },
+    }
+    const out = renderTerminal(
+      [makeFinding({ evidenceRefs: [{ kind: "verification", id: "ok-1" }] })],
+      { envelopes: new Map([["ok-1", passed]]) },
+    )
+    expect(out).toContain("verified by: lint ✓")
   })
 })
 

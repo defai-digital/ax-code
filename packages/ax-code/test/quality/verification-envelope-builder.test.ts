@@ -161,21 +161,93 @@ describe("fromRefactorApplyResult", () => {
     expect(tc.structuredFailures).toEqual([])
   })
 
-  test("lint and test structuredFailures stay empty in this slice (parsing deferred)", () => {
+  test("lint structuredFailures populated when ESLint compact output matches", () => {
     const envs = fromRefactorApplyResult({
       applyResult: applyResult({
         checks: {
           typecheck: { ok: true, errors: [] },
           lint: {
             ok: false,
-            errors: ["src/foo.ts:10:5  error  'foo' is unused  no-unused-vars"],
+            errors: [
+              "src/foo.ts:10:5: 'foo' is assigned a value but never used (no-unused-vars)",
+              "src/bar.ts:42:1: warning - missing semicolon (semi)",
+            ],
           },
+          tests: { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped" },
+        },
+      }),
+      ...baseInput,
+    })
+    const lint = envs.find((e) => e.command.runner === "lint")!
+    expect(lint.structuredFailures).toHaveLength(2)
+    expect(lint.structuredFailures[0]).toEqual({
+      kind: "lint",
+      file: "src/foo.ts",
+      line: 10,
+      rule: "no-unused-vars",
+      severity: "error",
+      message: "'foo' is assigned a value but never used",
+    })
+    expect(lint.structuredFailures[1]).toMatchObject({
+      file: "src/bar.ts",
+      line: 42,
+      rule: "semi",
+      severity: "warning",
+    })
+  })
+
+  test("test structuredFailures populated when bun:test fail headers match", () => {
+    const envs = fromRefactorApplyResult({
+      applyResult: applyResult({
+        checks: {
+          typecheck: { ok: true, errors: [] },
+          lint: { ok: true, errors: [] },
           tests: {
             ok: false,
             errors: [],
             ran: 5,
+            failed: 2,
+            failures: [
+              "(fail) describe > should pass [0.08ms]",
+              "(fail) auth > rejects expired token [12ms]",
+            ],
+            selection: "targeted",
+          },
+        },
+      }),
+      ...baseInput,
+    })
+    const tests = envs.find((e) => e.command.runner === "test")!
+    expect(tests.structuredFailures).toHaveLength(2)
+    expect(tests.structuredFailures[0]).toEqual({
+      kind: "test",
+      framework: "bun:test",
+      testName: "describe > should pass",
+    })
+    expect(tests.structuredFailures[1]).toMatchObject({
+      kind: "test",
+      framework: "bun:test",
+      testName: "auth > rejects expired token",
+    })
+  })
+
+  test("lint/test structuredFailures stay empty when output doesn't match supported formats", () => {
+    const envs = fromRefactorApplyResult({
+      applyResult: applyResult({
+        checks: {
+          typecheck: { ok: true, errors: [] },
+          lint: {
+            ok: false,
+            // ESLint stylish format — multi-line, intentionally NOT supported
+            errors: ["/path/to/file.ts\n  10:5  error  'foo' is unused  no-unused-vars"],
+          },
+          tests: {
+            ok: false,
+            errors: [],
+            ran: 1,
             failed: 1,
-            failures: ["(fail) describe > should pass"],
+            // jest format — intentionally NOT supported in v1
+            failures: ["● describe > should pass\n\nExpected: 1\nReceived: 0"],
             selection: "targeted",
           },
         },
@@ -188,7 +260,7 @@ describe("fromRefactorApplyResult", () => {
     expect(tests.structuredFailures).toEqual([])
     // raw output is still preserved for human inspection
     expect(lint.result.output).toContain("no-unused-vars")
-    expect(tests.result.output).toContain("should pass")
+    expect(tests.result.output).toContain("Received: 0")
   })
 
   test("scope.kind=workspace when filesChanged is empty (preflight-only run)", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
-import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionVerifications } from "../../src/session/verifications"
@@ -208,6 +208,88 @@ describe("SessionVerifications.load", () => {
         const envs = SessionVerifications.load(session.id)
         expect(envs).toHaveLength(1)
         expect(envs[0].source.runId).toBe(session.id)
+      },
+    })
+  })
+
+  test("loadWithIds attaches deterministic envelopeId to each loaded envelope", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const env = buildEnvelope({
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        })
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "refactor_apply",
+          callID: "call-load-ids",
+          status: "completed",
+          metadata: { verificationEnvelopes: [env] },
+          durationMs: 1,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const loaded = SessionVerifications.loadWithIds(session.id)
+        expect(loaded).toHaveLength(1)
+        expect(loaded[0].envelopeId).toBe(computeEnvelopeId(env))
+        expect(loaded[0].envelope).toEqual(env)
+      },
+    })
+  })
+
+  test("envelopeIdSet returns the set of all envelope ids in the session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const a = buildEnvelope({
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        })
+        const b = buildEnvelope({
+          command: { runner: "lint", argv: [], cwd: "/tmp/work" },
+          result: { ...a.result, name: "lint", type: "lint" },
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        })
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "refactor_apply",
+          callID: "call-set",
+          status: "completed",
+          metadata: { verificationEnvelopes: [a, b] },
+          durationMs: 1,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const ids = SessionVerifications.envelopeIdSet(session.id)
+        expect(ids.size).toBe(2)
+        expect(ids.has(computeEnvelopeId(a))).toBe(true)
+        expect(ids.has(computeEnvelopeId(b))).toBe(true)
+        expect(ids.has("0000000000000000")).toBe(false)
       },
     })
   })

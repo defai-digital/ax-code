@@ -1,9 +1,15 @@
 import type { Finding } from "./finding"
 import type { Severity } from "./finding-registry"
+import type { VerificationEnvelope } from "./verification-envelope"
 
 export type RenderOptions = {
   color?: boolean
   group?: "file" | "severity" | "category" | "none"
+  // When provided, finding.evidenceRefs entries with kind === "verification"
+  // are inlined as one-line summaries (runner + status glyph + first
+  // failure anchor) instead of as raw `<kind>: <id>` lines. Pass the
+  // envelopes loaded from the same session for consistent rendering.
+  envelopes?: ReadonlyMap<string, VerificationEnvelope>
 }
 
 const SEVERITY_RANK: Record<Severity, number> = {
@@ -74,7 +80,39 @@ function groupKey(finding: Finding, group: NonNullable<RenderOptions["group"]>):
   return ""
 }
 
-function renderOne(finding: Finding, color: boolean): string {
+function envelopeStatusGlyph(envelope: VerificationEnvelope): string {
+  const status = envelope.result.status
+  if (status === "passed") return "✓"
+  if (status === "skipped") return "⏭"
+  return "✗"
+}
+
+function formatEvidenceRef(
+  ref: NonNullable<Finding["evidenceRefs"]>[number],
+  envelopes?: ReadonlyMap<string, VerificationEnvelope>,
+): string {
+  if (ref.kind === "verification" && envelopes) {
+    const envelope = envelopes.get(ref.id)
+    if (envelope) {
+      const glyph = envelopeStatusGlyph(envelope)
+      const runner = envelope.command.runner
+      const first = envelope.structuredFailures[0]
+      if (first && first.kind === "typecheck") {
+        return `verified by: ${runner} ${glyph} ${first.file}:${first.line} ${first.code}`
+      }
+      if (first && first.kind === "lint") {
+        return `verified by: ${runner} ${glyph} ${first.file}:${first.line} ${first.rule}`
+      }
+      if (first && first.kind === "test") {
+        return `verified by: ${runner} ${glyph} ${first.testName}`
+      }
+      return `verified by: ${runner} ${glyph}`
+    }
+  }
+  return `${ref.kind}: ${ref.id}`
+}
+
+function renderOne(finding: Finding, color: boolean, envelopes?: ReadonlyMap<string, VerificationEnvelope>): string {
   const glyph = paint(SEVERITY_GLYPH[finding.severity], SEVERITY_COLOR[finding.severity], color)
   const sev = paint(finding.severity, SEVERITY_COLOR[finding.severity], color)
   const anchor = paint(formatAnchor(finding), "gray", color)
@@ -87,6 +125,11 @@ function renderOne(finding: Finding, color: boolean): string {
   if (finding.evidence.length > 0) {
     lines.push(`  ${paint("evidence:", "dim", color)}`)
     for (const e of finding.evidence) lines.push(`    - ${e}`)
+  }
+  if (finding.evidenceRefs && finding.evidenceRefs.length > 0) {
+    for (const ref of finding.evidenceRefs) {
+      lines.push(`  ${paint(formatEvidenceRef(ref, envelopes), "dim", color)}`)
+    }
   }
   lines.push(`  ${paint("next:", "dim", color)} ${finding.suggestedNextAction}`)
   if (finding.confidence !== undefined) {
@@ -101,12 +144,13 @@ function renderOne(finding: Finding, color: boolean): string {
 export function renderTerminal(findings: Finding[], opts: RenderOptions = {}): string {
   const color = opts.color ?? false
   const group = opts.group ?? "severity"
+  const envelopes = opts.envelopes
   if (findings.length === 0) {
     return "No findings."
   }
   const sorted = sortFindings(findings)
   if (group === "none") {
-    return sorted.map((f) => renderOne(f, color)).join("\n\n")
+    return sorted.map((f) => renderOne(f, color, envelopes)).join("\n\n")
   }
   const groups = new Map<string, Finding[]>()
   for (const finding of sorted) {
@@ -119,7 +163,7 @@ export function renderTerminal(findings: Finding[], opts: RenderOptions = {}): s
   for (const [key, bucket] of groups) {
     const header = paint(`── ${key} (${bucket.length}) ──`, "bold", color)
     sections.push(header)
-    for (const finding of bucket) sections.push(renderOne(finding, color))
+    for (const finding of bucket) sections.push(renderOne(finding, color, envelopes))
   }
   return sections.join("\n\n")
 }
