@@ -32,6 +32,13 @@ import { NamedError } from "@ax-code/util/error"
 
 const log = Log.create({ service: "server" })
 
+function startDetachedSessionTask(task: () => Promise<void>) {
+  const timer = setTimeout(() => {
+    void task()
+  }, 0)
+  timer.unref?.()
+}
+
 export const SessionRoutes = lazy(() =>
   new Hono()
     .get(
@@ -278,12 +285,20 @@ export const SessionRoutes = lazy(() =>
           quality: z.coerce.boolean().optional().default(false).meta({
             description: "Include replay readiness for review/debug/qa when replay evidence exists",
           }),
+          findings: z.coerce.boolean().optional().default(false).meta({
+            description: "Include the validated Finding[] emitted by register_finding tool calls in this session",
+          }),
         }),
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const query = c.req.valid("query")
-        return c.json(await SessionRisk.load(sessionID, { includeQuality: query.quality }))
+        return c.json(
+          await SessionRisk.load(sessionID, {
+            includeQuality: query.quality,
+            includeFindings: query.findings,
+          }),
+        )
       },
     )
     .get(
@@ -1047,7 +1062,8 @@ export const SessionRoutes = lazy(() =>
             const msg = await SessionPrompt.prompt({ ...body, sessionID })
             stream.write(JSON.stringify(msg))
           } catch (err) {
-            stream.write(JSON.stringify({ error: NamedError.message(err) }))
+            const message = err instanceof NamedError ? err.message : "Internal server error"
+            stream.write(JSON.stringify({ error: message }))
           }
         })
       },
@@ -1076,11 +1092,13 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        SessionPrompt.prompt({ ...body, sessionID }).catch((err) => {
-          log.error("prompt_async failed", { sessionID, error: err })
-          Bus.publishDetached(Session.Event.Error, {
-            sessionID,
-            error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
+        startDetachedSessionTask(async () => {
+          await SessionPrompt.prompt({ ...body, sessionID }).catch((err) => {
+            log.error("prompt_async failed", { sessionID, error: err })
+            Bus.publishDetached(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
+            })
           })
         })
         return c.body(null, 202)
@@ -1109,11 +1127,13 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        SessionPrompt.command({ ...body, sessionID }).catch((err) => {
-          log.error("command_async failed", { sessionID, error: err })
-          Bus.publishDetached(Session.Event.Error, {
-            sessionID,
-            error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
+        startDetachedSessionTask(async () => {
+          await SessionPrompt.command({ ...body, sessionID }).catch((err) => {
+            log.error("command_async failed", { sessionID, error: err })
+            Bus.publishDetached(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
+            })
           })
         })
         return c.body(null, 202)
@@ -1179,11 +1199,13 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        SessionPrompt.shell({ ...body, sessionID }).catch((err) => {
-          log.error("shell_async failed", { sessionID, error: err })
-          Bus.publishDetached(Session.Event.Error, {
-            sessionID,
-            error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
+        startDetachedSessionTask(async () => {
+          await SessionPrompt.shell({ ...body, sessionID }).catch((err) => {
+            log.error("shell_async failed", { sessionID, error: err })
+            Bus.publishDetached(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({ message: NamedError.message(err) }).toObject(),
+            })
           })
         })
         return c.body(null, 202)

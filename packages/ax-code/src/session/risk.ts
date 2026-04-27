@@ -1,11 +1,13 @@
 import { QualityLabelStore } from "../quality/label-store"
 import { ProbabilisticRollout } from "../quality/probabilistic-rollout"
+import { FindingSchema } from "../quality/finding"
 import z from "zod"
 import { Risk } from "../risk/score"
 import { QualityShadow } from "../quality/shadow-runtime"
 import { Log } from "../util/log"
 import { Session } from "."
 import { SessionBranchRank } from "./branch"
+import { SessionFindings } from "./findings"
 import { SessionSemanticDiff } from "./semantic-diff"
 import type { SessionID } from "./schema"
 
@@ -27,6 +29,7 @@ export namespace SessionRisk {
       drivers: z.string().array(),
       semantic: SessionSemanticDiff.Summary.nullable(),
       quality: QualityReadiness.optional(),
+      findings: FindingSchema.array().optional(),
     })
     .meta({
       ref: "SessionRiskDetail",
@@ -39,6 +42,7 @@ export namespace SessionRisk {
     assessment: Risk.Assessment
     semantic?: SessionSemanticDiff.Summary | null
     quality?: QualityReadiness
+    findings?: Detail["findings"]
   }) {
     return {
       id: input.id,
@@ -47,6 +51,7 @@ export namespace SessionRisk {
       drivers: Risk.explain(input.assessment),
       semantic: input.semantic ?? null,
       quality: input.quality,
+      findings: input.findings,
     } satisfies Detail
   }
 
@@ -68,19 +73,24 @@ export namespace SessionRisk {
     return QualityReadiness.parse({ review, debug, qa })
   }
 
-  export async function load(sessionID: SessionID, options?: { includeQuality?: boolean }) {
+  export async function load(
+    sessionID: SessionID,
+    options?: { includeQuality?: boolean; includeFindings?: boolean },
+  ) {
     const [session, semantic] = await Promise.all([Session.get(sessionID), SessionSemanticDiff.load(sessionID)])
     const assessment = Risk.fromSession(sessionID)
     void QualityShadow.captureSessionRisk({ session, assessment }).catch((err) => {
       log.warn("quality shadow capture failed", { sessionID, err })
     })
     const quality = options?.includeQuality ? await loadQualityReadiness(sessionID) : undefined
+    const findings = options?.includeFindings ? SessionFindings.load(sessionID) : undefined
     return detail({
       id: sessionID,
       title: session.title,
       assessment,
       semantic,
       quality,
+      findings,
     })
   }
 }
