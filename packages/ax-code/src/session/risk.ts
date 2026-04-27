@@ -2,12 +2,14 @@ import { QualityLabelStore } from "../quality/label-store"
 import { ProbabilisticRollout } from "../quality/probabilistic-rollout"
 import { FindingSchema } from "../quality/finding"
 import { VerificationEnvelopeSchema } from "../quality/verification-envelope"
+import { DebugCaseSchema, DebugEvidenceSchema, DebugHypothesisSchema } from "../debug-engine/runtime-debug"
 import z from "zod"
 import { Risk } from "../risk/score"
 import { QualityShadow } from "../quality/shadow-runtime"
 import { Log } from "../util/log"
 import { Session } from "."
 import { SessionBranchRank } from "./branch"
+import { SessionDebug } from "./debug"
 import { SessionFindings } from "./findings"
 import { SessionSemanticDiff } from "./semantic-diff"
 import { SessionVerifications } from "./verifications"
@@ -23,6 +25,13 @@ export namespace SessionRisk {
   })
   export type QualityReadiness = z.output<typeof QualityReadiness>
 
+  export const DebugBundle = z.object({
+    cases: DebugCaseSchema.array(),
+    evidence: DebugEvidenceSchema.array(),
+    hypotheses: DebugHypothesisSchema.array(),
+  })
+  export type DebugBundle = z.output<typeof DebugBundle>
+
   export const Detail = z
     .object({
       id: z.string(),
@@ -33,6 +42,7 @@ export namespace SessionRisk {
       quality: QualityReadiness.optional(),
       findings: FindingSchema.array().optional(),
       envelopes: VerificationEnvelopeSchema.array().optional(),
+      debug: DebugBundle.optional(),
     })
     .meta({
       ref: "SessionRiskDetail",
@@ -47,6 +57,7 @@ export namespace SessionRisk {
     quality?: QualityReadiness
     findings?: Detail["findings"]
     envelopes?: Detail["envelopes"]
+    debug?: Detail["debug"]
   }) {
     return {
       id: input.id,
@@ -57,6 +68,7 @@ export namespace SessionRisk {
       quality: input.quality,
       findings: input.findings,
       envelopes: input.envelopes,
+      debug: input.debug,
     } satisfies Detail
   }
 
@@ -80,7 +92,12 @@ export namespace SessionRisk {
 
   export async function load(
     sessionID: SessionID,
-    options?: { includeQuality?: boolean; includeFindings?: boolean; includeEnvelopes?: boolean },
+    options?: {
+      includeQuality?: boolean
+      includeFindings?: boolean
+      includeEnvelopes?: boolean
+      includeDebug?: boolean
+    },
   ) {
     const [session, semantic] = await Promise.all([Session.get(sessionID), SessionSemanticDiff.load(sessionID)])
     const assessment = Risk.fromSession(sessionID)
@@ -90,6 +107,7 @@ export namespace SessionRisk {
     const quality = options?.includeQuality ? await loadQualityReadiness(sessionID) : undefined
     const findings = options?.includeFindings ? SessionFindings.load(sessionID) : undefined
     const envelopes = options?.includeEnvelopes ? SessionVerifications.load(sessionID) : undefined
+    const debug = options?.includeDebug ? SessionDebug.load(sessionID) : undefined
     return detail({
       id: sessionID,
       title: session.title,
@@ -98,6 +116,7 @@ export namespace SessionRisk {
       quality,
       findings,
       envelopes,
+      debug,
     })
   }
 }

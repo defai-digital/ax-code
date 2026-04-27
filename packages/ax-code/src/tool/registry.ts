@@ -38,6 +38,9 @@ import { SecurityScanTool } from "./security_scan"
 import { Truncate } from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
 import { RegisterFindingTool } from "./register_finding"
+import { DebugOpenCaseTool } from "./debug_open_case"
+import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
+import { DebugProposeHypothesisTool } from "./debug_propose_hypothesis"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { Effect, Layer, ServiceMap } from "effect"
@@ -155,6 +158,9 @@ export namespace ToolRegistry {
           SkillTool,
           ApplyPatchTool,
           RegisterFindingTool,
+          DebugOpenCaseTool,
+          DebugCaptureEvidenceTool,
+          DebugProposeHypothesisTool,
           ...(Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE

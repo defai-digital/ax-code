@@ -1,0 +1,28 @@
+Record a single piece of runtime evidence under an open debug case. Each call captures ONE piece — call as many times as you have observations.
+
+When to use:
+- A user pasted log output or stack trace relevant to the case.
+- You ran a graph query (find_callers, find_dependents) and want to anchor the result to a hypothesis later.
+- The user added a temporary console.log and shared the output.
+
+When NOT to use:
+- The output is a generic build log unrelated to the case under investigation. Be specific.
+- You're proposing an explanation — that's debug_propose_hypothesis, which can reference this evidence by id.
+- The case isn't open yet — call debug_open_case first.
+
+Input:
+- caseId: 16-char hex returned by debug_open_case in this session. Calls with an unknown caseId are rejected (no fabricated ids).
+- kind: one of:
+  - "log_capture" — application log output (may be multi-line, with timestamps).
+  - "instrumentation_result" — output from a temporary console.log / printf the user added for debugging.
+  - "stack_trace" — a raw stack trace.
+  - "graph_query" — JSON-serialized result from a code-intelligence query.
+- content: the actual evidence text. Should be the raw observation, not a paraphrase.
+
+Output:
+- evidenceId: 16-char hex id you'll cite in debug_propose_hypothesis.evidenceRefs.
+- A one-line confirmation.
+
+Hard rules:
+- Do NOT invent log output or stack traces. Capture only what the user shared or what a tool produced.
+- Do NOT use this tool to capture review or qa findings — that's register_finding's job.

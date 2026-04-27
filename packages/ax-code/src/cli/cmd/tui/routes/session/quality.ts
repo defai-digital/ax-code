@@ -2,7 +2,9 @@ import type { PromptInfo } from "../../component/prompt/history"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import type { SeverityCounts } from "@/quality/finding-counts"
 import type { VerificationEnvelope } from "@/quality/verification-envelope"
+import type { DebugCase, DebugHypothesis } from "@/debug-engine/runtime-debug"
 import { ProbabilisticRollout } from "@/quality/probabilistic-rollout"
+import { SessionDebug } from "@/session/debug"
 
 export type SessionQualityWorkflow = "review" | "debug" | "qa"
 
@@ -387,11 +389,46 @@ export function renderSessionChecksSummary(envelopes: readonly VerificationEnvel
     return failedCount > 1 ? `${label} ✗ ${failedCount}` : `${label} ✗`
   }
 
-  const parts = (["typecheck", "lint", "test"] as const)
-    .map(formatPart)
-    .filter((part): part is string => part !== null)
+  const parts = (["typecheck", "lint", "test"] as const).map(formatPart).filter((part): part is string => part !== null)
 
   if (parts.length === 0) return ""
+  return parts.join(" · ")
+}
+
+// One-line summary for the sidebar Debug Cases section. Renders a count of
+// cases by effective status, prioritising the user-relevant signals
+// "unresolved" (something we tried and gave up on) and "investigating"
+// (work in progress). All-pass / no-cases returns "" so the sidebar
+// hides the section entirely.
+export function renderSessionDebugCasesSummary(input: {
+  cases: readonly DebugCase[]
+  hypotheses: readonly DebugHypothesis[]
+}): string {
+  if (input.cases.length === 0) return ""
+
+  const rolledUp = SessionDebug.rollup({
+    cases: [...input.cases],
+    evidence: [],
+    hypotheses: [...input.hypotheses],
+  })
+
+  let unresolved = 0
+  let investigating = 0
+  let resolved = 0
+  let open = 0
+  for (const c of rolledUp) {
+    if (c.effectiveStatus === "unresolved") unresolved++
+    else if (c.effectiveStatus === "investigating") investigating++
+    else if (c.effectiveStatus === "resolved") resolved++
+    else open++
+  }
+
+  const parts: string[] = []
+  if (unresolved > 0) parts.push(`${unresolved} unresolved`)
+  if (investigating > 0) parts.push(`${investigating} investigating`)
+  if (open > 0) parts.push(`${open} open`)
+  if (resolved > 0) parts.push(`${resolved} resolved`)
+
   return parts.join(" · ")
 }
 

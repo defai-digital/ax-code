@@ -1,0 +1,28 @@
+Propose a candidate explanation ("hypothesis") for an open debug case. A hypothesis pairs a single falsifiable claim with the evidence supporting it and an optional reference to the static analysis (debug_analyze) that informed it.
+
+When to use:
+- You have at least one piece of runtime evidence and can articulate a specific cause.
+- You ran debug_analyze and want to link its call chain to a candidate explanation.
+- You're moving from "what's broken" to "what would explain this".
+
+When NOT to use:
+- You only have a vague guess with no evidence — capture more evidence first.
+- The case is already resolved (a confirmed hypothesis exists).
+- You want to record an observation without explanation — that's debug_capture_evidence, not this tool.
+
+Input:
+- caseId: the open case (rejected if not in session — no fabricated ids).
+- claim: a one-sentence falsifiable explanation. Bad: "something with the cache". Good: "Connection pool exhaustion when concurrency > 50 because pool size is hardcoded to 32".
+- staticAnalysis (optional): when debug_analyze produced a chain you want to anchor on, supply { sourceCallId, chainLength, chainConfidence } from its tool.result.
+- evidenceRefs (optional): array of 16-char hex evidence ids (from debug_capture_evidence in this session). All ids are strict-validated.
+- status (optional, default "active"): "active" | "refuted" | "confirmed" | "unresolved". Use "active" for a new candidate; later tools update status as the case progresses.
+
+Output:
+- hypothesisId: 16-char hex id.
+- confidence: 0–0.95 combined from staticAnalysis.chainConfidence (when present) and the evidenceRefs count. Capped at 0.95 — never claim certainty.
+- A one-line confirmation.
+
+Hard rules:
+- Do NOT propose a hypothesis without at least one piece of evidence (refs or static analysis). The schema allows it but it's a smell.
+- Do NOT invent evidenceRefs or sourceCallId — only cite ids you've actually observed.
+- Do NOT claim status: "confirmed" until verification has actually passed (P3.4 wires that automatically from a successful verify-after-fix run).

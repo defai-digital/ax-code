@@ -21,6 +21,7 @@ import type { SyncedSessionQualityReadiness } from "../../context/sync-session-r
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
 import {
   renderSessionChecksSummary,
+  renderSessionDebugCasesSummary,
   renderSessionQualitySidebarLine,
   sessionQualityActions,
   sessionQualityActionValue,
@@ -180,6 +181,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   )
   const findingCounts = createMemo(() => countFindingsByWorkflow(risk()?.findings ?? []))
   const checksSummary = createMemo(() => renderSessionChecksSummary(risk()?.envelopes ?? []))
+  const debugCasesSummary = createMemo(() =>
+    renderSessionDebugCasesSummary({
+      cases: risk()?.debug?.cases ?? [],
+      hypotheses: risk()?.debug?.hypotheses ?? [],
+    }),
+  )
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
@@ -536,6 +543,19 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <box border={["top"]} borderColor={theme.borderSubtle} />
                   <text fg={theme.textMuted} wrapMode="word">
                     {checksSummary()}
+                  </text>
+                </box>
+              </Show>
+              <Show when={debugCasesSummary().length > 0}>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+                  <box flexDirection="row" justifyContent="space-between">
+                    <text fg={theme.text}>
+                      <b>Cases</b>
+                    </text>
+                  </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
+                  <text fg={theme.textMuted} wrapMode="word">
+                    {debugCasesSummary()}
                   </text>
                 </box>
               </Show>

@@ -302,6 +302,10 @@ export const SessionRoutes = lazy(() =>
             description:
               "Include the validated VerificationEnvelope[] emitted by tool calls that record verification runs (e.g. refactor_apply)",
           }),
+          debug: z.coerce.boolean().optional().default(false).meta({
+            description:
+              "Include the validated DebugCase / DebugEvidence / DebugHypothesis bundles emitted by Phase 3 runtime debug tools",
+          }),
         }),
       ),
       async (c) => {
@@ -312,6 +316,7 @@ export const SessionRoutes = lazy(() =>
             includeQuality: query.quality,
             includeFindings: query.findings,
             includeEnvelopes: query.envelopes,
+            includeDebug: query.debug,
           }),
         )
       },
