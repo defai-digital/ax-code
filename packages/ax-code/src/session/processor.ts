@@ -8,7 +8,9 @@ import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
-import { DOOM_LOOP_THRESHOLD as _DOOM_LOOP_THRESHOLD } from "@/constants/session"
+import { DOOM_LOOP_THRESHOLD as _DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
+import { BlastRadius } from "./blast-radius"
+import { detectCycle } from "./cycle-detection"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
@@ -80,7 +82,14 @@ export namespace SessionProcessor {
     const canonicalize = (obj: unknown): string => {
       if (typeof obj !== "object" || obj === null) return JSON.stringify(obj)
       if (Array.isArray(obj)) return "[" + obj.map(canonicalize).join(",") + "]"
-      return "{" + Object.keys(obj as Record<string, unknown>).sort().map((k) => JSON.stringify(k) + ":" + canonicalize((obj as Record<string, unknown>)[k])).join(",") + "}"
+      return (
+        "{" +
+        Object.keys(obj as Record<string, unknown>)
+          .sort()
+          .map((k) => JSON.stringify(k) + ":" + canonicalize((obj as Record<string, unknown>)[k]))
+          .join(",") +
+        "}"
+      )
     }
     const recentToolRing: { tool: string; input: string }[] = []
     // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
@@ -102,9 +111,7 @@ export namespace SessionProcessor {
     let lastStatusWrite = 0
     let lastWaitState: string | undefined
     const STATUS_THROTTLE_MS = 500
-    const setBusyStatus = async (
-      patch: Partial<Extract<SessionStatus.Info, { type: "busy" }>> = {},
-    ) => {
+    const setBusyStatus = async (patch: Partial<Extract<SessionStatus.Info, { type: "busy" }>> = {}) => {
       const now = Date.now()
       // Throttle: skip redundant writes if the waitState hasn't changed
       // and less than 500ms elapsed. Always write on state transitions
@@ -141,9 +148,18 @@ export namespace SessionProcessor {
       },
       async process(streamInput: LLM.StreamInput) {
         log.info("process started", { sessionId: input.sessionID, command: "session.process", status: "started" })
+        attempt = 0
         needsCompaction = false
         const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
-        const shouldBreak = autonomous ? false : (cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true)
+        const shouldBreak = autonomous
+          ? false
+          : (cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true)
+        if (autonomous) {
+          // Apply per-session cap overrides from config so users can widen
+          // limits for long refactors without code changes.
+          const caps = (await Config.get()).experimental?.autonomous_caps
+          if (caps) BlastRadius.get(input.sessionID, caps)
+        }
         while (true) {
           blocked = false
           let currentText: MessageV2.TextPart | undefined
@@ -152,7 +168,11 @@ export namespace SessionProcessor {
             let usedTools = false
             let receivedFinish = false
             let stepStartTime = Date.now()
-            let stepParts: Array<{ type: "text", text: string } | { type: "reasoning", text: string } | { type: "tool_call", callID: string, tool: string, input: Record<string, unknown> }> = []
+            let stepParts: Array<
+              | { type: "text"; text: string }
+              | { type: "reasoning"; text: string }
+              | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
+            > = []
             Recorder.emit({
               type: "llm.request",
               sessionID: input.sessionID,
@@ -280,12 +300,27 @@ export namespace SessionProcessor {
                     })
                     throw new Error(
                       `Tool call rate limit exceeded: ${RATE_LIMIT_MAX_CALLS} calls in ${RATE_LIMIT_WINDOW_MS / 1000}s. ` +
-                      "This may indicate a runaway agent loop.",
+                        "This may indicate a runaway agent loop.",
                     )
                   }
                   toolCallTimestamps.push(now)
 
-                  stepParts.push({ type: "tool_call", callID: value.toolCallId, tool: value.toolName, input: value.input as Record<string, unknown> })
+                  // Autonomous step cap (ADR-004 / PRD v4.2.0). The
+                  // per-session step counter is incremented at every
+                  // tool call so that any branch that loops without
+                  // making progress eventually fails with a typed
+                  // error instead of an opaque rate-limit warning.
+                  if (autonomous) {
+                    BlastRadius.incrementStep(input.sessionID)
+                    BlastRadius.assertWithinCaps(input.sessionID)
+                  }
+
+                  stepParts.push({
+                    type: "tool_call",
+                    callID: value.toolCallId,
+                    tool: value.toolName,
+                    input: value.input as Record<string, unknown>,
+                  })
                   Recorder.emit({
                     type: "tool.call",
                     sessionID: input.sessionID,
@@ -311,16 +346,18 @@ export namespace SessionProcessor {
                     })
                     toolcalls[value.toolCallId] = part as MessageV2.ToolPart
 
-                    // Doom loop detection: check ring buffer of recently completed tools plus current call
+                    // Doom loop detection: cycle-aware. Looks for the
+                    // shortest repeating pattern in the recent ring + the
+                    // current call. k=1 matches the legacy "same call N
+                    // times" behavior; k>=2 catches A->B->A->B and longer
+                    // shapes that exact-repeat detection misses. Patterns
+                    // are required to repeat at least
+                    // DOOM_LOOP_THRESHOLD times for k=1 and 2 times for
+                    // k>=2 (a longer cycle is itself stronger evidence).
                     const inputStr = canonicalize(value.input)
                     toolInputCache[value.toolCallId] = inputStr
                     const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
-                    if (
-                      allRecent.length >= DOOM_LOOP_THRESHOLD &&
-                      allRecent.slice(-DOOM_LOOP_THRESHOLD).every(
-                        (p) => p.tool === value.toolName && p.input === inputStr,
-                      )
-                    ) {
+                    if (detectCycle(allRecent, AUTONOMOUS_MAX_CYCLE_LEN) !== null) {
                       if (autonomous) {
                         // In autonomous mode, skip Permission.ask() (which
                         // would auto-approve and waste the detection). Clear
@@ -329,7 +366,10 @@ export namespace SessionProcessor {
                         // model sees the identical results in its history
                         // which should prompt a strategy change. Step limits
                         // bound total damage if the model keeps repeating.
-                        log.warn("autonomous doom_loop detected, clearing ring buffer", { tool: value.toolName, sessionID: input.sessionID })
+                        log.warn("autonomous doom_loop detected, clearing ring buffer", {
+                          tool: value.toolName,
+                          sessionID: input.sessionID,
+                        })
                         recentToolRing.length = 0
                         break
                       }
@@ -401,8 +441,14 @@ export namespace SessionProcessor {
                     // Self-correction: clear retry budget on success
                     SelfCorrection.recordSuccess(input.sessionID, match.tool)
 
-                    recentToolRing.push({ tool: match.tool, input: toolInputCache[value.toolCallId] ?? JSON.stringify(value.input ?? match.state.input) })
-                    if (recentToolRing.length > DOOM_LOOP_THRESHOLD) recentToolRing.shift()
+                    recentToolRing.push({
+                      tool: match.tool,
+                      input: toolInputCache[value.toolCallId] ?? JSON.stringify(value.input ?? match.state.input),
+                    })
+                    // Window large enough to evaluate the longest cycle
+                    // length (need 2*MAX_CYCLE_LEN entries) plus headroom.
+                    const RING_LIMIT = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
+                    if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()
                     delete toolcalls[value.toolCallId]
                     delete toolInputCache[value.toolCallId]
                   }
@@ -480,8 +526,12 @@ export namespace SessionProcessor {
                     ) {
                       blocked = shouldBreak
                     }
-                    recentToolRing.push({ tool: match.tool, input: toolInputCache[value.toolCallId] ?? JSON.stringify(value.input ?? match.state.input) })
-                    if (recentToolRing.length > DOOM_LOOP_THRESHOLD) recentToolRing.shift()
+                    recentToolRing.push({
+                      tool: match.tool,
+                      input: toolInputCache[value.toolCallId] ?? JSON.stringify(value.input ?? match.state.input),
+                    })
+                    const RING_LIMIT = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
+                    if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()
                     delete toolcalls[value.toolCallId]
                     delete toolInputCache[value.toolCallId]
                   }
@@ -524,15 +574,19 @@ export namespace SessionProcessor {
                     toolCallID: undefined,
                   })
                   if (!value.usage || ((value.usage.inputTokens ?? 0) === 0 && (value.usage.outputTokens ?? 0) === 0))
-                    log.warn("provider returned no usage data", { provider: input.model.providerID, model: input.model.id })
+                    log.warn("provider returned no usage data", {
+                      provider: input.model.providerID,
+                      model: input.model.id,
+                    })
                   const usage = Session.getUsage({
                     model: input.model,
                     usage: value.usage ?? { inputTokens: 0, outputTokens: 0 },
                     metadata: value.providerMetadata,
                   })
-                  const finishReason = typeof value.finishReason === "string"
-                    ? value.finishReason
-                    : (value.finishReason as { type?: string })?.type ?? String(value.finishReason ?? "stop")
+                  const finishReason =
+                    typeof value.finishReason === "string"
+                      ? value.finishReason
+                      : ((value.finishReason as { type?: string })?.type ?? String(value.finishReason ?? "stop"))
                   input.assistantMessage.finish = usedTools ? "tool-calls" : finishReason
                   input.assistantMessage.tokens = {
                     total: (usage.tokens.total ?? 0) + (input.assistantMessage.tokens.total ?? 0),
@@ -614,10 +668,13 @@ export namespace SessionProcessor {
                       parts: stepParts,
                     })
                   }
-                  SessionSummary.summarize({
-                    sessionID: input.sessionID,
-                    messageID: input.assistantMessage.parentID,
-                  }, input.messages).catch((e) => log.warn("summarize failed", { error: e }))
+                  SessionSummary.summarize(
+                    {
+                      sessionID: input.sessionID,
+                      messageID: input.assistantMessage.parentID,
+                    },
+                    input.messages,
+                  ).catch((e) => log.warn("summarize failed", { error: e }))
                   if (
                     !input.assistantMessage.summary &&
                     (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model }))
@@ -686,7 +743,8 @@ export namespace SessionProcessor {
                 // Finalize in-flight parts before breaking for compaction
                 if (currentText) {
                   currentText.text = currentText.text.trimEnd()
-                  if (!currentText.time?.end) currentText.time = { start: currentText.time?.start ?? Date.now(), end: Date.now() }
+                  if (!currentText.time?.end)
+                    currentText.time = { start: currentText.time?.start ?? Date.now(), end: Date.now() }
                 }
                 for (const part of Object.values(reasoningMap)) {
                   part.text = part.text.trimEnd()
@@ -695,10 +753,7 @@ export namespace SessionProcessor {
                 // Persist finalized in-flight parts so they are not lost when
                 // compaction breaks the loop (the catch path handles errors
                 // separately; the break path previously skipped this).
-                const compactionParts = [
-                  ...(currentText ? [currentText] : []),
-                  ...Object.values(reasoningMap),
-                ]
+                const compactionParts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
                 if (compactionParts.length > 0) {
                   Database.transaction(() => {
                     for (const p of compactionParts) Session.updatePart.force(p)
@@ -731,10 +786,7 @@ export namespace SessionProcessor {
               }
             }
             // Batch error-recovery writes in one transaction
-            const errorParts = [
-              ...(currentText ? [currentText] : []),
-              ...Object.values(reasoningMap),
-            ]
+            const errorParts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
             if (errorParts.length > 0) {
               Database.transaction(() => {
                 for (const p of errorParts) Session.updatePart.force(p)
@@ -778,7 +830,16 @@ export namespace SessionProcessor {
                     message: retry,
                     next: Date.now() + delay,
                   })
-                  await SessionRetry.sleep(delay, input.abort).catch(() => {})
+                  await SessionRetry.sleep(delay, input.abort).catch((error) => {
+                    if (input.abort.aborted) return
+                    log.warn("retry sleep failed, retrying immediately", {
+                      command: "session.prompt.process",
+                      status: "error",
+                      error,
+                      attempt,
+                      sessionID: input.sessionID,
+                    })
+                  })
                   if (input.abort.aborted) break
                   continue
                 }
@@ -835,9 +896,8 @@ export namespace SessionProcessor {
                     status: "error",
                     error: "Tool execution aborted",
                     time: {
-                      start: part.state.status === "running" && "time" in part.state
-                        ? part.state.time.start
-                        : Date.now(),
+                      start:
+                        part.state.status === "running" && "time" in part.state ? part.state.time.start : Date.now(),
                       end: Date.now(),
                     },
                   },

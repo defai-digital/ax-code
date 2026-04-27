@@ -11,6 +11,7 @@ import { trimDiff } from "./edit"
 import { assertExternalDirectory } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
+import { BlastRadius } from "@/session/blast-radius"
 
 export const WriteTool = Tool.define("write", {
   description: DESCRIPTION,
@@ -23,25 +24,8 @@ export const WriteTool = Tool.define("write", {
     const bytes = Buffer.byteLength(params.content, "utf-8")
     if (bytes > 5 * 1024 * 1024) throw new Error(`Write content too large: ${bytes} bytes (max 5MB)`)
     await assertExternalDirectory(ctx, filepath)
-    // Resolve symlinks and re-check containment so a symlink inside
-    // the project pointing to e.g. `~/.ssh/authorized_keys` cannot be
-    // used as a write sink. Only enforce when the original path was
-    // inside the project — external writes go through the
-    // `assertExternalDirectory` permission flow above and remain
-    // allowed after the grant.
-    if (Filesystem.contains(Instance.directory, filepath)) {
-      const lstat = await fs.promises.lstat(filepath).catch(() => null)
-      if (lstat?.isSymbolicLink()) {
-        const realFilepath = await fs.promises.realpath(filepath).catch(() => null)
-        if (!realFilepath) throw new Error("Access denied: symlink target is dangling or inaccessible")
-        if (!Filesystem.contains(Instance.directory, realFilepath))
-          throw new Error("Access denied: symlink target escapes project directory")
-      }
-    }
     Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
-
-    const stats = await fs.promises.stat(filepath).catch(() => null)
-    if (stats?.isDirectory()) throw new Error(`Path is a directory, not a file: ${filepath}`)
+    BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filepath))
 
     // Read + assert + diff computation must all happen inside the lock,
     // otherwise a concurrent tool call or external process modifying
@@ -51,6 +35,22 @@ export const WriteTool = Tool.define("write", {
     // does all of this inside its lock; `write.ts` was inconsistent.
     let exists = false
     await FileTime.withLock(filepath, async () => {
+      // Keep the symlink and directory validation inside the same lock as
+      // the read/permission/write flow so the checked path cannot be
+      // swapped between validation and write.
+      if (Filesystem.contains(Instance.directory, filepath)) {
+        const lstat = await fs.promises.lstat(filepath).catch(() => null)
+        if (lstat?.isSymbolicLink()) {
+          const realFilepath = await fs.promises.realpath(filepath).catch(() => null)
+          if (!realFilepath) throw new Error("Access denied: symlink target is dangling or inaccessible")
+          if (!Filesystem.contains(Instance.directory, realFilepath))
+            throw new Error("Access denied: symlink target escapes project directory")
+        }
+      }
+
+      const stats = await fs.promises.stat(filepath).catch(() => null)
+      if (stats?.isDirectory()) throw new Error(`Path is a directory, not a file: ${filepath}`)
+
       exists = await Filesystem.exists(filepath)
       const contentOld = exists ? await Filesystem.readText(filepath) : ""
       if (exists) await FileTime.assert(ctx.sessionID, filepath)
@@ -69,9 +69,15 @@ export const WriteTool = Tool.define("write", {
       await Filesystem.write(filepath, params.content)
       await notifyFileEdited(filepath, exists ? "change" : "add")
       await FileTime.read(ctx.sessionID, filepath)
+      // Approximate line delta — the diff package would be more
+      // precise but newline-counting is sufficient for cap accounting.
+      const lineDelta = params.content.split("\n").length + (exists ? contentOld.split("\n").length : 0)
+      BlastRadius.recordWriteAndAssert(ctx.sessionID, filepath, lineDelta)
     })
 
-    const { diagnostics, output: diagOutput } = await collectDiagnostics([filepath], { includeProjectDiagnostics: true })
+    const { diagnostics, output: diagOutput } = await collectDiagnostics([filepath], {
+      includeProjectDiagnostics: true,
+    })
     let output = "Wrote file successfully." + diagOutput
 
     return {

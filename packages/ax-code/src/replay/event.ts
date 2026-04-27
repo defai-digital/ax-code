@@ -136,6 +136,41 @@ export const CodeGraphSnapshotEvent = Base.extend({
   lastIndexedAt: z.number().nullable(),
 })
 
+// Autonomous-mode telemetry (PRD v4.2.0). Emitted whenever a blast-radius
+// cap is tripped so replay can audit why a session ended early.
+export const AutonomousCapHitEvent = Base.extend({
+  type: z.literal("autonomous.cap_hit"),
+  kind: z.enum(["steps", "files", "lines", "blocked_path"]),
+  current: z.number().int(),
+  limit: z.number().int(),
+  message: z.string().optional(),
+})
+
+export const AutonomousEscalationEvent = Base.extend({
+  type: z.literal("autonomous.escalation"),
+  reason: z.literal("low_confidence"),
+  questionHeader: z.string().optional(),
+  rationale: z.string().optional(),
+})
+
+export const PlannerArchitectCallEvent = Base.extend({
+  type: z.literal("planner.architect_call"),
+  model: z.string(),
+  durationMs: z.number(),
+  status: z.enum(["completed", "error", "timeout"]),
+  phaseCount: z.number().int().optional(),
+})
+
+export const QualityCriticFindingEvent = Base.extend({
+  type: z.literal("quality.critic_finding"),
+  phaseId: z.string(),
+  severity: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]),
+  ruleId: z.string().optional(),
+  file: z.string(),
+  line: z.number().int().optional(),
+  summary: z.string(),
+})
+
 export const ReplayEvent = z.discriminatedUnion("type", [
   SessionStartEvent,
   SessionEndEvent,
@@ -151,5 +186,9 @@ export const ReplayEvent = z.discriminatedUnion("type", [
   PermissionReplyEvent,
   ErrorEvent,
   CodeGraphSnapshotEvent,
+  AutonomousCapHitEvent,
+  AutonomousEscalationEvent,
+  PlannerArchitectCallEvent,
+  QualityCriticFindingEvent,
 ])
 export type ReplayEvent = z.infer<typeof ReplayEvent>

@@ -272,6 +272,53 @@ test("ask - handles multiple questions", async () => {
   })
 })
 
+test("ask - autonomous mode escalates low-confidence multi-option to user (PRD v4.2.0 P0-2)", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const original = process.env.AX_CODE_AUTONOMOUS
+  process.env.AX_CODE_AUTONOMOUS = "true"
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // Two options with no best-practice/risk markers — heuristic
+        // scorer cannot pick a winner, so confidence is "low" and the
+        // ask() should escalate to a pending request rather than
+        // auto-answer.
+        const askPromise = Question.ask({
+          sessionID: SessionID.make("ses_auto_escalate"),
+          questions: [
+            {
+              question: "Pick a color",
+              header: "Color",
+              options: [
+                { label: "Apple", description: "the fruit" },
+                { label: "Banana", description: "another fruit" },
+              ],
+            },
+          ],
+        })
+
+        // The escalated request should appear in the pending list.
+        // Poll briefly because Config.get() is async on the escalation path.
+        let pending: Awaited<ReturnType<typeof Question.list>> = []
+        for (let i = 0; i < 50; i++) {
+          pending = await Question.list()
+          if (pending.length > 0) break
+          await new Promise((r) => setTimeout(r, 10))
+        }
+        expect(pending).toHaveLength(1)
+
+        await Question.reply({ requestID: pending[0]!.id, answers: [["Apple"]] })
+        const answers = await askPromise
+        expect(answers).toEqual([["Apple"]])
+      },
+    })
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = original
+  }
+})
+
 test("ask - autonomous mode answers single-option questions", async () => {
   await using tmp = await tmpdir({ git: true })
   const original = process.env.AX_CODE_AUTONOMOUS

@@ -15,6 +15,7 @@ import os from "os"
 import path from "path"
 import z from "zod"
 import { evaluate as evalRule } from "./evaluate"
+import { classify as classifyRisk } from "./risk-classes"
 import { PermissionID } from "./schema"
 
 export namespace Permission {
@@ -204,11 +205,38 @@ export namespace Permission {
 
     if (!needsAsk) return
 
-    // Autonomous mode: auto-approve all non-interactive permissions
-    // without creating a pending request or waiting for TUI reply.
+    // Autonomous mode: hybrid policy (ADR-004 / PRD v4.2.0).
+    //   - SAFE permissions (read/glob/grep/list/...) auto-approve.
+    //   - RISK permissions (edit/write/apply_patch/bash/network/...)
+    //     fall through to the existing ruleset/ask path so user-defined
+    //     deny rules still apply and pre-approved patterns still match.
+    //   - Unknown permissions log a warning and default to allow,
+    //     matching legacy behavior. Set
+    //     `experimental.autonomous_strict_permission: true` to ask
+    //     instead.
     if (process.env["AX_CODE_AUTONOMOUS"] === "true" && !INTERACTIVE_ONLY.has(request.permission)) {
-      log.info("autonomous auto-approve", { permission: request.permission, patterns: request.patterns })
-      return
+      const riskClass = classifyRisk(request.permission)
+      if (riskClass === "safe") {
+        log.info("autonomous auto-approve (safe)", { permission: request.permission, patterns: request.patterns })
+        return
+      }
+      if (riskClass === "unknown") {
+        const strict = (await Config.get()).experimental?.autonomous_strict_permission === true
+        if (!strict) {
+          log.warn("autonomous: unknown permission risk class, defaulting to allow", {
+            permission: request.permission,
+          })
+          return
+        }
+        log.info("autonomous strict mode: prompting unknown permission", { permission: request.permission })
+        // fall through to ask path below
+      } else {
+        log.info("autonomous risk-class: falling through to ruleset", {
+          permission: request.permission,
+          patterns: request.patterns,
+        })
+        // fall through to ask path below
+      }
     }
 
     const signal = options?.signal
@@ -326,7 +354,9 @@ export namespace Permission {
 
     for (const [id, item] of pending.entries()) {
       if (item.info.sessionID !== existing.info.sessionID) continue
-      const ok = item.info.patterns.every((pattern) => evaluate(item.info.permission, pattern, approved).action === "allow")
+      const ok = item.info.patterns.every(
+        (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
+      )
       if (!ok) continue
       pending.delete(id)
       Bus.publishDetached(Event.Replied, {

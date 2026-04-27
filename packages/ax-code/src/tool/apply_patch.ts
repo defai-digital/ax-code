@@ -16,6 +16,7 @@ import { FileTime } from "../file/time"
 import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
 import { Log } from "../util/log"
+import { BlastRadius } from "@/session/blast-radius"
 
 const log = Log.create({ service: "tool.apply_patch" })
 
@@ -80,11 +81,28 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       // defense-in-depth and sufficient for the threat model.
       await assertSymlinkInsideProject(filePath)
       Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
+      BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filePath))
 
       switch (hunk.type) {
         case "add": {
-          const existed = await fs.stat(filePath).then((stats) => !stats.isDirectory()).catch(() => false)
-          const oldContent = existed ? await fs.readFile(filePath, "utf-8").catch(() => "") : ""
+          const existed = await fs
+            .stat(filePath)
+            .then((stats) => {
+              if (stats.isDirectory()) throw new Error(`Path is a directory: ${filePath}`)
+              return true
+            })
+            .catch((error: unknown) => {
+              if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return false
+              throw error
+            })
+          let oldContent = ""
+          if (existed) {
+            try {
+              oldContent = await fs.readFile(filePath, "utf-8")
+            } catch {
+              throw new Error(`apply_patch verification failed: Failed to read existing file: ${filePath}`)
+            }
+          }
           const newContent =
             hunk.contents.length === 0 || hunk.contents.endsWith("\n") ? hunk.contents : `${hunk.contents}\n`
           const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))
@@ -143,8 +161,20 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
           await assertExternalDirectory(ctx, movePath)
-          const moveExisted = movePath ? await fs.stat(movePath).then((stats) => !stats.isDirectory()).catch(() => false) : undefined
-          const moveOldContent = moveExisted ? await fs.readFile(movePath!, "utf-8").catch(() => "") : undefined
+          const moveExisted = movePath
+            ? await fs
+                .stat(movePath)
+                .then((stats) => !stats.isDirectory())
+                .catch(() => false)
+            : undefined
+          let moveOldContent: string | undefined
+          if (moveExisted) {
+            try {
+              moveOldContent = await fs.readFile(movePath!, "utf-8")
+            } catch {
+              throw new Error(`apply_patch verification failed: Failed to read move destination: ${movePath!}`)
+            }
+          }
           if (movePath && Filesystem.contains(Instance.directory, movePath)) {
             const moveStat = await fs.lstat(movePath).catch(() => null)
             if (moveStat?.isSymbolicLink()) {
@@ -259,8 +289,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         if (change.type === "move" && change.movePath) {
           const dest = change.movePath
           const [first, second] = [change.filePath, dest].sort()
-          await FileTime.withLock(first, async () => {
-            await FileTime.withLock(second, async () => {
+          if (first === second) {
+            await FileTime.withLock(first, async () => {
               await fs.mkdir(path.dirname(change.filePath), { recursive: true })
               await fs.writeFile(change.filePath, change.oldContent, "utf-8")
               if (change.moveExisted) {
@@ -270,7 +300,20 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               }
               await fs.unlink(dest).catch(() => undefined)
             })
-          })
+          } else {
+            await FileTime.withLock(first, async () => {
+              await FileTime.withLock(second, async () => {
+                await fs.mkdir(path.dirname(change.filePath), { recursive: true })
+                await fs.writeFile(change.filePath, change.oldContent, "utf-8")
+                if (change.moveExisted) {
+                  await fs.mkdir(path.dirname(dest), { recursive: true })
+                  await fs.writeFile(dest, change.moveOldContent ?? "", "utf-8")
+                  return
+                }
+                await fs.unlink(dest).catch(() => undefined)
+              })
+            })
+          }
           continue
         }
         await FileTime.withLock(change.filePath, async () => {
@@ -330,7 +373,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                 await FileTime.withLock(first, async () => {
                   const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
                   if (current !== change.oldContent) {
-                    throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
+                    throw new Error(
+                      `apply_patch conflict: ${change.filePath} was modified between verification and write`,
+                    )
                   }
                   activeDirty = true
                   await Filesystem.write(dest, change.newContent)
@@ -393,6 +438,12 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       await Bus.publish(FileWatcher.Event.Updated, update)
     }
 
+    // Autonomous accounting: only the changes we successfully applied count.
+    for (const change of appliedChanges) {
+      const target = change.movePath ?? change.filePath
+      BlastRadius.recordWriteAndAssert(ctx.sessionID, target, (change.additions ?? 0) + (change.deletions ?? 0))
+    }
+
     // Generate output summary
     const summaryLines = fileChanges.map((change) => {
       if (change.type === "add") {
@@ -405,9 +456,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       return `M ${path.relative(Instance.worktree, target).replaceAll("\\", "/")}`
     })
 
-    const changedFiles = fileChanges
-      .filter((c) => c.type !== "delete")
-      .map((c) => c.movePath ?? c.filePath)
+    const changedFiles = fileChanges.filter((c) => c.type !== "delete").map((c) => c.movePath ?? c.filePath)
     const { diagnostics, output: diagOutput } = await collectDiagnostics(changedFiles)
     let output = `Success. Updated the following files:\n${summaryLines.join("\n")}` + diagOutput
 
