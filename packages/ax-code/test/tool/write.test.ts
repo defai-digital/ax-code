@@ -320,6 +320,26 @@ describe("tool.write", () => {
   })
 
   describe("error handling", () => {
+    test("throws error when file path contains null byte", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await expect(
+            write.execute(
+              {
+                filePath: "null\x00path.txt",
+                content: "test",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("File path contains null byte")
+        },
+      })
+    })
+
     test.skipIf(process.platform === "win32" || process.getuid?.() === 0 || !!process.env.CI)(
       "throws error when OS denies write access",
       async () => {

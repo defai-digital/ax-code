@@ -20,6 +20,10 @@ export const WriteTool = Tool.define("write", {
     filePath: z.string().describe("The absolute path to the file to write (must be absolute, not relative)"),
   }),
   async execute(params, ctx) {
+    if (params.filePath.includes("\x00")) {
+      throw new Error("File path contains null byte")
+    }
+
     const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     const bytes = Buffer.byteLength(params.content, "utf-8")
     if (bytes > 5 * 1024 * 1024) throw new Error(`Write content too large: ${bytes} bytes (max 5MB)`)

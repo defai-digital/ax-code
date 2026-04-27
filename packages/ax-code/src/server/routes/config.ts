@@ -10,9 +10,9 @@ import { lazy } from "../../util/lazy"
 
 const log = Log.create({ service: "server" })
 
-const REDACTED = "[redacted]"
+export const REDACTED = "[redacted]"
 
-function redactConfig(config: Config.Info): Config.Info {
+export function redactConfig(config: Config.Info): Config.Info {
   const maskRecord = (rec: Record<string, string> | undefined) =>
     rec ? Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, v ? REDACTED : v])) : rec
 

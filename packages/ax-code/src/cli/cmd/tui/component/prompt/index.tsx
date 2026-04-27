@@ -184,9 +184,14 @@ export function Prompt(props: PromptProps) {
         : input.activeFg
       : input.inactiveFg
 
+    // onMouseUp lives on the wrapping <box>, not the inner <text>: text
+    // elements in OpenTUI primarily handle text selection, and click events
+    // on them are unreliable when nested inside a flex box. The pattern that
+    // actually works is the same one header.tsx / dialog-confirm.tsx use —
+    // a <box> with onMouseUp that contains the <text> for rendering.
     return (
-      <box flexShrink={0}>
-        <text onMouseUp={input.onMouseUp}>
+      <box flexShrink={0} onMouseUp={input.onMouseUp}>
+        <text>
           <span
             style={{
               fg: fg as any,
@@ -1505,14 +1510,36 @@ export function Prompt(props: PromptProps) {
                       return lines.join("\n")
                     })
 
+                    // Click-vs-drag detection: the previous impl checked
+                    // renderer.getSelection() at mouseUp, which blocked the
+                    // toggle whenever ANY selection existed anywhere on
+                    // screen — including stale selections from prior clicks
+                    // (Selection.copy clears the selection asynchronously)
+                    // and zero-width phantom selections created by a click
+                    // itself. Track mousedown coordinates and only toggle
+                    // when mouseup lands on (roughly) the same cell.
+                    let downX: number | undefined
+                    let downY: number | undefined
+
                     return (
                       <box
                         border={["left"]}
                         borderColor={theme.warning}
                         customBorderChars={EmptyBorder}
                         backgroundColor={theme.backgroundPanel}
-                        onMouseUp={() => {
-                          if (renderer.getSelection()?.getSelectedText()) return
+                        onMouseDown={(evt: MouseEvent) => {
+                          downX = evt.x
+                          downY = evt.y
+                        }}
+                        onMouseUp={(evt: MouseEvent) => {
+                          const sx = downX
+                          const sy = downY
+                          downX = undefined
+                          downY = undefined
+                          if (sx === undefined || sy === undefined) return
+                          // Treat anything beyond a ±1 cell tolerance as a
+                          // drag (text selection); otherwise it's a click.
+                          if (Math.abs(evt.x - sx) > 1 || Math.abs(evt.y - sy) > 1) return
                           togglePastePreview(view.partIndex)
                         }}
                       >

@@ -12,6 +12,7 @@ import { Installation } from "@/installation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
+import { redactConfig } from "./config"
 import { errors } from "../error"
 import { pushSseFrame } from "../sse-queue"
 import { Event } from "../event"
@@ -146,7 +147,7 @@ export const GlobalRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(await Config.getGlobal())
+        return c.json(redactConfig(await Config.getGlobal()))
       },
     )
     .patch(

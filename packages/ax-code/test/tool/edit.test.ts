@@ -360,6 +360,27 @@ describe("tool.edit", () => {
   })
 
   describe("edge cases", () => {
+    test("throws error when file path contains null byte", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const edit = await EditTool.init()
+          await expect(
+            edit.execute(
+              {
+                filePath: "\x00bad.txt",
+                oldString: "old",
+                newString: "new",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("File path contains null byte")
+        },
+      })
+    })
+
     test("handles multiline replacements", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "file.txt")

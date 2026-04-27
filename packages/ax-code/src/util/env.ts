@@ -3,17 +3,17 @@ export namespace Env {
   // processes. An LLM prompt that instructs a spawned shell to run
   // `env` or `echo $OPENAI_API_KEY` could otherwise exfiltrate provider
   // tokens, passwords, and other credentials held by the parent
-  // process. Matches on component boundaries (start/end or underscore)
-  // so functional variables like `SSH_AUTH_SOCK` (auth agent socket)
+  // process. Defaults to a strict keyword match so non-standard secret-like
+  // names are filtered too (for example OPENAI_APIKEY or AWS_ACCESSKEY).
+  // Functional variables like `SSH_AUTH_SOCK` (auth agent socket)
   // and `GIT_ASKPASS` (credential helper) aren't stripped. An explicit
   // allowlist covers the few legitimate cases where a secret-looking
   // keyword IS a real substring we want to keep.
-  const SECRET_PATTERN = /(?:^|_)(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)(?:_|$)/i
+  const SECRET_PATTERN = /KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH/i
   const SAFE_ALLOWLIST = new Set([
     "SSH_AUTH_SOCK",
     "GIT_ASKPASS",
     "SUDO_ASKPASS",
-    "GIT_CREDENTIAL_HELPER",
     "PYTHON_KEYRING_BACKEND",
     "XAUTHORITY",
     "DOTNET_CLI_TELEMETRY_SESSION_TOKEN",

@@ -93,6 +93,10 @@ export const EditTool = Tool.define("edit", {
     replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),
   }),
   async execute(params, ctx) {
+    if (params.filePath.includes("\x00")) {
+      throw new Error("File path contains null byte")
+    }
+
     if (!params.filePath) {
       throw new Error("filePath is required")
     }

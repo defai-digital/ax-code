@@ -926,11 +926,12 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
     throw err
   }
 
-  proc.once("exit", () => {
+  void proc.exited.finally(() => {
     fs.rm(dataDir, { recursive: true, force: true }).catch((err) =>
       log.warn("failed to remove jdtls data dir", { dataDir, err }),
     )
   })
+
   return { process: proc }
 }
 
