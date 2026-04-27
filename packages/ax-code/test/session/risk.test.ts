@@ -5,6 +5,11 @@ import { QualityLabelStore } from "../../src/quality/label-store"
 import { computeFindingId } from "../../src/quality/finding"
 import type { Finding } from "../../src/quality/finding"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
+import {
+  computeDebugCaseId,
+  computeDebugEvidenceId,
+  computeDebugHypothesisId,
+} from "../../src/debug-engine/runtime-debug"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
 import { Session } from "../../src/session"
@@ -353,6 +358,155 @@ describe("session.risk", () => {
           expect(detail.quality).toBeDefined()
           expect(detail.findings).toHaveLength(1)
           expect(detail.envelopes).toHaveLength(1)
+        } finally {
+          EventQuery.deleteBySession(session.id)
+        }
+      },
+    })
+  })
+
+  test("matches the full client sync shape with all four opt-ins (quality + findings + envelopes + debug)", async () => {
+    // This is the path the production client actually walks — sessionRiskURL
+    // sets quality=true&findings=true&envelopes=true&debug=true on every
+    // poll. Catches drift between server Detail schema and client
+    // SyncedSessionRisk for the entire assurance-lane surface in one shot.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        // Phase 1+2+3 artefacts emitted inline within a single Recorder
+        // lifecycle so the events all batch-commit together.
+        const problem = "Tests fail intermittently in CI"
+        const caseId = computeDebugCaseId({ problem, runId: session.id })
+        const evidenceContent = "[INFO] worker pool: timeout waiting for slot"
+        const evidenceId = computeDebugEvidenceId({ caseId, kind: "log_capture", content: evidenceContent })
+        const claim = "Worker pool starvation under CI's reduced concurrency"
+        const hypothesisId = computeDebugHypothesisId({ caseId, claim })
+        const debugSource = { tool: "debug_open_case", version: "4.x.x", runId: session.id }
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        // Finding from register_finding
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "register_finding",
+          callID: "call-finding",
+          status: "completed",
+          output: "registered",
+          metadata: {
+            findingId: buildFinding(session.id).findingId,
+            finding: buildFinding(session.id),
+          },
+          durationMs: 1,
+        })
+        // VerificationEnvelope from refactor_apply
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "refactor_apply",
+          callID: "call-apply",
+          status: "completed",
+          output: "applied",
+          metadata: { verificationEnvelopes: [buildEnvelope(session.id)] },
+          durationMs: 5,
+        })
+        // DebugCase / DebugEvidence / DebugHypothesis
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "debug_open_case",
+          callID: "call-debug-open",
+          status: "completed",
+          metadata: {
+            caseId,
+            debugCase: {
+              schemaVersion: 1,
+              caseId,
+              problem,
+              status: "open",
+              createdAt: "2026-04-26T18:00:00.000Z",
+              source: debugSource,
+            },
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "debug_capture_evidence",
+          callID: "call-debug-evidence",
+          status: "completed",
+          metadata: {
+            evidenceId,
+            debugEvidence: {
+              schemaVersion: 1,
+              evidenceId,
+              caseId,
+              kind: "log_capture",
+              capturedAt: "2026-04-26T18:01:00.000Z",
+              content: evidenceContent,
+              source: { ...debugSource, tool: "debug_capture_evidence" },
+            },
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "debug_propose_hypothesis",
+          callID: "call-debug-hypothesis",
+          status: "completed",
+          metadata: {
+            hypothesisId,
+            debugHypothesis: {
+              schemaVersion: 1,
+              hypothesisId,
+              caseId,
+              claim,
+              confidence: 0.65,
+              evidenceRefs: [evidenceId],
+              status: "active",
+              source: { ...debugSource, tool: "debug_propose_hypothesis" },
+            },
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "session.end",
+          sessionID: session.id,
+          reason: "completed",
+          totalSteps: 0,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        try {
+          const detail = await SessionRisk.load(session.id, {
+            includeQuality: true,
+            includeFindings: true,
+            includeEnvelopes: true,
+            includeDebug: true,
+          })
+
+          expect(detail.quality).toBeDefined()
+          expect(detail.findings).toHaveLength(1)
+          expect(detail.envelopes).toHaveLength(1)
+          expect(detail.debug).toBeDefined()
+          expect(detail.debug?.cases).toHaveLength(1)
+          expect(detail.debug?.evidence).toHaveLength(1)
+          expect(detail.debug?.hypotheses).toHaveLength(1)
+          expect(detail.debug?.cases[0].caseId).toBe(caseId)
+          expect(detail.debug?.evidence[0].caseId).toBe(caseId)
+          expect(detail.debug?.hypotheses[0].evidenceRefs).toContain(evidenceId)
         } finally {
           EventQuery.deleteBySession(session.id)
         }
