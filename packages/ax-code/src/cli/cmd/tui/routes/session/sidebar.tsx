@@ -18,6 +18,7 @@ import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { footerSessionStatusView, type FooterSessionStatus } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
+import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
 import {
   renderSessionQualitySidebarLine,
   sessionQualityActions,
@@ -177,6 +178,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
       quality: risk()?.quality,
     }),
   )
+  const findingCounts = createMemo(() => countFindingsByWorkflow(risk()?.findings ?? []))
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
@@ -514,7 +516,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                           {sessionQualityWorkflowIcon(action.workflow)}
                         </text>
                         <text fg={theme.textMuted} wrapMode="word">
-                          {renderSessionQualitySidebarLine(action)}
+                          {renderSessionQualitySidebarLine(action, {
+                            counts: findingCounts()[action.workflow],
+                          })}
                         </text>
                       </box>
                     )}

@@ -1,4 +1,5 @@
 import z from "zod"
+import { FindingSchema } from "../../../../quality/finding"
 
 export const SyncedSessionQualityReadiness = z.object({
   workflow: z.enum(["review", "debug", "qa"]),
@@ -30,6 +31,7 @@ export const SyncedSessionRisk = z.object({
       qa: SyncedSessionQualityReadiness.nullable().optional().default(null),
     })
     .optional(),
+  findings: z.array(FindingSchema).optional(),
 })
 export type SyncedSessionRisk = z.output<typeof SyncedSessionRisk>
 

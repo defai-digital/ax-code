@@ -1,5 +1,10 @@
 import { EventQuery } from "../replay/query"
 import { FindingSchema, type Finding } from "../quality/finding"
+import {
+  countByWorkflow as countFindingsByWorkflow,
+  type Counts as FindingCounts,
+  type SeverityCounts as FindingSeverityCounts,
+} from "../quality/finding-counts"
 import { Log } from "../util/log"
 import type { SessionID } from "./schema"
 
@@ -34,39 +39,10 @@ export namespace SessionFindings {
     return findings
   }
 
-  // Severity buckets for the same Finding[]. Useful for sidebar / dashboard
-  // surfaces that want a per-workflow count per severity without re-walking
-  // events.
-  export type Counts = {
-    review: SeverityCounts
-    debug: SeverityCounts
-    qa: SeverityCounts
-  }
-
-  export type SeverityCounts = {
-    CRITICAL: number
-    HIGH: number
-    MEDIUM: number
-    LOW: number
-    INFO: number
-    total: number
-  }
-
-  function emptySeverityCounts(): SeverityCounts {
-    return { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0, total: 0 }
-  }
-
-  export function countByWorkflow(findings: Finding[]): Counts {
-    const counts: Counts = {
-      review: emptySeverityCounts(),
-      debug: emptySeverityCounts(),
-      qa: emptySeverityCounts(),
-    }
-    for (const finding of findings) {
-      const bucket = counts[finding.workflow]
-      bucket[finding.severity] += 1
-      bucket.total += 1
-    }
-    return counts
-  }
+  // Re-exported for back-compat. The pure shapes/helpers live in
+  // src/quality/finding-counts.ts so client-side renderers can import them
+  // without pulling Node-only deps.
+  export type Counts = FindingCounts
+  export type SeverityCounts = FindingSeverityCounts
+  export const countByWorkflow = countFindingsByWorkflow
 }

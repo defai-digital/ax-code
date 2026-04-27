@@ -956,6 +956,127 @@ describe("tui session quality actions", () => {
       expect(renderSessionQualitySidebarLine(action)).toBe("QA · ok")
     })
 
+    test("appends finding-count parts when counts.total > 0 and overrides quality status", () => {
+      const action = sessionQualityActions({
+        sessionID: "ses_with_findings",
+        quality: {
+          review: {
+            workflow: "review",
+            overallStatus: "warn",
+            readyForBenchmark: false,
+            labeledItems: 1,
+            resolvedLabeledItems: 1,
+            unresolvedLabeledItems: 0,
+            missingLabels: 0,
+            totalItems: 1,
+            nextAction: null,
+            gates: [
+              { name: "refresh-required", status: "warn", detail: "refresh after recent activity" },
+            ],
+          },
+          debug: null,
+        },
+      })[0]!
+      const counts = { CRITICAL: 0, HIGH: 2, MEDIUM: 1, LOW: 0, INFO: 0, total: 3 }
+      const line = renderSessionQualitySidebarLine(action, { counts })
+      expect(line).toBe("Review · 2 HIGH · 1 MED")
+      expect(line).not.toContain("refresh after recent activity")
+    })
+
+    test("renders all severity buckets in CRITICAL→INFO order", () => {
+      const action = sessionQualityActions({
+        sessionID: "ses_all_severities",
+        quality: {
+          review: {
+            workflow: "review",
+            overallStatus: "fail",
+            readyForBenchmark: false,
+            labeledItems: 0,
+            resolvedLabeledItems: 0,
+            unresolvedLabeledItems: 0,
+            missingLabels: 0,
+            totalItems: 0,
+            nextAction: null,
+            gates: [],
+          },
+          debug: null,
+        },
+      })[0]!
+      const counts = { CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4, INFO: 5, total: 15 }
+      expect(renderSessionQualitySidebarLine(action, { counts })).toBe(
+        "Review · 1 CRITICAL · 2 HIGH · 3 MED · 4 LOW · 5 INFO",
+      )
+    })
+
+    test("falls through to quality status when counts.total === 0", () => {
+      const action = sessionQualityActions({
+        sessionID: "ses_zero_findings",
+        quality: {
+          review: null,
+          debug: {
+            workflow: "debug",
+            overallStatus: "pass",
+            readyForBenchmark: true,
+            labeledItems: 1,
+            resolvedLabeledItems: 1,
+            unresolvedLabeledItems: 0,
+            missingLabels: 0,
+            totalItems: 1,
+            nextAction: null,
+            gates: [],
+          },
+        },
+      })[0]!
+      const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0, total: 0 }
+      expect(renderSessionQualitySidebarLine(action, { counts })).toBe("Debug · ok")
+    })
+
+    test("uses 'QA' label not 'Qa' when findings dominate", () => {
+      const action = sessionQualityActions({
+        sessionID: "ses_qa_findings",
+        quality: {
+          review: null,
+          debug: null,
+          qa: {
+            workflow: "qa",
+            overallStatus: "pass",
+            readyForBenchmark: true,
+            labeledItems: 1,
+            resolvedLabeledItems: 1,
+            unresolvedLabeledItems: 0,
+            missingLabels: 0,
+            totalItems: 1,
+            nextAction: null,
+            gates: [],
+          },
+        },
+      })[0]!
+      const counts = { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 0, INFO: 0, total: 1 }
+      expect(renderSessionQualitySidebarLine(action, { counts })).toBe("QA · 1 HIGH")
+    })
+
+    test("opts is optional — calling without it preserves previous behaviour", () => {
+      const action = sessionQualityActions({
+        sessionID: "ses_no_opts",
+        quality: {
+          review: null,
+          debug: {
+            workflow: "debug",
+            overallStatus: "pass",
+            readyForBenchmark: true,
+            labeledItems: 1,
+            resolvedLabeledItems: 1,
+            unresolvedLabeledItems: 0,
+            missingLabels: 0,
+            totalItems: 1,
+            nextAction: null,
+            gates: [],
+          },
+        },
+      })[0]!
+      expect(renderSessionQualitySidebarLine(action)).toBe("Debug · ok")
+    })
+
     test("never includes internal training vocabulary (label coverage / replay readiness / capture evidence)", () => {
       const action = sessionQualityActions({
         sessionID: "ses_no_jargon",

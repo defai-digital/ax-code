@@ -1,5 +1,6 @@
 import type { PromptInfo } from "../../component/prompt/history"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
+import type { SeverityCounts } from "@/quality/finding-counts"
 import { ProbabilisticRollout } from "@/quality/probabilistic-rollout"
 
 export type SessionQualityWorkflow = "review" | "debug" | "qa"
@@ -307,10 +308,27 @@ export function renderSessionQualityInlineSummary(action: SessionQualityAction) 
 // vocabulary (replay readiness, label coverage, capture evidence) stays inside
 // the /quality dialog via renderSessionQualityInlineSummary; the sidebar gets
 // just status + the most actionable problem detail.
+//
+// When `counts.total > 0`, finding counts dominate the line — they are
+// file-anchored, severity-graded, and directly actionable, so they outrank
+// quality-readiness gates which are session-level training-pipeline state.
 export function renderSessionQualitySidebarLine(
   action: Pick<SessionQualityAction, "workflow" | "summary">,
+  opts?: { counts?: SeverityCounts },
 ): string {
   const label = sessionQualityWorkflowLabel(action.workflow)
+  const counts = opts?.counts
+
+  if (counts && counts.total > 0) {
+    const parts: string[] = []
+    if (counts.CRITICAL > 0) parts.push(`${counts.CRITICAL} CRITICAL`)
+    if (counts.HIGH > 0) parts.push(`${counts.HIGH} HIGH`)
+    if (counts.MEDIUM > 0) parts.push(`${counts.MEDIUM} MED`)
+    if (counts.LOW > 0) parts.push(`${counts.LOW} LOW`)
+    if (counts.INFO > 0) parts.push(`${counts.INFO} INFO`)
+    return `${label} · ${parts.join(" · ")}`
+  }
+
   const status = action.summary.overallStatus
   if (status === "pass") return `${label} · ok`
 

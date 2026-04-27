@@ -53,6 +53,7 @@ function withSyncTimeout<T>(label: string, promise: Promise<T>, timeoutMs = BOOT
 function sessionRiskURL(input: { baseUrl: string; sessionID: string; directory?: string }) {
   const url = new URL(`${input.baseUrl}/session/${encodeURIComponent(input.sessionID)}/risk`)
   url.searchParams.set("quality", "true")
+  url.searchParams.set("findings", "true")
   if (input.directory) url.searchParams.set("directory", input.directory)
   return url.toString()
 }
