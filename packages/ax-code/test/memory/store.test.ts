@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test"
+import { describe, expect, spyOn, test, beforeEach } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
@@ -46,6 +46,42 @@ describe("memory.store cache", () => {
     await fs.writeFile(memoryPath, JSON.stringify(sampleMemory({ contentHash: "from-external" })))
 
     expect((await store.load(tmp.path))?.contentHash).toBe("from-external")
+  })
+
+  test("load updates cache metadata after read to prevent stale cache replay", async () => {
+    await using tmp = await tmpdir()
+    const memoryPath = path.join(tmp.path, ".ax-code", "memory.json")
+    const initial = sampleMemory({ contentHash: "initial" })
+    const raced = sampleMemory({ contentHash: "raced-version" })
+    const restored = sampleMemory({ contentHash: "initial" })
+
+    await store.save(tmp.path, initial)
+    const statBefore = await fs.stat(memoryPath)
+    const realReadFile = fs.readFile.bind(fs)
+    const readFileSpy = spyOn(fs, "readFile")
+    let firstRead = true
+
+    readFileSpy.mockImplementation(async (...args) => {
+      if (firstRead) {
+        firstRead = false
+        await fs.writeFile(memoryPath, JSON.stringify(raced))
+        await fs.utimes(memoryPath, new Date(statBefore.atimeMs), new Date(statBefore.mtimeMs))
+      }
+      return realReadFile(...args)
+    })
+
+    try {
+      const first = await store.load(tmp.path)
+      expect(first?.contentHash).toBe("raced-version")
+
+      await fs.writeFile(memoryPath, JSON.stringify(restored))
+      await fs.utimes(memoryPath, new Date(statBefore.atimeMs), new Date(statBefore.mtimeMs))
+
+      const second = await store.load(tmp.path)
+      expect(second?.contentHash).toBe("initial")
+    } finally {
+      readFileSpy.mockRestore()
+    }
   })
 
   test("load returns null after clear()", async () => {

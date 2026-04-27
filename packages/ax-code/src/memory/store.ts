@@ -54,7 +54,12 @@ async function readWithCache(filePath: string): Promise<string | null> {
     }
     throw err
   }
-  readCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, text })
+  const finalStat = await fs.stat(filePath).catch(() => null)
+  if (finalStat) {
+    readCache.set(filePath, { mtimeMs: finalStat.mtimeMs, size: finalStat.size, text })
+  } else {
+    readCache.delete(filePath)
+  }
   return text
 }
 
