@@ -931,6 +931,15 @@ export namespace Provider {
       if (providerID.startsWith("alibaba")) {
         priority = ["qwen3.5-flash", "qwen-flash", "qwen-turbo"]
       }
+      // OpenAI and Anthropic were missing — without overrides they fell through to the
+      // gemini/llama default list which never matched their model IDs, returning undefined
+      // and silently disabling Auto-route's LLM tier for the majority of users.
+      if (providerID === "openai" || providerID.startsWith("openai-")) {
+        priority = ["gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini", "gpt-4o-mini"]
+      }
+      if (providerID === "anthropic" || providerID.startsWith("anthropic-")) {
+        priority = ["claude-haiku-4-5", "haiku-4", "claude-3-5-haiku"]
+      }
       for (const item of priority) {
         for (const model of Object.keys(provider.models)) {
           if (model.includes(item)) return getModel(providerID, ModelID.make(model))
