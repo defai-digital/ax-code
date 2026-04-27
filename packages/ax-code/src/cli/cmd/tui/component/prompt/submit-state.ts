@@ -6,7 +6,7 @@ const SUBMIT_ABORT_MESSAGE = "Prompt submission cancelled"
 export function pendingSubmitStatusText(stage: SubmitStage | undefined) {
   switch (stage) {
     case "creating-session":
-      return "Creating session..."
+      return "Starting..."
     case "dispatching":
       return "Submitting..."
     default:

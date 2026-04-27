@@ -8,7 +8,7 @@ import {
 
 describe("prompt submit state", () => {
   test("renders stage-specific pending labels", () => {
-    expect(pendingSubmitStatusText("creating-session")).toBe("Creating session...")
+    expect(pendingSubmitStatusText("creating-session")).toBe("Starting...")
     expect(pendingSubmitStatusText("dispatching")).toBe("Submitting...")
     expect(pendingSubmitStatusText(undefined)).toBe("")
   })

@@ -116,6 +116,27 @@ addDefaultParsers(parsers.parsers)
 
 const log = Log.create({ service: "tui.session" })
 
+const TOOL_SUMMARY_LABELS: Record<string, [string, string]> = {
+  read: ["read", "reads"],
+  edit: ["edit", "edits"],
+  write: ["write", "writes"],
+  bash: ["cmd", "cmds"],
+  glob: ["glob", "globs"],
+  grep: ["grep", "greps"],
+  list: ["list", "lists"],
+  task: ["delegation", "delegations"],
+  webfetch: ["fetch", "fetches"],
+  websearch: ["search", "searches"],
+  codesearch: ["search", "searches"],
+  todowrite: ["todo", "todos"],
+}
+
+function toolSummaryLabel(name: string, count: number): string {
+  const pair = TOOL_SUMMARY_LABELS[name]
+  if (pair) return pair[count === 1 ? 0 : 1]
+  return name
+}
+
 class CustomSpeedScroll implements ScrollAcceleration {
   constructor(private speed: number) {}
 
@@ -962,7 +983,17 @@ export function Session() {
       }}
     >
       <box flexDirection="row">
-        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
+        <box
+          flexGrow={1}
+          paddingBottom={1}
+          paddingTop={1}
+          paddingLeft={2}
+          paddingRight={2}
+          gap={1}
+          border={session()?.parentID ? ["left"] : undefined}
+          customBorderChars={SplitBorder.customBorderChars}
+          borderColor={theme.primary}
+        >
           <Show when={session()}>
             <Show when={showHeader() && (!sidebarVisible() || !wide())}>
               <Header />
@@ -1261,13 +1292,19 @@ function UserMessage(props: {
         </box>
       </Show>
       <Show when={compaction()}>
-        <box
-          marginTop={1}
-          border={["top"]}
-          title=" Compaction "
-          titleAlignment="center"
-          borderColor={theme.borderActive}
-        />
+        {(comp) => {
+          const info = comp() as { auto: boolean; overflow?: boolean }
+          const title = (info.auto ? "Auto compaction" : "Manual compaction") + (info.overflow ? " · overflow" : "")
+          return (
+            <box
+              marginTop={1}
+              border={["top"]}
+              title={` ${title} `}
+              titleAlignment="center"
+              borderColor={theme.borderActive}
+            />
+          )
+        }}
       </Show>
       <Show when={props.showCompactionNotice}>
         <CompactionNotice onDismiss={props.onDismissCompactionNotice} />
@@ -1352,6 +1389,18 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     return props.message.time.completed - user.time.created
   })
 
+  const toolSummary = createMemo<Array<[string, number]>>(() => {
+    const counts = new Map<string, number>()
+    for (const p of props.parts) {
+      if (p.type !== "tool") continue
+      const tool = (p as ToolPart).tool
+      counts.set(tool, (counts.get(tool) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+  })
+
   const keybind = useKeybind()
 
   const hasParts = createMemo(() => props.parts.length > 0)
@@ -1425,6 +1474,11 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
               </Show>
+              <For each={toolSummary()}>
+                {([name, count]) => (
+                  <span style={{ fg: theme.textMuted }}> · {count} {toolSummaryLabel(name, count)}</span>
+                )}
+              </For>
               <Show when={props.message.error?.name === "MessageAbortedError"}>
                 <span style={{ fg: theme.textMuted }}> · interrupted</span>
               </Show>
@@ -1485,15 +1539,28 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+  const [expanded, setExpanded] = createSignal(false)
+  const trimmed = createMemo(() => props.part.text.trim())
+  const lines = createMemo(() => trimmed().split("\n"))
+  const isFinal = createMemo(
+    () => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish),
+  )
+  // Only fold long completed text. Streaming text always renders in full.
+  const overflow = createMemo(() => isFinal() && lines().length > 50)
+  const visibleText = createMemo(() => {
+    if (expanded() || !overflow()) return trimmed()
+    return lines().slice(0, 50).join("\n") + "\n…"
+  })
+
   return (
-    <Show when={props.part.text.trim()}>
+    <Show when={trimmed()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
         <Switch>
           <Match when={Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
             <markdown
               syntaxStyle={syntax()}
               streaming={true}
-              content={props.part.text.trim()}
+              content={visibleText()}
               conceal={ctx.conceal()}
               fg={theme.markdownText}
               bg={theme.background}
@@ -1501,7 +1568,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
           </Match>
           <Match when={!Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
             <SessionCodeRenderer
-              display={codeDisplayView({ filePath: "message.md", content: props.part.text.trim() })}
+              display={codeDisplayView({ filePath: "message.md", content: visibleText() })}
               streaming={true}
               syntaxStyle={syntax()}
               conceal={ctx.conceal()}
@@ -1509,6 +1576,11 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
             />
           </Match>
         </Switch>
+        <Show when={overflow()}>
+          <text fg={theme.textMuted} onMouseUp={() => setExpanded((prev) => !prev)}>
+            {expanded() ? "Click to collapse" : `… ${lines().length - 50} more lines · click to expand`}
+          </text>
+        </Show>
       </box>
     </Show>
   )

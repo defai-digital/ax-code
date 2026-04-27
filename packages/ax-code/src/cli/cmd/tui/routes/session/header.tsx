@@ -63,7 +63,10 @@ export function Header() {
     const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
     let result = total.toLocaleString()
     if (model?.limit?.context) {
-      result += "  " + Math.round((total / model.limit.context) * 100) + "%"
+      const pct = Math.min(100, Math.round((total / model.limit.context) * 100))
+      const filled = Math.round(pct / 10)
+      const bar = "█".repeat(filled) + "░".repeat(10 - filled)
+      result += "  " + bar + " " + pct + "%"
     }
     if (last.time.completed && last.time.created && (last.tokens?.output ?? 0) > 0) {
       const durationSecs = (last.time.completed - last.time.created) / 1000

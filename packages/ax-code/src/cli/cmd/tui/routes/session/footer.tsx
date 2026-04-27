@@ -98,6 +98,7 @@ export function Footer() {
           <Match when={store.welcome}>
             <text fg={theme.text}>
               Get started <span style={{ fg: theme.accent }}>/connect</span>
+              <span style={{ fg: theme.textMuted }}> · 75+ providers supported</span>
             </text>
           </Match>
           <Match when={connected()}>

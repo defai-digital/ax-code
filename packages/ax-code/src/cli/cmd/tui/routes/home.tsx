@@ -3,7 +3,6 @@ import { createEffect, createMemo, Match, on, onMount, Show, Switch } from "soli
 import { useTheme } from "@tui/context/theme"
 import { useKeybind } from "@tui/context/keybind"
 import { Logo } from "../component/logo"
-import { Tips } from "../component/tips"
 import { Locale } from "@/util/locale"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
@@ -12,18 +11,14 @@ import { useDirectory } from "../context/directory"
 import { useRouteData } from "@tui/context/route"
 import { usePromptRef } from "../context/prompt"
 import { Installation } from "@/installation"
-import { useKV } from "../context/kv"
-import { useCommandDialog } from "../component/dialog-command"
 import { useLocal } from "../context/local"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 
 export function Home() {
   const sync = useSync()
-  const kv = useKV()
   const { theme } = useTheme()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
-  const command = useCommandDialog()
   const mcp = createMemo(() => Object.keys(sync.data.mcp).length > 0)
   const mcpError = createMemo(() => {
     return Object.values(sync.data.mcp).some((x) => x.status === "failed")
@@ -34,25 +29,6 @@ export function Home() {
   })
 
   const isFirstTimeUser = createMemo(() => sync.data.session.length === 0)
-  const tipsHidden = createMemo(() => kv.get("tips_hidden", false))
-  const showTips = createMemo(() => {
-    // Don't show tips for first-time users
-    if (isFirstTimeUser()) return false
-    return !tipsHidden()
-  })
-
-  command.register(() => [
-    {
-      title: tipsHidden() ? "Show tips" : "Hide tips",
-      value: "tips.toggle",
-      keybind: "tips_toggle",
-      category: "System",
-      onSelect: (dialog) => {
-        kv.set("tips_hidden", !tipsHidden())
-        dialog.clear()
-      },
-    },
-  ])
 
   const Hint = (
     <Show when={connectedMcpCount() > 0}>
@@ -125,11 +101,6 @@ export function Home() {
             workspaceID={route.workspaceID}
           />
         </box>
-        <Show when={showTips()}>
-          <box height={4} minHeight={0} width="100%" maxWidth={75} alignItems="center" paddingTop={3} flexShrink={1}>
-            <Tips />
-          </box>
-        </Show>
         <Show when={isFirstTimeUser()}>
           <box flexDirection="column" alignItems="flex-start" flexShrink={0} maxWidth={75} paddingLeft={2} paddingRight={2}>
             <text>

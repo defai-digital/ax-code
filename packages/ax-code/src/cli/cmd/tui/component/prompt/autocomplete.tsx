@@ -601,10 +601,35 @@ export function Autocomplete(props: {
     })
   })
 
-  const height = createMemo(() => {
+  const desired = createMemo(() => {
     const count = options().length || 1
-    if (!store.visible) return Math.min(10, count)
-    return Math.min(10, count, Math.max(1, anchorMetrics().y))
+    return Math.min(10, count)
+  })
+
+  const direction = createMemo<"above" | "below">(() => {
+    if (!store.visible) return "above"
+    // Prefer above (TUI convention with bottom prompt). Fall back to below
+    // when the parent box is too short to fit the desired height above the
+    // anchor — common on the home screen and the session bottom flex box,
+    // where the prompt's parent shrink-wraps to the prompt itself.
+    if (anchorMetrics().y >= desired()) return "above"
+    return "below"
+  })
+
+  const height = createMemo(() => {
+    if (!store.visible) return desired()
+    if (direction() === "above") {
+      return Math.min(desired(), Math.max(1, anchorMetrics().y))
+    }
+    return desired()
+  })
+
+  const top = createMemo(() => {
+    if (direction() === "above") {
+      return Math.max(0, anchorMetrics().y - height())
+    }
+    const anchor = props.anchor()
+    return anchorMetrics().y + (anchor.height ?? 1)
   })
 
   let scroll: ScrollBoxRenderable
@@ -613,7 +638,7 @@ export function Autocomplete(props: {
     <box
       visible={store.visible !== false}
       position="absolute"
-      top={Math.max(0, anchorMetrics().y - height())}
+      top={top()}
       left={anchorMetrics().x}
       width={anchorMetrics().width}
       zIndex={100}
