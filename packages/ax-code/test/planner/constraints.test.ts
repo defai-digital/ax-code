@@ -58,6 +58,22 @@ describe("planner constraints", () => {
     expect(out).toEqual(["tests: Unit, Integration"])
   })
 
+  test("Question.toConstraints falls through to question when header is empty/whitespace", () => {
+    const out = Question.toConstraints(
+      [{ question: "Which subset to refactor?", header: "   ", options: [{ label: "x", description: "y" }] }],
+      [["x"]],
+    )
+    expect(out).toEqual(["Which subset to refactor?: x"])
+  })
+
+  test("Question.toConstraints skips entries when both header and question are empty", () => {
+    const out = Question.toConstraints(
+      [{ question: "  ", header: "", options: [{ label: "x", description: "y" }] }],
+      [["x"]],
+    )
+    expect(out).toEqual([])
+  })
+
   test("Question.toConstraints tolerates length mismatch", () => {
     const q = Question.buildClarification({
       topic: "x",

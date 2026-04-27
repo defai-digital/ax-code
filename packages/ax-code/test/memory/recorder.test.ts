@@ -183,6 +183,23 @@ describe("memory.recorder", () => {
     expect(memory.sections.readme).toBeUndefined()
   })
 
+  test("budget: tiny maxTokens never overruns even when budget < truncation suffix", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(
+      `${tmp.path}/package.json`,
+      JSON.stringify({
+        name: "pkg",
+        version: "1.0.0",
+        dependencies: { react: "1.0.0", next: "1.0.0", "drizzle-orm": "1.0.0" },
+      }),
+    )
+
+    for (const max of [1, 2, 3, 4, 5, 10, 20]) {
+      const memory = await generate(tmp.path, { maxTokens: max })
+      expect(memory.totalTokens).toBeLessThanOrEqual(max)
+    }
+  })
+
   test("budget: with no entries, behaves identically to pre-budget logic", async () => {
     await using tmp = await tmpdir()
     await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))

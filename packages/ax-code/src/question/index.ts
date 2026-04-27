@@ -90,7 +90,10 @@ export namespace Question {
       if (!q || !a || a.length === 0) continue
       const cleaned = a.map((label) => label.replace(/\s*\(Recommended\)\s*$/i, "").trim()).filter(Boolean)
       if (cleaned.length === 0) continue
-      const header = (q.header ?? q.question).trim()
+      // `??` only catches null/undefined, not empty/whitespace strings — fall
+      // through to question text whenever the header has no usable label.
+      const header = q.header?.trim() || q.question?.trim() || ""
+      if (!header) continue
       out.push(`${header}: ${cleaned.join(", ")}`)
     }
     return out

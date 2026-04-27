@@ -26,10 +26,10 @@ const TRUNCATE_SUFFIX = "\n... (truncated)"
 function truncateToTokens(text: string, maxTokens: number): string {
   const maxChars = maxTokens * 4
   if (text.length <= maxChars) return text
-  // Reserve room for the suffix so the final result never exceeds maxChars.
-  // Without this, estimateTokens(result) over-shoots maxTokens by ~4 per
-  // truncated section, breaking the global token budget.
-  const sliceLen = Math.max(0, maxChars - TRUNCATE_SUFFIX.length)
+  // When the budget can't fit even the suffix, drop the section entirely —
+  // appending the suffix anyway over-shoots maxTokens by ~4 per section.
+  if (maxChars <= TRUNCATE_SUFFIX.length) return ""
+  const sliceLen = maxChars - TRUNCATE_SUFFIX.length
   let truncated = text.slice(0, sliceLen)
   const last = truncated.charCodeAt(truncated.length - 1)
   if (last >= 0xd800 && last <= 0xdbff) truncated = truncated.slice(0, -1)

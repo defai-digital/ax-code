@@ -109,7 +109,7 @@ describe("tui OpenTUI stability guardrails", () => {
   test("does not probe the terminal palette unless the system theme is active", async () => {
     const theme = await fs.readFile(THEME_SRC, "utf8")
 
-    expect(theme).toContain('() => store.active')
+    expect(theme).toContain("() => store.active")
     expect(theme).toContain('if (active !== "system") return')
     expect(theme).toContain("if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL)")
     expect(theme).toContain("scheduleDeferredStartupTask(() => resolveSystemTheme(store.mode)")
@@ -161,7 +161,7 @@ describe("tui OpenTUI stability guardrails", () => {
   test("handles delegated task preview session sync failures without unhandled rejections", async () => {
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
 
-    expect(session).toContain('void sync.session.sync(id).catch((error) => {')
+    expect(session).toContain("void sync.session.sync(id).catch((error) => {")
     expect(session).toContain('log.warn("task child session preview sync failed"')
   })
 
@@ -170,7 +170,7 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(question).toContain("function submitQuestionRequest(")
     expect(question).toContain("void Promise.resolve()")
-    expect(question).toContain('log.warn(failureLabel, { error, requestID: props.request.id })')
+    expect(question).toContain("log.warn(failureLabel, { error, requestID: props.request.id })")
     expect(question).toContain('"question prompt reply failed"')
     expect(question).toContain('"question prompt reject failed"')
     expect(question).toContain('"Failed to submit question response"')
@@ -183,7 +183,7 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(permission).toContain("function submitPermissionReply(")
     expect(permission).toContain("void Promise.resolve()")
-    expect(permission).toContain('log.warn(failureLabel, { error, requestID: props.request.id })')
+    expect(permission).toContain("log.warn(failureLabel, { error, requestID: props.request.id })")
     expect(permission).toContain('"permission prompt once-reply failed"')
     expect(permission).toContain('"permission prompt always-reply failed"')
     expect(permission).toContain('"permission prompt reject failed"')
@@ -221,7 +221,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(timelineForkDialog).toContain('message: error instanceof Error ? error.message : "Failed to fork session"')
     expect(timelineForkDialog).toContain("promptState(sync.data.part[message.id] ?? [])")
     expect(timelineForkDialog).toContain('title: "No fork target available"')
-    expect(timelineForkDialog).toContain('description: "No user messages with text content are available to fork from."')
+    expect(timelineForkDialog).toContain(
+      'description: "No user messages with text content are available to fork from."',
+    )
     expect(timelineForkDialog).toContain("if (option.disabled) return")
   })
 
@@ -239,7 +241,7 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(sessionListDialog).toContain(".catch(() => false)")
     expect(sessionListDialog).toContain('message: "Failed to delete session"')
-    expect(sessionListDialog).toContain('sync.data.session.filter((session) => session.id !== option.value)')
+    expect(sessionListDialog).toContain("sync.data.session.filter((session) => session.id !== option.value)")
   })
 
   test("keeps session list dialogs resilient when listing or search requests fail", async () => {
@@ -284,7 +286,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(workspaceListDialog).toContain("if (!input.forceCreate && !listed) {")
     expect(workspaceListDialog).toContain('message: "Failed to open workspace"')
     expect(workspaceListDialog).toContain("listed = await client.session.list({ roots: true, limit: 1 })")
-    expect(workspaceListDialog).toContain('message: error instanceof Error ? error.message : "Failed to open workspace"')
+    expect(workspaceListDialog).toContain(
+      'message: error instanceof Error ? error.message : "Failed to open workspace"',
+    )
     expect(workspaceListDialog).toContain("await sync.workspace.sync()")
     expect(workspaceListDialog).toContain("await props.onSelect(workspace.directory)")
   })
@@ -324,7 +328,9 @@ describe("tui OpenTUI stability guardrails", () => {
   test("closes transcript copy and export commands when the session is no longer available", async () => {
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
 
-    expect(displayCommands).toContain('input.toast.show({ message: "Session is no longer available", variant: "warning" })')
+    expect(displayCommands).toContain(
+      'input.toast.show({ message: "Session is no longer available", variant: "warning" })',
+    )
     expect(displayCommands).toContain("if (!data) {")
     expect(displayCommands).toContain("dialog.clear()")
   })
@@ -339,19 +345,28 @@ describe("tui OpenTUI stability guardrails", () => {
 
   test("handles undo and redo session revert failures without leaking stale prompt state", async () => {
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+    // Source can be reformatted by prettier (e.g. `message:` line-broken
+    // from its value), so collapse whitespace before substring assertions.
+    const collapsed = session.replace(/\s+/g, " ")
 
-    expect(session).toContain("enabled: !!undoMessageID(messages(), session()?.revert?.messageID),")
-    expect(session).toContain('log.warn("session rollback abort failed"')
-    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to stop the running session before rollback"')
-    expect(session).toContain('log.warn("session undo abort failed"')
-    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to stop the running session before undo"')
-    expect(session).toContain('log.warn("session undo failed"')
-    expect(session).toContain('log.warn("session redo failed"')
-    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to undo previous message"')
-    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to redo the previous message"')
-    expect(session).toContain("prompt.set(promptState(sync.data.part[messageID] ?? []))")
-    expect(session).toContain("if (!messageID) {")
-    expect(session).toContain("dialog.clear()")
+    expect(collapsed).toContain("enabled: !!undoMessageID(messages(), session()?.revert?.messageID),")
+    expect(collapsed).toContain('log.warn("session rollback abort failed"')
+    expect(collapsed).toContain(
+      'message: error instanceof Error ? error.message : "Failed to stop the running session before rollback"',
+    )
+    expect(collapsed).toContain('log.warn("session undo abort failed"')
+    expect(collapsed).toContain(
+      'message: error instanceof Error ? error.message : "Failed to stop the running session before undo"',
+    )
+    expect(collapsed).toContain('log.warn("session undo failed"')
+    expect(collapsed).toContain('log.warn("session redo failed"')
+    expect(collapsed).toContain('message: error instanceof Error ? error.message : "Failed to undo previous message"')
+    expect(collapsed).toContain(
+      'message: error instanceof Error ? error.message : "Failed to redo the previous message"',
+    )
+    expect(collapsed).toContain("prompt.set(promptState(sync.data.part[messageID] ?? []))")
+    expect(collapsed).toContain("if (!messageID) {")
+    expect(collapsed).toContain("dialog.clear()")
   })
 
   test("disposes the session reconnect recovery gate on route cleanup", async () => {
@@ -437,12 +452,26 @@ describe("tui OpenTUI stability guardrails", () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
     const matches = sidebar.match(/setInterval\(/g) ?? []
 
-    expect(matches.length).toBe(0)
+    expect(matches.length).toBe(1)
+    expect(sidebar).toContain("30_000")
+    expect(sidebar).not.toContain("1_000")
+    expect(sidebar).not.toContain("clockId")
     expect(sidebar).not.toContain("clockTick")
     expect(sidebar).not.toContain("Elapsed")
     expect(sidebar).not.toContain("tokens")
     expect(sidebar).not.toContain("sidebar-eta")
     expect(sidebar).not.toContain("./usage")
+  })
+
+  test("surfaces concise session status in the sidebar title", async () => {
+    const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
+
+    expect(sidebar).toContain("footerSessionStatusView")
+    expect(sidebar).toContain('"Thinking..."')
+    expect(sidebar).toContain('"Processing..."')
+    expect(sidebar).toContain('"Finished"')
+    expect(sidebar).toContain('"Thinking stalled"')
+    expect(sidebar).toContain('"Processing stalled"')
   })
 
   test("keeps the theme dialog reactive while custom themes hydrate", async () => {
@@ -486,7 +515,7 @@ describe("tui OpenTUI stability guardrails", () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
     expect(app).toContain("const marker = dialog.stack.at(-1)")
-    expect(app).toContain('if (dialog.stack.at(-1) !== marker) return')
+    expect(app).toContain("if (dialog.stack.at(-1) !== marker) return")
     expect(app).toContain('toast.show({ message: "Failed to open provider dialog", variant: "error" })')
     expect(app).toContain('toast.show({ message: "Failed to open model dialog", variant: "error" })')
     expect(app).toContain('toast.show({ message: "Failed to open session list", variant: "error" })')
@@ -497,7 +526,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).toContain('toast.show({ message: "Failed to open themes", variant: "error" })')
     expect(app).toContain('toast.show({ message: "Failed to open help", variant: "error" })')
 
-    expect(prompt).toContain('if (dialog.stack.at(-1) !== marker) return')
+    expect(prompt).toContain("if (dialog.stack.at(-1) !== marker) return")
     expect(prompt).toContain('toast.show({ message: "Failed to open provider dialog", variant: "error" })')
   })
 
@@ -507,7 +536,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).toContain('value: "docs.open"')
     expect(app).toContain('Log.Default.warn("failed to open docs", { error })')
     expect(app).toContain('message: error instanceof Error ? error.message : "Failed to open docs"')
-    expect(app).toContain('dialog.clear()')
+    expect(app).toContain("dialog.clear()")
   })
 
   test("surfaces error-boundary issue URL copy failures instead of silently rejecting", async () => {
@@ -532,7 +561,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).toContain("if (forkRetryDisposed) return")
     expect(app).toContain('toast.show({ message: "Failed to fork session", variant: "error" })')
     expect(app).toContain("if (continued || !sync.data.session_loaded || !args.continue) return")
-    expect(app).toContain("if (startupForkStarted || !sync.data.session_loaded || !args.sessionID || !args.fork) return")
+    expect(app).toContain(
+      "if (startupForkStarted || !sync.data.session_loaded || !args.sessionID || !args.fork) return",
+    )
     expect(app).toContain('forkSessionWithRetries({ sessionID: match, source: "continue" })')
     expect(app).toContain('forkSessionWithRetries({ sessionID: args.sessionID, source: "startup" })')
   })
@@ -579,8 +610,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("pendingSubmitKeyIntent")
     expect(prompt).toContain("cancelPendingSubmit")
     expect(prompt).toContain("new AbortController()")
-    expect(prompt).toContain("setSubmitStage(\"creating-session\")")
-    expect(prompt).toContain("setSubmitStage(\"dispatching\")")
+    expect(prompt).toContain('setSubmitStage("creating-session")')
+    expect(prompt).toContain('setSubmitStage("dispatching")')
     expect(prompt).toContain("setDraftSessionID(sessionID)")
     expect(prompt).toContain("pendingSubmitStatusText(submitStage())")
   })
@@ -646,7 +677,7 @@ describe("tui OpenTUI stability guardrails", () => {
     const clipboard = await fs.readFile(CLIPBOARD_SRC, "utf8")
 
     expect(clipboard).toContain('throw new Error("Timed out writing to clipboard")')
-    expect(clipboard).toContain('input.then(')
+    expect(clipboard).toContain("input.then(")
     expect(clipboard).toContain('type: "error" as const')
     expect(clipboard).toContain("await waitForWrite(clipboardy.write(text))")
     expect(clipboard).not.toContain("await waitForWrite(clipboardy.write(text)).catch(() => {})")
@@ -656,7 +687,7 @@ describe("tui OpenTUI stability guardrails", () => {
     const app = await fs.readFile(APP_SRC, "utf8")
 
     expect(app).toContain("renderer.console.onCopySelection = async (text: string) => {")
-    expect(app).toContain('.then(() => {')
+    expect(app).toContain(".then(() => {")
     expect(app).toContain('toast.show({ message: "Copied to clipboard", variant: "info" })')
     expect(app).toContain("renderer.clearSelection()")
   })
@@ -705,7 +736,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(resizeHandle).toContain("let activeCleanup: (() => void) | undefined")
     expect(resizeHandle).toContain("onCleanup(() => {")
     expect(textField).toContain('const node = inputWrapper?.querySelector("input, textarea")')
-    expect(textField).toContain("const value = local.value ?? currentValue ?? local.defaultValue ?? \"\"")
+    expect(textField).toContain('const value = local.value ?? currentValue ?? local.defaultValue ?? ""')
     expect(sessionTurn).toContain("return assistantVisible() === 0")
   })
 
@@ -716,7 +747,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(event).toContain('duration: z.number().optional().describe("Duration in milliseconds")')
     expect(fileSsr).toContain("let selectedLinesFrame: number | undefined")
     expect(fileSsr).toContain("let selectedLinesVersion = 0")
-    expect(fileSsr).toContain("const syncSelectedLines = (range: DiffFileProps<T>[\"selectedLines\"]) => {")
+    expect(fileSsr).toContain('const syncSelectedLines = (range: DiffFileProps<T>["selectedLines"]) => {')
     expect(fileSsr).toContain("clearSelectedLinesFrame()")
   })
 
@@ -848,6 +879,14 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(worker).toContain("runtimeMode()")
   })
 
+  test("surfaces workspace sync failures instead of leaving rejected RPC calls detached", async () => {
+    const thread = await fs.readFile(THREAD_SRC, "utf8")
+
+    expect(thread).toContain('client.call("setWorkspace", { workspaceID }).catch((error) => {')
+    expect(thread).toContain('log.warn("failed to set workspace"')
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.setWorkspaceFailed"')
+  })
+
   test("worker target() resolves all three layouts: compiled binary, source-bundle, source-dev", async () => {
     // Regression guard for ADR-002 source-bundle. The bundle emits flat
     // worker.js next to index.js (build-source.ts uses `naming.entry =
@@ -880,7 +919,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain("TUI app failed to load.")
     expect(thread).toContain("elapsedMs")
     expect(thread).not.toContain("DEFAULT_TUI_APP_IMPORT_TIMEOUT_MS")
-    expect(thread).not.toContain("withTimeout(\n          import(\"./app\")")
+    expect(thread).not.toContain('withTimeout(\n          import("./app")')
     expect(explain).toContain('case "tui.appImportFailed":')
     expect(explain).toContain("tui.appImportReady")
   })
