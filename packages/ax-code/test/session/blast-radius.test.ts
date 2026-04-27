@@ -142,6 +142,26 @@ describe("BlastRadius", () => {
     expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
   })
 
+  test("perTool override merges into default seed instead of replacing it (regression)", () => {
+    // A user who sets only `perTool: { bash: 0 }` to disable the bash
+    // cap must not lose the seeded edit/write/apply_patch caps. The
+    // earlier implementation replaced the whole perTool map.
+    BlastRadius.get(SID, { perTool: { bash: 0 } })
+    const state = BlastRadius.get(SID)
+    // bash override applied
+    expect(state.caps.perTool.bash).toBe(0)
+    // seeded defaults preserved
+    expect(state.caps.perTool.edit).toBeGreaterThan(0)
+    expect(state.caps.perTool.write).toBeGreaterThan(0)
+    expect(state.caps.perTool.apply_patch).toBeGreaterThan(0)
+  })
+
+  test("blockedPaths override replaces (not merges) — intentional", () => {
+    BlastRadius.get(SID, { blockedPaths: ["custom-only/**"] })
+    const state = BlastRadius.get(SID)
+    expect(state.caps.blockedPaths).toEqual(["custom-only/**"])
+  })
+
   test("describe surfaces the offending tool name", () => {
     BlastRadius.get(SID, { steps: 1000, files: 1000, lines: 100_000, perTool: { write: 1 } })
     BlastRadius.incrementToolCall(SID, "write")

@@ -52,17 +52,33 @@ export namespace BlastRadius {
     }
   }
 
+  /**
+   * Merge `overrides` onto `base`. The `perTool` map merges by key so a
+   * user override of one tool (e.g. `{ bash: 0 }` to disable the bash
+   * cap) does not erase the seeded defaults for `edit`, `write`, etc.
+   * The `blockedPaths` array replaces — users overriding the path list
+   * intentionally want a different list, not an extension.
+   */
+  function mergeCaps(base: Caps, overrides: Partial<Caps>): Caps {
+    return {
+      ...base,
+      ...overrides,
+      perTool: overrides.perTool ? { ...base.perTool, ...overrides.perTool } : base.perTool,
+      blockedPaths: overrides.blockedPaths ?? base.blockedPaths,
+    }
+  }
+
   /** Returns the active state, creating it on first use. */
   export function get(sessionID: SessionID, overrides?: Partial<Caps>): State {
     let state = sessions.get(sessionID)
     if (!state) {
-      const caps = { ...defaultCaps(), ...(overrides ?? {}) }
+      const caps = mergeCaps(defaultCaps(), overrides ?? {})
       state = { files: new Set(), lines: 0, steps: 0, toolCalls: new Map(), caps }
       sessions.set(sessionID, state)
       return state
     }
     if (overrides) {
-      state.caps = { ...state.caps, ...overrides }
+      state.caps = mergeCaps(state.caps, overrides)
     }
     return state
   }

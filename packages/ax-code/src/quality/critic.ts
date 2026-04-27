@@ -16,6 +16,7 @@ import { generateObject } from "ai"
 import z from "zod"
 import { Config } from "@/config/config"
 import { Provider } from "@/provider/provider"
+import type { ModelID, ProviderID } from "@/provider/schema"
 import { Recorder } from "@/replay/recorder"
 import type { SessionID } from "@/session/schema"
 import { Log } from "@/util/log"
@@ -72,18 +73,26 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
 
   export async function review(input: ReviewInput): Promise<ReviewResult> {
     const start = Date.now()
+    // The whole resolve+call path is wrapped in one try so that a
+    // failure in Provider.getModel / Provider.getLanguage (e.g. the
+    // configured architect model has been removed from models-snapshot)
+    // returns the same "critic unavailable" graceful path as a network
+    // failure, instead of throwing back to the planner. The setTimeout
+    // is also created inside the try so we never leak a timer when an
+    // early step throws.
     const explicit = input.model
-      ? { providerID: input.model.providerID as never, modelID: input.model.modelID as never }
+      ? { providerID: input.model.providerID as ProviderID, modelID: input.model.modelID as ModelID }
       : null
-    const modelRef = explicit ?? (await configuredArchitectModel()) ?? (await Provider.defaultModel())
-    const resolved = await Provider.getModel(modelRef.providerID, modelRef.modelID)
-    const language = await Provider.getLanguage(resolved)
-
+    let modelLabel = "unresolved"
+    let timer: ReturnType<typeof setTimeout> | undefined
     const abort = new AbortController()
-    const timer = setTimeout(() => abort.abort(), input.timeoutMs ?? 60_000)
-    const modelLabel = `${modelRef.providerID}/${modelRef.modelID}`
     let raw: z.infer<typeof CRITIC_OUTPUT>
     try {
+      const modelRef = explicit ?? (await configuredArchitectModel()) ?? (await Provider.defaultModel())
+      const resolved = await Provider.getModel(modelRef.providerID, modelRef.modelID)
+      const language = await Provider.getLanguage(resolved)
+      modelLabel = `${modelRef.providerID}/${modelRef.modelID}`
+      timer = setTimeout(() => abort.abort(), input.timeoutMs ?? 60_000)
       raw = await generateObject({
         model: language,
         schema: CRITIC_OUTPUT,
@@ -123,7 +132,7 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
       }
       return { overallAssessment: "critic unavailable", findings: [] }
     } finally {
-      clearTimeout(timer)
+      if (timer) clearTimeout(timer)
     }
 
     const runId = input.runId ?? input.phaseId
