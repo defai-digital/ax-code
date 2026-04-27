@@ -54,6 +54,7 @@ function sessionRiskURL(input: { baseUrl: string; sessionID: string; directory?:
   const url = new URL(`${input.baseUrl}/session/${encodeURIComponent(input.sessionID)}/risk`)
   url.searchParams.set("quality", "true")
   url.searchParams.set("findings", "true")
+  url.searchParams.set("envelopes", "true")
   if (input.directory) url.searchParams.set("directory", input.directory)
   return url.toString()
 }

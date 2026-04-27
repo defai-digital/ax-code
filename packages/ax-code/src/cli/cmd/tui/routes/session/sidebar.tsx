@@ -20,6 +20,7 @@ import { computeSidebarWidth } from "./layout"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
 import {
+  renderSessionChecksSummary,
   renderSessionQualitySidebarLine,
   sessionQualityActions,
   sessionQualityActionValue,
@@ -41,17 +42,16 @@ export function activityColor(status: string, theme: ReturnType<typeof useTheme>
   }
 }
 
-function qualityColor(status: SyncedSessionQualityReadiness["overallStatus"], theme: ReturnType<typeof useTheme>["theme"]) {
+function qualityColor(
+  status: SyncedSessionQualityReadiness["overallStatus"],
+  theme: ReturnType<typeof useTheme>["theme"],
+) {
   if (status === "pass") return theme.success
   if (status === "warn") return theme.warning
   return theme.error
 }
 
-function sidebarStatusText(input: {
-  status: FooterSessionStatus
-  hasMessages: boolean
-  now: number
-}) {
+function sidebarStatusText(input: { status: FooterSessionStatus; hasMessages: boolean; now: number }) {
   const view = footerSessionStatusView({
     status: input.status,
     now: input.now,
@@ -179,6 +179,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     }),
   )
   const findingCounts = createMemo(() => countFindingsByWorkflow(risk()?.findings ?? []))
+  const checksSummary = createMemo(() => renderSessionChecksSummary(risk()?.envelopes ?? []))
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
@@ -523,6 +524,19 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       </box>
                     )}
                   </For>
+                </box>
+              </Show>
+              <Show when={checksSummary().length > 0}>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+                  <box flexDirection="row" justifyContent="space-between">
+                    <text fg={theme.text}>
+                      <b>Checks</b>
+                    </text>
+                  </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
+                  <text fg={theme.textMuted} wrapMode="word">
+                    {checksSummary()}
+                  </text>
                 </box>
               </Show>
               <Show when={activity().length > 0}>

@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import {
   findSessionQualityAction,
+  renderSessionChecksSummary,
   renderSessionQualityBrief,
   renderSessionQualityInlineSummary,
   renderSessionQualityPrompt,
@@ -11,6 +12,7 @@ import {
   sessionQualityActionValue,
   sessionQualityDetailItems,
 } from "../../../src/cli/cmd/tui/routes/session/quality"
+import type { VerificationEnvelope } from "../../../src/quality/verification-envelope"
 
 const SESSION_ROUTE_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/index.tsx")
 
@@ -372,7 +374,9 @@ describe("tui session quality actions", () => {
       footer: "Check QA replay readiness gates before benchmarking.",
     })
     expect(renderSessionQualityInlineSummary(qaAction)).toContain("qa replay readiness")
-    expect(renderSessionQualityBrief(qaAction)).toContain("- next action: Check QA replay readiness gates before benchmarking.")
+    expect(renderSessionQualityBrief(qaAction)).toContain(
+      "- next action: Check QA replay readiness gates before benchmarking.",
+    )
 
     expect(debugAction).toMatchObject({
       title: "Check Debug Replay Readiness",
@@ -639,9 +643,7 @@ describe("tui session quality actions", () => {
       },
     })[0]!
 
-    expect(renderSessionQualityInlineSummary(action)).toBe(
-      "capture evidence · blocked · no replay evidence yet",
-    )
+    expect(renderSessionQualityInlineSummary(action)).toBe("capture evidence · blocked · no replay evidence yet")
   })
 
   test("renders a concrete capture-evidence prompt scaffold", () => {
@@ -779,6 +781,96 @@ describe("tui session quality actions", () => {
     expect(sessionRoute).toContain("const hasQualityReadiness = createMemo(() => qualityActions().length > 0)")
   })
 
+  describe("renderSessionChecksSummary", () => {
+    function envelope(overrides: Partial<VerificationEnvelope> = {}): VerificationEnvelope {
+      return {
+        schemaVersion: 1,
+        workflow: "qa",
+        scope: { kind: "file", paths: ["src/foo.ts"] },
+        command: { runner: "typecheck", argv: [], cwd: "/tmp/work" },
+        result: {
+          name: "typecheck",
+          type: "typecheck",
+          passed: true,
+          status: "passed",
+          issues: [],
+          duration: 0,
+        },
+        structuredFailures: [],
+        artifactRefs: [],
+        source: { tool: "refactor_apply", version: "4.x.x", runId: "ses_test" },
+        ...overrides,
+      }
+    }
+
+    test("returns empty string when no envelopes are present", () => {
+      expect(renderSessionChecksSummary([])).toBe("")
+    })
+
+    test("renders three-tick line when typecheck/lint/tests all passed", () => {
+      const envs = [
+        envelope({ command: { runner: "typecheck", argv: [], cwd: "/tmp" } }),
+        envelope({ command: { runner: "lint", argv: [], cwd: "/tmp" } }),
+        envelope({ command: { runner: "test", argv: [], cwd: "/tmp" } }),
+      ]
+      expect(renderSessionChecksSummary(envs)).toBe("typecheck ✓ · lint ✓ · tests ✓")
+    })
+
+    test("only includes kinds that have at least one envelope", () => {
+      const envs = [envelope({ command: { runner: "typecheck", argv: [], cwd: "/tmp" } })]
+      expect(renderSessionChecksSummary(envs)).toBe("typecheck ✓")
+    })
+
+    test("marks failed kinds with ✗ and a count when more than one envelope failed", () => {
+      const fail = (runner: "typecheck" | "lint" | "test"): VerificationEnvelope =>
+        envelope({
+          command: { runner, argv: [], cwd: "/tmp" },
+          result: { name: runner, type: runner, passed: false, status: "failed", issues: [], duration: 0 },
+        })
+      const envs = [fail("typecheck"), fail("typecheck"), fail("lint")]
+      expect(renderSessionChecksSummary(envs)).toBe("typecheck ✗ 2 · lint ✗")
+    })
+
+    test("marks skipped kinds with ⏭ and prefers skipped over passed but loses to failed", () => {
+      const skipped = envelope({
+        command: { runner: "test", argv: [], cwd: "/tmp" },
+        result: { name: "tests", type: "test", passed: false, status: "skipped", issues: [], duration: 0 },
+      })
+      expect(renderSessionChecksSummary([skipped])).toBe("tests ⏭")
+
+      const passed = envelope({
+        command: { runner: "test", argv: [], cwd: "/tmp" },
+        result: { name: "tests", type: "test", passed: true, status: "passed", issues: [], duration: 0 },
+      })
+      expect(renderSessionChecksSummary([passed, skipped])).toBe("tests ⏭")
+
+      const failed = envelope({
+        command: { runner: "test", argv: [], cwd: "/tmp" },
+        result: { name: "tests", type: "test", passed: false, status: "failed", issues: [], duration: 0 },
+      })
+      expect(renderSessionChecksSummary([passed, skipped, failed])).toBe("tests ✗")
+    })
+
+    test("treats error and timeout statuses as failures", () => {
+      const errored = envelope({
+        command: { runner: "lint", argv: [], cwd: "/tmp" },
+        result: { name: "lint", type: "lint", passed: false, status: "error", issues: [], duration: 0 },
+      })
+      const timedOut = envelope({
+        command: { runner: "test", argv: [], cwd: "/tmp" },
+        result: { name: "tests", type: "test", passed: false, status: "timeout", issues: [], duration: 0 },
+      })
+      expect(renderSessionChecksSummary([errored, timedOut])).toBe("lint ✗ · tests ✗")
+    })
+
+    test("ignores envelopes with unrecognised runners (forward-compat)", () => {
+      const unknown = envelope({
+        command: { runner: "format", argv: [], cwd: "/tmp" },
+      })
+      expect(renderSessionChecksSummary([unknown])).toBe("")
+    })
+  })
+
   describe("renderSessionQualitySidebarLine", () => {
     test("returns 'ok' for a passing workflow with no problem gates", () => {
       const action = sessionQualityActions({
@@ -795,9 +887,7 @@ describe("tui session quality actions", () => {
             missingLabels: 0,
             totalItems: 2,
             nextAction: null,
-            gates: [
-              { name: "benchmark-readiness", status: "pass", detail: "ready" },
-            ],
+            gates: [{ name: "benchmark-readiness", status: "pass", detail: "ready" }],
           },
         },
       })[0]!
@@ -818,9 +908,7 @@ describe("tui session quality actions", () => {
             missingLabels: 0,
             totalItems: 1,
             nextAction: null,
-            gates: [
-              { name: "refresh-required", status: "warn", detail: "refresh after recent activity" },
-            ],
+            gates: [{ name: "refresh-required", status: "warn", detail: "refresh after recent activity" }],
           },
           debug: null,
         },
@@ -853,9 +941,7 @@ describe("tui session quality actions", () => {
           debug: null,
         },
       })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe(
-        "Review · no anchor items exported for workflow review",
-      )
+      expect(renderSessionQualitySidebarLine(action)).toBe("Review · no anchor items exported for workflow review")
     })
 
     test("collapses to a count when there are multiple problem gates", () => {
@@ -970,9 +1056,7 @@ describe("tui session quality actions", () => {
             missingLabels: 0,
             totalItems: 1,
             nextAction: null,
-            gates: [
-              { name: "refresh-required", status: "warn", detail: "refresh after recent activity" },
-            ],
+            gates: [{ name: "refresh-required", status: "warn", detail: "refresh after recent activity" }],
           },
           debug: null,
         },

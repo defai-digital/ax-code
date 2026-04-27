@@ -1,6 +1,7 @@
 import type { PromptInfo } from "../../component/prompt/history"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import type { SeverityCounts } from "@/quality/finding-counts"
+import type { VerificationEnvelope } from "@/quality/verification-envelope"
 import { ProbabilisticRollout } from "@/quality/probabilistic-rollout"
 
 export type SessionQualityWorkflow = "review" | "debug" | "qa"
@@ -181,10 +182,7 @@ function actionStatusTitle(action: Pick<SessionQualityAction, "kind" | "summary"
   return "Label coverage incomplete"
 }
 
-function promptForAction(input: {
-  sessionID: string
-  action: SessionQualityAction
-}): PromptInfo {
+function promptForAction(input: { sessionID: string; action: SessionQualityAction }): PromptInfo {
   return {
     input: renderSessionQualityPrompt(input.action, input.sessionID),
     parts: [],
@@ -196,18 +194,19 @@ export function sessionQualityActions(input: {
   quality: SessionQualitySet
 }): SessionQualityAction[] {
   const items = [
-    input.quality?.review ? ({ workflow: "review" as const, summary: input.quality.review }) : null,
-    input.quality?.debug ? ({ workflow: "debug" as const, summary: input.quality.debug }) : null,
-    input.quality?.qa ? ({ workflow: "qa" as const, summary: input.quality.qa }) : null,
+    input.quality?.review ? { workflow: "review" as const, summary: input.quality.review } : null,
+    input.quality?.debug ? { workflow: "debug" as const, summary: input.quality.debug } : null,
+    input.quality?.qa ? { workflow: "qa" as const, summary: input.quality.qa } : null,
   ].filter((item): item is { workflow: SessionQualityWorkflow; summary: SyncedSessionQualityReadiness } => !!item)
 
   return items.map(({ workflow, summary }) => {
     const kind = actionKind(summary)
-    const title = kind === "benchmark"
-      ? `Benchmark ${sessionQualityWorkflowLabel(workflow)} Replay`
-      : kind === "capture_evidence"
-        ? `Capture ${sessionQualityWorkflowLabel(workflow)} Evidence`
-        : labelCoverageTitle(workflow, summary)
+    const title =
+      kind === "benchmark"
+        ? `Benchmark ${sessionQualityWorkflowLabel(workflow)} Replay`
+        : kind === "capture_evidence"
+          ? `Capture ${sessionQualityWorkflowLabel(workflow)} Evidence`
+          : labelCoverageTitle(workflow, summary)
 
     const description = `${actionReadinessState({ summary })} · ${actionSummaryDetail({ kind, summary })}`
 
@@ -343,13 +342,62 @@ export function renderSessionQualitySidebarLine(
   return `${label} · ${problemGates.length} ${noun}`
 }
 
+// One-line summary for the sidebar Checks section. Aggregates a session's
+// VerificationEnvelope[] by check type (typecheck / lint / tests) and renders
+// pass/fail/skipped icons. Returns "" when there are no envelopes — the
+// sidebar should not show the section at all in that case.
+//
+// "Skipped" wins over "passed" when ANY envelope of a kind was skipped,
+// because skipped is more user-relevant than green ("did this run at all?").
+// "Failed" wins over both, because a single failure must surface even if
+// other runs of the same kind passed.
+export function renderSessionChecksSummary(envelopes: readonly VerificationEnvelope[]): string {
+  if (envelopes.length === 0) return ""
+
+  type Kind = "typecheck" | "lint" | "test"
+  type Status = "passed" | "failed" | "skipped" | "missing"
+
+  const aggregateStatus = (kind: Kind): { status: Status; failedCount: number } => {
+    const same = envelopes.filter((e) => e.command.runner === kind)
+    if (same.length === 0) return { status: "missing", failedCount: 0 }
+    let hasFail = false
+    let hasSkip = false
+    let failedCount = 0
+    for (const env of same) {
+      if (env.result.status === "failed" || env.result.status === "error" || env.result.status === "timeout") {
+        hasFail = true
+        failedCount += 1
+      } else if (env.result.status === "skipped") {
+        hasSkip = true
+      }
+    }
+    if (hasFail) return { status: "failed", failedCount }
+    if (hasSkip) return { status: "skipped", failedCount: 0 }
+    return { status: "passed", failedCount: 0 }
+  }
+
+  const labelFor = (kind: Kind): string => (kind === "test" ? "tests" : kind)
+
+  const formatPart = (kind: Kind): string | null => {
+    const { status, failedCount } = aggregateStatus(kind)
+    const label = labelFor(kind)
+    if (status === "missing") return null
+    if (status === "passed") return `${label} ✓`
+    if (status === "skipped") return `${label} ⏭`
+    return failedCount > 1 ? `${label} ✗ ${failedCount}` : `${label} ✗`
+  }
+
+  const parts = (["typecheck", "lint", "test"] as const)
+    .map(formatPart)
+    .filter((part): part is string => part !== null)
+
+  if (parts.length === 0) return ""
+  return parts.join(" · ")
+}
+
 export function renderSessionQualityPrompt(action: SessionQualityAction, sessionID: string) {
   const recommended = targetedQATestRecommendations(action.summary)
-  const lines = [
-    `Quality readiness context for session ${sessionID}:`,
-    renderSessionQualityBrief(action),
-    "",
-  ]
+  const lines = [`Quality readiness context for session ${sessionID}:`, renderSessionQualityBrief(action), ""]
 
   if (recommended.length > 0) {
     lines.push(`Targeted QA recommendation: run ${recommended[0]} first.`)
