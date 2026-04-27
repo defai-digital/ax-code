@@ -38,6 +38,7 @@ import { FileTime } from "../file/time"
 import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
 import { Recorder } from "../replay/recorder"
+import { BlastRadius } from "./blast-radius"
 import { CodeIntelligence } from "../code-intelligence"
 import { AutoIndex } from "../code-intelligence/auto-index"
 import type { ProjectID } from "../project/schema"
@@ -96,9 +97,11 @@ export namespace SessionPrompt {
     uri: string,
   ): Promise<Awaited<ReturnType<typeof LSP.documentSymbolEnvelope>>["data"]> {
     return (
-      (await LSP.documentSymbolCachedEnvelope(uri).catch(() => undefined)) ??
-      (await LSP.documentSymbolEnvelope(uri, { cache: true }).catch(() => undefined))
-    )?.data ?? []
+      (
+        (await LSP.documentSymbolCachedEnvelope(uri).catch(() => undefined)) ??
+        (await LSP.documentSymbolEnvelope(uri, { cache: true }).catch(() => undefined))
+      )?.data ?? []
+    )
   }
 
   const state = Instance.state(
@@ -505,6 +508,11 @@ export namespace SessionPrompt {
         })
       }
       Recorder.end(sessionID)
+      // Release the autonomous-mode per-session counters and the
+      // BlastRadius cap state. Without this the module-level Map grows
+      // unbounded across the process lifetime — small per-session, but
+      // accumulates over hundreds of sessions.
+      BlastRadius.reset(sessionID)
     })
     Recorder.begin(sessionID)
     // Idempotent — primary warmup happens in InstanceBootstrap so providers

@@ -12,6 +12,7 @@ import { replace, trimDiff } from "./edit"
 import { Isolation } from "@/isolation"
 import DESCRIPTION from "./multiedit.txt"
 import { Log } from "@/util/log"
+import { BlastRadius } from "@/session/blast-radius"
 
 const log = Log.create({ service: "multiedit-tool" })
 
@@ -47,6 +48,11 @@ export const MultiEditTool = Tool.define("multiedit", {
       await assertExternalDirectory(ctx, file)
       await assertSymlinkInsideProject(file)
       Isolation.assertWrite(ctx.extra?.isolation, file, Instance.directory, Instance.worktree)
+      // PRD v4.2.0 P0-1 + v4.2.1 P2-3. The other write-mode tools
+      // (edit, write, apply_patch) gate writes on BlastRadius; this
+      // path was missing the hook so a multiedit could touch
+      // blocked dotenv/secrets paths even in autonomous mode.
+      BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, file))
     }
 
     const lock = async <T>(idx: number, fn: () => Promise<T>): Promise<T> => {
@@ -116,6 +122,17 @@ export const MultiEditTool = Tool.define("multiedit", {
           await Filesystem.write(file, next)
           await notifyFileEdited(file, "change")
           await FileTime.read(ctx.sessionID, file)
+          // Per-session file/line accounting for autonomous caps.
+          // additions+deletions matches the precise count edit.ts uses
+          // (diffLines), not the approximate split-newline count
+          // write.ts uses, since multiedit already computes the diff.
+          let additions = 0
+          let deletions = 0
+          for (const change of diffLines(prev, next)) {
+            if (change.added) additions += change.count || 0
+            if (change.removed) deletions += change.count || 0
+          }
+          BlastRadius.recordWriteAndAssert(ctx.sessionID, file, additions + deletions)
         }
       } catch (error) {
         const rollbackErrors: { file: string; error: unknown }[] = []
