@@ -193,8 +193,19 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
    * `sessionID` so per-finding telemetry is emitted, then turns blocking
    * findings into a `block: true` signal so the planner runs the configured
    * fallback (usually `replan`).
+   *
+   * `mediumReplanBudget` (PRD v4.2.1 P2-2): when > 0, MEDIUM-only findings
+   * also trigger a replan, but only up to N times per phase id. HIGH and
+   * CRITICAL always block regardless of budget. The default 0 preserves
+   * the legacy "block only on HIGH/CRITICAL" behavior.
    */
-  export function asPhaseReviewer(opts: { sessionID?: SessionID; getDiff: (phaseId: string) => Promise<string> }) {
+  export function asPhaseReviewer(opts: {
+    sessionID?: SessionID
+    getDiff: (phaseId: string) => Promise<string>
+    mediumReplanBudget?: number
+  }) {
+    const mediumBudget = Math.max(0, opts.mediumReplanBudget ?? 0)
+    const mediumUsedByPhase = new Map<string, number>()
     return async (phase: { id: string; description: string }, _result: unknown, _plan: unknown) => {
       if (!(await enabled())) return { block: false }
       const diff = await opts.getDiff(phase.id)
@@ -205,20 +216,64 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
         diff,
         sessionID: opts.sessionID,
       })
-      if (!isBlocking(result.findings)) return { block: false }
-      const summary = result.findings
+
+      const used = mediumUsedByPhase.get(phase.id) ?? 0
+      const decision = classifyForReplan(result.findings, used, mediumBudget)
+      if (!decision.block) return { block: false }
+      if (decision.reason === "medium_budget") {
+        mediumUsedByPhase.set(phase.id, used + 1)
+        return {
+          block: true,
+          error: `critic blocked phase (MEDIUM, replan budget remaining: ${decision.remaining}): ${decision.summary}`,
+        }
+      }
+      return { block: true, error: `critic blocked phase: ${decision.summary}` }
+    }
+  }
+
+  /** True if any finding should block plan continuation regardless of budget. */
+  export function isBlocking(findings: Finding[]): boolean {
+    return findings.some((f) => f.severity === "CRITICAL" || f.severity === "HIGH")
+  }
+
+  export type ReplanClassification =
+    | { block: false }
+    | { block: true; reason: "blocking"; summary: string }
+    | { block: true; reason: "medium_budget"; remaining: number; summary: string }
+
+  /**
+   * Pure classifier used by `asPhaseReviewer` (PRD v4.2.1 P2-2). Decides
+   * whether a critic result should block the phase and, when budget is
+   * configured, whether a MEDIUM-only result should burn one replan
+   * attempt. Pulled out of the closure so it can be tested without an
+   * LLM.
+   */
+  export function classifyForReplan(
+    findings: Finding[],
+    usedBudget: number,
+    totalBudget: number,
+  ): ReplanClassification {
+    if (isBlocking(findings)) {
+      const summary = findings
         .filter((f) => f.severity === "HIGH" || f.severity === "CRITICAL")
         .map(
           (f) =>
             `${f.severity} ${f.ruleId ?? f.category} @ ${f.file}:${f.anchor.kind === "line" ? f.anchor.line : "?"} — ${f.summary}`,
         )
         .join("; ")
-      return { block: true, error: `critic blocked phase: ${summary}` }
+      return { block: true, reason: "blocking", summary }
     }
-  }
-
-  /** True if any finding should block plan continuation. */
-  export function isBlocking(findings: Finding[]): boolean {
-    return findings.some((f) => f.severity === "CRITICAL" || f.severity === "HIGH")
+    if (totalBudget <= 0) return { block: false }
+    const mediums = findings.filter((f) => f.severity === "MEDIUM")
+    if (mediums.length === 0) return { block: false }
+    if (usedBudget >= totalBudget) return { block: false }
+    const remaining = totalBudget - usedBudget - 1
+    const summary = mediums
+      .map(
+        (f) =>
+          `MEDIUM ${f.ruleId ?? f.category} @ ${f.file}:${f.anchor.kind === "line" ? f.anchor.line : "?"} — ${f.summary}`,
+      )
+      .join("; ")
+    return { block: true, reason: "medium_budget", remaining, summary }
   }
 }

@@ -758,6 +758,12 @@ export const Info = z
             files: z.number().int().positive().optional(),
             lines: z.number().int().positive().optional(),
             blockedPaths: z.array(z.string()).optional(),
+            perTool: z
+              .record(z.string(), z.number().int())
+              .optional()
+              .describe(
+                "Per-tool call-count caps. 0 or negative disables the cap for that tool. Tools not listed are unrestricted at the per-tool layer.",
+              ),
           })
           .optional()
           .describe(

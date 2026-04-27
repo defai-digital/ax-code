@@ -111,4 +111,44 @@ describe("BlastRadius", () => {
     BlastRadius.recordWriteAndAssert(SID, "/a", 3)
     expect(() => BlastRadius.recordWriteAndAssert(SID, "/b", 10)).toThrow()
   })
+
+  test("per-tool caps trip when a single tool exceeds its limit (PRD v4.2.1 P2-3)", () => {
+    BlastRadius.get(SID, { steps: 1000, files: 1000, lines: 100_000, perTool: { bash: 3 } })
+    BlastRadius.incrementToolCall(SID, "bash")
+    BlastRadius.incrementToolCall(SID, "bash")
+    BlastRadius.incrementToolCall(SID, "bash")
+    // 3rd call hits the cap exactly — checkAfterIncrement returns null.
+    expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
+    BlastRadius.incrementToolCall(SID, "bash")
+    const trip = BlastRadius.checkAfterIncrement(SID)
+    expect(trip?.kind).toBe("tool_calls")
+    expect(trip?.current).toBe(4)
+    expect(trip?.limit).toBe(3)
+  })
+
+  test("per-tool caps ignore tools not in the map", () => {
+    BlastRadius.get(SID, { steps: 1000, files: 1000, lines: 100_000, perTool: { bash: 1 } })
+    // Calling an untracked tool 100 times should not trip.
+    for (let i = 0; i < 100; i++) BlastRadius.incrementToolCall(SID, "totally_made_up")
+    expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
+  })
+
+  test("per-tool cap of 0 or negative disables the cap", () => {
+    BlastRadius.get(SID, { steps: 1000, files: 1000, lines: 100_000, perTool: { bash: 0, edit: -1 } })
+    for (let i = 0; i < 100; i++) {
+      BlastRadius.incrementToolCall(SID, "bash")
+      BlastRadius.incrementToolCall(SID, "edit")
+    }
+    expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
+  })
+
+  test("describe surfaces the offending tool name", () => {
+    BlastRadius.get(SID, { steps: 1000, files: 1000, lines: 100_000, perTool: { write: 1 } })
+    BlastRadius.incrementToolCall(SID, "write")
+    BlastRadius.incrementToolCall(SID, "write")
+    const trip = BlastRadius.checkAfterIncrement(SID)
+    expect(trip).not.toBeNull()
+    expect(BlastRadius.describe(trip!, "write")).toContain('"write"')
+    expect(BlastRadius.describe(trip!, "write")).toContain("2/1")
+  })
 })

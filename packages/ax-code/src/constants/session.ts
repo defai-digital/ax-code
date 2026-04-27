@@ -44,3 +44,21 @@ export const AUTONOMOUS_BLOCKED_PATHS: readonly string[] = [
 // Doom-loop cycle detection window (P1-1). The detector inspects up to
 // the last `2 * AUTONOMOUS_MAX_CYCLE_LEN` tool calls.
 export const AUTONOMOUS_MAX_CYCLE_LEN = 4
+
+// Per-tool call-count caps for autonomous mode (PRD v4.2.1 P2-3).
+// Catches mass-rewrite / bash-flood failure modes that slip under the
+// per-session aggregate caps. Only tools that mutate state, run code,
+// or reach the network are listed — read/grep/glob/list cost only
+// tokens, which the provider already rate-limits.
+//
+// Tools NOT listed here are unrestricted at the per-tool layer and
+// remain bounded only by AUTONOMOUS_MAX_STEPS. Override per session
+// via `experimental.autonomous_caps.perTool` in ax-code.json (set 0
+// or negative to disable a per-tool cap entirely).
+export const AUTONOMOUS_PER_TOOL_MAX_CALLS: Readonly<Record<string, number>> = {
+  bash: 50,
+  edit: 100,
+  write: 50,
+  apply_patch: 50,
+  multiedit: 50,
+}

@@ -140,7 +140,7 @@ export const CodeGraphSnapshotEvent = Base.extend({
 // cap is tripped so replay can audit why a session ended early.
 export const AutonomousCapHitEvent = Base.extend({
   type: z.literal("autonomous.cap_hit"),
-  kind: z.enum(["steps", "files", "lines", "blocked_path"]),
+  kind: z.enum(["steps", "files", "lines", "blocked_path", "tool_calls"]),
   current: z.number().int(),
   limit: z.number().int(),
   message: z.string().optional(),

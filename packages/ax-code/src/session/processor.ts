@@ -310,8 +310,12 @@ export namespace SessionProcessor {
                   // tool call so that any branch that loops without
                   // making progress eventually fails with a typed
                   // error instead of an opaque rate-limit warning.
+                  // Also bump the per-tool counter (PRD v4.2.1 P2-3)
+                  // so that flooding one tool — bash spam, mass-edit
+                  // — trips before the aggregate session cap.
                   if (autonomous) {
                     BlastRadius.incrementStep(input.sessionID)
+                    BlastRadius.incrementToolCall(input.sessionID, value.toolName)
                     BlastRadius.assertWithinCaps(input.sessionID)
                   }
 

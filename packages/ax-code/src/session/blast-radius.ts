@@ -7,6 +7,7 @@ import {
   AUTONOMOUS_MAX_FILES_CHANGED,
   AUTONOMOUS_MAX_LINES_CHANGED,
   AUTONOMOUS_BLOCKED_PATHS,
+  AUTONOMOUS_PER_TOOL_MAX_CALLS,
 } from "@/constants/session"
 import { Recorder } from "@/replay/recorder"
 import type { SessionID } from "./schema"
@@ -14,19 +15,28 @@ import type { SessionID } from "./schema"
 export namespace BlastRadius {
   const log = Log.create({ service: "session.blast-radius" })
 
-  export type Kind = "steps" | "files" | "lines" | "blocked_path"
+  export type Kind = "steps" | "files" | "lines" | "blocked_path" | "tool_calls"
 
   export interface Caps {
     steps: number
     files: number
     lines: number
     blockedPaths: readonly string[]
+    /**
+     * Per-tool call-count cap. A `0` or negative value disables the
+     * cap for that tool. Tools not in the map are unrestricted.
+     */
+    perTool: Readonly<Record<string, number>>
   }
 
   export interface State {
     files: Set<string>
     lines: number
     steps: number
+    /** Per-tool call counts for the per-tool cap (PRD v4.2.1 P2-3). */
+    toolCalls: Map<string, number>
+    /** Set when the most-recent assertWithinCaps overage was per-tool (so describe() can name the tool). */
+    lastTripToolName?: string
     caps: Caps
   }
 
@@ -38,6 +48,7 @@ export namespace BlastRadius {
       files: AUTONOMOUS_MAX_FILES_CHANGED,
       lines: AUTONOMOUS_MAX_LINES_CHANGED,
       blockedPaths: AUTONOMOUS_BLOCKED_PATHS,
+      perTool: AUTONOMOUS_PER_TOOL_MAX_CALLS,
     }
   }
 
@@ -46,7 +57,7 @@ export namespace BlastRadius {
     let state = sessions.get(sessionID)
     if (!state) {
       const caps = { ...defaultCaps(), ...(overrides ?? {}) }
-      state = { files: new Set(), lines: 0, steps: 0, caps }
+      state = { files: new Set(), lines: 0, steps: 0, toolCalls: new Map(), caps }
       sessions.set(sessionID, state)
       return state
     }
@@ -65,6 +76,17 @@ export namespace BlastRadius {
     const state = get(sessionID)
     state.steps += 1
     return state.steps
+  }
+
+  /**
+   * Increment the per-tool call count for `toolName` and return the new value.
+   * Use together with `assertWithinCaps` to honor `caps.perTool`.
+   */
+  export function incrementToolCall(sessionID: SessionID, toolName: string): number {
+    const state = get(sessionID)
+    const next = (state.toolCalls.get(toolName) ?? 0) + 1
+    state.toolCalls.set(toolName, next)
+    return next
   }
 
   /** Record a file write (idempotent for the same path) and a line delta. */
@@ -99,13 +121,23 @@ export namespace BlastRadius {
     if (state.files.size > state.caps.files)
       return { kind: "files", current: state.files.size, limit: state.caps.files }
     if (state.lines > state.caps.lines) return { kind: "lines", current: state.lines, limit: state.caps.lines }
+    // Per-tool caps: any tool whose count exceeds its configured limit.
+    // A 0 or negative configured limit disables the cap for that tool.
+    state.lastTripToolName = undefined
+    for (const [tool, count] of state.toolCalls) {
+      const limit = state.caps.perTool[tool]
+      if (typeof limit === "number" && limit > 0 && count > limit) {
+        state.lastTripToolName = tool
+        return { kind: "tool_calls", current: count, limit }
+      }
+    }
     return null
   }
 
   export const LimitExceededError = NamedError.create(
     "AutonomousLimitExceededError",
     z.object({
-      kind: z.enum(["steps", "files", "lines", "blocked_path"]),
+      kind: z.enum(["steps", "files", "lines", "blocked_path", "tool_calls"]),
       current: z.number(),
       limit: z.number(),
       message: z.string(),
@@ -113,7 +145,7 @@ export namespace BlastRadius {
   )
 
   /** Pretty error message for a tripped cap. */
-  export function describe(check: { kind: Kind; current: number; limit: number }): string {
+  export function describe(check: { kind: Kind; current: number; limit: number }, toolName?: string): string {
     switch (check.kind) {
       case "steps":
         return `Autonomous step cap reached: ${check.current}/${check.limit}. The session will stop. Set experimental.autonomous_caps.steps to raise this limit.`
@@ -123,6 +155,8 @@ export namespace BlastRadius {
         return `Autonomous line-change cap reached: ${check.current}/${check.limit} lines modified. Set experimental.autonomous_caps.lines to raise.`
       case "blocked_path":
         return `Path is on the autonomous blocked-path list (limit ${check.limit}).`
+      case "tool_calls":
+        return `Autonomous per-tool call cap reached for "${toolName ?? "<unknown>"}": ${check.current}/${check.limit} calls. Set experimental.autonomous_caps.perTool["${toolName ?? "<tool>"}"] to raise (use 0 to disable).`
     }
   }
 
@@ -130,8 +164,10 @@ export namespace BlastRadius {
   export function assertWithinCaps(sessionID: SessionID) {
     const check = checkAfterIncrement(sessionID)
     if (!check) return
-    log.warn("autonomous cap exceeded", check)
-    const message = describe(check)
+    const state = sessions.get(sessionID)
+    const toolName = check.kind === "tool_calls" ? state?.lastTripToolName : undefined
+    log.warn("autonomous cap exceeded", { ...check, toolName })
+    const message = describe(check, toolName)
     Recorder.emit({
       type: "autonomous.cap_hit",
       sessionID,
