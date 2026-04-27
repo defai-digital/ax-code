@@ -45,7 +45,10 @@ function recomputeMetrics(memory: ProjectMemory): void {
 }
 
 async function loadOrInit(projectRoot: string): Promise<ProjectMemory> {
-  const existing = await store.load(projectRoot).catch(() => null)
+  // Let corrupt-JSON errors propagate so we don't overwrite a recoverable
+  // file. `store.load` returns null only for ENOENT (no file yet), in which
+  // case it's safe to scaffold from generate().
+  const existing = await store.load(projectRoot)
   if (existing) return existing
   return generate(projectRoot)
 }

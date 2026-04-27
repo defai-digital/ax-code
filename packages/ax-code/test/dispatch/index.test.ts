@@ -174,6 +174,41 @@ describe("dispatch primitive", () => {
     expect(received?.constraints).toEqual(["preserve API"])
   })
 
+  test("survives a callback that throws — log and continue", async () => {
+    const executor: DispatchExecutor = async (s) => ({ output: s.agent })
+    const completed: string[] = []
+    const results = await dispatch(
+      [spec("a"), spec("b"), spec("c")],
+      executor,
+      {
+        onSubagentStart: (s) => {
+          if (s.agent === "b") throw new Error("bad start callback")
+        },
+        onSubagentComplete: (r) => {
+          if (r.agent === "c") throw new Error("bad complete callback")
+          completed.push(r.agent)
+        },
+      },
+    )
+    expect(results.map((r) => r.agent)).toEqual(["a", "b", "c"])
+    expect(results.every((r) => r.status === "completed")).toBe(true)
+    // Both throws happened, but other results still landed:
+    expect(completed).toEqual(["a", "b"])
+  })
+
+  test("NaN / Infinity maxParallel falls back to default instead of stalling", async () => {
+    const executor: DispatchExecutor = async (s) => ({ output: s.agent })
+
+    const nanResults = await dispatch([spec("a"), spec("b")], executor, { maxParallel: NaN })
+    expect(nanResults).toHaveLength(2)
+
+    const infResults = await dispatch([spec("a"), spec("b")], executor, { maxParallel: Infinity })
+    expect(infResults).toHaveLength(2)
+
+    const negResults = await dispatch([spec("a"), spec("b")], executor, { maxParallel: -3 })
+    expect(negResults).toHaveLength(2)
+  })
+
   test("durationMs is recorded even on failure", async () => {
     const executor: DispatchExecutor = async () => {
       await new Promise((r) => setTimeout(r, 15))

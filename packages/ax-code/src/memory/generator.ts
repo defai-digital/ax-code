@@ -234,7 +234,11 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS
   const depth = options?.depth ?? DEFAULT_DEPTH
 
-  const existing = await store.load(root).catch(() => null)
+  // Let corrupt-JSON errors propagate — `store.load` already returns null
+  // for ENOENT, so the only throws here mean the existing file is unreadable.
+  // Swallowing them would silently overwrite user-curated entries on warmup
+  // (recorded entries that the warmup pipeline doesn't regenerate).
+  const existing = await store.load(root)
 
   // Scan all sections in parallel
   const results = await Promise.allSettled([

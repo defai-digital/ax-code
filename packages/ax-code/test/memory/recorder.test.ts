@@ -200,6 +200,32 @@ describe("memory.recorder", () => {
     }
   })
 
+  test("corrupt memory.json: recordEntry refuses (does not overwrite recoverable file)", async () => {
+    await using tmp = await tmpdir()
+    const fs = await import("fs/promises")
+    const path = await import("path")
+    await fs.mkdir(path.join(tmp.path, ".ax-code"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, ".ax-code", "memory.json"), '{"version": 1, "sections": {"feed')
+
+    await expect(
+      recordEntry(tmp.path, "userPrefs", { name: "x", body: "y" }),
+    ).rejects.toThrow(/corrupt JSON/)
+
+    // Corrupt file is preserved on disk for manual recovery.
+    const after = await fs.readFile(path.join(tmp.path, ".ax-code", "memory.json"), "utf8")
+    expect(after).toContain('{"version": 1, "sections": {"feed')
+  })
+
+  test("corrupt memory.json: generate refuses (does not overwrite recoverable file)", async () => {
+    await using tmp = await tmpdir()
+    const fs = await import("fs/promises")
+    const path = await import("path")
+    await fs.mkdir(path.join(tmp.path, ".ax-code"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, ".ax-code", "memory.json"), '{"truncated":')
+
+    await expect(generate(tmp.path)).rejects.toThrow(/corrupt JSON/)
+  })
+
   test("budget: with no entries, behaves identically to pre-budget logic", async () => {
     await using tmp = await tmpdir()
     await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))

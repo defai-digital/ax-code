@@ -80,7 +80,11 @@ export async function dispatch(
 ): Promise<DispatchResult[]> {
   if (specs.length === 0) return []
 
-  const maxParallel = Math.max(1, options.maxParallel ?? DEFAULT_MAX_PARALLEL)
+  // Defensive: NaN bypasses Math.max comparisons and breaks the for-loop
+  // step; clamp to default. Negative or zero clamp to 1.
+  const rawMax = options.maxParallel
+  const maxParallel =
+    rawMax === undefined || !Number.isFinite(rawMax) ? DEFAULT_MAX_PARALLEL : Math.max(1, Math.floor(rawMax))
   const results: DispatchResult[] = []
 
   for (let i = 0; i < specs.length; i += maxParallel) {
@@ -108,13 +112,24 @@ export async function dispatch(
   return results
 }
 
+function safeCallback<T>(fn: ((arg: T) => void) | undefined, arg: T, label: string): void {
+  if (!fn) return
+  try {
+    fn(arg)
+  } catch (err) {
+    // Caller-supplied callbacks must not be allowed to crash the whole
+    // dispatch — log and continue. The contract is "all results returned".
+    log.warn("dispatch callback threw", { label, error: String(err) })
+  }
+}
+
 async function runOne(
   spec: DispatchSpec,
   executor: DispatchExecutor,
   options: DispatchOptions,
 ): Promise<DispatchResult> {
   const start = Date.now()
-  options.onSubagentStart?.(spec)
+  safeCallback(options.onSubagentStart, spec, "onSubagentStart")
 
   // Local AC fires on per-spec timeout; we forward the parent signal so the
   // caller can cancel the whole dispatch in one place.
@@ -148,7 +163,7 @@ async function runOne(
       tokensUsed: out.tokensUsed ?? 0,
       durationMs: Date.now() - start,
     }
-    options.onSubagentComplete?.(result)
+    safeCallback(options.onSubagentComplete, result, "onSubagentComplete")
     return result
   } catch (err) {
     // Disambiguate timeout vs parent-cancel vs ordinary throw. We track
@@ -162,7 +177,7 @@ async function runOne(
       tokensUsed: 0,
       durationMs: Date.now() - start,
     }
-    options.onSubagentComplete?.(result)
+    safeCallback(options.onSubagentComplete, result, "onSubagentComplete")
     return result
   } finally {
     clearTimeout(timer)
