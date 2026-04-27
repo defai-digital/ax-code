@@ -5,9 +5,9 @@
 
 import fs from "fs/promises"
 import path from "path"
-import crypto from "crypto"
-import type { EntrySection, MemoryEntry, ProjectMemory, MemorySection, WarmupOptions } from "./types"
+import type { ProjectMemory, MemorySection, WarmupOptions } from "./types"
 import * as store from "./store"
+import { computeContentHash } from "./hash"
 
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
@@ -211,18 +211,6 @@ async function scanPatterns(root: string): Promise<MemorySection> {
   return { content, tokens: estimateTokens(content) }
 }
 
-function renderEntry(entry: MemoryEntry): string {
-  const parts = [`- ${entry.name}: ${entry.body}`]
-  if (entry.why) parts.push(`  - Why: ${entry.why}`)
-  if (entry.howToApply) parts.push(`  - Apply: ${entry.howToApply}`)
-  return parts.join("\n")
-}
-
-function entryContent(section: EntrySection | undefined): string {
-  if (!section) return ""
-  return section.entries.map(renderEntry).join("\n")
-}
-
 /**
  * Generate project memory.
  *
@@ -283,29 +271,18 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
 
   const totalTokens = Object.values(sections).reduce((sum, s) => sum + (s?.tokens ?? 0), 0)
 
-  // Hash includes both scanned content and rendered entries so any user
-  // record change is reflected in the content hash.
-  const allContent = [
-    sections.patterns?.content ?? "",
-    sections.config?.content ?? "",
-    sections.structure?.content ?? "",
-    sections.readme?.content ?? "",
-    entryContent(sections.userPrefs),
-    entryContent(sections.feedback),
-    entryContent(sections.decisions),
-  ].join("\n")
-  const contentHash = crypto.createHash("sha256").update(allContent).digest("hex").slice(0, 16)
-
   const now = new Date().toISOString()
-
-  return {
+  const draft: ProjectMemory = {
     version: existing?.version ?? 1,
     created: existing?.created ?? now,
     updated: now,
     projectRoot: root,
-    contentHash,
+    contentHash: "",
     maxTokens,
     sections,
     totalTokens,
   }
+  // Canonical hash via shared helper so warmup and recorder paths agree.
+  draft.contentHash = computeContentHash(draft)
+  return draft
 }

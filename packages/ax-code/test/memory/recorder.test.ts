@@ -233,6 +233,29 @@ describe("memory.recorder", () => {
     expect(memory.sections.config).toBeDefined()
   })
 
+  test("contentHash is consistent across generator and recorder code paths", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
+
+    // 1. Initial warmup hash via generator
+    const initial = await generate(tmp.path)
+    await store.save(tmp.path, initial)
+    const hashAfterWarmup = (await store.load(tmp.path))!.contentHash
+
+    // 2. Record + remove the same entry — net content is identical to warmup
+    await recordEntry(tmp.path, "feedback", { name: "tmp", body: "x" })
+    await removeEntry(tmp.path, "feedback", "tmp")
+    const hashAfterRoundTrip = (await store.load(tmp.path))!.contentHash
+
+    // 3. Re-warmup on the same project should also produce the same hash
+    const reWarmup = await generate(tmp.path)
+    await store.save(tmp.path, reWarmup)
+    const hashAfterReWarmup = (await store.load(tmp.path))!.contentHash
+
+    expect(hashAfterRoundTrip).toBe(hashAfterWarmup)
+    expect(hashAfterReWarmup).toBe(hashAfterWarmup)
+  })
+
   test("buildContext escapes literal <project-memory> tags in user-controlled text", async () => {
     await using tmp = await tmpdir()
 

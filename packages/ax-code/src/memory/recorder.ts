@@ -10,20 +10,13 @@
  * overwrites the prior entry rather than appending duplicates.
  */
 
-import crypto from "crypto"
 import * as store from "./store"
 import { generate } from "./generator"
+import { computeContentHash, renderEntry } from "./hash"
 import type { EntrySection, MemoryEntry, MemoryEntryKind, ProjectMemory } from "./types"
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
-}
-
-function renderEntry(entry: MemoryEntry): string {
-  const parts = [`- ${entry.name}: ${entry.body}`]
-  if (entry.why) parts.push(`  - Why: ${entry.why}`)
-  if (entry.howToApply) parts.push(`  - Apply: ${entry.howToApply}`)
-  return parts.join("\n")
 }
 
 function rebuildSection(entries: MemoryEntry[]): EntrySection {
@@ -32,15 +25,9 @@ function rebuildSection(entries: MemoryEntry[]): EntrySection {
 }
 
 function recomputeMetrics(memory: ProjectMemory): void {
-  const allContent: string[] = []
-  for (const section of Object.values(memory.sections)) {
-    if (!section) continue
-    if ("content" in section) allContent.push(section.content)
-    else allContent.push(section.entries.map(renderEntry).join("\n"))
-  }
-  const joined = allContent.join("\n")
-  memory.contentHash = crypto.createHash("sha256").update(joined).digest("hex").slice(0, 16)
   memory.totalTokens = Object.values(memory.sections).reduce((sum, s) => sum + (s?.tokens ?? 0), 0)
+  // Canonical hash via the shared helper so this matches generator.generate().
+  memory.contentHash = computeContentHash(memory)
   memory.updated = new Date().toISOString()
 }
 
