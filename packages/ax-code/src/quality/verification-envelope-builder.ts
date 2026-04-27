@@ -28,10 +28,40 @@ function joinErrors(errors: readonly string[]): string | undefined {
   return errors.join("\n")
 }
 
-function structuredFailuresFromCheck(_kind: "typecheck" | "lint" | "test"): StructuredFailure[] {
-  // v1: refactor_apply emits raw error strings only. A follow-up slice will
-  // parse them (TS error pattern, ESLint output, test framework markers)
-  // into typed StructuredFailure entries.
+// Mirrors the regex in src/planner/verification/index.ts parseTypeScriptErrors.
+// Inlined here so this module stays free of node-only deps from planner/.
+// Format: `file(line,col): error TSxxxx: message`
+const TS_ERROR_PATTERN = /^(.+)\((\d+),(\d+)\):\s+(?:error|warning)\s+(TS\d+):\s+(.+)$/gm
+
+function parseTypecheckFailures(text: string | undefined): StructuredFailure[] {
+  if (!text) return []
+  const failures: StructuredFailure[] = []
+  TS_ERROR_PATTERN.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = TS_ERROR_PATTERN.exec(text)) !== null) {
+    const [, file, line, column, code, message] = match
+    failures.push({
+      kind: "typecheck",
+      file,
+      line: Number.parseInt(line, 10),
+      column: Number.parseInt(column, 10),
+      code,
+      message,
+    })
+  }
+  return failures
+}
+
+// Lint and test parsing are deferred. ESLint and test-framework output formats
+// vary widely; populating them prematurely would either lock in a fragile
+// regex or pull in a per-formatter parser library. Until a real consumer
+// needs structured lint/test failures, the envelope.result.output raw text
+// is the source of truth.
+function parseLintFailures(_text: string | undefined): StructuredFailure[] {
+  return []
+}
+
+function parseTestFailures(_text: string | undefined): StructuredFailure[] {
   return []
 }
 
@@ -52,6 +82,7 @@ function commonScope(applyResult: DebugEngine.ApplyResult) {
 
 function envelopeForTypecheck(input: FromRefactorApplyInput): VerificationEnvelope {
   const check = input.applyResult.checks.typecheck
+  const output = joinErrors(check.errors)
   return VerificationEnvelopeSchema.parse({
     schemaVersion: 1,
     workflow: "qa",
@@ -64,9 +95,9 @@ function envelopeForTypecheck(input: FromRefactorApplyInput): VerificationEnvelo
       status: checkStatus(check.ok),
       issues: [],
       duration: 0,
-      output: joinErrors(check.errors),
+      output,
     },
-    structuredFailures: structuredFailuresFromCheck("typecheck"),
+    structuredFailures: parseTypecheckFailures(output),
     artifactRefs: [],
     source: source(input.sessionID),
   })
@@ -74,6 +105,7 @@ function envelopeForTypecheck(input: FromRefactorApplyInput): VerificationEnvelo
 
 function envelopeForLint(input: FromRefactorApplyInput): VerificationEnvelope {
   const check = input.applyResult.checks.lint
+  const output = joinErrors(check.errors)
   return VerificationEnvelopeSchema.parse({
     schemaVersion: 1,
     workflow: "qa",
@@ -86,9 +118,9 @@ function envelopeForLint(input: FromRefactorApplyInput): VerificationEnvelope {
       status: checkStatus(check.ok),
       issues: [],
       duration: 0,
-      output: joinErrors(check.errors),
+      output,
     },
-    structuredFailures: structuredFailuresFromCheck("lint"),
+    structuredFailures: parseLintFailures(output),
     artifactRefs: [],
     source: source(input.sessionID),
   })
@@ -97,6 +129,7 @@ function envelopeForLint(input: FromRefactorApplyInput): VerificationEnvelope {
 function envelopeForTests(input: FromRefactorApplyInput): VerificationEnvelope {
   const tests = input.applyResult.checks.tests
   const status = tests.selection === "skipped" ? "skipped" : checkStatus(tests.ok)
+  const output = joinErrors(tests.failures)
   return VerificationEnvelopeSchema.parse({
     schemaVersion: 1,
     workflow: "qa",
@@ -109,9 +142,9 @@ function envelopeForTests(input: FromRefactorApplyInput): VerificationEnvelope {
       status,
       issues: [],
       duration: 0,
-      output: joinErrors(tests.failures),
+      output,
     },
-    structuredFailures: structuredFailuresFromCheck("test"),
+    structuredFailures: parseTestFailures(output),
     artifactRefs: [],
     source: source(input.sessionID),
   })

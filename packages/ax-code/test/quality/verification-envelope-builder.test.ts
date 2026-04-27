@@ -76,7 +76,7 @@ describe("fromRefactorApplyResult", () => {
     expect(tests.result.status).toBe("skipped")
   })
 
-  test("structuredFailures is empty in v1 (placeholder for future error parsing)", () => {
+  test("structuredFailures is empty when error strings don't match any known format", () => {
     const envs = fromRefactorApplyResult({
       applyResult: applyResult({
         checks: {
@@ -90,6 +90,105 @@ describe("fromRefactorApplyResult", () => {
     for (const env of envs) {
       expect(env.structuredFailures).toEqual([])
     }
+  })
+
+  test("typecheck structuredFailures populated when output matches the TS error pattern", () => {
+    const envs = fromRefactorApplyResult({
+      applyResult: applyResult({
+        checks: {
+          typecheck: {
+            ok: false,
+            errors: [
+              "src/foo.ts(10,4): error TS2322: Type 'string' is not assignable to type 'number'.",
+              "src/bar.ts(42,1): error TS7006: Parameter 'x' implicitly has an 'any' type.",
+            ],
+          },
+          lint: { ok: true, errors: [] },
+          tests: { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped" },
+        },
+      }),
+      ...baseInput,
+    })
+    const tc = envs.find((e) => e.command.runner === "typecheck")!
+    expect(tc.structuredFailures).toHaveLength(2)
+    expect(tc.structuredFailures[0]).toEqual({
+      kind: "typecheck",
+      file: "src/foo.ts",
+      line: 10,
+      column: 4,
+      code: "TS2322",
+      message: "Type 'string' is not assignable to type 'number'.",
+    })
+    expect(tc.structuredFailures[1]).toMatchObject({
+      kind: "typecheck",
+      file: "src/bar.ts",
+      line: 42,
+      column: 1,
+      code: "TS7006",
+    })
+  })
+
+  test("typecheck structuredFailures skips lines that don't match the pattern", () => {
+    const envs = fromRefactorApplyResult({
+      applyResult: applyResult({
+        checks: {
+          typecheck: {
+            ok: false,
+            errors: [
+              "Some prelude line that is not a TS error",
+              "src/foo.ts(10,4): error TS2322: Type 'string' is not assignable to type 'number'.",
+              "Found 1 error in 1 file.",
+            ],
+          },
+          lint: { ok: true, errors: [] },
+          tests: { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped" },
+        },
+      }),
+      ...baseInput,
+    })
+    const tc = envs.find((e) => e.command.runner === "typecheck")!
+    expect(tc.structuredFailures).toHaveLength(1)
+    expect(tc.structuredFailures[0]).toMatchObject({
+      file: "src/foo.ts",
+      line: 10,
+      code: "TS2322",
+    })
+  })
+
+  test("typecheck structuredFailures is [] when typecheck passed (no errors)", () => {
+    const envs = fromRefactorApplyResult({ applyResult: applyResult(), ...baseInput })
+    const tc = envs.find((e) => e.command.runner === "typecheck")!
+    expect(tc.structuredFailures).toEqual([])
+  })
+
+  test("lint and test structuredFailures stay empty in this slice (parsing deferred)", () => {
+    const envs = fromRefactorApplyResult({
+      applyResult: applyResult({
+        checks: {
+          typecheck: { ok: true, errors: [] },
+          lint: {
+            ok: false,
+            errors: ["src/foo.ts:10:5  error  'foo' is unused  no-unused-vars"],
+          },
+          tests: {
+            ok: false,
+            errors: [],
+            ran: 5,
+            failed: 1,
+            failures: ["(fail) describe > should pass"],
+            selection: "targeted",
+          },
+        },
+      }),
+      ...baseInput,
+    })
+    const lint = envs.find((e) => e.command.runner === "lint")!
+    const tests = envs.find((e) => e.command.runner === "test")!
+    expect(lint.structuredFailures).toEqual([])
+    expect(tests.structuredFailures).toEqual([])
+    // raw output is still preserved for human inspection
+    expect(lint.result.output).toContain("no-unused-vars")
+    expect(tests.result.output).toContain("should pass")
   })
 
   test("scope.kind=workspace when filesChanged is empty (preflight-only run)", () => {
