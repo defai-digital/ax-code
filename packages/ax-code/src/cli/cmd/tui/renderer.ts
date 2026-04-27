@@ -39,7 +39,7 @@ export function resolveTuiRenderProfile(input: {
     useThread: advancedTerminal,
     // Mouse support is safe in compatible mode — unlike kitty keyboard
     // or the native render thread, it does not trigger terminal capability
-    // probes that can hang. Enable it so footer toggle buttons (Auto-route,
+    // probes that can hang. Enable it so footer toggle buttons (Fast-model,
     // Autonomous, Sandbox) are clickable in all terminal profiles.
     useMouse: true,
     useKittyKeyboard: advancedTerminal,

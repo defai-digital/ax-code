@@ -359,7 +359,7 @@ export function Prompt(props: PromptProps) {
     promptFooterLayout({
       contentWidth: promptContentWidth(),
       toggleWidth:
-        footerToggleLabel("Auto-route", sync.data.smartLlm).length +
+        footerToggleLabel("Fast-model", sync.data.smartLlm).length +
         footerToggleLabel("Autonomous", sync.data.autonomous).length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
@@ -412,26 +412,15 @@ export function Prompt(props: PromptProps) {
   }
 
   // Initialize agent/model/variant from last user message when session changes.
-  // syncedAgentName tracks the agent from last message so we can detect
-  // user-initiated switches (Tab/dialog) vs auto-routed or default agent.
   let syncedSessionID: string | undefined
-  let syncedAgentName: string | undefined = local.agent.current().name
   createEffect(() => {
     const sessionID = props.sessionID
     const msg = lastUserMessage()
 
-    // Track the agent from the latest message for userSelectedAgent detection
-    if (msg?.agent) syncedAgentName = msg.agent
-
     if (sessionID !== syncedSessionID) {
       if (!sessionID) return
       syncedSessionID = sessionID
-      // Reset to current agent on session switch so first message
-      // of a new session doesn't falsely flag as user-selected
-      if (!msg) {
-        syncedAgentName = local.agent.current().name
-        return
-      }
+      if (!msg) return
 
       // Only set agent if it's a primary agent (not a subagent)
       const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
@@ -1040,7 +1029,6 @@ export function Prompt(props: PromptProps) {
               },
               ...nonTextParts.map(assign),
             ],
-            ...(local.agent.current().name !== syncedAgentName ? ({ userSelectedAgent: true } as any) : {}),
           },
         })
       }
@@ -1662,7 +1650,7 @@ export function Prompt(props: PromptProps) {
             >
               <box flexDirection="row" flexShrink={0}>
                 {footerToggleChip({
-                  label: "Auto-route",
+                  label: "Fast-model",
                   active: sync.data.smartLlm,
                   activeFg: theme.primary,
                   inactiveFg: theme.textMuted,

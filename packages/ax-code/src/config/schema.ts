@@ -196,7 +196,7 @@ export const Agent = z
       .enum(["core", "specialist", "internal"])
       .optional()
       .describe(
-        "Agent visibility tier: core (always shown in picker), specialist (expandable/auto-routed), internal (hidden)",
+        "Agent visibility tier: core (always shown in picker), specialist (expandable, accessed via @-mention), internal (hidden)",
       ),
     options: z.record(z.string(), z.any()).optional(),
     color: z

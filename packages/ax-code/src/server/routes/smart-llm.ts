@@ -13,7 +13,7 @@ const SmartLlmState = z
   })
   .meta({ ref: "SmartLlmState" })
 
-/** Auto-route LLM tier defaults to ON. Explicit config beats env beats default. */
+/** Fast-model complexity routing defaults to ON. Explicit config beats env beats default. */
 function resolveSmartLlmEnabled(configValue: boolean | undefined, envValue: string | undefined) {
   if (typeof configValue === "boolean") return configValue
   if (envValue === "true") return true
