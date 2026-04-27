@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import * as fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
-import { Policy } from "../../src/quality/policy"
+import { Policy, type PolicyRules } from "../../src/quality/policy"
 import { tmpdir } from "../fixture/fixture"
 
 async function writeFile(dir: string, relPath: string, contents: string) {
@@ -173,6 +173,104 @@ describe("Policy.loadQaPolicy", () => {
       fn: async () => {
         const policy = await Policy.loadReviewPolicy({ worktree: tmp.path, cwd: inner })
         expect(policy).toContain("ROOT_ONLY_POLICY")
+      },
+    })
+  })
+})
+
+describe("Policy.loadReviewRules / loadQaRules", () => {
+  test("returns undefined when no rules file exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Policy.loadReviewRules({ worktree: tmp.path })).toBeUndefined()
+        expect(await Policy.loadQaRules({ worktree: tmp.path })).toBeUndefined()
+      },
+    })
+  })
+
+  test("loads and validates a complete review.rules.json", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const rules: PolicyRules = {
+      required_categories: ["bug", "security"],
+      prohibited_categories: ["regression_risk"],
+      severity_floor: "MEDIUM",
+      scope_glob: ["src/**", "test/**"],
+    }
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify(rules))
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const loaded = await Policy.loadReviewRules({ worktree: tmp.path })
+        expect(loaded).toEqual(rules)
+      },
+    })
+  })
+
+  test("returns undefined for malformed JSON without throwing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.rules.json", "{ not valid json")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Policy.loadReviewRules({ worktree: tmp.path })).toBeUndefined()
+      },
+    })
+  })
+
+  test("returns undefined when rules fail schema validation (unknown field)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(
+      tmp.path,
+      ".ax-code/review.rules.json",
+      JSON.stringify({ unknown_field: "x" }),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // strict() schema rejects unknown keys
+        expect(await Policy.loadReviewRules({ worktree: tmp.path })).toBeUndefined()
+      },
+    })
+  })
+
+  test("review and qa rules files are isolated", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(
+      tmp.path,
+      ".ax-code/review.rules.json",
+      JSON.stringify({ severity_floor: "HIGH" }),
+    )
+    await writeFile(
+      tmp.path,
+      ".ax-code/qa.rules.json",
+      JSON.stringify({ severity_floor: "LOW" }),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const r = await Policy.loadReviewRules({ worktree: tmp.path })
+        const q = await Policy.loadQaRules({ worktree: tmp.path })
+        expect(r?.severity_floor).toBe("HIGH")
+        expect(q?.severity_floor).toBe("LOW")
+      },
+    })
+  })
+
+  test("rules and prose are loaded independently — having rules.json without review.md works", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(
+      tmp.path,
+      ".ax-code/review.rules.json",
+      JSON.stringify({ severity_floor: "MEDIUM" }),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Policy.loadReviewPolicy({ worktree: tmp.path })).toBeUndefined()
+        const rules = await Policy.loadReviewRules({ worktree: tmp.path })
+        expect(rules?.severity_floor).toBe("MEDIUM")
       },
     })
   })

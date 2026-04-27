@@ -1,8 +1,36 @@
 import path from "path"
 import * as fs from "fs/promises"
+import z from "zod"
+import { CategoryEnum, SeverityEnum } from "./finding"
 import { Filesystem } from "../util/filesystem"
 import { Global } from "../global"
 import { Log } from "../util/log"
+
+// Phase 4 P4.3: declarative rules live in a sibling JSON file
+// (.ax-code/review.rules.json or qa.rules.json), not in the markdown
+// policy. This keeps prose and structured rules separate, avoids pulling
+// in a YAML parser dep just for frontmatter, and lets the rule schema
+// evolve via Zod validation without confusing the prose loader.
+//
+// All rule fields are optional. An empty rules file (or no file at all)
+// means "no declarative constraints" — workflows fall back to the prose
+// policy text only.
+export const PolicyRulesSchema = z
+  .object({
+    // Categories the workflow MUST find at least one of. Surfaces as a
+    // warning when none are present (does not block the workflow).
+    required_categories: z.array(CategoryEnum).optional(),
+    // Categories whose findings must be filtered out post-emit.
+    prohibited_categories: z.array(CategoryEnum).optional(),
+    // Findings below this severity are filtered out post-emit.
+    // Order: CRITICAL > HIGH > MEDIUM > LOW > INFO.
+    severity_floor: SeverityEnum.optional(),
+    // Glob patterns; only findings whose .file matches at least one
+    // pattern are kept. Empty/undefined = no scope filtering.
+    scope_glob: z.array(z.string().min(1)).optional(),
+  })
+  .strict()
+export type PolicyRules = z.infer<typeof PolicyRulesSchema>
 
 export namespace Policy {
   const log = Log.create({ service: "quality.policy" })
@@ -27,6 +55,57 @@ export namespace Policy {
 
   export async function loadQaPolicy(input: { worktree: string; cwd?: string }): Promise<string | undefined> {
     return loadByName({ ...input, name: "qa.md" })
+  }
+
+  export async function loadReviewRules(input: { worktree: string; cwd?: string }): Promise<PolicyRules | undefined> {
+    return loadRulesByName({ ...input, name: "review.rules.json" })
+  }
+
+  export async function loadQaRules(input: { worktree: string; cwd?: string }): Promise<PolicyRules | undefined> {
+    return loadRulesByName({ ...input, name: "qa.rules.json" })
+  }
+
+  async function loadRulesByName(input: {
+    worktree: string
+    cwd?: string
+    name: string
+  }): Promise<PolicyRules | undefined> {
+    const cwd = input.cwd ?? input.worktree
+    for await (const dir of policyDirs({ worktree: input.worktree, cwd })) {
+      const candidate = path.join(dir, input.name)
+      let raw: string
+      try {
+        raw = await fs.readFile(candidate, "utf8")
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException | undefined)?.code
+        if (code === "ENOENT" || code === "EISDIR" || code === "ENOTDIR") continue
+        log.warn("rules read failed; skipping", { name: input.name, path: candidate, err })
+        continue
+      }
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(raw)
+      } catch (err) {
+        log.warn("rules JSON parse failed; treating as missing", {
+          name: input.name,
+          path: candidate,
+          err: err instanceof Error ? err.message : String(err),
+        })
+        return undefined
+      }
+      const validated = PolicyRulesSchema.safeParse(parsed)
+      if (!validated.success) {
+        log.warn("rules schema validation failed; treating as missing", {
+          name: input.name,
+          path: candidate,
+          issues: validated.error.issues.length,
+        })
+        return undefined
+      }
+      log.info("loaded rules", { name: input.name, path: candidate })
+      return validated.data
+    }
+    return undefined
   }
 
   async function* policyDirs(input: { worktree: string; cwd: string }): AsyncGenerator<string> {

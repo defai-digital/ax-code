@@ -69,30 +69,22 @@ describe("RegisterFindingTool", () => {
 
   test("rejects invalid severity", async () => {
     const tool = await RegisterFindingTool.init()
-    await expect(
-      tool.execute({ ...validInput, severity: "BLOCKER" } as any, ctx),
-    ).rejects.toThrow()
+    await expect(tool.execute({ ...validInput, severity: "BLOCKER" } as any, ctx)).rejects.toThrow()
   })
 
   test("rejects invalid category", async () => {
     const tool = await RegisterFindingTool.init()
-    await expect(
-      tool.execute({ ...validInput, category: "style" } as any, ctx),
-    ).rejects.toThrow()
+    await expect(tool.execute({ ...validInput, category: "style" } as any, ctx)).rejects.toThrow()
   })
 
   test("rejects malformed ruleId", async () => {
     const tool = await RegisterFindingTool.init()
-    await expect(
-      tool.execute({ ...validInput, ruleId: "vendor:Some_Rule" } as any, ctx),
-    ).rejects.toThrow()
+    await expect(tool.execute({ ...validInput, ruleId: "vendor:Some_Rule" } as any, ctx)).rejects.toThrow()
   })
 
   test("rejects summary over 200 chars", async () => {
     const tool = await RegisterFindingTool.init()
-    await expect(
-      tool.execute({ ...validInput, summary: "x".repeat(201) } as any, ctx),
-    ).rejects.toThrow()
+    await expect(tool.execute({ ...validInput, summary: "x".repeat(201) } as any, ctx)).rejects.toThrow()
   })
 
   test("findingId is deterministic across two calls with the same anchor and category", async () => {
@@ -131,10 +123,7 @@ describe("RegisterFindingTool", () => {
 
   test("optional confidence and ruleId are preserved in the output finding when provided", async () => {
     const tool = await RegisterFindingTool.init()
-    const result = await tool.execute(
-      { ...validInput, confidence: 0.83, ruleId: "axcode:bug-empty-catch" },
-      ctx,
-    )
+    const result = await tool.execute({ ...validInput, confidence: 0.83, ruleId: "axcode:bug-empty-catch" }, ctx)
     expect(result.metadata.finding.confidence).toBe(0.83)
     expect(result.metadata.finding.ruleId).toBe("axcode:bug-empty-catch")
   })
@@ -159,5 +148,40 @@ describe("RegisterFindingTool", () => {
     const result = await tool.execute(validInput, ctx)
     expect(result.metadata.finding.source.version).toBe(Installation.VERSION)
     expect(result.metadata.finding.source.version).not.toBe("4.x.x")
+  })
+
+  test("rejects evidenceRefs with kind: 'verification' when the id is not in the session", async () => {
+    // Mock ctx has sessionID with no recorded envelopes — any verification
+    // ref must therefore be rejected as fabricated.
+    const tool = await RegisterFindingTool.init()
+    await expect(
+      tool.execute(
+        {
+          ...validInput,
+          evidenceRefs: [{ kind: "verification", id: "fabricated0000abc" }],
+        },
+        ctx,
+      ),
+    ).rejects.toThrow(/unknown verification envelope id/)
+  })
+
+  test("does not strict-validate non-verification evidenceRefs (log/graph/diff pass through)", async () => {
+    // Other ref kinds don't yet have session-level loaders; they're
+    // accepted as-is. P2.5 step 4 scopes the strict check to verification
+    // refs only.
+    const tool = await RegisterFindingTool.init()
+    const result = await tool.execute(
+      {
+        ...validInput,
+        evidenceRefs: [
+          { kind: "log", id: "any-log-id" },
+          { kind: "graph", id: "any-graph-id" },
+          { kind: "diff", id: "any-diff-id" },
+        ],
+      },
+      ctx,
+    )
+    expect(result.metadata.finding.evidenceRefs).toHaveLength(3)
+    expect(result.metadata.finding.evidenceRefs?.[0].kind).toBe("log")
   })
 })
