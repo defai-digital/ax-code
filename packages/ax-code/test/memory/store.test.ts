@@ -61,14 +61,17 @@ describe("memory.store cache", () => {
     const readFileSpy = spyOn(fs, "readFile")
     let firstRead = true
 
-    readFileSpy.mockImplementation(async (...args) => {
+    // fs.readFile is heavily overloaded; the mock signature widens the return
+    // type beyond what spyOn's first-overload inference accepts. Cast to any
+    // — the test itself only relies on the runtime behavior.
+    readFileSpy.mockImplementation((async (...args: Parameters<typeof realReadFile>) => {
       if (firstRead) {
         firstRead = false
         await fs.writeFile(memoryPath, JSON.stringify(raced))
         await fs.utimes(memoryPath, new Date(statBefore.atimeMs), new Date(statBefore.mtimeMs))
       }
       return realReadFile(...args)
-    })
+    }) as any)
 
     try {
       const first = await store.load(tmp.path)

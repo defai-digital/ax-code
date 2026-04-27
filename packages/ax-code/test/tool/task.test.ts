@@ -199,14 +199,17 @@ describe("tool.task", () => {
 
         const controller = new AbortController()
         const originalGet = Session.get
-        const getSpy = spyOn(Session, "get").mockImplementation(async (...args: Parameters<typeof originalGet>) => {
+        // Session.get is a callable namespace with attached `force` and
+        // `schema` properties. spyOn's mockImplementation infers a plain
+        // function type, so cast to any.
+        const getSpy = spyOn(Session, "get").mockImplementation((async (...args: Parameters<typeof originalGet>) => {
           const result = await originalGet(...args)
           if (result?.id === root.id) {
             await new Promise((resolve) => setTimeout(resolve, 10))
             controller.abort()
           }
           return result
-        })
+        }) as any)
 
         const promptSpy = spyOn(SessionPrompt, "prompt")
         try {
