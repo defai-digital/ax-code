@@ -1,6 +1,7 @@
 import { QualityLabelStore } from "../quality/label-store"
 import { ProbabilisticRollout } from "../quality/probabilistic-rollout"
 import { FindingSchema } from "../quality/finding"
+import { VerificationEnvelopeSchema } from "../quality/verification-envelope"
 import z from "zod"
 import { Risk } from "../risk/score"
 import { QualityShadow } from "../quality/shadow-runtime"
@@ -9,6 +10,7 @@ import { Session } from "."
 import { SessionBranchRank } from "./branch"
 import { SessionFindings } from "./findings"
 import { SessionSemanticDiff } from "./semantic-diff"
+import { SessionVerifications } from "./verifications"
 import type { SessionID } from "./schema"
 
 export namespace SessionRisk {
@@ -30,6 +32,7 @@ export namespace SessionRisk {
       semantic: SessionSemanticDiff.Summary.nullable(),
       quality: QualityReadiness.optional(),
       findings: FindingSchema.array().optional(),
+      envelopes: VerificationEnvelopeSchema.array().optional(),
     })
     .meta({
       ref: "SessionRiskDetail",
@@ -43,6 +46,7 @@ export namespace SessionRisk {
     semantic?: SessionSemanticDiff.Summary | null
     quality?: QualityReadiness
     findings?: Detail["findings"]
+    envelopes?: Detail["envelopes"]
   }) {
     return {
       id: input.id,
@@ -52,6 +56,7 @@ export namespace SessionRisk {
       semantic: input.semantic ?? null,
       quality: input.quality,
       findings: input.findings,
+      envelopes: input.envelopes,
     } satisfies Detail
   }
 
@@ -75,7 +80,7 @@ export namespace SessionRisk {
 
   export async function load(
     sessionID: SessionID,
-    options?: { includeQuality?: boolean; includeFindings?: boolean },
+    options?: { includeQuality?: boolean; includeFindings?: boolean; includeEnvelopes?: boolean },
   ) {
     const [session, semantic] = await Promise.all([Session.get(sessionID), SessionSemanticDiff.load(sessionID)])
     const assessment = Risk.fromSession(sessionID)
@@ -84,6 +89,7 @@ export namespace SessionRisk {
     })
     const quality = options?.includeQuality ? await loadQualityReadiness(sessionID) : undefined
     const findings = options?.includeFindings ? SessionFindings.load(sessionID) : undefined
+    const envelopes = options?.includeEnvelopes ? SessionVerifications.load(sessionID) : undefined
     return detail({
       id: sessionID,
       title: session.title,
@@ -91,6 +97,7 @@ export namespace SessionRisk {
       semantic,
       quality,
       findings,
+      envelopes,
     })
   }
 }

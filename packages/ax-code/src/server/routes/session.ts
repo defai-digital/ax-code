@@ -68,7 +68,13 @@ export const SessionRoutes = lazy(() =>
             .optional()
             .meta({ description: "Filter sessions updated on or after this timestamp (milliseconds since epoch)" }),
           search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
-          limit: z.coerce.number().int().min(1).max(1000).optional().meta({ description: "Maximum number of sessions to return (1-1000)" }),
+          limit: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(1000)
+            .optional()
+            .meta({ description: "Maximum number of sessions to return (1-1000)" }),
         }),
       ),
       async (c) => {
@@ -195,7 +201,11 @@ export const SessionRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          deep: z.coerce.boolean().optional().default(false).meta({ description: "Include replay divergence signals in branch ranking" }),
+          deep: z.coerce
+            .boolean()
+            .optional()
+            .default(false)
+            .meta({ description: "Include replay divergence signals in branch ranking" }),
         }),
       ),
       async (c) => {
@@ -288,6 +298,10 @@ export const SessionRoutes = lazy(() =>
           findings: z.coerce.boolean().optional().default(false).meta({
             description: "Include the validated Finding[] emitted by register_finding tool calls in this session",
           }),
+          envelopes: z.coerce.boolean().optional().default(false).meta({
+            description:
+              "Include the validated VerificationEnvelope[] emitted by tool calls that record verification runs (e.g. refactor_apply)",
+          }),
         }),
       ),
       async (c) => {
@@ -297,6 +311,7 @@ export const SessionRoutes = lazy(() =>
           await SessionRisk.load(sessionID, {
             includeQuality: query.quality,
             includeFindings: query.findings,
+            includeEnvelopes: query.envelopes,
           }),
         )
       },
@@ -351,7 +366,11 @@ export const SessionRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          deep: z.coerce.boolean().optional().default(false).meta({ description: "Include replay divergence signals in session comparison" }),
+          deep: z.coerce
+            .boolean()
+            .optional()
+            .default(false)
+            .meta({ description: "Include replay divergence signals in session comparison" }),
         }),
       ),
       async (c) => {

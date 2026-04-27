@@ -1,0 +1,44 @@
+import { type VerificationEnvelope, VerificationEnvelopeSchema } from "../quality/verification-envelope"
+import { EventQuery } from "../replay/query"
+import { Log } from "../util/log"
+import type { SessionID } from "./schema"
+
+export namespace SessionVerifications {
+  const log = Log.create({ service: "session-verifications" })
+
+  // Walks the session event log and rebuilds the VerificationEnvelope[]
+  // emitted by tools that record verification runs. Currently the only
+  // producer is refactor_apply (which writes metadata.verificationEnvelopes
+  // alongside its legacy result.checks), but the loader is intentionally
+  // tool-name agnostic: any tool.result whose metadata carries a
+  // verificationEnvelopes array of validated envelopes is included.
+  //
+  // Each envelope is re-validated via VerificationEnvelopeSchema. Entries
+  // that fail validation are skipped (with a warning) so a single corrupted
+  // record cannot block the rest.
+  export function load(sessionID: SessionID): VerificationEnvelope[] {
+    const events = EventQuery.bySession(sessionID)
+    const envelopes: VerificationEnvelope[] = []
+    for (const event of events) {
+      if (event.type !== "tool.result") continue
+      if (event.status !== "completed") continue
+      const candidate = event.metadata?.verificationEnvelopes
+      if (!Array.isArray(candidate)) continue
+      for (let i = 0; i < candidate.length; i++) {
+        const parsed = VerificationEnvelopeSchema.safeParse(candidate[i])
+        if (!parsed.success) {
+          log.warn("dropping malformed verificationEnvelope metadata entry", {
+            sessionID,
+            tool: event.tool,
+            callID: event.callID,
+            index: i,
+            issues: parsed.error.issues.length,
+          })
+          continue
+        }
+        envelopes.push(parsed.data)
+      }
+    }
+    return envelopes
+  }
+}

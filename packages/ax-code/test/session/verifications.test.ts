@@ -1,0 +1,249 @@
+import { describe, expect, test } from "bun:test"
+import { Instance } from "../../src/project/instance"
+import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { Recorder } from "../../src/replay/recorder"
+import { Session } from "../../src/session"
+import { SessionVerifications } from "../../src/session/verifications"
+import { tmpdir } from "../fixture/fixture"
+
+function buildEnvelope(overrides: Partial<VerificationEnvelope> = {}): VerificationEnvelope {
+  return {
+    schemaVersion: 1,
+    workflow: "qa",
+    scope: { kind: "file", paths: ["src/foo.ts"] },
+    command: { runner: "typecheck", argv: [], cwd: "/tmp/work" },
+    result: {
+      name: "typecheck",
+      type: "typecheck",
+      passed: true,
+      status: "passed",
+      issues: [],
+      duration: 0,
+    },
+    structuredFailures: [],
+    artifactRefs: [],
+    source: { tool: "refactor_apply", version: "4.x.x", runId: "ses_test" },
+    ...overrides,
+  }
+}
+
+describe("SessionVerifications.load", () => {
+  test("returns [] for a session with no verification-emitting tool calls", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "session.end",
+          sessionID: session.id,
+          reason: "completed",
+          totalSteps: 0,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        expect(SessionVerifications.load(session.id)).toEqual([])
+      },
+    })
+  })
+
+  test("flattens metadata.verificationEnvelopes from refactor_apply tool.result events", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const tc = buildEnvelope({
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        })
+        const lint = buildEnvelope({
+          command: { runner: "lint", argv: [], cwd: "/tmp/work" },
+          result: { ...tc.result, name: "lint", type: "lint" },
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        })
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "refactor_apply",
+          callID: "call-apply-1",
+          status: "completed",
+          metadata: { verificationEnvelopes: [tc, lint] },
+          durationMs: 100,
+        })
+        Recorder.emit({
+          type: "session.end",
+          sessionID: session.id,
+          reason: "completed",
+          totalSteps: 0,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const envs = SessionVerifications.load(session.id)
+        expect(envs).toHaveLength(2)
+        expect(envs[0].command.runner).toBe("typecheck")
+        expect(envs[1].command.runner).toBe("lint")
+      },
+    })
+  })
+
+  test("is tool-name agnostic — picks up envelopes from any tool that emits the metadata key", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const env = buildEnvelope({
+          source: { tool: "future_tool", version: "4.x.x", runId: session.id },
+        })
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "future_qa_runner",
+          callID: "call-future",
+          status: "completed",
+          metadata: { verificationEnvelopes: [env] },
+          durationMs: 1,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const envs = SessionVerifications.load(session.id)
+        expect(envs).toHaveLength(1)
+      },
+    })
+  })
+
+  test("ignores tool.result events without metadata.verificationEnvelopes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "bash",
+          callID: "call-bash",
+          status: "completed",
+          output: "ok",
+          metadata: {},
+          durationMs: 1,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        expect(SessionVerifications.load(session.id)).toEqual([])
+      },
+    })
+  })
+
+  test("skips malformed entries inside metadata.verificationEnvelopes but keeps valid siblings", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const good = buildEnvelope({
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        })
+        const malformed = { workflow: "qa", schemaVersion: 99 } // invalid
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "refactor_apply",
+          callID: "call-mixed",
+          status: "completed",
+          metadata: { verificationEnvelopes: [good, malformed] },
+          durationMs: 1,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const envs = SessionVerifications.load(session.id)
+        expect(envs).toHaveLength(1)
+        expect(envs[0].source.runId).toBe(session.id)
+      },
+    })
+  })
+
+  test("ignores tool.result events with status: 'error'", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const env = buildEnvelope({
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        })
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "refactor_apply",
+          callID: "call-err",
+          status: "error",
+          metadata: { verificationEnvelopes: [env] },
+          durationMs: 1,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        expect(SessionVerifications.load(session.id)).toEqual([])
+      },
+    })
+  })
+})
