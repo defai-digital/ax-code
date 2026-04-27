@@ -51,32 +51,36 @@ export namespace QualityPromotionEligibility {
     currentActiveSource: z.string().nullable(),
     lastPromotionAt: z.string().nullable(),
     lastRollbackAt: z.string().nullable(),
-    reentryContext: z.object({
-      rollbackID: z.string(),
-      promotionID: z.string(),
-      rolledBackAt: z.string(),
-      watchOverallStatus: z.enum(["pass", "warn", "fail"]),
-      watchReleasePolicySource: z.enum(["explicit", "project", "global", "default"]).nullable(),
-      watchReleasePolicyDigest: z.string().nullable(),
-      sameReleasePolicyAsCurrent: z.boolean().nullable(),
-      rollbackTargetSource: z.string().nullable(),
-      priorPromotionApprovers: z.array(z.string()),
-      teamCarryoverHistory: TeamCarryoverEntry.array(),
-      priorPromotionReportingChains: z.array(z.string()),
-      reviewerCarryoverHistory: ReviewerCarryoverEntry.array(),
-      reportingChainCarryoverHistory: ReportingChainCarryoverEntry.array(),
-    }).nullable(),
-    remediation: z.object({
-      remediationID: z.string(),
-      contextID: z.string(),
-      rollbackID: z.string(),
-      createdAt: z.string(),
-      author: z.string(),
-      summary: z.string(),
-      evidenceCount: z.number().int().positive(),
-      currentReleasePolicyDigest: z.string().nullable(),
-      matchesCurrentReleasePolicyDigest: z.boolean().nullable(),
-    }).nullable(),
+    reentryContext: z
+      .object({
+        rollbackID: z.string(),
+        promotionID: z.string(),
+        rolledBackAt: z.string(),
+        watchOverallStatus: z.enum(["pass", "warn", "fail"]),
+        watchReleasePolicySource: z.enum(["explicit", "project", "global", "default"]).nullable(),
+        watchReleasePolicyDigest: z.string().nullable(),
+        sameReleasePolicyAsCurrent: z.boolean().nullable(),
+        rollbackTargetSource: z.string().nullable(),
+        priorPromotionApprovers: z.array(z.string()),
+        teamCarryoverHistory: TeamCarryoverEntry.array(),
+        priorPromotionReportingChains: z.array(z.string()),
+        reviewerCarryoverHistory: ReviewerCarryoverEntry.array(),
+        reportingChainCarryoverHistory: ReportingChainCarryoverEntry.array(),
+      })
+      .nullable(),
+    remediation: z
+      .object({
+        remediationID: z.string(),
+        contextID: z.string(),
+        rollbackID: z.string(),
+        createdAt: z.string(),
+        author: z.string(),
+        summary: z.string(),
+        evidenceCount: z.number().int().positive(),
+        currentReleasePolicyDigest: z.string().nullable(),
+        matchesCurrentReleasePolicyDigest: z.boolean().nullable(),
+      })
+      .nullable(),
     history: z.object({
       priorPromotions: z.number().int().nonnegative(),
       priorRollbacks: z.number().int().nonnegative(),
@@ -132,12 +136,14 @@ export namespace QualityPromotionEligibility {
     const benchmarkStatus = input.bundle.comparison.overallStatus
     const stabilityStatus = input.stability.overallStatus
     const evaluatedAt = new Date().toISOString()
-    const sameReleasePolicyAsCurrent = input.reentryContext?.watch.releasePolicyDigest && input.currentReleasePolicyDigest
-      ? input.reentryContext.watch.releasePolicyDigest === input.currentReleasePolicyDigest
-      : null
-    const matchesCurrentReleasePolicyDigest = input.remediation?.currentReleasePolicyDigest && input.currentReleasePolicyDigest
-      ? input.remediation.currentReleasePolicyDigest === input.currentReleasePolicyDigest
-      : null
+    const sameReleasePolicyAsCurrent =
+      input.reentryContext?.watch.releasePolicyDigest && input.currentReleasePolicyDigest
+        ? input.reentryContext.watch.releasePolicyDigest === input.currentReleasePolicyDigest
+        : null
+    const matchesCurrentReleasePolicyDigest =
+      input.remediation?.currentReleasePolicyDigest && input.currentReleasePolicyDigest
+        ? input.remediation.currentReleasePolicyDigest === input.currentReleasePolicyDigest
+        : null
     const gates: EligibilityGate[] = [
       {
         name: "benchmark-comparison",
@@ -193,45 +199,45 @@ export namespace QualityPromotionEligibility {
       lastRollbackAt: input.lastRollbackAt ?? null,
       reentryContext: input.reentryContext
         ? {
-          rollbackID: input.reentryContext.rollbackID,
-          promotionID: input.reentryContext.promotionID,
-          rolledBackAt: input.reentryContext.rolledBackAt,
-          watchOverallStatus: input.reentryContext.watch.overallStatus,
-          watchReleasePolicySource: input.reentryContext.watch.releasePolicySource,
-          watchReleasePolicyDigest: input.reentryContext.watch.releasePolicyDigest,
-          sameReleasePolicyAsCurrent,
-          rollbackTargetSource: input.reentryContext.rollbackTargetSource,
-          priorPromotionApprovers: [...new Set(input.priorPromotionApprovers ?? [])].sort(),
-          teamCarryoverHistory: [...(input.teamCarryoverHistory ?? [])].sort((a, b) => {
-            const byScore = b.weightedReuseScore - a.weightedReuseScore
-            if (byScore !== 0) return byScore
-            return a.team.localeCompare(b.team)
-          }),
-          priorPromotionReportingChains: [...new Set(input.priorPromotionReportingChains ?? [])].sort(),
-          reviewerCarryoverHistory: [...(input.reviewerCarryoverHistory ?? [])].sort((a, b) => {
-            const byScore = b.weightedReuseScore - a.weightedReuseScore
-            if (byScore !== 0) return byScore
-            return a.approver.localeCompare(b.approver)
-          }),
-          reportingChainCarryoverHistory: [...(input.reportingChainCarryoverHistory ?? [])].sort((a, b) => {
-            const byScore = b.weightedReuseScore - a.weightedReuseScore
-            if (byScore !== 0) return byScore
-            return a.reportingChain.localeCompare(b.reportingChain)
-          }),
-        }
+            rollbackID: input.reentryContext.rollbackID,
+            promotionID: input.reentryContext.promotionID,
+            rolledBackAt: input.reentryContext.rolledBackAt,
+            watchOverallStatus: input.reentryContext.watch.overallStatus,
+            watchReleasePolicySource: input.reentryContext.watch.releasePolicySource,
+            watchReleasePolicyDigest: input.reentryContext.watch.releasePolicyDigest,
+            sameReleasePolicyAsCurrent,
+            rollbackTargetSource: input.reentryContext.rollbackTargetSource,
+            priorPromotionApprovers: [...new Set(input.priorPromotionApprovers ?? [])].sort(),
+            teamCarryoverHistory: [...(input.teamCarryoverHistory ?? [])].sort((a, b) => {
+              const byScore = b.weightedReuseScore - a.weightedReuseScore
+              if (byScore !== 0) return byScore
+              return a.team.localeCompare(b.team)
+            }),
+            priorPromotionReportingChains: [...new Set(input.priorPromotionReportingChains ?? [])].sort(),
+            reviewerCarryoverHistory: [...(input.reviewerCarryoverHistory ?? [])].sort((a, b) => {
+              const byScore = b.weightedReuseScore - a.weightedReuseScore
+              if (byScore !== 0) return byScore
+              return a.approver.localeCompare(b.approver)
+            }),
+            reportingChainCarryoverHistory: [...(input.reportingChainCarryoverHistory ?? [])].sort((a, b) => {
+              const byScore = b.weightedReuseScore - a.weightedReuseScore
+              if (byScore !== 0) return byScore
+              return a.reportingChain.localeCompare(b.reportingChain)
+            }),
+          }
         : null,
       remediation: input.remediation
         ? {
-          remediationID: input.remediation.remediationID,
-          contextID: input.remediation.contextID,
-          rollbackID: input.remediation.rollbackID,
-          createdAt: input.remediation.createdAt,
-          author: input.remediation.author,
-          summary: input.remediation.summary,
-          evidenceCount: input.remediation.evidence.length,
-          currentReleasePolicyDigest: input.remediation.currentReleasePolicyDigest,
-          matchesCurrentReleasePolicyDigest,
-        }
+            remediationID: input.remediation.remediationID,
+            contextID: input.remediation.contextID,
+            rollbackID: input.remediation.rollbackID,
+            createdAt: input.remediation.createdAt,
+            author: input.remediation.author,
+            summary: input.remediation.summary,
+            evidenceCount: input.remediation.evidence.length,
+            currentReleasePolicyDigest: input.remediation.currentReleasePolicyDigest,
+            matchesCurrentReleasePolicyDigest,
+          }
         : null,
       history: {
         priorPromotions: input.priorPromotions ?? 0,
@@ -283,7 +289,9 @@ export namespace QualityPromotionEligibility {
     lines.push(
       `- team carryover history: ${summary.reentryContext?.teamCarryoverHistory.map((entry) => `${entry.team}:${entry.weightedReuseScore.toFixed(2)}`).join(", ") || "n/a"}`,
     )
-    lines.push(`- prior promotion reporting chains: ${summary.reentryContext?.priorPromotionReportingChains.join(", ") || "n/a"}`)
+    lines.push(
+      `- prior promotion reporting chains: ${summary.reentryContext?.priorPromotionReportingChains.join(", ") || "n/a"}`,
+    )
     lines.push(
       `- reviewer carryover history: ${summary.reentryContext?.reviewerCarryoverHistory.map((entry) => `${entry.approver}:${entry.weightedReuseScore.toFixed(2)}`).join(", ") || "n/a"}`,
     )
@@ -294,7 +302,9 @@ export namespace QualityPromotionEligibility {
     lines.push(`- remediation author: ${summary.remediation?.author ?? "n/a"}`)
     lines.push(`- remediation evidence count: ${summary.remediation?.evidenceCount ?? "n/a"}`)
     lines.push(`- remediation policy digest: ${summary.remediation?.currentReleasePolicyDigest ?? "n/a"}`)
-    lines.push(`- remediation matches current policy: ${summary.remediation?.matchesCurrentReleasePolicyDigest ?? "n/a"}`)
+    lines.push(
+      `- remediation matches current policy: ${summary.remediation?.matchesCurrentReleasePolicyDigest ?? "n/a"}`,
+    )
     lines.push(`- prior promotions: ${summary.history.priorPromotions}`)
     lines.push(`- prior rollbacks: ${summary.history.priorRollbacks}`)
     lines.push(`- recent rollback count: ${summary.history.recentRollbackCount}`)

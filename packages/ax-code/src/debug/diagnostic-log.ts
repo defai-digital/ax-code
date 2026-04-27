@@ -51,6 +51,7 @@ const SENSITIVE_LOG_KEYS = new Set([
 let state: State | undefined
 let writeQueue = Promise.resolve()
 let processDiagnosticsInstalled = false
+let writeFailureReported = false
 const log = Log.create({ service: "diagnostic-log" })
 
 export namespace DiagnosticLog {
@@ -133,7 +134,17 @@ export namespace DiagnosticLog {
     }
 
     const line = JSON.stringify(record) + "\n"
-    writeQueue = writeQueue.then(() => fs.appendFile(current.eventsPath, line)).catch(() => {})
+    writeQueue = writeQueue
+      .then(() => fs.appendFile(current.eventsPath, line))
+      .catch((error) => {
+        if (!writeFailureReported) {
+          writeFailureReported = true
+          log.warn("diagnostic log write failed", {
+            error: error instanceof Error ? error.message : String(error),
+            path: current.eventsPath,
+          })
+        }
+      })
   }
 
   export async function flush() {

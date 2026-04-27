@@ -898,10 +898,7 @@ export namespace ACP {
       })
     }
 
-    private async emitToolRunning(
-      sessionId: string,
-      part: ToolPart & { state: ToolStateRunning },
-    ): Promise<void> {
+    private async emitToolRunning(sessionId: string, part: ToolPart & { state: ToolStateRunning }): Promise<void> {
       const output = this.bashOutput(part)
       const content: ToolCallContent[] = []
       if (output) {
@@ -952,10 +949,7 @@ export namespace ACP {
         })
     }
 
-    private async emitToolCompleted(
-      sessionId: string,
-      part: ToolPart & { state: ToolStateCompleted },
-    ): Promise<void> {
+    private async emitToolCompleted(sessionId: string, part: ToolPart & { state: ToolStateCompleted }): Promise<void> {
       this.toolStarts.delete(part.callID)
       this.bashSnapshots.delete(part.callID)
       const kind = toToolKind(part.tool)
@@ -1015,10 +1009,7 @@ export namespace ACP {
         })
     }
 
-    private async emitToolError(
-      sessionId: string,
-      part: ToolPart & { state: ToolStateError },
-    ): Promise<void> {
+    private async emitToolError(sessionId: string, part: ToolPart & { state: ToolStateError }): Promise<void> {
       this.toolStarts.delete(part.callID)
       this.bashSnapshots.delete(part.callID)
       await this.connection

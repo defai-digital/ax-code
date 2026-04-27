@@ -82,10 +82,7 @@ describe("tui sync bootstrap phase plan", () => {
       }),
     )
 
-    expect(startup).toEqual([
-      "tui.startup.bootstrapCoreReady",
-      "tui.startup.bootstrapDeferredReady",
-    ])
+    expect(startup).toEqual(["tui.startup.bootstrapCoreReady", "tui.startup.bootstrapDeferredReady"])
     expect(status as string).toBe("complete")
   })
 
@@ -114,10 +111,7 @@ describe("tui sync bootstrap phase plan", () => {
     )
 
     expect(statuses).toEqual(["complete"])
-    expect(startup).toEqual([
-      "tui.startup.bootstrapCoreReady",
-      "tui.startup.bootstrapDeferredReady",
-    ])
+    expect(startup).toEqual(["tui.startup.bootstrapCoreReady", "tui.startup.bootstrapDeferredReady"])
     expect(status as string).toBe("complete")
   })
 })

@@ -12,11 +12,14 @@ describe("tui sync bootstrap phase", () => {
     const logged: string[] = []
 
     await expect(
-      settleBootstrapPhase([() => Promise.reject(new Error("first")), () => Promise.resolve("ok"), () => Promise.reject("second")], {
-        onRejected(error) {
-          logged.push(error)
+      settleBootstrapPhase(
+        [() => Promise.reject(new Error("first")), () => Promise.resolve("ok"), () => Promise.reject("second")],
+        {
+          onRejected(error) {
+            logged.push(error)
+          },
         },
-      }),
+      ),
     ).resolves.toEqual({
       rejected: ["Error: first", "second"],
     })
@@ -28,13 +31,18 @@ describe("tui sync bootstrap phase", () => {
     const logged: string[] = []
 
     await expect(
-      settleBootstrapPhase([() => {
-        throw new Error("sync first")
-      }], {
-        onRejected(error) {
-          logged.push(error)
+      settleBootstrapPhase(
+        [
+          () => {
+            throw new Error("sync first")
+          },
+        ],
+        {
+          onRejected(error) {
+            logged.push(error)
+          },
         },
-      }),
+      ),
     ).resolves.toEqual({
       rejected: ["Error: sync first"],
     })

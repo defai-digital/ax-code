@@ -73,12 +73,9 @@ describe("QualityPromotionApprovalPolicyStore", () => {
         }),
       )
 
-      const explicitPolicy = QualityPromotionApprovalPolicy.merge(
-        QualityPromotionApprovalPolicy.defaults(),
-        {
-          force: { minimumApprovals: 4, minimumRole: "vp" },
-        },
-      )
+      const explicitPolicy = QualityPromotionApprovalPolicy.merge(QualityPromotionApprovalPolicy.defaults(), {
+        force: { minimumApprovals: 4, minimumRole: "vp" },
+      })
       const explicit = await QualityPromotionApprovalPolicyStore.resolve({
         projectID: "project-policy-2",
         policy: explicitPolicy,

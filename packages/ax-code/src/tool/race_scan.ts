@@ -13,20 +13,11 @@ const MAX_FINDINGS_IN_OUTPUT = 40
 export const RaceScanTool = Tool.define("race_scan", {
   description: DESCRIPTION,
   parameters: z.object({
-    patterns: z
-      .array(z.enum(PATTERN_KINDS))
-      .optional()
-      .describe("Which detectors to run (default: all four)"),
+    patterns: z.array(z.enum(PATTERN_KINDS)).optional().describe("Which detectors to run (default: all four)"),
     excludeTests: z.boolean().optional().describe("Skip test files (default true)"),
     include: z.array(z.string()).optional().describe("Glob patterns to include (default: TS/JS sources)"),
     maxFiles: z.number().int().min(1).max(5000).optional().describe("Max files to scan (default 500)"),
-    maxFindingsPerFile: z
-      .number()
-      .int()
-      .min(1)
-      .max(200)
-      .optional()
-      .describe("Max findings per file (default 20)"),
+    maxFindingsPerFile: z.number().int().min(1).max(200).optional().describe("Max findings per file (default 20)"),
   }),
   execute: async (args) => {
     const projectID = Instance.project.id

@@ -36,9 +36,17 @@ export namespace McpAuth {
   export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
     const prev = locks.get(key) ?? Promise.resolve()
     let result: T
-    const next = prev.then(async () => { result = await fn() })
+    const next = prev.then(async () => {
+      result = await fn()
+    })
     // Store a promise that always resolves so the chain continues after errors
-    locks.set(key, next.then(() => {}, () => {}))
+    locks.set(
+      key,
+      next.then(
+        () => {},
+        () => {},
+      ),
+    )
     await next
     return result!
   }
@@ -46,7 +54,10 @@ export namespace McpAuth {
   function decryptEntry(raw: Record<string, unknown>): Entry {
     const entry = { ...raw } as Record<string, unknown>
     if (entry.tokens && typeof entry.tokens === "object") {
-      entry.tokens = decryptField(decryptField({ ...(entry.tokens as Record<string, unknown>) }, "accessToken"), "refreshToken")
+      entry.tokens = decryptField(
+        decryptField({ ...(entry.tokens as Record<string, unknown>) }, "accessToken"),
+        "refreshToken",
+      )
     }
     if (entry.clientInfo && typeof entry.clientInfo === "object") {
       entry.clientInfo = decryptField({ ...(entry.clientInfo as Record<string, unknown>) }, "clientSecret")
@@ -57,7 +68,10 @@ export namespace McpAuth {
   function encryptEntry(entry: Entry): Record<string, unknown> {
     const out = { ...entry } as Record<string, unknown>
     if (entry.tokens) {
-      out.tokens = encryptField(encryptField({ ...entry.tokens } as Record<string, unknown>, "accessToken"), "refreshToken")
+      out.tokens = encryptField(
+        encryptField({ ...entry.tokens } as Record<string, unknown>, "accessToken"),
+        "refreshToken",
+      )
     }
     if (entry.clientInfo) {
       out.clientInfo = encryptField({ ...entry.clientInfo } as Record<string, unknown>, "clientSecret")

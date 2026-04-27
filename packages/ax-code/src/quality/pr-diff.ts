@@ -95,10 +95,7 @@ const PrViewSchema = z.object({
 export async function fetchPrDiff(prRef: string, cwd: string): Promise<PrDiff> {
   await ensureGhAvailable(cwd)
 
-  const view = await runGh(
-    ["pr", "view", prRef, "--json", "number,title,baseRefName,headRefName,headRefOid"],
-    cwd,
-  )
+  const view = await runGh(["pr", "view", prRef, "--json", "number,title,baseRefName,headRefName,headRefOid"], cwd)
   if (view.code !== 0) {
     throw new GhFetchError({
       command: `gh pr view ${prRef}`,

@@ -243,8 +243,9 @@ export function DialogWorkspaceList() {
 
   const localCount = createMemo(
     () =>
-      sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory) && !session.parentID)
-        .length,
+      sync.data.session.filter(
+        (session) => session.directory === (sync.data.path.directory || sdk.directory) && !session.parentID,
+      ).length,
   )
 
   let run = 0
@@ -284,8 +285,7 @@ export function DialogWorkspaceList() {
       const count = counts()[workspace]
       const name = path.basename(workspace) || workspace
       return {
-        title:
-          toDelete() === workspace ? `Delete ${name}? Press ${keybind.print("session_delete")} again` : name,
+        title: toDelete() === workspace ? `Delete ${name}? Press ${keybind.print("session_delete")} again` : name,
         value: workspace,
         category: "Workspace",
         description: workspace,

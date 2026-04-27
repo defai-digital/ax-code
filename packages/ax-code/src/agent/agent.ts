@@ -264,9 +264,9 @@ export namespace Agent {
               description:
                 "Security Auditor agent. Scans code for vulnerabilities, secrets, OWASP issues, and compliance problems. Read-only — reports findings without modifying code.",
               prompt: PROMPT_SECURITY,
-              // No readOnly preset — auto-routing can land users on this agent for
-              // mixed analyze-then-fix asks ("fix the SQL injection"); blocking edits
-              // would turn misroutes into dead-ends. Specialist personality lives in
+              // No readOnly preset — users @-mention this agent for mixed
+              // analyze-then-fix asks ("fix the SQL injection"); blocking edits
+              // would dead-end the request. Specialist personality lives in
               // the prompt, not in artificial permission constraints.
               permission: Permission.merge(defaults, policy("security"), user),
               options: {},

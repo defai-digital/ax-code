@@ -16,7 +16,13 @@ describe("audit report routing", () => {
         const sid = session.id
         Recorder.begin(sid)
 
-        Recorder.emit({ type: "session.start", sessionID: sid, agent: "build", model: "test/model", directory: tmp.path })
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
         Recorder.emit({
           type: "agent.route",
           sessionID: sid,

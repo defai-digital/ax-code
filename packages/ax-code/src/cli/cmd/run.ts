@@ -305,6 +305,12 @@ export const RunCommand = cmd({
       })
   },
   handler: async (args) => {
+    const exitEarly = (message: string): never => {
+      UI.error(message)
+      process.exitCode = 1
+      throw new UI.CancelledError()
+    }
+
     let message = [...args.message, ...(args["--"] || [])]
       .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
       .join(" ")
@@ -316,8 +322,7 @@ export const RunCommand = cmd({
         process.chdir(args.dir)
         return process.cwd()
       } catch {
-        UI.error("Failed to change directory to " + args.dir)
-        process.exit(1)
+        exitEarly("Failed to change directory to " + args.dir)
       }
     })()
 
@@ -328,8 +333,7 @@ export const RunCommand = cmd({
       for (const filePath of list) {
         const resolvedPath = path.resolve(process.cwd(), filePath)
         if (!(await Filesystem.exists(resolvedPath))) {
-          UI.error(`File not found: ${filePath}`)
-          process.exit(1)
+          exitEarly(`File not found: ${filePath}`)
         }
 
         const mime = (await Filesystem.isDir(resolvedPath)) ? "application/x-directory" : "text/plain"
@@ -346,13 +350,11 @@ export const RunCommand = cmd({
     if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
 
     if (message.trim().length === 0 && !args.command) {
-      UI.error("You must provide a message or a command")
-      process.exit(1)
+      exitEarly("You must provide a message or a command")
     }
 
     if (args.fork && !args.continue && !args.session) {
-      UI.error("--fork requires --continue or --session")
-      process.exit(1)
+      exitEarly("--fork requires --continue or --session")
     }
 
     const rules: Permission.Ruleset = [
@@ -623,16 +625,12 @@ export const RunCommand = cmd({
         return args.agent
       })()
 
-      const sessionID = await session(sdk)
-      if (!sessionID) {
-        UI.error("Session not found")
-        process.exit(1)
-      }
+      const sessionID = (await session(sdk)) ?? exitEarly("Session not found")
       await share(sdk, sessionID)
 
       loop().catch((e) => {
         console.error(e)
-        process.exit(1)
+        process.exitCode = 1
       })
 
       if (args.command) {

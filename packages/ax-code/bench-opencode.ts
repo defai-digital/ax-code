@@ -14,11 +14,22 @@ const url = await new Promise<string>((resolve, reject) => {
   proc.stdout?.on("data", (chunk) => {
     output += chunk.toString()
     const match = output.match(/listening on\s+(https?:\/\/[^\s]+)/)
-    if (match) { clearTimeout(timeout); resolve(match[1]) }
+    if (match) {
+      clearTimeout(timeout)
+      resolve(match[1])
+    }
   })
-  proc.stderr?.on("data", (chunk) => { output += chunk.toString() })
-  proc.on("error", (e) => { clearTimeout(timeout); reject(e) })
-  proc.on("exit", (code) => { clearTimeout(timeout); reject(new Error("Exited: " + code + "\n" + output)) })
+  proc.stderr?.on("data", (chunk) => {
+    output += chunk.toString()
+  })
+  proc.on("error", (e) => {
+    clearTimeout(timeout)
+    reject(e)
+  })
+  proc.on("exit", (code) => {
+    clearTimeout(timeout)
+    reject(new Error("Exited: " + code + "\n" + output))
+  })
 })
 
 const spawnTime = Date.now() - s

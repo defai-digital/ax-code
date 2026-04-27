@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { createRuntimeSyncActions, type RuntimeSyncClient, type RuntimeSyncFetchResponse } from "../../../src/cli/cmd/tui/context/sync-runtime-sync"
+import {
+  createRuntimeSyncActions,
+  type RuntimeSyncClient,
+  type RuntimeSyncFetchResponse,
+} from "../../../src/cli/cmd/tui/context/sync-runtime-sync"
 
 function okJson(value: unknown): RuntimeSyncFetchResponse {
   return {
@@ -186,10 +190,7 @@ describe("tui sync runtime sync", () => {
     await actions.syncAutonomous()
     await actions.syncSmartLlm()
 
-    expect(requests).toEqual([
-      "http://localhost/autonomous",
-      "http://localhost/smart-llm",
-    ])
+    expect(requests).toEqual(["http://localhost/autonomous", "http://localhost/smart-llm"])
     expect(applied).toEqual({
       autonomous: [true],
       smartLlm: [false],

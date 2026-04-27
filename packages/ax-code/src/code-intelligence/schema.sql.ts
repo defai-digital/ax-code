@@ -64,14 +64,7 @@ export const CodeNodeTable = sqliteTable(
 // (references), module imports (imports), and class hierarchy (extends,
 // implements). "defines" links a module-kind node to each top-level
 // symbol it defines; "declared_in" is the reverse.
-export type CodeEdgeKind =
-  | "calls"
-  | "references"
-  | "imports"
-  | "extends"
-  | "implements"
-  | "defines"
-  | "declared_in"
+export type CodeEdgeKind = "calls" | "references" | "imports" | "extends" | "implements" | "defines" | "declared_in"
 
 export const CodeEdgeTable = sqliteTable(
   "code_edge",

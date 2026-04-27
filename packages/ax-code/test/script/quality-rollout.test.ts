@@ -15,21 +15,27 @@ import { tmpdir } from "../fixture/fixture"
 
 describe("script.quality-rollout project scope", () => {
   test("reconciles explicit and artifact project ids when they match", () => {
-    expect(QualityRolloutProjectScope.reconcile({
-      explicitProjectID: "project-a",
-      artifactProjectID: "project-a",
-    })).toBe("project-a")
-    expect(QualityRolloutProjectScope.reconcile({
-      explicitProjectID: null,
-      artifactProjectID: "project-a",
-    })).toBe("project-a")
+    expect(
+      QualityRolloutProjectScope.reconcile({
+        explicitProjectID: "project-a",
+        artifactProjectID: "project-a",
+      }),
+    ).toBe("project-a")
+    expect(
+      QualityRolloutProjectScope.reconcile({
+        explicitProjectID: null,
+        artifactProjectID: "project-a",
+      }),
+    ).toBe("project-a")
   })
 
   test("rejects explicit project ids that conflict with artifact provenance", () => {
-    expect(() => QualityRolloutProjectScope.reconcile({
-      explicitProjectID: "project-a",
-      artifactProjectID: "project-b",
-    })).toThrow(/does not match artifact project id/)
+    expect(() =>
+      QualityRolloutProjectScope.reconcile({
+        explicitProjectID: "project-a",
+        artifactProjectID: "project-b",
+      }),
+    ).toThrow(/does not match artifact project id/)
   })
 
   test("derives project ids from nested promotion artifacts", () => {

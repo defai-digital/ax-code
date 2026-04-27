@@ -35,7 +35,10 @@ export namespace Risk {
     primaryChange?: SessionSemanticCore.Kind | null
   }
 
-  export type NormalizedSignals = Omit<Signals, "validationState" | "validationCount" | "validationFailures" | "validationCommands" | "diffState"> & {
+  export type NormalizedSignals = Omit<
+    Signals,
+    "validationState" | "validationCount" | "validationFailures" | "validationCommands" | "diffState"
+  > & {
     validationState: ValidationState
     validationCount: number
     validationFailures: number
@@ -66,9 +69,20 @@ export namespace Risk {
   }
 
   const SECURITY_PATTERNS = [
-    /auth/i, /password/i, /secret/i, /token/i, /credential/i,
-    /encrypt/i, /decrypt/i, /\.env/, /\.pem$/, /\.key$/,
-    /permission/i, /oauth/i, /session/i, /cookie/i,
+    /auth/i,
+    /password/i,
+    /secret/i,
+    /token/i,
+    /credential/i,
+    /encrypt/i,
+    /decrypt/i,
+    /\.env/,
+    /\.pem$/,
+    /\.key$/,
+    /permission/i,
+    /oauth/i,
+    /session/i,
+    /cookie/i,
   ]
 
   function isSecurityRelated(files: string[]): boolean {
@@ -82,7 +96,9 @@ export namespace Risk {
 
   function api(files: string[]) {
     return new Set(
-      files.filter((file) => file.includes("/src/server/routes/") || file.includes("/server/routes/") || file.includes("/api/")),
+      files.filter(
+        (file) => file.includes("/src/server/routes/") || file.includes("/server/routes/") || file.includes("/api/"),
+      ),
     ).size
   }
 
@@ -92,7 +108,10 @@ export namespace Risk {
     for (const line of input.split("\n")) {
       if (line.startsWith("+++")) continue
       if (line.startsWith("---")) continue
-      if (line.startsWith("+")) { add++; continue }
+      if (line.startsWith("+")) {
+        add++
+        continue
+      }
       if (line.startsWith("-")) del++
     }
     return { add, del }
@@ -127,9 +146,13 @@ export namespace Risk {
     const base =
       0.35 +
       (signals.diffState === "recorded" ? 0.25 : signals.diffState === "derived" ? 0.12 : 0) +
-      (signals.validationState === "passed" || signals.validationState === "failed" ? 0.22
-        : signals.validationState === "partial" ? 0.1
-        : signals.filesChanged === 0 ? 0.1 : -0.05) +
+      (signals.validationState === "passed" || signals.validationState === "failed"
+        ? 0.22
+        : signals.validationState === "partial"
+          ? 0.1
+          : signals.filesChanged === 0
+            ? 0.1
+            : -0.05) +
       (signals.primaryChange && signals.diffState !== "missing" ? 0.08 : 0) -
       Math.min(0.15, signals.toolFailures * 0.05)
     return Math.max(0.1, Math.min(0.99, Number(base.toFixed(2))))
@@ -175,15 +198,54 @@ export namespace Risk {
       breakdown.push({ kind, label, points, detail })
     }
 
-    push("files", "File churn", next.filesChanged > 10 ? 25 : next.filesChanged > 5 ? 15 : next.filesChanged > 1 ? 8 : 0, `${next.filesChanged} files changed`)
-    push("lines", "Code churn", next.linesChanged > 500 ? 20 : next.linesChanged > 100 ? 12 : next.linesChanged > 30 ? 5 : 0, `${next.linesChanged} lines changed`)
-    push("tests", "Validation scope", next.validationState === "partial" ? 6 : 0, next.validationCommands.length > 0 ? `${next.validationCommands.length} validation commands recorded` : "partial validation coverage")
-    push("api", "API surface", next.apiEndpointsAffected > 0 ? 12 : 0, `${next.apiEndpointsAffected} route files affected`)
+    push(
+      "files",
+      "File churn",
+      next.filesChanged > 10 ? 25 : next.filesChanged > 5 ? 15 : next.filesChanged > 1 ? 8 : 0,
+      `${next.filesChanged} files changed`,
+    )
+    push(
+      "lines",
+      "Code churn",
+      next.linesChanged > 500 ? 20 : next.linesChanged > 100 ? 12 : next.linesChanged > 30 ? 5 : 0,
+      `${next.linesChanged} lines changed`,
+    )
+    push(
+      "tests",
+      "Validation scope",
+      next.validationState === "partial" ? 6 : 0,
+      next.validationCommands.length > 0
+        ? `${next.validationCommands.length} validation commands recorded`
+        : "partial validation coverage",
+    )
+    push(
+      "api",
+      "API surface",
+      next.apiEndpointsAffected > 0 ? 12 : 0,
+      `${next.apiEndpointsAffected} route files affected`,
+    )
     push("module", "Cross-module scope", next.crossModule ? 8 : 0, "changes span multiple top-level areas")
     push("security", "Security-sensitive area", next.securityRelated ? 15 : 0, "security-related files touched")
-    push("semantic", "Semantic change", next.semanticRisk === "high" ? 10 : next.semanticRisk === "medium" ? 4 : 0, next.primaryChange ? `${SessionSemanticCore.format(next.primaryChange)} classified as ${next.semanticRisk} risk` : "semantic change unavailable")
-    push("validation", "Validation result", next.validationState === "failed" ? 20 : 0, "validation output reported failure")
-    push("tools", "Tool stability", next.toolFailures > 0 ? Math.min(15, 6 + next.toolFailures * 2) : 0, `${next.toolFailures}/${next.totalTools} tool calls failed`)
+    push(
+      "semantic",
+      "Semantic change",
+      next.semanticRisk === "high" ? 10 : next.semanticRisk === "medium" ? 4 : 0,
+      next.primaryChange
+        ? `${SessionSemanticCore.format(next.primaryChange)} classified as ${next.semanticRisk} risk`
+        : "semantic change unavailable",
+    )
+    push(
+      "validation",
+      "Validation result",
+      next.validationState === "failed" ? 20 : 0,
+      "validation output reported failure",
+    )
+    push(
+      "tools",
+      "Tool stability",
+      next.toolFailures > 0 ? Math.min(15, 6 + next.toolFailures * 2) : 0,
+      `${next.toolFailures}/${next.totalTools} tool calls failed`,
+    )
 
     score = Math.min(score, 100)
     const level: Level = score >= 70 ? "CRITICAL" : score >= 45 ? "HIGH" : score >= 20 ? "MEDIUM" : "LOW"
@@ -200,8 +262,16 @@ export namespace Risk {
     if (next.toolFailures > 0) parts.push(`${next.toolFailures} tool failures`)
 
     const evidence = [
-      next.diffState === "recorded" ? `diff snapshot recorded for ${next.filesChanged} file${next.filesChanged === 1 ? "" : "s"}` : next.diffState === "derived" ? "change scope derived from tool events" : "",
-      next.validationCount > 0 ? next.validationCommands.length > 0 ? `validation recorded: ${next.validationCommands.slice(0, 2).join(" \u00b7 ")}` : `${next.validationCount} validation run${next.validationCount === 1 ? "" : "s"} recorded` : "",
+      next.diffState === "recorded"
+        ? `diff snapshot recorded for ${next.filesChanged} file${next.filesChanged === 1 ? "" : "s"}`
+        : next.diffState === "derived"
+          ? "change scope derived from tool events"
+          : "",
+      next.validationCount > 0
+        ? next.validationCommands.length > 0
+          ? `validation recorded: ${next.validationCommands.slice(0, 2).join(" \u00b7 ")}`
+          : `${next.validationCount} validation run${next.validationCount === 1 ? "" : "s"} recorded`
+        : "",
       next.primaryChange ? `semantic change classified as ${SessionSemanticCore.format(next.primaryChange)}` : "",
       next.toolFailures > 0 ? `${next.toolFailures} tool failure${next.toolFailures === 1 ? "" : "s"} recorded` : "",
     ].filter(Boolean)
@@ -209,19 +279,34 @@ export namespace Risk {
     const unknowns = [
       next.diffState === "missing" && next.filesChanged > 0 ? "no diff snapshot recorded for changed files" : "",
       next.diffState === "derived" ? "line churn is estimated from tool events, not a persisted diff" : "",
-      next.filesChanged > 0 && next.validationState === "not_run" ? "no validation command recorded for code changes" : "",
+      next.filesChanged > 0 && next.validationState === "not_run"
+        ? "no validation command recorded for code changes"
+        : "",
       next.validationState === "partial" ? "validation covered only part of the change" : "",
     ].filter(Boolean)
 
     const mitigations = [
       next.filesChanged > 0 && next.validationState === "not_run" ? "run validation before accepting this session" : "",
       next.validationState === "partial" ? "expand validation to the touched files or routes" : "",
-      next.diffState !== "recorded" && next.filesChanged > 0 ? "persist a session diff snapshot before trusting churn estimates" : "",
+      next.diffState !== "recorded" && next.filesChanged > 0
+        ? "persist a session diff snapshot before trusting churn estimates"
+        : "",
       next.apiEndpointsAffected > 0 ? "exercise the touched routes with endpoint or contract checks" : "",
       next.securityRelated ? "review auth, session, or credential paths with an owner" : "",
     ].filter(Boolean)
 
-    return { level, score, confidence: conf, readiness: ready, signals: next, summary: parts.length > 0 ? parts.join(", ") : next.filesChanged > 0 ? "code change recorded" : "minimal change", breakdown, evidence, unknowns, mitigations }
+    return {
+      level,
+      score,
+      confidence: conf,
+      readiness: ready,
+      signals: next,
+      summary: parts.length > 0 ? parts.join(", ") : next.filesChanged > 0 ? "code change recorded" : "minimal change",
+      breakdown,
+      evidence,
+      unknowns,
+      mitigations,
+    }
   }
 
   export function fromSession(sessionID: SessionID): Assessment {
@@ -244,7 +329,10 @@ export namespace Risk {
         const call = validationMap.get((e.callID as string) ?? "")
         if (tool === "bash" && call) {
           const output = (e.output as string) ?? ""
-          runs.push({ command: call, failed: validationFailed({ command: call, status: e.status as "completed" | "error", output }) })
+          runs.push({
+            command: call,
+            failed: validationFailed({ command: call, status: e.status as "completed" | "error", output }),
+          })
           validationMap.delete((e.callID as string) ?? "")
         }
       }
@@ -261,7 +349,10 @@ export namespace Risk {
         }
         if (tool === "apply_patch") {
           const patchText = (input.patch ?? "") as string
-          const list = [...patchText.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm), ...patchText.matchAll(/^[+-]{3}\s+[ab]\/(.+)$/gm)]
+          const list = [
+            ...patchText.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm),
+            ...patchText.matchAll(/^[+-]{3}\s+[ab]\/(.+)$/gm),
+          ]
           for (const item of list) {
             const f = item[1]?.replace(/^[ab]\//, "")
             if (f && f !== "/dev/null") files.add(f)
@@ -283,21 +374,29 @@ export namespace Risk {
 
     const fileList = [...files]
     const linesChanged = additions + deletions
-    const semantic = diff ? SessionSemanticCore.summarize(diff) ?? null : null
+    const semantic = diff ? (SessionSemanticCore.summarize(diff) ?? null) : null
     const failed = runs.filter((item) => item.failed).length
     const passed = runs.length > 0 && failed === 0
     const partial = runs.length > 0 && failed > 0 && failed < runs.length
     const vs = passed ? "passed" : failed > 0 ? (partial ? "partial" : "failed") : "not_run"
 
     return assess({
-      filesChanged: fileList.length, linesChanged,
+      filesChanged: fileList.length,
+      linesChanged,
       testCoverage: vs === "passed" ? 1 : vs === "partial" ? 0.5 : 0,
-      apiEndpointsAffected: api(fileList), crossModule: isCrossModule(fileList), securityRelated: isSecurityRelated(fileList),
+      apiEndpointsAffected: api(fileList),
+      crossModule: isCrossModule(fileList),
+      securityRelated: isSecurityRelated(fileList),
       validationPassed: vs === "passed" ? true : vs === "failed" ? false : undefined,
-      validationState: vs as ValidationState, validationCount: runs.length, validationFailures: failed, validationCommands: runs.map((item) => item.command),
-      toolFailures, totalTools,
+      validationState: vs as ValidationState,
+      validationCount: runs.length,
+      validationFailures: failed,
+      validationCommands: runs.map((item) => item.command),
+      toolFailures,
+      totalTools,
       diffState: diff ? "recorded" : fileList.length > 0 || linesChanged > 0 ? "derived" : "missing",
-      semanticRisk: semantic?.risk ?? null, primaryChange: semantic?.primary ?? null,
+      semanticRisk: semantic?.risk ?? null,
+      primaryChange: semantic?.primary ?? null,
     })
   }
 
@@ -313,7 +412,9 @@ export namespace Risk {
   }
 
   function testCommand(input: string) {
-    return [/\b(?:bun|pnpm|npm|yarn)\s+(?:run\s+)?test\b/i, /\b(?:vitest|jest|mocha|ava|pytest|rspec|phpunit)\b/i].some((pat) => pat.test(input))
+    return [/\b(?:bun|pnpm|npm|yarn)\s+(?:run\s+)?test\b/i, /\b(?:vitest|jest|mocha|ava|pytest|rspec|phpunit)\b/i].some(
+      (pat) => pat.test(input),
+    )
   }
 
   function validationFailed(input: { command: string; status: "completed" | "error"; output: string }) {
@@ -321,7 +422,11 @@ export namespace Risk {
     if (!testCommand(input.command)) return false
     const txt = input.output.toLowerCase()
     if (/\b0\s+fail(?:ed|ures?)?\b/.test(txt) || /\b0\s+errors?\b/.test(txt)) return false
-    return /\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(txt) || /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output) || /\bFAIL\b/.test(input.output)
+    return (
+      /\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(txt) ||
+      /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output) ||
+      /\bFAIL\b/.test(input.output)
+    )
   }
 
   export function top(assessment: Assessment, limit = 3) {
@@ -333,7 +438,14 @@ export namespace Risk {
   }
 
   export function render(assessment: Assessment): string {
-    const icon = assessment.level === "LOW" ? "." : assessment.level === "MEDIUM" ? "!" : assessment.level === "HIGH" ? "!!" : "!!!"
+    const icon =
+      assessment.level === "LOW"
+        ? "."
+        : assessment.level === "MEDIUM"
+          ? "!"
+          : assessment.level === "HIGH"
+            ? "!!"
+            : "!!!"
     return `Risk: ${assessment.level} (${assessment.score}/100) ${icon}\n  ${assessment.summary}\n  readiness ${text(assessment.readiness)} \u00b7 confidence ${assessment.confidence.toFixed(2)}`
   }
 }

@@ -47,7 +47,10 @@ describe("session message recovery", () => {
 
         Database.use((db) => {
           for (const id of ids.slice(1)) {
-            db.update(MessageTable).set({ data: { role: "user" } as any }).where(eq(MessageTable.id, id)).run()
+            db.update(MessageTable)
+              .set({ data: { role: "user" } as any })
+              .where(eq(MessageTable.id, id))
+              .run()
           }
         })
 
@@ -80,7 +83,10 @@ describe("session message recovery", () => {
         })
 
         Database.use((db) => {
-          db.update(PartTable).set({ data: { type: "text" } as any }).where(eq(PartTable.id, bad)).run()
+          db.update(PartTable)
+            .set({ data: { type: "text" } as any })
+            .where(eq(PartTable.id, bad))
+            .run()
         })
 
         const msg = await MessageV2.get({ sessionID: session.id, messageID: item.id })

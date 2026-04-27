@@ -88,12 +88,8 @@ describe("CodeGraphQuery nodes", () => {
         const projectID = Instance.project.id
         CodeGraphQuery.clearProject(projectID)
 
-        CodeGraphQuery.insertNode(
-          makeNode({ project_id: projectID, name: "bar", kind: "function", file: "/tmp/a.ts" }),
-        )
-        CodeGraphQuery.insertNode(
-          makeNode({ project_id: projectID, name: "bar", kind: "class", file: "/tmp/b.ts" }),
-        )
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "bar", kind: "function", file: "/tmp/a.ts" }))
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "bar", kind: "class", file: "/tmp/b.ts" }))
 
         const fns = CodeGraphQuery.findNodesByName(projectID, "bar", { kind: "function" })
         expect(fns.length).toBe(1)
@@ -435,9 +431,7 @@ describe("CodeGraphQuery regression fixes", () => {
         const projectID = Instance.project.id
         CodeGraphQuery.clearProject(projectID)
         const id = CodeNodeID.ascending()
-        CodeGraphQuery.insertNode(
-          makeNode({ id, project_id: projectID, name: "secret" }),
-        )
+        CodeGraphQuery.insertNode(makeNode({ id, project_id: projectID, name: "secret" }))
         return { projectA: projectID, nodeFromA: id }
       },
     })
@@ -579,14 +573,12 @@ describe("CodeGraphQuery.pruneOrphanFiles", () => {
         // Walking proj1 only; live set has just proj1's file. Scope
         // is "/Users/u/proj1", so proj2's row is out of scope and
         // must survive.
-        const result = CodeGraphQuery.pruneOrphanFiles(
-          projectID,
-          new Set(["/Users/u/proj1/a.ts"]),
-          "/Users/u/proj1",
-        )
+        const result = CodeGraphQuery.pruneOrphanFiles(projectID, new Set(["/Users/u/proj1/a.ts"]), "/Users/u/proj1")
         expect(result.files).toBe(0)
 
-        const remaining = CodeGraphQuery.listFiles(projectID).map((f) => f.path).sort()
+        const remaining = CodeGraphQuery.listFiles(projectID)
+          .map((f) => f.path)
+          .sort()
         expect(remaining).toEqual(["/Users/u/proj1/a.ts", "/Users/u/proj2/b.ts"])
 
         CodeGraphQuery.clearProject(projectID)
@@ -606,11 +598,7 @@ describe("CodeGraphQuery.pruneOrphanFiles", () => {
         seed(projectID, "/tmp/y/b.ts")
         const before = CodeGraphQuery.countNodes(projectID)
 
-        const result = CodeGraphQuery.pruneOrphanFiles(
-          projectID,
-          new Set(["/tmp/y/a.ts", "/tmp/y/b.ts"]),
-          "/tmp/y",
-        )
+        const result = CodeGraphQuery.pruneOrphanFiles(projectID, new Set(["/tmp/y/a.ts", "/tmp/y/b.ts"]), "/tmp/y")
         expect(result).toEqual({ files: 0, nodes: 0, edges: 0 })
         expect(CodeGraphQuery.countNodes(projectID)).toBe(before)
 
@@ -632,9 +620,7 @@ describe("CodeGraphQuery.pruneOrphanFiles", () => {
 
         const a = seed(projectID, "/tmp/z/a.ts")
         const b = seed(projectID, "/tmp/z/b.ts")
-        CodeGraphQuery.insertEdge(
-          makeEdge({ project_id: projectID, from_node: a, to_node: b, file: "/tmp/z/a.ts" }),
-        )
+        CodeGraphQuery.insertEdge(makeEdge({ project_id: projectID, from_node: a, to_node: b, file: "/tmp/z/a.ts" }))
         expect(CodeGraphQuery.countEdges(projectID)).toBe(1)
 
         const result = CodeGraphQuery.pruneOrphanFiles(projectID, new Set(["/tmp/z/a.ts"]), "/tmp/z")

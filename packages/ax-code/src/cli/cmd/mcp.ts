@@ -424,7 +424,9 @@ const configLocks = new Map<string, Promise<void>>()
 async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: string) {
   const prev = configLocks.get(configPath) ?? Promise.resolve()
   let resolve: () => void
-  const next = new Promise<void>((r) => { resolve = r })
+  const next = new Promise<void>((r) => {
+    resolve = r
+  })
   configLocks.set(configPath, next)
   await prev
 
@@ -502,9 +504,15 @@ export const McpAddCommand = cmd({
         const source = await prompts.select({
           message: "How do you want to add?",
           options: [
-            ...templateOptions.length > 0
-              ? [{ label: "From template", value: "template" as string, hint: `${templateOptions.length} pre-configured servers` }]
-              : [],
+            ...(templateOptions.length > 0
+              ? [
+                  {
+                    label: "From template",
+                    value: "template" as string,
+                    hint: `${templateOptions.length} pre-configured servers`,
+                  },
+                ]
+              : []),
             { label: "Custom local", value: "custom-local" as string, hint: "Run a local command" },
             { label: "Custom remote", value: "custom-remote" as string, hint: "Connect to a remote URL" },
           ],

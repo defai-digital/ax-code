@@ -57,11 +57,13 @@ export namespace QualityPromotionAdoptionReview {
     distinctQualifiedReviewers: z.number().int().nonnegative(),
     qualifiedRejectingReviews: z.number().int().nonnegative(),
     distinctQualifiedRejectingReviewers: z.number().int().nonnegative(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ConsensusSummary = z.output<typeof ConsensusSummary>
 
@@ -100,15 +102,17 @@ export namespace QualityPromotionAdoptionReview {
   }
 
   export function suggestionDigest(bundle: QualityPromotionDecisionBundle.DecisionBundle) {
-    const suggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const suggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
     return createHash("sha256").update(JSON.stringify(suggestion)).digest("hex")
   }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, review: ReviewArtifact) {
-    return review.decisionBundle.digest === decisionBundleDigest(bundle)
-      && review.decisionBundle.createdAt === bundle.createdAt
-      && review.suggestion.digest === suggestionDigest(bundle)
+    return (
+      review.decisionBundle.digest === decisionBundleDigest(bundle) &&
+      review.decisionBundle.createdAt === bundle.createdAt &&
+      review.suggestion.digest === suggestionDigest(bundle)
+    )
   }
 
   function normalizeRole(role: string | null | undefined): QualityPromotionApprovalPolicy.ApprovalRole | null {
@@ -119,7 +123,10 @@ export namespace QualityPromotionAdoptionReview {
       : null
   }
 
-  function qualifiesRole(role: string | null | undefined, minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null) {
+  function qualifiesRole(
+    role: string | null | undefined,
+    minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
+  ) {
     if (!minimumRole) return true
     const normalized = normalizeRole(role)
     if (!normalized) return false
@@ -166,14 +173,17 @@ export namespace QualityPromotionAdoptionReview {
   }): ReviewArtifact {
     const reviewedAt = new Date().toISOString()
     const reviewID = `${Date.now()}-${encode(input.bundle.source)}-${encode(input.reviewer)}`
-    const suggestion = input.bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
-    const disposition = input.disposition
-      ?? (suggestion.adoption.status === "accepted" ? "accepted" : "accepted_override")
+    const suggestion =
+      input.bundle.approvalPolicySuggestion ??
+      QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
+    const disposition =
+      input.disposition ?? (suggestion.adoption.status === "accepted" ? "accepted" : "accepted_override")
     const rationale = input.rationale?.trim() || null
 
     if (suggestion.adoption.status === "accepted" && disposition !== "accepted") {
-      throw new Error(`Adoption review for ${input.bundle.source} cannot use ${disposition} when suggestion adoption is accepted`)
+      throw new Error(
+        `Adoption review for ${input.bundle.source} cannot use ${disposition} when suggestion adoption is accepted`,
+      )
     }
     if (suggestion.adoption.status !== "accepted" && disposition === "accepted") {
       throw new Error(`Adoption review for ${input.bundle.source} must explicitly acknowledge override or rejection`)
@@ -209,16 +219,20 @@ export namespace QualityPromotionAdoptionReview {
 
   export function verify(bundle: QualityPromotionDecisionBundle.DecisionBundle, review: ReviewArtifact) {
     const reasons: string[] = []
-    const suggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const suggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
     if (review.source !== bundle.source) {
       reasons.push(`adoption review source mismatch: ${review.source} vs ${bundle.source}`)
     }
     if (review.decisionBundle.source !== bundle.source) {
-      reasons.push(`adoption review decision bundle source mismatch: ${review.decisionBundle.source} vs ${bundle.source}`)
+      reasons.push(
+        `adoption review decision bundle source mismatch: ${review.decisionBundle.source} vs ${bundle.source}`,
+      )
     }
     if (review.decisionBundle.createdAt !== bundle.createdAt) {
-      reasons.push(`adoption review decision bundle createdAt mismatch: ${review.decisionBundle.createdAt} vs ${bundle.createdAt}`)
+      reasons.push(
+        `adoption review decision bundle createdAt mismatch: ${review.decisionBundle.createdAt} vs ${bundle.createdAt}`,
+      )
     }
     if (review.decisionBundle.digest !== decisionBundleDigest(bundle)) {
       reasons.push(`adoption review decision bundle digest mismatch for ${bundle.source}`)
@@ -227,10 +241,14 @@ export namespace QualityPromotionAdoptionReview {
       reasons.push(`adoption review suggestion digest mismatch for ${bundle.source}`)
     }
     if (review.suggestion.adoptionStatus !== suggestion.adoption.status) {
-      reasons.push(`adoption review status mismatch: ${review.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`)
+      reasons.push(
+        `adoption review status mismatch: ${review.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`,
+      )
     }
     if (review.disposition === "accepted" && suggestion.adoption.status !== "accepted") {
-      reasons.push(`adoption review disposition accepted is invalid for suggestion status ${suggestion.adoption.status}`)
+      reasons.push(
+        `adoption review disposition accepted is invalid for suggestion status ${suggestion.adoption.status}`,
+      )
     }
     if (review.disposition !== "accepted" && suggestion.adoption.status === "accepted") {
       reasons.push(`adoption review override disposition is invalid for accepted suggestion status`)
@@ -243,21 +261,25 @@ export namespace QualityPromotionAdoptionReview {
     reviews: ReviewArtifact[],
     requirementOverride?: Partial<OverrideRequirement>,
   ) {
-    const suggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
-    const qualifyingDisposition: Disposition = suggestion.adoption.status === "accepted" ? "accepted" : "accepted_override"
+    const suggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const qualifyingDisposition: Disposition =
+      suggestion.adoption.status === "accepted" ? "accepted" : "accepted_override"
     const requirement = OverrideRequirement.parse({
       ...defaultRequirement(suggestion.adoption.status),
       ...requirementOverride,
     })
-    const qualifyingReviews = reviews.filter((review) =>
-      review.disposition === qualifyingDisposition && qualifiesRole(review.role, requirement.minimumRole))
+    const qualifyingReviews = reviews.filter(
+      (review) => review.disposition === qualifyingDisposition && qualifiesRole(review.role, requirement.minimumRole),
+    )
     const distinctQualifiedReviewers = new Set(qualifyingReviews.map((review) => review.reviewer)).size
-    const qualifiedRejectingReviews = reviews.filter((review) =>
-      review.disposition === "rejected" && qualifiesRole(review.role, requirement.minimumRole))
+    const qualifiedRejectingReviews = reviews.filter(
+      (review) => review.disposition === "rejected" && qualifiesRole(review.role, requirement.minimumRole),
+    )
     const distinctQualifiedRejectingReviewers = new Set(qualifiedRejectingReviews.map((review) => review.reviewer)).size
     const meetsCount = qualifyingReviews.length >= requirement.minimumReviews
-    const meetsDistinct = !requirement.requireDistinctReviewers || distinctQualifiedReviewers >= requirement.minimumReviews
+    const meetsDistinct =
+      !requirement.requireDistinctReviewers || distinctQualifiedReviewers >= requirement.minimumReviews
     const vetoedByQualifiedRejection = qualifiedRejectingReviews.length > 0
     const gates = [
       {
@@ -323,7 +345,9 @@ export namespace QualityPromotionAdoptionReview {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Adoption review ${review.reviewID} already exists for source ${review.source} with different content`)
+      throw new Error(
+        `Adoption review ${review.reviewID} already exists for source ${review.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(review.source, review.reviewID), next)

@@ -52,15 +52,23 @@ export const AuditRoutes = lazy(() =>
           200: { description: "JSON Lines audit export" },
         },
       }),
-      validator("query", z.object({
-        since: z.coerce.number().int().min(0).optional(),
-        risk: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional().meta({ description: "Filter sessions by minimum risk level" }),
-        type: z.string().optional().meta({ description: "Filter by event type (e.g. tool.call, agent.route)" }),
-      })),
+      validator(
+        "query",
+        z.object({
+          since: z.coerce.number().int().min(0).optional(),
+          risk: z
+            .enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"])
+            .optional()
+            .meta({ description: "Filter sessions by minimum risk level" }),
+          type: z.string().optional().meta({ description: "Filter by event type (e.g. tool.call, agent.route)" }),
+        }),
+      ),
       async (c) => {
         const { since, risk, type } = c.req.valid("query")
         type AuditRecord = { session_id: string; event_type: string; [key: string]: unknown }
-        let records = [...AuditExport.streamAll({ since })].map(parseLine).filter((x): x is AuditRecord => x !== null && typeof x === "object" && "session_id" in (x as object))
+        let records = [...AuditExport.streamAll({ since })]
+          .map(parseLine)
+          .filter((x): x is AuditRecord => x !== null && typeof x === "object" && "session_id" in (x as object))
         if (type) records = records.filter((r) => r.event_type === type)
         if (risk) {
           const { Risk: RiskEngine } = await import("../../risk/score")

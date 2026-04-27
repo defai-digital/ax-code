@@ -40,12 +40,7 @@ function replayItem(input: {
   } satisfies ProbabilisticRollout.ReplayItem
 }
 
-function label(input: {
-  labelID: string
-  artifactID: string
-  sessionID: string
-  outcome: "accepted" | "dismissed"
-}) {
+function label(input: { labelID: string; artifactID: string; sessionID: string; outcome: "accepted" | "dismissed" }) {
   return {
     labelID: input.labelID,
     artifactID: input.artifactID,

@@ -11,110 +11,128 @@ export namespace QualityPromotionAuditManifest {
     previousActiveSource: z.string().nullable(),
     decision: z.enum(["pass", "warn_override", "force"]),
     decisionBundleCreatedAt: z.string().nullable().optional(),
-    boardDecision: z.object({
-      decisionID: z.string(),
-      decidedAt: z.string(),
-      decider: z.string(),
-      role: z.string().nullable(),
-      team: z.string().nullable().default(null),
-      reportingChain: z.string().nullable().default(null),
-      disposition: z.lazy(() => QualityPromotionReleaseDecisionRecord.RecordSummary.shape.disposition),
-      overrideAccepted: z.boolean(),
-      dossierID: z.string(),
-      recommendation: z.lazy(() => QualityPromotionReleaseDecisionRecord.RecordSummary.shape.recommendation),
-      requiredOverride: z.enum(["none", "allow_warn", "force"]),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    releaseDecisionRecord: z.object({
-      recordID: z.string(),
-      recordedAt: z.string(),
-      decisionID: z.string(),
-      disposition: z.lazy(() => QualityPromotionReleaseDecisionRecord.RecordSummary.shape.disposition),
-      overrideAccepted: z.boolean(),
-      authorizedPromotion: z.boolean(),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    releasePacket: z.object({
-      packetID: z.string(),
-      createdAt: z.string(),
-      recordID: z.string(),
-      decisionID: z.string(),
-      authorizedPromotion: z.boolean(),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    reviewDossier: z.object({
-      dossierID: z.string(),
-      createdAt: z.string(),
-      submissionID: z.string(),
-      submissionCreatedAt: z.string(),
-      decisionBundleCreatedAt: z.string(),
-      approvalPacketID: z.string(),
-      overallStatus: z.enum(["pass", "fail"]),
-      recommendation: z.lazy(() => QualityPromotionReleaseDecisionRecord.RecordSummary.shape.recommendation),
-    }).optional(),
-    submissionBundle: z.object({
-      submissionID: z.string(),
-      createdAt: z.string(),
-      decisionBundleCreatedAt: z.string(),
-      approvalPacketID: z.string(),
-      overallStatus: z.enum(["pass", "fail"]),
-      eligibilityDecision: z.enum(["go", "review", "no_go"]),
-      requiredOverride: z.enum(["none", "allow_warn", "force"]),
-    }).optional(),
-    approvalPacket: z.object({
-      packetID: z.string(),
-      createdAt: z.string(),
-      decisionBundleCreatedAt: z.string(),
-      decisionBundleDigest: z.string(),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-      approvalCount: z.number().int().nonnegative(),
-      adoptionReviewCount: z.number().int().nonnegative(),
-      hasDissentHandling: z.boolean(),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    signedArchive: z.object({
-      signedArchiveID: z.string(),
-      createdAt: z.string(),
-      archiveID: z.string(),
-      exportID: z.string(),
-      promotionID: z.string(),
-      keyID: z.string(),
-      attestedBy: z.string(),
-      algorithm: z.literal("hmac-sha256"),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    signedArchiveTrust: z.object({
-      overallStatus: z.enum(["pass", "warn", "fail"]),
-      trusted: z.boolean(),
-      signatureStatus: z.enum(["pass", "fail"]),
-      registryStatus: z.enum(["pass", "fail"]),
-      lifecycleStatus: z.enum(["pass", "warn", "fail"]),
-      resolution: z.object({
-        matched: z.boolean(),
-        scope: z.enum(["global", "project"]).nullable(),
-        projectID: z.string().nullable(),
-        trustID: z.string().nullable(),
-        lifecycle: z.enum(["active", "retired", "revoked"]).nullable(),
-        registeredAt: z.string().nullable(),
-        effectiveFrom: z.string().nullable(),
-        retiredAt: z.string().nullable(),
-        revokedAt: z.string().nullable(),
-      }),
-    }).optional(),
-    signedArchiveAttestation: z.object({
-      overallStatus: z.enum(["pass", "warn", "fail"]),
-      policySource: z.enum(["explicit", "project", "global", "default"]),
-      policyProjectID: z.string().nullable(),
-      policyDigest: z.string(),
-      acceptedByPolicy: z.boolean(),
-      trustStatus: z.enum(["pass", "warn", "fail"]),
-      minimumScopeStatus: z.enum(["pass", "fail"]),
-      lifecyclePolicyStatus: z.enum(["pass", "warn", "fail"]),
-      effectiveTrustScope: z.enum(["global", "project"]).nullable(),
-      effectiveTrustLifecycle: z.enum(["active", "retired", "revoked"]).nullable(),
-    }).optional(),
+    boardDecision: z
+      .object({
+        decisionID: z.string(),
+        decidedAt: z.string(),
+        decider: z.string(),
+        role: z.string().nullable(),
+        team: z.string().nullable().default(null),
+        reportingChain: z.string().nullable().default(null),
+        disposition: z.lazy(() => QualityPromotionReleaseDecisionRecord.RecordSummary.shape.disposition),
+        overrideAccepted: z.boolean(),
+        dossierID: z.string(),
+        recommendation: z.lazy(() => QualityPromotionReleaseDecisionRecord.RecordSummary.shape.recommendation),
+        requiredOverride: z.enum(["none", "allow_warn", "force"]),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    releaseDecisionRecord: z
+      .object({
+        recordID: z.string(),
+        recordedAt: z.string(),
+        decisionID: z.string(),
+        disposition: z.lazy(() => QualityPromotionReleaseDecisionRecord.RecordSummary.shape.disposition),
+        overrideAccepted: z.boolean(),
+        authorizedPromotion: z.boolean(),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    releasePacket: z
+      .object({
+        packetID: z.string(),
+        createdAt: z.string(),
+        recordID: z.string(),
+        decisionID: z.string(),
+        authorizedPromotion: z.boolean(),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    reviewDossier: z
+      .object({
+        dossierID: z.string(),
+        createdAt: z.string(),
+        submissionID: z.string(),
+        submissionCreatedAt: z.string(),
+        decisionBundleCreatedAt: z.string(),
+        approvalPacketID: z.string(),
+        overallStatus: z.enum(["pass", "fail"]),
+        recommendation: z.lazy(() => QualityPromotionReleaseDecisionRecord.RecordSummary.shape.recommendation),
+      })
+      .optional(),
+    submissionBundle: z
+      .object({
+        submissionID: z.string(),
+        createdAt: z.string(),
+        decisionBundleCreatedAt: z.string(),
+        approvalPacketID: z.string(),
+        overallStatus: z.enum(["pass", "fail"]),
+        eligibilityDecision: z.enum(["go", "review", "no_go"]),
+        requiredOverride: z.enum(["none", "allow_warn", "force"]),
+      })
+      .optional(),
+    approvalPacket: z
+      .object({
+        packetID: z.string(),
+        createdAt: z.string(),
+        decisionBundleCreatedAt: z.string(),
+        decisionBundleDigest: z.string(),
+        adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        approvalCount: z.number().int().nonnegative(),
+        adoptionReviewCount: z.number().int().nonnegative(),
+        hasDissentHandling: z.boolean(),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    signedArchive: z
+      .object({
+        signedArchiveID: z.string(),
+        createdAt: z.string(),
+        archiveID: z.string(),
+        exportID: z.string(),
+        promotionID: z.string(),
+        keyID: z.string(),
+        attestedBy: z.string(),
+        algorithm: z.literal("hmac-sha256"),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    signedArchiveTrust: z
+      .object({
+        overallStatus: z.enum(["pass", "warn", "fail"]),
+        trusted: z.boolean(),
+        signatureStatus: z.enum(["pass", "fail"]),
+        registryStatus: z.enum(["pass", "fail"]),
+        lifecycleStatus: z.enum(["pass", "warn", "fail"]),
+        resolution: z.object({
+          matched: z.boolean(),
+          scope: z.enum(["global", "project"]).nullable(),
+          projectID: z.string().nullable(),
+          trustID: z.string().nullable(),
+          lifecycle: z.enum(["active", "retired", "revoked"]).nullable(),
+          registeredAt: z.string().nullable(),
+          effectiveFrom: z.string().nullable(),
+          retiredAt: z.string().nullable(),
+          revokedAt: z.string().nullable(),
+        }),
+      })
+      .optional(),
+    signedArchiveAttestation: z
+      .object({
+        overallStatus: z.enum(["pass", "warn", "fail"]),
+        policySource: z.enum(["explicit", "project", "global", "default"]),
+        policyProjectID: z.string().nullable(),
+        policyDigest: z.string(),
+        acceptedByPolicy: z.boolean(),
+        trustStatus: z.enum(["pass", "warn", "fail"]),
+        minimumScopeStatus: z.enum(["pass", "fail"]),
+        lifecyclePolicyStatus: z.enum(["pass", "warn", "fail"]),
+        effectiveTrustScope: z.enum(["global", "project"]).nullable(),
+        effectiveTrustLifecycle: z.enum(["active", "retired", "revoked"]).nullable(),
+      })
+      .optional(),
   })
   export type PromotionSnapshot = z.output<typeof PromotionSnapshot>
 
@@ -128,11 +146,13 @@ export namespace QualityPromotionAuditManifest {
     boardDecisionStatus: z.enum(["pass", "fail"]),
     releaseDecisionRecordStatus: z.enum(["pass", "fail"]),
     previousActiveSource: z.string().nullable(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ManifestSummary = z.output<typeof ManifestSummary>
 
@@ -176,8 +196,7 @@ export namespace QualityPromotionAuditManifest {
   }
 
   function matchesPromotion(promotion: PromotionSnapshot, manifest: ManifestArtifact) {
-    return manifest.promotion.promotionID === promotion.promotionID
-      && manifest.promotion.source === promotion.source
+    return manifest.promotion.promotionID === promotion.promotionID && manifest.promotion.source === promotion.source
   }
 
   function evaluateSummary(input: {
@@ -189,9 +208,11 @@ export namespace QualityPromotionAuditManifest {
       {
         name: "release-packet-readiness",
         status: input.releasePacket.summary.overallStatus,
-        detail: input.releasePacket.summary.overallStatus === "pass"
-          ? `release packet ${input.releasePacket.packetID} is ready`
-          : input.releasePacket.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "release packet not ready",
+        detail:
+          input.releasePacket.summary.overallStatus === "pass"
+            ? `release packet ${input.releasePacket.packetID} is ready`
+            : (input.releasePacket.summary.gates.find((gate) => gate.status === "fail")?.detail ??
+              "release packet not ready"),
       },
       {
         name: "promotion-source-alignment",
@@ -235,7 +256,9 @@ export namespace QualityPromotionAuditManifest {
       input.releasePacket,
     )
     if (packetReasons.length > 0) {
-      throw new Error(`Cannot create promotion audit manifest for ${input.releasePacket.source}: invalid release packet (${packetReasons[0]})`)
+      throw new Error(
+        `Cannot create promotion audit manifest for ${input.releasePacket.source}: invalid release packet (${packetReasons[0]})`,
+      )
     }
     const summary = evaluateSummary(input)
     return ManifestArtifact.parse({
@@ -250,10 +273,7 @@ export namespace QualityPromotionAuditManifest {
     })
   }
 
-  export function verify(
-    releasePacket: QualityPromotionReleasePacket.PacketArtifact,
-    manifest: ManifestArtifact,
-  ) {
+  export function verify(releasePacket: QualityPromotionReleasePacket.PacketArtifact, manifest: ManifestArtifact) {
     const reasons: string[] = []
     if (manifest.source !== releasePacket.source) {
       reasons.push(`audit manifest source mismatch: ${manifest.source} vs ${releasePacket.source}`)
@@ -278,10 +298,7 @@ export namespace QualityPromotionAuditManifest {
     return reasons
   }
 
-  export async function resolveForPromotion(
-    promotion: PromotionSnapshot,
-    manifests: ManifestArtifact[] = [],
-  ) {
+  export async function resolveForPromotion(promotion: PromotionSnapshot, manifests: ManifestArtifact[] = []) {
     const persisted = (await list(promotion.source)).filter((manifest) => matchesPromotion(promotion, manifest))
     const deduped = new Map<string, ManifestArtifact>()
     for (const manifest of [...persisted, ...manifests]) {
@@ -309,7 +326,9 @@ export namespace QualityPromotionAuditManifest {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion audit manifest ${manifest.manifestID} already exists for source ${manifest.source} with different content`)
+      throw new Error(
+        `Promotion audit manifest ${manifest.manifestID} already exists for source ${manifest.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(manifest.source, manifest.manifestID), next)
@@ -368,8 +387,12 @@ export namespace QualityPromotionAuditManifest {
     if (manifest.promotion.signedArchiveAttestation) {
       lines.push(`- signed archive attestation: ${manifest.promotion.signedArchiveAttestation.overallStatus}`)
       lines.push(`- signed archive accepted by policy: ${manifest.promotion.signedArchiveAttestation.acceptedByPolicy}`)
-      lines.push(`- signed archive attestation policy source: ${manifest.promotion.signedArchiveAttestation.policySource}`)
-      lines.push(`- signed archive attestation policy project id: ${manifest.promotion.signedArchiveAttestation.policyProjectID ?? "n/a"}`)
+      lines.push(
+        `- signed archive attestation policy source: ${manifest.promotion.signedArchiveAttestation.policySource}`,
+      )
+      lines.push(
+        `- signed archive attestation policy project id: ${manifest.promotion.signedArchiveAttestation.policyProjectID ?? "n/a"}`,
+      )
     }
     lines.push("")
     for (const gate of manifest.summary.gates) {

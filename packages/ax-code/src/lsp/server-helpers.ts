@@ -271,12 +271,8 @@ const ZLS_RELEASE_BY_ZIG_MINOR: Record<string, string> = {
   "0.16": "0.16.0",
 }
 
-export const managedToolDir = (
-  name: string,
-  version: string,
-  platform = process.platform,
-  arch = process.arch,
-) => path.join(Global.Path.bin, ".managed", name, version, `${platform}-${arch}`)
+export const managedToolDir = (name: string, version: string, platform = process.platform, arch = process.arch) =>
+  path.join(Global.Path.bin, ".managed", name, version, `${platform}-${arch}`)
 
 export const managedToolPath = (
   name: string,
@@ -286,12 +282,8 @@ export const managedToolPath = (
   arch = process.arch,
 ) => path.join(managedToolDir(name, version, platform, arch), relativePath)
 
-export const managedToolBin = (
-  name: string,
-  version: string,
-  platform = process.platform,
-  arch = process.arch,
-) => path.join(managedToolDir(name, version, platform, arch), name + (platform === "win32" ? ".exe" : ""))
+export const managedToolBin = (name: string, version: string, platform = process.platform, arch = process.arch) =>
+  path.join(managedToolDir(name, version, platform, arch), name + (platform === "win32" ? ".exe" : ""))
 
 export const releaseVersion = (tag: string) => tag.replace(/^v/, "")
 
@@ -373,7 +365,8 @@ export const fetchGitHubReleaseByTag = async (input: {
 
 export const texlabAsset = (platform: string, arch: string) => {
   const texArch = arch === "arm64" ? "aarch64" : arch === "x64" ? "x86_64" : undefined
-  const texPlatform = platform === "darwin" ? "macos" : platform === "linux" ? "linux" : platform === "win32" ? "windows" : undefined
+  const texPlatform =
+    platform === "darwin" ? "macos" : platform === "linux" ? "linux" : platform === "win32" ? "windows" : undefined
   if (!texArch || !texPlatform) return
   const ext = platform === "win32" ? "zip" : "tar.gz"
   return `texlab-${texArch}-${texPlatform}.${ext}`
@@ -400,7 +393,8 @@ export const tinymistAsset = (platform: string, arch: string) => {
 }
 
 export const luaLsReleaseTarget = (platform: string, arch: string) => {
-  const luaPlatform = platform === "darwin" ? "darwin" : platform === "linux" ? "linux" : platform === "win32" ? "win32" : undefined
+  const luaPlatform =
+    platform === "darwin" ? "darwin" : platform === "linux" ? "linux" : platform === "win32" ? "win32" : undefined
   const luaArch = arch === "arm64" ? "arm64" : arch === "x64" ? "x64" : arch === "ia32" ? "ia32" : undefined
   const ext = platform === "win32" ? "zip" : "tar.gz"
   if (!luaPlatform || !luaArch) return
@@ -441,8 +435,10 @@ export const llvmClangdAsset = (tag: string, platform: string, arch: string) => 
 }
 
 export const terraformLsReleaseTarget = (platform: string, arch: string) => {
-  const tfPlatform = platform === "darwin" ? "darwin" : platform === "linux" ? "linux" : platform === "win32" ? "windows" : undefined
-  const tfArch = arch === "arm64" ? "arm64" : arch === "x64" ? "amd64" : arch === "ia32" ? "386" : arch === "arm" ? "arm" : undefined
+  const tfPlatform =
+    platform === "darwin" ? "darwin" : platform === "linux" ? "linux" : platform === "win32" ? "windows" : undefined
+  const tfArch =
+    arch === "arm64" ? "arm64" : arch === "x64" ? "amd64" : arch === "ia32" ? "386" : arch === "arm" ? "arm" : undefined
   if (!tfPlatform || !tfArch) return
 
   const supportedCombos = new Set([
@@ -481,7 +477,8 @@ export const terraformLsChecksumUrl = (version: string) =>
   `https://releases.hashicorp.com/terraform-ls/${version}/terraform-ls_${version}_SHA256SUMS`
 
 export const kotlinLsReleaseTarget = (platform: string, arch: string) => {
-  const kotlinPlatform = platform === "darwin" ? "mac" : platform === "linux" ? "linux" : platform === "win32" ? "win" : undefined
+  const kotlinPlatform =
+    platform === "darwin" ? "mac" : platform === "linux" ? "linux" : platform === "win32" ? "win" : undefined
   const kotlinArch = arch === "arm64" ? "aarch64" : arch === "x64" ? "x64" : undefined
   if (!kotlinPlatform || !kotlinArch) return
   return {
@@ -685,7 +682,9 @@ export const installReleaseBin = async (input: {
       if (!ok) return
     } else {
       const tarArgs = input.tarArgs ?? ["-xf"]
-      const result = await (input.run ?? run)(["tar", tarArgs[0] ?? "-xf", archive, ...tarArgs.slice(1)], { cwd: installDir })
+      const result = await (input.run ?? run)(["tar", tarArgs[0] ?? "-xf", archive, ...tarArgs.slice(1)], {
+        cwd: installDir,
+      })
       if (typeof result?.code === "number" && result.code !== 0) {
         log.error(`Failed to extract ${input.id} archive`, {
           code: result.code,
@@ -731,13 +730,7 @@ export interface ServerInfo {
   concurrency?: number
   capabilityHints?: Partial<
     Record<
-      | "hover"
-      | "definition"
-      | "references"
-      | "implementation"
-      | "documentSymbol"
-      | "workspaceSymbol"
-      | "callHierarchy",
+      "hover" | "definition" | "references" | "implementation" | "documentSymbol" | "workspaceSymbol" | "callHierarchy",
       boolean
     >
   >
@@ -761,9 +754,7 @@ export const NearestRoot = (includePatterns: string[], excludePatterns?: string[
               dot: true,
             }).catch(() => [])
             if (matches.length > 0) return undefined
-            continue
-          }
-          if (await Filesystem.exists(path.join(current, pattern))) return undefined
+          } else if (await Filesystem.exists(path.join(current, pattern))) return undefined
         }
       }
       for (const pattern of includePatterns) {
@@ -775,9 +766,7 @@ export const NearestRoot = (includePatterns: string[], excludePatterns?: string[
             dot: true,
           }).catch(() => [])
           if (matches.length > 0) return current
-          continue
-        }
-        if (await Filesystem.exists(path.join(current, pattern))) return current
+        } else if (await Filesystem.exists(path.join(current, pattern))) return current
       }
       if (current === Instance.directory) break
       const parent = path.dirname(current)

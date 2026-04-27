@@ -54,11 +54,9 @@ describe("createAbortableResourceFetcher", () => {
             { once: true },
           )
           return await new Promise<string>((_innerResolve, innerReject) => {
-            signal.addEventListener(
-              "abort",
-              () => innerReject(new DOMException("Aborted", "AbortError")),
-              { once: true },
-            )
+            signal.addEventListener("abort", () => innerReject(new DOMException("Aborted", "AbortError")), {
+              once: true,
+            })
           })
         })
 

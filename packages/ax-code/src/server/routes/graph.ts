@@ -61,7 +61,9 @@ export const GraphRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          format: z.enum(["ascii", "json", "mermaid", "gantt", "svggantt", "markdown", "timeline", "topology"]).default("json"),
+          format: z
+            .enum(["ascii", "json", "mermaid", "gantt", "svggantt", "markdown", "timeline", "topology"])
+            .default("json"),
         }),
       ),
       async (c) => {

@@ -37,7 +37,9 @@ export namespace Isolation {
   export function resolve(config: IsolationConfig | undefined, directory: string, worktree = directory): State {
     const mode = Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? "full-access"
     const network = Flag.AX_CODE_ISOLATION_NETWORK ?? config?.network
-    const protectedPaths = roots(directory, worktree).flatMap((root) => DEFAULT_PROTECTED.map((item) => path.resolve(root, item)))
+    const protectedPaths = roots(directory, worktree).flatMap((root) =>
+      DEFAULT_PROTECTED.map((item) => path.resolve(root, item)),
+    )
     if (config?.protected) {
       for (const root of roots(directory, worktree)) {
         for (const item of config.protected) protectedPaths.push(path.resolve(root, item))

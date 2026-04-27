@@ -82,11 +82,11 @@ export function footerSessionStatusView(input: {
   }
 
   const staleAfterMs =
-    input.stalledAfterMs ?? (status.waitState === "tool" ? SESSION_STATUS_TOOL_STALE_AFTER_MS : SESSION_STATUS_STALE_AFTER_MS)
+    input.stalledAfterMs ??
+    (status.waitState === "tool" ? SESSION_STATUS_TOOL_STALE_AFTER_MS : SESSION_STATUS_STALE_AFTER_MS)
   const idleMs = status.lastActivityAt !== undefined ? Math.max(0, now - status.lastActivityAt) : 0
   const stale = idleMs >= staleAfterMs
-  const inactive =
-    stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / 1000))) : undefined
+  const inactive = stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / 1000))) : undefined
   const text = elapsed ? `${label} · ${elapsed}` : label
 
   if (!inactive) return { label: text, stale }

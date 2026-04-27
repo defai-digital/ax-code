@@ -188,39 +188,27 @@ function flattenReplay(input: unknown) {
 }
 
 async function loadPredictionFile(file: string) {
-  return ProbabilisticRollout.PredictionFile.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return ProbabilisticRollout.PredictionFile.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadModelFile(file: string) {
-  return QualityCalibrationModel.ModelFile.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityCalibrationModel.ModelFile.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadBenchmarkBundle(file: string) {
-  return QualityCalibrationModel.BenchmarkBundle.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityCalibrationModel.BenchmarkBundle.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadDecisionBundle(file: string) {
-  return QualityPromotionDecisionBundle.DecisionBundle.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionDecisionBundle.DecisionBundle.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadApprovalArtifact(file: string) {
-  return QualityPromotionApproval.ApprovalArtifact.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionApproval.ApprovalArtifact.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadAdoptionReviewArtifact(file: string) {
-  return QualityPromotionAdoptionReview.ReviewArtifact.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionAdoptionReview.ReviewArtifact.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadAdoptionDissentResolutionArtifact(file: string) {
@@ -242,9 +230,7 @@ async function loadAdoptionDissentHandlingArtifact(file: string) {
 }
 
 async function loadApprovalPacketArtifact(file: string) {
-  return QualityPromotionApprovalPacket.PacketArtifact.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionApprovalPacket.PacketArtifact.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadSubmissionBundleArtifact(file: string) {
@@ -254,9 +240,7 @@ async function loadSubmissionBundleArtifact(file: string) {
 }
 
 async function loadReviewDossierArtifact(file: string) {
-  return QualityPromotionReviewDossier.DossierArtifact.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionReviewDossier.DossierArtifact.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadBoardDecisionArtifact(file: string) {
@@ -272,9 +256,7 @@ async function loadReleaseDecisionRecordArtifact(file: string) {
 }
 
 async function loadReleasePacketArtifact(file: string) {
-  return QualityPromotionReleasePacket.PacketArtifact.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionReleasePacket.PacketArtifact.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 export namespace QualityRolloutProjectScope {
@@ -283,10 +265,7 @@ export namespace QualityRolloutProjectScope {
     return trimmed ? trimmed : null
   }
 
-  export function reconcile(input: {
-    explicitProjectID?: string | null
-    artifactProjectID?: string | null
-  }) {
+  export function reconcile(input: { explicitProjectID?: string | null; artifactProjectID?: string | null }) {
     const explicitProjectID = normalize(input.explicitProjectID)
     const artifactProjectID = normalize(input.artifactProjectID)
     if (explicitProjectID && artifactProjectID && explicitProjectID !== artifactProjectID) {
@@ -323,13 +302,13 @@ export namespace QualityRolloutProjectScope {
 
   export function fromPromotionRecord(record: QualityModelRegistry.PromotionRecord) {
     return (
-      normalize(record.signedArchiveAttestation?.policyProjectID)
-      ?? normalize(record.signedArchiveAttestationRecord?.policyProjectID)
-      ?? normalize(record.signedArchiveAttestationPacket?.policyProjectID)
-      ?? normalize(record.signedArchiveGovernancePacket?.policyProjectID)
-      ?? normalize(record.signedArchiveReviewDossier?.policyProjectID)
-      ?? normalize(record.signedArchiveTrust?.resolution.projectID)
-      ?? normalize(record.releasePolicy?.policyProjectID)
+      normalize(record.signedArchiveAttestation?.policyProjectID) ??
+      normalize(record.signedArchiveAttestationRecord?.policyProjectID) ??
+      normalize(record.signedArchiveAttestationPacket?.policyProjectID) ??
+      normalize(record.signedArchiveGovernancePacket?.policyProjectID) ??
+      normalize(record.signedArchiveReviewDossier?.policyProjectID) ??
+      normalize(record.signedArchiveTrust?.resolution.projectID) ??
+      normalize(record.releasePolicy?.policyProjectID)
     )
   }
 }
@@ -347,9 +326,7 @@ async function loadArchiveManifestArtifact(file: string) {
 }
 
 async function loadExportBundleArtifact(file: string) {
-  return QualityPromotionExportBundle.ExportArtifact.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionExportBundle.ExportArtifact.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadHandoffPackageArtifact(file: string) {
@@ -359,9 +336,7 @@ async function loadHandoffPackageArtifact(file: string) {
 }
 
 async function loadPortableExportArtifact(file: string) {
-  return QualityPromotionPortableExport.ExportArtifact.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionPortableExport.ExportArtifact.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadPackagedArchiveArtifact(file: string) {
@@ -371,9 +346,7 @@ async function loadPackagedArchiveArtifact(file: string) {
 }
 
 async function loadSignedArchiveArtifact(file: string) {
-  return QualityPromotionSignedArchive.ArchiveArtifact.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  return QualityPromotionSignedArchive.ArchiveArtifact.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
 }
 
 async function loadSignedArchiveAttestationRecordArtifact(file: string) {
@@ -422,22 +395,29 @@ async function resolveApprovalPacketForDecisionBundle(
     await QualityPromotionAdoptionDissentHandling.resolveForBundle(
       decisionBundle,
       adoptionReviews,
-      await Promise.all(argsMany("--dissent-handling").map((handlingFile) => loadAdoptionDissentHandlingArtifact(handlingFile))),
+      await Promise.all(
+        argsMany("--dissent-handling").map((handlingFile) => loadAdoptionDissentHandlingArtifact(handlingFile)),
+      ),
     )
   ).at(-1)
 
   return (
-    await QualityPromotionApprovalPacket.resolveForBundle(
-      decisionBundle,
-      explicitArtifacts ?? await Promise.all(argsMany("--approval-packet").map((packetFile) => loadApprovalPacketArtifact(packetFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionApprovalPacket.create({
+    (
+      await QualityPromotionApprovalPacket.resolveForBundle(
+        decisionBundle,
+        explicitArtifacts ??
+          (await Promise.all(
+            argsMany("--approval-packet").map((packetFile) => loadApprovalPacketArtifact(packetFile)),
+          )),
+      )
+    ).at(-1) ??
+    QualityPromotionApprovalPacket.create({
       bundle: decisionBundle,
       approvals,
       adoptionReviews,
       dissentHandling,
     })
+  )
 }
 
 async function resolveSubmissionBundleForDecisionBundle(
@@ -445,15 +425,20 @@ async function resolveSubmissionBundleForDecisionBundle(
   explicitArtifacts?: QualityPromotionSubmissionBundle.BundleArtifact[],
 ) {
   return (
-    await QualityPromotionSubmissionBundle.resolveForBundle(
-      decisionBundle,
-      explicitArtifacts ?? await Promise.all(argsMany("--submission-bundle").map((submissionFile) => loadSubmissionBundleArtifact(submissionFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionSubmissionBundle.create({
+    (
+      await QualityPromotionSubmissionBundle.resolveForBundle(
+        decisionBundle,
+        explicitArtifacts ??
+          (await Promise.all(
+            argsMany("--submission-bundle").map((submissionFile) => loadSubmissionBundleArtifact(submissionFile)),
+          )),
+      )
+    ).at(-1) ??
+    QualityPromotionSubmissionBundle.create({
       decisionBundle,
       approvalPacket: await resolveApprovalPacketForDecisionBundle(decisionBundle),
     })
+  )
 }
 
 async function resolveReviewDossierForDecisionBundle(
@@ -461,14 +446,19 @@ async function resolveReviewDossierForDecisionBundle(
   explicitArtifacts?: QualityPromotionReviewDossier.DossierArtifact[],
 ) {
   return (
-    await QualityPromotionReviewDossier.resolveForBundle(
-      decisionBundle,
-      explicitArtifacts ?? await Promise.all(argsMany("--review-dossier").map((dossierFile) => loadReviewDossierArtifact(dossierFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionReviewDossier.create({
+    (
+      await QualityPromotionReviewDossier.resolveForBundle(
+        decisionBundle,
+        explicitArtifacts ??
+          (await Promise.all(
+            argsMany("--review-dossier").map((dossierFile) => loadReviewDossierArtifact(dossierFile)),
+          )),
+      )
+    ).at(-1) ??
+    QualityPromotionReviewDossier.create({
       submissionBundle: await resolveSubmissionBundleForDecisionBundle(decisionBundle),
     })
+  )
 }
 
 function boardDispositionArg() {
@@ -496,12 +486,16 @@ async function resolveBoardDecisionForDecisionBundle(
   explicitArtifacts?: QualityPromotionBoardDecision.DecisionArtifact[],
 ) {
   return (
-    await QualityPromotionBoardDecision.resolveForBundle(
-      decisionBundle,
-      explicitArtifacts ?? await Promise.all(argsMany("--board-decision").map((decisionFile) => loadBoardDecisionArtifact(decisionFile))),
-    )
-  ).at(-1)
-    ?? createBoardDecisionFromDossier(await resolveReviewDossierForDecisionBundle(decisionBundle))
+    (
+      await QualityPromotionBoardDecision.resolveForBundle(
+        decisionBundle,
+        explicitArtifacts ??
+          (await Promise.all(
+            argsMany("--board-decision").map((decisionFile) => loadBoardDecisionArtifact(decisionFile)),
+          )),
+      )
+    ).at(-1) ?? createBoardDecisionFromDossier(await resolveReviewDossierForDecisionBundle(decisionBundle))
+  )
 }
 
 async function resolveReleaseDecisionRecordForDecisionBundle(
@@ -509,14 +503,19 @@ async function resolveReleaseDecisionRecordForDecisionBundle(
   explicitArtifacts?: QualityPromotionReleaseDecisionRecord.RecordArtifact[],
 ) {
   return (
-    await QualityPromotionReleaseDecisionRecord.resolveForBundle(
-      decisionBundle,
-      explicitArtifacts ?? await Promise.all(argsMany("--release-decision-record").map((recordFile) => loadReleaseDecisionRecordArtifact(recordFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionReleaseDecisionRecord.create({
+    (
+      await QualityPromotionReleaseDecisionRecord.resolveForBundle(
+        decisionBundle,
+        explicitArtifacts ??
+          (await Promise.all(
+            argsMany("--release-decision-record").map((recordFile) => loadReleaseDecisionRecordArtifact(recordFile)),
+          )),
+      )
+    ).at(-1) ??
+    QualityPromotionReleaseDecisionRecord.create({
       boardDecision: await resolveBoardDecisionForDecisionBundle(decisionBundle),
     })
+  )
 }
 
 async function resolveReleasePacketForDecisionBundle(
@@ -524,21 +523,26 @@ async function resolveReleasePacketForDecisionBundle(
   explicitArtifacts?: QualityPromotionReleasePacket.PacketArtifact[],
 ) {
   return (
-    await QualityPromotionReleasePacket.resolveForBundle(
-      decisionBundle,
-      explicitArtifacts ?? await Promise.all(argsMany("--release-packet").map((packetFile) => loadReleasePacketArtifact(packetFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionReleasePacket.create({
+    (
+      await QualityPromotionReleasePacket.resolveForBundle(
+        decisionBundle,
+        explicitArtifacts ??
+          (await Promise.all(argsMany("--release-packet").map((packetFile) => loadReleasePacketArtifact(packetFile)))),
+      )
+    ).at(-1) ??
+    QualityPromotionReleasePacket.create({
       releaseDecisionRecord: await resolveReleaseDecisionRecordForDecisionBundle(decisionBundle),
     })
+  )
 }
 
 async function resolveReleasePacketForPromotion(
   promotion: QualityModelRegistry.PromotionRecord,
   explicitArtifacts?: QualityPromotionReleasePacket.PacketArtifact[],
 ) {
-  const explicit = explicitArtifacts ?? await Promise.all(argsMany("--release-packet").map((packetFile) => loadReleasePacketArtifact(packetFile)))
+  const explicit =
+    explicitArtifacts ??
+    (await Promise.all(argsMany("--release-packet").map((packetFile) => loadReleasePacketArtifact(packetFile))))
   const resolved = explicit.length > 0 ? explicit : await QualityPromotionReleasePacket.list(promotion.source)
   const packetID = promotion.releasePacket?.packetID
   if (!packetID) {
@@ -556,25 +560,29 @@ async function resolveAuditManifestForPromotion(
   explicitArtifacts?: QualityPromotionAuditManifest.ManifestArtifact[],
 ) {
   return (
-    await QualityPromotionAuditManifest.resolveForPromotion(
-      QualityPromotionAuditManifest.PromotionSnapshot.parse({
-        promotionID: promotion.promotionID,
-        source: promotion.source,
-        promotedAt: promotion.promotedAt,
-        previousActiveSource: promotion.previousActiveSource,
-        decision: promotion.decision,
-        decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
-        boardDecision: promotion.boardDecision,
-        releaseDecisionRecord: promotion.releaseDecisionRecord,
-        releasePacket: promotion.releasePacket,
-        reviewDossier: promotion.reviewDossier,
-        submissionBundle: promotion.submissionBundle,
-        approvalPacket: promotion.approvalPacket,
-      }),
-      explicitArtifacts ?? await Promise.all(argsMany("--audit-manifest").map((manifestFile) => loadAuditManifestArtifact(manifestFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionAuditManifest.create({
+    (
+      await QualityPromotionAuditManifest.resolveForPromotion(
+        QualityPromotionAuditManifest.PromotionSnapshot.parse({
+          promotionID: promotion.promotionID,
+          source: promotion.source,
+          promotedAt: promotion.promotedAt,
+          previousActiveSource: promotion.previousActiveSource,
+          decision: promotion.decision,
+          decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
+          boardDecision: promotion.boardDecision,
+          releaseDecisionRecord: promotion.releaseDecisionRecord,
+          releasePacket: promotion.releasePacket,
+          reviewDossier: promotion.reviewDossier,
+          submissionBundle: promotion.submissionBundle,
+          approvalPacket: promotion.approvalPacket,
+        }),
+        explicitArtifacts ??
+          (await Promise.all(
+            argsMany("--audit-manifest").map((manifestFile) => loadAuditManifestArtifact(manifestFile)),
+          )),
+      )
+    ).at(-1) ??
+    QualityPromotionAuditManifest.create({
       releasePacket: await resolveReleasePacketForPromotion(promotion),
       promotion: QualityPromotionAuditManifest.PromotionSnapshot.parse({
         promotionID: promotion.promotionID,
@@ -591,6 +599,7 @@ async function resolveAuditManifestForPromotion(
         approvalPacket: promotion.approvalPacket,
       }),
     })
+  )
 }
 
 async function resolveExportBundleForPromotion(
@@ -598,27 +607,30 @@ async function resolveExportBundleForPromotion(
   explicitArtifacts?: QualityPromotionExportBundle.ExportArtifact[],
 ) {
   return (
-    await QualityPromotionExportBundle.resolveForPromotion(
-      QualityPromotionAuditManifest.PromotionSnapshot.parse({
-        promotionID: promotion.promotionID,
-        source: promotion.source,
-        promotedAt: promotion.promotedAt,
-        previousActiveSource: promotion.previousActiveSource,
-        decision: promotion.decision,
-        decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
-        boardDecision: promotion.boardDecision,
-        releaseDecisionRecord: promotion.releaseDecisionRecord,
-        releasePacket: promotion.releasePacket,
-        reviewDossier: promotion.reviewDossier,
-        submissionBundle: promotion.submissionBundle,
-        approvalPacket: promotion.approvalPacket,
-      }),
-      explicitArtifacts ?? await Promise.all(argsMany("--export-bundle").map((bundleFile) => loadExportBundleArtifact(bundleFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionExportBundle.create({
+    (
+      await QualityPromotionExportBundle.resolveForPromotion(
+        QualityPromotionAuditManifest.PromotionSnapshot.parse({
+          promotionID: promotion.promotionID,
+          source: promotion.source,
+          promotedAt: promotion.promotedAt,
+          previousActiveSource: promotion.previousActiveSource,
+          decision: promotion.decision,
+          decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
+          boardDecision: promotion.boardDecision,
+          releaseDecisionRecord: promotion.releaseDecisionRecord,
+          releasePacket: promotion.releasePacket,
+          reviewDossier: promotion.reviewDossier,
+          submissionBundle: promotion.submissionBundle,
+          approvalPacket: promotion.approvalPacket,
+        }),
+        explicitArtifacts ??
+          (await Promise.all(argsMany("--export-bundle").map((bundleFile) => loadExportBundleArtifact(bundleFile)))),
+      )
+    ).at(-1) ??
+    QualityPromotionExportBundle.create({
       auditManifest: await resolveAuditManifestForPromotion(promotion),
     })
+  )
 }
 
 async function resolveArchiveManifestForPromotion(
@@ -626,27 +638,32 @@ async function resolveArchiveManifestForPromotion(
   explicitArtifacts?: QualityPromotionArchiveManifest.ArchiveArtifact[],
 ) {
   return (
-    await QualityPromotionArchiveManifest.resolveForPromotion(
-      QualityPromotionAuditManifest.PromotionSnapshot.parse({
-        promotionID: promotion.promotionID,
-        source: promotion.source,
-        promotedAt: promotion.promotedAt,
-        previousActiveSource: promotion.previousActiveSource,
-        decision: promotion.decision,
-        decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
-        boardDecision: promotion.boardDecision,
-        releaseDecisionRecord: promotion.releaseDecisionRecord,
-        releasePacket: promotion.releasePacket,
-        reviewDossier: promotion.reviewDossier,
-        submissionBundle: promotion.submissionBundle,
-        approvalPacket: promotion.approvalPacket,
-      }),
-      explicitArtifacts ?? await Promise.all(argsMany("--archive-manifest").map((archiveFile) => loadArchiveManifestArtifact(archiveFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionArchiveManifest.create({
+    (
+      await QualityPromotionArchiveManifest.resolveForPromotion(
+        QualityPromotionAuditManifest.PromotionSnapshot.parse({
+          promotionID: promotion.promotionID,
+          source: promotion.source,
+          promotedAt: promotion.promotedAt,
+          previousActiveSource: promotion.previousActiveSource,
+          decision: promotion.decision,
+          decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
+          boardDecision: promotion.boardDecision,
+          releaseDecisionRecord: promotion.releaseDecisionRecord,
+          releasePacket: promotion.releasePacket,
+          reviewDossier: promotion.reviewDossier,
+          submissionBundle: promotion.submissionBundle,
+          approvalPacket: promotion.approvalPacket,
+        }),
+        explicitArtifacts ??
+          (await Promise.all(
+            argsMany("--archive-manifest").map((archiveFile) => loadArchiveManifestArtifact(archiveFile)),
+          )),
+      )
+    ).at(-1) ??
+    QualityPromotionArchiveManifest.create({
       exportBundle: await resolveExportBundleForPromotion(promotion),
     })
+  )
 }
 
 async function resolveHandoffPackageForPromotion(
@@ -654,27 +671,32 @@ async function resolveHandoffPackageForPromotion(
   explicitArtifacts?: QualityPromotionHandoffPackage.PackageArtifact[],
 ) {
   return (
-    await QualityPromotionHandoffPackage.resolveForPromotion(
-      QualityPromotionAuditManifest.PromotionSnapshot.parse({
-        promotionID: promotion.promotionID,
-        source: promotion.source,
-        promotedAt: promotion.promotedAt,
-        previousActiveSource: promotion.previousActiveSource,
-        decision: promotion.decision,
-        decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
-        boardDecision: promotion.boardDecision,
-        releaseDecisionRecord: promotion.releaseDecisionRecord,
-        releasePacket: promotion.releasePacket,
-        reviewDossier: promotion.reviewDossier,
-        submissionBundle: promotion.submissionBundle,
-        approvalPacket: promotion.approvalPacket,
-      }),
-      explicitArtifacts ?? await Promise.all(argsMany("--handoff-package").map((packetFile) => loadHandoffPackageArtifact(packetFile))),
-    )
-  ).at(-1)
-    ?? QualityPromotionHandoffPackage.create({
+    (
+      await QualityPromotionHandoffPackage.resolveForPromotion(
+        QualityPromotionAuditManifest.PromotionSnapshot.parse({
+          promotionID: promotion.promotionID,
+          source: promotion.source,
+          promotedAt: promotion.promotedAt,
+          previousActiveSource: promotion.previousActiveSource,
+          decision: promotion.decision,
+          decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
+          boardDecision: promotion.boardDecision,
+          releaseDecisionRecord: promotion.releaseDecisionRecord,
+          releasePacket: promotion.releasePacket,
+          reviewDossier: promotion.reviewDossier,
+          submissionBundle: promotion.submissionBundle,
+          approvalPacket: promotion.approvalPacket,
+        }),
+        explicitArtifacts ??
+          (await Promise.all(
+            argsMany("--handoff-package").map((packetFile) => loadHandoffPackageArtifact(packetFile)),
+          )),
+      )
+    ).at(-1) ??
+    QualityPromotionHandoffPackage.create({
       archiveManifest: await resolveArchiveManifestForPromotion(promotion),
     })
+  )
 }
 
 async function resolvePortableExportForPromotion(
@@ -682,27 +704,30 @@ async function resolvePortableExportForPromotion(
   explicitArtifacts?: QualityPromotionPortableExport.ExportArtifact[],
 ) {
   return (
-    await QualityPromotionPortableExport.resolveForPromotion(
-      QualityPromotionAuditManifest.PromotionSnapshot.parse({
-        promotionID: promotion.promotionID,
-        source: promotion.source,
-        promotedAt: promotion.promotedAt,
-        previousActiveSource: promotion.previousActiveSource,
-        decision: promotion.decision,
-        decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
-        boardDecision: promotion.boardDecision,
-        releaseDecisionRecord: promotion.releaseDecisionRecord,
-        releasePacket: promotion.releasePacket,
-        reviewDossier: promotion.reviewDossier,
-        submissionBundle: promotion.submissionBundle,
-        approvalPacket: promotion.approvalPacket,
-      }),
-      explicitArtifacts ?? await Promise.all(argsMany("--portable-export").map((file) => loadPortableExportArtifact(file))),
-    )
-  ).at(-1)
-    ?? QualityPromotionPortableExport.create({
+    (
+      await QualityPromotionPortableExport.resolveForPromotion(
+        QualityPromotionAuditManifest.PromotionSnapshot.parse({
+          promotionID: promotion.promotionID,
+          source: promotion.source,
+          promotedAt: promotion.promotedAt,
+          previousActiveSource: promotion.previousActiveSource,
+          decision: promotion.decision,
+          decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
+          boardDecision: promotion.boardDecision,
+          releaseDecisionRecord: promotion.releaseDecisionRecord,
+          releasePacket: promotion.releasePacket,
+          reviewDossier: promotion.reviewDossier,
+          submissionBundle: promotion.submissionBundle,
+          approvalPacket: promotion.approvalPacket,
+        }),
+        explicitArtifacts ??
+          (await Promise.all(argsMany("--portable-export").map((file) => loadPortableExportArtifact(file)))),
+      )
+    ).at(-1) ??
+    QualityPromotionPortableExport.create({
       handoffPackage: await resolveHandoffPackageForPromotion(promotion),
     })
+  )
 }
 
 async function resolvePackagedArchiveForPromotion(
@@ -710,27 +735,30 @@ async function resolvePackagedArchiveForPromotion(
   explicitArtifacts?: QualityPromotionPackagedArchive.ArchiveArtifact[],
 ) {
   return (
-    await QualityPromotionPackagedArchive.resolveForPromotion(
-      QualityPromotionAuditManifest.PromotionSnapshot.parse({
-        promotionID: promotion.promotionID,
-        source: promotion.source,
-        promotedAt: promotion.promotedAt,
-        previousActiveSource: promotion.previousActiveSource,
-        decision: promotion.decision,
-        decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
-        boardDecision: promotion.boardDecision,
-        releaseDecisionRecord: promotion.releaseDecisionRecord,
-        releasePacket: promotion.releasePacket,
-        reviewDossier: promotion.reviewDossier,
-        submissionBundle: promotion.submissionBundle,
-        approvalPacket: promotion.approvalPacket,
-      }),
-      explicitArtifacts ?? await Promise.all(argsMany("--packaged-archive").map((file) => loadPackagedArchiveArtifact(file))),
-    )
-  ).at(-1)
-    ?? QualityPromotionPackagedArchive.create({
+    (
+      await QualityPromotionPackagedArchive.resolveForPromotion(
+        QualityPromotionAuditManifest.PromotionSnapshot.parse({
+          promotionID: promotion.promotionID,
+          source: promotion.source,
+          promotedAt: promotion.promotedAt,
+          previousActiveSource: promotion.previousActiveSource,
+          decision: promotion.decision,
+          decisionBundleCreatedAt: promotion.decisionBundleCreatedAt ?? null,
+          boardDecision: promotion.boardDecision,
+          releaseDecisionRecord: promotion.releaseDecisionRecord,
+          releasePacket: promotion.releasePacket,
+          reviewDossier: promotion.reviewDossier,
+          submissionBundle: promotion.submissionBundle,
+          approvalPacket: promotion.approvalPacket,
+        }),
+        explicitArtifacts ??
+          (await Promise.all(argsMany("--packaged-archive").map((file) => loadPackagedArchiveArtifact(file)))),
+      )
+    ).at(-1) ??
+    QualityPromotionPackagedArchive.create({
       portableExport: await resolvePortableExportForPromotion(promotion),
     })
+  )
 }
 
 async function resolveSignedArchiveForPromotion(
@@ -753,7 +781,8 @@ async function resolveSignedArchiveForPromotion(
         submissionBundle: promotion.submissionBundle,
         approvalPacket: promotion.approvalPacket,
       }),
-      explicitArtifacts ?? await Promise.all(argsMany("--signed-archive").map((file) => loadSignedArchiveArtifact(file))),
+      explicitArtifacts ??
+        (await Promise.all(argsMany("--signed-archive").map((file) => loadSignedArchiveArtifact(file)))),
     )
   ).at(-1)
 }
@@ -771,9 +800,10 @@ async function evaluateSignedArchiveAttestationForPromotion(input: {
   if (!archive) {
     throw new Error(`No signed archive available for promotion ${input.promotion.promotionID}`)
   }
-  const projectID = (await effectiveProjectIDForCLI({
-    projectID: QualityRolloutProjectScope.fromPromotionRecord(input.promotion),
-  })) ?? undefined
+  const projectID =
+    (await effectiveProjectIDForCLI({
+      projectID: QualityRolloutProjectScope.fromPromotionRecord(input.promotion),
+    })) ?? undefined
   const trust = await QualityPromotionSignedArchiveTrust.evaluate({
     archive,
     keyMaterial: signing.keyMaterial,
@@ -861,18 +891,25 @@ async function resolveSignedArchiveAttestationRecordForPromotion(
   promotion: QualityModelRegistry.PromotionRecord,
   explicitArtifacts?: QualityPromotionSignedArchiveAttestationRecord.RecordArtifact[],
 ) {
-  const explicit = explicitArtifacts ?? await Promise.all(
-    argsMany("--signed-archive-attestation-record").map((file) => loadSignedArchiveAttestationRecordArtifact(file)),
-  )
-  const resolved = explicit.length > 0 ? explicit : await QualityPromotionSignedArchiveAttestationRecord.list(promotion.source)
+  const explicit =
+    explicitArtifacts ??
+    (await Promise.all(
+      argsMany("--signed-archive-attestation-record").map((file) => loadSignedArchiveAttestationRecordArtifact(file)),
+    ))
+  const resolved =
+    explicit.length > 0 ? explicit : await QualityPromotionSignedArchiveAttestationRecord.list(promotion.source)
   const recordID = promotion.signedArchiveAttestationRecord?.recordID
   if (recordID) {
     const match = resolved.find((record) => record.recordID === recordID)
     if (match) return verifiedSignedArchiveAttestationRecordOrThrow(promotion, match)
     if (explicit.length > 0) {
-      throw new Error(`Could not resolve signed archive attestation record ${recordID} for promotion ${promotion.promotionID}`)
+      throw new Error(
+        `Could not resolve signed archive attestation record ${recordID} for promotion ${promotion.promotionID}`,
+      )
     }
-    throw new Error(`Could not resolve signed archive attestation record ${recordID} for promotion ${promotion.promotionID}`)
+    throw new Error(
+      `Could not resolve signed archive attestation record ${recordID} for promotion ${promotion.promotionID}`,
+    )
   }
   const matchesByPromotion = resolved
     .filter((record) => record.promotionID === promotion.promotionID)
@@ -894,16 +931,21 @@ async function resolveSignedArchiveAttestationPacketForPromotion(
   explicitArtifacts?: QualityPromotionSignedArchiveAttestationPacket.PacketArtifact[],
   explicitRecords?: QualityPromotionSignedArchiveAttestationRecord.RecordArtifact[],
 ) {
-  const explicit = explicitArtifacts ?? await Promise.all(
-    argsMany("--signed-archive-attestation-packet").map((file) => loadSignedArchiveAttestationPacketArtifact(file)),
-  )
-  const resolved = explicit.length > 0 ? explicit : await QualityPromotionSignedArchiveAttestationPacket.list(promotion.source)
+  const explicit =
+    explicitArtifacts ??
+    (await Promise.all(
+      argsMany("--signed-archive-attestation-packet").map((file) => loadSignedArchiveAttestationPacketArtifact(file)),
+    ))
+  const resolved =
+    explicit.length > 0 ? explicit : await QualityPromotionSignedArchiveAttestationPacket.list(promotion.source)
   const packetID = promotion.signedArchiveAttestationPacket?.packetID
   if (packetID) {
     const match = resolved.find((packet) => packet.packetID === packetID)
     if (match) return verifiedSignedArchiveAttestationPacketOrThrow(promotion, match)
     if (explicit.length > 0) {
-      throw new Error(`Could not resolve signed archive attestation packet ${packetID} for promotion ${promotion.promotionID}`)
+      throw new Error(
+        `Could not resolve signed archive attestation packet ${packetID} for promotion ${promotion.promotionID}`,
+      )
     }
   }
   const matchesByPromotion = resolved
@@ -935,18 +977,25 @@ async function resolveSignedArchiveGovernancePacketForPromotion(
   explicitAttestationRecords?: QualityPromotionSignedArchiveAttestationRecord.RecordArtifact[],
   explicitReleasePackets?: QualityPromotionReleasePacket.PacketArtifact[],
 ) {
-  const explicit = explicitArtifacts ?? await Promise.all(
-    argsMany("--signed-archive-governance-packet").map((file) => loadSignedArchiveGovernancePacketArtifact(file)),
-  )
-  const resolved = explicit.length > 0 ? explicit : await QualityPromotionSignedArchiveGovernancePacket.list(promotion.source)
+  const explicit =
+    explicitArtifacts ??
+    (await Promise.all(
+      argsMany("--signed-archive-governance-packet").map((file) => loadSignedArchiveGovernancePacketArtifact(file)),
+    ))
+  const resolved =
+    explicit.length > 0 ? explicit : await QualityPromotionSignedArchiveGovernancePacket.list(promotion.source)
   const packetID = promotion.signedArchiveGovernancePacket?.packetID
   if (packetID) {
     const match = resolved.find((packet) => packet.packetID === packetID)
     if (match) return verifiedSignedArchiveGovernancePacketOrThrow(promotion, match)
     if (explicit.length > 0) {
-      throw new Error(`Could not resolve signed archive governance packet ${packetID} for promotion ${promotion.promotionID}`)
+      throw new Error(
+        `Could not resolve signed archive governance packet ${packetID} for promotion ${promotion.promotionID}`,
+      )
     }
-    throw new Error(`Could not resolve signed archive governance packet ${packetID} for promotion ${promotion.promotionID}`)
+    throw new Error(
+      `Could not resolve signed archive governance packet ${packetID} for promotion ${promotion.promotionID}`,
+    )
   }
   const promotionReference = QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
     promotionID: promotion.promotionID,
@@ -1012,18 +1061,25 @@ async function resolveSignedArchiveReviewDossierForPromotion(
   explicitReleasePackets?: QualityPromotionReleasePacket.PacketArtifact[],
   explicitHandoffPackages?: QualityPromotionHandoffPackage.PackageArtifact[],
 ) {
-  const explicit = explicitArtifacts ?? await Promise.all(
-    argsMany("--signed-archive-review-dossier").map((file) => loadSignedArchiveReviewDossierArtifact(file)),
-  )
-  const resolved = explicit.length > 0 ? explicit : await QualityPromotionSignedArchiveReviewDossier.list(promotion.source)
+  const explicit =
+    explicitArtifacts ??
+    (await Promise.all(
+      argsMany("--signed-archive-review-dossier").map((file) => loadSignedArchiveReviewDossierArtifact(file)),
+    ))
+  const resolved =
+    explicit.length > 0 ? explicit : await QualityPromotionSignedArchiveReviewDossier.list(promotion.source)
   const dossierID = promotion.signedArchiveReviewDossier?.dossierID
   if (dossierID) {
     const match = resolved.find((dossier) => dossier.dossierID === dossierID)
     if (match) return verifiedSignedArchiveReviewDossierOrThrow(promotion, match)
     if (explicit.length > 0) {
-      throw new Error(`Could not resolve signed archive review dossier ${dossierID} for promotion ${promotion.promotionID}`)
+      throw new Error(
+        `Could not resolve signed archive review dossier ${dossierID} for promotion ${promotion.promotionID}`,
+      )
     }
-    throw new Error(`Could not resolve signed archive review dossier ${dossierID} for promotion ${promotion.promotionID}`)
+    throw new Error(
+      `Could not resolve signed archive review dossier ${dossierID} for promotion ${promotion.promotionID}`,
+    )
   }
   const matchesByPromotion = resolved
     .filter((dossier) => dossier.governancePacket.promotion.promotionID === promotion.promotionID)
@@ -1100,7 +1156,9 @@ function hasApprovalPolicyOverrideArgs() {
   ].some((name) => hasArg(name))
 }
 
-async function approvalPolicyOverrides(basePolicy?: QualityPromotionApprovalPolicy.Policy): Promise<QualityPromotionApprovalPolicy.PolicyOverrides> {
+async function approvalPolicyOverrides(
+  basePolicy?: QualityPromotionApprovalPolicy.Policy,
+): Promise<QualityPromotionApprovalPolicy.PolicyOverrides> {
   const warnDistinct = hasArg("--warn-distinct-approvers") ? true : undefined
   const forceDistinct = hasArg("--force-distinct-approvers") ? true : undefined
   const reentryDistinct = hasArg("--reentry-distinct-approvers") ? true : undefined
@@ -1144,37 +1202,30 @@ async function approvalPolicyOverrides(basePolicy?: QualityPromotionApprovalPoli
     : arg("--reentry-approval-concentration-budget")
       ? Number(arg("--reentry-approval-concentration-budget"))
       : undefined
-  const reentryApprovalConcentrationRiskTier =
-    (arg("--reentry-approval-concentration-risk-tier") as QualityPromotionApprovalPolicy.ApprovalConcentrationRiskTier | undefined)
-  const reentryApprovalConcentrationWorkflow =
-    (arg("--reentry-approval-concentration-workflow") as QualityPromotionApprovalPolicy.ApprovalConcentrationWorkflow | undefined)
+  const reentryApprovalConcentrationRiskTier = arg("--reentry-approval-concentration-risk-tier") as
+    | QualityPromotionApprovalPolicy.ApprovalConcentrationRiskTier
+    | undefined
+  const reentryApprovalConcentrationWorkflow = arg("--reentry-approval-concentration-workflow") as
+    | QualityPromotionApprovalPolicy.ApprovalConcentrationWorkflow
+    | undefined
   const reentryApprovalConcentrationSamePolicyRetry = hasArg("--reentry-approval-concentration-same-policy-retry")
     ? true
     : undefined
-  const reentryApprovalConcentrationForcePath = hasArg("--reentry-approval-concentration-force-path")
-    ? true
-    : undefined
+  const reentryApprovalConcentrationForcePath = hasArg("--reentry-approval-concentration-force-path") ? true : undefined
   const reentryApprovalConcentrationPriorRollbacks = arg("--reentry-approval-concentration-prior-rollbacks")
     ? Number(arg("--reentry-approval-concentration-prior-rollbacks"))
     : undefined
   const contextualDecisionBundle = hasArg("--reentry-approval-concentration-contextual")
-    ? await loadDecisionBundle(arg("--decision-bundle") ?? (() => {
-      throw new Error("--decision-bundle is required with --reentry-approval-concentration-contextual")
-    })())
+    ? await loadDecisionBundle(
+        arg("--decision-bundle") ??
+          (() => {
+            throw new Error("--decision-bundle is required with --reentry-approval-concentration-contextual")
+          })(),
+      )
     : null
   const contextualRecommendation = contextualDecisionBundle
     ? QualityPromotionApprovalPolicy.recommendConcentrationFromContext({
-      bundle: contextualDecisionBundle,
-      workflow: reentryApprovalConcentrationWorkflow,
-      riskTier: reentryApprovalConcentrationRiskTier,
-      samePolicyRetry: reentryApprovalConcentrationSamePolicyRetry,
-      forcePath: reentryApprovalConcentrationForcePath,
-      priorRollbacks: reentryApprovalConcentrationPriorRollbacks,
-    })
-    : null
-  const reentryApprovalConcentrationRecommendation = contextualRecommendation?.recommendation
-    ?? (reentryApprovalConcentrationRiskTier
-      ? QualityPromotionApprovalPolicy.recommendConcentration({
+        bundle: contextualDecisionBundle,
         workflow: reentryApprovalConcentrationWorkflow,
         riskTier: reentryApprovalConcentrationRiskTier,
         samePolicyRetry: reentryApprovalConcentrationSamePolicyRetry,
@@ -1182,39 +1233,54 @@ async function approvalPolicyOverrides(basePolicy?: QualityPromotionApprovalPoli
         priorRollbacks: reentryApprovalConcentrationPriorRollbacks,
       })
     : null
-    )
+  const reentryApprovalConcentrationRecommendation =
+    contextualRecommendation?.recommendation ??
+    (reentryApprovalConcentrationRiskTier
+      ? QualityPromotionApprovalPolicy.recommendConcentration({
+          workflow: reentryApprovalConcentrationWorkflow,
+          riskTier: reentryApprovalConcentrationRiskTier,
+          samePolicyRetry: reentryApprovalConcentrationSamePolicyRetry,
+          forcePath: reentryApprovalConcentrationForcePath,
+          priorRollbacks: reentryApprovalConcentrationPriorRollbacks,
+        })
+      : null)
   const reentryApprovalConcentrationPreset =
-    (arg("--reentry-approval-concentration-preset") as QualityPromotionApprovalPolicy.ApprovalConcentrationPreset | undefined)
-    ?? reentryApprovalConcentrationRecommendation?.preset
+    (arg("--reentry-approval-concentration-preset") as
+      | QualityPromotionApprovalPolicy.ApprovalConcentrationPreset
+      | undefined) ?? reentryApprovalConcentrationRecommendation?.preset
   const concentrationWeightApproverArg = arg("--reentry-approval-concentration-weight-approver")
   const concentrationWeightTeamArg = arg("--reentry-approval-concentration-weight-team")
   const concentrationWeightReportingChainArg = arg("--reentry-approval-concentration-weight-reporting-chain")
-  const reentryApprovalConcentrationWeights = (
+  const reentryApprovalConcentrationWeights =
     concentrationWeightApproverArg !== undefined ||
-      concentrationWeightTeamArg !== undefined ||
-      concentrationWeightReportingChainArg !== undefined
-  )
-    ? {
-      approver: concentrationWeightApproverArg !== undefined
-        ? Number(concentrationWeightApproverArg)
-        : (reentryApprovalConcentrationPreset
-          ? QualityPromotionApprovalPolicy.concentrationWeightsForPreset(reentryApprovalConcentrationPreset).approver
-          : (basePolicy?.rules.reentry.approvalConcentrationWeights.approver
-            ?? QualityPromotionApprovalPolicy.DEFAULT_REENTRY_APPROVAL_CONCENTRATION_WEIGHTS.approver)),
-      team: concentrationWeightTeamArg !== undefined
-        ? Number(concentrationWeightTeamArg)
-        : (reentryApprovalConcentrationPreset
-          ? QualityPromotionApprovalPolicy.concentrationWeightsForPreset(reentryApprovalConcentrationPreset).team
-          : (basePolicy?.rules.reentry.approvalConcentrationWeights.team
-            ?? QualityPromotionApprovalPolicy.DEFAULT_REENTRY_APPROVAL_CONCENTRATION_WEIGHTS.team)),
-      reportingChain: concentrationWeightReportingChainArg !== undefined
-        ? Number(concentrationWeightReportingChainArg)
-        : (reentryApprovalConcentrationPreset
-          ? QualityPromotionApprovalPolicy.concentrationWeightsForPreset(reentryApprovalConcentrationPreset).reportingChain
-          : (basePolicy?.rules.reentry.approvalConcentrationWeights.reportingChain
-            ?? QualityPromotionApprovalPolicy.DEFAULT_REENTRY_APPROVAL_CONCENTRATION_WEIGHTS.reportingChain)),
-    }
-    : undefined
+    concentrationWeightTeamArg !== undefined ||
+    concentrationWeightReportingChainArg !== undefined
+      ? {
+          approver:
+            concentrationWeightApproverArg !== undefined
+              ? Number(concentrationWeightApproverArg)
+              : reentryApprovalConcentrationPreset
+                ? QualityPromotionApprovalPolicy.concentrationWeightsForPreset(reentryApprovalConcentrationPreset)
+                    .approver
+                : (basePolicy?.rules.reentry.approvalConcentrationWeights.approver ??
+                  QualityPromotionApprovalPolicy.DEFAULT_REENTRY_APPROVAL_CONCENTRATION_WEIGHTS.approver),
+          team:
+            concentrationWeightTeamArg !== undefined
+              ? Number(concentrationWeightTeamArg)
+              : reentryApprovalConcentrationPreset
+                ? QualityPromotionApprovalPolicy.concentrationWeightsForPreset(reentryApprovalConcentrationPreset).team
+                : (basePolicy?.rules.reentry.approvalConcentrationWeights.team ??
+                  QualityPromotionApprovalPolicy.DEFAULT_REENTRY_APPROVAL_CONCENTRATION_WEIGHTS.team),
+          reportingChain:
+            concentrationWeightReportingChainArg !== undefined
+              ? Number(concentrationWeightReportingChainArg)
+              : reentryApprovalConcentrationPreset
+                ? QualityPromotionApprovalPolicy.concentrationWeightsForPreset(reentryApprovalConcentrationPreset)
+                    .reportingChain
+                : (basePolicy?.rules.reentry.approvalConcentrationWeights.reportingChain ??
+                  QualityPromotionApprovalPolicy.DEFAULT_REENTRY_APPROVAL_CONCENTRATION_WEIGHTS.reportingChain),
+        }
+      : undefined
   const reentryRoleCohortDiversity = hasArg("--reentry-allow-single-role-cohort")
     ? false
     : hasArg("--reentry-require-role-cohort-diversity")
@@ -1253,14 +1319,17 @@ async function approvalPolicyOverrides(basePolicy?: QualityPromotionApprovalPoli
       maxPriorReportingChainOverlapRatio: reentryReportingChainOverlapCap,
       reportingChainCarryoverBudget: reentryReportingChainCarryoverBudget,
       requireRoleCohortDiversity: reentryRoleCohortDiversity,
-      minimumDistinctRoleCohorts: arg("--reentry-min-role-cohorts") ? Number(arg("--reentry-min-role-cohorts")) : undefined,
+      minimumDistinctRoleCohorts: arg("--reentry-min-role-cohorts")
+        ? Number(arg("--reentry-min-role-cohorts"))
+        : undefined,
       requireReviewerTeamDiversity: reentryTeamDiversity,
       minimumDistinctReviewerTeams: arg("--reentry-min-teams") ? Number(arg("--reentry-min-teams")) : undefined,
       requireReportingChainDiversity: reentryReportingChainDiversity,
       minimumDistinctReportingChains: arg("--reentry-min-reporting-chains")
         ? Number(arg("--reentry-min-reporting-chains"))
         : undefined,
-      approvalConcentrationBudget: reentryApprovalConcentrationBudget ?? reentryApprovalConcentrationRecommendation?.budget,
+      approvalConcentrationBudget:
+        reentryApprovalConcentrationBudget ?? reentryApprovalConcentrationRecommendation?.budget,
       approvalConcentrationPreset: reentryApprovalConcentrationPreset,
       approvalConcentrationWeights: reentryApprovalConcentrationWeights,
     },
@@ -1317,8 +1386,7 @@ function hasSignedArchiveAttestationPolicyOverrideArgs() {
   ].some((name) => hasArg(name))
 }
 
-function signedArchiveAttestationPolicyOverrides():
-  QualityPromotionSignedArchiveAttestationPolicy.PolicyOverrides {
+function signedArchiveAttestationPolicyOverrides(): QualityPromotionSignedArchiveAttestationPolicy.PolicyOverrides {
   const minimumTrustScope = arg("--minimum-trust-scope")
   const allowRetiredHistorical = hasArg("--allow-retired-historical")
     ? true
@@ -1347,7 +1415,10 @@ function signedArchiveAttestationPolicyOverrides():
   }
 }
 
-async function resolveSignedArchiveAttestationPolicyForCLI(input?: { requireProject?: boolean; projectID?: string | null }) {
+async function resolveSignedArchiveAttestationPolicyForCLI(input?: {
+  requireProject?: boolean
+  projectID?: string | null
+}) {
   const projectID = await effectiveProjectIDForCLI({
     required: input?.requireProject,
     projectID: input?.projectID,
@@ -1366,20 +1437,23 @@ async function resolveSignedArchiveAttestationPolicyForCLI(input?: { requireProj
 }
 
 function hasReleasePolicyOverrideArgs() {
-  return hasApprovalPolicyOverrideArgs() || [
-    "--cooldown-hours",
-    "--repeat-window-hours",
-    "--repeat-threshold",
-    "--watch-min-records",
-    "--watch-max-records",
-    "--watch-abstention-warn-rate",
-    "--watch-abstention-fail-rate",
-    "--watch-avg-confidence-warn-abs-delta",
-    "--watch-avg-confidence-fail-abs-delta",
-    "--watch-max-confidence-warn-abs-delta",
-    "--watch-require-candidate-coverage",
-    "--watch-allow-missing-candidate",
-  ].some((name) => hasArg(name))
+  return (
+    hasApprovalPolicyOverrideArgs() ||
+    [
+      "--cooldown-hours",
+      "--repeat-window-hours",
+      "--repeat-threshold",
+      "--watch-min-records",
+      "--watch-max-records",
+      "--watch-abstention-warn-rate",
+      "--watch-abstention-fail-rate",
+      "--watch-avg-confidence-warn-abs-delta",
+      "--watch-avg-confidence-fail-abs-delta",
+      "--watch-max-confidence-warn-abs-delta",
+      "--watch-require-candidate-coverage",
+      "--watch-allow-missing-candidate",
+    ].some((name) => hasArg(name))
+  )
 }
 
 function stabilityPolicyOverrides(): Partial<QualityPromotionReleasePolicy.StabilityPolicy> {
@@ -1394,12 +1468,8 @@ function watchPolicyOverrides(): Partial<QualityPromotionReleasePolicy.WatchPoli
   return {
     minRecords: arg("--watch-min-records") ? Number(arg("--watch-min-records")) : undefined,
     maxRecords: arg("--watch-max-records") ? Number(arg("--watch-max-records")) : undefined,
-    abstentionWarnRate: arg("--watch-abstention-warn-rate")
-      ? Number(arg("--watch-abstention-warn-rate"))
-      : undefined,
-    abstentionFailRate: arg("--watch-abstention-fail-rate")
-      ? Number(arg("--watch-abstention-fail-rate"))
-      : undefined,
+    abstentionWarnRate: arg("--watch-abstention-warn-rate") ? Number(arg("--watch-abstention-warn-rate")) : undefined,
+    abstentionFailRate: arg("--watch-abstention-fail-rate") ? Number(arg("--watch-abstention-fail-rate")) : undefined,
     avgConfidenceWarnAbsDelta: arg("--watch-avg-confidence-warn-abs-delta")
       ? Number(arg("--watch-avg-confidence-warn-abs-delta"))
       : undefined,
@@ -1452,9 +1522,7 @@ async function loadLabels(itemsFileLabelsArg: string | undefined, sessionIDs: st
 async function labelsImportMode() {
   const file = arg("--file")
   if (!file) throw new Error("--file is required for labels-import mode")
-  const labelFile = ProbabilisticRollout.LabelFile.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  const labelFile = ProbabilisticRollout.LabelFile.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
   const persisted = await QualityLabelStore.appendMany(labelFile.labels)
   console.log(`Persisted ${persisted.length} label record(s)`)
 }
@@ -1549,9 +1617,18 @@ async function benchmarkMode() {
 
   const bundleOut = path.resolve(process.cwd(), arg("--bundle-out") ?? ".tmp/quality-benchmark-bundle.json")
   const modelOut = path.resolve(process.cwd(), arg("--model-out") ?? ".tmp/quality-benchmark-model.json")
-  const predictionsOut = path.resolve(process.cwd(), arg("--predictions-out") ?? ".tmp/quality-benchmark-predictions.json")
-  const baselineSummaryOut = path.resolve(process.cwd(), arg("--baseline-summary-out") ?? ".tmp/quality-benchmark-baseline-summary.json")
-  const candidateSummaryOut = path.resolve(process.cwd(), arg("--candidate-summary-out") ?? ".tmp/quality-benchmark-candidate-summary.json")
+  const predictionsOut = path.resolve(
+    process.cwd(),
+    arg("--predictions-out") ?? ".tmp/quality-benchmark-predictions.json",
+  )
+  const baselineSummaryOut = path.resolve(
+    process.cwd(),
+    arg("--baseline-summary-out") ?? ".tmp/quality-benchmark-baseline-summary.json",
+  )
+  const candidateSummaryOut = path.resolve(
+    process.cwd(),
+    arg("--candidate-summary-out") ?? ".tmp/quality-benchmark-candidate-summary.json",
+  )
   const comparisonOut = path.resolve(process.cwd(), arg("--comparison-out") ?? ".tmp/quality-benchmark-comparison.json")
   const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-benchmark-report.md")
   const report = QualityCalibrationModel.renderBenchmarkReport(benchmark.bundle)
@@ -1583,7 +1660,9 @@ async function modelListMode() {
   }
   for (const record of records) {
     const current = active?.source === record.model.source ? " (active)" : ""
-    console.log(`${record.model.source}${current} · trained=${record.model.trainedAt} · labeled=${record.model.training.labeledItems}`)
+    console.log(
+      `${record.model.source}${current} · trained=${record.model.trainedAt} · labeled=${record.model.training.labeledItems}`,
+    )
   }
 }
 
@@ -1622,67 +1701,88 @@ async function modelPromoteMode() {
   const dissentHandlingFiles = argsMany("--dissent-handling")
   const dissentResolutionFiles = argsMany("--dissent-resolution")
   const dissentSupersessionFiles = argsMany("--dissent-supersession")
-  const targetKinds = [bundleFile, decisionBundleFile, submissionBundleFile, reviewDossierFile, boardDecisionFile, releaseDecisionRecordFile, releasePacketFile].filter(Boolean)
+  const targetKinds = [
+    bundleFile,
+    decisionBundleFile,
+    submissionBundleFile,
+    reviewDossierFile,
+    boardDecisionFile,
+    releaseDecisionRecordFile,
+    releasePacketFile,
+  ].filter(Boolean)
   if (targetKinds.length !== 1) {
-    throw new Error("Provide exactly one of --bundle, --decision-bundle, --submission-bundle, --review-dossier, --board-decision, --release-decision-record, or --release-packet for model-promote mode")
+    throw new Error(
+      "Provide exactly one of --bundle, --decision-bundle, --submission-bundle, --review-dossier, --board-decision, --release-decision-record, or --release-packet for model-promote mode",
+    )
   }
   if (releasePacketFile && (hasArg("--allow-warn") || hasArg("--force"))) {
-    throw new Error("--release-packet cannot be combined with --allow-warn or --force because promotion mode is part of the artifact")
+    throw new Error(
+      "--release-packet cannot be combined with --allow-warn or --force because promotion mode is part of the artifact",
+    )
   }
-  if (releasePacketFile && (
-    approvalPacketFiles.length > 0 ||
-    approvalFiles.length > 0 ||
-    adoptionReviewFiles.length > 0 ||
-    dissentHandlingFiles.length > 0 ||
-    dissentResolutionFiles.length > 0 ||
-    dissentSupersessionFiles.length > 0
-  )) {
+  if (
+    releasePacketFile &&
+    (approvalPacketFiles.length > 0 ||
+      approvalFiles.length > 0 ||
+      adoptionReviewFiles.length > 0 ||
+      dissentHandlingFiles.length > 0 ||
+      dissentResolutionFiles.length > 0 ||
+      dissentSupersessionFiles.length > 0)
+  ) {
     throw new Error("--release-packet cannot be combined with approval, review, or dissent-handling inputs")
   }
   if (releaseDecisionRecordFile && (hasArg("--allow-warn") || hasArg("--force"))) {
-    throw new Error("--release-decision-record cannot be combined with --allow-warn or --force because override authorization is part of the artifact")
+    throw new Error(
+      "--release-decision-record cannot be combined with --allow-warn or --force because override authorization is part of the artifact",
+    )
   }
-  if (releaseDecisionRecordFile && (
-    approvalPacketFiles.length > 0 ||
-    approvalFiles.length > 0 ||
-    adoptionReviewFiles.length > 0 ||
-    dissentHandlingFiles.length > 0 ||
-    dissentResolutionFiles.length > 0 ||
-    dissentSupersessionFiles.length > 0
-  )) {
+  if (
+    releaseDecisionRecordFile &&
+    (approvalPacketFiles.length > 0 ||
+      approvalFiles.length > 0 ||
+      adoptionReviewFiles.length > 0 ||
+      dissentHandlingFiles.length > 0 ||
+      dissentResolutionFiles.length > 0 ||
+      dissentSupersessionFiles.length > 0)
+  ) {
     throw new Error("--release-decision-record cannot be combined with approval, review, or dissent-handling inputs")
   }
   if (boardDecisionFile && (hasArg("--allow-warn") || hasArg("--force"))) {
-    throw new Error("--board-decision cannot be combined with --allow-warn or --force because override authorization is part of the artifact")
+    throw new Error(
+      "--board-decision cannot be combined with --allow-warn or --force because override authorization is part of the artifact",
+    )
   }
-  if (boardDecisionFile && (
-    approvalPacketFiles.length > 0 ||
-    approvalFiles.length > 0 ||
-    adoptionReviewFiles.length > 0 ||
-    dissentHandlingFiles.length > 0 ||
-    dissentResolutionFiles.length > 0 ||
-    dissentSupersessionFiles.length > 0
-  )) {
+  if (
+    boardDecisionFile &&
+    (approvalPacketFiles.length > 0 ||
+      approvalFiles.length > 0 ||
+      adoptionReviewFiles.length > 0 ||
+      dissentHandlingFiles.length > 0 ||
+      dissentResolutionFiles.length > 0 ||
+      dissentSupersessionFiles.length > 0)
+  ) {
     throw new Error("--board-decision cannot be combined with approval, review, or dissent-handling inputs")
   }
-  if (reviewDossierFile && (
-    approvalPacketFiles.length > 0 ||
-    approvalFiles.length > 0 ||
-    adoptionReviewFiles.length > 0 ||
-    dissentHandlingFiles.length > 0 ||
-    dissentResolutionFiles.length > 0 ||
-    dissentSupersessionFiles.length > 0
-  )) {
+  if (
+    reviewDossierFile &&
+    (approvalPacketFiles.length > 0 ||
+      approvalFiles.length > 0 ||
+      adoptionReviewFiles.length > 0 ||
+      dissentHandlingFiles.length > 0 ||
+      dissentResolutionFiles.length > 0 ||
+      dissentSupersessionFiles.length > 0)
+  ) {
     throw new Error("--review-dossier cannot be combined with approval, review, or dissent-handling inputs")
   }
-  if (submissionBundleFile && (
-    approvalPacketFiles.length > 0 ||
-    approvalFiles.length > 0 ||
-    adoptionReviewFiles.length > 0 ||
-    dissentHandlingFiles.length > 0 ||
-    dissentResolutionFiles.length > 0 ||
-    dissentSupersessionFiles.length > 0
-  )) {
+  if (
+    submissionBundleFile &&
+    (approvalPacketFiles.length > 0 ||
+      approvalFiles.length > 0 ||
+      adoptionReviewFiles.length > 0 ||
+      dissentHandlingFiles.length > 0 ||
+      dissentResolutionFiles.length > 0 ||
+      dissentSupersessionFiles.length > 0)
+  ) {
     throw new Error("--submission-bundle cannot be combined with approval, review, or dissent-handling inputs")
   }
   if (approvalPacketFiles.length > 1) {
@@ -1691,14 +1791,17 @@ async function modelPromoteMode() {
   if (approvalPacketFiles.length > 0 && !decisionBundleFile) {
     throw new Error("--approval-packet requires --decision-bundle")
   }
-  if (approvalPacketFiles.length > 0 && (
-    approvalFiles.length > 0 ||
-    adoptionReviewFiles.length > 0 ||
-    dissentHandlingFiles.length > 0 ||
-    dissentResolutionFiles.length > 0 ||
-    dissentSupersessionFiles.length > 0
-  )) {
-    throw new Error("--approval-packet cannot be combined with --approval, --adoption-review, or dissent-handling inputs")
+  if (
+    approvalPacketFiles.length > 0 &&
+    (approvalFiles.length > 0 ||
+      adoptionReviewFiles.length > 0 ||
+      dissentHandlingFiles.length > 0 ||
+      dissentResolutionFiles.length > 0 ||
+      dissentSupersessionFiles.length > 0)
+  ) {
+    throw new Error(
+      "--approval-packet cannot be combined with --approval, --adoption-review, or dissent-handling inputs",
+    )
   }
   if (approvalFiles.length > 0 && !decisionBundleFile) {
     throw new Error("--approval requires --decision-bundle")
@@ -1735,7 +1838,9 @@ async function modelPromoteMode() {
     throw new Error("Archive signing in model-promote mode currently requires --release-packet")
   }
   const loadedDecisionBundle = decisionBundleFile ? await loadDecisionBundle(decisionBundleFile) : undefined
-  const loadedSubmissionBundle = submissionBundleFile ? await loadSubmissionBundleArtifact(submissionBundleFile) : undefined
+  const loadedSubmissionBundle = submissionBundleFile
+    ? await loadSubmissionBundleArtifact(submissionBundleFile)
+    : undefined
   const loadedReviewDossier = reviewDossierFile ? await loadReviewDossierArtifact(reviewDossierFile) : undefined
   const loadedBoardDecision = boardDecisionFile ? await loadBoardDecisionArtifact(boardDecisionFile) : undefined
   const loadedReleaseDecisionRecord = releaseDecisionRecordFile
@@ -1760,103 +1865,89 @@ async function modelPromoteMode() {
   })
   const attestationPolicyResolution = archiveSigning
     ? await resolveSignedArchiveAttestationPolicyForCLI({
-      projectID: loadedReleasePacket ? QualityRolloutProjectScope.fromReleasePacket(loadedReleasePacket) : null,
-    })
+        projectID: loadedReleasePacket ? QualityRolloutProjectScope.fromReleasePacket(loadedReleasePacket) : null,
+      })
     : undefined
 
   const result = loadedReleasePacket
-    ? await QualityModelRegistry.promoteReleasePacket(
-      loadedReleasePacket,
-      {
+    ? await QualityModelRegistry.promoteReleasePacket(loadedReleasePacket, {
         releasePolicyResolution,
         archiveSigning,
         attestationPolicyResolution,
-      },
-    )
-    : loadedReleaseDecisionRecord
-    ? await QualityModelRegistry.promoteReleaseDecisionRecord(
-      loadedReleaseDecisionRecord,
-      {
-        releasePolicyResolution,
-      },
-    )
-    : loadedBoardDecision
-    ? await QualityModelRegistry.promoteBoardDecision(
-      loadedBoardDecision,
-      {
-        releasePolicyResolution,
-      },
-    )
-    : loadedReviewDossier
-    ? await QualityModelRegistry.promoteReviewDossier(
-      loadedReviewDossier,
-      {
-        allowWarn: hasArg("--allow-warn"),
-        force: hasArg("--force"),
-        releasePolicyResolution,
-      },
-    )
-    : loadedSubmissionBundle
-    ? await QualityModelRegistry.promoteSubmissionBundle(
-      loadedSubmissionBundle,
-      {
-        allowWarn: hasArg("--allow-warn"),
-        force: hasArg("--force"),
-        releasePolicyResolution,
-      },
-    )
-    : loadedDecisionBundle
-    ? approvalPacketFiles.length > 0
-      ? await QualityModelRegistry.promoteApprovedDecisionBundle(
-        loadedDecisionBundle,
-        undefined,
-        {
-          allowWarn: hasArg("--allow-warn"),
-          force: hasArg("--force"),
-          approvalPacket: await loadApprovalPacketArtifact(approvalPacketFiles[0]!),
-          approvalPolicy: releasePolicyResolution.policy.approval,
-          approvalPolicySource: releasePolicyResolution.source,
-          projectID: releasePolicyResolution.projectID,
-          releasePolicyResolution,
-        },
-      )
-      : approvalFiles.length > 0
-      ? await QualityModelRegistry.promoteApprovedDecisionBundle(
-        loadedDecisionBundle,
-        await Promise.all(approvalFiles.map((file) => loadApprovalArtifact(file))),
-        {
-          allowWarn: hasArg("--allow-warn"),
-          force: hasArg("--force"),
-          adoptionReviews: await Promise.all(adoptionReviewFiles.map((file) => loadAdoptionReviewArtifact(file))),
-          dissentHandling: dissentHandlingFiles.length > 0
-            ? await Promise.all(dissentHandlingFiles.map((file) => loadAdoptionDissentHandlingArtifact(file)))
-            : undefined,
-          dissentResolutions: await Promise.all(
-            dissentResolutionFiles.map((file) => loadAdoptionDissentResolutionArtifact(file)),
-          ),
-          dissentSupersessions: await Promise.all(
-            dissentSupersessionFiles.map((file) => loadAdoptionDissentSupersessionArtifact(file)),
-          ),
-          approvalPolicy: releasePolicyResolution.policy.approval,
-          approvalPolicySource: releasePolicyResolution.source,
-          projectID: releasePolicyResolution.projectID,
-          releasePolicyResolution,
-        },
-      )
-      : await QualityModelRegistry.promoteDecisionBundle(loadedDecisionBundle, {
-        allowWarn: hasArg("--allow-warn"),
-        force: hasArg("--force"),
-        releasePolicyResolution,
       })
-    : await QualityModelRegistry.promote(await loadBenchmarkBundle(bundleFile!), {
-      allowWarn: hasArg("--allow-warn"),
-      force: hasArg("--force"),
-      ...releasePolicyResolution.policy.stability,
-      releasePolicy: {
-        policy: releasePolicyResolution.policy,
-        provenance: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution),
-      },
-    })
+    : loadedReleaseDecisionRecord
+      ? await QualityModelRegistry.promoteReleaseDecisionRecord(loadedReleaseDecisionRecord, {
+          releasePolicyResolution,
+        })
+      : loadedBoardDecision
+        ? await QualityModelRegistry.promoteBoardDecision(loadedBoardDecision, {
+            releasePolicyResolution,
+          })
+        : loadedReviewDossier
+          ? await QualityModelRegistry.promoteReviewDossier(loadedReviewDossier, {
+              allowWarn: hasArg("--allow-warn"),
+              force: hasArg("--force"),
+              releasePolicyResolution,
+            })
+          : loadedSubmissionBundle
+            ? await QualityModelRegistry.promoteSubmissionBundle(loadedSubmissionBundle, {
+                allowWarn: hasArg("--allow-warn"),
+                force: hasArg("--force"),
+                releasePolicyResolution,
+              })
+            : loadedDecisionBundle
+              ? approvalPacketFiles.length > 0
+                ? await QualityModelRegistry.promoteApprovedDecisionBundle(loadedDecisionBundle, undefined, {
+                    allowWarn: hasArg("--allow-warn"),
+                    force: hasArg("--force"),
+                    approvalPacket: await loadApprovalPacketArtifact(approvalPacketFiles[0]!),
+                    approvalPolicy: releasePolicyResolution.policy.approval,
+                    approvalPolicySource: releasePolicyResolution.source,
+                    projectID: releasePolicyResolution.projectID,
+                    releasePolicyResolution,
+                  })
+                : approvalFiles.length > 0
+                  ? await QualityModelRegistry.promoteApprovedDecisionBundle(
+                      loadedDecisionBundle,
+                      await Promise.all(approvalFiles.map((file) => loadApprovalArtifact(file))),
+                      {
+                        allowWarn: hasArg("--allow-warn"),
+                        force: hasArg("--force"),
+                        adoptionReviews: await Promise.all(
+                          adoptionReviewFiles.map((file) => loadAdoptionReviewArtifact(file)),
+                        ),
+                        dissentHandling:
+                          dissentHandlingFiles.length > 0
+                            ? await Promise.all(
+                                dissentHandlingFiles.map((file) => loadAdoptionDissentHandlingArtifact(file)),
+                              )
+                            : undefined,
+                        dissentResolutions: await Promise.all(
+                          dissentResolutionFiles.map((file) => loadAdoptionDissentResolutionArtifact(file)),
+                        ),
+                        dissentSupersessions: await Promise.all(
+                          dissentSupersessionFiles.map((file) => loadAdoptionDissentSupersessionArtifact(file)),
+                        ),
+                        approvalPolicy: releasePolicyResolution.policy.approval,
+                        approvalPolicySource: releasePolicyResolution.source,
+                        projectID: releasePolicyResolution.projectID,
+                        releasePolicyResolution,
+                      },
+                    )
+                  : await QualityModelRegistry.promoteDecisionBundle(loadedDecisionBundle, {
+                      allowWarn: hasArg("--allow-warn"),
+                      force: hasArg("--force"),
+                      releasePolicyResolution,
+                    })
+              : await QualityModelRegistry.promote(await loadBenchmarkBundle(bundleFile!), {
+                  allowWarn: hasArg("--allow-warn"),
+                  force: hasArg("--force"),
+                  ...releasePolicyResolution.policy.stability,
+                  releasePolicy: {
+                    policy: releasePolicyResolution.policy,
+                    provenance: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution),
+                  },
+                })
   console.log(
     `Promoted model ${result.active.source} with decision ${result.record.decision} (benchmark status ${result.record.benchmark.overallStatus})`,
   )
@@ -1966,7 +2057,9 @@ async function modelPromoteMode() {
     )
   }
   if (result.record.adoptionReviews?.[0]) {
-    console.log(`Adoption review: ${result.record.adoptionReviews[0].reviewer} · ${result.record.adoptionReviews[0].disposition}`)
+    console.log(
+      `Adoption review: ${result.record.adoptionReviews[0].reviewer} · ${result.record.adoptionReviews[0].disposition}`,
+    )
   }
   if (result.record.adoptionDissentResolution) {
     console.log(
@@ -2059,7 +2152,8 @@ async function modelDecisionBundleMode() {
 async function modelApprovalCreateMode() {
   const file = arg("--decision-bundle")
   const approver = arg("--approver")
-  if (!file || !approver) throw new Error("--decision-bundle and --approver are required for model-approval-create mode")
+  if (!file || !approver)
+    throw new Error("--decision-bundle and --approver are required for model-approval-create mode")
   const approval = QualityPromotionApproval.create({
     bundle: await loadDecisionBundle(file),
     approver,
@@ -2082,7 +2176,8 @@ async function modelApprovalCreateMode() {
 async function modelAdoptionReviewCreateMode() {
   const file = arg("--decision-bundle")
   const reviewer = arg("--reviewer")
-  if (!file || !reviewer) throw new Error("--decision-bundle and --reviewer are required for model-adoption-review-create mode")
+  if (!file || !reviewer)
+    throw new Error("--decision-bundle and --reviewer are required for model-adoption-review-create mode")
   const review = QualityPromotionAdoptionReview.create({
     bundle: await loadDecisionBundle(file),
     reviewer,
@@ -2117,12 +2212,20 @@ async function modelAdoptionReviewConsensusMode() {
   const file = arg("--decision-bundle")
   if (!file) throw new Error("--decision-bundle is required for model-adoption-review-consensus mode")
   const bundle = await loadDecisionBundle(file)
-  const reviews = await Promise.all(argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)))
+  const reviews = await Promise.all(
+    argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)),
+  )
   const resolvedReviews = await QualityPromotionAdoptionReview.resolveForBundle(bundle, reviews)
   const summary = QualityPromotionAdoptionReview.evaluate(bundle, resolvedReviews)
   const report = QualityPromotionAdoptionReview.renderConsensus(summary)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-adoption-review-consensus.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-adoption-review-consensus.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-adoption-review-consensus.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-adoption-review-consensus.md",
+  )
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
   await write(reportOut, report)
@@ -2136,10 +2239,15 @@ async function modelAdoptionDissentResolutionCreateMode() {
     throw new Error("--decision-bundle and --resolver are required for model-adoption-dissent-resolution-create mode")
   }
   const bundle = await loadDecisionBundle(file)
-  const explicitTargetReviews = await Promise.all(argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)))
-  const targetReviews = explicitTargetReviews.length > 0
-    ? explicitTargetReviews
-    : (await QualityPromotionAdoptionReview.resolveForBundle(bundle)).filter((review) => review.disposition === "rejected")
+  const explicitTargetReviews = await Promise.all(
+    argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)),
+  )
+  const targetReviews =
+    explicitTargetReviews.length > 0
+      ? explicitTargetReviews
+      : (await QualityPromotionAdoptionReview.resolveForBundle(bundle)).filter(
+          (review) => review.disposition === "rejected",
+        )
   if (targetReviews.length === 0) {
     throw new Error(`No rejected adoption reviews available for decision bundle ${bundle.source}`)
   }
@@ -2153,7 +2261,10 @@ async function modelAdoptionDissentResolutionCreateMode() {
   await QualityPromotionAdoptionDissentResolution.append(resolution)
   const report = QualityPromotionAdoptionDissentResolution.renderReport(resolution)
   const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-adoption-dissent-resolution.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-resolution.md")
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-resolution.md",
+  )
 
   await write(out, JSON.stringify(resolution, null, 2))
   await write(reportOut, report)
@@ -2183,10 +2294,15 @@ async function modelAdoptionDissentSupersessionCreateMode() {
     )
   }
   const bundle = await loadDecisionBundle(file)
-  const explicitTargetReviews = await Promise.all(argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)))
-  const targetReviews = explicitTargetReviews.length > 0
-    ? explicitTargetReviews
-    : (await QualityPromotionAdoptionReview.resolveForBundle(bundle)).filter((review) => review.disposition === "rejected")
+  const explicitTargetReviews = await Promise.all(
+    argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)),
+  )
+  const targetReviews =
+    explicitTargetReviews.length > 0
+      ? explicitTargetReviews
+      : (await QualityPromotionAdoptionReview.resolveForBundle(bundle)).filter(
+          (review) => review.disposition === "rejected",
+        )
   if (targetReviews.length === 0) {
     throw new Error(`No rejected adoption reviews available for decision bundle ${bundle.source}`)
   }
@@ -2201,7 +2317,10 @@ async function modelAdoptionDissentSupersessionCreateMode() {
   await QualityPromotionAdoptionDissentSupersession.append(supersession)
   const report = QualityPromotionAdoptionDissentSupersession.renderReport(supersession)
   const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-adoption-dissent-supersession.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-supersession.md")
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-supersession.md",
+  )
 
   await write(out, JSON.stringify(supersession, null, 2))
   await write(reportOut, report)
@@ -2233,12 +2352,16 @@ async function modelAdoptionDissentHandlingCreateMode() {
   )
   const resolutions = await QualityPromotionAdoptionDissentResolution.resolveForBundle(
     bundle,
-    await Promise.all(argsMany("--dissent-resolution").map((resolutionFile) => loadAdoptionDissentResolutionArtifact(resolutionFile))),
+    await Promise.all(
+      argsMany("--dissent-resolution").map((resolutionFile) => loadAdoptionDissentResolutionArtifact(resolutionFile)),
+    ),
   )
   const supersessions = await QualityPromotionAdoptionDissentSupersession.resolveForBundle(
     bundle,
     await Promise.all(
-      argsMany("--dissent-supersession").map((supersessionFile) => loadAdoptionDissentSupersessionArtifact(supersessionFile)),
+      argsMany("--dissent-supersession").map((supersessionFile) =>
+        loadAdoptionDissentSupersessionArtifact(supersessionFile),
+      ),
     ),
   )
   const handling = QualityPromotionAdoptionDissentHandling.create({
@@ -2250,7 +2373,10 @@ async function modelAdoptionDissentHandlingCreateMode() {
   await QualityPromotionAdoptionDissentHandling.append(handling)
   const report = QualityPromotionAdoptionDissentHandling.renderReport(handling)
   const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-adoption-dissent-handling.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-handling.md")
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-handling.md",
+  )
 
   await write(out, JSON.stringify(handling, null, 2))
   await write(reportOut, report)
@@ -2283,21 +2409,30 @@ async function modelAdoptionDissentHandlingStatusMode() {
   const explicitHandlings = await Promise.all(
     argsMany("--dissent-handling").map((handlingFile) => loadAdoptionDissentHandlingArtifact(handlingFile)),
   )
-  const resolvedHandlings = await QualityPromotionAdoptionDissentHandling.resolveForBundle(bundle, reviews, explicitHandlings)
-  const handling = resolvedHandlings.at(-1)
-    ?? QualityPromotionAdoptionDissentHandling.create({
+  const resolvedHandlings = await QualityPromotionAdoptionDissentHandling.resolveForBundle(
+    bundle,
+    reviews,
+    explicitHandlings,
+  )
+  const handling =
+    resolvedHandlings.at(-1) ??
+    QualityPromotionAdoptionDissentHandling.create({
       bundle,
       reviews,
       resolutions: await QualityPromotionAdoptionDissentResolution.resolveForBundle(
         bundle,
         await Promise.all(
-          argsMany("--dissent-resolution").map((resolutionFile) => loadAdoptionDissentResolutionArtifact(resolutionFile)),
+          argsMany("--dissent-resolution").map((resolutionFile) =>
+            loadAdoptionDissentResolutionArtifact(resolutionFile),
+          ),
         ),
       ),
       supersessions: await QualityPromotionAdoptionDissentSupersession.resolveForBundle(
         bundle,
         await Promise.all(
-          argsMany("--dissent-supersession").map((supersessionFile) => loadAdoptionDissentSupersessionArtifact(supersessionFile)),
+          argsMany("--dissent-supersession").map((supersessionFile) =>
+            loadAdoptionDissentSupersessionArtifact(supersessionFile),
+          ),
         ),
       ),
     })
@@ -2322,12 +2457,19 @@ async function modelAdoptionDissentSupersessionStatusMode() {
     throw new Error("--decision-bundle is required for model-adoption-dissent-supersession-status mode")
   }
   const bundle = await loadDecisionBundle(file)
-  const reviews = await Promise.all(argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)))
+  const reviews = await Promise.all(
+    argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)),
+  )
   const supersessions = await Promise.all(
-    argsMany("--dissent-supersession").map((supersessionFile) => loadAdoptionDissentSupersessionArtifact(supersessionFile)),
+    argsMany("--dissent-supersession").map((supersessionFile) =>
+      loadAdoptionDissentSupersessionArtifact(supersessionFile),
+    ),
   )
   const resolvedReviews = await QualityPromotionAdoptionReview.resolveForBundle(bundle, reviews)
-  const resolvedSupersessions = await QualityPromotionAdoptionDissentSupersession.resolveForBundle(bundle, supersessions)
+  const resolvedSupersessions = await QualityPromotionAdoptionDissentSupersession.resolveForBundle(
+    bundle,
+    supersessions,
+  )
   const summary = QualityPromotionAdoptionDissentSupersession.evaluate(bundle, resolvedReviews, resolvedSupersessions)
   const report = QualityPromotionAdoptionDissentSupersession.renderSummary(summary)
   const summaryOut = path.resolve(
@@ -2350,7 +2492,9 @@ async function modelAdoptionDissentResolutionStatusMode() {
     throw new Error("--decision-bundle is required for model-adoption-dissent-resolution-status mode")
   }
   const bundle = await loadDecisionBundle(file)
-  const reviews = await Promise.all(argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)))
+  const reviews = await Promise.all(
+    argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)),
+  )
   const resolutions = await Promise.all(
     argsMany("--dissent-resolution").map((resolutionFile) => loadAdoptionDissentResolutionArtifact(resolutionFile)),
   )
@@ -2400,9 +2544,12 @@ async function modelApprovalPacketCreateMode() {
   const explicitHandling = await Promise.all(
     argsMany("--dissent-handling").map((handlingFile) => loadAdoptionDissentHandlingArtifact(handlingFile)),
   )
-  const dissentHandling = explicitHandling.length > 0
-    ? (await QualityPromotionAdoptionDissentHandling.resolveForBundle(bundle, adoptionReviews, explicitHandling)).at(-1)
-    : undefined
+  const dissentHandling =
+    explicitHandling.length > 0
+      ? (await QualityPromotionAdoptionDissentHandling.resolveForBundle(bundle, adoptionReviews, explicitHandling)).at(
+          -1,
+        )
+      : undefined
   const packet = QualityPromotionApprovalPacket.create({
     bundle,
     approvals,
@@ -2440,8 +2587,9 @@ async function modelApprovalPacketStatusMode() {
     argsMany("--approval-packet").map((packetFile) => loadApprovalPacketArtifact(packetFile)),
   )
   const resolvedPackets = await QualityPromotionApprovalPacket.resolveForBundle(bundle, explicitPackets)
-  const packet = resolvedPackets.at(-1)
-    ?? QualityPromotionApprovalPacket.create({
+  const packet =
+    resolvedPackets.at(-1) ??
+    QualityPromotionApprovalPacket.create({
       bundle,
       approvals: await QualityPromotionApprovalPacket.resolveApprovalsForBundle(
         bundle,
@@ -2456,15 +2604,25 @@ async function modelApprovalPacketStatusMode() {
           bundle,
           await QualityPromotionAdoptionReview.resolveForBundle(
             bundle,
-            await Promise.all(argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile))),
+            await Promise.all(
+              argsMany("--adoption-review").map((reviewFile) => loadAdoptionReviewArtifact(reviewFile)),
+            ),
           ),
-          await Promise.all(argsMany("--dissent-handling").map((handlingFile) => loadAdoptionDissentHandlingArtifact(handlingFile))),
+          await Promise.all(
+            argsMany("--dissent-handling").map((handlingFile) => loadAdoptionDissentHandlingArtifact(handlingFile)),
+          ),
         )
       ).at(-1),
     })
   const report = QualityPromotionApprovalPacket.renderReport(packet)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-approval-packet-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-approval-packet-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-approval-packet-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-approval-packet-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(packet.readiness, null, 2))
   await write(reportOut, report)
@@ -2511,8 +2669,14 @@ async function modelSubmissionBundleStatusMode() {
   )
   const submission = await resolveSubmissionBundleForDecisionBundle(decisionBundle, explicitSubmissions)
   const report = QualityPromotionSubmissionBundle.renderReport(submission)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-submission-bundle-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-submission-bundle-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-submission-bundle-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-submission-bundle-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(submission.summary, null, 2))
   await write(reportOut, report)
@@ -2558,8 +2722,14 @@ async function modelReviewDossierStatusMode() {
   )
   const dossier = await resolveReviewDossierForDecisionBundle(decisionBundle, explicitDossiers)
   const report = QualityPromotionReviewDossier.renderReport(dossier)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-review-dossier-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-review-dossier-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-review-dossier-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-review-dossier-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(dossier.summary, null, 2))
   await write(reportOut, report)
@@ -2601,13 +2771,18 @@ async function modelBoardDecisionStatusMode() {
   const explicitDecisions = await Promise.all(
     argsMany("--board-decision").map((decisionFile) => loadBoardDecisionArtifact(decisionFile)),
   )
-  const boardDecision = (
-    await QualityPromotionBoardDecision.resolveForBundle(decisionBundle, explicitDecisions)
-  ).at(-1)
-    ?? createBoardDecisionFromDossier(await resolveReviewDossierForDecisionBundle(decisionBundle))
+  const boardDecision =
+    (await QualityPromotionBoardDecision.resolveForBundle(decisionBundle, explicitDecisions)).at(-1) ??
+    createBoardDecisionFromDossier(await resolveReviewDossierForDecisionBundle(decisionBundle))
   const report = QualityPromotionBoardDecision.renderReport(boardDecision)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-board-decision-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-board-decision-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-board-decision-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-board-decision-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(boardDecision.summary, null, 2))
   await write(reportOut, report)
@@ -2616,7 +2791,8 @@ async function modelBoardDecisionStatusMode() {
 
 async function modelReleaseDecisionRecordCreateMode() {
   const decisionBundleFile = arg("--decision-bundle")
-  if (!decisionBundleFile) throw new Error("--decision-bundle is required for model-release-decision-record-create mode")
+  if (!decisionBundleFile)
+    throw new Error("--decision-bundle is required for model-release-decision-record-create mode")
   const decisionBundle = await loadDecisionBundle(decisionBundleFile)
   const record = QualityPromotionReleaseDecisionRecord.create({
     boardDecision: await resolveBoardDecisionForDecisionBundle(decisionBundle),
@@ -2624,7 +2800,10 @@ async function modelReleaseDecisionRecordCreateMode() {
   await QualityPromotionReleaseDecisionRecord.append(record)
   const report = QualityPromotionReleaseDecisionRecord.renderReport(record)
   const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-release-decision-record.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-release-decision-record.md")
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-release-decision-record.md",
+  )
 
   await write(out, JSON.stringify(record, null, 2))
   await write(reportOut, report)
@@ -2646,15 +2825,22 @@ async function modelReleaseDecisionRecordsMode() {
 
 async function modelReleaseDecisionRecordStatusMode() {
   const decisionBundleFile = arg("--decision-bundle")
-  if (!decisionBundleFile) throw new Error("--decision-bundle is required for model-release-decision-record-status mode")
+  if (!decisionBundleFile)
+    throw new Error("--decision-bundle is required for model-release-decision-record-status mode")
   const decisionBundle = await loadDecisionBundle(decisionBundleFile)
   const explicitRecords = await Promise.all(
     argsMany("--release-decision-record").map((recordFile) => loadReleaseDecisionRecordArtifact(recordFile)),
   )
   const record = await resolveReleaseDecisionRecordForDecisionBundle(decisionBundle, explicitRecords)
   const report = QualityPromotionReleaseDecisionRecord.renderReport(record)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-release-decision-record-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-release-decision-record-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-release-decision-record-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-release-decision-record-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(record.summary, null, 2))
   await write(reportOut, report)
@@ -2700,8 +2886,14 @@ async function modelReleasePacketStatusMode() {
   )
   const packet = await resolveReleasePacketForDecisionBundle(decisionBundle, explicitPackets)
   const report = QualityPromotionReleasePacket.renderReport(packet)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-release-packet-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-release-packet-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-release-packet-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-release-packet-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(packet.summary, null, 2))
   await write(reportOut, report)
@@ -2761,8 +2953,14 @@ async function modelAuditManifestStatusMode() {
   )
   const manifest = await resolveAuditManifestForPromotion(promotion, explicitManifests)
   const report = QualityPromotionAuditManifest.renderReport(manifest)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-audit-manifest-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-audit-manifest-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-audit-manifest-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-audit-manifest-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(manifest.summary, null, 2))
   await write(reportOut, report)
@@ -2808,8 +3006,14 @@ async function modelExportBundleStatusMode() {
   )
   const bundle = await resolveExportBundleForPromotion(promotion, explicitBundles)
   const report = QualityPromotionExportBundle.renderReport(bundle)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-export-bundle-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-export-bundle-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-export-bundle-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-export-bundle-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(bundle.summary, null, 2))
   await write(reportOut, report)
@@ -2855,8 +3059,14 @@ async function modelArchiveManifestStatusMode() {
   )
   const archive = await resolveArchiveManifestForPromotion(promotion, explicitArchives)
   const report = QualityPromotionArchiveManifest.renderReport(archive)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-archive-manifest-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-archive-manifest-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-archive-manifest-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-archive-manifest-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(archive.summary, null, 2))
   await write(reportOut, report)
@@ -2902,8 +3112,14 @@ async function modelHandoffPackageStatusMode() {
   )
   const packet = await resolveHandoffPackageForPromotion(promotion, explicitPackets)
   const report = QualityPromotionHandoffPackage.renderReport(packet)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-handoff-package-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-handoff-package-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-handoff-package-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-handoff-package-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(packet.summary, null, 2))
   await write(reportOut, report)
@@ -2949,8 +3165,14 @@ async function modelPortableExportStatusMode() {
   )
   const exportArtifact = await resolvePortableExportForPromotion(promotion, explicitExports)
   const report = QualityPromotionPortableExport.renderReport(exportArtifact)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-portable-export-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-portable-export-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-portable-export-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-portable-export-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(exportArtifact.summary, null, 2))
   await write(reportOut, report)
@@ -3010,8 +3232,14 @@ async function modelPackagedArchiveStatusMode() {
   )
   const archive = await resolvePackagedArchiveForPromotion(promotion, explicitArchives)
   const report = QualityPromotionPackagedArchive.renderReport(archive)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-packaged-archive-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-packaged-archive-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-packaged-archive-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-packaged-archive-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(archive.summary, null, 2))
   await write(reportOut, report)
@@ -3089,8 +3317,14 @@ async function modelSignedArchiveStatusMode() {
   const archive = await resolveSignedArchiveForPromotion(promotion, explicitArchives)
   if (!archive) throw new Error(`No signed archive available for promotion ${promotionID}`)
   const report = QualityPromotionSignedArchive.renderReport(archive)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(archive.summary, null, 2))
   await write(reportOut, report)
@@ -3109,18 +3343,37 @@ async function modelSignedArchiveVerifyMode() {
   const archive = await resolveSignedArchiveForPromotion(promotion, explicitArchives)
   if (!archive) throw new Error(`No signed archive available for promotion ${promotionID}`)
   const structuralReasons = QualityPromotionSignedArchive.verify(archive)
-  const signatureReasons = structuralReasons.length > 0 ? structuralReasons : QualityPromotionSignedArchive.verifySignature(archive, signing.keyMaterial)
-  const report = QualityPromotionSignedArchive.renderReport(archive, signatureReasons.length === 0 ? ["__signature_ok__"] : signatureReasons)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-verification.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-verification.md")
+  const signatureReasons =
+    structuralReasons.length > 0
+      ? structuralReasons
+      : QualityPromotionSignedArchive.verifySignature(archive, signing.keyMaterial)
+  const report = QualityPromotionSignedArchive.renderReport(
+    archive,
+    signatureReasons.length === 0 ? ["__signature_ok__"] : signatureReasons,
+  )
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-verification.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-verification.md",
+  )
 
-  await write(summaryOut, JSON.stringify({
-    valid: signatureReasons.length === 0,
-    structuralReasons,
-    signatureReasons,
-    keyID: archive.attestation.keyID,
-    keyLocator: archive.attestation.keyLocator,
-  }, null, 2))
+  await write(
+    summaryOut,
+    JSON.stringify(
+      {
+        valid: signatureReasons.length === 0,
+        structuralReasons,
+        signatureReasons,
+        keyID: archive.attestation.keyID,
+        keyLocator: archive.attestation.keyLocator,
+      },
+      null,
+      2,
+    ),
+  )
   await write(reportOut, report)
   console.log(report)
 }
@@ -3145,9 +3398,13 @@ async function modelSignedArchiveTrustCreateMode() {
   if (!signing) throw new Error("Archive signing inputs are required for model-signed-archive-trust-create mode")
   const rawScope = arg("--scope") ?? "global"
   const scope = QualityPromotionSignedArchiveTrust.Scope.parse(rawScope)
-  const projectID = scope === "project" ? (arg("--project-id") ?? (() => {
-    throw new Error("--project-id is required for project-scoped signed archive trust entries")
-  })()) : undefined
+  const projectID =
+    scope === "project"
+      ? (arg("--project-id") ??
+        (() => {
+          throw new Error("--project-id is required for project-scoped signed archive trust entries")
+        })())
+      : undefined
   const lifecycle = (arg("--lifecycle") as QualityPromotionSignedArchiveTrust.Lifecycle | undefined) ?? undefined
   const trust = QualityPromotionSignedArchiveTrust.create({
     scope,
@@ -3172,9 +3429,13 @@ async function modelSignedArchiveTrustCreateMode() {
 async function modelSignedArchiveTrustsMode() {
   const rawScope = arg("--scope")
   const scope = rawScope ? QualityPromotionSignedArchiveTrust.Scope.parse(rawScope) : undefined
-  const projectID = scope === "project" ? (arg("--project-id") ?? (() => {
-    throw new Error("--project-id is required when --scope=project")
-  })()) : undefined
+  const projectID =
+    scope === "project"
+      ? (arg("--project-id") ??
+        (() => {
+          throw new Error("--project-id is required when --scope=project")
+        })())
+      : undefined
   const trusts = await QualityPromotionSignedArchiveTrust.list(scope ? { scope, projectID } : undefined)
   if (trusts.length === 0) {
     console.log("No quality model signed archive trust entries recorded")
@@ -3204,14 +3465,21 @@ async function modelSignedArchiveTrustStatusMode() {
   const summary = await QualityPromotionSignedArchiveTrust.evaluate({
     archive,
     keyMaterial: signing.keyMaterial,
-    projectID: (await effectiveProjectIDForCLI({
-      projectID: QualityRolloutProjectScope.fromPromotionRecord(promotion),
-    })) ?? undefined,
+    projectID:
+      (await effectiveProjectIDForCLI({
+        projectID: QualityRolloutProjectScope.fromPromotionRecord(promotion),
+      })) ?? undefined,
     trusts: explicitTrusts,
   })
   const report = QualityPromotionSignedArchiveTrust.renderReport(summary)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-trust-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-trust-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-trust-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-trust-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
   await write(reportOut, report)
@@ -3235,8 +3503,14 @@ async function modelSignedArchiveAttestationStatusMode() {
   })
   const summary = evaluation.attestation
   const report = QualityPromotionSignedArchiveAttestationPolicy.renderReport(summary)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
   await write(reportOut, report)
@@ -3267,8 +3541,14 @@ async function modelSignedArchiveAttestationRecordCreateMode() {
   })
   await QualityPromotionSignedArchiveAttestationRecord.append(record)
   const report = QualityPromotionSignedArchiveAttestationRecord.renderReport(record)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-signed-archive-attestation-record.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record.md")
+  const out = path.resolve(
+    process.cwd(),
+    arg("--out") ?? ".tmp/quality-promotion-signed-archive-attestation-record.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record.md",
+  )
 
   await write(out, JSON.stringify(record, null, 2))
   await write(reportOut, report)
@@ -3320,8 +3600,14 @@ async function modelSignedArchiveAttestationRecordStatusMode() {
     })
   }
   const report = QualityPromotionSignedArchiveAttestationRecord.renderReport(record)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(record.summary, null, 2))
   await write(reportOut, report)
@@ -3347,8 +3633,14 @@ async function modelSignedArchiveAttestationPacketCreateMode() {
   })
   await QualityPromotionSignedArchiveAttestationPacket.append(packet)
   const report = QualityPromotionSignedArchiveAttestationPacket.renderReport(packet)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet.md")
+  const out = path.resolve(
+    process.cwd(),
+    arg("--out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet.md",
+  )
 
   await write(out, JSON.stringify(packet, null, 2))
   await write(reportOut, report)
@@ -3382,8 +3674,14 @@ async function modelSignedArchiveAttestationPacketStatusMode() {
   )
   const packet = await resolveSignedArchiveAttestationPacketForPromotion(promotion, explicitPackets, explicitRecords)
   const report = QualityPromotionSignedArchiveAttestationPacket.renderReport(packet)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(packet.summary, null, 2))
   await write(reportOut, report)
@@ -3400,7 +3698,9 @@ async function modelSignedArchiveGovernancePacketCreateMode() {
     argsMany("--signed-archive-governance-packet").map((file) => loadSignedArchiveGovernancePacketArtifact(file)),
   )
   if (explicitGovernancePackets.length > 0) {
-    throw new Error("--signed-archive-governance-packet is not supported for model-signed-archive-governance-packet-create mode")
+    throw new Error(
+      "--signed-archive-governance-packet is not supported for model-signed-archive-governance-packet-create mode",
+    )
   }
   const explicitReleasePackets = await Promise.all(
     argsMany("--release-packet").map((file) => loadReleasePacketArtifact(file)),
@@ -3420,8 +3720,14 @@ async function modelSignedArchiveGovernancePacketCreateMode() {
   )
   await QualityPromotionSignedArchiveGovernancePacket.append(packet)
   const report = QualityPromotionSignedArchiveGovernancePacket.renderReport(packet)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-signed-archive-governance-packet.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet.md")
+  const out = path.resolve(
+    process.cwd(),
+    arg("--out") ?? ".tmp/quality-promotion-signed-archive-governance-packet.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet.md",
+  )
 
   await write(out, JSON.stringify(packet, null, 2))
   await write(reportOut, report)
@@ -3467,8 +3773,14 @@ async function modelSignedArchiveGovernancePacketStatusMode() {
     explicitReleasePackets,
   )
   const report = QualityPromotionSignedArchiveGovernancePacket.renderReport(packet)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(packet.summary, null, 2))
   await write(reportOut, report)
@@ -3485,7 +3797,9 @@ async function modelSignedArchiveReviewDossierCreateMode() {
     argsMany("--signed-archive-review-dossier").map((file) => loadSignedArchiveReviewDossierArtifact(file)),
   )
   if (explicitDossiers.length > 0) {
-    throw new Error("--signed-archive-review-dossier is not supported for model-signed-archive-review-dossier-create mode")
+    throw new Error(
+      "--signed-archive-review-dossier is not supported for model-signed-archive-review-dossier-create mode",
+    )
   }
   const explicitGovernancePackets = await Promise.all(
     argsMany("--signed-archive-governance-packet").map((file) => loadSignedArchiveGovernancePacketArtifact(file)),
@@ -3514,7 +3828,10 @@ async function modelSignedArchiveReviewDossierCreateMode() {
   await QualityPromotionSignedArchiveReviewDossier.append(dossier)
   const report = QualityPromotionSignedArchiveReviewDossier.renderReport(dossier)
   const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-signed-archive-review-dossier.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier.md")
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier.md",
+  )
 
   await write(out, JSON.stringify(dossier, null, 2))
   await write(reportOut, report)
@@ -3568,8 +3885,14 @@ async function modelSignedArchiveReviewDossierStatusMode() {
     explicitHandoffPackages,
   )
   const report = QualityPromotionSignedArchiveReviewDossier.renderReport(dossier)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier-summary.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier-summary.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier-summary.md",
+  )
 
   await write(summaryOut, JSON.stringify(dossier.summary, null, 2))
   await write(reportOut, report)
@@ -3578,8 +3901,14 @@ async function modelSignedArchiveReviewDossierStatusMode() {
 
 async function modelSignedArchiveAttestationPolicyShowMode() {
   const scope = policyScope()
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-resolution.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-resolution.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-resolution.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-resolution.md",
+  )
 
   if (scope === "resolved") {
     const resolution = await resolveSignedArchiveAttestationPolicyForCLI()
@@ -3591,13 +3920,16 @@ async function modelSignedArchiveAttestationPolicyShowMode() {
   }
 
   const projectID = scope === "project" ? await currentProjectID({ required: true }) : null
-  const record = scope === "project"
-    ? await QualityPromotionSignedArchiveAttestationPolicyStore.getProject(projectID!)
-    : await QualityPromotionSignedArchiveAttestationPolicyStore.getGlobal()
+  const record =
+    scope === "project"
+      ? await QualityPromotionSignedArchiveAttestationPolicyStore.getProject(projectID!)
+      : await QualityPromotionSignedArchiveAttestationPolicyStore.getGlobal()
   if (!record) {
-    console.log(scope === "project"
-      ? `No project signed archive attestation policy stored for ${projectID}`
-      : "No global signed archive attestation policy stored")
+    console.log(
+      scope === "project"
+        ? `No project signed archive attestation policy stored for ${projectID}`
+        : "No global signed archive attestation policy stored",
+    )
     return
   }
   const report = QualityPromotionSignedArchiveAttestationPolicyStore.renderStoredPolicy(record)
@@ -3608,24 +3940,35 @@ async function modelSignedArchiveAttestationPolicyShowMode() {
 
 async function modelSignedArchiveAttestationPolicySetMode() {
   const scope = policyScope("project")
-  if (scope === "resolved") throw new Error("--scope resolved is not supported for model-signed-archive-attestation-policy-set mode")
+  if (scope === "resolved")
+    throw new Error("--scope resolved is not supported for model-signed-archive-attestation-policy-set mode")
   if (!hasSignedArchiveAttestationPolicyOverrideArgs()) {
-    throw new Error("At least one attestation policy override flag is required for model-signed-archive-attestation-policy-set mode")
+    throw new Error(
+      "At least one attestation policy override flag is required for model-signed-archive-attestation-policy-set mode",
+    )
   }
   const projectID = scope === "project" ? await currentProjectID({ required: true }) : null
-  const existing = scope === "project"
-    ? await QualityPromotionSignedArchiveAttestationPolicyStore.getProject(projectID!)
-    : await QualityPromotionSignedArchiveAttestationPolicyStore.getGlobal()
+  const existing =
+    scope === "project"
+      ? await QualityPromotionSignedArchiveAttestationPolicyStore.getProject(projectID!)
+      : await QualityPromotionSignedArchiveAttestationPolicyStore.getGlobal()
   const nextPolicy = QualityPromotionSignedArchiveAttestationPolicy.merge(
     existing?.policy ?? QualityPromotionSignedArchiveAttestationPolicy.defaults(),
     signedArchiveAttestationPolicyOverrides(),
   )
-  const record = scope === "project"
-    ? await QualityPromotionSignedArchiveAttestationPolicyStore.setProject(projectID!, nextPolicy)
-    : await QualityPromotionSignedArchiveAttestationPolicyStore.setGlobal(nextPolicy)
+  const record =
+    scope === "project"
+      ? await QualityPromotionSignedArchiveAttestationPolicyStore.setProject(projectID!, nextPolicy)
+      : await QualityPromotionSignedArchiveAttestationPolicyStore.setGlobal(nextPolicy)
   const report = QualityPromotionSignedArchiveAttestationPolicyStore.renderStoredPolicy(record)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-record.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-record.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-record.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-record.md",
+  )
 
   await write(summaryOut, JSON.stringify(record, null, 2))
   await write(reportOut, report)
@@ -3634,7 +3977,8 @@ async function modelSignedArchiveAttestationPolicySetMode() {
 
 async function modelSignedArchiveAttestationPolicyClearMode() {
   const scope = policyScope("project")
-  if (scope === "resolved") throw new Error("--scope resolved is not supported for model-signed-archive-attestation-policy-clear mode")
+  if (scope === "resolved")
+    throw new Error("--scope resolved is not supported for model-signed-archive-attestation-policy-clear mode")
   if (scope === "project") {
     const projectID = await currentProjectID({ required: true })
     if (!projectID) throw new Error("Unable to resolve current project id")
@@ -3672,8 +4016,14 @@ async function modelApprovalPolicyMode() {
 
 async function modelApprovalPolicyShowMode() {
   const scope = policyScope()
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-approval-policy-resolution.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-approval-policy-resolution.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-approval-policy-resolution.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-approval-policy-resolution.md",
+  )
 
   if (scope === "resolved") {
     const resolution = await resolveApprovalPolicyForCLI()
@@ -3685,13 +4035,14 @@ async function modelApprovalPolicyShowMode() {
   }
 
   const projectID = scope === "project" ? await currentProjectID({ required: true }) : null
-  const record = scope === "project"
-    ? await QualityPromotionApprovalPolicyStore.getProject(projectID!)
-    : await QualityPromotionApprovalPolicyStore.getGlobal()
+  const record =
+    scope === "project"
+      ? await QualityPromotionApprovalPolicyStore.getProject(projectID!)
+      : await QualityPromotionApprovalPolicyStore.getGlobal()
   if (!record) {
-    console.log(scope === "project"
-      ? `No project approval policy stored for ${projectID}`
-      : "No global approval policy stored")
+    console.log(
+      scope === "project" ? `No project approval policy stored for ${projectID}` : "No global approval policy stored",
+    )
     return
   }
   const report = QualityPromotionApprovalPolicyStore.renderStoredPolicy(record)
@@ -3701,41 +4052,48 @@ async function modelApprovalPolicyShowMode() {
 }
 
 async function modelApprovalConcentrationRecommendMode() {
-  const riskTier = arg("--reentry-approval-concentration-risk-tier") as QualityPromotionApprovalPolicy.ApprovalConcentrationRiskTier | undefined
-  const workflow =
-    (arg("--reentry-approval-concentration-workflow") as QualityPromotionApprovalPolicy.ApprovalConcentrationWorkflow | undefined)
-  const samePolicyRetry = hasArg("--reentry-approval-concentration-same-policy-retry")
-    ? true
-    : undefined
-  const forcePath = hasArg("--reentry-approval-concentration-force-path")
-    ? true
-    : undefined
+  const riskTier = arg("--reentry-approval-concentration-risk-tier") as
+    | QualityPromotionApprovalPolicy.ApprovalConcentrationRiskTier
+    | undefined
+  const workflow = arg("--reentry-approval-concentration-workflow") as
+    | QualityPromotionApprovalPolicy.ApprovalConcentrationWorkflow
+    | undefined
+  const samePolicyRetry = hasArg("--reentry-approval-concentration-same-policy-retry") ? true : undefined
+  const forcePath = hasArg("--reentry-approval-concentration-force-path") ? true : undefined
   const priorRollbacks = arg("--reentry-approval-concentration-prior-rollbacks")
     ? Number(arg("--reentry-approval-concentration-prior-rollbacks"))
     : undefined
   const bundleFile = arg("--decision-bundle")
   const contextual = bundleFile
     ? QualityPromotionApprovalPolicy.recommendConcentrationFromContext({
-      bundle: await loadDecisionBundle(bundleFile),
+        bundle: await loadDecisionBundle(bundleFile),
+        workflow,
+        riskTier,
+        samePolicyRetry,
+        forcePath,
+        priorRollbacks,
+      })
+    : null
+  const recommendation =
+    contextual?.recommendation ??
+    QualityPromotionApprovalPolicy.recommendConcentration({
       workflow,
-      riskTier,
+      riskTier: riskTier ?? "standard",
       samePolicyRetry,
       forcePath,
       priorRollbacks,
     })
-    : null
-  const recommendation = contextual?.recommendation ?? QualityPromotionApprovalPolicy.recommendConcentration({
-    workflow,
-    riskTier: riskTier ?? "standard",
-    samePolicyRetry,
-    forcePath,
-    priorRollbacks,
-  })
   const report = contextual
     ? QualityPromotionApprovalPolicy.renderContextualConcentrationRecommendation(contextual)
     : QualityPromotionApprovalPolicy.renderConcentrationRecommendation(recommendation)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-approval-concentration-recommendation.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-approval-concentration-recommendation.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-approval-concentration-recommendation.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-approval-concentration-recommendation.md",
+  )
 
   await write(summaryOut, JSON.stringify(contextual ?? recommendation, null, 2))
   await write(reportOut, report)
@@ -3750,19 +4108,27 @@ async function modelApprovalPolicySetMode() {
   }
 
   const projectID = scope === "project" ? await currentProjectID({ required: true }) : null
-  const existing = scope === "project"
-    ? await QualityPromotionApprovalPolicyStore.getProject(projectID!)
-    : await QualityPromotionApprovalPolicyStore.getGlobal()
+  const existing =
+    scope === "project"
+      ? await QualityPromotionApprovalPolicyStore.getProject(projectID!)
+      : await QualityPromotionApprovalPolicyStore.getGlobal()
   const nextPolicy = QualityPromotionApprovalPolicy.merge(
     existing?.policy ?? QualityPromotionApprovalPolicy.defaults(),
     await approvalPolicyOverrides(),
   )
-  const record = scope === "project"
-    ? await QualityPromotionApprovalPolicyStore.setProject(projectID!, nextPolicy)
-    : await QualityPromotionApprovalPolicyStore.setGlobal(nextPolicy)
+  const record =
+    scope === "project"
+      ? await QualityPromotionApprovalPolicyStore.setProject(projectID!, nextPolicy)
+      : await QualityPromotionApprovalPolicyStore.setGlobal(nextPolicy)
   const report = QualityPromotionApprovalPolicyStore.renderStoredPolicy(record)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-approval-policy-record.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-approval-policy-record.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-approval-policy-record.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-approval-policy-record.md",
+  )
 
   await write(summaryOut, JSON.stringify(record, null, 2))
   await write(reportOut, report)
@@ -3785,8 +4151,14 @@ async function modelApprovalPolicyClearMode() {
 
 async function modelReleasePolicyShowMode() {
   const scope = policyScope()
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-release-policy-resolution.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-release-policy-resolution.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-release-policy-resolution.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-release-policy-resolution.md",
+  )
 
   if (scope === "resolved") {
     const resolution = await resolveReleasePolicyForCLI()
@@ -3798,13 +4170,14 @@ async function modelReleasePolicyShowMode() {
   }
 
   const projectID = scope === "project" ? await currentProjectID({ required: true }) : null
-  const record = scope === "project"
-    ? await QualityPromotionReleasePolicyStore.getProject(projectID!)
-    : await QualityPromotionReleasePolicyStore.getGlobal()
+  const record =
+    scope === "project"
+      ? await QualityPromotionReleasePolicyStore.getProject(projectID!)
+      : await QualityPromotionReleasePolicyStore.getGlobal()
   if (!record) {
-    console.log(scope === "project"
-      ? `No project release policy stored for ${projectID}`
-      : "No global release policy stored")
+    console.log(
+      scope === "project" ? `No project release policy stored for ${projectID}` : "No global release policy stored",
+    )
     return
   }
   const report = QualityPromotionReleasePolicyStore.renderStoredPolicy(record)
@@ -3827,12 +4200,19 @@ async function modelReleasePolicySetMode() {
     watch: watchPolicyOverrides(),
     approval: await approvalPolicyOverrides(),
   })
-  const record = scope === "project"
-    ? await QualityPromotionReleasePolicyStore.setProject(projectID!, nextPolicy)
-    : await QualityPromotionReleasePolicyStore.setGlobal(nextPolicy)
+  const record =
+    scope === "project"
+      ? await QualityPromotionReleasePolicyStore.setProject(projectID!, nextPolicy)
+      : await QualityPromotionReleasePolicyStore.setGlobal(nextPolicy)
   const report = QualityPromotionReleasePolicyStore.renderStoredPolicy(record)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-release-policy-record.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-release-policy-record.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? ".tmp/quality-promotion-release-policy-record.json",
+  )
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? ".tmp/quality-promotion-release-policy-record.md",
+  )
 
   await write(summaryOut, JSON.stringify(record, null, 2))
   await write(reportOut, report)
@@ -3911,8 +4291,9 @@ async function modelReentryRemediationCreateMode() {
   }
 
   const context = await resolveReentryContextForCLI(source)
-  const releasePolicyDigest = arg("--release-policy-digest")
-    ?? QualityPromotionReleasePolicyStore.provenance(await resolveReleasePolicyForCLI()).digest
+  const releasePolicyDigest =
+    arg("--release-policy-digest") ??
+    QualityPromotionReleasePolicyStore.provenance(await resolveReleasePolicyForCLI()).digest
   const remediation = QualityReentryRemediation.create({
     context,
     author,
@@ -3946,16 +4327,14 @@ async function modelReentryRemediationsMode() {
   }
 }
 
-async function resolvePromotionWatch(input: {
-  source?: string
-  minRecords?: number
-  maxRecords?: number
-}) {
+async function resolvePromotionWatch(input: { source?: string; minRecords?: number; maxRecords?: number }) {
   const promotion = await QualityModelRegistry.latestPromotion(input.source)
   if (!promotion) {
-    throw new Error(input.source
-      ? `No promotion record found for model source ${input.source}`
-      : "No promotion record found; promote a model before running this command")
+    throw new Error(
+      input.source
+        ? `No promotion record found for model source ${input.source}`
+        : "No promotion record found; promote a model before running this command",
+    )
   }
 
   const records = await QualityShadowStore.listAll(promotion.source)
@@ -4066,7 +4445,10 @@ async function compareMode() {
   const candidateFile = arg("--candidate")
   if (!baselineFile || !candidateFile) throw new Error("--baseline and --candidate are required for compare mode")
 
-  const comparisonOut = path.resolve(process.cwd(), arg("--comparison-out") ?? ".tmp/quality-calibration-comparison.json")
+  const comparisonOut = path.resolve(
+    process.cwd(),
+    arg("--comparison-out") ?? ".tmp/quality-calibration-comparison.json",
+  )
   const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-calibration-comparison.md")
   const baseline = ProbabilisticRollout.CalibrationSummary.parse(
     await readJson<unknown>(path.resolve(process.cwd(), baselineFile)),
@@ -4096,12 +4478,10 @@ async function shadowMode() {
   const shadow = ProbabilisticRollout.buildShadowFile(items, predictions, {
     baselineThreshold: Number(arg("--baseline-threshold") ?? "0.5"),
     candidateThreshold: Number(arg("--candidate-threshold") ?? "0.5"),
-    baselineAbstainBelow: arg("--baseline-abstain-below") === undefined
-      ? undefined
-      : Number(arg("--baseline-abstain-below")),
-    candidateAbstainBelow: arg("--candidate-abstain-below") === undefined
-      ? undefined
-      : Number(arg("--candidate-abstain-below")),
+    baselineAbstainBelow:
+      arg("--baseline-abstain-below") === undefined ? undefined : Number(arg("--baseline-abstain-below")),
+    candidateAbstainBelow:
+      arg("--candidate-abstain-below") === undefined ? undefined : Number(arg("--candidate-abstain-below")),
   })
   const summary = ProbabilisticRollout.summarizeShadowFile(shadow)
   const report = ProbabilisticRollout.renderShadowReport(summary)
@@ -4136,9 +4516,7 @@ async function shadowReportMode() {
 
   const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-shadow-summary.json")
   const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-shadow-report.md")
-  const shadow = ProbabilisticRollout.ShadowFile.parse(
-    await readJson<unknown>(path.resolve(process.cwd(), file)),
-  )
+  const shadow = ProbabilisticRollout.ShadowFile.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
   const summary = ProbabilisticRollout.summarizeShadowFile(shadow)
   const report = ProbabilisticRollout.renderShadowReport(summary)
 

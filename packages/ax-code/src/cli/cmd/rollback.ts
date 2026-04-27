@@ -12,9 +12,17 @@ export const RollbackCommand = cmd({
   builder: (yargs) =>
     yargs
       .positional("sessionID", { describe: "Session to rollback", type: "string", demandOption: true })
-      .option("dry-run", { describe: "Show what would be rolled back without applying", type: "boolean", default: false })
+      .option("dry-run", {
+        describe: "Show what would be rolled back without applying",
+        type: "boolean",
+        default: false,
+      })
       .option("force", { describe: "Skip confirmation", type: "boolean", default: false })
-      .option("list", { describe: "Show available rollback points from the execution graph", type: "boolean", default: false })
+      .option("list", {
+        describe: "Show available rollback points from the execution graph",
+        type: "boolean",
+        default: false,
+      })
       .option("step", { describe: "Rollback to a specific step index instead of the full session", type: "number" }),
   async handler(args) {
     await Instance.provide({
@@ -68,9 +76,8 @@ export const RollbackCommand = cmd({
 
         console.log(`\nFiles to rollback (${diff.length}):`)
         for (const d of diff) {
-          const status = d.status === "added" ? "\x1b[32m+\x1b[0m" :
-                         d.status === "deleted" ? "\x1b[31m-\x1b[0m" :
-                         "\x1b[33m~\x1b[0m"
+          const status =
+            d.status === "added" ? "\x1b[32m+\x1b[0m" : d.status === "deleted" ? "\x1b[31m-\x1b[0m" : "\x1b[33m~\x1b[0m"
           console.log(`  ${status} ${d.file} (+${d.additions} -${d.deletions})`)
         }
 

@@ -38,7 +38,10 @@ export function generate(info: ProjectInfo, config: Partial<GeneratorConfig> = {
 
   sections.push(projectRules(info, cfg.externalRules))
 
-  if (cfg.includeCodePatterns && (depth === "full" || depth === "security" || complexity === "large" || complexity === "enterprise")) {
+  if (
+    cfg.includeCodePatterns &&
+    (depth === "full" || depth === "security" || complexity === "large" || complexity === "enterprise")
+  ) {
     sections.push(codePatterns(info))
   }
 
@@ -99,8 +102,12 @@ function projectHeader(info: ProjectInfo): string {
 function buildCommands(info: ProjectInfo): string {
   const { scripts, packageManager } = info
   const lines = ["## Build & Development"]
-  const run = packageManager === "npm" ? "npm run" : (packageManager || "npm run")
-  const install = packageManager ? (packageManager === "npm" ? "npm install" : `${packageManager} install`) : "npm install"
+  const run = packageManager === "npm" ? "npm run" : packageManager || "npm run"
+  const install = packageManager
+    ? packageManager === "npm"
+      ? "npm install"
+      : `${packageManager} install`
+    : "npm install"
   const cmds: string[] = []
 
   cmds.push(`${install}    # Install dependencies`)

@@ -77,9 +77,7 @@ export namespace QualityLabelStore {
   }
 
   export async function exportFile(input: { sessionIDs: string[]; workflow?: ProbabilisticRollout.Workflow }) {
-    const labels = (
-      await Promise.all(input.sessionIDs.map((sessionID) => list(sessionID, input.workflow)))
-    ).flat()
+    const labels = (await Promise.all(input.sessionIDs.map((sessionID) => list(sessionID, input.workflow)))).flat()
 
     return ProbabilisticRollout.LabelFile.parse({
       schemaVersion: 1,

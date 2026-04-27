@@ -87,12 +87,14 @@ describe("tui sync bootstrap plan", () => {
       },
     })()
 
-    expect(success).toEqual([{
-      provider: ["openai"],
-      provider_default: { chat: "openai" },
-      provider_loaded: true,
-      provider_failed: false,
-    }])
+    expect(success).toEqual([
+      {
+        provider: ["openai"],
+        provider_default: { chat: "openai" },
+        provider_loaded: true,
+        provider_failed: false,
+      },
+    ])
     expect(ready).toEqual([false])
   })
 
@@ -119,22 +121,24 @@ describe("tui sync bootstrap plan", () => {
   test("materializes heterogeneous response plans through the shared bootstrap helper", async () => {
     const applied: string[] = []
 
-    await Promise.all(createBootstrapResponsePlanTasks(
-      {
-        request: () => Promise.resolve({ data: ["a", "b"] }),
-        normalize: (value) => (value ?? []).join(","),
-        apply(value) {
-          applied.push(value)
+    await Promise.all(
+      createBootstrapResponsePlanTasks(
+        {
+          request: () => Promise.resolve({ data: ["a", "b"] }),
+          normalize: (value) => (value ?? []).join(","),
+          apply(value) {
+            applied.push(value)
+          },
         },
-      },
-      {
-        request: () => Promise.resolve({ data: { count: 2 } }),
-        normalize: (value) => String(value?.count ?? 0),
-        apply(value) {
-          applied.push(value)
+        {
+          request: () => Promise.resolve({ data: { count: 2 } }),
+          normalize: (value) => String(value?.count ?? 0),
+          apply(value) {
+            applied.push(value)
+          },
         },
-      },
-    ).map((task) => task()))
+      ).map((task) => task()),
+    )
 
     expect(applied).toEqual(["a,b", "2"])
   })
@@ -142,59 +146,67 @@ describe("tui sync bootstrap plan", () => {
   test("materializes the core bootstrap phase tasks through a single plan helper", async () => {
     const applied: string[] = []
 
-    await Promise.all(createCoreBootstrapPhaseTasks({
-      providerTask: () => Promise.resolve().then(() => {
-        applied.push("provider-task")
-      }),
-      providerListPromise: () => Promise.resolve({ data: { all: [], default: {}, connected: [] } }),
-      providerNextFallback: { all: [], default: {}, connected: [] },
-      applyProviderNext: () => {
-        applied.push("provider-next")
-      },
-      agentsPromise: () => Promise.resolve({ data: [] }),
-      applyAgents: () => {
-        applied.push("agents")
-      },
-      configPromise: () => Promise.resolve({ data: {} }),
-      configFallback: {},
-      applyConfig: () => {
-        applied.push("config")
-      },
-      commandPromise: () => Promise.resolve({ data: [] }),
-      applyCommands: () => {
-        applied.push("command")
-      },
-      sessionTasks: [() => Promise.resolve().then(() => {
-        applied.push("session")
-      })],
-      permissionPromise: () => Promise.resolve({ data: [] }),
-      applyPermission: () => {
-        applied.push("permission")
-      },
-      questionPromise: () => Promise.resolve({ data: [] }),
-      applyQuestion: () => {
-        applied.push("question")
-      },
-      sessionStatusPromise: () => Promise.resolve({ data: {} }),
-      applySessionStatus: () => {
-        applied.push("session-status")
-      },
-      providerAuthPromise: () => Promise.resolve({ data: {} }),
-      applyProviderAuth: () => {
-        applied.push("provider-auth")
-      },
-      pathPromise: () => Promise.resolve({ data: { state: "", config: "", worktree: "", directory: "" } }),
-      pathFallback: { state: "", config: "", worktree: "", directory: "" },
-      applyPath: () => {
-        applied.push("path")
-      },
-      isolationTask: () => Promise.resolve().then(() => {
-        applied.push("isolation")
-      }),
-      autonomousTask: () => Promise.resolve().then(() => {
-        applied.push("autonomous")
-      }),
-    }).map((task) => task()))
+    await Promise.all(
+      createCoreBootstrapPhaseTasks({
+        providerTask: () =>
+          Promise.resolve().then(() => {
+            applied.push("provider-task")
+          }),
+        providerListPromise: () => Promise.resolve({ data: { all: [], default: {}, connected: [] } }),
+        providerNextFallback: { all: [], default: {}, connected: [] },
+        applyProviderNext: () => {
+          applied.push("provider-next")
+        },
+        agentsPromise: () => Promise.resolve({ data: [] }),
+        applyAgents: () => {
+          applied.push("agents")
+        },
+        configPromise: () => Promise.resolve({ data: {} }),
+        configFallback: {},
+        applyConfig: () => {
+          applied.push("config")
+        },
+        commandPromise: () => Promise.resolve({ data: [] }),
+        applyCommands: () => {
+          applied.push("command")
+        },
+        sessionTasks: [
+          () =>
+            Promise.resolve().then(() => {
+              applied.push("session")
+            }),
+        ],
+        permissionPromise: () => Promise.resolve({ data: [] }),
+        applyPermission: () => {
+          applied.push("permission")
+        },
+        questionPromise: () => Promise.resolve({ data: [] }),
+        applyQuestion: () => {
+          applied.push("question")
+        },
+        sessionStatusPromise: () => Promise.resolve({ data: {} }),
+        applySessionStatus: () => {
+          applied.push("session-status")
+        },
+        providerAuthPromise: () => Promise.resolve({ data: {} }),
+        applyProviderAuth: () => {
+          applied.push("provider-auth")
+        },
+        pathPromise: () => Promise.resolve({ data: { state: "", config: "", worktree: "", directory: "" } }),
+        pathFallback: { state: "", config: "", worktree: "", directory: "" },
+        applyPath: () => {
+          applied.push("path")
+        },
+        isolationTask: () =>
+          Promise.resolve().then(() => {
+            applied.push("isolation")
+          }),
+        autonomousTask: () =>
+          Promise.resolve().then(() => {
+            applied.push("autonomous")
+          }),
+      }).map((task) => task()),
+    )
 
     expect(applied.sort()).toEqual([
       "agents",
@@ -216,48 +228,44 @@ describe("tui sync bootstrap plan", () => {
   test("materializes the deferred bootstrap phase tasks through a single plan helper", async () => {
     const applied: string[] = []
 
-    await Promise.all(createDeferredBootstrapPhaseTasks({
-      lspPromise: () => Promise.resolve({ data: [] }),
-      applyLsp: () => {
-        applied.push("lsp")
-      },
-      mcpPromise: () => Promise.resolve({ data: {} }),
-      applyMcp: () => {
-        applied.push("mcp")
-      },
-      resourcePromise: () => Promise.resolve({ data: {} }),
-      applyResources: () => {
-        applied.push("resource")
-      },
-      formatterPromise: () => Promise.resolve({ data: [] }),
-      applyFormatter: () => {
-        applied.push("formatter")
-      },
-      vcsPromise: () => Promise.resolve({ data: undefined }),
-      vcsFallback: undefined,
-      applyVcs: () => {
-        applied.push("vcs")
-      },
-      workspacesTask: () => Promise.resolve().then(() => {
-        applied.push("workspaces")
-      }),
-      debugEngineTask: () => Promise.resolve().then(() => {
-        applied.push("debug")
-      }),
-      smartLlmTask: () => Promise.resolve().then(() => {
-        applied.push("smart")
-      }),
-    }).map((task) => task()))
+    await Promise.all(
+      createDeferredBootstrapPhaseTasks({
+        lspPromise: () => Promise.resolve({ data: [] }),
+        applyLsp: () => {
+          applied.push("lsp")
+        },
+        mcpPromise: () => Promise.resolve({ data: {} }),
+        applyMcp: () => {
+          applied.push("mcp")
+        },
+        resourcePromise: () => Promise.resolve({ data: {} }),
+        applyResources: () => {
+          applied.push("resource")
+        },
+        formatterPromise: () => Promise.resolve({ data: [] }),
+        applyFormatter: () => {
+          applied.push("formatter")
+        },
+        vcsPromise: () => Promise.resolve({ data: undefined }),
+        vcsFallback: undefined,
+        applyVcs: () => {
+          applied.push("vcs")
+        },
+        workspacesTask: () =>
+          Promise.resolve().then(() => {
+            applied.push("workspaces")
+          }),
+        debugEngineTask: () =>
+          Promise.resolve().then(() => {
+            applied.push("debug")
+          }),
+        smartLlmTask: () =>
+          Promise.resolve().then(() => {
+            applied.push("smart")
+          }),
+      }).map((task) => task()),
+    )
 
-    expect(applied.sort()).toEqual([
-      "debug",
-      "formatter",
-      "lsp",
-      "mcp",
-      "resource",
-      "smart",
-      "vcs",
-      "workspaces",
-    ])
+    expect(applied.sort()).toEqual(["debug", "formatter", "lsp", "mcp", "resource", "smart", "vcs", "workspaces"])
   })
 })

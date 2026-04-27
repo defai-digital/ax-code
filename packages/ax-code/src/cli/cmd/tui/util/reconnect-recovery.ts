@@ -1,8 +1,6 @@
 export const RECONNECT_STABILIZE_MS = 2_000
 
-export function createReconnectRecoveryGate(input: {
-  recover: () => void | Promise<void>
-}) {
+export function createReconnectRecoveryGate(input: { recover: () => void | Promise<void> }) {
   let hasConnectedOnce = false
   let connected = false
   let disposed = false

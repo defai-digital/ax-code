@@ -178,11 +178,17 @@ export const TraceCommand: CommandModule = {
 
     // Find the most recent .json.log file (Pino output)
     const files = await fs.readdir(logDir).catch(() => [] as string[])
-    let logFile = files.filter((f) => f.endsWith(".json.log")).sort().pop()
+    let logFile = files
+      .filter((f) => f.endsWith(".json.log"))
+      .sort()
+      .pop()
 
     // Fall back to text log if no JSON log
     if (!logFile) {
-      logFile = files.filter((f) => f.endsWith(".log") && !f.endsWith(".json.log")).sort().pop()
+      logFile = files
+        .filter((f) => f.endsWith(".log") && !f.endsWith(".json.log"))
+        .sort()
+        .pop()
     }
 
     if (!logFile) {
@@ -194,7 +200,9 @@ export const TraceCommand: CommandModule = {
     const MAX_LOG_SIZE = 50 * 1024 * 1024 // 50 MB
     const stat = await fs.stat(logPath).catch(() => null)
     if (stat && stat.size > MAX_LOG_SIZE) {
-      console.log(`\n  Log file too large (${Math.round(stat.size / 1024 / 1024)}MB). Use --limit or filter with --service/--errors.\n`)
+      console.log(
+        `\n  Log file too large (${Math.round(stat.size / 1024 / 1024)}MB). Use --limit or filter with --service/--errors.\n`,
+      )
       return
     }
     const content = await fs.readFile(logPath, "utf8")
@@ -216,31 +224,33 @@ export const TraceCommand: CommandModule = {
         .filter((e): e is LogEntry => e !== null)
     } else {
       // Parse text format: "LEVEL YYYY-MM-DDTHH:MM:SS +Nms key=value key=value message"
-      entries = lines.map((line) => {
-        const match = line.match(/^(\w+)\s+(\S+)\s+\+(\d+)ms\s+(.*)$/)
-        if (!match) return null
-        const [, level, time, , rest] = match
-        const parts = rest.split(" ")
-        const entry: LogEntry = { level, time, service: "", msg: "" }
-        for (const part of parts) {
-          const eq = part.indexOf("=")
-          if (eq > 0) {
-            const key = part.slice(0, eq)
-            const val = part.slice(eq + 1)
-            if (key === "service") entry.service = val
-            else if (key === "command") entry.command = val
-            else if (key === "toolName") entry.toolName = val
-            else if (key === "status") entry.status = val
-            else if (key === "durationMs") entry.durationMs = parseInt(val, 10)
-            else if (key === "errorCode") entry.errorCode = val
-            else if (key === "sessionId") entry.sessionId = val
-            else entry[key] = val
-          } else {
-            entry.msg = entry.msg ? entry.msg + " " + part : part
+      entries = lines
+        .map((line) => {
+          const match = line.match(/^(\w+)\s+(\S+)\s+\+(\d+)ms\s+(.*)$/)
+          if (!match) return null
+          const [, level, time, , rest] = match
+          const parts = rest.split(" ")
+          const entry: LogEntry = { level, time, service: "", msg: "" }
+          for (const part of parts) {
+            const eq = part.indexOf("=")
+            if (eq > 0) {
+              const key = part.slice(0, eq)
+              const val = part.slice(eq + 1)
+              if (key === "service") entry.service = val
+              else if (key === "command") entry.command = val
+              else if (key === "toolName") entry.toolName = val
+              else if (key === "status") entry.status = val
+              else if (key === "durationMs") entry.durationMs = parseInt(val, 10)
+              else if (key === "errorCode") entry.errorCode = val
+              else if (key === "sessionId") entry.sessionId = val
+              else entry[key] = val
+            } else {
+              entry.msg = entry.msg ? entry.msg + " " + part : part
+            }
           }
-        }
-        return entry
-      }).filter((e): e is LogEntry => e !== null)
+          return entry
+        })
+        .filter((e): e is LogEntry => e !== null)
     }
 
     // Apply filters
@@ -257,8 +267,9 @@ export const TraceCommand: CommandModule = {
       filtered = filtered.filter((e) => e.sessionId === sessionID)
     }
     if (errorsOnly) {
-      filtered = filtered.filter((e) =>
-        e.status === "error" || e.errorCode || (typeof e.level === "number" ? e.level >= 50 : e.level === "ERROR"),
+      filtered = filtered.filter(
+        (e) =>
+          e.status === "error" || e.errorCode || (typeof e.level === "number" ? e.level >= 50 : e.level === "ERROR"),
       )
     }
     if (slowThreshold) {
@@ -287,26 +298,40 @@ export const TraceCommand: CommandModule = {
     console.log(`\n  ax-code trace (${logFile}, ${filtered.length} entries)\n`)
 
     for (const entry of filtered) {
-      const level = typeof entry.level === "number"
-        ? entry.level >= 50 ? "ERROR" : entry.level >= 40 ? "WARN" : "INFO"
-        : entry.level
+      const level =
+        typeof entry.level === "number"
+          ? entry.level >= 50
+            ? "ERROR"
+            : entry.level >= 40
+              ? "WARN"
+              : "INFO"
+          : entry.level
 
-      const icon = level === "ERROR" ? "\x1b[31m✗\x1b[0m"
-        : level === "WARN" ? "\x1b[33m△\x1b[0m"
-        : entry.status === "ok" ? "\x1b[32m✓\x1b[0m"
-        : "\x1b[90m·\x1b[0m"
+      const icon =
+        level === "ERROR"
+          ? "\x1b[31m✗\x1b[0m"
+          : level === "WARN"
+            ? "\x1b[33m△\x1b[0m"
+            : entry.status === "ok"
+              ? "\x1b[32m✓\x1b[0m"
+              : "\x1b[90m·\x1b[0m"
 
-      const time = typeof entry.time === "number"
-        ? new Date(entry.time).toISOString().split("T")[1].split(".")[0]
-        : entry.time?.split("T")[1]?.split(".")[0] ?? ""
+      const time =
+        typeof entry.time === "number"
+          ? new Date(entry.time).toISOString().split("T")[1].split(".")[0]
+          : (entry.time?.split("T")[1]?.split(".")[0] ?? "")
 
       const service = entry.service ? `\x1b[36m${entry.service}\x1b[0m` : ""
       const command = entry.command || entry.toolName || ""
       const duration = entry.durationMs ? `\x1b[90m${entry.durationMs}ms\x1b[0m` : ""
-      const status = entry.status === "error" ? `\x1b[31m${entry.errorCode || "error"}\x1b[0m`
-        : entry.status === "ok" ? "\x1b[32mok\x1b[0m"
-        : entry.status ? `\x1b[90m${entry.status}\x1b[0m`
-        : ""
+      const status =
+        entry.status === "error"
+          ? `\x1b[31m${entry.errorCode || "error"}\x1b[0m`
+          : entry.status === "ok"
+            ? "\x1b[32mok\x1b[0m"
+            : entry.status
+              ? `\x1b[90m${entry.status}\x1b[0m`
+              : ""
       const message = [entry.msg, entry.errorMessage]
         .filter((value, index, all) => value && all.indexOf(value) === index)
         .join(" - ")
@@ -316,13 +341,14 @@ export const TraceCommand: CommandModule = {
     }
 
     // Summary
-    const errors = filtered.filter((e) =>
-      e.status === "error" || (typeof e.level === "number" ? e.level >= 50 : e.level === "ERROR"),
+    const errors = filtered.filter(
+      (e) => e.status === "error" || (typeof e.level === "number" ? e.level >= 50 : e.level === "ERROR"),
     )
     const withDuration = filtered.filter((e) => e.durationMs)
-    const avgDuration = withDuration.length > 0
-      ? Math.round(withDuration.reduce((sum, e) => sum + (e.durationMs ?? 0), 0) / withDuration.length)
-      : 0
+    const avgDuration =
+      withDuration.length > 0
+        ? Math.round(withDuration.reduce((sum, e) => sum + (e.durationMs ?? 0), 0) / withDuration.length)
+        : 0
 
     console.log("")
     console.log(`  \x1b[90m${filtered.length} entries | ${errors.length} errors | avg ${avgDuration}ms\x1b[0m`)

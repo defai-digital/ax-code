@@ -242,6 +242,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <text fg={theme.text}>
                   <b>{session().title}</b>
                 </text>
+                <text fg={theme.textMuted}>{session().id}</text>
                 <text fg={titleStatus().stale ? theme.warning : theme.textMuted}>{titleStatus().label}</text>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
               </box>

@@ -111,7 +111,9 @@ export namespace SessionRollback {
             point.tools.find((item) => {
               const label = item.toLowerCase()
               return label === query || label.startsWith(`${query}:`)
-            }) ?? point.tools[0] ?? kind,
+            }) ??
+            point.tools[0] ??
+            kind,
           footer: meta.join(" · "),
           category: "Tools",
         })

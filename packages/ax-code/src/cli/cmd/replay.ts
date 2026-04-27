@@ -37,7 +37,7 @@ export const ReplayCommand = cmd({
         process.exit(1)
       }
 
-      const mode = args.mode === "check" ? "verify" as const : args.mode
+      const mode = args.mode === "check" ? ("verify" as const) : args.mode
 
       if (mode === "execute") {
         const fromStep = args["from-step"] ?? args.fromStep
@@ -93,13 +93,19 @@ export const ReplayCommand = cmd({
 
       if (mode === "reconstruct") {
         const fromStep = args["from-step"] ?? args.fromStep
-        process.stderr.write(`Reconstructing stream for session ${args.sessionID}${fromStep !== undefined ? ` from step ${fromStep}` : ""}${EOL}${EOL}`)
+        process.stderr.write(
+          `Reconstructing stream for session ${args.sessionID}${fromStep !== undefined ? ` from step ${fromStep}` : ""}${EOL}${EOL}`,
+        )
         const { steps } = Replay.reconstructStream(sid, { fromStep })
         for (const step of steps) {
           process.stdout.write(`Step #${step.stepIndex} (${step.finishReason}, ${step.parts.length} parts)${EOL}`)
           for (const part of step.parts) {
-            if (part.type === "text") process.stdout.write(`  [text] ${part.text.slice(0, 200)}${part.text.length > 200 ? "..." : ""}${EOL}`)
-            if (part.type === "reasoning") process.stdout.write(`  [reasoning] ${part.text.slice(0, 200)}${part.text.length > 200 ? "..." : ""}${EOL}`)
+            if (part.type === "text")
+              process.stdout.write(`  [text] ${part.text.slice(0, 200)}${part.text.length > 200 ? "..." : ""}${EOL}`)
+            if (part.type === "reasoning")
+              process.stdout.write(
+                `  [reasoning] ${part.text.slice(0, 200)}${part.text.length > 200 ? "..." : ""}${EOL}`,
+              )
             if (part.type === "tool_call") process.stdout.write(`  [tool_call] ${part.tool} id=${part.callID}${EOL}`)
           }
           for (const tr of step.toolResults) {

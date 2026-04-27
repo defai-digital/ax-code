@@ -52,12 +52,13 @@ describe("memory.recorder", () => {
     expect(await removeEntry(tmp.path, "decisions", "auth-rewrite")).toBe(false)
   })
 
-  test("buildContext orders feedback first, then user prefs, then decisions", async () => {
+  test("buildContext orders feedback first, then user prefs, then decisions, then references", async () => {
     await using tmp = await tmpdir()
 
     await recordEntry(tmp.path, "userPrefs", { name: "language", body: "TW Chinese" })
     await recordEntry(tmp.path, "feedback", { name: "tests", body: "no mocks", why: "regressions" })
     await recordEntry(tmp.path, "decisions", { name: "auth", body: "rewrite for compliance" })
+    await recordEntry(tmp.path, "reference", { name: "linear", body: "bugs in LINEAR/INGEST" })
 
     const memory = await store.load(tmp.path)
     expect(memory).not.toBeNull()
@@ -66,10 +67,12 @@ describe("memory.recorder", () => {
     const feedbackIdx = ctx.indexOf("Feedback Rules")
     const userIdx = ctx.indexOf("User Preferences")
     const decisionsIdx = ctx.indexOf("Project Decisions")
+    const referencesIdx = ctx.indexOf("References")
 
     expect(feedbackIdx).toBeGreaterThan(-1)
     expect(userIdx).toBeGreaterThan(feedbackIdx)
     expect(decisionsIdx).toBeGreaterThan(userIdx)
+    expect(referencesIdx).toBeGreaterThan(decisionsIdx)
     expect(ctx).toContain("Why: regressions")
   })
 
@@ -78,10 +81,13 @@ describe("memory.recorder", () => {
     await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
 
     await recordEntry(tmp.path, "userPrefs", { name: "language", body: "TW Chinese" })
+    await recordEntry(tmp.path, "reference", { name: "linear", body: "bugs in LINEAR/INGEST" })
 
     const fresh = await generate(tmp.path)
     expect(fresh.sections.userPrefs?.entries).toHaveLength(1)
     expect(fresh.sections.userPrefs?.entries[0]?.name).toBe("language")
+    expect(fresh.sections.reference?.entries).toHaveLength(1)
+    expect(fresh.sections.reference?.entries[0]?.name).toBe("linear")
     expect(fresh.sections.config).toBeDefined()
   })
 
@@ -254,6 +260,137 @@ describe("memory.recorder", () => {
 
     expect(hashAfterRoundTrip).toBe(hashAfterWarmup)
     expect(hashAfterReWarmup).toBe(hashAfterWarmup)
+  })
+
+  test("reference kind: records, lists, removes like other kinds", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "reference", {
+      name: "grafana",
+      body: "Latency dashboard at grafana.internal/d/api-latency",
+      why: "oncall watches this",
+    })
+    const entries = await listEntries(tmp.path, "reference")
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.name).toBe("grafana")
+
+    const removed = await removeEntry(tmp.path, "reference", "grafana")
+    expect(removed).toBe(true)
+    expect(await listEntries(tmp.path, "reference")).toHaveLength(0)
+  })
+
+  test("global scope: recordEntry saves to global store, not project store", async () => {
+    await using tmp = await tmpdir()
+    await store.clearGlobal().catch(() => {}) // start clean
+    try {
+      await recordEntry(tmp.path, "userPrefs", {
+        name: "language",
+        body: "Reply in Traditional Chinese",
+        scope: "global",
+      })
+
+      // Project store should be empty
+      const projectEntries = await listEntries(tmp.path, "userPrefs")
+      expect(projectEntries).toHaveLength(0)
+
+      // Global store should have the entry
+      const globalEntries = await listEntries(tmp.path, "userPrefs", "global")
+      expect(globalEntries).toHaveLength(1)
+      expect(globalEntries[0]?.name).toBe("language")
+    } finally {
+      await store.clearGlobal().catch(() => {})
+    }
+  })
+
+  test("global scope: removeEntry deletes from global store", async () => {
+    await using tmp = await tmpdir()
+    await store.clearGlobal().catch(() => {})
+    try {
+      await recordEntry(tmp.path, "feedback", { name: "rule", body: "x", scope: "global" })
+      expect(await removeEntry(tmp.path, "feedback", "rule", "global")).toBe(true)
+      expect(await listEntries(tmp.path, "feedback", "global")).toHaveLength(0)
+    } finally {
+      await store.clearGlobal().catch(() => {})
+    }
+  })
+
+  test("buildContext includes global section when global memory is provided", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", { name: "project-rule", body: "project-specific" })
+
+    const mockGlobal = {
+      version: 1,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      projectRoot: "",
+      contentHash: "",
+      maxTokens: 2000,
+      totalTokens: 10,
+      sections: {
+        userPrefs: {
+          entries: [{ name: "language", body: "Reply in TW Chinese", savedAt: new Date().toISOString() }],
+          tokens: 10,
+        },
+      },
+    }
+
+    const memory = await store.load(tmp.path)
+    expect(memory).not.toBeNull()
+    const ctx = buildContext(memory!, { global: mockGlobal as any })
+
+    expect(ctx).toContain("Global Settings")
+    expect(ctx).toContain("Reply in TW Chinese")
+    expect(ctx).toContain("project-specific")
+    // Global section appears before project feedback
+    expect(ctx.indexOf("Global Settings")).toBeLessThan(ctx.indexOf("Feedback Rules"))
+    // Global entries are flat under ## Global Settings — no sub-heading between
+    // "## Global Settings" and the first entry line.
+    const globalBlock = ctx.slice(ctx.indexOf("## Global Settings"))
+    const nextHeading = globalBlock.indexOf("\n##", 3) // find next ## after the title
+    const firstEntry = globalBlock.indexOf("\n-")
+    expect(firstEntry).toBeGreaterThan(-1)
+    expect(firstEntry).toBeLessThan(nextHeading) // entry appears before next ## heading
+  })
+
+  test("buildContext returns empty string when memory has no content", async () => {
+    await using tmp = await tmpdir()
+    const emptyMemory = {
+      version: 1,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      projectRoot: tmp.path,
+      contentHash: "",
+      maxTokens: 4000,
+      totalTokens: 0,
+      sections: {},
+    }
+    const ctx = buildContext(emptyMemory as any)
+    expect(ctx).toBe("")
+  })
+
+  test("buildContext returns empty string when global has no applicable entries", async () => {
+    await using tmp = await tmpdir()
+    const emptyGlobal = {
+      version: 1,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      projectRoot: "",
+      contentHash: "",
+      maxTokens: 2000,
+      totalTokens: 0,
+      sections: {},
+    }
+    const emptyMemory = { ...emptyGlobal, projectRoot: tmp.path }
+    const ctx = buildContext(emptyMemory as any, { global: emptyGlobal as any })
+    expect(ctx).toBe("")
+  })
+
+  test("scanned sections get scannedAt timestamp after warmup", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
+
+    const memory = await generate(tmp.path)
+    expect(memory.sections.config?.scannedAt).toBeDefined()
+    expect(new Date(memory.sections.config!.scannedAt!).getTime()).toBeGreaterThan(Date.now() - 5000)
   })
 
   test("buildContext escapes literal <project-memory> tags in user-controlled text", async () => {

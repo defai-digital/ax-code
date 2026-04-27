@@ -67,18 +67,22 @@ export namespace InstanceStore {
         const inflight = pending.get(dir)
         if (inflight) return inflight
 
-        const promise = Promise.resolve(init({
-          directory: dir,
-          worktree: Instance.worktree,
-          project: Instance.project,
-        })).then((value) => {
-          entries.set(dir, value)
-          pending.delete(dir)
-          return value
-        }).catch((err) => {
-          pending.delete(dir)
-          throw err
-        })
+        const promise = Promise.resolve(
+          init({
+            directory: dir,
+            worktree: Instance.worktree,
+            project: Instance.project,
+          }),
+        )
+          .then((value) => {
+            entries.set(dir, value)
+            pending.delete(dir)
+            return value
+          })
+          .catch((err) => {
+            pending.delete(dir)
+            throw err
+          })
 
         pending.set(dir, promise)
         return promise

@@ -24,6 +24,7 @@ import { withTimeout } from "../util/timeout"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
+import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { ModelID, ProviderID } from "./schema"
@@ -53,7 +54,12 @@ export namespace Provider {
       if (!lower.includes("grok")) return true
       return lower.includes("grok-4") || lower.includes("grok-code")
     }
-    if (providerID === "zhipuai" || providerID === "zhipuai-coding-plan" || providerID === "zai" || providerID === "zai-coding-plan") {
+    if (
+      providerID === "zhipuai" ||
+      providerID === "zhipuai-coding-plan" ||
+      providerID === "zai" ||
+      providerID === "zai-coding-plan"
+    ) {
       if (!lower.includes("glm")) return true
       // Block known-problematic 4.5 SKUs, but keep newer GLM 4/5
       // variants, including hyphenated names like glm-4-plus.
@@ -120,13 +126,12 @@ export namespace Provider {
     "@ai-sdk/google": createGoogleGenerativeAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
+    "@openrouter/ai-sdk-provider": createOpenRouter,
   }
 
   function useLanguageModel(sdk: Record<string, unknown>) {
     return sdk.responses === undefined && sdk.chat === undefined
   }
-
-  const Cost = ModelsDev.Cost
 
   export const Model = z
     .object({
@@ -170,7 +175,6 @@ export namespace Provider {
         input: z.number().optional(),
         output: z.number(),
       }),
-      cost: Cost,
       status: z.enum(["alpha", "beta", "deprecated", "active"]),
       options: z.record(z.string(), z.any()),
       headers: z.record(z.string(), z.string()),
@@ -216,7 +220,6 @@ export namespace Provider {
         input: model.limit.input,
         output: model.limit.output,
       },
-      cost: model.cost,
       capabilities: {
         temperature: model.temperature,
         reasoning: model.reasoning,
@@ -358,22 +361,16 @@ export namespace Provider {
             toolcall: model.tool_call ?? existingModel?.capabilities?.toolcall ?? true,
             input: {
               text: model.modalities?.input?.includes("text") ?? existingModel?.capabilities?.input?.text ?? true,
-              audio:
-                model.modalities?.input?.includes("audio") ?? existingModel?.capabilities?.input?.audio ?? false,
-              image:
-                model.modalities?.input?.includes("image") ?? existingModel?.capabilities?.input?.image ?? false,
-              video:
-                model.modalities?.input?.includes("video") ?? existingModel?.capabilities?.input?.video ?? false,
+              audio: model.modalities?.input?.includes("audio") ?? existingModel?.capabilities?.input?.audio ?? false,
+              image: model.modalities?.input?.includes("image") ?? existingModel?.capabilities?.input?.image ?? false,
+              video: model.modalities?.input?.includes("video") ?? existingModel?.capabilities?.input?.video ?? false,
               pdf: model.modalities?.input?.includes("pdf") ?? existingModel?.capabilities?.input?.pdf ?? false,
             },
             output: {
               text: model.modalities?.output?.includes("text") ?? existingModel?.capabilities?.output?.text ?? true,
-              audio:
-                model.modalities?.output?.includes("audio") ?? existingModel?.capabilities?.output?.audio ?? false,
-              image:
-                model.modalities?.output?.includes("image") ?? existingModel?.capabilities?.output?.image ?? false,
-              video:
-                model.modalities?.output?.includes("video") ?? existingModel?.capabilities?.output?.video ?? false,
+              audio: model.modalities?.output?.includes("audio") ?? existingModel?.capabilities?.output?.audio ?? false,
+              image: model.modalities?.output?.includes("image") ?? existingModel?.capabilities?.output?.image ?? false,
+              video: model.modalities?.output?.includes("video") ?? existingModel?.capabilities?.output?.video ?? false,
               pdf: model.modalities?.output?.includes("pdf") ?? existingModel?.capabilities?.output?.pdf ?? false,
             },
             interleaved: model.interleaved ?? existingModel?.capabilities?.interleaved ?? false,
@@ -383,13 +380,6 @@ export namespace Provider {
             context: model.limit?.context ?? existingModel?.limit?.context ?? 0,
             input: model.limit?.input ?? existingModel?.limit?.input,
             output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
-          },
-          cost: {
-            input: model.cost?.input ?? existingModel?.cost?.input ?? 0,
-            output: model.cost?.output ?? existingModel?.cost?.output ?? 0,
-            cache_read: model.cost?.cache_read ?? existingModel?.cost?.cache_read,
-            cache_write: model.cost?.cache_write ?? existingModel?.cost?.cache_write,
-            reasoning: model.cost?.reasoning ?? existingModel?.cost?.reasoning,
           },
           headers: mergeDeep(existingModel?.headers ?? {}, model.headers ?? {}),
           family: model.family ?? existingModel?.family ?? "",
@@ -437,9 +427,9 @@ export namespace Provider {
       if (!plugin.auth) continue
       const providerID = ProviderID.make(plugin.auth.provider)
       if (disabled.has(providerID)) continue
-        const group = authGroups.get(plugin.auth.provider) ?? []
-        group.push(plugin)
-        authGroups.set(plugin.auth.provider, group)
+      const group = authGroups.get(plugin.auth.provider) ?? []
+      group.push(plugin)
+      authGroups.set(plugin.auth.provider, group)
     }
     for (const plugins of authGroups.values()) {
       for (const plugin of plugins) {
@@ -566,7 +556,9 @@ export namespace Provider {
         command: "provider.init",
         status: "partial",
         providers: providerCount,
-        failures: initFailures.map((f) => `${f.source}: ${f.error instanceof Error ? f.error.message : String(f.error)}`),
+        failures: initFailures.map(
+          (f) => `${f.source}: ${f.error instanceof Error ? f.error.message : String(f.error)}`,
+        ),
       })
     } else {
       log.info("provider init completed", {
@@ -628,6 +620,35 @@ export namespace Provider {
         options["includeUsage"] = true
       }
 
+      // OpenRouter-specific quirks. Applied here at the SDK funnel so they
+      // fire regardless of whether the provider was discovered via env var,
+      // auth.json, or ax-code.json config. The custom-loader path runs
+      // before config-load, so config-only users would otherwise miss these.
+      //
+      //   - extraBody.usage.include = true: forces OpenRouter to return
+      //     promptTokens/completionTokens on every response. Without this,
+      //     streamed responses omit token counts in default `compatible`
+      //     mode (SDK only emits stream_options in `strict` mode). Token
+      //     counts feed Assistant.tokens, compaction, and context-window
+      //     tracking. SDK reference: this.config.extraBody is spread into
+      //     every request body (index.mjs:3565).
+      //   - HTTP-Referer + X-Title: documented attribution headers for
+      //     the OpenRouter dashboard
+      //     (https://openrouter.ai/docs/api-reference/overview).
+      //
+      // User-supplied options win in both maps so config overrides hold.
+      if (model.api.npm === "@openrouter/ai-sdk-provider") {
+        options["extraBody"] = {
+          usage: { include: true },
+          ...((options["extraBody"] as Record<string, unknown> | undefined) ?? {}),
+        }
+        options["headers"] = {
+          "HTTP-Referer": "https://github.com/automatosx/ax-code",
+          "X-Title": "ax-code",
+          ...((options["headers"] as Record<string, string> | undefined) ?? {}),
+        }
+      }
+
       // Disable provider-level retries — ax-code handles retries via
       // SessionRetry with smarter logic (permanent error detection,
       // provider fallback, abort signal checks). The AI SDK default
@@ -686,19 +707,19 @@ export namespace Provider {
         // (servers send keepalive events) but prevents indefinite hangs.
         // Explicit 0 or false disables the timeout.
         const rawChunkTimeout = options["chunkTimeout"]
-        const chunkTimeout = rawChunkTimeout === false || rawChunkTimeout === 0
-          ? 0
-          : typeof rawChunkTimeout === "number"
-            ? rawChunkTimeout
-            : 90_000
+        const chunkTimeout =
+          rawChunkTimeout === false || rawChunkTimeout === 0
+            ? 0
+            : typeof rawChunkTimeout === "number"
+              ? rawChunkTimeout
+              : 90_000
         delete options["chunkTimeout"]
 
         options["fetch"] = async (input: string | Request | URL, init?: BunFetchRequestInit) => {
           // Preserve custom fetch if it exists, wrap it with timeout logic
           const fetchFn = customFetch ?? fetch
           const opts = init ?? {}
-          const chunkAbortCtl =
-            typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
+          const chunkAbortCtl = typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
           const signals: AbortSignal[] = []
 
           if (opts.signal) signals.push(opts.signal)
@@ -954,7 +975,13 @@ export namespace Provider {
   export function sort<T extends { id: string }>(models: T[]) {
     return sortBy(
       models,
-      [(model) => priority.findIndex((filter) => model.id.includes(filter)), "desc"],
+      [
+        (model) => {
+          const index = priority.findIndex((filter) => model.id.includes(filter))
+          return index === -1 ? Number.POSITIVE_INFINITY : index
+        },
+        "asc",
+      ],
       [(model) => (model.id.includes("latest") ? 0 : 1), "asc"],
       [(model) => model.id, "desc"],
     )

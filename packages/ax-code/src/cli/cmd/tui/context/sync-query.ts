@@ -15,8 +15,7 @@ export function sessionRuntimeStatus<
   const last = messages.at(-1)
   if (!last) return "idle"
   if (last.role === "user") return "working"
-  const completed =
-    last.time && "completed" in last.time ? (last.time as { completed?: unknown }).completed : undefined
+  const completed = last.time && "completed" in last.time ? (last.time as { completed?: unknown }).completed : undefined
   return completed ? "idle" : "working"
 }
 

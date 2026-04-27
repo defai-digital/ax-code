@@ -1,13 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Usage } from "../../../src/cli/cmd/tui/routes/session/usage"
 
-function assistant(input: {
-  input?: number
-  output?: number
-  reasoning?: number
-  read?: number
-  write?: number
-}) {
+function assistant(input: { input?: number; output?: number; reasoning?: number; read?: number; write?: number }) {
   return {
     role: "assistant",
     tokens: {
@@ -52,21 +46,13 @@ describe("Usage.total", () => {
 
 describe("Usage.last", () => {
   test("returns the last assistant message with reasoning-only usage", () => {
-    const msgs = [
-      { role: "user" },
-      assistant({}),
-      assistant({ reasoning: 120 }),
-    ] as any[]
+    const msgs = [{ role: "user" }, assistant({}), assistant({ reasoning: 120 })] as any[]
 
     expect(Usage.last(msgs as any)).toBe(msgs[2] as any)
   })
 
   test("returns the last assistant message with cache-only usage", () => {
-    const msgs = [
-      assistant({ input: 10 }),
-      assistant({}),
-      assistant({ read: 64 }),
-    ] as any[]
+    const msgs = [assistant({ input: 10 }), assistant({}), assistant({ read: 64 })] as any[]
 
     expect(Usage.last(msgs as any)).toBe(msgs[2] as any)
   })

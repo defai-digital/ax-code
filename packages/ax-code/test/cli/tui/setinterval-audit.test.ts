@@ -9,9 +9,7 @@ const TUI_ROOT = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui")
 // comment text. Imperfect (won't handle template-literal // patterns),
 // but the TUI source doesn't have those.
 function stripComments(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1")
+  return src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1")
 }
 
 // Match identifier-like uses of setInterval, not the type alias usage

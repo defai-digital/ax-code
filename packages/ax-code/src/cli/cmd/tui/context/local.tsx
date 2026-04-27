@@ -41,18 +41,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     }
 
     const agent = iife(() => {
-      const coreAgents = createMemo(() =>
-        sync.data.agent.filter((x) => Agent.resolveTier(x) === "core"),
-      )
+      const coreAgents = createMemo(() => sync.data.agent.filter((x) => Agent.resolveTier(x) === "core"))
       const agents = createMemo(() =>
         sync.data.agent.filter((x) => {
           const t = Agent.resolveTier(x)
           return t === "core" || t === "specialist"
         }),
       )
-      const visibleAgents = createMemo(() =>
-        sync.data.agent.filter((x) => Agent.resolveTier(x) !== "internal"),
-      )
+      const visibleAgents = createMemo(() => sync.data.agent.filter((x) => Agent.resolveTier(x) !== "internal"))
       const [agentStore, setAgentStore] = createStore<{
         current: string
       }>({
@@ -92,8 +88,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           batch(() => {
             const list = coreAgents()
             if (list.length === 0) return
-            const idx = list.findIndex((x) => x.name === agentStore.current)
-            let next = (idx === -1 ? 0 : idx + direction)
+            // Use the resolved current name so cycling stays in sync with what
+            // the user sees — `agentStore.current` may be empty before sync data
+            // loads, or hold a specialist name (not in `list`).
+            const currentName = resolveCurrentAgent(agents(), agentStore.current).name
+            const idx = list.findIndex((x) => x.name === currentName)
+            let next = idx === -1 ? (direction === 1 ? 0 : list.length - 1) : idx + direction
             if (next < 0) next = list.length - 1
             if (next >= list.length) next = 0
             const value = list[next]
@@ -268,6 +268,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       return {
         current: currentModel,
+        hasOverride(name: string) {
+          return !!modelStore.model[name]
+        },
         get ready() {
           return modelStore.ready
         },
@@ -451,19 +454,24 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     // Automatically update model when agent changes
     createEffect(() => {
       const value = agent.current()
-      if (value.model) {
-        if (isModelValid(value.model))
-          model.set({
-            providerID: value.model.providerID,
-            modelID: value.model.modelID,
-          })
-        else
-          toast.show({
-            variant: "warning",
-            message: `Agent ${value.name}'s configured model ${value.model.providerID}/${value.model.modelID} is not valid`,
-            duration: 3000,
-          })
+      if (!value.model) return
+      if (!isModelValid(value.model)) {
+        toast.show({
+          variant: "warning",
+          message: `Agent ${value.name}'s configured model ${value.model.providerID}/${value.model.modelID} is not valid`,
+          duration: 3000,
+        })
+        return
       }
+      // Only seed the per-agent slot when the user has no override yet.
+      // Otherwise switching away and back to this agent would wipe their
+      // manual model choice with the config-pinned default. `currentModel`
+      // already falls back to `a.model` for display when the slot is empty.
+      if (model.hasOverride(value.name)) return
+      model.set({
+        providerID: value.model.providerID,
+        modelID: value.model.modelID,
+      })
     })
 
     const result = {

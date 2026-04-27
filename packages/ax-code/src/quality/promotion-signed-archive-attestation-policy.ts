@@ -18,7 +18,9 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
   })
   export type Policy = z.output<typeof Policy>
 
-  export type PolicyOverrides = Partial<Pick<Policy, "minimumTrustScope" | "allowRetiredHistorical" | "allowRevokedHistorical">>
+  export type PolicyOverrides = Partial<
+    Pick<Policy, "minimumTrustScope" | "allowRetiredHistorical" | "allowRevokedHistorical">
+  >
 
   export const Summary = z.object({
     schemaVersion: z.literal(1),
@@ -56,13 +58,16 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
   }
 
   export function defaults(overrides?: PolicyOverrides): Policy {
-    return merge({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-signed-archive-attestation-policy",
-      minimumTrustScope: "global",
-      allowRetiredHistorical: true,
-      allowRevokedHistorical: false,
-    }, overrides)
+    return merge(
+      {
+        schemaVersion: 1,
+        kind: "ax-code-quality-promotion-signed-archive-attestation-policy",
+        minimumTrustScope: "global",
+        allowRetiredHistorical: true,
+        allowRevokedHistorical: false,
+      },
+      overrides,
+    )
   }
 
   export function digest(policy: Policy) {
@@ -83,9 +88,10 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
       },
     ]
 
-    const minimumScopePass = input.policy.minimumTrustScope === "global"
-      ? input.trust.resolution.matched
-      : input.trust.resolution.scope === "project"
+    const minimumScopePass =
+      input.policy.minimumTrustScope === "global"
+        ? input.trust.resolution.matched
+        : input.trust.resolution.scope === "project"
     gates.push({
       name: "minimum-trust-scope",
       status: minimumScopePass ? "pass" : "fail",
@@ -110,8 +116,8 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
         : "revoked historical trust is not allowed by attestation policy"
     } else if (input.trust.lifecycleStatus === "fail") {
       lifecyclePolicyStatus = "fail"
-      lifecyclePolicyDetail = input.trust.gates.find((gate) => gate.name === "trust-lifecycle")?.detail
-        ?? "trust lifecycle is not acceptable"
+      lifecyclePolicyDetail =
+        input.trust.gates.find((gate) => gate.name === "trust-lifecycle")?.detail ?? "trust lifecycle is not acceptable"
     }
 
     gates.push({

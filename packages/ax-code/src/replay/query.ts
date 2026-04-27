@@ -18,7 +18,7 @@ export namespace EventQuery {
     ).map((row) => row.event_data)
   }
 
-  export function bySessionWithTimestamp(sessionID: SessionID): { event_data: ReplayEvent, time_created: number }[] {
+  export function bySessionWithTimestamp(sessionID: SessionID): { event_data: ReplayEvent; time_created: number }[] {
     return Database.use((db) =>
       db
         .select({
@@ -97,7 +97,10 @@ export namespace EventQuery {
               eq(EventLogTable.time_created, input.cursor.time_created),
               or(
                 gt(EventLogTable.session_id, input.cursor.session_id),
-                and(eq(EventLogTable.session_id, input.cursor.session_id), gt(EventLogTable.sequence, input.cursor.sequence)),
+                and(
+                  eq(EventLogTable.session_id, input.cursor.session_id),
+                  gt(EventLogTable.sequence, input.cursor.sequence),
+                ),
               ),
             ),
           ),
@@ -140,12 +143,7 @@ export namespace EventQuery {
   }
 
   export function deleteBySession(sessionID: SessionID) {
-    Database.use((db) =>
-      db
-        .delete(EventLogTable)
-        .where(eq(EventLogTable.session_id, sessionID))
-        .run(),
-    )
+    Database.use((db) => db.delete(EventLogTable).where(eq(EventLogTable.session_id, sessionID)).run())
   }
 
   export function pruneOlderThan(cutoffMs: number): number {

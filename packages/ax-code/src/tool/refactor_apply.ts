@@ -56,6 +56,8 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
       },
     })
 
+    if (ctx.abort.aborted) throw new DOMException("Refactor apply aborted", "AbortError")
+
     const result = await DebugEngine.applySafeRefactor(projectID, {
       planId: RefactorPlanID.make(args.planId),
       patch: args.patch,

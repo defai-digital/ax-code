@@ -28,15 +28,71 @@ export function subscribeStoreBackedSyncEvents<
   listen: (handler: (event: SyncEventEnvelope<unknown>) => void) => () => void
   getAutonomous: () => boolean
   setStore: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["setStore"]
-  clearSessionSyncState: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["clearSessionSyncState"]
-  replyPermission: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["replyPermission"]
-  replyQuestion: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["replyQuestion"]
-  syncMcpStatus: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["syncMcpStatus"]
-  syncLspStatus: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["syncLspStatus"]
-  syncDebugEngine: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["syncDebugEngine"]
+  clearSessionSyncState: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["clearSessionSyncState"]
+  replyPermission: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["replyPermission"]
+  replyQuestion: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["replyQuestion"]
+  syncMcpStatus: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["syncMcpStatus"]
+  syncLspStatus: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["syncLspStatus"]
+  syncDebugEngine: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["syncDebugEngine"]
   bootstrap: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["bootstrap"]
   onWarn: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["onWarn"]
-  maxSessionMessages: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["maxSessionMessages"]
+  maxSessionMessages: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["maxSessionMessages"]
   onHandlerError: (input: { type: string | undefined; error: string }) => void
   dispatch?: (
     input: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>,

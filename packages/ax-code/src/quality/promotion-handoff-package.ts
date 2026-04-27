@@ -52,11 +52,13 @@ export namespace QualityPromotionHandoffPackage {
     documentCount: z.number().int().positive(),
     inventoryCount: z.number().int().positive(),
     previousActiveSource: z.string().nullable(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type PackageSummary = z.output<typeof PackageSummary>
 
@@ -111,8 +113,10 @@ export namespace QualityPromotionHandoffPackage {
     promotion: QualityPromotionArchiveManifest.ArchiveArtifact["exportBundle"]["auditManifest"]["promotion"],
     packet: PackageArtifact,
   ) {
-    return packet.archiveManifest.exportBundle.auditManifest.promotion.promotionID === promotion.promotionID
-      && packet.archiveManifest.exportBundle.auditManifest.promotion.source === promotion.source
+    return (
+      packet.archiveManifest.exportBundle.auditManifest.promotion.promotionID === promotion.promotionID &&
+      packet.archiveManifest.exportBundle.auditManifest.promotion.source === promotion.source
+    )
   }
 
   function inventoryByKind(archiveManifest: QualityPromotionArchiveManifest.ArchiveArtifact) {
@@ -238,21 +242,25 @@ export namespace QualityPromotionHandoffPackage {
       },
     ]
 
-    return sortDocuments(Document.array().parse(documentInput.map((item) => ({
-      ...item,
-      format: "markdown",
-      contentDigest: digest(item.content),
-    }))))
+    return sortDocuments(
+      Document.array().parse(
+        documentInput.map((item) => ({
+          ...item,
+          format: "markdown",
+          contentDigest: digest(item.content),
+        })),
+      ),
+    )
   }
 
   function evaluateSummary(archiveManifest: QualityPromotionArchiveManifest.ArchiveArtifact, documents: Document[]) {
     const archiveReasons = QualityPromotionArchiveManifest.verify(archiveManifest)
     const expectedDocuments = buildDocuments(archiveManifest)
     const documentsMatch = JSON.stringify(documents) === JSON.stringify(expectedDocuments)
-    const digestCoverage = documents.every((document) => (
-      document.contentDigest.length > 0
-      && (document.kind === "index" || (document.artifactDigest?.length ?? 0) > 0)
-    ))
+    const digestCoverage = documents.every(
+      (document) =>
+        document.contentDigest.length > 0 && (document.kind === "index" || (document.artifactDigest?.length ?? 0) > 0),
+    )
     const gates = [
       {
         name: "archive-manifest-verification",
@@ -297,12 +305,12 @@ export namespace QualityPromotionHandoffPackage {
     })
   }
 
-  export function create(input: {
-    archiveManifest: QualityPromotionArchiveManifest.ArchiveArtifact
-  }) {
+  export function create(input: { archiveManifest: QualityPromotionArchiveManifest.ArchiveArtifact }) {
     const archiveReasons = QualityPromotionArchiveManifest.verify(input.archiveManifest)
     if (archiveReasons.length > 0) {
-      throw new Error(`Cannot create promotion handoff package for ${input.archiveManifest.source}: invalid archive manifest (${archiveReasons[0]})`)
+      throw new Error(
+        `Cannot create promotion handoff package for ${input.archiveManifest.source}: invalid archive manifest (${archiveReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const packageID = `${input.archiveManifest.archiveID}-handoff-package`
@@ -371,7 +379,9 @@ export namespace QualityPromotionHandoffPackage {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion handoff package ${packet.packageID} already exists for source ${packet.source} with different content`)
+      throw new Error(
+        `Promotion handoff package ${packet.packageID} already exists for source ${packet.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(packet.source, packet.packageID), next)
@@ -427,7 +437,9 @@ export namespace QualityPromotionHandoffPackage {
     lines.push("### Documents")
     lines.push("")
     for (const document of packet.documents) {
-      lines.push(`- ${document.name}: ${document.kind} · artifact=${document.artifactID ?? "n/a"} · digest=${document.contentDigest}`)
+      lines.push(
+        `- ${document.name}: ${document.kind} · artifact=${document.artifactID ?? "n/a"} · digest=${document.contentDigest}`,
+      )
     }
     lines.push("")
     for (const gate of packet.summary.gates) {

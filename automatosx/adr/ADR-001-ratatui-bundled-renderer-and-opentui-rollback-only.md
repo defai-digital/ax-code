@@ -126,4 +126,4 @@ Non-negotiable implementation guardrails:
 
 ## Related
 
-- [PRD: AX Code v4.1.0 - ratatui TUI Migration](../prd/v4.1.0-ratatui-migration.md)
+- [PRD: AX Code v4.1.0 - ratatui TUI Migration](../archive/prd/v4.1.0-ratatui-migration.md)

@@ -93,8 +93,8 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain('PACKAGE="@defai.digital/ax-code"')
     expect(text).toContain('npm install -g "${PACKAGE}@${VERSION}"')
     expect(text).toContain('OUTPUT="$(ax-code --version)"')
-    expect(text).toContain('expected ax-code --version to be ${VERSION}')
-    expect(text).not.toContain('@defai.digital/ax-code@$CHANNEL')
+    expect(text).toContain("expected ax-code --version to be ${VERSION}")
+    expect(text).not.toContain("@defai.digital/ax-code@$CHANNEL")
   })
 
   test("existing ax-code (compiled) homebrew formula generator is untouched", async () => {
@@ -103,6 +103,6 @@ describe("homebrew source formula generator", () => {
     const compiledScript = path.join(repoRoot, ".github/scripts/update-homebrew.sh")
     const text = await Bun.file(compiledScript).text()
     expect(text).toContain("class AxCode < Formula")
-    expect(text).not.toContain("depends_on \"bun\"")
+    expect(text).not.toContain('depends_on "bun"')
   })
 })

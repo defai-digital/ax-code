@@ -124,7 +124,11 @@ export const PrCommand = cmd({
           stderr: "inherit",
           cwd: process.cwd(),
         })
-        const kill = () => { try { axcodeProcess.kill("SIGTERM") } catch {} }
+        const kill = () => {
+          try {
+            axcodeProcess.kill("SIGTERM")
+          } catch {}
+        }
         process.on("SIGINT", kill)
         process.on("SIGTERM", kill)
         let code: number

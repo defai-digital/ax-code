@@ -103,9 +103,12 @@ export namespace Snapshot {
       const scheduleCleanup = () => {
         next.cleanupDelay = setTimeout(() => {
           void cleanupFor(next)
-          next.cleanupInterval = setInterval(() => {
-            void cleanupFor(next)
-          }, 60 * 60 * 1000)
+          next.cleanupInterval = setInterval(
+            () => {
+              void cleanupFor(next)
+            },
+            60 * 60 * 1000,
+          )
           next.cleanupInterval.unref?.()
         }, 60 * 1000)
         next.cleanupDelay.unref?.()
@@ -272,9 +275,12 @@ export namespace Snapshot {
       return { hash, files: [] }
     }
     await add(current)
-    const result = await runGit([...quote, ...args(current, ["diff", "--no-ext-diff", "--name-only", hash, "--", "."])], {
-      cwd: current.directory,
-    })
+    const result = await runGit(
+      [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-only", hash, "--", "."])],
+      {
+        cwd: current.directory,
+      },
+    )
     if (result.code !== 0) {
       log.warn("failed to get diff", { hash, exitCode: result.code })
       return { hash, files: [] }
@@ -406,7 +412,9 @@ export namespace Snapshot {
       const file = parsed?.[2]
       if (!file || adds === undefined || dels === undefined) continue
       const binary = adds === "-" && dels === "-"
-      const [before, after] = binary ? ["", ""] : await Promise.all([show(current, from, file), show(current, to, file)])
+      const [before, after] = binary
+        ? ["", ""]
+        : await Promise.all([show(current, from, file), show(current, to, file)])
       const additions = binary ? 0 : parseInt(adds, 10)
       const deletions = binary ? 0 : parseInt(dels, 10)
       result.push({

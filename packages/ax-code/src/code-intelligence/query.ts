@@ -341,11 +341,7 @@ export namespace CodeGraphQuery {
   ): { files: number; nodes: number; edges: number } {
     if (useNative) return NativeStore.pruneOrphanFiles(projectID, [...livePaths], scopePrefix)
     const rows = Database.use((db) =>
-      db
-        .select({ path: CodeFileTable.path })
-        .from(CodeFileTable)
-        .where(eq(CodeFileTable.project_id, projectID))
-        .all(),
+      db.select({ path: CodeFileTable.path }).from(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).all(),
     )
     const orphans = rows
       .map((r) => r.path)
@@ -418,12 +414,7 @@ export namespace CodeGraphQuery {
   export function getCursor(projectID: ProjectID): CursorRow | undefined {
     if (useNative) return NativeStore.getCursor(projectID)
     return Database.use((db) =>
-      db
-        .select()
-        .from(CodeIndexCursorTable)
-        .where(eq(CodeIndexCursorTable.project_id, projectID))
-        .limit(1)
-        .all(),
+      db.select().from(CodeIndexCursorTable).where(eq(CodeIndexCursorTable.project_id, projectID)).limit(1).all(),
     )[0]
   }
 
@@ -620,11 +611,7 @@ export namespace CodeGraphQuery {
   // does not expose a changes/affectedRows field on .run().
   export function pruneExpiredLspCache(now: number): number {
     return Database.use((db) => {
-      const ids = db
-        .select({ id: LspCacheTable.id })
-        .from(LspCacheTable)
-        .where(lt(LspCacheTable.expires_at, now))
-        .all()
+      const ids = db.select({ id: LspCacheTable.id }).from(LspCacheTable).where(lt(LspCacheTable.expires_at, now)).all()
       if (ids.length === 0) return 0
       db.delete(LspCacheTable).where(lt(LspCacheTable.expires_at, now)).run()
       return ids.length

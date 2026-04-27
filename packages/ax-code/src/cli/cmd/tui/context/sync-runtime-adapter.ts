@@ -1,6 +1,11 @@
 import type { LspStatus, McpStatus } from "@ax-code/sdk/v2"
 import { reconcile, type SetStoreFunction } from "solid-js/store"
-import { createRuntimeSyncActions, type RuntimeSyncActions, type RuntimeSyncClient, type RuntimeSyncFetchResponse } from "./sync-runtime-sync"
+import {
+  createRuntimeSyncActions,
+  type RuntimeSyncActions,
+  type RuntimeSyncClient,
+  type RuntimeSyncFetchResponse,
+} from "./sync-runtime-sync"
 import { type SyncStoreState } from "./sync-state"
 
 type RuntimeStoreState = Pick<

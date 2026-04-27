@@ -147,12 +147,12 @@ describe("session risk endpoint", () => {
 
           const base = await app.request(`/session/${sid}/risk`)
           expect(base.status).toBe(200)
-          const baseBody = await base.json() as Record<string, unknown>
+          const baseBody = (await base.json()) as Record<string, unknown>
           expect(baseBody["quality"]).toBeUndefined()
 
           const enriched = await app.request(`/session/${sid}/risk?quality=true`)
           expect(enriched.status).toBe(200)
-          const enrichedBody = await enriched.json() as {
+          const enrichedBody = (await enriched.json()) as {
             quality?: {
               review?: {
                 overallStatus: string

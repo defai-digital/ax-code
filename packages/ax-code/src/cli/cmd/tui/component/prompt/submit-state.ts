@@ -14,11 +14,7 @@ export function pendingSubmitStatusText(stage: SubmitStage | undefined) {
   }
 }
 
-export function pendingSubmitKeyIntent(input: {
-  pending: boolean
-  appExit: boolean
-  sessionInterrupt: boolean
-}) {
+export function pendingSubmitKeyIntent(input: { pending: boolean; appExit: boolean; sessionInterrupt: boolean }) {
   if (!input.pending) return "none" as const
   if (input.appExit || input.sessionInterrupt) return "cancel" as const
   return "block" as const

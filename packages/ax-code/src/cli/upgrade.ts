@@ -9,7 +9,10 @@ const log = Log.create({ service: "cli.upgrade" })
 export async function upgrade() {
   const config = await Config.global()
   const method = await Installation.method()
-  const latest = await Installation.latest(method).catch(() => {})
+  const latest = await Installation.latest(method).catch((err) => {
+    log.debug("version check failed, skipping upgrade", { method, err })
+    return undefined
+  })
   if (!latest) return
   const compare = Installation.compareVersions(Installation.VERSION, latest)
   if (compare !== undefined && compare <= 0) return

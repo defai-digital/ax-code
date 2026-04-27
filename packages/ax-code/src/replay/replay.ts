@@ -62,7 +62,10 @@ export namespace Replay {
         // A step.finish should follow step.start
         // A tool.result should follow tool.call with same callID
         if (event.type === "tool.result") {
-          const preceding = events.slice(0, i).reverse().find((e) => e.type === "tool.call")
+          const preceding = events
+            .slice(0, i)
+            .reverse()
+            .find((e) => e.type === "tool.call")
           if (preceding && preceding.type === "tool.call" && preceding.callID !== event.callID) {
             const div: DivergenceInfo = {
               sequence: i,
@@ -76,7 +79,10 @@ export namespace Replay {
         }
 
         if (event.type === "step.finish") {
-          const precedingStart = events.slice(0, i).reverse().find((e) => e.type === "step.start")
+          const precedingStart = events
+            .slice(0, i)
+            .reverse()
+            .find((e) => e.type === "step.start")
           if (precedingStart && precedingStart.type === "step.start" && precedingStart.stepIndex !== event.stepIndex) {
             const div: DivergenceInfo = {
               sequence: i,
@@ -109,7 +115,10 @@ export namespace Replay {
    * @param fromStep — Start reconstruction from this step index (R7: partial replay).
    *                    Steps before this index are skipped.
    */
-  export function reconstructStream(sessionID: SessionID, options?: { fromStep?: number }): { steps: ReconstructedStep[] } {
+  export function reconstructStream(
+    sessionID: SessionID,
+    options?: { fromStep?: number },
+  ): { steps: ReconstructedStep[] } {
     const events = EventQuery.bySession(sessionID)
     const steps: ReconstructedStep[] = []
     let current: ReconstructedStep | undefined
@@ -118,7 +127,13 @@ export namespace Replay {
     for (const event of events) {
       if (event.type === "step.start") {
         if (event.stepIndex < fromStep) continue
-        current = { stepIndex: event.stepIndex, parts: [], toolResults: [], finishReason: "stop", usage: { inputTokens: 0, outputTokens: 0 } }
+        current = {
+          stepIndex: event.stepIndex,
+          parts: [],
+          toolResults: [],
+          finishReason: "stop",
+          usage: { inputTokens: 0, outputTokens: 0 },
+        }
         steps.push(current)
       }
       if (!current) continue
@@ -151,9 +166,9 @@ export namespace Replay {
   export interface ReconstructedStep {
     stepIndex: number
     parts: Array<
-      | { type: "text", text: string }
-      | { type: "reasoning", text: string }
-      | { type: "tool_call", callID: string, tool: string, input: Record<string, unknown> }
+      | { type: "text"; text: string }
+      | { type: "reasoning"; text: string }
+      | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
     >
     toolResults: Array<{
       callID: string
@@ -164,7 +179,7 @@ export namespace Replay {
       metadata?: Record<string, unknown>
     }>
     finishReason: string
-    usage: { inputTokens: number, outputTokens: number }
+    usage: { inputTokens: number; outputTokens: number }
   }
 
   /**
@@ -200,7 +215,12 @@ export namespace Replay {
                 type: "tool-result",
                 toolCallId: part.callID,
                 input: part.input,
-                output: { output: result.output ?? "", title: part.tool, metadata: result.metadata ?? {}, attachments: [] },
+                output: {
+                  output: result.output ?? "",
+                  title: part.tool,
+                  metadata: result.metadata ?? {},
+                  attachments: [],
+                },
               }
             } else {
               yield {
@@ -243,7 +263,10 @@ export namespace Replay {
    * This function provides the mock stream; the caller wires it into the processor.
    * See test/replay/reconstruct.test.ts for the pattern.
    */
-  export function prepareExecution(sessionID: SessionID, options?: { fromStep?: number }): {
+  export function prepareExecution(
+    sessionID: SessionID,
+    options?: { fromStep?: number },
+  ): {
     steps: ReconstructedStep[]
     stream: AsyncIterable<unknown>
   } {
@@ -255,13 +278,13 @@ export namespace Replay {
    * R4: Compare reconstructed steps against original event log.
    * Returns divergences where the replay would differ from the original.
    */
-  export function compare(sessionID: SessionID): { divergences: DivergenceInfo[], stepsCompared: number } {
+  export function compare(sessionID: SessionID): { divergences: DivergenceInfo[]; stepsCompared: number } {
     const original = EventQuery.bySession(sessionID)
     const { steps } = reconstructStream(sessionID)
     const divergences: DivergenceInfo[] = []
 
     // Extract original steps from events for comparison
-    const originalSteps: { stepIndex: number, toolCalls: string[], finishReason: string, textParts: number }[] = []
+    const originalSteps: { stepIndex: number; toolCalls: string[]; finishReason: string; textParts: number }[] = []
     let current: (typeof originalSteps)[number] | undefined
     for (const event of original) {
       if (event.type === "step.start") {
@@ -280,7 +303,12 @@ export namespace Replay {
     if (steps.length !== originalSteps.length) {
       divergences.push({
         sequence: 0,
-        expected: { type: "session.end", sessionID, reason: "completed", totalSteps: originalSteps.length } as ReplayEvent,
+        expected: {
+          type: "session.end",
+          sessionID,
+          reason: "completed",
+          totalSteps: originalSteps.length,
+        } as ReplayEvent,
         actual: { type: "session.end", sessionID, reason: "completed", totalSteps: steps.length } as ReplayEvent,
         reason: `Step count mismatch: original ${originalSteps.length} vs reconstructed ${steps.length}`,
       })
@@ -295,13 +323,27 @@ export namespace Replay {
       if (orig.finishReason !== recon.finishReason) {
         divergences.push({
           sequence: i,
-          expected: { type: "step.finish", sessionID, stepIndex: orig.stepIndex, finishReason: orig.finishReason, tokens: { input: 0, output: 0 } } as ReplayEvent,
-          actual: { type: "step.finish", sessionID, stepIndex: recon.stepIndex, finishReason: recon.finishReason, tokens: { input: 0, output: 0 } } as ReplayEvent,
+          expected: {
+            type: "step.finish",
+            sessionID,
+            stepIndex: orig.stepIndex,
+            finishReason: orig.finishReason,
+            tokens: { input: 0, output: 0 },
+          } as ReplayEvent,
+          actual: {
+            type: "step.finish",
+            sessionID,
+            stepIndex: recon.stepIndex,
+            finishReason: recon.finishReason,
+            tokens: { input: 0, output: 0 },
+          } as ReplayEvent,
           reason: `Step ${i} finish reason: original "${orig.finishReason}" vs reconstructed "${recon.finishReason}"`,
         })
       }
 
-      const reconToolCalls = recon.parts.filter((p) => p.type === "tool_call").map((p) => (p as { callID: string }).callID)
+      const reconToolCalls = recon.parts
+        .filter((p) => p.type === "tool_call")
+        .map((p) => (p as { callID: string }).callID)
       if (orig.toolCalls.length !== reconToolCalls.length) {
         divergences.push({
           sequence: i,
@@ -336,7 +378,9 @@ export namespace Replay {
           lines.push(`[llm]     request model=${event.model} messages=${event.messageCount}`)
           break
         case "llm.response":
-          lines.push(`[llm]     response finish=${event.finishReason} tokens=${event.tokens.input}/${event.tokens.output} ${event.latencyMs}ms`)
+          lines.push(
+            `[llm]     response finish=${event.finishReason} tokens=${event.tokens.input}/${event.tokens.output} ${event.latencyMs}ms`,
+          )
           break
         case "step.start":
           lines.push(`[step]    #${event.stepIndex} start`)
@@ -363,7 +407,9 @@ export namespace Replay {
           lines.push(`[error]   ${event.errorType}: ${event.message}`)
           break
         case "code.graph.snapshot":
-          lines.push(`[graph]   snapshot project=${event.projectID} nodes=${event.nodeCount} edges=${event.edgeCount}${event.commitSha ? ` sha=${event.commitSha}` : ""}`)
+          lines.push(
+            `[graph]   snapshot project=${event.projectID} nodes=${event.nodeCount} edges=${event.edgeCount}${event.commitSha ? ` sha=${event.commitSha}` : ""}`,
+          )
           break
       }
     }

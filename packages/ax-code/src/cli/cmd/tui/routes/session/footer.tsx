@@ -89,9 +89,12 @@ export function Footer() {
       return
     }
 
-    const pending = setTimeout(() => {
-      setStore("welcome", !store.welcome)
-    }, store.welcome ? 5000 : 10_000)
+    const pending = setTimeout(
+      () => {
+        setStore("welcome", !store.welcome)
+      },
+      store.welcome ? 5000 : 10_000,
+    )
 
     onCleanup(() => {
       clearTimeout(pending)

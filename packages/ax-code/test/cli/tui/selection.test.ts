@@ -11,9 +11,10 @@ afterEach(() => {
 describe("Selection.copy", () => {
   test("clears the current selection only after clipboard copy succeeds", async () => {
     let resolveCopy!: () => void
-    Clipboard.copy = (() => new Promise<void>((resolve) => {
-      resolveCopy = resolve
-    })) as typeof Clipboard.copy
+    Clipboard.copy = (() =>
+      new Promise<void>((resolve) => {
+        resolveCopy = resolve
+      })) as typeof Clipboard.copy
 
     let cleared = 0
     const renderer = {

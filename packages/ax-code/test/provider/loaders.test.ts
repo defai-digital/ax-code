@@ -99,7 +99,9 @@ describe("online provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          }),
         )
       },
     })
@@ -121,7 +123,9 @@ describe("online provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          }),
         )
       },
     })
@@ -144,7 +148,9 @@ describe("online provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          }),
         )
       },
     })
@@ -174,7 +180,9 @@ describe("offline provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          }),
         )
       },
     })
@@ -199,7 +207,9 @@ describe("offline provider loaders", () => {
       init: async (dir) => {
         await Bun.write(
           path.join(dir, "ax-code.json"),
-          JSON.stringify({ $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json" }),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          }),
         )
       },
     })

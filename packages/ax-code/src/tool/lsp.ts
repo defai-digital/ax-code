@@ -84,12 +84,7 @@ export const LspTool = Tool.define("lsp", {
     // failure we write one row — audit is load-bearing, not opt-in.
     // In queue mode this is ~zero-cost (array push). In sync mode
     // the caller absorbs the DB write latency.
-    const audit = (input: {
-      operation: string
-      args: unknown
-      envelope: unknown
-      errorCode?: string
-    }) => {
+    const audit = (input: { operation: string; args: unknown; envelope: unknown; errorCode?: string }) => {
       try {
         AuditSemanticCall.record({
           sessionID: ctx.sessionID,
@@ -163,7 +158,7 @@ export const LspTool = Tool.define("lsp", {
         metadata,
         output,
       }
-      }
+    }
 
     if (args.operation === "diagnosticsAggregated") {
       let file: string | undefined

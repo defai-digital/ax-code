@@ -99,19 +99,29 @@ export function Home() {
           />
         </box>
         <Show when={isFirstTimeUser()}>
-          <box flexDirection="column" alignItems="flex-start" flexShrink={0} maxWidth={75} paddingLeft={2} paddingRight={2}>
+          <box
+            flexDirection="column"
+            alignItems="flex-start"
+            flexShrink={0}
+            maxWidth={75}
+            paddingLeft={2}
+            paddingRight={2}
+          >
             <text>
-              <span style={{ fg: theme.accent }}>●</span>{"  "}
+              <span style={{ fg: theme.accent }}>●</span>
+              {"  "}
               <span style={{ fg: theme.text }}>Ask anything</span>
               <span style={{ fg: theme.textMuted }}> · just type your question</span>
             </text>
             <text>
-              <span style={{ fg: theme.accent }}>●</span>{"  "}
+              <span style={{ fg: theme.accent }}>●</span>
+              {"  "}
               <span style={{ fg: theme.text }}>/help</span>
               <span style={{ fg: theme.textMuted }}> · keyboard shortcuts and commands</span>
             </text>
             <text>
-              <span style={{ fg: theme.accent }}>●</span>{"  "}
+              <span style={{ fg: theme.accent }}>●</span>
+              {"  "}
               <span style={{ fg: theme.text }}>@filename</span>
               <span style={{ fg: theme.textMuted }}> · attach files from your project</span>
             </text>

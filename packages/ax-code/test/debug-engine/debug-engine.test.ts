@@ -91,14 +91,14 @@ function seedCallEdge(projectID: ProjectID, from: string, to: string, file: stri
 // every DRE call in the test suite.
 function v3RowSnapshot(projectID: ProjectID): { nodes: number; edges: number; files: number } {
   return {
-    nodes: Database.use((db) =>
-      db.select().from(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).all().length,
+    nodes: Database.use(
+      (db) => db.select().from(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).all().length,
     ),
-    edges: Database.use((db) =>
-      db.select().from(CodeEdgeTable).where(eq(CodeEdgeTable.project_id, projectID)).all().length,
+    edges: Database.use(
+      (db) => db.select().from(CodeEdgeTable).where(eq(CodeEdgeTable.project_id, projectID)).all().length,
     ),
-    files: Database.use((db) =>
-      db.select().from(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).all().length,
+    files: Database.use(
+      (db) => db.select().from(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).all().length,
     ),
   }
 }
@@ -107,11 +107,7 @@ function v3RowSnapshot(projectID: ProjectID): { nodes: number; edges: number; fi
 
 describe("analyzeBug — parseTypeScriptStack", () => {
   test("parses V8 form with symbol + location", () => {
-    const stack = [
-      "Error: boom",
-      "    at Foo.bar (/abs/a.ts:10:5)",
-      "    at handleRequest (/abs/b.ts:20:3)",
-    ].join("\n")
+    const stack = ["Error: boom", "    at Foo.bar (/abs/a.ts:10:5)", "    at handleRequest (/abs/b.ts:20:3)"].join("\n")
     const frames = parseTypeScriptStack(stack)
     expect(frames.length).toBe(2)
     expect(frames[0].file).toBe("/abs/a.ts")
@@ -220,10 +216,7 @@ describe("analyzeBug — end-to-end", () => {
         // File referenced in the stack trace has no seeded symbols.
         const result = await DebugEngine.analyzeBug(projectID, {
           error: "boom",
-          stackTrace: [
-            "Error: boom",
-            `    at anonFn (${path.join(tmp.path, "ghost.ts")}:5:1)`,
-          ].join("\n"),
+          stackTrace: ["Error: boom", `    at anonFn (${path.join(tmp.path, "ghost.ts")}:5:1)`].join("\n"),
         })
 
         // Frame is parsed but symbol is null.

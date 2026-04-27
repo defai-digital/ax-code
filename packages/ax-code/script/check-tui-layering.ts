@@ -15,7 +15,9 @@ function rule(spec: string): TuiLayeringGuardrails.Rule | undefined {
 }
 
 function skip(file: string) {
-  return file.includes("/node_modules/") || file.includes("/dist/") || file.includes("/.git/") || file.includes("/.turbo/")
+  return (
+    file.includes("/node_modules/") || file.includes("/dist/") || file.includes("/.git/") || file.includes("/.turbo/")
+  )
 }
 
 export namespace TuiLayeringGuardrails {

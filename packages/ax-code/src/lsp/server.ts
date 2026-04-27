@@ -14,13 +14,7 @@ import { which } from "../util/which"
 import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
 import { JS_LOCKFILES } from "@/constants/lsp"
-import {
-  log,
-  pathExists,
-  run,
-  output,
-  NearestRoot,
-} from "./server-helpers"
+import { log, pathExists, run, output, NearestRoot } from "./server-helpers"
 
 import * as _Defs from "./server-defs"
 

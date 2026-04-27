@@ -15,11 +15,13 @@ export namespace QualityPromotionReleaseDecisionRecord {
     overrideAccepted: z.boolean(),
     authorizedPromotion: z.boolean(),
     promotionMode: PromotionMode,
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type RecordSummary = z.output<typeof RecordSummary>
 
@@ -68,7 +70,8 @@ export namespace QualityPromotionReleaseDecisionRecord {
     return (
       record.boardDecision.reviewDossier.submissionBundle.decisionBundle.createdAt === decisionBundle.createdAt &&
       record.boardDecision.reviewDossier.submissionBundle.decisionBundle.source === decisionBundle.source &&
-      JSON.stringify(record.boardDecision.reviewDossier.submissionBundle.decisionBundle) === JSON.stringify(decisionBundle)
+      JSON.stringify(record.boardDecision.reviewDossier.submissionBundle.decisionBundle) ===
+        JSON.stringify(decisionBundle)
     )
   }
 
@@ -80,26 +83,30 @@ export namespace QualityPromotionReleaseDecisionRecord {
 
   function evaluateSummary(boardDecision: QualityPromotionBoardDecision.DecisionArtifact) {
     const promotionMode = expectedPromotionMode(boardDecision)
-    const authorizedPromotion = boardDecision.disposition !== "approved"
-      ? false
-      : boardDecision.summary.requiredOverride === "none"
-        ? !boardDecision.overrideAccepted
-        : boardDecision.overrideAccepted
+    const authorizedPromotion =
+      boardDecision.disposition !== "approved"
+        ? false
+        : boardDecision.summary.requiredOverride === "none"
+          ? !boardDecision.overrideAccepted
+          : boardDecision.overrideAccepted
 
     const gates = [
       {
         name: "board-decision-readiness",
         status: boardDecision.summary.overallStatus,
-        detail: boardDecision.summary.overallStatus === "pass"
-          ? `board decision ${boardDecision.decisionID} is ready`
-          : boardDecision.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "board decision not ready",
+        detail:
+          boardDecision.summary.overallStatus === "pass"
+            ? `board decision ${boardDecision.decisionID} is ready`
+            : (boardDecision.summary.gates.find((gate) => gate.status === "fail")?.detail ??
+              "board decision not ready"),
       },
       {
         name: "promotion-authorization",
         status: boardDecision.disposition === "approved" ? "pass" : "fail",
-        detail: boardDecision.disposition === "approved"
-          ? "board decision authorizes release promotion"
-          : `board decision disposition is ${boardDecision.disposition}`,
+        detail:
+          boardDecision.disposition === "approved"
+            ? "board decision authorizes release promotion"
+            : `board decision disposition is ${boardDecision.disposition}`,
       },
       {
         name: "override-mode",
@@ -125,9 +132,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
     })
   }
 
-  export function create(input: {
-    boardDecision: QualityPromotionBoardDecision.DecisionArtifact
-  }) {
+  export function create(input: { boardDecision: QualityPromotionBoardDecision.DecisionArtifact }) {
     const recordedAt = new Date().toISOString()
     const recordID = `${Date.now()}-${encode(input.boardDecision.source)}-release-decision-record`
     const decisionReasons = QualityPromotionBoardDecision.verify(
@@ -159,12 +164,17 @@ export namespace QualityPromotionReleaseDecisionRecord {
     if (record.source !== decisionBundle.source) {
       reasons.push(`release decision record source mismatch: ${record.source} vs ${decisionBundle.source}`)
     }
-    if (JSON.stringify(record.boardDecision.reviewDossier.submissionBundle.decisionBundle) !== JSON.stringify(decisionBundle)) {
+    if (
+      JSON.stringify(record.boardDecision.reviewDossier.submissionBundle.decisionBundle) !==
+      JSON.stringify(decisionBundle)
+    ) {
       reasons.push(`release decision record decision bundle mismatch for ${decisionBundle.source}`)
     }
     const decisionReasons = QualityPromotionBoardDecision.verify(decisionBundle, record.boardDecision)
     if (decisionReasons.length > 0) {
-      reasons.push(`release decision record board decision mismatch for ${decisionBundle.source} (${decisionReasons[0]})`)
+      reasons.push(
+        `release decision record board decision mismatch for ${decisionBundle.source} (${decisionReasons[0]})`,
+      )
     }
     const expectedSummary = evaluateSummary(record.boardDecision)
     if (JSON.stringify(record.summary) !== JSON.stringify(expectedSummary)) {
@@ -177,7 +187,9 @@ export namespace QualityPromotionReleaseDecisionRecord {
     decisionBundle: QualityPromotionBoardDecision.DecisionArtifact["reviewDossier"]["submissionBundle"]["decisionBundle"],
     records: RecordArtifact[] = [],
   ) {
-    const persisted = (await list(decisionBundle.source)).filter((record) => matchesDecisionBundle(decisionBundle, record))
+    const persisted = (await list(decisionBundle.source)).filter((record) =>
+      matchesDecisionBundle(decisionBundle, record),
+    )
     const deduped = new Map<string, RecordArtifact>()
     for (const record of [...persisted, ...records]) {
       if (!matchesDecisionBundle(decisionBundle, record)) continue
@@ -204,7 +216,9 @@ export namespace QualityPromotionReleaseDecisionRecord {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion release decision record ${record.recordID} already exists for source ${record.source} with different content`)
+      throw new Error(
+        `Promotion release decision record ${record.recordID} already exists for source ${record.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(record.source, record.recordID), next)
@@ -213,7 +227,9 @@ export namespace QualityPromotionReleaseDecisionRecord {
   }
 
   export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_release_decision_record", encode(source)]] : [["quality_model_release_decision_record"]]
+    const prefixes = source
+      ? [["quality_model_release_decision_record", encode(source)]]
+      : [["quality_model_release_decision_record"]]
     const records: RecordArtifact[] = []
 
     for (const prefix of prefixes) {
@@ -236,7 +252,9 @@ export namespace QualityPromotionReleaseDecisionRecord {
     const prev = JSON.stringify(persisted.record)
     const curr = JSON.stringify(record)
     if (prev !== curr) {
-      throw new Error(`Persisted promotion release decision record ${record.recordID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted promotion release decision record ${record.recordID} does not match the provided artifact`,
+      )
     }
     return persisted
   }

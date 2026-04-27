@@ -214,7 +214,7 @@ async function scanPatterns(root: string): Promise<MemorySection> {
 /**
  * Generate project memory.
  *
- * Recorded entries (userPrefs, feedback, decisions) on disk are preserved —
+ * Recorded entries (userPrefs, feedback, decisions, reference) on disk are preserved —
  * `generate()` only refreshes scanned sections. This lets the warmup CLI run
  * on a schedule without wiping user-curated memories.
  */
@@ -228,6 +228,8 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   // (recorded entries that the warmup pipeline doesn't regenerate).
   const existing = await store.load(root)
 
+  const now = new Date().toISOString()
+
   // Scan all sections in parallel
   const results = await Promise.allSettled([
     scanStructure(root, depth),
@@ -235,11 +237,11 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
     scanConfig(root),
     scanPatterns(root),
   ])
-  const empty: MemorySection = { content: "", tokens: 0 }
-  const structure = results[0].status === "fulfilled" ? results[0].value : empty
-  const readme = results[1].status === "fulfilled" ? results[1].value : empty
-  const config = results[2].status === "fulfilled" ? results[2].value : empty
-  const patterns = results[3].status === "fulfilled" ? results[3].value : empty
+  const empty: MemorySection = { content: "", tokens: 0, scannedAt: now }
+  const structure = results[0].status === "fulfilled" ? { ...results[0].value, scannedAt: now } : empty
+  const readme = results[1].status === "fulfilled" ? { ...results[1].value, scannedAt: now } : empty
+  const config = results[2].status === "fulfilled" ? { ...results[2].value, scannedAt: now } : empty
+  const patterns = results[3].status === "fulfilled" ? { ...results[3].value, scannedAt: now } : empty
 
   // Entry sections (user-curated) are preserved verbatim and given priority.
   // Their tokens are subtracted from the budget so scanned sections shrink to
@@ -248,9 +250,13 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   if (existing?.sections.userPrefs) sections.userPrefs = existing.sections.userPrefs
   if (existing?.sections.feedback) sections.feedback = existing.sections.feedback
   if (existing?.sections.decisions) sections.decisions = existing.sections.decisions
+  if (existing?.sections.reference) sections.reference = existing.sections.reference
 
   const entryTokens =
-    (sections.userPrefs?.tokens ?? 0) + (sections.feedback?.tokens ?? 0) + (sections.decisions?.tokens ?? 0)
+    (sections.userPrefs?.tokens ?? 0) +
+    (sections.feedback?.tokens ?? 0) +
+    (sections.decisions?.tokens ?? 0) +
+    (sections.reference?.tokens ?? 0)
   let remaining = Math.max(0, maxTokens - entryTokens)
 
   // Truncate scanned sections within the remaining budget.
@@ -264,14 +270,13 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
     if (section.tokens > 0 && remaining > 0) {
       const content = truncateToTokens(section.content, remaining)
       const tokens = estimateTokens(content)
-      sections[key] = { content, tokens }
+      sections[key] = { content, tokens, scannedAt: section.scannedAt }
       remaining -= tokens
     }
   }
 
   const totalTokens = Object.values(sections).reduce((sum, s) => sum + (s?.tokens ?? 0), 0)
 
-  const now = new Date().toISOString()
   const draft: ProjectMemory = {
     version: existing?.version ?? 1,
     created: existing?.created ?? now,

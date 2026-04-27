@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { createStore } from "solid-js/store"
-import { dispatchStoreBackedSyncEvent, type SyncEventStoreState } from "../../../src/cli/cmd/tui/context/sync-store-event"
+import {
+  dispatchStoreBackedSyncEvent,
+  type SyncEventStoreState,
+} from "../../../src/cli/cmd/tui/context/sync-store-event"
 import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
 
 type Session = { id: string }
@@ -144,7 +147,9 @@ describe("tui sync store event", () => {
     const cleared: string[] = []
 
     setStore({
-      permission: { ses_1: [{ id: "perm_1", sessionID: "ses_1", permission: "shell", patterns: [], metadata: {}, always: [] }] },
+      permission: {
+        ses_1: [{ id: "perm_1", sessionID: "ses_1", permission: "shell", patterns: [], metadata: {}, always: [] }],
+      },
       question: {},
       todo: { ses_1: [{ id: "todo_1" }] },
       session_diff: { ses_1: [{ path: "file.ts" }] },

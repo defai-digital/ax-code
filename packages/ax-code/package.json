@@ -78,6 +78,7 @@
     "@ai-sdk/provider": "3.0.8",
     "@ai-sdk/provider-utils": "4.0.22",
     "@ai-sdk/xai": "3.0.77",
+    "@openrouter/ai-sdk-provider": "2.8.1",
     "@ax-code/plugin": "workspace:*",
     "@ax-code/script": "workspace:*",
     "@ax-code/sdk": "workspace:*",

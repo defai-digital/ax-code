@@ -3,6 +3,7 @@ import { Bus } from "@/bus"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
 import { Instance } from "@/project/instance"
+import { Filesystem } from "@/util/filesystem"
 import { type IPty } from "bun-pty"
 import z from "zod"
 import { Log } from "../util/log"
@@ -208,11 +209,18 @@ export namespace Pty {
           const id = PtyID.ascending()
           const command = input.command || Shell.preferred()
           const args = [...(input.args ?? [])]
-          const shell = command.split(/[\\/]/).at(-1)?.replace(/\.exe$/i, "") ?? command
+          const shell =
+            command
+              .split(/[\\/]/)
+              .at(-1)
+              ?.replace(/\.exe$/i, "") ?? command
           if (["sh", "bash", "zsh", "dash", "ash", "ksh", "csh", "tcsh"].includes(shell)) {
             args.push("-l")
           }
 
+          if (input.cwd && !Filesystem.contains(Instance.directory, input.cwd)) {
+            throw new Error(`PTY cwd escapes project directory: ${input.cwd}`)
+          }
           const cwd = input.cwd || state.dir
           const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
           const baseEnv = Env.sanitize({

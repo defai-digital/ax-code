@@ -69,7 +69,9 @@ export namespace Truncate {
         let totalSize = 0
         const sizes: { name: string; size: number }[] = []
         for (const entry of remaining) {
-          const stat = yield* fs.stat(path.join(TRUNCATION_DIR, entry)).pipe(Effect.catch(() => Effect.succeed({ size: 0 as number })))
+          const stat = yield* fs
+            .stat(path.join(TRUNCATION_DIR, entry))
+            .pipe(Effect.catch(() => Effect.succeed({ size: 0 as number })))
           const size = Number(stat.size)
           sizes.push({ name: entry, size })
           totalSize += size

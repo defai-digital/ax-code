@@ -37,11 +37,7 @@ describe("tool.batch", () => {
       timeoutMs: 1000,
       run(signal) {
         return new Promise((_, reject) => {
-          signal.addEventListener(
-            "abort",
-            () => reject(signal.reason),
-            { once: true },
-          )
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true })
         })
       },
     })

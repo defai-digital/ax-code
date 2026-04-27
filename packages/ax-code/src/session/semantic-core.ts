@@ -166,14 +166,21 @@ export namespace SessionSemanticCore {
     const faster = delta(diff.before, diff.after, fast)
     const helpers = delta(diff.before, diff.after, helper)
 
-    if (file.includes("/__tests__/") || file.includes("/test/") || file.includes("/tests/") || file.includes(".test.") || file.includes(".spec."))
+    if (
+      file.includes("/__tests__/") ||
+      file.includes("/test/") ||
+      file.includes("/tests/") ||
+      file.includes(".test.") ||
+      file.includes(".spec.")
+    )
       return "test"
     if (docs.has(ext)) return "documentation"
     if (dep.has(name(file))) return "dependency"
     if (cfg.has(ext) || file.includes(".env") || name(file).startsWith("tsconfig") || name(file) === "bunfig.toml")
       return "configuration"
     if (diff.status === "deleted") return "rewrite"
-    if (code.has(ext) && (churn >= 180 || (Math.max(before, after) >= 80 && (ratio >= 2.5 || ratio <= 0.4)))) return "rewrite"
+    if (code.has(ext) && (churn >= 180 || (Math.max(before, after) >= 80 && (ratio >= 2.5 || ratio <= 0.4))))
+      return "rewrite"
     if (faster > 0 && churn <= 120) return "optimization"
     if (guards > 0 && churn <= 100) return "bug_fix"
     if (helpers > 0 || code.has(ext)) return "refactor"

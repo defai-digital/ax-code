@@ -1,12 +1,6 @@
 import { createHash } from "node:crypto"
 import z from "zod"
-import {
-  ArtifactRefKind,
-  Category,
-  EvidenceRefKind,
-  Severity,
-  Workflow,
-} from "./finding-registry"
+import { ArtifactRefKind, Category, EvidenceRefKind, Severity, Workflow } from "./finding-registry"
 
 export const SeverityEnum = z.enum(Severity)
 export const CategoryEnum = z.enum(Category)
@@ -74,10 +68,7 @@ export type FindingIdInput = {
 // reloads and across multiple `/review` runs for the same defect, so consumers
 // (PR comment refresh, session artifact dedup) can detect duplicates by id.
 export function computeFindingId(input: FindingIdInput): string {
-  const anchorRef =
-    input.anchor.kind === "line" ? `line:${input.anchor.line}` : `symbol:${input.anchor.symbolId}`
-  const payload = [input.workflow, input.category, input.file, anchorRef, input.ruleId ?? ""].join(
-    "\u0000",
-  )
+  const anchorRef = input.anchor.kind === "line" ? `line:${input.anchor.line}` : `symbol:${input.anchor.symbolId}`
+  const payload = [input.workflow, input.category, input.file, anchorRef, input.ruleId ?? ""].join("\u0000")
   return createHash("sha256").update(payload).digest("hex").slice(0, 16)
 }

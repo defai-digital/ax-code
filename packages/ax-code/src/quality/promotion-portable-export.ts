@@ -29,11 +29,13 @@ export namespace QualityPromotionPortableExport {
     fileCount: z.number().int().positive(),
     documentCount: z.number().int().positive(),
     previousActiveSource: z.string().nullable(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ExportSummary = z.output<typeof ExportSummary>
 
@@ -88,8 +90,11 @@ export namespace QualityPromotionPortableExport {
     promotion: QualityPromotionHandoffPackage.PackageArtifact["archiveManifest"]["exportBundle"]["auditManifest"]["promotion"],
     exportArtifact: ExportArtifact,
   ) {
-    return exportArtifact.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID === promotion.promotionID
-      && exportArtifact.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.source === promotion.source
+    return (
+      exportArtifact.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID ===
+        promotion.promotionID &&
+      exportArtifact.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.source === promotion.source
+    )
   }
 
   function jsonFile(filePath: string, value: unknown) {
@@ -148,7 +153,9 @@ export namespace QualityPromotionPortableExport {
       jsonFile("manifest/handoff-package-summary.json", handoffPackage.summary),
       jsonFile("manifest/archive-manifest.json", handoffPackage.archiveManifest),
       jsonFile("manifest/archive-manifest-summary.json", handoffPackage.archiveManifest.summary),
-      ...handoffPackage.documents.map((document) => markdownFile(path.posix.join("docs", document.name), document.content)),
+      ...handoffPackage.documents.map((document) =>
+        markdownFile(path.posix.join("docs", document.name), document.content),
+      ),
     ]
     return sortFiles(files)
   }
@@ -191,7 +198,8 @@ export namespace QualityPromotionPortableExport {
       archiveManifestStatus: handoffPackage.archiveManifest.summary.overallStatus,
       exportBundleStatus: handoffPackage.archiveManifest.exportBundle.summary.overallStatus,
       auditManifestStatus: handoffPackage.archiveManifest.exportBundle.auditManifest.summary.overallStatus,
-      releasePacketStatus: handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket.summary.overallStatus,
+      releasePacketStatus:
+        handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket.summary.overallStatus,
       promotionRecorded: handoffPackage.summary.promotionRecorded,
       promotionDecision: handoffPackage.summary.promotionDecision,
       promotionMode: handoffPackage.summary.promotionMode,
@@ -203,12 +211,12 @@ export namespace QualityPromotionPortableExport {
     })
   }
 
-  export function create(input: {
-    handoffPackage: QualityPromotionHandoffPackage.PackageArtifact
-  }) {
+  export function create(input: { handoffPackage: QualityPromotionHandoffPackage.PackageArtifact }) {
     const packageReasons = QualityPromotionHandoffPackage.verify(input.handoffPackage)
     if (packageReasons.length > 0) {
-      throw new Error(`Cannot create promotion portable export for ${input.handoffPackage.source}: invalid handoff package (${packageReasons[0]})`)
+      throw new Error(
+        `Cannot create promotion portable export for ${input.handoffPackage.source}: invalid handoff package (${packageReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const exportID = `${input.handoffPackage.packageID}-portable-export`
@@ -229,7 +237,9 @@ export namespace QualityPromotionPortableExport {
   export function verify(exportArtifact: ExportArtifact) {
     const reasons: string[] = []
     if (exportArtifact.source !== exportArtifact.handoffPackage.source) {
-      reasons.push(`portable export source mismatch: ${exportArtifact.source} vs ${exportArtifact.handoffPackage.source}`)
+      reasons.push(
+        `portable export source mismatch: ${exportArtifact.source} vs ${exportArtifact.handoffPackage.source}`,
+      )
     }
     const packageReasons = QualityPromotionHandoffPackage.verify(exportArtifact.handoffPackage)
     if (packageReasons.length > 0) {
@@ -250,7 +260,9 @@ export namespace QualityPromotionPortableExport {
     promotion: QualityPromotionHandoffPackage.PackageArtifact["archiveManifest"]["exportBundle"]["auditManifest"]["promotion"],
     exports: ExportArtifact[] = [],
   ) {
-    const persisted = (await list(promotion.source)).filter((exportArtifact) => matchesPromotion(promotion, exportArtifact))
+    const persisted = (await list(promotion.source)).filter((exportArtifact) =>
+      matchesPromotion(promotion, exportArtifact),
+    )
     const deduped = new Map<string, ExportArtifact>()
     for (const exportArtifact of [...persisted, ...exports]) {
       if (!matchesPromotion(promotion, exportArtifact)) continue
@@ -277,7 +289,9 @@ export namespace QualityPromotionPortableExport {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion portable export ${exportArtifact.exportID} already exists for source ${exportArtifact.source} with different content`)
+      throw new Error(
+        `Promotion portable export ${exportArtifact.exportID} already exists for source ${exportArtifact.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(exportArtifact.source, exportArtifact.exportID), next)
@@ -309,7 +323,9 @@ export namespace QualityPromotionPortableExport {
     const prev = JSON.stringify(persisted.export)
     const curr = JSON.stringify(exportArtifact)
     if (prev !== curr) {
-      throw new Error(`Persisted promotion portable export ${exportArtifact.exportID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted promotion portable export ${exportArtifact.exportID} does not match the provided artifact`,
+      )
     }
     return persisted
   }
@@ -340,7 +356,9 @@ export namespace QualityPromotionPortableExport {
     lines.push(`- created at: ${exportArtifact.createdAt}`)
     lines.push(`- handoff package id: ${exportArtifact.handoffPackage.packageID}`)
     lines.push(`- archive manifest id: ${exportArtifact.handoffPackage.archiveManifest.archiveID}`)
-    lines.push(`- promotion id: ${exportArtifact.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID}`)
+    lines.push(
+      `- promotion id: ${exportArtifact.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID}`,
+    )
     lines.push(`- promotion mode: ${exportArtifact.summary.promotionMode}`)
     lines.push(`- authorized promotion: ${exportArtifact.summary.authorizedPromotion}`)
     lines.push(`- file count: ${exportArtifact.summary.fileCount}`)

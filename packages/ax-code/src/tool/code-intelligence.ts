@@ -67,9 +67,18 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
     operation: z.enum(operations).describe("Which Code Intelligence query to run"),
     name: z.string().optional().describe("Symbol name (for findSymbol) or prefix (for findSymbolByPrefix)"),
     file: z.string().optional().describe("Absolute file path (for symbolsInFile)"),
-    symbolID: z.string().optional().describe("Symbol id from a previous findSymbol call (for findReferences/findCallers/findCallees)"),
+    symbolID: z
+      .string()
+      .optional()
+      .describe("Symbol id from a previous findSymbol call (for findReferences/findCallers/findCallees)"),
     kind: z.enum(NODE_KINDS).optional().describe("Optional kind filter for findSymbol/findSymbolByPrefix"),
-    limit: z.number().int().min(1).max(MAX_RESULTS).optional().describe(`Max results to return (default ${MAX_RESULTS})`),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_RESULTS)
+      .optional()
+      .describe(`Max results to return (default ${MAX_RESULTS})`),
   }),
   execute: async (args, ctx) => {
     await ctx.ask({
@@ -92,9 +101,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
         const envelope = CodeIntelligence.graphEnvelope(projectID, symbols)
         return {
           title: `findSymbol ${args.name}${args.kind ? ` (${args.kind})` : ""}`,
-          output: symbols.length === 0
-            ? `No symbols named "${args.name}"`
-            : symbols.map(formatSymbol).join("\n"),
+          output: symbols.length === 0 ? `No symbols named "${args.name}"` : symbols.map(formatSymbol).join("\n"),
           metadata: { count: symbols.length, symbols, envelope },
         }
       }
@@ -104,9 +111,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
         const envelope = CodeIntelligence.graphEnvelope(projectID, symbols)
         return {
           title: `findSymbolByPrefix ${args.name}`,
-          output: symbols.length === 0
-            ? `No symbols with prefix "${args.name}"`
-            : symbols.map(formatSymbol).join("\n"),
+          output: symbols.length === 0 ? `No symbols with prefix "${args.name}"` : symbols.map(formatSymbol).join("\n"),
           metadata: { count: symbols.length, symbols, envelope },
         }
       }
@@ -117,9 +122,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
         const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
           title: `symbolsInFile ${args.file}`,
-          output: clipped.length === 0
-            ? `No indexed symbols in ${args.file}`
-            : clipped.map(formatSymbol).join("\n"),
+          output: clipped.length === 0 ? `No indexed symbols in ${args.file}` : clipped.map(formatSymbol).join("\n"),
           metadata: { count: symbols.length, truncated: symbols.length > clipped.length, symbols: clipped, envelope },
         }
       }
@@ -130,9 +133,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
         const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
           title: `findReferences ${args.symbolID}`,
-          output: clipped.length === 0
-            ? `No references found`
-            : clipped.map(formatReference).join("\n"),
+          output: clipped.length === 0 ? `No references found` : clipped.map(formatReference).join("\n"),
           metadata: { count: refs.length, truncated: refs.length > clipped.length, references: clipped, envelope },
         }
       }
@@ -143,9 +144,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
         const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
           title: `findCallers ${args.symbolID}`,
-          output: clipped.length === 0
-            ? `No callers found`
-            : clipped.map(formatCallChainNode).join("\n"),
+          output: clipped.length === 0 ? `No callers found` : clipped.map(formatCallChainNode).join("\n"),
           metadata: { count: callers.length, truncated: callers.length > clipped.length, callers: clipped, envelope },
         }
       }
@@ -156,9 +155,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
         const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
           title: `findCallees ${args.symbolID}`,
-          output: clipped.length === 0
-            ? `No callees found`
-            : clipped.map(formatCallChainNode).join("\n"),
+          output: clipped.length === 0 ? `No callees found` : clipped.map(formatCallChainNode).join("\n"),
           metadata: { count: callees.length, truncated: callees.length > clipped.length, callees: clipped, envelope },
         }
       }

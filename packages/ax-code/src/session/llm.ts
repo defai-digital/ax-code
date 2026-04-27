@@ -271,19 +271,23 @@ export namespace LLM {
   // Cache Permission.disabled() results — the ruleset rarely changes within a session
   let _disabledCache: { key: string; toolKeys: string; result: Set<string> } | undefined
 
-  async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">, cfg: Awaited<ReturnType<typeof Config.get>>) {
+  async function resolveTools(
+    input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">,
+    cfg: Awaited<ReturnType<typeof Config.get>>,
+  ) {
     const tools = { ...input.tools }
     const ruleset = Permission.merge(input.agent.permission, input.permission ?? [])
     const toolKeys = Object.keys(tools)
     const toolKeysStr = toolKeys.join(",")
     const key = JSON.stringify(ruleset)
-    const disabled = (_disabledCache?.key === key && _disabledCache.toolKeys === toolKeysStr)
-      ? _disabledCache.result
-      : (() => {
-        const r = Permission.disabled(toolKeys, ruleset)
-        _disabledCache = { key, toolKeys: toolKeysStr, result: r }
-        return r
-      })()
+    const disabled =
+      _disabledCache?.key === key && _disabledCache.toolKeys === toolKeysStr
+        ? _disabledCache.result
+        : (() => {
+            const r = Permission.disabled(toolKeys, ruleset)
+            _disabledCache = { key, toolKeys: toolKeysStr, result: r }
+            return r
+          })()
     for (const tool of toolKeys) {
       if (input.user.tools?.[tool] === false || disabled.has(tool)) {
         delete tools[tool]

@@ -178,13 +178,36 @@ export namespace InstructionPrompt {
         log.warn("instruction URL rejected by SSRF guard", { url, err })
         return ""
       }
+      const INSTRUCTION_MAX_BYTES = 1024 * 1024 // 1MB
       return Ssrf.pinnedFetch(url, { signal: AbortSignal.timeout(5000) })
-        .then((res) => {
+        .then(async (res) => {
           if (!res.ok) {
             log.warn("instruction URL returned non-ok", { url, status: res.status })
             return ""
           }
-          return res.text()
+          const contentLength = res.headers.get("content-length")
+          if (contentLength && parseInt(contentLength, 10) > INSTRUCTION_MAX_BYTES) {
+            log.warn("instruction URL response too large", { url, contentLength })
+            return ""
+          }
+          const reader = res.body?.getReader()
+          if (!reader) return res.text()
+          const chunks: Uint8Array[] = []
+          let total = 0
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            total += value.byteLength
+            if (total > INSTRUCTION_MAX_BYTES) {
+              await reader.cancel()
+              log.warn("instruction URL response exceeded size limit", { url, limit: INSTRUCTION_MAX_BYTES })
+              return ""
+            }
+            chunks.push(value)
+          }
+          return new TextDecoder().decode(
+            chunks.reduce((acc, c) => { const merged = new Uint8Array(acc.byteLength + c.byteLength); merged.set(acc); merged.set(c, acc.byteLength); return merged }, new Uint8Array()),
+          )
         })
         .catch((err) => {
           log.warn("instruction URL fetch failed", { url, err })

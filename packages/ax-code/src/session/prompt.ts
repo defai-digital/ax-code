@@ -30,8 +30,7 @@ import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
-import { route as routeAgent, classifyComplexity } from "../agent/router"
-import { TuiEvent } from "../cli/cmd/tui/event"
+import { classifyComplexity } from "../agent/router"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
@@ -329,7 +328,10 @@ export namespace SessionPrompt {
       })
       .optional(),
     agent: z.string().optional(),
-    userSelectedAgent: z.boolean().optional(),
+    userSelectedAgent: z
+      .boolean()
+      .optional()
+      .describe("@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored."),
     noReply: z.boolean().optional(),
     tools: z
       .record(z.string(), z.boolean())
@@ -885,7 +887,9 @@ export namespace SessionPrompt {
             sessionID,
             error: e,
           })
-          await Session.setTitle({ sessionID, title: "Untitled session" }).catch(() => {})
+          await Session.setTitle({ sessionID, title: "Untitled session" }).catch((e) => {
+            log.warn("fallback setTitle also failed", { sessionID, error: e })
+          })
         })
       }
 
@@ -894,16 +898,22 @@ export namespace SessionPrompt {
 
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
-      // Build system prompt — cache environment and instructions across steps
+      // Build system prompt and convert messages to model format in parallel —
+      // both walk the same msgs/model independently with no side effects on
+      // each other, so awaiting them sequentially wastes wall-clock time on
+      // long sessions where toModelMessages can run 10-30ms.
       const format = lastUser.format ?? { type: "text" }
-      const system = await getSystemPrompt({
-        agent,
-        model,
-        format,
-        cache: cachedSystemPrompt,
-        messages: msgs,
-        structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
-      })
+      const [system, modelMessages] = await Promise.all([
+        getSystemPrompt({
+          agent,
+          model,
+          format,
+          cache: cachedSystemPrompt,
+          messages: msgs,
+          structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
+        }),
+        MessageV2.toModelMessages(msgs, model),
+      ])
 
       const result = await processor.process({
         user: lastUser,
@@ -913,7 +923,7 @@ export namespace SessionPrompt {
         sessionID,
         system,
         messages: [
-          ...(await MessageV2.toModelMessages(msgs, model)),
+          ...modelMessages,
           ...(isLastStep
             ? [
                 {
@@ -1318,57 +1328,13 @@ export namespace SessionPrompt {
 
   async function createUserMessage(input: PromptInput) {
     const messageID = input.messageID ?? MessageID.ascending()
-    let agentName = input.agent || (await Agent.defaultAgent())
+    const agentName = input.agent || (await Agent.defaultAgent())
     const messageText = input.parts
       .filter((p): p is typeof p & { type: "text" } => p.type === "text")
       .map((p) => p.text)
       .join(" ")
-    const routedParts: PromptInput["parts"] = [...input.parts]
-
-    // v2-style auto agent switching: simple sync keyword route, fires whenever
-    // a topic keyword scores ≥ 0.4. Skipped only when the user explicitly named
-    // an agent (@-mention), or when routing.disable is set in config.
-    const cfg = await Config.get()
-    const hasAgentPart = input.parts.some((p) => p.type === "agent")
-    const routingDisabled = cfg.routing?.disable === true
-    if (messageText && !hasAgentPart && !routingDisabled) {
-      const routeResult = routeAgent(messageText, agentName)
-      if (routeResult) {
-        const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
-        if (routedAgent) {
-          const routedLabel = routedAgent.displayName ?? routeResult.agent
-          Recorder.emit({
-            type: "agent.route",
-            sessionID: input.sessionID,
-            messageID,
-            fromAgent: agentName,
-            toAgent: routeResult.agent,
-            confidence: routeResult.confidence,
-            routeMode: "switch",
-            matched: routeResult.matched,
-          })
-          agentName = routeResult.agent
-          log.info("auto-routed to agent", {
-            command: "session.prompt.route",
-            status: "ok",
-            sessionID: input.sessionID,
-            agent: routeResult.agent,
-            confidence: routeResult.confidence,
-          })
-          Bus.publishDetached(TuiEvent.ToastShow, {
-            title: "Agent Auto-Switched",
-            message: `Switched to "${routedLabel}" agent for this task`,
-            variant: "info",
-            duration: 5000,
-          })
-        } else {
-          log.warn("auto-route target not found", { agent: routeResult.agent })
-        }
-      }
-    }
-
-    // Classify message complexity (independent of agent routing) so simple
-    // queries can use a small/fast model.
+    // Keyword auto-routing was removed — specialists are invoked via @-mention only.
+    // Classify message complexity so simple queries can use a small/fast model.
     const messageComplexity = messageText ? (await classifyComplexity(messageText)).complexity : null
 
     const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
@@ -1428,7 +1394,7 @@ export namespace SessionPrompt {
     })
 
     const parts = await Promise.all(
-      routedParts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
+      input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
         if (part.type === "file") {
           // before checking the protocol we check if this is an mcp resource because it needs special handling
           if (part.source?.type === "resource") {
@@ -1945,15 +1911,20 @@ export namespace SessionPrompt {
     // inserts with independent bus publishes. For messages with many
     // file attachments (screenshots, paste images), sequential awaits
     // added ~10-50ms per part.
+    const partFailures: string[] = []
     await Promise.all(
       parts.map(async (part) => {
         try {
           await Session.updatePart(part)
         } catch (e) {
           log.warn("failed to persist part", { partID: part.id, err: e })
+          partFailures.push(part.id)
         }
       }),
     )
+    if (partFailures.length > 0) {
+      throw new Error(`Failed to persist ${partFailures.length} message part(s): ${partFailures.join(", ")}`)
+    }
 
     return {
       info,

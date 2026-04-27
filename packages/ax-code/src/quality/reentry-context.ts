@@ -98,10 +98,7 @@ export namespace QualityReentryContext {
     })
   }
 
-  export function create(input: {
-    rollback: RollbackLike
-    watch: WatchLike
-  }): ContextArtifact {
+  export function create(input: { rollback: RollbackLike; watch: WatchLike }): ContextArtifact {
     const contextID = input.rollback.rollbackID
     return ContextArtifact.parse({
       schemaVersion: 1,
@@ -148,7 +145,9 @@ export namespace QualityReentryContext {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Reentry context ${context.contextID} already exists for source ${context.source} with different content`)
+      throw new Error(
+        `Reentry context ${context.contextID} already exists for source ${context.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(context.source, context.contextID), next)

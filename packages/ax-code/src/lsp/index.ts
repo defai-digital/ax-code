@@ -117,11 +117,7 @@ export namespace LSP {
   // in-memory sampler. The operation name is the public API surface
   // (`touch`, `documentSymbol`, `references`, `workspaceSymbol`), not the
   // underlying RPC method — callers aggregate on the surface name.
-  async function metered<T>(
-    operation: string,
-    extra: Record<string, unknown>,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async function metered<T>(operation: string, extra: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
     const started = performance.now()
     try {
       const result = await fn()
@@ -708,7 +704,8 @@ export namespace LSP {
     const probeByServer = new Map<string, string>()
     let freshSpawnCount = 0
     const eligibleServers = Object.values(s.servers).filter(
-      (server) => clientModeMatchesServer(mode, server.semantic) && clientMethodMatchesServer(methods, server.capabilityHints),
+      (server) =>
+        clientModeMatchesServer(mode, server.semantic) && clientMethodMatchesServer(methods, server.capabilityHints),
     )
 
     // Cold workspace symbol should not spawn every configured server.
@@ -879,7 +876,10 @@ export namespace LSP {
         }
 
         const targets = [...planned.entries()]
-          .filter(([, target]) => !s.clients.find((client) => client.root === target.root && client.serverID === target.server.id))
+          .filter(
+            ([, target]) =>
+              !s.clients.find((client) => client.root === target.root && client.serverID === target.server.id),
+          )
           .sort(([, a], [, b]) => {
             if ((a.server.priority ?? 0) !== (b.server.priority ?? 0)) {
               return (b.server.priority ?? 0) - (a.server.priority ?? 0)
@@ -1023,9 +1023,7 @@ export namespace LSP {
     // the serverID and do not block cleanup on the other clients — local
     // state eviction on the failing client still happens inside notify.close
     // because notify.close only catches connection errors, not state deletes.
-    const results = await Promise.allSettled(
-      s.clients.map((client) => client.notify.close({ path: input, deleted })),
-    )
+    const results = await Promise.allSettled(s.clients.map((client) => client.notify.close({ path: input, deleted })))
     for (let i = 0; i < results.length; i++) {
       const r = results[i]
       if (r.status === "rejected") {
@@ -1110,14 +1108,7 @@ export namespace LSP {
 
   function dedupKeyOf(path: string, d: LSPClient.Diagnostic): string {
     const r = d.range
-    return [
-      path,
-      r.start.line,
-      r.start.character,
-      r.end.line,
-      r.end.character,
-      d.message,
-    ].join("\u0000")
+    return [path, r.start.line, r.start.character, r.end.line, r.end.character, d.message].join("\u0000")
   }
 
   // Pure aggregation kernel, exported for unit tests. Real call site
@@ -1182,8 +1173,7 @@ export namespace LSP {
     data.sort((a, b) => {
       if (a.path !== b.path) return a.path < b.path ? -1 : 1
       if (a.range.start.line !== b.range.start.line) return a.range.start.line - b.range.start.line
-      if (a.range.start.character !== b.range.start.character)
-        return a.range.start.character - b.range.start.character
+      if (a.range.start.character !== b.range.start.character) return a.range.start.character - b.range.start.character
       return a.message < b.message ? -1 : a.message > b.message ? 1 : 0
     })
 
@@ -1842,7 +1832,10 @@ export namespace LSP {
             RPC_TIMEOUT_MS,
           )) as unknown[]
           if (!items?.length) return []
-          return withTimeout(client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }), RPC_TIMEOUT_MS)
+          return withTimeout(
+            client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }),
+            RPC_TIMEOUT_MS,
+          )
         },
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
@@ -1875,7 +1868,10 @@ export namespace LSP {
             RPC_TIMEOUT_MS,
           )) as unknown[]
           if (!items?.length) return []
-          return withTimeout(client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }), RPC_TIMEOUT_MS)
+          return withTimeout(
+            client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }),
+            RPC_TIMEOUT_MS,
+          )
         },
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
@@ -2047,11 +2043,7 @@ export namespace LSP {
     // between "no one had anything to say" (empty) and "some subset
     // answered, others errored" (partial).
     const completeness: "full" | "partial" | "empty" =
-      participatingServerIDs.length === 0
-        ? "empty"
-        : failures === 0
-          ? "full"
-          : "partial"
+      participatingServerIDs.length === 0 ? "empty" : failures === 0 ? "full" : "partial"
     // degraded = any non-MethodNotFound failure, OR no server
     // participated when the file type matched at least one server
     // (the clients.length check above already short-circuits the

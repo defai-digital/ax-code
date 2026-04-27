@@ -72,8 +72,8 @@ describe("tui session routing helpers", () => {
 
   test("renders complexity events as the fast-model indicator", () => {
     // Only "complexity" events are emitted now; agent-routing was removed.
-    // Legacy "switch"/"delegate" rows from older sessions still render as the same
-    // fast-model indicator so historical replays don't crash.
+    // Legacy "switch"/"delegate" rows from older sessions still render as the
+    // agent-switch indicator (⇄) so historical replays don't crash.
     const item = routeEvent({
       time_created: 10,
       event_data: {

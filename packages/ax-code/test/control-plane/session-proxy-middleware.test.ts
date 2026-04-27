@@ -157,7 +157,10 @@ describe("control-plane/session-proxy-middleware", () => {
     const ctx = await setup(state)
 
     Database.use((db) => {
-      db.update(WorkspaceTable).set({ extra: ["bad"] as any }).where(eq(WorkspaceTable.id, ctx.id1)).run()
+      db.update(WorkspaceTable)
+        .set({ extra: ["bad"] as any })
+        .where(eq(WorkspaceTable.id, ctx.id1))
+        .run()
     })
 
     ctx.app.post("/session/foo", (c) => c.text("local", 200))

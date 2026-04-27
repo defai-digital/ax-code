@@ -56,11 +56,8 @@ export const geminiCliParser: CliOutputParser = {
       if (event.type === "result" && typeof event.text === "string") return { text: event.text }
       if (event.type === "result" && typeof event.content === "string") return { text: event.content }
       if (event.type === "message" && event.role !== "user") {
-        const text = typeof event.content === "string"
-          ? event.content
-          : typeof event.text === "string"
-            ? event.text
-            : null
+        const text =
+          typeof event.content === "string" ? event.content : typeof event.text === "string" ? event.text : null
         if (text) parts.push(text)
       }
     }
@@ -93,7 +90,10 @@ export const codexCliParser: CliOutputParser = {
       }
       if (event.type === "item.completed" && event.item?.content) {
         const text = Array.isArray(event.item.content)
-          ? event.item.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("")
+          ? event.item.content
+              .filter((b: any) => b.type === "text")
+              .map((b: any) => b.text)
+              .join("")
           : typeof event.item.content === "string"
             ? event.item.content
             : null

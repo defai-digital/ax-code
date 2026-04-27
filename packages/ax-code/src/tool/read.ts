@@ -57,10 +57,11 @@ export const ReadTool = Tool.define("read", {
   description: DESCRIPTION,
   parameters: z.object({
     filePath: z.string().describe("The absolute path to the file or directory to read"),
-    offset: z.coerce.number().describe("The line number to start reading from (1-indexed)").optional(),
-    limit: z.coerce.number().describe("The maximum number of lines to read (defaults to 2000)").optional(),
+    offset: z.coerce.number().int().min(1).describe("The line number to start reading from (1-indexed)").optional(),
+    limit: z.coerce.number().max(10000).describe("The maximum number of lines to read (defaults to 2000)").optional(),
   }),
   async execute(params, ctx) {
+    if (params.filePath.includes("\x00")) throw readError("ReadInvalidPathError", "File path contains null byte")
     if (params.offset !== undefined && params.offset < 1) {
       throw readError("ReadInvalidOffsetError", "offset must be greater than or equal to 1")
     }
@@ -115,7 +116,10 @@ export const ReadTool = Tool.define("read", {
           .catch(() => [])
 
         if (suggestions.length > 0) {
-          throw readError("ReadFileNotFoundError", `File not found: ${filepath}\n\nDid you mean one of these?\n${suggestions.join("\n")}`)
+          throw readError(
+            "ReadFileNotFoundError",
+            `File not found: ${filepath}\n\nDid you mean one of these?\n${suggestions.join("\n")}`,
+          )
         }
 
         throw readError("ReadFileNotFoundError", `File not found: ${filepath}`)
@@ -213,10 +217,13 @@ export const ReadTool = Tool.define("read", {
       const raw: string[] = []
       let bytes = 0
       let lines = 0
+      let firstLine = true
       let truncatedByBytes = false
       let hasMoreLines = false
       try {
         for await (const text of rl) {
+          const normalizedText = firstLine && text.startsWith("\uFEFF") ? text.slice(1) : text
+          firstLine = false
           lines += 1
           if (lines <= start) continue
 
@@ -225,7 +232,10 @@ export const ReadTool = Tool.define("read", {
             continue
           }
 
-          const line = text.length > MAX_LINE_LENGTH ? text.substring(0, MAX_LINE_LENGTH) + MAX_LINE_SUFFIX : text
+          const line =
+            normalizedText.length > MAX_LINE_LENGTH
+              ? normalizedText.substring(0, MAX_LINE_LENGTH) + MAX_LINE_SUFFIX
+              : normalizedText
           const size = Buffer.byteLength(line, "utf-8") + (raw.length > 0 ? 1 : 0)
           if (bytes + size > MAX_BYTES) {
             truncatedByBytes = true

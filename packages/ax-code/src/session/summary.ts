@@ -75,7 +75,7 @@ export namespace SessionSummary {
     input: { sessionID: SessionID; messageID: MessageID },
     messages?: MessageV2.WithParts[],
   ) {
-    const all = messages ?? await Session.messages({ sessionID: input.sessionID })
+    const all = messages ?? (await Session.messages({ sessionID: input.sessionID }))
     const settled = await Promise.allSettled([
       summarizeSession({ sessionID: input.sessionID, messages: all }),
       summarizeMessage({ messageID: input.messageID, messages: all }),

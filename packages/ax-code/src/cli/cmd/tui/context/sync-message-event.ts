@@ -22,10 +22,7 @@ export interface MessageSyncEventHandlers<
 export function handleMessageSyncEvent<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
->(
-  event: MessageSyncEvent<TMessage, TPart>,
-  handlers: MessageSyncEventHandlers<TMessage, TPart>,
-) {
+>(event: MessageSyncEvent<TMessage, TPart>, handlers: MessageSyncEventHandlers<TMessage, TPart>) {
   switch (event.type) {
     case "message.updated":
       handlers.updateMessage(event.properties.info.sessionID, event.properties.info)

@@ -11,6 +11,7 @@ We value community feedback. The best ways to contribute are:
 Found something broken? [Open a bug report](https://github.com/defai-digital/ax-code/issues/new?template=bug_report.yml).
 
 Include:
+
 - What you expected vs. what happened
 - Steps to reproduce
 - Your platform (OS, AX Code version, provider/model)

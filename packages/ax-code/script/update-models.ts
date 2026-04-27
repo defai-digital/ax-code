@@ -57,17 +57,30 @@ for (const id of ["alibaba", "alibaba-cn", "alibaba-coding-plan", "alibaba-codin
   if (!kept["qwen3.5-flash"] && fetched["alibaba-cn"]?.models?.["qwen3.5-flash"]) {
     kept["qwen3.5-flash"] = JSON.parse(JSON.stringify(fetched["alibaba-cn"].models["qwen3.5-flash"]))
   }
-  // Zero all cost fields for coding plan (flat-rate subscription)
-  if (id.includes("coding-plan")) {
-    for (const m of Object.values(kept) as any[]) {
-      if (m.cost && typeof m.cost === "object") {
-        for (const key of Object.keys(m.cost)) m.cost[key] = 0
+  fetched[id].models = kept
+}
+
+// Strip cost fields from every model — cost telemetry is removed from
+// ax-code, and zod will silently drop these on parse anyway. Removing them
+// here keeps the snapshot small and prevents the pre-commit hook from
+// re-introducing thousands of dead JSON entries on each regeneration.
+// Also strips nested experimental.modes.<name>.cost which models.dev uses
+// to surface alternate-mode pricing.
+type ModelEntry = {
+  cost?: unknown
+  experimental?: { modes?: Record<string, { cost?: unknown }> } | unknown
+}
+for (const provider of Object.values(fetched) as Array<{ models?: Record<string, ModelEntry> }>) {
+  for (const model of Object.values(provider.models ?? {})) {
+    delete model.cost
+    const experimental = model.experimental
+    if (experimental && typeof experimental === "object" && "modes" in experimental) {
+      const modes = (experimental as { modes?: Record<string, { cost?: unknown }> }).modes
+      for (const mode of Object.values(modes ?? {})) {
+        delete mode.cost
       }
-      // Ensure required fields exist
-      m.cost = { input: 0, output: 0, cache_read: 0, cache_write: 0, ...m.cost }
     }
   }
-  fetched[id].models = kept
 }
 
 // Apply display name overrides

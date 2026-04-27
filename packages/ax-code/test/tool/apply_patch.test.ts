@@ -167,6 +167,61 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("fails add verification when an existing file cannot be read", async () => {
+    await using fixture = await tmpdir({ git: true })
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "blocked.txt")
+        await fs.writeFile(target, "old\n", "utf-8")
+
+        const actualReadFile = fs.readFile
+        const readSpy = spyOn(fs, "readFile").mockImplementation(async (input, options) => {
+          if (String(input) === target) throw new Error("read blocked")
+          return (await actualReadFile(input as any, options as any)) as any
+        })
+
+        try {
+          const patchText = `*** Begin Patch\n*** Add File: blocked.txt\n+new\n*** End Patch`
+          await expect(execute({ patchText }, ctx)).rejects.toThrow(`Failed to read existing file: ${target}`)
+        } finally {
+          readSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("fails move verification when the destination cannot be read", async () => {
+    await using fixture = await tmpdir({ git: true })
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "source.txt")
+        const dest = path.join(fixture.path, "dest.txt")
+        await writeAndTrack(source, "old content\n")
+        await fs.writeFile(dest, "existing\n", "utf-8")
+
+        const actualReadFile = fs.readFile
+        const readSpy = spyOn(fs, "readFile").mockImplementation(async (input, options) => {
+          if (String(input) === dest) throw new Error("read blocked")
+          return (await actualReadFile(input as any, options as any)) as any
+        })
+
+        try {
+          const patchText =
+            "*** Begin Patch\n*** Update File: source.txt\n*** Move to: dest.txt\n@@\n-old content\n+new content\n*** End Patch"
+          await expect(execute({ patchText }, ctx)).rejects.toThrow(`Failed to read move destination: ${dest}`)
+        } finally {
+          readSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("applies multiple hunks to one file", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
@@ -326,8 +381,7 @@ describe("tool.apply_patch freeform", () => {
           await fs.writeFile(outside, "outside\n", "utf-8")
 
           const movePath = path.relative(fixture.path, outside).replaceAll("\\", "/")
-          const patchText =
-            `*** Begin Patch\n*** Update File: old.txt\n*** Move to: ${movePath}\n@@\n-from\n+new\n*** End Patch`
+          const patchText = `*** Begin Patch\n*** Update File: old.txt\n*** Move to: ${movePath}\n@@\n-from\n+new\n*** End Patch`
 
           await expect(execute({ patchText }, ctx)).rejects.toThrow("prompted")
         },
@@ -394,9 +448,7 @@ describe("tool.apply_patch freeform", () => {
       fn: async () => {
         const patchText = "*** Begin Patch\n*** Update File: missing.txt\n@@\n-nope\n+better\n*** End Patch"
 
-        await expect(execute({ patchText }, ctx)).rejects.toThrow(
-          "You must read file",
-        )
+        await expect(execute({ patchText }, ctx)).rejects.toThrow("You must read file")
       },
     })
   })
@@ -428,6 +480,24 @@ describe("tool.apply_patch freeform", () => {
         const patchText = "*** Begin Patch\n*** Delete File: dir\n*** End Patch"
 
         await expect(execute({ patchText }, ctx)).rejects.toThrow()
+      },
+    })
+  })
+
+  test("rejects add when target path is an existing directory", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        await fs.mkdir(path.join(fixture.path, "dir"))
+
+        const patchText = "*** Begin Patch\n*** Add File: dir\n+content\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow(
+          `Path is a directory: ${path.join(fixture.path, "dir")}`,
+        )
       },
     })
   })

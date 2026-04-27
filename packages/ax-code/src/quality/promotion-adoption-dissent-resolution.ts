@@ -59,11 +59,13 @@ export namespace QualityPromotionAdoptionDissentResolution {
     coveredQualifiedRejectingReviews: z.number().int().nonnegative(),
     unresolvedQualifiedRejectingReviews: z.number().int().nonnegative(),
     distinctQualifiedRejectingReviewers: z.number().int().nonnegative(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ResolutionSummary = z.output<typeof ResolutionSummary>
 
@@ -105,7 +107,10 @@ export namespace QualityPromotionAdoptionDissentResolution {
       : null
   }
 
-  function qualifiesRole(role: string | null | undefined, minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null) {
+  function qualifiesRole(
+    role: string | null | undefined,
+    minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
+  ) {
     if (!minimumRole) return true
     const normalized = normalizeRole(role)
     if (!normalized) return false
@@ -113,9 +118,11 @@ export namespace QualityPromotionAdoptionDissentResolution {
   }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, resolution: ResolutionArtifact) {
-    return resolution.decisionBundle.digest === QualityPromotionAdoptionReview.decisionBundleDigest(bundle)
-      && resolution.decisionBundle.createdAt === bundle.createdAt
-      && resolution.suggestion.digest === QualityPromotionAdoptionReview.suggestionDigest(bundle)
+    return (
+      resolution.decisionBundle.digest === QualityPromotionAdoptionReview.decisionBundleDigest(bundle) &&
+      resolution.decisionBundle.createdAt === bundle.createdAt &&
+      resolution.suggestion.digest === QualityPromotionAdoptionReview.suggestionDigest(bundle)
+    )
   }
 
   export function create(input: {
@@ -127,22 +134,29 @@ export namespace QualityPromotionAdoptionDissentResolution {
   }): ResolutionArtifact {
     const resolvedAt = new Date().toISOString()
     const resolutionID = `${Date.now()}-${encode(input.bundle.source)}-${encode(input.resolver)}`
-    const suggestion = input.bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
+    const suggestion =
+      input.bundle.approvalPolicySuggestion ??
+      QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
     const rationale = input.rationale.trim()
     if (!rationale) {
       throw new Error(`Adoption dissent resolution for ${input.bundle.source} requires rationale`)
     }
     if (input.targetReviews.length === 0) {
-      throw new Error(`Adoption dissent resolution for ${input.bundle.source} requires at least one rejected adoption review`)
+      throw new Error(
+        `Adoption dissent resolution for ${input.bundle.source} requires at least one rejected adoption review`,
+      )
     }
     for (const review of input.targetReviews) {
       const reviewReasons = QualityPromotionAdoptionReview.verify(input.bundle, review)
       if (reviewReasons.length > 0) {
-        throw new Error(`Cannot create dissent resolution for ${input.bundle.source}: invalid target adoption review (${reviewReasons[0]})`)
+        throw new Error(
+          `Cannot create dissent resolution for ${input.bundle.source}: invalid target adoption review (${reviewReasons[0]})`,
+        )
       }
       if (review.disposition !== "rejected") {
-        throw new Error(`Cannot create dissent resolution for ${input.bundle.source}: target review ${review.reviewID} is not rejected`)
+        throw new Error(
+          `Cannot create dissent resolution for ${input.bundle.source}: target review ${review.reviewID} is not rejected`,
+        )
       }
     }
 
@@ -181,16 +195,20 @@ export namespace QualityPromotionAdoptionDissentResolution {
 
   export function verify(bundle: QualityPromotionDecisionBundle.DecisionBundle, resolution: ResolutionArtifact) {
     const reasons: string[] = []
-    const suggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const suggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
     if (resolution.source !== bundle.source) {
       reasons.push(`dissent resolution source mismatch: ${resolution.source} vs ${bundle.source}`)
     }
     if (resolution.decisionBundle.source !== bundle.source) {
-      reasons.push(`dissent resolution decision bundle source mismatch: ${resolution.decisionBundle.source} vs ${bundle.source}`)
+      reasons.push(
+        `dissent resolution decision bundle source mismatch: ${resolution.decisionBundle.source} vs ${bundle.source}`,
+      )
     }
     if (resolution.decisionBundle.createdAt !== bundle.createdAt) {
-      reasons.push(`dissent resolution decision bundle createdAt mismatch: ${resolution.decisionBundle.createdAt} vs ${bundle.createdAt}`)
+      reasons.push(
+        `dissent resolution decision bundle createdAt mismatch: ${resolution.decisionBundle.createdAt} vs ${bundle.createdAt}`,
+      )
     }
     if (resolution.decisionBundle.digest !== QualityPromotionAdoptionReview.decisionBundleDigest(bundle)) {
       reasons.push(`dissent resolution decision bundle digest mismatch for ${bundle.source}`)
@@ -199,7 +217,9 @@ export namespace QualityPromotionAdoptionDissentResolution {
       reasons.push(`dissent resolution suggestion digest mismatch for ${bundle.source}`)
     }
     if (resolution.suggestion.adoptionStatus !== suggestion.adoption.status) {
-      reasons.push(`dissent resolution adoption status mismatch: ${resolution.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`)
+      reasons.push(
+        `dissent resolution adoption status mismatch: ${resolution.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`,
+      )
     }
     if (resolution.targetReviews.length === 0) {
       reasons.push(`dissent resolution for ${bundle.source} has no target reviews`)
@@ -232,11 +252,15 @@ export namespace QualityPromotionAdoptionDissentResolution {
     resolutions: ResolutionArtifact[],
   ) {
     const consensus = QualityPromotionAdoptionReview.evaluate(bundle, reviews)
-    const qualifiedRejectingReviews = reviews.filter((review) =>
-      review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole))
+    const qualifiedRejectingReviews = reviews.filter(
+      (review) => review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole),
+    )
     const qualifiedRejectingReviewers = new Set(qualifiedRejectingReviews.map((review) => review.reviewer))
-    const qualifyingResolutions = resolutions.filter((resolution) =>
-      qualifiesRole(resolution.role, consensus.requirement.minimumRole) && !qualifiedRejectingReviewers.has(resolution.resolver))
+    const qualifyingResolutions = resolutions.filter(
+      (resolution) =>
+        qualifiesRole(resolution.role, consensus.requirement.minimumRole) &&
+        !qualifiedRejectingReviewers.has(resolution.resolver),
+    )
     const coveredQualifiedRejectingReviewIDs = new Set<string>()
     const qualifiedRejectingReviewIDSet = new Set(qualifiedRejectingReviews.map((review) => review.reviewID))
 
@@ -265,23 +289,26 @@ export namespace QualityPromotionAdoptionDissentResolution {
     const analysis = coveredQualifiedRejectingReviewIDs(bundle, reviews, resolutions)
 
     const coverageSatisfied = analysis.coveredReviewIDs.size === analysis.totalQualifiedRejectingReviews
-    const hasIndependentResolver = analysis.totalQualifiedRejectingReviews === 0 || analysis.qualifyingResolutions.length > 0
+    const hasIndependentResolver =
+      analysis.totalQualifiedRejectingReviews === 0 || analysis.qualifyingResolutions.length > 0
     const gates = [
       {
         name: "qualified-rejection-coverage",
         status: coverageSatisfied ? "pass" : "fail",
-        detail: analysis.totalQualifiedRejectingReviews === 0
-          ? "no qualified rejecting reviews present"
-          : `${analysis.coveredReviewIDs.size}/${analysis.totalQualifiedRejectingReviews} qualified rejecting review(s) explicitly resolved`,
+        detail:
+          analysis.totalQualifiedRejectingReviews === 0
+            ? "no qualified rejecting reviews present"
+            : `${analysis.coveredReviewIDs.size}/${analysis.totalQualifiedRejectingReviews} qualified rejecting review(s) explicitly resolved`,
       },
       {
         name: "independent-dissent-resolver",
         status: hasIndependentResolver ? "pass" : "fail",
-        detail: analysis.totalQualifiedRejectingReviews === 0
-          ? "no independent resolver required"
-          : hasIndependentResolver
-            ? `${new Set(analysis.qualifyingResolutions.map((resolution) => resolution.resolver)).size} independent qualifying resolver(s) present`
-            : "no independent qualifying resolver present",
+        detail:
+          analysis.totalQualifiedRejectingReviews === 0
+            ? "no independent resolver required"
+            : hasIndependentResolver
+              ? `${new Set(analysis.qualifyingResolutions.map((resolution) => resolution.resolver)).size} independent qualifying resolver(s) present`
+              : "no independent qualifying resolver present",
       },
     ] as const
 
@@ -291,10 +318,14 @@ export namespace QualityPromotionAdoptionDissentResolution {
       requiredRole: consensus.requirement.minimumRole,
       totalResolutions: resolutions.length,
       qualifyingResolutions: analysis.qualifyingResolutions.length,
-      distinctQualifyingResolvers: new Set(analysis.qualifyingResolutions.map((resolution) => resolution.resolver)).size,
+      distinctQualifyingResolvers: new Set(analysis.qualifyingResolutions.map((resolution) => resolution.resolver))
+        .size,
       totalQualifiedRejectingReviews: analysis.totalQualifiedRejectingReviews,
       coveredQualifiedRejectingReviews: analysis.coveredReviewIDs.size,
-      unresolvedQualifiedRejectingReviews: Math.max(0, analysis.totalQualifiedRejectingReviews - analysis.coveredReviewIDs.size),
+      unresolvedQualifiedRejectingReviews: Math.max(
+        0,
+        analysis.totalQualifiedRejectingReviews - analysis.coveredReviewIDs.size,
+      ),
       distinctQualifiedRejectingReviewers: analysis.distinctQualifiedRejectingReviewers,
       gates,
     })
@@ -329,7 +360,9 @@ export namespace QualityPromotionAdoptionDissentResolution {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Adoption dissent resolution ${resolution.resolutionID} already exists for source ${resolution.source} with different content`)
+      throw new Error(
+        `Adoption dissent resolution ${resolution.resolutionID} already exists for source ${resolution.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(resolution.source, resolution.resolutionID), next)
@@ -362,7 +395,9 @@ export namespace QualityPromotionAdoptionDissentResolution {
     const prev = JSON.stringify(persisted.resolution)
     const curr = JSON.stringify(resolution)
     if (prev !== curr) {
-      throw new Error(`Persisted adoption dissent resolution ${resolution.resolutionID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted adoption dissent resolution ${resolution.resolutionID} does not match the provided artifact`,
+      )
     }
     return persisted
   }

@@ -58,13 +58,7 @@ export function SessionGraph(props: SessionGraphProps) {
   const lay = createMemo(() => (local.graph ? sessionGraphLayout(local.graph, local.topology) : undefined))
 
   return (
-    <Card
-      {...rest}
-      variant="normal"
-      class={local.class}
-      classList={local.classList}
-      data-component="session-graph"
-    >
+    <Card {...rest} variant="normal" class={local.class} classList={local.classList} data-component="session-graph">
       <div class="space-y-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0 space-y-1">

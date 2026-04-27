@@ -1,4 +1,9 @@
-import type { LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3StreamPart, LanguageModelV3Usage } from "@ai-sdk/provider"
+import type {
+  LanguageModelV3,
+  LanguageModelV3CallOptions,
+  LanguageModelV3StreamPart,
+  LanguageModelV3Usage,
+} from "@ai-sdk/provider"
 import { Process } from "../../util/process"
 import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
@@ -19,9 +24,7 @@ function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
   const err = stderr.toString().trim()
   const out = stdout.toString().trim()
   const detail = err || out
-  return detail
-    ? `CLI exited with code ${code}: ${detail.slice(0, 500)}`
-    : `CLI exited with code ${code}`
+  return detail ? `CLI exited with code ${code}: ${detail.slice(0, 500)}` : `CLI exited with code ${code}`
 }
 
 export function cliEnv() {
@@ -84,12 +87,13 @@ export class CliLanguageModel implements LanguageModelV3 {
     if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
 
     let timeoutTimer: ReturnType<typeof setTimeout>
-    const timeout = new Promise<never>((_, reject) =>
-      timeoutTimer = setTimeout(() => {
-        proc.kill("SIGTERM")
-        setTimeout(() => proc.kill("SIGKILL"), 5000).unref()
-        reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
-      }, CLI_TIMEOUT_MS),
+    const timeout = new Promise<never>(
+      (_, reject) =>
+        (timeoutTimer = setTimeout(() => {
+          proc.kill("SIGTERM")
+          setTimeout(() => proc.kill("SIGKILL"), 5000).unref()
+          reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
+        }, CLI_TIMEOUT_MS)),
     )
     const result = Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
     result.catch(() => {})
@@ -144,7 +148,10 @@ export class CliLanguageModel implements LanguageModelV3 {
         timer = setTimeout(() => {
           proc.kill("SIGTERM")
           if (closed()) return
-          controller.enqueue({ type: "error", error: new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`) })
+          controller.enqueue({
+            type: "error",
+            error: new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`),
+          })
           safeClose()
         }, CLI_TIMEOUT_MS)
 
@@ -215,25 +222,27 @@ export class CliLanguageModel implements LanguageModelV3 {
           safeClose()
         })
 
-        proc.exited.then((code) => {
-          clearTimeout(timer)
-          if (closed()) return
-          exitCode = code
-          if (code !== 0) {
-            controller.enqueue({
-              type: "error",
-              error: new Error(formatCliFailure(code, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))),
-            })
+        proc.exited
+          .then((code) => {
+            clearTimeout(timer)
+            if (closed()) return
+            exitCode = code
+            if (code !== 0) {
+              controller.enqueue({
+                type: "error",
+                error: new Error(formatCliFailure(code, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))),
+              })
+              safeClose()
+              return
+            }
+            finishSuccess()
+          })
+          .catch((err) => {
+            clearTimeout(timer)
+            if (closed()) return
+            controller.enqueue({ type: "error", error: err ?? new Error("CLI process killed by signal") })
             safeClose()
-            return
-          }
-          finishSuccess()
-        }).catch((err) => {
-          clearTimeout(timer)
-          if (closed()) return
-          controller.enqueue({ type: "error", error: err ?? new Error("CLI process killed by signal") })
-          safeClose()
-        })
+          })
       },
       cancel() {
         done = true

@@ -141,9 +141,11 @@ describe("LSP.clientMethodMatchesServer", () => {
 
   test("skips servers only when every requested method is statically unsupported", () => {
     expect(LSP.clientMethodMatchesServer(["documentSymbol", "references"], { documentSymbol: false })).toBe(true)
-    expect(LSP.clientMethodMatchesServer(["documentSymbol", "references"], {
-      documentSymbol: false,
-      references: false,
-    })).toBe(false)
+    expect(
+      LSP.clientMethodMatchesServer(["documentSymbol", "references"], {
+        documentSymbol: false,
+        references: false,
+      }),
+    ).toBe(false)
   })
 })

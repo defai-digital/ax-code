@@ -106,7 +106,8 @@ export namespace QualityPromotionDecisionBundle {
   function normalizedPolicy(input?: Partial<Policy>): Policy {
     return {
       cooldownHours: input?.cooldownHours ?? QualityStabilityGuard.DEFAULT_COOLDOWN_HOURS,
-      repeatFailureWindowHours: input?.repeatFailureWindowHours ?? QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_WINDOW_HOURS,
+      repeatFailureWindowHours:
+        input?.repeatFailureWindowHours ?? QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_WINDOW_HOURS,
       repeatFailureThreshold: input?.repeatFailureThreshold ?? QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_THRESHOLD,
     }
   }
@@ -156,7 +157,9 @@ export namespace QualityPromotionDecisionBundle {
     return `approver=${weights.approver.toFixed(2)},team=${weights.team.toFixed(2)},reporting_chain=${weights.reportingChain.toFixed(2)}`
   }
 
-  export function deriveApprovalPolicySuggestion(input: ApprovalPolicySuggestionContext): ApprovalPolicySuggestionSnapshot {
+  export function deriveApprovalPolicySuggestion(
+    input: ApprovalPolicySuggestionContext,
+  ): ApprovalPolicySuggestionSnapshot {
     const recommendation = QualityPromotionApprovalPolicy.recommendConcentrationFromContext({
       bundle: {
         benchmark: input.benchmark,
@@ -172,93 +175,99 @@ export namespace QualityPromotionDecisionBundle {
       approvalConcentrationPreset: suggestedPreset,
       approvalConcentrationWeights: suggestedWeights,
     })
-    const effectiveRule = input.releasePolicy?.policy.approval.rules.reentry
+    const effectiveRule = input.releasePolicy?.policy?.approval?.rules?.reentry
     const effectiveReentryPolicy = effectiveRule
       ? ApprovalConcentrationPolicySnapshot.parse({
-        approvalConcentrationBudget: effectiveRule.approvalConcentrationBudget,
-        approvalConcentrationPreset: effectiveRule.approvalConcentrationPreset,
-        approvalConcentrationWeights: effectiveRule.approvalConcentrationWeights,
-      })
+          approvalConcentrationBudget: effectiveRule.approvalConcentrationBudget,
+          approvalConcentrationPreset: effectiveRule.approvalConcentrationPreset,
+          approvalConcentrationWeights: effectiveRule.approvalConcentrationWeights,
+        })
       : null
     const alignment = effectiveReentryPolicy
       ? ApprovalPolicySuggestionAlignment.parse({
-        budgetMatches: effectiveReentryPolicy.approvalConcentrationBudget !== null &&
-          Math.abs(
-            effectiveReentryPolicy.approvalConcentrationBudget - suggestedBudget,
-          ) <= APPROVAL_POLICY_SUGGESTION_EPSILON,
-        presetMatches: effectiveReentryPolicy.approvalConcentrationPreset !== null &&
-          effectiveReentryPolicy.approvalConcentrationPreset === suggestedPreset,
-        weightsMatch: weightsMatch(
-          effectiveReentryPolicy.approvalConcentrationWeights,
-          suggestedWeights,
-        ),
-        overall: false,
-      })
+          budgetMatches:
+            effectiveReentryPolicy.approvalConcentrationBudget !== null &&
+            Math.abs(effectiveReentryPolicy.approvalConcentrationBudget - suggestedBudget) <=
+              APPROVAL_POLICY_SUGGESTION_EPSILON,
+          presetMatches:
+            effectiveReentryPolicy.approvalConcentrationPreset !== null &&
+            effectiveReentryPolicy.approvalConcentrationPreset === suggestedPreset,
+          weightsMatch: weightsMatch(effectiveReentryPolicy.approvalConcentrationWeights, suggestedWeights),
+          overall: false,
+        })
       : null
 
     const finalizedAlignment = alignment
       ? {
-        ...alignment,
-        overall: alignment.budgetMatches && alignment.presetMatches && alignment.weightsMatch,
-      }
+          ...alignment,
+          overall: alignment.budgetMatches && alignment.presetMatches && alignment.weightsMatch,
+        }
       : null
     const differences: ApprovalPolicyAdoptionDifference[] = effectiveReentryPolicy
       ? [
-        ApprovalPolicyAdoptionDifference.parse({
-          field: "approval_concentration_budget",
-          status: finalizedAlignment?.budgetMatches ? "accepted" : effectiveReentryPolicy.approvalConcentrationBudget === null ? "missing_effective" : "different",
-          suggested: formatBudget(suggestedBudget),
-          effective: formatBudget(effectiveReentryPolicy.approvalConcentrationBudget),
-          detail: finalizedAlignment?.budgetMatches
-            ? `effective budget matches suggested budget ${formatBudget(suggestedBudget)}`
-            : effectiveReentryPolicy.approvalConcentrationBudget === null
-              ? `effective policy does not set a concentration budget; suggested ${formatBudget(suggestedBudget)}`
-              : `effective budget ${formatBudget(effectiveReentryPolicy.approvalConcentrationBudget)} differs from suggested ${formatBudget(suggestedBudget)}`,
-        }),
-        ApprovalPolicyAdoptionDifference.parse({
-          field: "approval_concentration_preset",
-          status: finalizedAlignment?.presetMatches ? "accepted" : effectiveReentryPolicy.approvalConcentrationPreset === null ? "missing_effective" : "different",
-          suggested: formatPreset(suggestedPreset),
-          effective: formatPreset(effectiveReentryPolicy.approvalConcentrationPreset),
-          detail: finalizedAlignment?.presetMatches
-            ? `effective preset matches suggested preset ${formatPreset(suggestedPreset)}`
-            : effectiveReentryPolicy.approvalConcentrationPreset === null
-              ? `effective policy does not set a concentration preset; suggested ${formatPreset(suggestedPreset)}`
-              : `effective preset ${formatPreset(effectiveReentryPolicy.approvalConcentrationPreset)} differs from suggested ${formatPreset(suggestedPreset)}`,
-        }),
-        ApprovalPolicyAdoptionDifference.parse({
-          field: "approval_concentration_weights",
-          status: finalizedAlignment?.weightsMatch ? "accepted" : "different",
-          suggested: formatWeights(suggestedWeights),
-          effective: formatWeights(effectiveReentryPolicy.approvalConcentrationWeights),
-          detail: finalizedAlignment?.weightsMatch
-            ? `effective weights match suggested weights ${formatWeights(suggestedWeights)}`
-            : `effective weights ${formatWeights(effectiveReentryPolicy.approvalConcentrationWeights)} differ from suggested ${formatWeights(suggestedWeights)}`,
-        }),
-      ]
+          ApprovalPolicyAdoptionDifference.parse({
+            field: "approval_concentration_budget",
+            status: finalizedAlignment?.budgetMatches
+              ? "accepted"
+              : effectiveReentryPolicy.approvalConcentrationBudget === null
+                ? "missing_effective"
+                : "different",
+            suggested: formatBudget(suggestedBudget),
+            effective: formatBudget(effectiveReentryPolicy.approvalConcentrationBudget),
+            detail: finalizedAlignment?.budgetMatches
+              ? `effective budget matches suggested budget ${formatBudget(suggestedBudget)}`
+              : effectiveReentryPolicy.approvalConcentrationBudget === null
+                ? `effective policy does not set a concentration budget; suggested ${formatBudget(suggestedBudget)}`
+                : `effective budget ${formatBudget(effectiveReentryPolicy.approvalConcentrationBudget)} differs from suggested ${formatBudget(suggestedBudget)}`,
+          }),
+          ApprovalPolicyAdoptionDifference.parse({
+            field: "approval_concentration_preset",
+            status: finalizedAlignment?.presetMatches
+              ? "accepted"
+              : effectiveReentryPolicy.approvalConcentrationPreset === null
+                ? "missing_effective"
+                : "different",
+            suggested: formatPreset(suggestedPreset),
+            effective: formatPreset(effectiveReentryPolicy.approvalConcentrationPreset),
+            detail: finalizedAlignment?.presetMatches
+              ? `effective preset matches suggested preset ${formatPreset(suggestedPreset)}`
+              : effectiveReentryPolicy.approvalConcentrationPreset === null
+                ? `effective policy does not set a concentration preset; suggested ${formatPreset(suggestedPreset)}`
+                : `effective preset ${formatPreset(effectiveReentryPolicy.approvalConcentrationPreset)} differs from suggested ${formatPreset(suggestedPreset)}`,
+          }),
+          ApprovalPolicyAdoptionDifference.parse({
+            field: "approval_concentration_weights",
+            status: finalizedAlignment?.weightsMatch ? "accepted" : "different",
+            suggested: formatWeights(suggestedWeights),
+            effective: formatWeights(effectiveReentryPolicy.approvalConcentrationWeights),
+            detail: finalizedAlignment?.weightsMatch
+              ? `effective weights match suggested weights ${formatWeights(suggestedWeights)}`
+              : `effective weights ${formatWeights(effectiveReentryPolicy.approvalConcentrationWeights)} differ from suggested ${formatWeights(suggestedWeights)}`,
+          }),
+        ]
       : [
-        ApprovalPolicyAdoptionDifference.parse({
-          field: "approval_concentration_budget",
-          status: "missing_effective",
-          suggested: formatBudget(suggestedBudget),
-          effective: null,
-          detail: `no effective release policy is available; suggested budget ${formatBudget(suggestedBudget)}`,
-        }),
-        ApprovalPolicyAdoptionDifference.parse({
-          field: "approval_concentration_preset",
-          status: "missing_effective",
-          suggested: formatPreset(suggestedPreset),
-          effective: null,
-          detail: `no effective release policy is available; suggested preset ${formatPreset(suggestedPreset)}`,
-        }),
-        ApprovalPolicyAdoptionDifference.parse({
-          field: "approval_concentration_weights",
-          status: "missing_effective",
-          suggested: formatWeights(suggestedWeights),
-          effective: null,
-          detail: `no effective release policy is available; suggested weights ${formatWeights(suggestedWeights)}`,
-        }),
-      ]
+          ApprovalPolicyAdoptionDifference.parse({
+            field: "approval_concentration_budget",
+            status: "missing_effective",
+            suggested: formatBudget(suggestedBudget),
+            effective: null,
+            detail: `no effective release policy is available; suggested budget ${formatBudget(suggestedBudget)}`,
+          }),
+          ApprovalPolicyAdoptionDifference.parse({
+            field: "approval_concentration_preset",
+            status: "missing_effective",
+            suggested: formatPreset(suggestedPreset),
+            effective: null,
+            detail: `no effective release policy is available; suggested preset ${formatPreset(suggestedPreset)}`,
+          }),
+          ApprovalPolicyAdoptionDifference.parse({
+            field: "approval_concentration_weights",
+            status: "missing_effective",
+            suggested: formatWeights(suggestedWeights),
+            effective: null,
+            detail: `no effective release policy is available; suggested weights ${formatWeights(suggestedWeights)}`,
+          }),
+        ]
     const acceptedFields = differences.filter((difference) => difference.status === "accepted").length
     const differingFields = differences.filter((difference) => difference.status === "different").length
     const missingEffectiveFields = differences.filter((difference) => difference.status === "missing_effective").length
@@ -372,25 +381,35 @@ export namespace QualityPromotionDecisionBundle {
       )
     }
     if (bundle.eligibility.decision !== current.eligibility.decision) {
-      reasons.push(`eligibility decision changed from ${bundle.eligibility.decision} to ${current.eligibility.decision}`)
+      reasons.push(
+        `eligibility decision changed from ${bundle.eligibility.decision} to ${current.eligibility.decision}`,
+      )
     }
     if (bundle.eligibility.requiredOverride !== current.eligibility.requiredOverride) {
       reasons.push(
         `required override changed from ${bundle.eligibility.requiredOverride} to ${current.eligibility.requiredOverride}`,
       )
     }
-    if ((bundle.eligibility.reentryContext?.rollbackID ?? null) !== (current.eligibility.reentryContext?.rollbackID ?? null)) {
+    if (
+      (bundle.eligibility.reentryContext?.rollbackID ?? null) !==
+      (current.eligibility.reentryContext?.rollbackID ?? null)
+    ) {
       reasons.push(
         `reentry rollback changed from ${bundle.eligibility.reentryContext?.rollbackID ?? "none"} to ${current.eligibility.reentryContext?.rollbackID ?? "none"}`,
       )
     }
-    if ((bundle.eligibility.remediation?.remediationID ?? null) !== (current.eligibility.remediation?.remediationID ?? null)) {
+    if (
+      (bundle.eligibility.remediation?.remediationID ?? null) !==
+      (current.eligibility.remediation?.remediationID ?? null)
+    ) {
       reasons.push(
         `reentry remediation changed from ${bundle.eligibility.remediation?.remediationID ?? "none"} to ${current.eligibility.remediation?.remediationID ?? "none"}`,
       )
     }
     if (bundle.stability.overallStatus !== current.stability.overallStatus) {
-      reasons.push(`stability status changed from ${bundle.stability.overallStatus} to ${current.stability.overallStatus}`)
+      reasons.push(
+        `stability status changed from ${bundle.stability.overallStatus} to ${current.stability.overallStatus}`,
+      )
     }
     if (bundle.releasePolicy && current.releasePolicy) {
       if (bundle.releasePolicy.provenance.digest !== current.releasePolicy.provenance.digest) {
@@ -423,16 +442,30 @@ export namespace QualityPromotionDecisionBundle {
     lines.push(`- release policy source: ${bundle.releasePolicy?.provenance.policySource ?? "n/a"}`)
     lines.push(`- release policy digest: ${bundle.releasePolicy?.provenance.digest ?? "n/a"}`)
     lines.push(`- release policy scope: ${bundle.releasePolicy?.provenance.persistedScope ?? "n/a"}`)
-    lines.push(`- suggested concentration preset: ${bundle.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationPreset ?? "n/a"}`)
-    lines.push(`- suggested concentration budget: ${bundle.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationBudget ?? "n/a"}`)
+    lines.push(
+      `- suggested concentration preset: ${bundle.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationPreset ?? "n/a"}`,
+    )
+    lines.push(
+      `- suggested concentration budget: ${bundle.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationBudget ?? "n/a"}`,
+    )
     lines.push(`- suggested workflow: ${bundle.approvalPolicySuggestion?.recommendation.workflow ?? "general"}`)
     lines.push(`- suggested risk tier: ${bundle.approvalPolicySuggestion?.recommendation.riskTier ?? "n/a"}`)
-    lines.push(`- effective concentration preset: ${bundle.approvalPolicySuggestion?.effectiveReentryPolicy?.approvalConcentrationPreset ?? "n/a"}`)
-    lines.push(`- effective concentration budget: ${bundle.approvalPolicySuggestion?.effectiveReentryPolicy?.approvalConcentrationBudget ?? "n/a"}`)
-    lines.push(`- suggestion aligned with effective policy: ${bundle.approvalPolicySuggestion?.alignment?.overall ?? "n/a"}`)
+    lines.push(
+      `- effective concentration preset: ${bundle.approvalPolicySuggestion?.effectiveReentryPolicy?.approvalConcentrationPreset ?? "n/a"}`,
+    )
+    lines.push(
+      `- effective concentration budget: ${bundle.approvalPolicySuggestion?.effectiveReentryPolicy?.approvalConcentrationBudget ?? "n/a"}`,
+    )
+    lines.push(
+      `- suggestion aligned with effective policy: ${bundle.approvalPolicySuggestion?.alignment?.overall ?? "n/a"}`,
+    )
     lines.push(`- suggestion adoption status: ${bundle.approvalPolicySuggestion?.adoption.status ?? "n/a"}`)
-    lines.push(`- suggestion adoption accepted fields: ${bundle.approvalPolicySuggestion?.adoption.acceptedFields ?? "n/a"}`)
-    lines.push(`- suggestion adoption differing fields: ${bundle.approvalPolicySuggestion?.adoption.differingFields ?? "n/a"}`)
+    lines.push(
+      `- suggestion adoption accepted fields: ${bundle.approvalPolicySuggestion?.adoption.acceptedFields ?? "n/a"}`,
+    )
+    lines.push(
+      `- suggestion adoption differing fields: ${bundle.approvalPolicySuggestion?.adoption.differingFields ?? "n/a"}`,
+    )
     lines.push(`- current active source: ${bundle.snapshot.currentActiveSource ?? "none"}`)
     lines.push(`- last promotion at: ${bundle.snapshot.lastPromotionAt ?? "n/a"}`)
     lines.push(`- last rollback at: ${bundle.snapshot.lastRollbackAt ?? "n/a"}`)

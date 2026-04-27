@@ -705,10 +705,14 @@ export namespace Session {
     }
     for (const desc of allDescendants) {
       SelfCorrection.reset(desc.id)
-      await SessionPrompt.cancel(desc.id).catch(() => {})
+      await SessionPrompt.cancel(desc.id).catch((e) =>
+        log.warn("session cancel failed", { sessionID: desc.id, error: e }),
+      )
     }
     SelfCorrection.reset(sessionID)
-    await SessionPrompt.cancel(sessionID).catch(() => {})
+    await SessionPrompt.cancel(sessionID).catch((e) =>
+      log.warn("session cancel failed", { sessionID, error: e }),
+    )
   })
 
   /**

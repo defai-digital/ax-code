@@ -86,12 +86,7 @@ export namespace Workspace {
 
   export function list(project: Project.Info) {
     return Database.use((db) =>
-      db
-        .select()
-        .from(WorkspaceTable)
-        .where(eq(WorkspaceTable.project_id, project.id))
-        .all()
-        .map(toInfo),
+      db.select().from(WorkspaceTable).where(eq(WorkspaceTable.project_id, project.id)).all().map(toInfo),
     )
   }
 
@@ -100,9 +95,9 @@ export namespace Workspace {
     if (!row) return
     const adaptor = getAdaptor(row.type)
     if (adaptor) {
-      await adaptor.remove(row.extra).catch((err) =>
-        log.warn("adaptor cleanup failed during workspace removal", { id, type: row.type, err }),
-      )
+      await adaptor
+        .remove(row.extra)
+        .catch((err) => log.warn("adaptor cleanup failed during workspace removal", { id, type: row.type, err }))
     }
     Database.use((db) => db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, id)).run())
     return row

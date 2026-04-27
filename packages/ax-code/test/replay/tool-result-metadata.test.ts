@@ -17,13 +17,26 @@ describe("replay tool.result metadata", () => {
         const sid = session.id as SessionID
 
         Recorder.begin(sid)
-        Recorder.emit({ type: "session.start", sessionID: sid, agent: "explore", model: "test/model", directory: tmp.path })
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "explore",
+          model: "test/model",
+          directory: tmp.path,
+        })
         Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 })
         Recorder.emit({
           type: "llm.output",
           sessionID: sid,
           stepIndex: 0,
-          parts: [{ type: "tool_call", callID: "call_1", tool: "code_intelligence", input: { operation: "findSymbol", name: "foo" } }],
+          parts: [
+            {
+              type: "tool_call",
+              callID: "call_1",
+              tool: "code_intelligence",
+              input: { operation: "findSymbol", name: "foo" },
+            },
+          ],
         })
         Recorder.emit({
           type: "tool.result",

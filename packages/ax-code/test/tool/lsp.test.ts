@@ -86,9 +86,9 @@ describe("tool.lsp", () => {
         expect(envelopeSpy).toHaveBeenCalledWith("DemoSymbol")
         expect(result.title).toBe("workspaceSymbol DemoSymbol")
         expect(result.output).toContain("DemoSymbol")
-        expect(result.output).toContain("\"source\"")
-        expect(result.output).toContain("\"completeness\"")
-        expect(result.output).toContain("\"timestamp\"")
+        expect(result.output).toContain('"source"')
+        expect(result.output).toContain('"completeness"')
+        expect(result.output).toContain('"timestamp"')
         const meta = result.metadata as { envelope: { source: string; completeness: string } }
         expect(meta.envelope.source).toBe("lsp")
         expect(meta.envelope.completeness).toBe("full")
@@ -108,9 +108,9 @@ describe("tool.lsp", () => {
         touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(0 as never)
 
         const tool = await LspTool.init()
-        await expect(
-          tool.execute({ operation: "hover", filePath: file, line: 1, character: 1 }, ctx),
-        ).rejects.toThrow("could not be started")
+        await expect(tool.execute({ operation: "hover", filePath: file, line: 1, character: 1 }, ctx)).rejects.toThrow(
+          "could not be started",
+        )
         expect(hasClientsSpy).toHaveBeenCalledWith(file, { mode: "semantic", method: "hover" })
         expect(touchFileSpy).toHaveBeenCalledWith(file, true, { mode: "semantic", method: "hover" })
       },
@@ -341,7 +341,10 @@ describe("tool.lsp", () => {
         } as any)
 
         const tool = await LspTool.init()
-        const result = await tool.execute({ operation: "goToImplementation", filePath: file, line: 1, character: 1 }, ctx)
+        const result = await tool.execute(
+          { operation: "goToImplementation", filePath: file, line: 1, character: 1 },
+          ctx,
+        )
 
         expect(implementationEnvelopeSpy).toHaveBeenCalled()
         const meta = result.metadata as { envelope: { serverIDs: string[] } }
@@ -370,7 +373,10 @@ describe("tool.lsp", () => {
         } as any)
 
         const tool = await LspTool.init()
-        const result = await tool.execute({ operation: "prepareCallHierarchy", filePath: file, line: 1, character: 1 }, ctx)
+        const result = await tool.execute(
+          { operation: "prepareCallHierarchy", filePath: file, line: 1, character: 1 },
+          ctx,
+        )
 
         expect(prepareCallHierarchyEnvelopeSpy).toHaveBeenCalled()
         const meta = result.metadata as { envelope: { serverIDs: string[] } }

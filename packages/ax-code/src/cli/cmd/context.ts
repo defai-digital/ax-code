@@ -103,7 +103,9 @@ export const ContextCommand = cmd({
       console.log()
 
       if (sessions.length > 1) {
-        console.log(`\n${dim}${sessions.length} total sessions. Showing latest. Use: ax-code context <sessionID>${reset}`)
+        console.log(
+          `\n${dim}${sessions.length} total sessions. Showing latest. Use: ax-code context <sessionID>${reset}`,
+        )
       }
 
       prompts.outro("Done")

@@ -171,9 +171,12 @@ export const ESLint: Info = {
 
     const legacyServer = path.join(Global.Path.bin, "vscode-eslint", "server", "out", "eslintServer.js")
     if (await pathExists(legacyServer)) {
-      log.warn("using legacy unmanaged vscode-eslint install; remove shared-bin copy to switch to pinned managed installs", {
-        serverPath: legacyServer,
-      })
+      log.warn(
+        "using legacy unmanaged vscode-eslint install; remove shared-bin copy to switch to pinned managed installs",
+        {
+          serverPath: legacyServer,
+        },
+      )
       return {
         process: spawn(BunProc.which(), [legacyServer, "--stdio"], {
           cwd: root,
@@ -478,9 +481,12 @@ export const ElixirLS: Info = {
       process.platform === "win32" ? "language_server.bat" : "language_server.sh",
     )
     if (await pathExists(binary)) {
-      log.warn("using legacy unmanaged elixir-ls install; reinstall manually to replace the old runtime Mix.install path", {
-        bin: binary,
-      })
+      log.warn(
+        "using legacy unmanaged elixir-ls install; reinstall manually to replace the old runtime Mix.install path",
+        {
+          bin: binary,
+        },
+      )
       return {
         process: spawn(binary, {
           cwd: root,
@@ -763,9 +769,12 @@ export const Clangd: Info = {
       if (!entry.name.startsWith("clangd_")) continue
       const candidate = path.join(Global.Path.bin, entry.name, "bin", "clangd" + ext)
       if (await pathExists(candidate)) {
-        log.warn("using legacy unmanaged clangd install; remove extracted shared-bin copy to switch to pinned managed installs", {
-          bin: candidate,
-        })
+        log.warn(
+          "using legacy unmanaged clangd install; remove extracted shared-bin copy to switch to pinned managed installs",
+          {
+            bin: candidate,
+          },
+        )
         return {
           process: spawn(candidate, args, {
             cwd: root,
@@ -858,10 +867,9 @@ export const Astro: Info = {
 }
 
 const spawnJdtls = async (java: string, root: string, distPath: string, launcherDir: string) => {
-  const jarFileName =
-    (await fs.readdir(launcherDir).catch(() => []))
-      .find((item) => /^org\.eclipse\.equinox\.launcher_.*\.jar$/.test(item))
-      ?.trim()
+  const jarFileName = (await fs.readdir(launcherDir).catch(() => []))
+    .find((item) => /^org\.eclipse\.equinox\.launcher_.*\.jar$/.test(item))
+    ?.trim()
   if (!jarFileName) {
     log.error(`Failed to locate the JDTLS launcher jar in: ${launcherDir}`)
     return
@@ -1049,9 +1057,12 @@ export const KotlinLS: Info = {
     }
 
     if (installedLauncher) {
-      log.warn("using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs", {
-        bin: installedLauncher,
-      })
+      log.warn(
+        "using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs",
+        {
+          bin: installedLauncher,
+        },
+      )
       return {
         process: spawn(installedLauncher, ["--stdio"], {
           cwd: root,
@@ -1061,9 +1072,12 @@ export const KotlinLS: Info = {
 
     const legacyLauncher = path.join(Global.Path.bin, "kotlin-ls", launcherName)
     if (await pathExists(legacyLauncher)) {
-      log.warn("using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs", {
-        bin: legacyLauncher,
-      })
+      log.warn(
+        "using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs",
+        {
+          bin: legacyLauncher,
+        },
+      )
       return {
         process: spawn(legacyLauncher, ["--stdio"], {
           cwd: root,
@@ -1364,9 +1378,12 @@ export const TerraformLS: Info = {
     }
 
     if (installedBin) {
-      log.warn("using legacy unmanaged terraform-ls install; remove shared-bin copy to switch to pinned managed installs", {
-        bin: installedBin,
-      })
+      log.warn(
+        "using legacy unmanaged terraform-ls install; remove shared-bin copy to switch to pinned managed installs",
+        {
+          bin: installedBin,
+        },
+      )
       return {
         process: spawn(installedBin, ["serve"], {
           cwd: root,

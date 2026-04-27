@@ -169,7 +169,16 @@ describe("LSP cache integration", () => {
           contentHash,
           line: -1,
           character: -1,
-          payload: [{ name: "x", kind: 13, location: { uri: pathToFileURL(file).href, range: { start: { line: 0, character: 13 }, end: { line: 0, character: 14 } } } }],
+          payload: [
+            {
+              name: "x",
+              kind: 13,
+              location: {
+                uri: pathToFileURL(file).href,
+                range: { start: { line: 0, character: 13 }, end: { line: 0, character: 14 } },
+              },
+            },
+          ],
           serverIDs: ["fake"],
           completeness: "full",
           expiresAt: Date.now() + 60_000,

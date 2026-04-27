@@ -83,71 +83,120 @@ export function createDialogProviderOptions() {
         return {
           title: provider.name,
           value: provider.id,
-          description: isConnected
-            ? "Connected"
-            : isOfflineKind
-              ? offlineProviderHint(provider.id)
-              : undefined,
+          description: isConnected ? "Connected" : isOfflineKind ? offlineProviderHint(provider.id) : undefined,
           descriptionFg: isConnected ? theme.warning : isOfflineKind ? theme.textMuted : undefined,
           category: isOfflineKind ? "Offline" : CLI_PROVIDERS.has(provider.id) ? "Online - CLI" : "Online",
-        onSelect() {
-          runProviderDialogAction({
-            providerID: provider.id,
-            action: "select-provider",
-            fallbackMessage: `Failed to update ${provider.name}`,
-            toast,
-            run: async () => {
-              const isConnected = sync.data.provider_next.connected.includes(provider.id)
+          onSelect() {
+            runProviderDialogAction({
+              providerID: provider.id,
+              action: "select-provider",
+              fallbackMessage: `Failed to update ${provider.name}`,
+              toast,
+              run: async () => {
+                const isConnected = sync.data.provider_next.connected.includes(provider.id)
 
-              // CLI providers — check binary availability, support connect/disconnect
-              if (CLI_PROVIDERS.has(provider.id)) {
-                const binary = CLI_BINARIES[provider.id]
-                const available = binary ? which(binary) !== null : false
+                // CLI providers — check binary availability, support connect/disconnect
+                if (CLI_PROVIDERS.has(provider.id)) {
+                  const binary = CLI_BINARIES[provider.id]
+                  const available = binary ? which(binary) !== null : false
 
-                if (!available) {
-                  dialog.replace(() => (
-                    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
-                      <box flexDirection="row" justifyContent="space-between">
-                        <text attributes={TextAttributes.BOLD} fg={theme.text}>
-                          {provider.name} — CLI not found
-                        </text>
-                        <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
-                          esc
+                  if (!available) {
+                    dialog.replace(() => (
+                      <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+                        <box flexDirection="row" justifyContent="space-between">
+                          <text attributes={TextAttributes.BOLD} fg={theme.text}>
+                            {provider.name} — CLI not found
+                          </text>
+                          <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+                            esc
+                          </text>
+                        </box>
+                        <text fg={theme.textMuted}>
+                          Install the CLI and ensure it is available in your PATH, then restart ax-code.
                         </text>
                       </box>
-                      <text fg={theme.textMuted}>
-                        Install the CLI and ensure it is available in your PATH, then restart ax-code.
-                      </text>
-                    </box>
-                  ))
+                    ))
+                    return
+                  }
+
+                  const info = await resolveCliModel(provider.id).catch((error) => {
+                    toast.show({
+                      variant: "error",
+                      message: error instanceof Error ? error.message : `Failed to inspect ${provider.name}`,
+                    })
+                    return undefined
+                  })
+                  if (!info) return
+
+                  if (isConnected) {
+                    const action = await new Promise<"use" | "disconnect" | null>((resolve) => {
+                      dialog.replace(
+                        () => (
+                          <DialogSelect
+                            title={`${provider.name} — connected`}
+                            options={[
+                              {
+                                title: "Select a model",
+                                value: "use" as const,
+                                description: `Current: ${info.model}`,
+                              },
+                              {
+                                title: "Disconnect",
+                                value: "disconnect" as const,
+                                description: "Remove this CLI provider",
+                              },
+                            ]}
+                            onSelect={(option) => resolve(option.value)}
+                          />
+                        ),
+                        () => resolve(null),
+                      )
+                    })
+                    if (action === "use") {
+                      dialog.replace(() => <DialogModel providerID={provider.id} />)
+                    } else if (action === "disconnect") {
+                      await sdk.client.auth.remove({ providerID: provider.id })
+                      await sdk.client.instance.dispose()
+                      await sync.bootstrap()
+                      toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
+                      dialog.clear()
+                    }
+                  } else {
+                    // Connect: store a marker in auth.json so provider persists as connected
+                    await sdk.client.auth.set({
+                      providerID: provider.id,
+                      auth: { type: "api", key: "cli" },
+                    })
+                    await sdk.client.instance.dispose()
+                    await sync.bootstrap()
+                    toast.show({ variant: "success", message: `Connected ${provider.name}` })
+                    dialog.replace(() => <DialogModel providerID={provider.id} />)
+                  }
                   return
                 }
 
-                const info = await resolveCliModel(provider.id).catch((error) => {
-                  toast.show({
-                    variant: "error",
-                    message: error instanceof Error ? error.message : `Failed to inspect ${provider.name}`,
-                  })
-                  return undefined
-                })
-                if (!info) return
-
+                // If provider already has a saved key, offer to use it or replace it
                 if (isConnected) {
-                  const action = await new Promise<"use" | "disconnect" | null>((resolve) => {
+                  const action = await new Promise<"use" | "replace" | "remove" | null>((resolve) => {
                     dialog.replace(
                       () => (
                         <DialogSelect
-                          title={`${provider.name} — connected`}
+                          title={`${provider.name} — already connected`}
                           options={[
                             {
-                              title: "Select a model",
+                              title: "Use saved key",
                               value: "use" as const,
-                              description: `Current: ${info.model}`,
+                              description: "Select a model from this provider",
+                            },
+                            {
+                              title: "Replace key",
+                              value: "replace" as const,
+                              description: "Enter a new API key",
                             },
                             {
                               title: "Disconnect",
-                              value: "disconnect" as const,
-                              description: "Remove this CLI provider",
+                              value: "remove" as const,
+                              description: "Remove saved credentials",
                             },
                           ]}
                           onSelect={(option) => resolve(option.value)}
@@ -156,151 +205,108 @@ export function createDialogProviderOptions() {
                       () => resolve(null),
                     )
                   })
+                  if (action === null) return
                   if (action === "use") {
                     dialog.replace(() => <DialogModel providerID={provider.id} />)
-                  } else if (action === "disconnect") {
+                    return
+                  }
+                  if (action === "remove") {
                     await sdk.client.auth.remove({ providerID: provider.id })
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
                     dialog.clear()
+                    return
                   }
-                } else {
-                  // Connect: store a marker in auth.json so provider persists as connected
-                  await sdk.client.auth.set({
+                  // action === "replace" → fall through to auth flow
+                }
+
+                const methods = sync.data.provider_auth[provider.id] ?? [
+                  {
+                    type: "api",
+                    label: "API key",
+                  },
+                ]
+                let index: number | null = 0
+                if (methods.length > 1) {
+                  index = await new Promise<number | null>((resolve) => {
+                    dialog.replace(
+                      () => (
+                        <DialogSelect
+                          title="Select auth method"
+                          options={methods.map((x, index) => ({
+                            title: x.label,
+                            value: index,
+                          }))}
+                          onSelect={(option) => resolve(option.value)}
+                        />
+                      ),
+                      () => resolve(null),
+                    )
+                  })
+                }
+                if (index == null) return
+                const method = methods[index]
+                if (method.type === "oauth") {
+                  let inputs: Record<string, string> | undefined
+                  if (method.prompts?.length) {
+                    const value = await PromptsMethod({
+                      dialog,
+                      prompts: method.prompts,
+                    })
+                    if (!value) return
+                    inputs = value
+                  }
+
+                  const result = await sdk.client.provider.oauth.authorize({
                     providerID: provider.id,
-                    auth: { type: "api", key: "cli" },
+                    method: index,
+                    inputs,
                   })
-                  await sdk.client.instance.dispose()
-                  await sync.bootstrap()
-                  toast.show({ variant: "success", message: `Connected ${provider.name}` })
-                  dialog.replace(() => <DialogModel providerID={provider.id} />)
-                }
-                return
-              }
-
-              // If provider already has a saved key, offer to use it or replace it
-              if (isConnected) {
-                const action = await new Promise<"use" | "replace" | "remove" | null>((resolve) => {
-                  dialog.replace(
-                    () => (
-                      <DialogSelect
-                        title={`${provider.name} — already connected`}
-                        options={[
-                          {
-                            title: "Use saved key",
-                            value: "use" as const,
-                            description: "Select a model from this provider",
-                          },
-                          {
-                            title: "Replace key",
-                            value: "replace" as const,
-                            description: "Enter a new API key",
-                          },
-                          {
-                            title: "Disconnect",
-                            value: "remove" as const,
-                            description: "Remove saved credentials",
-                          },
-                        ]}
-                        onSelect={(option) => resolve(option.value)}
+                  if (result.error) {
+                    toast.show({
+                      variant: "error",
+                      message: JSON.stringify(result.error),
+                    })
+                    dialog.clear()
+                    return
+                  }
+                  const authorization = result.data
+                  if (!authorization) {
+                    toast.show({
+                      variant: "error",
+                      message: "Provider authorization returned no data",
+                    })
+                    dialog.clear()
+                    return
+                  }
+                  if (authorization.method === "code") {
+                    dialog.replace(() => (
+                      <CodeMethod
+                        providerID={provider.id}
+                        title={method.label}
+                        index={index}
+                        authorization={authorization}
                       />
-                    ),
-                    () => resolve(null),
-                  )
-                })
-                if (action === null) return
-                if (action === "use") {
-                  dialog.replace(() => <DialogModel providerID={provider.id} />)
-                  return
-                }
-                if (action === "remove") {
-                  await sdk.client.auth.remove({ providerID: provider.id })
-                  await sdk.client.instance.dispose()
-                  await sync.bootstrap()
-                  toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
-                  dialog.clear()
-                  return
-                }
-                // action === "replace" → fall through to auth flow
-              }
-
-              const methods = sync.data.provider_auth[provider.id] ?? [
-                {
-                  type: "api",
-                  label: "API key",
-                },
-              ]
-              let index: number | null = 0
-              if (methods.length > 1) {
-                index = await new Promise<number | null>((resolve) => {
-                  dialog.replace(
-                    () => (
-                      <DialogSelect
-                        title="Select auth method"
-                        options={methods.map((x, index) => ({
-                          title: x.label,
-                          value: index,
-                        }))}
-                        onSelect={(option) => resolve(option.value)}
+                    ))
+                  }
+                  if (authorization.method === "auto") {
+                    dialog.replace(() => (
+                      <AutoMethod
+                        providerID={provider.id}
+                        title={method.label}
+                        index={index}
+                        authorization={authorization}
                       />
-                    ),
-                    () => resolve(null),
-                  )
-                })
-              }
-              if (index == null) return
-              const method = methods[index]
-              if (method.type === "oauth") {
-                let inputs: Record<string, string> | undefined
-                if (method.prompts?.length) {
-                  const value = await PromptsMethod({
-                    dialog,
-                    prompts: method.prompts,
-                  })
-                  if (!value) return
-                  inputs = value
+                    ))
+                  }
                 }
-
-                const result = await sdk.client.provider.oauth.authorize({
-                  providerID: provider.id,
-                  method: index,
-                  inputs,
-                })
-                if (result.error) {
-                  toast.show({
-                    variant: "error",
-                    message: JSON.stringify(result.error),
-                  })
-                  dialog.clear()
-                  return
+                if (method.type === "api") {
+                  return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
                 }
-                const authorization = result.data
-                if (!authorization) {
-                  toast.show({
-                    variant: "error",
-                    message: "Provider authorization returned no data",
-                  })
-                  dialog.clear()
-                  return
-                }
-                if (authorization.method === "code") {
-                  dialog.replace(() => (
-                    <CodeMethod providerID={provider.id} title={method.label} index={index} authorization={authorization} />
-                  ))
-                }
-                if (authorization.method === "auto") {
-                  dialog.replace(() => (
-                    <AutoMethod providerID={provider.id} title={method.label} index={index} authorization={authorization} />
-                  ))
-                }
-              }
-              if (method.type === "api") {
-                return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
-              }
-            },
-          })
-        },
+              },
+            })
+          },
         }
       }),
     )

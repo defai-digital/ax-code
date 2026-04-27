@@ -242,10 +242,7 @@ const sourcePackageManifest = {
   },
 }
 
-await fs.promises.writeFile(
-  path.join(stageDir, "package.json"),
-  JSON.stringify(sourcePackageManifest, null, 2) + "\n",
-)
+await fs.promises.writeFile(path.join(stageDir, "package.json"), JSON.stringify(sourcePackageManifest, null, 2) + "\n")
 
 // Step 7: copy LICENSE.
 await fs.promises.copyFile(path.resolve(dir, "../../LICENSE"), path.join(stageDir, "LICENSE"))

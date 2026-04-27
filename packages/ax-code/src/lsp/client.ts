@@ -152,17 +152,23 @@ export namespace LSPClient {
     return value !== undefined && value !== null && value !== false
   }
 
-  export function capabilityHintsFromInitializeForTest(capabilities: Record<string, unknown> | undefined): LSPServer.CapabilityHints {
+  export function capabilityHintsFromInitializeForTest(
+    capabilities: Record<string, unknown> | undefined,
+  ): LSPServer.CapabilityHints {
     if (!capabilities) return {}
     const hints: LSPServer.CapabilityHints = {}
 
     if ("hoverProvider" in capabilities) hints.hover = capabilityEnabled(capabilities.hoverProvider)
     if ("definitionProvider" in capabilities) hints.definition = capabilityEnabled(capabilities.definitionProvider)
     if ("referencesProvider" in capabilities) hints.references = capabilityEnabled(capabilities.referencesProvider)
-    if ("implementationProvider" in capabilities) hints.implementation = capabilityEnabled(capabilities.implementationProvider)
-    if ("documentSymbolProvider" in capabilities) hints.documentSymbol = capabilityEnabled(capabilities.documentSymbolProvider)
-    if ("workspaceSymbolProvider" in capabilities) hints.workspaceSymbol = capabilityEnabled(capabilities.workspaceSymbolProvider)
-    if ("callHierarchyProvider" in capabilities) hints.callHierarchy = capabilityEnabled(capabilities.callHierarchyProvider)
+    if ("implementationProvider" in capabilities)
+      hints.implementation = capabilityEnabled(capabilities.implementationProvider)
+    if ("documentSymbolProvider" in capabilities)
+      hints.documentSymbol = capabilityEnabled(capabilities.documentSymbolProvider)
+    if ("workspaceSymbolProvider" in capabilities)
+      hints.workspaceSymbol = capabilityEnabled(capabilities.workspaceSymbolProvider)
+    if ("callHierarchyProvider" in capabilities)
+      hints.callHierarchy = capabilityEnabled(capabilities.callHierarchyProvider)
 
     return hints
   }
@@ -364,7 +370,6 @@ export namespace LSPClient {
       return prev.hash === fingerprintHash(text)
     }
 
-
     function diagnosticsWait(input: { path: string }) {
       log.info("waiting for diagnostics", { path: input.path })
       let unsub: (() => void) | undefined
@@ -462,35 +467,90 @@ export namespace LSPClient {
           // send duplicate didChange notifications with the same version
           // number. Unrelated paths still run in parallel.
           return withPathLock(input.path, async () => {
-          // If a previously-tracked file has disappeared from disk, treat
-          // the touch as a close so we don't leak stale entries in files,
-          // diagnostics, and lastContent. Caller gets false ("nothing sent
-          // to server").
-          if (files[input.path] !== undefined) {
-            const exists = await Bun.file(input.path)
-              .exists()
-              .catch(() => false)
-            if (!exists) {
-              // closeUnlocked — we already hold the lock for this path.
-              await closeUnlocked({ path: input.path, deleted: true })
-              return false
+            // If a previously-tracked file has disappeared from disk, treat
+            // the touch as a close so we don't leak stale entries in files,
+            // diagnostics, and lastContent. Caller gets false ("nothing sent
+            // to server").
+            if (files[input.path] !== undefined) {
+              const exists = await Bun.file(input.path)
+                .exists()
+                .catch(() => false)
+              if (!exists) {
+                // closeUnlocked — we already hold the lock for this path.
+                await closeUnlocked({ path: input.path, deleted: true })
+                return false
+              }
             }
-          }
-          const text = await Filesystem.readText(input.path)
-          const extension = path.extname(input.path)
-          const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
+            const text = await Filesystem.readText(input.path)
+            const extension = path.extname(input.path)
+            const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
 
-          const version = files[input.path]
-          if (version !== undefined) {
-            // File previously opened — this would be a didChange. Skip
-            // the round-trip entirely if the content is byte-identical to
-            // what we already sent; the server's state is already correct.
-            if (contentUnchanged(input.path, text)) {
-              log.info("textDocument/didChange skipped (unchanged)", {
-                path: input.path,
-                version,
+            const version = files[input.path]
+            if (version !== undefined) {
+              // File previously opened — this would be a didChange. Skip
+              // the round-trip entirely if the content is byte-identical to
+              // what we already sent; the server's state is already correct.
+              if (contentUnchanged(input.path, text)) {
+                log.info("textDocument/didChange skipped (unchanged)", {
+                  path: input.path,
+                  version,
+                })
+                return false
+              }
+
+              log.info("workspace/didChangeWatchedFiles", input)
+              const wait = input.waitForDiagnostics ? diagnosticsWait({ path: input.path }) : undefined
+              await connection.sendNotification("workspace/didChangeWatchedFiles", {
+                changes: [
+                  {
+                    uri: pathToFileURL(input.path).href,
+                    type: 2, // Changed
+                  },
+                ],
               })
-              return false
+
+              const next = version + 1
+              files[input.path] = next
+
+              // Try incremental sync first. If we have the previously-sent
+              // text cached and computeIncrementalChanges produces a reasonable
+              // hunk list, send ranges. Otherwise fall back to full-document
+              // sync — which works on every server regardless of their
+              // declared sync kind, since LSP treats a range-less change as
+              // "replace the whole document".
+              let contentChanges: Array<
+                | { text: string }
+                | {
+                    range: { start: { line: number; character: number }; end: { line: number; character: number } }
+                    text: string
+                  }
+              >
+              const prevText = lastContent[input.path]?.text
+              const incremental = prevText ? computeIncrementalChanges(prevText, text) : null
+              if (incremental && incremental.length > 0) {
+                contentChanges = incremental
+                log.info("textDocument/didChange (incremental)", {
+                  path: input.path,
+                  version: next,
+                  hunks: incremental.length,
+                })
+              } else {
+                contentChanges = [{ text }]
+                log.info("textDocument/didChange (full)", {
+                  path: input.path,
+                  version: next,
+                })
+              }
+              await connection.sendNotification("textDocument/didChange", {
+                textDocument: {
+                  uri: pathToFileURL(input.path).href,
+                  version: next,
+                },
+                contentChanges,
+              })
+              lastContent[input.path] = contentFingerprint(text)
+              await wait
+              return true
             }
 
             log.info("workspace/didChangeWatchedFiles", input)
@@ -499,86 +559,29 @@ export namespace LSPClient {
               changes: [
                 {
                   uri: pathToFileURL(input.path).href,
-                  type: 2, // Changed
+                  type: 1, // Created
                 },
               ],
             })
 
-            const next = version + 1
-            files[input.path] = next
-
-            // Try incremental sync first. If we have the previously-sent
-            // text cached and computeIncrementalChanges produces a reasonable
-            // hunk list, send ranges. Otherwise fall back to full-document
-            // sync — which works on every server regardless of their
-            // declared sync kind, since LSP treats a range-less change as
-            // "replace the whole document".
-            let contentChanges: Array<
-              | { text: string }
-              | {
-                  range: { start: { line: number; character: number }; end: { line: number; character: number } }
-                  text: string
-                }
-            >
-            const prevText = lastContent[input.path]?.text
-            const incremental = prevText ? computeIncrementalChanges(prevText, text) : null
-            if (incremental && incremental.length > 0) {
-              contentChanges = incremental
-              log.info("textDocument/didChange (incremental)", {
-                path: input.path,
-                version: next,
-                hunks: incremental.length,
-              })
-            } else {
-              contentChanges = [{ text }]
-              log.info("textDocument/didChange (full)", {
-                path: input.path,
-                version: next,
-              })
-            }
-            await connection.sendNotification("textDocument/didChange", {
+            log.info("textDocument/didOpen", input)
+            diagnostics.delete(input.path)
+            await connection.sendNotification("textDocument/didOpen", {
               textDocument: {
                 uri: pathToFileURL(input.path).href,
-                version: next,
+                languageId,
+                version: 0,
+                text,
               },
-              contentChanges,
             })
+            files[input.path] = 0
             lastContent[input.path] = contentFingerprint(text)
             await wait
             return true
-          }
-
-          log.info("workspace/didChangeWatchedFiles", input)
-          const wait = input.waitForDiagnostics ? diagnosticsWait({ path: input.path }) : undefined
-          await connection.sendNotification("workspace/didChangeWatchedFiles", {
-            changes: [
-              {
-                uri: pathToFileURL(input.path).href,
-                type: 1, // Created
-              },
-            ],
-          })
-
-          log.info("textDocument/didOpen", input)
-          diagnostics.delete(input.path)
-          await connection.sendNotification("textDocument/didOpen", {
-            textDocument: {
-              uri: pathToFileURL(input.path).href,
-              languageId,
-              version: 0,
-              text,
-            },
-          })
-          files[input.path] = 0
-          lastContent[input.path] = contentFingerprint(text)
-          await wait
-          return true
           })
         },
         async close(input: { path: string; deleted?: boolean }) {
-          const normalized = path.isAbsolute(input.path)
-            ? input.path
-            : path.resolve(Instance.directory, input.path)
+          const normalized = path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path)
           return withPathLock(normalized, () => closeUnlocked({ path: normalized, deleted: input.deleted }))
         },
       },

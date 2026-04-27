@@ -142,9 +142,8 @@ export namespace Database {
   }
 
   export type TxOrDb = Transaction | Client
-  type SyncTransactionResult<T> = T extends Promise<any>
-    ? DrizzleTypeError<"Sync drivers can't use async functions in transactions!">
-    : T
+  type SyncTransactionResult<T> =
+    T extends Promise<any> ? DrizzleTypeError<"Sync drivers can't use async functions in transactions!"> : T
 
   const ctx = Context.create<{
     tx: TxOrDb
@@ -154,7 +153,9 @@ export namespace Database {
   function runEffects(effects: (() => void | Promise<void>)[]) {
     const errors: { index: number; error: unknown }[] = []
     for (let i = 0; i < effects.length; i++) {
-      try { effects[i]() } catch (e) {
+      try {
+        effects[i]()
+      } catch (e) {
         errors.push({ index: i, error: e })
       }
     }

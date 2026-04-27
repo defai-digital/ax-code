@@ -69,31 +69,36 @@ export namespace QualityPromotionReleasePolicy {
         ...base.watch,
         ...overrides?.watch,
       },
-      approval: overrides?.approval ? QualityPromotionApprovalPolicy.merge(base.approval, overrides.approval) : base.approval,
+      approval: overrides?.approval
+        ? QualityPromotionApprovalPolicy.merge(base.approval, overrides.approval)
+        : base.approval,
     })
   }
 
   export function defaults(input?: PolicyOverrides): Policy {
-    return merge({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-release-policy",
-      stability: {
-        cooldownHours: QualityStabilityGuard.DEFAULT_COOLDOWN_HOURS,
-        repeatFailureWindowHours: QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_WINDOW_HOURS,
-        repeatFailureThreshold: QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_THRESHOLD,
+    return merge(
+      {
+        schemaVersion: 1,
+        kind: "ax-code-quality-promotion-release-policy",
+        stability: {
+          cooldownHours: QualityStabilityGuard.DEFAULT_COOLDOWN_HOURS,
+          repeatFailureWindowHours: QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_WINDOW_HOURS,
+          repeatFailureThreshold: QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_THRESHOLD,
+        },
+        watch: {
+          minRecords: DEFAULT_WATCH_MIN_RECORDS,
+          maxRecords: DEFAULT_WATCH_MAX_RECORDS,
+          abstentionWarnRate: DEFAULT_ABSTENTION_WARN_RATE,
+          abstentionFailRate: DEFAULT_ABSTENTION_FAIL_RATE,
+          avgConfidenceWarnAbsDelta: DEFAULT_AVG_CONFIDENCE_WARN_ABS_DELTA,
+          avgConfidenceFailAbsDelta: DEFAULT_AVG_CONFIDENCE_FAIL_ABS_DELTA,
+          maxConfidenceWarnAbsDelta: DEFAULT_MAX_CONFIDENCE_WARN_ABS_DELTA,
+          requireCandidateCoverage: true,
+        },
+        approval: QualityPromotionApprovalPolicy.defaults(),
       },
-      watch: {
-        minRecords: DEFAULT_WATCH_MIN_RECORDS,
-        maxRecords: DEFAULT_WATCH_MAX_RECORDS,
-        abstentionWarnRate: DEFAULT_ABSTENTION_WARN_RATE,
-        abstentionFailRate: DEFAULT_ABSTENTION_FAIL_RATE,
-        avgConfidenceWarnAbsDelta: DEFAULT_AVG_CONFIDENCE_WARN_ABS_DELTA,
-        avgConfidenceFailAbsDelta: DEFAULT_AVG_CONFIDENCE_FAIL_ABS_DELTA,
-        maxConfidenceWarnAbsDelta: DEFAULT_MAX_CONFIDENCE_WARN_ABS_DELTA,
-        requireCandidateCoverage: true,
-      },
-      approval: QualityPromotionApprovalPolicy.defaults(),
-    }, input)
+      input,
+    )
   }
 
   export function digest(policy: Policy) {
@@ -129,23 +134,49 @@ export namespace QualityPromotionReleasePolicy {
     lines.push(`- reentry min role: ${policy.approval.rules.reentry.minimumRole ?? "none"}`)
     lines.push(`- reentry independent reviewer: ${policy.approval.rules.reentry.requireIndependentReviewer}`)
     lines.push(`- reentry prior approver exclusion: ${policy.approval.rules.reentry.requirePriorApproverExclusion}`)
-    lines.push(`- reentry max prior overlap ratio: ${policy.approval.rules.reentry.maxPriorApproverOverlapRatio ?? "none"}`)
-    lines.push(`- reentry reviewer carryover budget: ${policy.approval.rules.reentry.reviewerCarryoverBudget ?? "none"}`)
-    lines.push(`- reentry reviewer carryover lookback promotions: ${policy.approval.rules.reentry.reviewerCarryoverLookbackPromotions ?? "none"}`)
+    lines.push(
+      `- reentry max prior overlap ratio: ${policy.approval.rules.reentry.maxPriorApproverOverlapRatio ?? "none"}`,
+    )
+    lines.push(
+      `- reentry reviewer carryover budget: ${policy.approval.rules.reentry.reviewerCarryoverBudget ?? "none"}`,
+    )
+    lines.push(
+      `- reentry reviewer carryover lookback promotions: ${policy.approval.rules.reentry.reviewerCarryoverLookbackPromotions ?? "none"}`,
+    )
     lines.push(`- reentry team carryover budget: ${policy.approval.rules.reentry.teamCarryoverBudget ?? "none"}`)
-    lines.push(`- reentry team carryover lookback promotions: ${policy.approval.rules.reentry.teamCarryoverLookbackPromotions ?? "none"}`)
-    lines.push(`- reentry max prior reporting chain overlap ratio: ${policy.approval.rules.reentry.maxPriorReportingChainOverlapRatio ?? "none"}`)
-    lines.push(`- reentry reporting chain carryover budget: ${policy.approval.rules.reentry.reportingChainCarryoverBudget ?? "none"}`)
-    lines.push(`- reentry reporting chain carryover lookback promotions: ${policy.approval.rules.reentry.reportingChainCarryoverLookbackPromotions ?? "none"}`)
+    lines.push(
+      `- reentry team carryover lookback promotions: ${policy.approval.rules.reentry.teamCarryoverLookbackPromotions ?? "none"}`,
+    )
+    lines.push(
+      `- reentry max prior reporting chain overlap ratio: ${policy.approval.rules.reentry.maxPriorReportingChainOverlapRatio ?? "none"}`,
+    )
+    lines.push(
+      `- reentry reporting chain carryover budget: ${policy.approval.rules.reentry.reportingChainCarryoverBudget ?? "none"}`,
+    )
+    lines.push(
+      `- reentry reporting chain carryover lookback promotions: ${policy.approval.rules.reentry.reportingChainCarryoverLookbackPromotions ?? "none"}`,
+    )
     lines.push(`- reentry role cohort diversity: ${policy.approval.rules.reentry.requireRoleCohortDiversity}`)
-    lines.push(`- reentry minimum distinct role cohorts: ${policy.approval.rules.reentry.minimumDistinctRoleCohorts ?? "none"}`)
+    lines.push(
+      `- reentry minimum distinct role cohorts: ${policy.approval.rules.reentry.minimumDistinctRoleCohorts ?? "none"}`,
+    )
     lines.push(`- reentry reviewer team diversity: ${policy.approval.rules.reentry.requireReviewerTeamDiversity}`)
-    lines.push(`- reentry minimum distinct reviewer teams: ${policy.approval.rules.reentry.minimumDistinctReviewerTeams ?? "none"}`)
+    lines.push(
+      `- reentry minimum distinct reviewer teams: ${policy.approval.rules.reentry.minimumDistinctReviewerTeams ?? "none"}`,
+    )
     lines.push(`- reentry reporting chain diversity: ${policy.approval.rules.reentry.requireReportingChainDiversity}`)
-    lines.push(`- reentry minimum distinct reporting chains: ${policy.approval.rules.reentry.minimumDistinctReportingChains ?? "none"}`)
-    lines.push(`- reentry approval concentration budget: ${policy.approval.rules.reentry.approvalConcentrationBudget ?? "none"}`)
-    lines.push(`- reentry approval concentration preset: ${policy.approval.rules.reentry.approvalConcentrationPreset ?? "none"}`)
-    lines.push(`- reentry approval concentration weights: approver=${policy.approval.rules.reentry.approvalConcentrationWeights.approver}, team=${policy.approval.rules.reentry.approvalConcentrationWeights.team}, reporting_chain=${policy.approval.rules.reentry.approvalConcentrationWeights.reportingChain}`)
+    lines.push(
+      `- reentry minimum distinct reporting chains: ${policy.approval.rules.reentry.minimumDistinctReportingChains ?? "none"}`,
+    )
+    lines.push(
+      `- reentry approval concentration budget: ${policy.approval.rules.reentry.approvalConcentrationBudget ?? "none"}`,
+    )
+    lines.push(
+      `- reentry approval concentration preset: ${policy.approval.rules.reentry.approvalConcentrationPreset ?? "none"}`,
+    )
+    lines.push(
+      `- reentry approval concentration weights: approver=${policy.approval.rules.reentry.approvalConcentrationWeights.approver}, team=${policy.approval.rules.reentry.approvalConcentrationWeights.team}, reporting_chain=${policy.approval.rules.reentry.approvalConcentrationWeights.reportingChain}`,
+    )
     lines.push("")
     return lines.join("\n")
   }

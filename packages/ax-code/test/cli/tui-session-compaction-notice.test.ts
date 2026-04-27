@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { firstCompactionMessageID, shouldShowCompactionNotice } from "../../src/cli/cmd/tui/routes/session/compaction-view-model"
+import {
+  firstCompactionMessageID,
+  shouldShowCompactionNotice,
+} from "../../src/cli/cmd/tui/routes/session/compaction-view-model"
 
 describe("tui session compaction notice", () => {
   test("finds the first user message that contains a compaction marker", () => {

@@ -17,11 +17,13 @@ export namespace QualityPromotionApprovalPacket {
     dissentHandlingStatus: z.enum(["pass", "fail"]),
     qualifiedRejectingReviews: z.number().int().nonnegative(),
     coveredQualifiedRejectingReviews: z.number().int().nonnegative(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ReadinessSummary = z.output<typeof ReadinessSummary>
 
@@ -81,9 +83,11 @@ export namespace QualityPromotionApprovalPacket {
   }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, packet: PacketArtifact) {
-    return packet.decisionBundle.digest === QualityPromotionApproval.digest(bundle)
-      && packet.decisionBundle.createdAt === bundle.createdAt
-      && packet.suggestion.digest === QualityPromotionAdoptionReview.suggestionDigest(bundle)
+    return (
+      packet.decisionBundle.digest === QualityPromotionApproval.digest(bundle) &&
+      packet.decisionBundle.createdAt === bundle.createdAt &&
+      packet.suggestion.digest === QualityPromotionAdoptionReview.suggestionDigest(bundle)
+    )
   }
 
   function approvalPolicyForBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle) {
@@ -102,27 +106,32 @@ export namespace QualityPromotionApprovalPacket {
     adoptionReviewConsensus: QualityPromotionAdoptionReview.ConsensusSummary
     dissentHandling: QualityPromotionAdoptionDissentHandling.HandlingSummary
   }) {
-    const blockingConsensusGate = input.adoptionReviewConsensus.gates.find((gate) =>
-      gate.status === "fail" && gate.name !== "qualified-rejection-veto")
+    const blockingConsensusGate = input.adoptionReviewConsensus.gates.find(
+      (gate) => gate.status === "fail" && gate.name !== "qualified-rejection-veto",
+    )
     const gates = [
       {
         name: "approval-policy",
         status: input.approvalEvaluation.overallStatus,
-        detail: input.approvalEvaluation.overallStatus === "pass"
-          ? `${input.approvalEvaluation.qualifiedApprovals}/${input.approvalEvaluation.requirement.minimumApprovals} qualifying approval(s) present`
-          : input.approvalEvaluation.gates.find((gate) => gate.status === "fail")?.detail ?? "approval policy not satisfied",
+        detail:
+          input.approvalEvaluation.overallStatus === "pass"
+            ? `${input.approvalEvaluation.qualifiedApprovals}/${input.approvalEvaluation.requirement.minimumApprovals} qualifying approval(s) present`
+            : (input.approvalEvaluation.gates.find((gate) => gate.status === "fail")?.detail ??
+              "approval policy not satisfied"),
       },
       {
         name: "adoption-review-consensus",
         status: blockingConsensusGate ? "fail" : "pass",
-        detail: blockingConsensusGate?.detail
-          ?? `${input.adoptionReviewConsensus.qualifyingReviews}/${input.adoptionReviewConsensus.requirement.minimumReviews} qualifying adoption review(s) present`,
+        detail:
+          blockingConsensusGate?.detail ??
+          `${input.adoptionReviewConsensus.qualifyingReviews}/${input.adoptionReviewConsensus.requirement.minimumReviews} qualifying adoption review(s) present`,
       },
       {
         name: "adoption-dissent-handling",
         status: input.dissentHandling.overallStatus,
-        detail: input.dissentHandling.gates.find((gate) => gate.status === "fail")?.detail
-          ?? `${input.dissentHandling.coveredQualifiedRejectingReviews}/${input.dissentHandling.totalQualifiedRejectingReviews} qualified rejecting review(s) covered`,
+        detail:
+          input.dissentHandling.gates.find((gate) => gate.status === "fail")?.detail ??
+          `${input.dissentHandling.coveredQualifiedRejectingReviews}/${input.dissentHandling.totalQualifiedRejectingReviews} qualified rejecting review(s) covered`,
       },
     ] as const
 
@@ -144,10 +153,11 @@ export namespace QualityPromotionApprovalPacket {
     bundle: QualityPromotionDecisionBundle.DecisionBundle,
     approvals: QualityPromotionApproval.ApprovalArtifact[] = [],
   ) {
-    const persisted = (await QualityPromotionApproval.list(bundle.source)).filter((approval) =>
-      approval.decisionBundle.createdAt === bundle.createdAt &&
-      approval.decisionBundle.digest === QualityPromotionApproval.digest(bundle) &&
-      approval.decisionBundle.source === bundle.source
+    const persisted = (await QualityPromotionApproval.list(bundle.source)).filter(
+      (approval) =>
+        approval.decisionBundle.createdAt === bundle.createdAt &&
+        approval.decisionBundle.digest === QualityPromotionApproval.digest(bundle) &&
+        approval.decisionBundle.source === bundle.source,
     )
     const deduped = new Map<string, QualityPromotionApproval.ApprovalArtifact>()
     for (const approval of [...persisted, ...approvals]) {
@@ -170,25 +180,36 @@ export namespace QualityPromotionApprovalPacket {
   }) {
     const createdAt = new Date().toISOString()
     const packetID = `${Date.now()}-${encode(input.bundle.source)}-approval-packet`
-    const suggestion = input.bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
+    const suggestion =
+      input.bundle.approvalPolicySuggestion ??
+      QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
     for (const approval of input.approvals) {
       const reasons = QualityPromotionApproval.verify(input.bundle, approval)
       if (reasons.length > 0) {
-        throw new Error(`Cannot create approval packet for ${input.bundle.source}: invalid approval artifact (${reasons[0]})`)
+        throw new Error(
+          `Cannot create approval packet for ${input.bundle.source}: invalid approval artifact (${reasons[0]})`,
+        )
       }
     }
     const adoptionReviews = input.adoptionReviews ?? []
     for (const review of adoptionReviews) {
       const reasons = QualityPromotionAdoptionReview.verify(input.bundle, review)
       if (reasons.length > 0) {
-        throw new Error(`Cannot create approval packet for ${input.bundle.source}: invalid adoption review artifact (${reasons[0]})`)
+        throw new Error(
+          `Cannot create approval packet for ${input.bundle.source}: invalid adoption review artifact (${reasons[0]})`,
+        )
       }
     }
     if (input.dissentHandling) {
-      const reasons = QualityPromotionAdoptionDissentHandling.verify(input.bundle, adoptionReviews, input.dissentHandling)
+      const reasons = QualityPromotionAdoptionDissentHandling.verify(
+        input.bundle,
+        adoptionReviews,
+        input.dissentHandling,
+      )
       if (reasons.length > 0) {
-        throw new Error(`Cannot create approval packet for ${input.bundle.source}: invalid dissent handling bundle (${reasons[0]})`)
+        throw new Error(
+          `Cannot create approval packet for ${input.bundle.source}: invalid dissent handling bundle (${reasons[0]})`,
+        )
       }
     }
     const policyResolution = approvalPolicyForBundle(input.bundle)
@@ -200,8 +221,9 @@ export namespace QualityPromotionApprovalPacket {
       policyProjectID: policyResolution.policyProjectID,
     })
     const adoptionReviewConsensus = QualityPromotionAdoptionReview.evaluate(input.bundle, adoptionReviews)
-    const dissentHandling = input.dissentHandling?.summary
-      ?? QualityPromotionAdoptionDissentHandling.evaluate(input.bundle, adoptionReviews, [], [])
+    const dissentHandling =
+      input.dissentHandling?.summary ??
+      QualityPromotionAdoptionDissentHandling.evaluate(input.bundle, adoptionReviews, [], [])
     const readiness = evaluateReadiness({
       bundle: input.bundle,
       approvals: input.approvals,
@@ -241,31 +263,41 @@ export namespace QualityPromotionApprovalPacket {
 
   export function verify(bundle: QualityPromotionDecisionBundle.DecisionBundle, packet: PacketArtifact) {
     const reasons: string[] = []
-    const suggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const suggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
     if (packet.source !== bundle.source) {
       reasons.push(`approval packet source mismatch: ${packet.source} vs ${bundle.source}`)
     }
     if (packet.decisionBundle.source !== bundle.source) {
-      reasons.push(`approval packet decision bundle source mismatch: ${packet.decisionBundle.source} vs ${bundle.source}`)
+      reasons.push(
+        `approval packet decision bundle source mismatch: ${packet.decisionBundle.source} vs ${bundle.source}`,
+      )
     }
     if (packet.decisionBundle.createdAt !== bundle.createdAt) {
-      reasons.push(`approval packet decision bundle createdAt mismatch: ${packet.decisionBundle.createdAt} vs ${bundle.createdAt}`)
+      reasons.push(
+        `approval packet decision bundle createdAt mismatch: ${packet.decisionBundle.createdAt} vs ${bundle.createdAt}`,
+      )
     }
     if (packet.decisionBundle.digest !== QualityPromotionApproval.digest(bundle)) {
       reasons.push(`approval packet decision bundle digest mismatch for ${bundle.source}`)
     }
     if (packet.decisionBundle.decision !== bundle.eligibility.decision) {
-      reasons.push(`approval packet decision mismatch: ${packet.decisionBundle.decision} vs ${bundle.eligibility.decision}`)
+      reasons.push(
+        `approval packet decision mismatch: ${packet.decisionBundle.decision} vs ${bundle.eligibility.decision}`,
+      )
     }
     if (packet.decisionBundle.requiredOverride !== bundle.eligibility.requiredOverride) {
-      reasons.push(`approval packet required override mismatch: ${packet.decisionBundle.requiredOverride} vs ${bundle.eligibility.requiredOverride}`)
+      reasons.push(
+        `approval packet required override mismatch: ${packet.decisionBundle.requiredOverride} vs ${bundle.eligibility.requiredOverride}`,
+      )
     }
     if (packet.suggestion.digest !== QualityPromotionAdoptionReview.suggestionDigest(bundle)) {
       reasons.push(`approval packet suggestion digest mismatch for ${bundle.source}`)
     }
     if (packet.suggestion.adoptionStatus !== suggestion.adoption.status) {
-      reasons.push(`approval packet adoption status mismatch: ${packet.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`)
+      reasons.push(
+        `approval packet adoption status mismatch: ${packet.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`,
+      )
     }
     if (bundle.releasePolicy && !packet.releasePolicy) {
       reasons.push(`approval packet release policy snapshot missing for ${bundle.source}`)
@@ -275,10 +307,14 @@ export namespace QualityPromotionApprovalPacket {
     }
     if (bundle.releasePolicy && packet.releasePolicy) {
       if (packet.releasePolicy.provenance.digest !== bundle.releasePolicy.provenance.digest) {
-        reasons.push(`approval packet release policy digest mismatch: ${packet.releasePolicy.provenance.digest} vs ${bundle.releasePolicy.provenance.digest}`)
+        reasons.push(
+          `approval packet release policy digest mismatch: ${packet.releasePolicy.provenance.digest} vs ${bundle.releasePolicy.provenance.digest}`,
+        )
       }
       if (packet.releasePolicy.provenance.policySource !== bundle.releasePolicy.provenance.policySource) {
-        reasons.push(`approval packet release policy source mismatch: ${packet.releasePolicy.provenance.policySource} vs ${bundle.releasePolicy.provenance.policySource}`)
+        reasons.push(
+          `approval packet release policy source mismatch: ${packet.releasePolicy.provenance.policySource} vs ${bundle.releasePolicy.provenance.policySource}`,
+        )
       }
     }
 
@@ -295,9 +331,15 @@ export namespace QualityPromotionApprovalPacket {
       }
     }
     if (packet.dissentHandling) {
-      const handlingReasons = QualityPromotionAdoptionDissentHandling.verify(bundle, packet.adoptionReviews, packet.dissentHandling)
+      const handlingReasons = QualityPromotionAdoptionDissentHandling.verify(
+        bundle,
+        packet.adoptionReviews,
+        packet.dissentHandling,
+      )
       if (handlingReasons.length > 0) {
-        reasons.push(`approval packet contains invalid dissent handling bundle ${packet.dissentHandling.handlingID} (${handlingReasons[0]})`)
+        reasons.push(
+          `approval packet contains invalid dissent handling bundle ${packet.dissentHandling.handlingID} (${handlingReasons[0]})`,
+        )
       }
     }
 
@@ -318,8 +360,9 @@ export namespace QualityPromotionApprovalPacket {
       reasons.push(`approval packet adoption review consensus mismatch for ${bundle.source}`)
     }
 
-    const expectedDissentHandling = packet.dissentHandling?.summary
-      ?? QualityPromotionAdoptionDissentHandling.evaluate(bundle, packet.adoptionReviews, [], [])
+    const expectedDissentHandling =
+      packet.dissentHandling?.summary ??
+      QualityPromotionAdoptionDissentHandling.evaluate(bundle, packet.adoptionReviews, [], [])
     const expectedReadiness = evaluateReadiness({
       bundle,
       approvals: packet.approvals,
@@ -364,7 +407,9 @@ export namespace QualityPromotionApprovalPacket {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Approval packet ${packet.packetID} already exists for source ${packet.source} with different content`)
+      throw new Error(
+        `Approval packet ${packet.packetID} already exists for source ${packet.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(packet.source, packet.packetID), next)

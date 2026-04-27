@@ -154,13 +154,62 @@ function bundle(
           candidateMissingPredictionItems: 0,
         },
         metrics: {
-          precision: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-          recall: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-          falsePositiveRate: { baseline: null, candidate: null, delta: null, direction: "lower_is_better", improvement: false, regression: false },
-          falseNegativeRate: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
-          precisionAt1: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-          precisionAt3: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-          calibrationError: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
+          precision: {
+            baseline: 1,
+            candidate: 1,
+            delta: 0,
+            direction: "higher_is_better",
+            improvement: false,
+            regression: false,
+          },
+          recall: {
+            baseline: 1,
+            candidate: 1,
+            delta: 0,
+            direction: "higher_is_better",
+            improvement: false,
+            regression: false,
+          },
+          falsePositiveRate: {
+            baseline: null,
+            candidate: null,
+            delta: null,
+            direction: "lower_is_better",
+            improvement: false,
+            regression: false,
+          },
+          falseNegativeRate: {
+            baseline: 0,
+            candidate: 0,
+            delta: 0,
+            direction: "lower_is_better",
+            improvement: false,
+            regression: false,
+          },
+          precisionAt1: {
+            baseline: 1,
+            candidate: 1,
+            delta: 0,
+            direction: "higher_is_better",
+            improvement: false,
+            regression: false,
+          },
+          precisionAt3: {
+            baseline: 1,
+            candidate: 1,
+            delta: 0,
+            direction: "higher_is_better",
+            improvement: false,
+            regression: false,
+          },
+          calibrationError: {
+            baseline: 0,
+            candidate: 0,
+            delta: 0,
+            direction: "lower_is_better",
+            improvement: false,
+            regression: false,
+          },
         },
         gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
       },
@@ -195,33 +244,33 @@ function bundle(
       lastRollbackAt: options?.reentryRollbackID ? "2026-04-20T11:00:00.000Z" : null,
       reentryContext: options?.reentryRollbackID
         ? {
-          rollbackID: options.reentryRollbackID,
-          promotionID: options.priorPromotionID ?? "promotion-1",
-          rolledBackAt: "2026-04-20T11:00:00.000Z",
-          watchOverallStatus: "fail",
-          watchReleasePolicySource: "project",
-          watchReleasePolicyDigest: "policy-digest-1",
-          sameReleasePolicyAsCurrent: true,
-          rollbackTargetSource: "baseline-model-v1",
-          priorPromotionApprovers: options.priorPromotionApprovers ?? [],
-          teamCarryoverHistory: options.teamCarryoverHistory ?? [],
-          priorPromotionReportingChains: options.priorPromotionReportingChains ?? [],
-          reviewerCarryoverHistory: options.reviewerCarryoverHistory ?? [],
-          reportingChainCarryoverHistory: options.reportingChainCarryoverHistory ?? [],
-        }
+            rollbackID: options.reentryRollbackID,
+            promotionID: options.priorPromotionID ?? "promotion-1",
+            rolledBackAt: "2026-04-20T11:00:00.000Z",
+            watchOverallStatus: "fail",
+            watchReleasePolicySource: "project",
+            watchReleasePolicyDigest: "policy-digest-1",
+            sameReleasePolicyAsCurrent: true,
+            rollbackTargetSource: "baseline-model-v1",
+            priorPromotionApprovers: options.priorPromotionApprovers ?? [],
+            teamCarryoverHistory: options.teamCarryoverHistory ?? [],
+            priorPromotionReportingChains: options.priorPromotionReportingChains ?? [],
+            reviewerCarryoverHistory: options.reviewerCarryoverHistory ?? [],
+            reportingChainCarryoverHistory: options.reportingChainCarryoverHistory ?? [],
+          }
         : null,
       remediation: options?.remediationAuthor
         ? {
-          remediationID: "rem-1",
-          contextID: "rollback-ctx-1",
-          rollbackID: options.reentryRollbackID ?? "rollback-1",
-          createdAt: "2026-04-20T12:00:00.000Z",
-          author: options.remediationAuthor,
-          summary: "Captured retry remediation context.",
-          evidenceCount: 1,
-          currentReleasePolicyDigest: "policy-digest-1",
-          matchesCurrentReleasePolicyDigest: true,
-        }
+            remediationID: "rem-1",
+            contextID: "rollback-ctx-1",
+            rollbackID: options.reentryRollbackID ?? "rollback-1",
+            createdAt: "2026-04-20T12:00:00.000Z",
+            author: options.remediationAuthor,
+            summary: "Captured retry remediation context.",
+            evidenceCount: 1,
+            currentReleasePolicyDigest: "policy-digest-1",
+            matchesCurrentReleasePolicyDigest: true,
+          }
         : null,
       history: {
         priorPromotions: 1,
@@ -230,7 +279,13 @@ function bundle(
         coolingWindowActive: false,
         escalationRequired: false,
       },
-      gates: [{ name: "benchmark-comparison", status: requiredOverride === "none" ? "pass" : requiredOverride === "allow_warn" ? "warn" : "fail", detail: "ok" }],
+      gates: [
+        {
+          name: "benchmark-comparison",
+          status: requiredOverride === "none" ? "pass" : requiredOverride === "allow_warn" ? "warn" : "fail",
+          detail: "ok",
+        },
+      ],
     },
     snapshot: {
       currentActiveSource: "baseline-model-v1",
@@ -329,21 +384,23 @@ describe("QualityPromotionApprovalPolicy", () => {
 
   test("rejects policies whose concentration preset does not match the configured weights", () => {
     const policy = QualityPromotionApprovalPolicy.defaults()
-    expect(() => QualityPromotionApprovalPolicy.Policy.parse({
-      ...policy,
-      rules: {
-        ...policy.rules,
-        reentry: {
-          ...policy.rules.reentry,
-          approvalConcentrationPreset: "balanced",
-          approvalConcentrationWeights: {
-            approver: 0.5,
-            team: 0.25,
-            reportingChain: 0.25,
+    expect(() =>
+      QualityPromotionApprovalPolicy.Policy.parse({
+        ...policy,
+        rules: {
+          ...policy.rules,
+          reentry: {
+            ...policy.rules.reentry,
+            approvalConcentrationPreset: "balanced",
+            approvalConcentrationWeights: {
+              approver: 0.5,
+              team: 0.25,
+              reportingChain: 0.25,
+            },
           },
         },
-      },
-    })).toThrow("approval concentration preset")
+      }),
+    ).toThrow("approval concentration preset")
   })
 
   test("recommends balanced concentration for standard risk tiers without escalation signals", () => {
@@ -505,9 +562,7 @@ describe("QualityPromotionApprovalPolicy", () => {
 
     const passSummary = QualityPromotionApprovalPolicy.evaluate({
       bundle: decisionBundle,
-      approvals: [
-        approval({ bundle: decisionBundle, approver: "staff@example.com", role: "staff-engineer" }),
-      ],
+      approvals: [approval({ bundle: decisionBundle, approver: "staff@example.com", role: "staff-engineer" })],
     })
     expect(passSummary.overallStatus).toBe("pass")
     expect(passSummary.reentryRequirement?.minimumApprovals).toBe(1)
@@ -521,9 +576,7 @@ describe("QualityPromotionApprovalPolicy", () => {
 
     const selfApproved = QualityPromotionApprovalPolicy.evaluate({
       bundle: decisionBundle,
-      approvals: [
-        approval({ bundle: decisionBundle, approver: "author@example.com", role: "staff-engineer" }),
-      ],
+      approvals: [approval({ bundle: decisionBundle, approver: "author@example.com", role: "staff-engineer" })],
     })
     expect(selfApproved.overallStatus).toBe("fail")
     expect(selfApproved.independentReviewRequired).toBe(true)
@@ -550,9 +603,7 @@ describe("QualityPromotionApprovalPolicy", () => {
 
     const repeatedOnly = QualityPromotionApprovalPolicy.evaluate({
       bundle: decisionBundle,
-      approvals: [
-        approval({ bundle: decisionBundle, approver: "reviewer@example.com", role: "principal-engineer" }),
-      ],
+      approvals: [approval({ bundle: decisionBundle, approver: "reviewer@example.com", role: "principal-engineer" })],
     })
     expect(repeatedOnly.overallStatus).toBe("fail")
     expect(repeatedOnly.priorApproverExclusionRequired).toBe(true)
@@ -1111,7 +1162,7 @@ describe("QualityPromotionApprovalPolicy", () => {
       reportingChain: 0.25,
     })
     expect(concentrated.approvalConcentrationAppliedWeightTotal).toBe(1)
-    expect(concentrated.approvalConcentrationScore).toBeCloseTo(((1 / 3) * 0.5) + ((1 / 2) * 0.25) + ((1 / 2) * 0.25))
+    expect(concentrated.approvalConcentrationScore).toBeCloseTo((1 / 3) * 0.5 + (1 / 2) * 0.25 + (1 / 2) * 0.25)
     expect(concentrated.gates.find((gate) => gate.name === "reviewer-carryover-budget")?.status).toBe("pass")
     expect(concentrated.gates.find((gate) => gate.name === "team-carryover-budget")?.status).toBe("pass")
     expect(concentrated.gates.find((gate) => gate.name === "reporting-chain-carryover-budget")?.status).toBe("pass")

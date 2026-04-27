@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { tmpdir } from "../fixture/fixture"
 import { recall } from "../../src/memory/recall"
 import { recordEntry } from "../../src/memory/recorder"
+import * as store from "../../src/memory/store"
 
 describe("memory.recall", () => {
   test("empty memory returns []", async () => {
@@ -91,14 +92,15 @@ describe("memory.recall", () => {
     expect(await recall(tmp.path, { limit: 2 })).toHaveLength(2)
   })
 
-  test("ordering: feedback > userPrefs > decisions; ties broken by score then savedAt desc", async () => {
+  test("ordering: feedback > userPrefs > decisions > reference; ties broken by score then savedAt desc", async () => {
     await using tmp = await tmpdir()
     await recordEntry(tmp.path, "decisions", { name: "d1", body: "x" })
     await recordEntry(tmp.path, "userPrefs", { name: "u1", body: "x" })
     await recordEntry(tmp.path, "feedback", { name: "f1", body: "x" })
+    await recordEntry(tmp.path, "reference", { name: "r1", body: "x" })
 
     const kinds = (await recall(tmp.path)).map((r) => r.kind)
-    expect(kinds).toEqual(["feedback", "userPrefs", "decisions"])
+    expect(kinds).toEqual(["feedback", "userPrefs", "decisions", "reference"])
   })
 
   test("no query: every matching entry gets score 1", async () => {
@@ -121,5 +123,94 @@ describe("memory.recall", () => {
     expect(names).toContain("global")
     expect(names).not.toContain("security-scan")
     expect(names).not.toContain("test-coverage")
+  })
+
+  test("reference kind: searchable and included in all-kinds recall", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "reference", { name: "linear-bugs", body: "Pipeline bugs in Linear project INGEST" })
+    await recordEntry(tmp.path, "feedback", { name: "f1", body: "x" })
+
+    const all = await recall(tmp.path)
+    const kinds = all.map((r) => r.kind)
+    expect(kinds).toContain("reference")
+
+    const results = await recall(tmp.path, { query: "linear" })
+    expect(results).toHaveLength(1)
+    expect(results[0].entry.name).toBe("linear-bugs")
+    expect(results[0].kind).toBe("reference")
+  })
+
+  test("recency bonus: entries saved within 7 days score 2 higher than older entries", async () => {
+    await using tmp = await tmpdir()
+
+    // Insert a fresh entry normally
+    await recordEntry(tmp.path, "feedback", { name: "fresh", body: "recent rule" })
+
+    // Manually insert a stale entry by writing to disk with old savedAt
+    const memory = await store.load(tmp.path)
+    expect(memory).not.toBeNull()
+    const staleDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() // 10 days ago
+    memory!.sections.feedback!.entries.push({
+      name: "stale",
+      body: "old rule",
+      savedAt: staleDate,
+    })
+    await store.save(tmp.path, memory!)
+
+    const results = await recall(tmp.path, { query: "rule" })
+    const fresh = results.find((r) => r.entry.name === "fresh")!
+    const stale = results.find((r) => r.entry.name === "stale")!
+    expect(fresh.score).toBeGreaterThan(stale.score)
+    expect(fresh.score - stale.score).toBe(2) // exactly the RECENCY_BONUS
+  })
+
+  test("scope=global: searches global store, not project store", async () => {
+    await using tmp = await tmpdir()
+    await store.clearGlobal().catch(() => {})
+    try {
+      await recordEntry(tmp.path, "feedback", { name: "project-rule", body: "only in project" })
+      await recordEntry(tmp.path, "userPrefs", { name: "global-pref", body: "reply in TW Chinese", scope: "global" })
+
+      const projectResults = await recall(tmp.path, { scope: "project" })
+      const names = projectResults.map((r) => r.entry.name)
+      expect(names).toContain("project-rule")
+      expect(names).not.toContain("global-pref")
+
+      const globalResults = await recall(tmp.path, { scope: "global" })
+      const globalNames = globalResults.map((r) => r.entry.name)
+      expect(globalNames).toContain("global-pref")
+      expect(globalNames).not.toContain("project-rule")
+    } finally {
+      await store.clearGlobal().catch(() => {})
+    }
+  })
+
+  test("scope=all: merges project and global results", async () => {
+    await using tmp = await tmpdir()
+    await store.clearGlobal().catch(() => {})
+    try {
+      await recordEntry(tmp.path, "feedback", { name: "project-rule", body: "only in project" })
+      await recordEntry(tmp.path, "userPrefs", { name: "global-pref", body: "reply in TW Chinese", scope: "global" })
+
+      const allResults = await recall(tmp.path, { scope: "all" })
+      const names = allResults.map((r) => r.entry.name)
+      expect(names).toContain("project-rule")
+      expect(names).toContain("global-pref")
+
+      // Check source labeling
+      const projectEntry = allResults.find((r) => r.entry.name === "project-rule")!
+      const globalEntry = allResults.find((r) => r.entry.name === "global-pref")!
+      expect(projectEntry.source).toBe("project")
+      expect(globalEntry.source).toBe("global")
+    } finally {
+      await store.clearGlobal().catch(() => {})
+    }
+  })
+
+  test("result includes source field for project scope", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", { name: "f1", body: "x" })
+    const results = await recall(tmp.path)
+    expect(results[0].source).toBe("project")
   })
 })

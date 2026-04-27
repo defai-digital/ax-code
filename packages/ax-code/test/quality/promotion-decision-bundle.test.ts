@@ -115,13 +115,62 @@ function benchmarkBundle(): QualityCalibrationModel.BenchmarkBundle {
         candidateMissingPredictionItems: 0,
       },
       metrics: {
-        precision: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        recall: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        falsePositiveRate: { baseline: null, candidate: null, delta: null, direction: "lower_is_better", improvement: false, regression: false },
-        falseNegativeRate: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
-        precisionAt1: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        precisionAt3: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        calibrationError: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
+        precision: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        recall: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falsePositiveRate: {
+          baseline: null,
+          candidate: null,
+          delta: null,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falseNegativeRate: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt1: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt3: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        calibrationError: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
       },
       gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
     },
@@ -153,7 +202,10 @@ function stability(overallStatus: "pass" | "warn" | "fail"): QualityStabilityGua
   }
 }
 
-function eligibility(decision: "go" | "review" | "no_go", requiredOverride: "none" | "allow_warn" | "force"): QualityPromotionEligibility.EligibilitySummary {
+function eligibility(
+  decision: "go" | "review" | "no_go",
+  requiredOverride: "none" | "allow_warn" | "force",
+): QualityPromotionEligibility.EligibilitySummary {
   return {
     schemaVersion: 1,
     kind: "ax-code-quality-promotion-eligibility",
@@ -175,9 +227,7 @@ function eligibility(decision: "go" | "review" | "no_go", requiredOverride: "non
       coolingWindowActive: decision === "no_go",
       escalationRequired: decision === "review",
     },
-    gates: [
-      { name: "benchmark-comparison", status: decision === "no_go" ? "fail" : "pass", detail: "ok" },
-    ],
+    gates: [{ name: "benchmark-comparison", status: decision === "no_go" ? "fail" : "pass", detail: "ok" }],
   }
 }
 

@@ -58,10 +58,18 @@ console.log(result.text)
 // Streaming — async iterator of typed events
 for await (const event of agent.stream("Explain this codebase")) {
   switch (event.type) {
-    case "text": process.stdout.write(event.text); break
-    case "tool-call": console.log(`Calling ${event.tool}...`); break
-    case "tool-result": console.log(`${event.tool} → ${event.status}`); break
-    case "done": console.log(`\nTokens: ${event.result.usage.totalTokens}`); break
+    case "text":
+      process.stdout.write(event.text)
+      break
+    case "tool-call":
+      console.log(`Calling ${event.tool}...`)
+      break
+    case "tool-result":
+      console.log(`${event.tool} → ${event.status}`)
+      break
+    case "done":
+      console.log(`\nTokens: ${event.result.usage.totalTokens}`)
+      break
   }
 }
 
@@ -115,9 +123,7 @@ import { createMockAgent, assertToolSuccess } from "@ax-code/sdk/testing"
 test("CI bot scans for CVEs", async () => {
   const agent = createMockAgent({
     replies: ["Found 2 CVEs. Opening PR to bump versions."],
-    toolCalls: [
-      { tool: "grep", input: { pattern: "CVE-" }, output: "CVE-2025-1234" },
-    ],
+    toolCalls: [{ tool: "grep", input: { pattern: "CVE-" }, output: "CVE-2025-1234" }],
   })
 
   const result = await agent.run("scan for CVEs")
@@ -150,13 +156,13 @@ const sessions = await client.session.list()
 
 ## Migration from 1.4.0
 
-| Before (1.4.0) | After (2.0.0) |
-|---|---|
-| `import { createAxCode } from "@ax-code/sdk"` | `import { createAxCode } from "@ax-code/sdk/http"` |
-| `import { createAgent } from "@ax-code/sdk/programmatic"` | `import { createAgent } from "@ax-code/sdk"` |
-| No custom tools | `import { tool } from "@ax-code/sdk"` + `tools: [...]` on AgentOptions |
-| No testing utilities | `import { createMockAgent } from "@ax-code/sdk/testing"` |
-| No version check | `import { SDK_VERSION } from "@ax-code/sdk"` |
+| Before (1.4.0)                                            | After (2.0.0)                                                          |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `import { createAxCode } from "@ax-code/sdk"`             | `import { createAxCode } from "@ax-code/sdk/http"`                     |
+| `import { createAgent } from "@ax-code/sdk/programmatic"` | `import { createAgent } from "@ax-code/sdk"`                           |
+| No custom tools                                           | `import { tool } from "@ax-code/sdk"` + `tools: [...]` on AgentOptions |
+| No testing utilities                                      | `import { createMockAgent } from "@ax-code/sdk/testing"`               |
+| No version check                                          | `import { SDK_VERSION } from "@ax-code/sdk"`                           |
 
 The `./programmatic` subpath still works (re-exports everything from `.`) for backward compatibility but should be considered deprecated.
 

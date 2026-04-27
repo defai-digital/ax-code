@@ -701,7 +701,9 @@ describe("ProbabilisticRollout.summarizeReplayReadiness", () => {
     )
     expect(ProbabilisticRollout.readinessNextActionLabel(ready)).toBe("Ready to benchmark the current replay export.")
     expect(ProbabilisticRollout.readinessDetailLabel(blocked)).toBe("no replay evidence yet")
-    expect(ProbabilisticRollout.readinessDetailLabel(needsLabels)).toBe("0/2 resolved labels · 1 missing · 1 unresolved")
+    expect(ProbabilisticRollout.readinessDetailLabel(needsLabels)).toBe(
+      "0/2 resolved labels · 1 missing · 1 unresolved",
+    )
     expect(ProbabilisticRollout.readinessDetailLabel(notReady)).toBe("label coverage complete · 2/2 resolved labels")
     expect(ProbabilisticRollout.readinessDetailLabel(ready)).toBe("benchmark ready · 1/1 resolved labels")
   })
@@ -1279,7 +1281,10 @@ describe("QualityShadow", () => {
     }
   }
 
-  function createBenchmarkBundle(source: string, status: "pass" | "warn" | "fail"): QualityCalibrationModel.BenchmarkBundle {
+  function createBenchmarkBundle(
+    source: string,
+    status: "pass" | "warn" | "fail",
+  ): QualityCalibrationModel.BenchmarkBundle {
     return {
       schemaVersion: 1,
       kind: "ax-code-quality-benchmark-bundle",
@@ -1382,17 +1387,64 @@ describe("QualityShadow", () => {
           candidateMissingPredictionItems: 0,
         },
         metrics: {
-          precision: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-          recall: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-          falsePositiveRate: { baseline: null, candidate: null, delta: null, direction: "lower_is_better", improvement: false, regression: false },
-          falseNegativeRate: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
-          precisionAt1: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-          precisionAt3: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-          calibrationError: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
+          precision: {
+            baseline: 1,
+            candidate: 1,
+            delta: 0,
+            direction: "higher_is_better",
+            improvement: false,
+            regression: false,
+          },
+          recall: {
+            baseline: 1,
+            candidate: 1,
+            delta: 0,
+            direction: "higher_is_better",
+            improvement: false,
+            regression: false,
+          },
+          falsePositiveRate: {
+            baseline: null,
+            candidate: null,
+            delta: null,
+            direction: "lower_is_better",
+            improvement: false,
+            regression: false,
+          },
+          falseNegativeRate: {
+            baseline: 0,
+            candidate: 0,
+            delta: 0,
+            direction: "lower_is_better",
+            improvement: false,
+            regression: false,
+          },
+          precisionAt1: {
+            baseline: 1,
+            candidate: 1,
+            delta: 0,
+            direction: "higher_is_better",
+            improvement: false,
+            regression: false,
+          },
+          precisionAt3: {
+            baseline: 1,
+            candidate: 1,
+            delta: 0,
+            direction: "higher_is_better",
+            improvement: false,
+            regression: false,
+          },
+          calibrationError: {
+            baseline: 0,
+            candidate: 0,
+            delta: 0,
+            direction: "lower_is_better",
+            improvement: false,
+            regression: false,
+          },
         },
-        gates: [
-          { name: "dataset-consistency", status: "pass", detail: "ok" },
-        ],
+        gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
       },
     }
   }
@@ -1429,17 +1481,109 @@ describe("QualityShadow", () => {
             maxConfidenceWarnAbsDelta: 0.6,
             requireCandidateCoverage: true,
           },
-        approval: {
-          schemaVersion: 1,
-          kind: "ax-code-quality-promotion-approval-policy",
-          rules: {
-            none: { minimumApprovals: 0, minimumRole: null, requireDistinctApprovers: false, requireIndependentReviewer: false, requirePriorApproverExclusion: false, maxPriorApproverOverlapRatio: null, reviewerCarryoverBudget: null, reviewerCarryoverLookbackPromotions: null, teamCarryoverBudget: null, teamCarryoverLookbackPromotions: null, maxPriorReportingChainOverlapRatio: null, reportingChainCarryoverBudget: null, reportingChainCarryoverLookbackPromotions: null, requireRoleCohortDiversity: false, minimumDistinctRoleCohorts: null, requireReviewerTeamDiversity: false, minimumDistinctReviewerTeams: null, requireReportingChainDiversity: false, minimumDistinctReportingChains: null, approvalConcentrationBudget: null, approvalConcentrationPreset: null, approvalConcentrationWeights: { approver: 1, team: 1, reportingChain: 1 } },
-            allow_warn: { minimumApprovals: 1, minimumRole: "staff-engineer", requireDistinctApprovers: true, requireIndependentReviewer: false, requirePriorApproverExclusion: false, maxPriorApproverOverlapRatio: null, reviewerCarryoverBudget: null, reviewerCarryoverLookbackPromotions: null, teamCarryoverBudget: null, teamCarryoverLookbackPromotions: null, maxPriorReportingChainOverlapRatio: null, reportingChainCarryoverBudget: null, reportingChainCarryoverLookbackPromotions: null, requireRoleCohortDiversity: false, minimumDistinctRoleCohorts: null, requireReviewerTeamDiversity: false, minimumDistinctReviewerTeams: null, requireReportingChainDiversity: false, minimumDistinctReportingChains: null, approvalConcentrationBudget: null, approvalConcentrationPreset: null, approvalConcentrationWeights: { approver: 1, team: 1, reportingChain: 1 } },
-            force: { minimumApprovals: 2, minimumRole: "manager", requireDistinctApprovers: true, requireIndependentReviewer: false, requirePriorApproverExclusion: false, maxPriorApproverOverlapRatio: null, reviewerCarryoverBudget: null, reviewerCarryoverLookbackPromotions: null, teamCarryoverBudget: null, teamCarryoverLookbackPromotions: null, maxPriorReportingChainOverlapRatio: null, reportingChainCarryoverBudget: null, reportingChainCarryoverLookbackPromotions: null, requireRoleCohortDiversity: false, minimumDistinctRoleCohorts: null, requireReviewerTeamDiversity: false, minimumDistinctReviewerTeams: null, requireReportingChainDiversity: false, minimumDistinctReportingChains: null, approvalConcentrationBudget: null, approvalConcentrationPreset: null, approvalConcentrationWeights: { approver: 1, team: 1, reportingChain: 1 } },
-            reentry: { minimumApprovals: 1, minimumRole: "staff-engineer", requireDistinctApprovers: true, requireIndependentReviewer: true, requirePriorApproverExclusion: true, maxPriorApproverOverlapRatio: 0.5, reviewerCarryoverBudget: 0.5, reviewerCarryoverLookbackPromotions: 3, teamCarryoverBudget: 0.5, teamCarryoverLookbackPromotions: 3, maxPriorReportingChainOverlapRatio: 0.5, reportingChainCarryoverBudget: 0.5, reportingChainCarryoverLookbackPromotions: 3, requireRoleCohortDiversity: true, minimumDistinctRoleCohorts: 2, requireReviewerTeamDiversity: true, minimumDistinctReviewerTeams: 2, requireReportingChainDiversity: true, minimumDistinctReportingChains: 2, approvalConcentrationBudget: 0.4, approvalConcentrationPreset: "reviewer-heavy", approvalConcentrationWeights: { approver: 0.5, team: 0.25, reportingChain: 0.25 } },
+          approval: {
+            schemaVersion: 1,
+            kind: "ax-code-quality-promotion-approval-policy",
+            rules: {
+              none: {
+                minimumApprovals: 0,
+                minimumRole: null,
+                requireDistinctApprovers: false,
+                requireIndependentReviewer: false,
+                requirePriorApproverExclusion: false,
+                maxPriorApproverOverlapRatio: null,
+                reviewerCarryoverBudget: null,
+                reviewerCarryoverLookbackPromotions: null,
+                teamCarryoverBudget: null,
+                teamCarryoverLookbackPromotions: null,
+                maxPriorReportingChainOverlapRatio: null,
+                reportingChainCarryoverBudget: null,
+                reportingChainCarryoverLookbackPromotions: null,
+                requireRoleCohortDiversity: false,
+                minimumDistinctRoleCohorts: null,
+                requireReviewerTeamDiversity: false,
+                minimumDistinctReviewerTeams: null,
+                requireReportingChainDiversity: false,
+                minimumDistinctReportingChains: null,
+                approvalConcentrationBudget: null,
+                approvalConcentrationPreset: null,
+                approvalConcentrationWeights: { approver: 1, team: 1, reportingChain: 1 },
+              },
+              allow_warn: {
+                minimumApprovals: 1,
+                minimumRole: "staff-engineer",
+                requireDistinctApprovers: true,
+                requireIndependentReviewer: false,
+                requirePriorApproverExclusion: false,
+                maxPriorApproverOverlapRatio: null,
+                reviewerCarryoverBudget: null,
+                reviewerCarryoverLookbackPromotions: null,
+                teamCarryoverBudget: null,
+                teamCarryoverLookbackPromotions: null,
+                maxPriorReportingChainOverlapRatio: null,
+                reportingChainCarryoverBudget: null,
+                reportingChainCarryoverLookbackPromotions: null,
+                requireRoleCohortDiversity: false,
+                minimumDistinctRoleCohorts: null,
+                requireReviewerTeamDiversity: false,
+                minimumDistinctReviewerTeams: null,
+                requireReportingChainDiversity: false,
+                minimumDistinctReportingChains: null,
+                approvalConcentrationBudget: null,
+                approvalConcentrationPreset: null,
+                approvalConcentrationWeights: { approver: 1, team: 1, reportingChain: 1 },
+              },
+              force: {
+                minimumApprovals: 2,
+                minimumRole: "manager",
+                requireDistinctApprovers: true,
+                requireIndependentReviewer: false,
+                requirePriorApproverExclusion: false,
+                maxPriorApproverOverlapRatio: null,
+                reviewerCarryoverBudget: null,
+                reviewerCarryoverLookbackPromotions: null,
+                teamCarryoverBudget: null,
+                teamCarryoverLookbackPromotions: null,
+                maxPriorReportingChainOverlapRatio: null,
+                reportingChainCarryoverBudget: null,
+                reportingChainCarryoverLookbackPromotions: null,
+                requireRoleCohortDiversity: false,
+                minimumDistinctRoleCohorts: null,
+                requireReviewerTeamDiversity: false,
+                minimumDistinctReviewerTeams: null,
+                requireReportingChainDiversity: false,
+                minimumDistinctReportingChains: null,
+                approvalConcentrationBudget: null,
+                approvalConcentrationPreset: null,
+                approvalConcentrationWeights: { approver: 1, team: 1, reportingChain: 1 },
+              },
+              reentry: {
+                minimumApprovals: 1,
+                minimumRole: "staff-engineer",
+                requireDistinctApprovers: true,
+                requireIndependentReviewer: true,
+                requirePriorApproverExclusion: true,
+                maxPriorApproverOverlapRatio: 0.5,
+                reviewerCarryoverBudget: 0.5,
+                reviewerCarryoverLookbackPromotions: 3,
+                teamCarryoverBudget: 0.5,
+                teamCarryoverLookbackPromotions: 3,
+                maxPriorReportingChainOverlapRatio: 0.5,
+                reportingChainCarryoverBudget: 0.5,
+                reportingChainCarryoverLookbackPromotions: 3,
+                requireRoleCohortDiversity: true,
+                minimumDistinctRoleCohorts: 2,
+                requireReviewerTeamDiversity: true,
+                minimumDistinctReviewerTeams: 2,
+                requireReportingChainDiversity: true,
+                minimumDistinctReportingChains: 2,
+                approvalConcentrationBudget: 0.4,
+                approvalConcentrationPreset: "reviewer-heavy",
+                approvalConcentrationWeights: { approver: 0.5, team: 0.25, reportingChain: 0.25 },
+              },
+            },
           },
         },
-      },
         provenance: {
           policySource: "project",
           policyProjectID: "rollback-project-1",
@@ -1491,17 +1635,18 @@ describe("QualityShadow", () => {
     bundle: QualityPromotionDecisionBundle.DecisionBundle,
     reviewers = ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
   ) {
-    const suggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const suggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
     const reviews = []
     for (const reviewer of reviewers) {
       const review = QualityPromotionAdoptionReview.create({
         bundle,
         reviewer,
         role: "staff-engineer",
-        rationale: suggestion.adoption.status === "accepted"
-          ? null
-          : "Reviewed and accepted the current policy adoption state for this promotion.",
+        rationale:
+          suggestion.adoption.status === "accepted"
+            ? null
+            : "Reviewed and accepted the current policy adoption state for this promotion.",
       })
       await QualityPromotionAdoptionReview.append(review)
       reviews.push(review)
@@ -1557,7 +1702,7 @@ describe("QualityShadow", () => {
   ) {
     const handling = QualityPromotionAdoptionDissentHandling.create({
       bundle,
-      reviews: input?.reviews ?? await QualityPromotionAdoptionReview.resolveForBundle(bundle),
+      reviews: input?.reviews ?? (await QualityPromotionAdoptionReview.resolveForBundle(bundle)),
       resolutions: input?.resolutions,
       supersessions: input?.supersessions,
     })
@@ -1573,8 +1718,7 @@ describe("QualityShadow", () => {
       dissentHandling?: QualityPromotionAdoptionDissentHandling.HandlingArtifact
     },
   ) {
-    const approvals = input?.approvals
-      ?? await QualityPromotionApprovalPacket.resolveApprovalsForBundle(bundle)
+    const approvals = input?.approvals ?? (await QualityPromotionApprovalPacket.resolveApprovalsForBundle(bundle))
     const packet = QualityPromotionApprovalPacket.create({
       bundle,
       approvals,
@@ -1593,7 +1737,7 @@ describe("QualityShadow", () => {
   ) {
     const submission = QualityPromotionSubmissionBundle.create({
       decisionBundle,
-      approvalPacket: input?.approvalPacket ?? await createAndPersistApprovalPacket(decisionBundle),
+      approvalPacket: input?.approvalPacket ?? (await createAndPersistApprovalPacket(decisionBundle)),
     })
     await QualityPromotionSubmissionBundle.append(submission)
     return submission
@@ -1606,7 +1750,7 @@ describe("QualityShadow", () => {
     },
   ) {
     const dossier = QualityPromotionReviewDossier.create({
-      submissionBundle: input?.submissionBundle ?? await createAndPersistSubmissionBundle(decisionBundle),
+      submissionBundle: input?.submissionBundle ?? (await createAndPersistSubmissionBundle(decisionBundle)),
     })
     await QualityPromotionReviewDossier.append(dossier)
     return dossier
@@ -1621,7 +1765,7 @@ describe("QualityShadow", () => {
     },
   ) {
     const boardDecision = QualityPromotionBoardDecision.create({
-      reviewDossier: input?.reviewDossier ?? await createAndPersistReviewDossier(decisionBundle),
+      reviewDossier: input?.reviewDossier ?? (await createAndPersistReviewDossier(decisionBundle)),
       decider: "board-chair@example.com",
       role: "director",
       team: "quality-governance",
@@ -1641,7 +1785,7 @@ describe("QualityShadow", () => {
     },
   ) {
     const record = QualityPromotionReleaseDecisionRecord.create({
-      boardDecision: input?.boardDecision ?? await createAndPersistBoardDecision(decisionBundle),
+      boardDecision: input?.boardDecision ?? (await createAndPersistBoardDecision(decisionBundle)),
     })
     await QualityPromotionReleaseDecisionRecord.append(record)
     return record
@@ -1654,7 +1798,8 @@ describe("QualityShadow", () => {
     },
   ) {
     const packet = QualityPromotionReleasePacket.create({
-      releaseDecisionRecord: input?.releaseDecisionRecord ?? await createAndPersistReleaseDecisionRecord(decisionBundle),
+      releaseDecisionRecord:
+        input?.releaseDecisionRecord ?? (await createAndPersistReleaseDecisionRecord(decisionBundle)),
     })
     await QualityPromotionReleasePacket.append(packet)
     return packet
@@ -1745,7 +1890,9 @@ describe("QualityShadow", () => {
       expect(promoted.record.decision).toBe("pass")
       expect(promoted.record.eligibility?.decision).toBe("go")
       expect(promoted.record.approvalPolicySuggestion?.recommendation.workflow).toBe("review")
-      expect(promoted.record.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationPreset).toBe("balanced")
+      expect(promoted.record.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationPreset).toBe(
+        "balanced",
+      )
       expect(promoted.record.approvalPolicySuggestion?.effectiveReentryPolicy).toBeNull()
       expect(promoted.record.approvalPolicySuggestion?.adoption.status).toBe("no_effective_policy")
 
@@ -1808,7 +1955,9 @@ describe("QualityShadow", () => {
         totalRecords: 4,
       })
 
-      await expect(QualityModelRegistry.rollbackPromotion(promoted.record, watch)).rejects.toThrow("watch status is warn")
+      await expect(QualityModelRegistry.rollbackPromotion(promoted.record, watch)).rejects.toThrow(
+        "watch status is warn",
+      )
 
       const rolledBack = await QualityModelRegistry.rollbackPromotion(promoted.record, watch, {
         allowWarn: true,
@@ -2009,18 +2158,14 @@ describe("QualityShadow", () => {
       const reapprovalAdoptionReview = await createAndPersistAdoptionReviews(built.decisionBundle)
 
       await expect(
-        QualityModelRegistry.promoteApprovedDecisionBundle(
-          built.decisionBundle,
-          selfApproval,
-          {
-            allowWarn: true,
-            adoptionReviews: reapprovalAdoptionReview,
-            approvalPolicy: releasePolicyResolution.policy.approval,
-            approvalPolicySource: releasePolicyResolution.source,
-            projectID: releasePolicyResolution.projectID,
-            releasePolicyResolution,
-          },
-        ),
+        QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, selfApproval, {
+          allowWarn: true,
+          adoptionReviews: reapprovalAdoptionReview,
+          approvalPolicy: releasePolicyResolution.policy.approval,
+          approvalPolicySource: releasePolicyResolution.source,
+          projectID: releasePolicyResolution.projectID,
+          releasePolicyResolution,
+        }),
       ).rejects.toThrow("approval policy not satisfied")
 
       const independentApproval = QualityPromotionApproval.create({
@@ -2223,18 +2368,20 @@ describe("QualityShadow", () => {
         }),
       )
       const reentryContextOne = await QualityReentryContext.latest("carryover-candidate-v1")
-      await QualityReentryRemediation.append(QualityReentryRemediation.create({
-        context: reentryContextOne!,
-        author: "owner@example.com",
-        summary: "Prepared first retry after rollback.",
-        evidence: [
-          {
-            kind: "validation",
-            detail: "Confirmed the first retry path is deterministic.",
-          },
-        ],
-        currentReleasePolicyDigest: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution).digest,
-      }))
+      await QualityReentryRemediation.append(
+        QualityReentryRemediation.create({
+          context: reentryContextOne!,
+          author: "owner@example.com",
+          summary: "Prepared first retry after rollback.",
+          evidence: [
+            {
+              kind: "validation",
+              detail: "Confirmed the first retry path is deterministic.",
+            },
+          ],
+          currentReleasePolicyDigest: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution).digest,
+        }),
+      )
 
       const retryDecisionOne = await QualityModelRegistry.buildPromotionDecisionBundle(candidateBundle, {
         cooldownHours: 0,
@@ -2279,18 +2426,20 @@ describe("QualityShadow", () => {
         }),
       )
       const reentryContextTwo = await QualityReentryContext.latest("carryover-candidate-v1")
-      await QualityReentryRemediation.append(QualityReentryRemediation.create({
-        context: reentryContextTwo!,
-        author: "owner@example.com",
-        summary: "Prepared second retry after repeated rollback.",
-        evidence: [
-          {
-            kind: "validation",
-            detail: "Confirmed the repeated retry path remains reproducible.",
-          },
-        ],
-        currentReleasePolicyDigest: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution).digest,
-      }))
+      await QualityReentryRemediation.append(
+        QualityReentryRemediation.create({
+          context: reentryContextTwo!,
+          author: "owner@example.com",
+          summary: "Prepared second retry after repeated rollback.",
+          evidence: [
+            {
+              kind: "validation",
+              detail: "Confirmed the repeated retry path remains reproducible.",
+            },
+          ],
+          currentReleasePolicyDigest: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution).digest,
+        }),
+      )
 
       const retryDecisionTwo = await QualityModelRegistry.buildPromotionDecisionBundle(candidateBundle, {
         cooldownHours: 0,
@@ -2521,7 +2670,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("approval-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("approval-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2529,10 +2680,9 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      const insufficientAdoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com"],
-      )
+      const insufficientAdoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+      ])
 
       await expect(
         QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, approval, {
@@ -2540,10 +2690,10 @@ describe("QualityShadow", () => {
         }),
       ).rejects.toThrow("adoption review consensus not satisfied")
 
-      const approvalTargetAdoptionReview = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-2@example.com", "policy-reviewer-3@example.com"],
-      )
+      const approvalTargetAdoptionReview = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-2@example.com",
+        "policy-reviewer-3@example.com",
+      ])
 
       const promoted = await QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, approval, {
         adoptionReviews: [approvalTargetAdoptionReview[0]!],
@@ -2567,7 +2717,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("adoption-dissent-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("adoption-dissent-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2585,9 +2737,9 @@ describe("QualityShadow", () => {
       })
       await QualityPromotionAdoptionReview.append(dissent)
 
-      await expect(
-        QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, approval),
-      ).rejects.toThrow("adoption dissent handling not satisfied")
+      await expect(QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, approval)).rejects.toThrow(
+        "adoption dissent handling not satisfied",
+      )
 
       const resolution = await createAndPersistAdoptionDissentResolution(built.decisionBundle, [dissent])
       const promoted = await QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, approval, {
@@ -2609,7 +2761,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("adoption-supersession-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("adoption-supersession-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2617,10 +2771,10 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const dissent = QualityPromotionAdoptionReview.create({
         bundle: built.decisionBundle,
         reviewer: "staff-dissent@example.com",
@@ -2630,16 +2784,12 @@ describe("QualityShadow", () => {
       })
       await QualityPromotionAdoptionReview.append(dissent)
 
-      const supersession = await createAndPersistAdoptionDissentSupersession(
-        built.decisionBundle,
-        [dissent],
-        {
-          superseder: dissent.reviewer,
-          role: "staff-engineer",
-          disposition: "withdrawn",
-          rationale: "The earlier dissent is withdrawn after additional review.",
-        },
-      )
+      const supersession = await createAndPersistAdoptionDissentSupersession(built.decisionBundle, [dissent], {
+        superseder: dissent.reviewer,
+        role: "staff-engineer",
+        disposition: "withdrawn",
+        rationale: "The earlier dissent is withdrawn after additional review.",
+      })
       const promoted = await QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, approval, {
         dissentSupersessions: supersession,
       })
@@ -2659,7 +2809,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("adoption-handling-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("adoption-handling-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2667,10 +2819,10 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      const acceptedReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const acceptedReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const dissent = QualityPromotionAdoptionReview.create({
         bundle: built.decisionBundle,
         reviewer: "staff-dissent@example.com",
@@ -2706,7 +2858,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("approval-packet-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("approval-packet-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2714,10 +2868,10 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      const adoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const packet = await createAndPersistApprovalPacket(built.decisionBundle, {
         approvals: [approval],
         adoptionReviews,
@@ -2743,7 +2897,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("submission-bundle-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("submission-bundle-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2751,10 +2907,10 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      const adoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const approvalPacket = await createAndPersistApprovalPacket(built.decisionBundle, {
         approvals: [approval],
         adoptionReviews,
@@ -2781,7 +2937,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("review-dossier-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("review-dossier-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2789,10 +2947,10 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      const adoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const approvalPacket = await createAndPersistApprovalPacket(built.decisionBundle, {
         approvals: [approval],
         adoptionReviews,
@@ -2823,7 +2981,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("board-decision-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("board-decision-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2831,10 +2991,10 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      const adoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const approvalPacket = await createAndPersistApprovalPacket(built.decisionBundle, {
         approvals: [approval],
         adoptionReviews,
@@ -2868,7 +3028,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("release-decision-record-target-v1", "pass"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("release-decision-record-target-v1", "pass"),
+      )
       const approval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "reviewer@example.com",
@@ -2876,10 +3038,10 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      const adoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const approvalPacket = await createAndPersistApprovalPacket(built.decisionBundle, {
         approvals: [approval],
         adoptionReviews,
@@ -2931,10 +3093,10 @@ describe("QualityShadow", () => {
         rationale: "Eligibility and benchmark checked.",
       })
       await QualityPromotionApproval.append(approval)
-      const adoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const approvalPacket = await createAndPersistApprovalPacket(built.decisionBundle, {
         approvals: [approval],
         adoptionReviews,
@@ -3010,17 +3172,27 @@ describe("QualityShadow", () => {
       expect(promoted.record.signedArchiveAttestation?.policySource).toBe("project")
       expect(promoted.record.signedArchiveAttestation?.policyProjectID).toBe("release-packet-project-1")
       expect(promoted.record.signedArchiveAttestationRecord?.promotionID).toBe(promoted.record.promotionID)
-      expect(promoted.record.signedArchiveAttestationRecord?.signedArchiveID).toBe(promoted.record.signedArchive?.signedArchiveID)
+      expect(promoted.record.signedArchiveAttestationRecord?.signedArchiveID).toBe(
+        promoted.record.signedArchive?.signedArchiveID,
+      )
       expect(promoted.record.signedArchiveAttestationRecord?.policySource).toBe("project")
       expect(promoted.record.signedArchiveAttestationPacket?.promotionID).toBe(promoted.record.promotionID)
-      expect(promoted.record.signedArchiveAttestationPacket?.signedArchiveID).toBe(promoted.record.signedArchive?.signedArchiveID)
+      expect(promoted.record.signedArchiveAttestationPacket?.signedArchiveID).toBe(
+        promoted.record.signedArchive?.signedArchiveID,
+      )
       expect(promoted.record.signedArchiveAttestationPacket?.policySource).toBe("project")
       expect(promoted.record.signedArchiveGovernancePacket?.promotionID).toBe(promoted.record.promotionID)
-      expect(promoted.record.signedArchiveGovernancePacket?.releasePacketID).toBe(promoted.record.releasePacket?.packetID)
-      expect(promoted.record.signedArchiveGovernancePacket?.signedArchiveID).toBe(promoted.record.signedArchive?.signedArchiveID)
+      expect(promoted.record.signedArchiveGovernancePacket?.releasePacketID).toBe(
+        promoted.record.releasePacket?.packetID,
+      )
+      expect(promoted.record.signedArchiveGovernancePacket?.signedArchiveID).toBe(
+        promoted.record.signedArchive?.signedArchiveID,
+      )
       expect(promoted.record.signedArchiveGovernancePacket?.policySource).toBe("project")
       expect(promoted.record.signedArchiveReviewDossier?.promotionID).toBe(promoted.record.promotionID)
-      expect(promoted.record.signedArchiveReviewDossier?.governancePacketID).toBe(promoted.record.signedArchiveGovernancePacket?.packetID)
+      expect(promoted.record.signedArchiveReviewDossier?.governancePacketID).toBe(
+        promoted.record.signedArchiveGovernancePacket?.packetID,
+      )
       expect(promoted.record.signedArchiveReviewDossier?.packageID).toBe(promoted.record.handoffPackage?.packageID)
       expect(promoted.record.signedArchiveReviewDossier?.policySource).toBe("project")
       const manifests = await QualityPromotionAuditManifest.list(promoted.record.source)
@@ -3034,17 +3206,26 @@ describe("QualityShadow", () => {
       expect(archiveManifests[0]?.exportBundle.auditManifest.promotion.promotionID).toBe(promoted.record.promotionID)
       const handoffPackages = await QualityPromotionHandoffPackage.list(promoted.record.source)
       expect(handoffPackages).toHaveLength(1)
-      expect(handoffPackages[0]?.archiveManifest.exportBundle.auditManifest.promotion.promotionID).toBe(promoted.record.promotionID)
+      expect(handoffPackages[0]?.archiveManifest.exportBundle.auditManifest.promotion.promotionID).toBe(
+        promoted.record.promotionID,
+      )
       const portableExports = await QualityPromotionPortableExport.list(promoted.record.source)
       expect(portableExports).toHaveLength(1)
-      expect(portableExports[0]?.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID).toBe(promoted.record.promotionID)
+      expect(portableExports[0]?.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID).toBe(
+        promoted.record.promotionID,
+      )
       const packagedArchives = await QualityPromotionPackagedArchive.list(promoted.record.source)
       expect(packagedArchives).toHaveLength(1)
-      expect(packagedArchives[0]?.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID).toBe(promoted.record.promotionID)
+      expect(
+        packagedArchives[0]?.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+          .promotionID,
+      ).toBe(promoted.record.promotionID)
       const signedArchives = await QualityPromotionSignedArchive.list(promoted.record.source)
       expect(signedArchives).toHaveLength(1)
-      expect(signedArchives[0]?.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID)
-        .toBe(promoted.record.promotionID)
+      expect(
+        signedArchives[0]?.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .promotion.promotionID,
+      ).toBe(promoted.record.promotionID)
       const attestationRecords = await QualityPromotionSignedArchiveAttestationRecord.list(promoted.record.source)
       expect(attestationRecords).toHaveLength(1)
       expect(attestationRecords[0]?.promotionID).toBe(promoted.record.promotionID)
@@ -3058,7 +3239,9 @@ describe("QualityShadow", () => {
       expect(attestationPackets[0]?.summary.policyProjectID).toBe("release-packet-project-1")
       expect(attestationPackets[0]?.attestationRecord.recordID).toBe(attestationRecords[0]?.recordID)
       expect(attestationPackets[0]?.summary.gates.map((gate) => gate.name)).toContain("promotion-reference-alignment")
-      expect(attestationPackets[0]?.summary.gates.find((gate) => gate.name === "promotion-reference-alignment")?.status).toBe("pass")
+      expect(
+        attestationPackets[0]?.summary.gates.find((gate) => gate.name === "promotion-reference-alignment")?.status,
+      ).toBe("pass")
       const governancePackets = await QualityPromotionSignedArchiveGovernancePacket.list(promoted.record.source)
       expect(governancePackets).toHaveLength(1)
       expect(governancePackets[0]?.promotion.promotionID).toBe(promoted.record.promotionID)
@@ -3067,7 +3250,9 @@ describe("QualityShadow", () => {
       expect(governancePackets[0]?.summary.policyProjectID).toBe("release-packet-project-1")
       expect(governancePackets[0]?.attestationPacket.packetID).toBe(attestationPackets[0]?.packetID)
       expect(governancePackets[0]?.summary.gates.map((gate) => gate.name)).toContain("release-packet-linkage")
-      expect(governancePackets[0]?.summary.gates.find((gate) => gate.name === "release-packet-linkage")?.status).toBe("pass")
+      expect(governancePackets[0]?.summary.gates.find((gate) => gate.name === "release-packet-linkage")?.status).toBe(
+        "pass",
+      )
       const reviewDossiers = await QualityPromotionSignedArchiveReviewDossier.list(promoted.record.source)
       expect(reviewDossiers).toHaveLength(1)
       expect(reviewDossiers[0]?.governancePacket.packetID).toBe(governancePackets[0]?.packetID)
@@ -3087,7 +3272,7 @@ describe("QualityShadow", () => {
       })
       expect(
         QualityPromotionSignedArchiveAttestationRecord.verify(tamperedTrustIdentity).some((reason) =>
-          reason.includes("attestation record summary mismatch")
+          reason.includes("attestation record summary mismatch"),
         ),
       ).toBe(true)
       const tamperedAttestationTrustDrift = QualityPromotionSignedArchiveAttestationRecord.RecordArtifact.parse({
@@ -3099,7 +3284,7 @@ describe("QualityShadow", () => {
       })
       expect(
         QualityPromotionSignedArchiveAttestationRecord.verify(tamperedAttestationTrustDrift).some((reason) =>
-          reason.includes("attestation record summary mismatch")
+          reason.includes("attestation record summary mismatch"),
         ),
       ).toBe(true)
       const tamperedAttestationPacketPromotion = QualityPromotionSignedArchiveAttestationPacket.PacketArtifact.parse({
@@ -3111,7 +3296,7 @@ describe("QualityShadow", () => {
       })
       expect(
         QualityPromotionSignedArchiveAttestationPacket.verify(tamperedAttestationPacketPromotion).some((reason) =>
-          reason.includes("attestation packet summary mismatch")
+          reason.includes("attestation packet summary mismatch"),
         ),
       ).toBe(true)
       expect(QualityPromotionSignedArchive.verifySignature(signedArchives[0]!, "quality-archive-secret-v1")).toEqual([])
@@ -3152,10 +3337,10 @@ describe("QualityShadow", () => {
         rationale: "Approved for attestation policy validation coverage.",
       })
       await QualityPromotionApproval.append(approval)
-      const adoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const approvalPacket = await createAndPersistApprovalPacket(built.decisionBundle, {
         approvals: [approval],
         adoptionReviews,
@@ -3222,10 +3407,10 @@ describe("QualityShadow", () => {
         rationale: "Approved for cross-project attestation resolution coverage.",
       })
       await QualityPromotionApproval.append(approval)
-      const adoptionReviews = await createAndPersistAdoptionReviews(
-        built.decisionBundle,
-        ["policy-reviewer-1@example.com", "policy-reviewer-2@example.com"],
-      )
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle, [
+        "policy-reviewer-1@example.com",
+        "policy-reviewer-2@example.com",
+      ])
       const approvalPacket = await createAndPersistApprovalPacket(built.decisionBundle, {
         approvals: [approval],
         adoptionReviews,
@@ -3276,7 +3461,9 @@ describe("QualityShadow", () => {
       await QualityModelRegistry.register(current)
       await QualityModelRegistry.activate(current.source)
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("force-approval-target-v1", "fail"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("force-approval-target-v1", "fail"),
+      )
       const weakApproval = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "engineer@example.com",
@@ -3305,15 +3492,11 @@ describe("QualityShadow", () => {
       await QualityPromotionApproval.append(mgr1)
       await QualityPromotionApproval.append(mgr2)
 
-      const promoted = await QualityModelRegistry.promoteApprovedDecisionBundle(
-        built.decisionBundle,
-        [mgr1, mgr2],
-        {
-          force: true,
-          adoptionReviews: forcePolicyAdoptionReview,
-          approvalPolicy: QualityPromotionApprovalPolicy.defaults(),
-        },
-      )
+      const promoted = await QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, [mgr1, mgr2], {
+        force: true,
+        adoptionReviews: forcePolicyAdoptionReview,
+        approvalPolicy: QualityPromotionApprovalPolicy.defaults(),
+      })
       expect(promoted.active.source).toBe("force-approval-target-v1")
       expect(promoted.record.approvalPolicy?.requiredApprovals).toBe(2)
       expect(promoted.record.approvalPolicy?.qualifiedApprovals).toBe(2)
@@ -3336,7 +3519,9 @@ describe("QualityShadow", () => {
         }),
       )
 
-      const built = await QualityModelRegistry.buildPromotionDecisionBundle(createBenchmarkBundle("project-policy-target-v1", "fail"))
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(
+        createBenchmarkBundle("project-policy-target-v1", "fail"),
+      )
       const mgr1 = QualityPromotionApproval.create({
         bundle: built.decisionBundle,
         approver: "mgr1@example.com",
@@ -3352,15 +3537,11 @@ describe("QualityShadow", () => {
       const projectPolicyAdoptionReview = await createAndPersistAdoptionReviews(built.decisionBundle)
 
       await expect(
-        QualityModelRegistry.promoteApprovedDecisionBundle(
-          built.decisionBundle,
-          [mgr1, mgr2],
-          {
-            force: true,
-            adoptionReviews: projectPolicyAdoptionReview,
-            projectID: "project-policy-1",
-          },
-        ),
+        QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, [mgr1, mgr2], {
+          force: true,
+          adoptionReviews: projectPolicyAdoptionReview,
+          projectID: "project-policy-1",
+        }),
       ).rejects.toThrow("approval policy not satisfied")
 
       const mgr3 = QualityPromotionApproval.create({

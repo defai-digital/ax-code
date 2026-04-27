@@ -19,10 +19,7 @@ export const RefactorPlanTool = Tool.define("refactor_plan", {
       .array(z.string())
       .min(1)
       .describe("CodeNodeID strings from findSymbol identifying the symbols to refactor"),
-    kind: z
-      .enum(PLAN_KINDS)
-      .optional()
-      .describe("Explicit refactor kind; if omitted, classified from intent keywords"),
+    kind: z.enum(PLAN_KINDS).optional().describe("Explicit refactor kind; if omitted, classified from intent keywords"),
   }),
   execute: async (args) => {
     const projectID = Instance.project.id

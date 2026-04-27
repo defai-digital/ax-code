@@ -346,6 +346,38 @@ describe("tool.read truncation", () => {
     })
   })
 
+  test("strips a UTF-8 BOM from the first line", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "bom.txt"), "\uFEFFfirst line\nsecond line\n")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "bom.txt") }, ctx)
+        expect(result.output).toContain("1: first line")
+        expect(result.output).not.toContain("\uFEFF")
+      },
+    })
+  })
+
+  test("rejects non-integer offsets", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "offset.txt"), "line1\nline2\n")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        await expect(read.execute({ filePath: path.join(tmp.path, "offset.txt"), offset: 1.5 }, ctx)).rejects.toThrow()
+      },
+    })
+  })
+
   test("allows reading empty file at default offset", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
@@ -513,7 +545,9 @@ describe("tool.read lsp", () => {
         for (let i = 0; i < 20; i++) {
           const status = await LSP.status()
           if (
-            status.some((item) => item.id === "fake" && item.name === "fake" && item.root === "" && item.status === "connected")
+            status.some(
+              (item) => item.id === "fake" && item.name === "fake" && item.root === "" && item.status === "connected",
+            )
           ) {
             return
           }

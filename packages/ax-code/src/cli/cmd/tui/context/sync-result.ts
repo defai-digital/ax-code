@@ -29,7 +29,8 @@ export function createSyncContextValue<
   type Message = TStore["message"][string] extends Array<infer TItem> ? TItem : never
   type Risk = TStore["session_risk"][string]
 
-  const getSession = (sessionID: string): Session | undefined => findByID(input.store.session, sessionID) as Session | undefined
+  const getSession = (sessionID: string): Session | undefined =>
+    findByID(input.store.session, sessionID) as Session | undefined
 
   return {
     data: input.store,

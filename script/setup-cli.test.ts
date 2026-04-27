@@ -93,7 +93,11 @@ describe("setup-cli helpers", () => {
         writes.push([target, String(content)])
       },
       spawnSync: (cmd, args, options) => {
-        spawns.push({ cmd: String(cmd), args: (args ?? []).map(String), env: options?.env as NodeJS.ProcessEnv | undefined })
+        spawns.push({
+          cmd: String(cmd),
+          args: (args ?? []).map(String),
+          env: options?.env as NodeJS.ProcessEnv | undefined,
+        })
         return { status: 0, stdout: null, stderr: null, pid: 1, output: null, signal: null } as any
       },
       which: () => undefined,
@@ -134,7 +138,11 @@ describe("setup-cli helpers", () => {
         writes.push([target, String(content)])
       },
       spawnSync: (cmd, args, options) => {
-        spawns.push({ cmd: String(cmd), args: (args ?? []).map(String), env: options?.env as NodeJS.ProcessEnv | undefined })
+        spawns.push({
+          cmd: String(cmd),
+          args: (args ?? []).map(String),
+          env: options?.env as NodeJS.ProcessEnv | undefined,
+        })
         return { status: 0, stdout: null, stderr: null, pid: 1, output: null, signal: null } as any
       },
       which: () => undefined,

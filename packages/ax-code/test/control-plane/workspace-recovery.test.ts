@@ -33,7 +33,10 @@ describe("control-plane/workspace recovery", () => {
     )
 
     Database.use((db) => {
-      db.update(WorkspaceTable).set({ extra: ["bad"] as any }).where(eq(WorkspaceTable.id, id)).run()
+      db.update(WorkspaceTable)
+        .set({ extra: ["bad"] as any })
+        .where(eq(WorkspaceTable.id, id))
+        .run()
     })
 
     expect(Workspace.get(id)).toMatchObject({

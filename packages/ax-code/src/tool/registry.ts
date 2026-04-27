@@ -38,6 +38,7 @@ import { SecurityScanTool } from "./security_scan"
 import { Truncate } from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
 import { RegisterFindingTool } from "./register_finding"
+import { MemorySaveTool } from "./memory"
 import { DebugOpenCaseTool } from "./debug_open_case"
 import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
 import { DebugProposeHypothesisTool } from "./debug_propose_hypothesis"
@@ -156,6 +157,7 @@ export namespace ToolRegistry {
           WebSearchTool,
           CodeSearchTool,
           SkillTool,
+          MemorySaveTool,
           ApplyPatchTool,
           RegisterFindingTool,
           DebugOpenCaseTool,

@@ -119,8 +119,8 @@ function candidatePackageNames(options = {}) {
       if (arch === "x64") {
         const names = scoped(
           baseline
-          ? [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base]
-          : [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`],
+            ? [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base]
+            : [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`],
         )
         return { platform, arch, binary, names }
       }
@@ -130,8 +130,8 @@ function candidatePackageNames(options = {}) {
     if (arch === "x64") {
       const names = scoped(
         baseline
-        ? [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`]
-        : [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`],
+          ? [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`]
+          : [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`],
       )
       return { platform, arch, binary, names }
     }

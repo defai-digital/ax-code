@@ -165,4 +165,33 @@ describe("tool.webfetch", () => {
       },
     )
   })
+
+  test("cancels non-ok response bodies before throwing", async () => {
+    let cancelled = 0
+    const body = new ReadableStream({
+      cancel() {
+        cancelled++
+      },
+    })
+
+    await withFetch(
+      async () =>
+        new Response(body, {
+          status: 500,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            await expect(
+              webfetch.execute({ url: "https://93.184.216.34/file.txt", format: "text" }, ctx),
+            ).rejects.toThrow("Request failed with status code: 500")
+            expect(cancelled).toBe(1)
+          },
+        })
+      },
+    )
+  })
 })

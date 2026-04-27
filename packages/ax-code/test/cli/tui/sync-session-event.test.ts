@@ -47,11 +47,7 @@ describe("tui sync session event", () => {
       },
     )
 
-    expect(calls).toEqual([
-      "todo:ses_1:1",
-      "diff:ses_1:1",
-      "status:ses_1:busy",
-    ])
+    expect(calls).toEqual(["todo:ses_1:1", "diff:ses_1:1", "status:ses_1:busy"])
   })
 
   test("clears sync state before deleting a session", () => {

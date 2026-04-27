@@ -121,14 +121,11 @@ describe("pty", () => {
         })
 
         try {
-          const conn = await Pty.connect(
-            info.id,
-            {
-              readyState: 1,
-              send() {},
-              close() {},
-            } as any,
-          )
+          const conn = await Pty.connect(info.id, {
+            readyState: 1,
+            send() {},
+            close() {},
+          } as any)
 
           await wait(() => pick([{ type: "exited", id: info.id }], info.id).includes("exited")).catch(() => sleep(150))
           expect(() => conn?.onMessage("hello")).not.toThrow()

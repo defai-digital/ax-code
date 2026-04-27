@@ -188,7 +188,7 @@ describeWatcher("FileWatcher", () => {
             Effect.promise(() => fs.writeFile(file, "gone")),
           ),
         ),
-      })
+    })
   })
 
   test("rebuilds watcher when init options change", async () => {

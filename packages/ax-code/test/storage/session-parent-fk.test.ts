@@ -33,27 +33,33 @@ describe("session parent fk", () => {
     try {
       const client = drizzle({ client: sqlite })
 
-      client.insert(ProjectTable).values({
-        id: ProjectID.make("proj_test"),
-        worktree: "/tmp/test",
-        vcs: "git",
-        sandboxes: [],
-        time_created: 1,
-        time_updated: 1,
-      }).run()
-
-      expect(() =>
-        client.insert(SessionTable).values({
-          id: SessionID.make("ses_test"),
-          project_id: ProjectID.make("proj_test"),
-          parent_id: SessionID.make("ses_missing"),
-          slug: "test",
-          directory: "/tmp/test",
-          title: "test",
-          version: "1",
+      client
+        .insert(ProjectTable)
+        .values({
+          id: ProjectID.make("proj_test"),
+          worktree: "/tmp/test",
+          vcs: "git",
+          sandboxes: [],
           time_created: 1,
           time_updated: 1,
-        }).run(),
+        })
+        .run()
+
+      expect(() =>
+        client
+          .insert(SessionTable)
+          .values({
+            id: SessionID.make("ses_test"),
+            project_id: ProjectID.make("proj_test"),
+            parent_id: SessionID.make("ses_missing"),
+            slug: "test",
+            directory: "/tmp/test",
+            title: "test",
+            version: "1",
+            time_created: 1,
+            time_updated: 1,
+          })
+          .run(),
       ).toThrow()
     } finally {
       sqlite.close()
@@ -65,41 +71,57 @@ describe("session parent fk", () => {
     try {
       const client = drizzle({ client: sqlite })
 
-      client.insert(ProjectTable).values({
-        id: ProjectID.make("proj_test"),
-        worktree: "/tmp/test",
-        vcs: "git",
-        sandboxes: [],
-        time_created: 1,
-        time_updated: 1,
-      }).run()
+      client
+        .insert(ProjectTable)
+        .values({
+          id: ProjectID.make("proj_test"),
+          worktree: "/tmp/test",
+          vcs: "git",
+          sandboxes: [],
+          time_created: 1,
+          time_updated: 1,
+        })
+        .run()
 
-      client.insert(SessionTable).values({
-        id: SessionID.make("ses_parent"),
-        project_id: ProjectID.make("proj_test"),
-        slug: "parent",
-        directory: "/tmp/test",
-        title: "parent",
-        version: "1",
-        time_created: 1,
-        time_updated: 1,
-      }).run()
+      client
+        .insert(SessionTable)
+        .values({
+          id: SessionID.make("ses_parent"),
+          project_id: ProjectID.make("proj_test"),
+          slug: "parent",
+          directory: "/tmp/test",
+          title: "parent",
+          version: "1",
+          time_created: 1,
+          time_updated: 1,
+        })
+        .run()
 
-      client.insert(SessionTable).values({
-        id: SessionID.make("ses_child"),
-        project_id: ProjectID.make("proj_test"),
-        parent_id: SessionID.make("ses_parent"),
-        slug: "child",
-        directory: "/tmp/test",
-        title: "child",
-        version: "1",
-        time_created: 1,
-        time_updated: 1,
-      }).run()
+      client
+        .insert(SessionTable)
+        .values({
+          id: SessionID.make("ses_child"),
+          project_id: ProjectID.make("proj_test"),
+          parent_id: SessionID.make("ses_parent"),
+          slug: "child",
+          directory: "/tmp/test",
+          title: "child",
+          version: "1",
+          time_created: 1,
+          time_updated: 1,
+        })
+        .run()
 
-      client.delete(SessionTable).where(eq(SessionTable.id, SessionID.make("ses_parent"))).run()
+      client
+        .delete(SessionTable)
+        .where(eq(SessionTable.id, SessionID.make("ses_parent")))
+        .run()
 
-      const row = client.select().from(SessionTable).where(eq(SessionTable.id, SessionID.make("ses_child"))).get()
+      const row = client
+        .select()
+        .from(SessionTable)
+        .where(eq(SessionTable.id, SessionID.make("ses_child")))
+        .get()
       expect(row?.parent_id).toBeNull()
     } finally {
       sqlite.close()

@@ -27,9 +27,7 @@ export function decideTuiRenderer(input: {
   installOrBuildRiskAccepted: boolean
   offlinePackagingDeterministic?: boolean
 }): TuiRendererDecision {
-  const rendererSpecific = input.issueLayer
-    ? input.issueLayer === "renderer-specific"
-    : input.rendererSpecific === true
+  const rendererSpecific = input.issueLayer ? input.issueLayer === "renderer-specific" : input.rendererSpecific === true
 
   if (input.criteriaFailures.length === 0) {
     return {
@@ -45,7 +43,11 @@ export function decideTuiRenderer(input: {
     }
   }
 
-  if (!input.blocksProductDirection || !input.installOrBuildRiskAccepted || input.offlinePackagingDeterministic !== true) {
+  if (
+    !input.blocksProductDirection ||
+    !input.installOrBuildRiskAccepted ||
+    input.offlinePackagingDeterministic !== true
+  ) {
     return {
       action: "upstream-or-fork-opentui",
       reason:

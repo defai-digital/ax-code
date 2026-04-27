@@ -5,14 +5,7 @@ export interface SyncedMessageParts<TMessage, TPart> {
   parts: TPart[]
 }
 
-export function createSessionSyncSnapshot<
-  TSession,
-  TTodo,
-  TMessage,
-  TPart,
-  TDiff,
-  TRisk,
->(input: {
+export function createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk>(input: {
   session: TSession | undefined
   todo: TTodo[] | undefined
   messages: Array<SyncedMessageParts<TMessage, TPart>> | undefined
@@ -64,7 +57,9 @@ export function applySessionSyncSnapshot<
   }, -1)
   const liveTail =
     lastSnapshotMatchIndex >= 0
-      ? existingMessages.slice(lastSnapshotMatchIndex + 1).filter((message) => !nextMessages.some((next) => next.id === message.id))
+      ? existingMessages
+          .slice(lastSnapshotMatchIndex + 1)
+          .filter((message) => !nextMessages.some((next) => next.id === message.id))
       : []
   const mergedMessages = mergeSorted(nextMessages, liveTail)
   const nextMessageIDs = new Set(mergedMessages.map((message) => message.id))

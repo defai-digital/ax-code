@@ -12,6 +12,7 @@ const KIND_BY_FLAG: Record<string, MemoryEntryKind> = {
   user: "userPrefs",
   feedback: "feedback",
   decision: "decisions",
+  reference: "reference",
 }
 
 export const MemoryCommand = cmd({
@@ -102,6 +103,7 @@ export const MemoryStatusCommand = cmd({
     prompts.log.info(`Sections: ${meta.sections.join(", ")}`)
     prompts.log.info(`Last updated: ${meta.lastUpdated}`)
     prompts.log.info(`Hash: ${meta.contentHash}`)
+    if (meta.stale) prompts.log.warn("Project scan is over 30 days old. Run: ax-code memory warmup")
     prompts.outro("Done")
   },
 })
@@ -109,9 +111,29 @@ export const MemoryStatusCommand = cmd({
 export const MemoryClearCommand = cmd({
   command: "clear",
   describe: "delete cached memory",
-  async handler() {
+  builder: (yargs) =>
+    yargs.option("global", {
+      alias: "g",
+      describe: "clear global memory (~/.ax-code/memory.json) instead of project memory",
+      type: "boolean",
+      default: false,
+    }),
+  async handler(args) {
     UI.empty()
     prompts.intro("Clear Memory")
+
+    if (args.global) {
+      const exists = await store.existsGlobal()
+      if (!exists) {
+        prompts.log.warn("No global memory to clear")
+        prompts.outro("Done")
+        return
+      }
+      await store.clearGlobal()
+      prompts.log.success("Global memory cleared")
+      prompts.outro("Done")
+      return
+    }
 
     const exists = await store.exists(process.cwd())
     if (!exists) {
@@ -128,12 +150,12 @@ export const MemoryClearCommand = cmd({
 
 export const MemoryRememberCommand = cmd({
   command: "remember",
-  describe: "record a user preference, feedback rule, or project decision",
+  describe: "record a user preference, feedback rule, project decision, or reference",
   builder: (yargs) =>
     yargs
       .option("kind", {
         describe: "memory kind",
-        choices: ["user", "feedback", "decision"] as const,
+        choices: ["user", "feedback", "decision", "reference"] as const,
         demandOption: true,
       })
       .option("name", {
@@ -142,7 +164,7 @@ export const MemoryRememberCommand = cmd({
         demandOption: true,
       })
       .option("body", {
-        describe: "memory body — the rule, preference, or decision itself",
+        describe: "memory body — the rule, preference, decision, or pointer itself",
         type: "string",
         demandOption: true,
       })
@@ -151,6 +173,12 @@ export const MemoryRememberCommand = cmd({
       .option("agents", {
         describe: "comma-separated agent names that should see this entry (default: all)",
         type: "string",
+      })
+      .option("global", {
+        alias: "g",
+        describe: "save to global memory (~/.ax-code/memory.json) instead of project memory",
+        type: "boolean",
+        default: false,
       }),
   async handler(args) {
     UI.empty()
@@ -163,15 +191,17 @@ export const MemoryRememberCommand = cmd({
           .map((a) => a.trim())
           .filter(Boolean)
       : undefined
+    const scope = args.global ? "global" : "project"
     await recordEntry(process.cwd(), kind, {
       name: args.name,
       body: args.body,
       why: args.why,
       howToApply: args.apply,
       agents,
+      scope,
     })
 
-    prompts.log.success(`Saved ${args.kind} memory: ${args.name}`)
+    prompts.log.success(`Saved ${args.kind} memory (${scope}): ${args.name}`)
     prompts.outro("Done")
   },
 })
@@ -183,21 +213,28 @@ export const MemoryForgetCommand = cmd({
     yargs
       .option("kind", {
         describe: "memory kind",
-        choices: ["user", "feedback", "decision"] as const,
+        choices: ["user", "feedback", "decision", "reference"] as const,
         demandOption: true,
       })
       .option("name", {
         describe: "entry name to remove",
         type: "string",
         demandOption: true,
+      })
+      .option("global", {
+        alias: "g",
+        describe: "remove from global memory instead of project memory",
+        type: "boolean",
+        default: false,
       }),
   async handler(args) {
     UI.empty()
     prompts.intro("Memory Forget")
 
     const kind = KIND_BY_FLAG[args.kind]
-    const removed = await removeEntry(process.cwd(), kind, args.name)
-    if (removed) prompts.log.success(`Removed ${args.kind} memory: ${args.name}`)
+    const scope = args.global ? "global" : "project"
+    const removed = await removeEntry(process.cwd(), kind, args.name, scope)
+    if (removed) prompts.log.success(`Removed ${args.kind} memory (${scope}): ${args.name}`)
     else prompts.log.warn(`No ${args.kind} memory named "${args.name}"`)
     prompts.outro("Done")
   },
@@ -214,7 +251,7 @@ export const MemoryRecallCommand = cmd({
       })
       .option("kind", {
         describe: "restrict to one kind",
-        choices: ["user", "feedback", "decision"] as const,
+        choices: ["user", "feedback", "decision", "reference"] as const,
       })
       .option("agent", {
         describe: "filter to entries applicable to this agent",
@@ -223,17 +260,29 @@ export const MemoryRecallCommand = cmd({
       .option("limit", {
         describe: "cap on result count",
         type: "number",
+      })
+      .option("global", {
+        alias: "g",
+        describe: "search global memory instead of project memory (use --scope=all for both)",
+        type: "boolean",
+        default: false,
+      })
+      .option("scope", {
+        describe: 'which store to search: "project", "global", or "all"',
+        choices: ["project", "global", "all"] as const,
       }),
   async handler(args) {
     UI.empty()
     prompts.intro("Memory Recall")
 
     const kind = args.kind ? KIND_BY_FLAG[args.kind] : undefined
+    const scope = args.scope ?? (args.global ? "global" : "project")
     const results = await recall(process.cwd(), {
       query: args.query,
       kind,
       agent: args.agent,
       limit: args.limit,
+      scope,
     })
 
     if (results.length === 0) {
@@ -243,7 +292,7 @@ export const MemoryRecallCommand = cmd({
     }
 
     for (const r of results) {
-      prompts.log.info(`[${r.kind}] ${r.entry.name}: ${r.entry.body}  (score ${r.score})`)
+      prompts.log.info(`[${r.kind}/${r.source}] ${r.entry.name}: ${r.entry.body}  (score ${r.score})`)
       if (r.entry.why) prompts.log.info(`  why: ${r.entry.why}`)
       if (r.entry.howToApply) prompts.log.info(`  apply: ${r.entry.howToApply}`)
       if (r.entry.agents?.length) prompts.log.info(`  agents: ${r.entry.agents.join(", ")}`)
@@ -256,16 +305,24 @@ export const MemoryListCommand = cmd({
   command: "list",
   describe: "list recorded memory entries",
   builder: (yargs) =>
-    yargs.option("kind", {
-      describe: "filter by kind",
-      choices: ["user", "feedback", "decision"] as const,
-    }),
+    yargs
+      .option("kind", {
+        describe: "filter by kind",
+        choices: ["user", "feedback", "decision", "reference"] as const,
+      })
+      .option("global", {
+        alias: "g",
+        describe: "list global memory entries instead of project entries",
+        type: "boolean",
+        default: false,
+      }),
   async handler(args) {
     UI.empty()
     prompts.intro("Memory Entries")
 
     const kind = args.kind ? KIND_BY_FLAG[args.kind] : undefined
-    const entries = await listEntries(process.cwd(), kind)
+    const scope = args.global ? "global" : "project"
+    const entries = await listEntries(process.cwd(), kind, scope)
     if (entries.length === 0) {
       prompts.log.warn("No entries recorded")
       prompts.outro("Done")

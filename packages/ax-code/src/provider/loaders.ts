@@ -55,7 +55,6 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
               interleaved: false,
             },
             limit: { context: 128000, output: 4096 },
-            cost: { input: 0, output: 0 },
             status: "active",
             options: {},
             headers: {},

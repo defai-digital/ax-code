@@ -214,11 +214,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         const s = selected()
         if (s) {
           evt.preventDefault()
-          runDialogSelectAction(
-            () => item.onTrigger(s),
-            "dialog select keybind failed",
-            `Failed to run ${item.title}`,
-          )
+          runDialogSelectAction(() => item.onTrigger(s), "dialog select keybind failed", `Failed to run ${item.title}`)
         }
       }
     }

@@ -40,11 +40,13 @@ curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/ax-
 ```
 
 > **Hitting a TUI hang on first launch?** Some terminals trigger known bun-compile-binary bugs ([oven-sh/bun#26762](https://github.com/oven-sh/bun/issues/26762), [#27766](https://github.com/oven-sh/bun/issues/27766)). Install the **source-bundle channel** instead — it ships pre-bundled JavaScript plus the bun runtime and avoids the bug class entirely:
+>
 > ```bash
 > brew install defai-digital/ax-code/ax-code-source
 > # or
 > npm i -g @defai.digital/ax-code-source
 > ```
+>
 > Trade-off: ~80 MB install vs ~50 MB for the compiled binary. See [Channel comparison](#channel-comparison) below.
 
 ### Verify
@@ -55,11 +57,11 @@ ax-code doctor
 
 Look for the `Runtime` line:
 
-| Output | Meaning |
-| ------ | ------- |
-| `Runtime: Bun X.Y.Z (compiled)` | Default channel — single binary |
+| Output                             | Meaning                                   |
+| ---------------------------------- | ----------------------------------------- |
+| `Runtime: Bun X.Y.Z (compiled)`    | Default channel — single binary           |
 | `Runtime: Bun X.Y.Z (bun-bundled)` | Source channel — bundled JS + bun runtime |
-| `Runtime: Bun X.Y.Z (source)` | Local checkout via `pnpm setup:cli` |
+| `Runtime: Bun X.Y.Z (source)`      | Local checkout via `pnpm setup:cli`       |
 
 If the TUI hangs and your runtime is `compiled`, switch to the source-bundle channel using the install hint above.
 
@@ -96,14 +98,14 @@ npm i -g @defai.digital/ax-code-source
 
 ### Channel comparison
 
-| | Default (`ax-code`) | Source-bundle (`ax-code-source`) |
-| --- | --- | --- |
-| What ships | `bun build --compile` single binary | Pre-bundled JS + bun runtime |
-| Install size | ~50 MB | ~80 MB |
-| TUI stability on common terminals | stable | stable |
-| TUI stability on terminals that trigger Bun-Worker bugs | may hang on first launch | stable |
-| Updates via | `brew upgrade ax-code` / `npm update -g @defai.digital/ax-code` | `brew upgrade ax-code-source` / `npm update -g @defai.digital/ax-code-source` |
-| Verify with | `ax-code doctor` shows `(compiled)` | `ax-code doctor` shows `(bun-bundled)` |
+|                                                         | Default (`ax-code`)                                             | Source-bundle (`ax-code-source`)                                              |
+| ------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| What ships                                              | `bun build --compile` single binary                             | Pre-bundled JS + bun runtime                                                  |
+| Install size                                            | ~50 MB                                                          | ~80 MB                                                                        |
+| TUI stability on common terminals                       | stable                                                          | stable                                                                        |
+| TUI stability on terminals that trigger Bun-Worker bugs | may hang on first launch                                        | stable                                                                        |
+| Updates via                                             | `brew upgrade ax-code` / `npm update -g @defai.digital/ax-code` | `brew upgrade ax-code-source` / `npm update -g @defai.digital/ax-code-source` |
+| Verify with                                             | `ax-code doctor` shows `(compiled)`                             | `ax-code doctor` shows `(bun-bundled)`                                        |
 
 Both channels publish from the same release tag and ship identical features. The only difference is how the runtime is packaged.
 
@@ -117,6 +119,7 @@ cd ax-code && pnpm install && pnpm run setup:cli
 Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+. `setup:cli` installs a source launcher that runs ax-code directly via `bun run` from your checkout. `ax-code doctor` will report `Runtime: Bun X.Y.Z (source)`.
 
 Build the same bundle that ships under the source channel:
+
 ```bash
 pnpm --filter ax-code run bundle:source        # build only
 pnpm --filter ax-code run bundle:source:smoke  # build + run --version
@@ -149,13 +152,13 @@ AX Code is a strong fit when you need one or more of these:
 
 ## Use It Your Way
 
-| Surface | Best for | Entry point |
-| ------- | -------- | ----------- |
-| TUI | Interactive repo work | `ax-code` |
-| One-shot CLI | Quick tasks and scripts | `ax-code run "review the auth flow"` |
-| Server mode | CI, bots, and internal platforms | `ax-code serve` |
-| TypeScript SDK | Embedding ax-code in applications | [`packages/sdk/js/README.md`](packages/sdk/js/README.md) |
-| VS Code | Editor-native workflow | [`packages/integration-vscode/README.md`](packages/integration-vscode/README.md) |
+| Surface        | Best for                          | Entry point                                                                      |
+| -------------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| TUI            | Interactive repo work             | `ax-code`                                                                        |
+| One-shot CLI   | Quick tasks and scripts           | `ax-code run "review the auth flow"`                                             |
+| Server mode    | CI, bots, and internal platforms  | `ax-code serve`                                                                  |
+| TypeScript SDK | Embedding ax-code in applications | [`packages/sdk/js/README.md`](packages/sdk/js/README.md)                         |
+| VS Code        | Editor-native workflow            | [`packages/integration-vscode/README.md`](packages/integration-vscode/README.md) |
 
 ## Core Workflow
 

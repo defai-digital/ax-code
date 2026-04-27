@@ -17,10 +17,12 @@ export namespace QualityPromotionWatch {
     source: z.string(),
     baselineSource: z.string(),
     promotedAt: z.string(),
-    releasePolicy: z.object({
-      policy: z.lazy(() => QualityPromotionReleasePolicy.Policy),
-      provenance: z.lazy(() => QualityPromotionReleasePolicy.PolicyProvenance),
-    }).optional(),
+    releasePolicy: z
+      .object({
+        policy: z.lazy(() => QualityPromotionReleasePolicy.Policy),
+        provenance: z.lazy(() => QualityPromotionReleasePolicy.PolicyProvenance),
+      })
+      .optional(),
     window: z.object({
       since: z.string(),
       through: z.string().nullable(),
@@ -62,7 +64,9 @@ export namespace QualityPromotionWatch {
     maxRecords?: number
   }) {
     const filtered = sortRecords(
-      input.records.filter((record) => record.candidate.source === input.source && recordTimestamp(record) >= input.promotedAt),
+      input.records.filter(
+        (record) => record.candidate.source === input.source && recordTimestamp(record) >= input.promotedAt,
+      ),
     )
     if (!input.maxRecords || filtered.length <= input.maxRecords) return filtered
     return filtered.slice(filtered.length - input.maxRecords)
@@ -82,36 +86,33 @@ export namespace QualityPromotionWatch {
   }): WatchSummary {
     const effectiveReleasePolicy = input.releasePolicy
       ? {
-        policy: QualityPromotionReleasePolicy.merge(input.releasePolicy.policy, {
-          watch: input.policy,
-        }),
-        provenance: input.releasePolicy.provenance,
-      }
+          policy: QualityPromotionReleasePolicy.merge(input.releasePolicy.policy, {
+            watch: input.policy,
+          }),
+          provenance: input.releasePolicy.provenance,
+        }
       : {
-        policy: QualityPromotionReleasePolicy.defaults({
-          watch: input.policy,
-        }),
-        provenance: QualityPromotionReleasePolicy.PolicyProvenance.parse({
-          policySource: "default",
-          policyProjectID: null,
-          compatibilityApprovalSource: null,
-          resolvedAt: new Date().toISOString(),
-          persistedScope: null,
-          persistedUpdatedAt: null,
-          digest: QualityPromotionReleasePolicy.digest(
-            QualityPromotionReleasePolicy.defaults({
-              watch: input.policy,
-            }),
-          ),
-        }),
-      }
+          policy: QualityPromotionReleasePolicy.defaults({
+            watch: input.policy,
+          }),
+          provenance: QualityPromotionReleasePolicy.PolicyProvenance.parse({
+            policySource: "default",
+            policyProjectID: null,
+            compatibilityApprovalSource: null,
+            resolvedAt: new Date().toISOString(),
+            persistedScope: null,
+            persistedUpdatedAt: null,
+            digest: QualityPromotionReleasePolicy.digest(
+              QualityPromotionReleasePolicy.defaults({
+                watch: input.policy,
+              }),
+            ),
+          }),
+        }
     const policy = effectiveReleasePolicy.policy.watch
     const minRecords = Math.max(1, input.minRecords ?? policy.minRecords)
-    const maxRecords = input.maxRecords === undefined
-      ? policy.maxRecords
-      : input.maxRecords
-        ? Math.max(1, input.maxRecords)
-        : null
+    const maxRecords =
+      input.maxRecords === undefined ? policy.maxRecords : input.maxRecords ? Math.max(1, input.maxRecords) : null
     const records = windowedRecords({
       records: input.records,
       source: input.source,
@@ -145,11 +146,12 @@ export namespace QualityPromotionWatch {
       detail: `${shadow.missingCandidateItems} record(s) missing candidate predictions`,
     })
 
-    const abstentionStatus = abstentionChangedRate !== null && abstentionChangedRate > policy.abstentionFailRate
-      ? "fail"
-      : abstentionChangedRate !== null && abstentionChangedRate > policy.abstentionWarnRate
-        ? "warn"
-        : "pass"
+    const abstentionStatus =
+      abstentionChangedRate !== null && abstentionChangedRate > policy.abstentionFailRate
+        ? "fail"
+        : abstentionChangedRate !== null && abstentionChangedRate > policy.abstentionWarnRate
+          ? "warn"
+          : "pass"
     gates.push({
       name: "abstention-drift",
       status: abstentionStatus,
@@ -158,12 +160,13 @@ export namespace QualityPromotionWatch {
 
     const avgDelta = shadow.avgConfidenceDelta === null ? null : Math.abs(shadow.avgConfidenceDelta)
     const maxDelta = shadow.maxAbsConfidenceDelta
-    const confidenceStatus = avgDelta !== null && avgDelta > policy.avgConfidenceFailAbsDelta
-      ? "fail"
-      : (avgDelta !== null && avgDelta > policy.avgConfidenceWarnAbsDelta)
-          || (maxDelta !== null && maxDelta > policy.maxConfidenceWarnAbsDelta)
-        ? "warn"
-        : "pass"
+    const confidenceStatus =
+      avgDelta !== null && avgDelta > policy.avgConfidenceFailAbsDelta
+        ? "fail"
+        : (avgDelta !== null && avgDelta > policy.avgConfidenceWarnAbsDelta) ||
+            (maxDelta !== null && maxDelta > policy.maxConfidenceWarnAbsDelta)
+          ? "warn"
+          : "pass"
     gates.push({
       name: "confidence-drift",
       status: confidenceStatus,

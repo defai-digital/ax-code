@@ -93,14 +93,14 @@ function seedCallEdge(projectID: ProjectID, from: string, to: string, file: stri
 
 function v3RowSnapshot(projectID: ProjectID): { nodes: number; edges: number; files: number } {
   return {
-    nodes: Database.use((db) =>
-      db.select().from(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).all().length,
+    nodes: Database.use(
+      (db) => db.select().from(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).all().length,
     ),
-    edges: Database.use((db) =>
-      db.select().from(CodeEdgeTable).where(eq(CodeEdgeTable.project_id, projectID)).all().length,
+    edges: Database.use(
+      (db) => db.select().from(CodeEdgeTable).where(eq(CodeEdgeTable.project_id, projectID)).all().length,
     ),
-    files: Database.use((db) =>
-      db.select().from(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).all().length,
+    files: Database.use(
+      (db) => db.select().from(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).all().length,
     ),
   }
 }
@@ -135,7 +135,7 @@ describe("parsePythonStack", () => {
 
 describe("detectStackFormat + parseStackTrace dispatch", () => {
   test("detects Python by header", () => {
-    const t = "Traceback (most recent call last):\n  File \"/a.py\", line 1, in x\nValueError"
+    const t = 'Traceback (most recent call last):\n  File "/a.py", line 1, in x\nValueError'
     expect(detectStackFormat(t)).toBe("python")
   })
 
@@ -149,7 +149,7 @@ describe("detectStackFormat + parseStackTrace dispatch", () => {
   })
 
   test("routes dispatch to the correct parser", () => {
-    const py = "Traceback (most recent call last):\n  File \"/a.py\", line 1, in foo\nError"
+    const py = 'Traceback (most recent call last):\n  File "/a.py", line 1, in foo\nError'
     const { format, frames } = parseStackTrace(py)
     expect(format).toBe("python")
     expect(frames.length).toBe(1)
@@ -356,13 +356,7 @@ describe("analyzeImpact — e2e", () => {
         const relFile = "touched.ts"
         seedSymbol(projectID, { name: "inTouched", file: relFile })
 
-        const patch = [
-          `--- a/${relFile}`,
-          `+++ b/${relFile}`,
-          "@@ -1 +1 @@",
-          "-old",
-          "+new",
-        ].join("\n")
+        const patch = [`--- a/${relFile}`, `+++ b/${relFile}`, "@@ -1 +1 @@", "-old", "+new"].join("\n")
 
         const report = await DebugEngine.analyzeImpact(projectID, {
           changes: [{ kind: "diff", patch }],
@@ -387,12 +381,7 @@ describe("detectHardcodes", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "timeouts.ts"),
-      [
-        "export function connect() {",
-        "  const t = 30000",
-        "  return t",
-        "}",
-      ].join("\n"),
+      ["export function connect() {", "  const t = 30000", "  return t", "}"].join("\n"),
     )
 
     await Instance.provide({
@@ -461,10 +450,7 @@ describe("detectHardcodes", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "config.ts"),
-      [
-        "export const MAX_TIMEOUT_MS = 30000",
-        "const RETRY_DELAY = 5000",
-      ].join("\n"),
+      ["export const MAX_TIMEOUT_MS = 30000", "const RETRY_DELAY = 5000"].join("\n"),
     )
 
     await Instance.provide({
@@ -565,10 +551,7 @@ describe("detectHardcodes", () => {
   test("excludes test files by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "test"), { recursive: true })
-    await fs.writeFile(
-      path.join(tmp.path, "test", "api.test.ts"),
-      'const url = "https://api.example.com"',
-    )
+    await fs.writeFile(path.join(tmp.path, "test", "api.test.ts"), 'const url = "https://api.example.com"')
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -583,10 +566,7 @@ describe("detectHardcodes", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "commented.ts"),
-      [
-        "// see https://example.com for docs",
-        "export const x = 42",
-      ].join("\n"),
+      ["// see https://example.com for docs", "export const x = 42"].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -631,10 +611,7 @@ describe("detectHardcodes — precision overhaul", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "paths.ts"),
-      [
-        'const DATA_DIR = "/Users/deploy/data"',
-        'readFile("/Users/hardcoded/secrets")',
-      ].join("\n"),
+      ['const DATA_DIR = "/Users/deploy/data"', 'readFile("/Users/hardcoded/secrets")'].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -785,12 +762,7 @@ describe("detectRaces", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "events.ts"),
-      [
-        "async function setup(emitter: any) {",
-        "  await initialize()",
-        '  emitter.on("data", handler)',
-        "}",
-      ].join("\n"),
+      ["async function setup(emitter: any) {", "  await initialize()", '  emitter.on("data", handler)', "}"].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -808,11 +780,7 @@ describe("detectRaces", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "sync.ts"),
-      [
-        "function add(a: number, b: number) {",
-        "  return a + b",
-        "}",
-      ].join("\n"),
+      ["function add(a: number, b: number) {", "  return a + b", "}"].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -857,13 +825,7 @@ describe("detectLifecycle", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "timer.ts"),
-      [
-        "function startPolling() {",
-        "  setInterval(() => {",
-        '    console.log("tick")',
-        "  }, 1000)",
-        "}",
-      ].join("\n"),
+      ["function startPolling() {", "  setInterval(() => {", '    console.log("tick")', "  }, 1000)", "}"].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -927,12 +889,9 @@ describe("detectLifecycle", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "events-ok.ts"),
-      [
-        "function setup(emitter: any) {",
-        '  emitter.on("data", handleData)',
-        "  return () => emitter.off()",
-        "}",
-      ].join("\n"),
+      ["function setup(emitter: any) {", '  emitter.on("data", handleData)', "  return () => emitter.off()", "}"].join(
+        "\n",
+      ),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -993,11 +952,7 @@ describe("detectLifecycle", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "proc.ts"),
-      [
-        "function run(cmd: string) {",
-        '  spawn("bash", ["-c", cmd])',
-        "}",
-      ].join("\n"),
+      ["function run(cmd: string) {", '  spawn("bash", ["-c", cmd])', "}"].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -1038,11 +993,7 @@ describe("detectLifecycle", () => {
     await fs.mkdir(path.join(tmp.path, "test"), { recursive: true })
     await fs.writeFile(
       path.join(tmp.path, "test", "timer.test.ts"),
-      [
-        "function startPolling() {",
-        "  setInterval(() => {}, 1000)",
-        "}",
-      ].join("\n"),
+      ["function startPolling() {", "  setInterval(() => {}, 1000)", "}"].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -1110,11 +1061,7 @@ describe("detectSecurity", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "run.ts"),
-      [
-        "function runCommand(input: string) {",
-        "  exec(`echo ${input}`)",
-        "}",
-      ].join("\n"),
+      ["function runCommand(input: string) {", "  exec(`echo ${input}`)", "}"].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -1132,11 +1079,7 @@ describe("detectSecurity", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
       path.join(tmp.path, "spawn.ts"),
-      [
-        "function run() {",
-        "  spawn('node', ['script.js'], { env: { ...process.env } })",
-        "}",
-      ].join("\n"),
+      ["function run() {", "  spawn('node', ['script.js'], { env: { ...process.env } })", "}"].join("\n"),
     )
     await Instance.provide({
       directory: tmp.path,
@@ -1323,7 +1266,10 @@ describe("ShadowWorktree", () => {
         // Dispose: directory gone, branch gone.
         await result.handle[Symbol.asyncDispose]()
         expect(result.handle.disposed).toBe(true)
-        const exists = await fs.stat(shadowPath).then(() => true).catch(() => false)
+        const exists = await fs
+          .stat(shadowPath)
+          .then(() => true)
+          .catch(() => false)
         expect(exists).toBe(false)
         const branchesAfter = await $`git branch --list ${branch}`.cwd(tmp.path).text()
         expect(branchesAfter.trim()).toBe("")
@@ -1457,10 +1403,7 @@ describe("applySafeRefactor", () => {
 
     // Minimal package.json with no test/typecheck/lint scripts so
     // resolveCommands returns all null — checks pass vacuously.
-    await fs.writeFile(
-      path.join(tmp.path, "package.json"),
-      JSON.stringify({ name: "dre-test", version: "0.0.0" }),
-    )
+    await fs.writeFile(path.join(tmp.path, "package.json"), JSON.stringify({ name: "dre-test", version: "0.0.0" }))
     await $`git add .`.cwd(tmp.path).quiet()
     await $`git commit -m "add pkg"`.cwd(tmp.path).quiet()
 
@@ -1630,8 +1573,8 @@ describe("applySafeRefactor", () => {
           "--- a/greet.ts",
           "+++ b/greet.ts",
           "@@ -1 +1 @@",
-          "-export const WRONG = \"hello\"",
-          "+export const WRONG = \"hi\"",
+          '-export const WRONG = "hello"',
+          '+export const WRONG = "hi"',
           "",
         ].join("\n")
 

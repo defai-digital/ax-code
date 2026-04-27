@@ -17,7 +17,10 @@ describe("tui sync", () => {
   })
 
   test("replaces an existing session when the same id arrives again", () => {
-    const list = [{ id: "ses_1", title: "old" }, { id: "ses_2", title: "keep" }]
+    const list = [
+      { id: "ses_1", title: "old" },
+      { id: "ses_2", title: "keep" },
+    ]
 
     upsert(list, { id: "ses_1", title: "new" })
 

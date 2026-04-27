@@ -13,12 +13,12 @@ const SmartLlmState = z
   })
   .meta({ ref: "SmartLlmState" })
 
-/** Fast-model complexity routing defaults to ON. Explicit config beats env beats default. */
+/** Fast-model complexity routing defaults to OFF. Explicit config beats env beats default. */
 function resolveSmartLlmEnabled(configValue: boolean | undefined, envValue: string | undefined) {
   if (typeof configValue === "boolean") return configValue
   if (envValue === "true") return true
   if (envValue === "false") return false
-  return true
+  return false
 }
 
 export const SmartLlmRoutes = lazy(() =>

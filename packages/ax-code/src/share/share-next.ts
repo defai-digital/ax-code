@@ -38,11 +38,7 @@ export namespace ShareNext {
     return new URL(endpoint, req.baseUrl).toString()
   }
 
-  function fetchShare(
-    req: { baseUrl: string; headers: Record<string, string> },
-    endpoint: string,
-    init?: RequestInit,
-  ) {
+  function fetchShare(req: { baseUrl: string; headers: Record<string, string> }, endpoint: string, init?: RequestInit) {
     return Ssrf.pinnedFetch(shareEndpoint(req, endpoint), {
       ...init,
       headers: init?.headers,
@@ -99,54 +95,74 @@ export namespace ShareNext {
     }
     activeUnsubs.push(
       Bus.subscribe(Session.Event.Updated, async (evt) => {
-        await safeSync(evt.properties.info.id, [
-          {
-            type: "session",
-            data: evt.properties.info,
-          },
-        ], "session.updated")
+        await safeSync(
+          evt.properties.info.id,
+          [
+            {
+              type: "session",
+              data: evt.properties.info,
+            },
+          ],
+          "session.updated",
+        )
       }),
     )
     activeUnsubs.push(
       Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
-        await safeSync(evt.properties.info.sessionID, [
-          {
-            type: "message",
-            data: evt.properties.info,
-          },
-        ], "message.updated")
-        if (evt.properties.info.role === "user") {
-          await safeSync(evt.properties.info.sessionID, [
+        await safeSync(
+          evt.properties.info.sessionID,
+          [
             {
-              type: "model",
-              data: [
-                await Provider.getModel(evt.properties.info.model.providerID, evt.properties.info.model.modelID).then(
-                  (m) => m,
-                ),
-              ],
+              type: "message",
+              data: evt.properties.info,
             },
-          ], "message.updated.model")
+          ],
+          "message.updated",
+        )
+        if (evt.properties.info.role === "user") {
+          await safeSync(
+            evt.properties.info.sessionID,
+            [
+              {
+                type: "model",
+                data: [
+                  await Provider.getModel(evt.properties.info.model.providerID, evt.properties.info.model.modelID).then(
+                    (m) => m,
+                  ),
+                ],
+              },
+            ],
+            "message.updated.model",
+          )
         }
       }),
     )
     activeUnsubs.push(
       Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-        await safeSync(evt.properties.part.sessionID, [
-          {
-            type: "part",
-            data: evt.properties.part,
-          },
-        ], "part.updated")
+        await safeSync(
+          evt.properties.part.sessionID,
+          [
+            {
+              type: "part",
+              data: evt.properties.part,
+            },
+          ],
+          "part.updated",
+        )
       }),
     )
     activeUnsubs.push(
       Bus.subscribe(Session.Event.Diff, async (evt) => {
-        await safeSync(evt.properties.sessionID, [
-          {
-            type: "session_diff",
-            data: evt.properties.diff,
-          },
-        ], "session.diff")
+        await safeSync(
+          evt.properties.sessionID,
+          [
+            {
+              type: "session_diff",
+              data: evt.properties.diff,
+            },
+          ],
+          "session.diff",
+        )
       }),
     )
   }
@@ -401,7 +417,9 @@ export namespace ShareNext {
       ),
     )
     const models = results
-      .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof Provider.getModel>>> => r.status === "fulfilled")
+      .filter(
+        (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof Provider.getModel>>> => r.status === "fulfilled",
+      )
       .map((r) => r.value)
 
     // First chunk includes session metadata, models, and diffs

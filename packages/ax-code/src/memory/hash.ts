@@ -37,6 +37,7 @@ export function computeContentHash(memory: ProjectMemory): string {
     entryContent(memory.sections.userPrefs),
     entryContent(memory.sections.feedback),
     entryContent(memory.sections.decisions),
+    entryContent(memory.sections.reference),
   ].join("\n")
   return crypto.createHash("sha256").update(allContent).digest("hex").slice(0, 16)
 }

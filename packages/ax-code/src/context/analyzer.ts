@@ -8,6 +8,7 @@
 import path from "path"
 import fs from "fs"
 import { readFile } from "node:fs/promises"
+import { Log } from "../util/log"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
 export type DepthLevel = "basic" | "standard" | "full" | "security"
@@ -358,7 +359,13 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
       for await (const file of glob.scan({ cwd, onlyFiles: true })) {
         batch.push(file)
         if (batch.length >= 50 || fileCount + batch.length > 5000) {
-          const results = await Promise.all(batch.map((f) => Bun.file(path.join(cwd, f)).text().catch(() => "")))
+          const results = await Promise.all(
+            batch.map((f) =>
+              Bun.file(path.join(cwd, f))
+                .text()
+                .catch(() => ""),
+            ),
+          )
           for (const content of results) {
             fileCount++
             loc += countLines(content)
@@ -368,14 +375,24 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
         }
       }
       if (batch.length > 0) {
-        const results = await Promise.all(batch.map((f) => Bun.file(path.join(cwd, f)).text().catch(() => "")))
+        const results = await Promise.all(
+          batch.map((f) =>
+            Bun.file(path.join(cwd, f))
+              .text()
+              .catch(() => ""),
+          ),
+        )
         for (const content of results) {
           fileCount++
           loc += countLines(content)
         }
       }
-    } catch {
-      // fallback
+    } catch (error) {
+      Log.Default.warn("complexity scan failed, using fallback", {
+        root,
+        sourceDir,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -387,8 +404,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
 
   const score = Math.min(100, fileCount * 0.05 + loc * 0.001 + depCount * 0.5)
 
-  const level: ComplexityLevel =
-    score < 15 ? "small" : score < 40 ? "medium" : score < 70 ? "large" : "enterprise"
+  const level: ComplexityLevel = score < 15 ? "small" : score < 40 ? "medium" : score < 70 ? "large" : "enterprise"
 
   return { level, score: Math.round(score), fileCount, linesOfCode: loc, dependencyCount: depCount }
 }

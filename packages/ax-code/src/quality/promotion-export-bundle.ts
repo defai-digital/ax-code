@@ -13,11 +13,13 @@ export namespace QualityPromotionExportBundle {
     promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
     authorizedPromotion: z.boolean(),
     previousActiveSource: z.string().nullable(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ExportSummary = z.output<typeof ExportSummary>
 
@@ -59,12 +61,11 @@ export namespace QualityPromotionExportBundle {
     })
   }
 
-  function matchesPromotion(
-    promotion: QualityPromotionAuditManifest.PromotionSnapshot,
-    bundle: ExportArtifact,
-  ) {
-    return bundle.auditManifest.promotion.promotionID === promotion.promotionID
-      && bundle.auditManifest.promotion.source === promotion.source
+  function matchesPromotion(promotion: QualityPromotionAuditManifest.PromotionSnapshot, bundle: ExportArtifact) {
+    return (
+      bundle.auditManifest.promotion.promotionID === promotion.promotionID &&
+      bundle.auditManifest.promotion.source === promotion.source
+    )
   }
 
   function evaluateSummary(auditManifest: QualityPromotionAuditManifest.ManifestArtifact) {
@@ -78,9 +79,11 @@ export namespace QualityPromotionExportBundle {
       {
         name: "release-packet-readiness",
         status: auditManifest.releasePacket.summary.overallStatus,
-        detail: auditManifest.releasePacket.summary.overallStatus === "pass"
-          ? `release packet ${auditManifest.releasePacket.packetID} is ready`
-          : auditManifest.releasePacket.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "release packet not ready",
+        detail:
+          auditManifest.releasePacket.summary.overallStatus === "pass"
+            ? `release packet ${auditManifest.releasePacket.packetID} is ready`
+            : (auditManifest.releasePacket.summary.gates.find((gate) => gate.status === "fail")?.detail ??
+              "release packet not ready"),
       },
       {
         name: "promotion-recorded",
@@ -98,7 +101,8 @@ export namespace QualityPromotionExportBundle {
       },
       {
         name: "promotion-release-packet-linkage",
-        status: auditManifest.promotion.releasePacket?.packetID === auditManifest.releasePacket.packetID ? "pass" : "fail",
+        status:
+          auditManifest.promotion.releasePacket?.packetID === auditManifest.releasePacket.packetID ? "pass" : "fail",
         detail: `promotion packet=${auditManifest.promotion.releasePacket?.packetID ?? "n/a"} export packet=${auditManifest.releasePacket.packetID}`,
       },
     ] as const
@@ -116,12 +120,12 @@ export namespace QualityPromotionExportBundle {
     })
   }
 
-  export function create(input: {
-    auditManifest: QualityPromotionAuditManifest.ManifestArtifact
-  }) {
+  export function create(input: { auditManifest: QualityPromotionAuditManifest.ManifestArtifact }) {
     const manifestReasons = QualityPromotionAuditManifest.verify(input.auditManifest.releasePacket, input.auditManifest)
     if (manifestReasons.length > 0) {
-      throw new Error(`Cannot create promotion export bundle for ${input.auditManifest.source}: invalid audit manifest (${manifestReasons[0]})`)
+      throw new Error(
+        `Cannot create promotion export bundle for ${input.auditManifest.source}: invalid audit manifest (${manifestReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const bundleID = `${input.auditManifest.manifestID}-export-bundle`
@@ -142,7 +146,10 @@ export namespace QualityPromotionExportBundle {
     if (bundle.source !== bundle.auditManifest.source) {
       reasons.push(`export bundle source mismatch: ${bundle.source} vs ${bundle.auditManifest.source}`)
     }
-    const manifestReasons = QualityPromotionAuditManifest.verify(bundle.auditManifest.releasePacket, bundle.auditManifest)
+    const manifestReasons = QualityPromotionAuditManifest.verify(
+      bundle.auditManifest.releasePacket,
+      bundle.auditManifest,
+    )
     if (manifestReasons.length > 0) {
       reasons.push(`export bundle audit manifest mismatch for ${bundle.source} (${manifestReasons[0]})`)
     }
@@ -184,7 +191,9 @@ export namespace QualityPromotionExportBundle {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion export bundle ${bundle.bundleID} already exists for source ${bundle.source} with different content`)
+      throw new Error(
+        `Promotion export bundle ${bundle.bundleID} already exists for source ${bundle.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(bundle.source, bundle.bundleID), next)

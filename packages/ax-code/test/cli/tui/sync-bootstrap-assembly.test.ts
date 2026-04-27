@@ -89,8 +89,12 @@ describe("tui sync bootstrap assembly", () => {
       setStore,
       requests: createRequests({
         sessionListPromise: async () => [{ id: "ses_1" } as never],
-        providersPromise: async () => ({ data: { providers: [{ id: "openai" } as never], default: { chat: "openai" } } }),
-        providerListPromise: async () => ({ data: { all: [{ id: "openai" } as never], default: { chat: "openai" }, connected: [] } }),
+        providersPromise: async () => ({
+          data: { providers: [{ id: "openai" } as never], default: { chat: "openai" } },
+        }),
+        providerListPromise: async () => ({
+          data: { all: [{ id: "openai" } as never], default: { chat: "openai" }, connected: [] },
+        }),
         agentsPromise: async () => ({ data: [{ id: "agent_1" } as never] }),
         configPromise: async () => ({ data: { theme: "dark" } as never }),
         commandPromise: async () => ({ data: [{ id: "cmd_1" } as never] }),
@@ -104,7 +108,9 @@ describe("tui sync bootstrap assembly", () => {
           }) as never,
         sessionStatusPromise: async () => ({ data: { ses_1: "working" as never } }),
         providerAuthPromise: async () => ({ data: { openai: [{ type: "api", label: "API key" } as never] } }),
-        pathPromise: async () => ({ data: { state: "/state", config: "/config", worktree: "/worktree", directory: "/repo" } }),
+        pathPromise: async () => ({
+          data: { state: "/state", config: "/config", worktree: "/worktree", directory: "/repo" },
+        }),
         isolationTask: async () => {
           calls.push("isolation")
         },

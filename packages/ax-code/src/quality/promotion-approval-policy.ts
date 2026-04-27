@@ -74,14 +74,16 @@ export namespace QualityPromotionApprovalPolicy {
   export const ApprovalRoleCohort = z.enum(["individual-contributor", "management"])
   export type ApprovalRoleCohort = z.output<typeof ApprovalRoleCohort>
 
-  export const ApprovalConcentrationWeights = z.object({
-    approver: z.number().min(0),
-    team: z.number().min(0),
-    reportingChain: z.number().min(0),
-  }).refine(
-    (weights) => weights.approver > 0 || weights.team > 0 || weights.reportingChain > 0,
-    "At least one approval concentration axis weight must be positive",
-  )
+  export const ApprovalConcentrationWeights = z
+    .object({
+      approver: z.number().min(0),
+      team: z.number().min(0),
+      reportingChain: z.number().min(0),
+    })
+    .refine(
+      (weights) => weights.approver > 0 || weights.team > 0 || weights.reportingChain > 0,
+      "At least one approval concentration axis weight must be positive",
+    )
   export type ApprovalConcentrationWeights = z.output<typeof ApprovalConcentrationWeights>
 
   export const DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS = ApprovalConcentrationWeights.parse({
@@ -184,10 +186,7 @@ export namespace QualityPromotionApprovalPolicy {
     }
   }
 
-  function matchesConcentrationPreset(
-    preset: ApprovalConcentrationPreset,
-    weights: ApprovalConcentrationWeights,
-  ) {
+  function matchesConcentrationPreset(preset: ApprovalConcentrationPreset, weights: ApprovalConcentrationWeights) {
     const expected = concentrationWeightsForPreset(preset)
     return (
       Math.abs(weights.approver - expected.approver) <= CONCENTRATION_WEIGHT_EPSILON &&
@@ -219,12 +218,16 @@ export namespace QualityPromotionApprovalPolicy {
     workflow: ApprovalConcentrationWorkflow | null
     workflowSource: ConcentrationWorkflowSource
   } {
-    const workflows = [...new Set(
-      input.benchmark.model.groups
-        .map((group) => group.workflow)
-        .filter((workflow): workflow is string =>
-          workflow === "review" || workflow === "debug" || workflow === "refactor" || workflow === "qa"),
-    )].sort()
+    const workflows = [
+      ...new Set(
+        input.benchmark.model.groups
+          .map((group) => group.workflow)
+          .filter(
+            (workflow): workflow is string =>
+              workflow === "review" || workflow === "debug" || workflow === "refactor" || workflow === "qa",
+          ),
+      ),
+    ].sort()
     if (workflows.length === 1) {
       return {
         workflow: workflows[0] as ApprovalConcentrationWorkflow,
@@ -280,11 +283,7 @@ export namespace QualityPromotionApprovalPolicy {
     riskTier: ApprovalConcentrationRiskTier
   }): ApprovalConcentrationPreset {
     if (!input.workflow) {
-      return input.riskTier === "standard"
-        ? "balanced"
-        : input.riskTier === "elevated"
-          ? "reviewer-heavy"
-          : "org-heavy"
+      return input.riskTier === "standard" ? "balanced" : input.riskTier === "elevated" ? "reviewer-heavy" : "org-heavy"
     }
 
     switch (input.workflow) {
@@ -307,10 +306,7 @@ export namespace QualityPromotionApprovalPolicy {
     }
   }
 
-  function escalatePreset(
-    preset: ApprovalConcentrationPreset,
-    steps: number,
-  ): ApprovalConcentrationPreset {
+  function escalatePreset(preset: ApprovalConcentrationPreset, steps: number): ApprovalConcentrationPreset {
     if (steps <= 0) return preset
     const order: ApprovalConcentrationPreset[] = ["balanced", "reviewer-heavy", "org-heavy"]
     const index = order.indexOf(preset)
@@ -384,12 +380,14 @@ export namespace QualityPromotionApprovalPolicy {
     const workflowSource: ConcentrationWorkflowSource = input.workflow ? "explicit" : inferredWorkflow.workflowSource
     const riskTier = input.riskTier ?? inferredRiskTier.riskTier
     const riskTierSource: ConcentrationRiskTierSource = input.riskTier ? "explicit" : inferredRiskTier.riskTierSource
-    const samePolicyRetry = input.samePolicyRetry ?? (input.bundle.eligibility.reentryContext?.sameReleasePolicyAsCurrent === true)
-    const forcePath = input.forcePath ?? (input.bundle.eligibility.requiredOverride === "force")
-    const priorRollbacks = input.priorRollbacks
-      ?? input.bundle.snapshot?.priorRollbacks
-      ?? input.bundle.eligibility.history?.priorRollbacks
-      ?? 0
+    const samePolicyRetry =
+      input.samePolicyRetry ?? input.bundle.eligibility.reentryContext?.sameReleasePolicyAsCurrent === true
+    const forcePath = input.forcePath ?? input.bundle.eligibility.requiredOverride === "force"
+    const priorRollbacks =
+      input.priorRollbacks ??
+      input.bundle.snapshot?.priorRollbacks ??
+      input.bundle.eligibility.history?.priorRollbacks ??
+      0
     const recommendation = recommendConcentration({
       workflow,
       riskTier,
@@ -419,7 +417,9 @@ export namespace QualityPromotionApprovalPolicy {
     lines.push(`- preset: ${recommendation.preset}`)
     lines.push(`- budget: ${recommendation.budget}`)
     lines.push(`- escalated: ${recommendation.escalated}`)
-    lines.push(`- weights: approver=${recommendation.weights.approver}, team=${recommendation.weights.team}, reporting_chain=${recommendation.weights.reportingChain}`)
+    lines.push(
+      `- weights: approver=${recommendation.weights.approver}, team=${recommendation.weights.team}, reporting_chain=${recommendation.weights.reportingChain}`,
+    )
     lines.push("")
     lines.push("Rationale:")
     for (const item of recommendation.rationale) {
@@ -446,48 +446,48 @@ export namespace QualityPromotionApprovalPolicy {
     return lines.join("\n")
   }
 
-  export const ApprovalRequirement = z.object({
-    minimumApprovals: z.number().int().nonnegative(),
-    minimumRole: ApprovalRole.nullable(),
-    requireDistinctApprovers: z.boolean(),
-    requireIndependentReviewer: z.boolean().default(false),
-    requirePriorApproverExclusion: z.boolean().default(false),
-    maxPriorApproverOverlapRatio: z.number().min(0).max(1).nullable().default(null),
-    reviewerCarryoverBudget: z.number().nonnegative().nullable().default(null),
-    reviewerCarryoverLookbackPromotions: z.number().int().positive().nullable().default(null),
-    teamCarryoverBudget: z.number().nonnegative().nullable().default(null),
-    teamCarryoverLookbackPromotions: z.number().int().positive().nullable().default(null),
-    maxPriorReportingChainOverlapRatio: z.number().min(0).max(1).nullable().default(null),
-    reportingChainCarryoverBudget: z.number().nonnegative().nullable().default(null),
-    reportingChainCarryoverLookbackPromotions: z.number().int().positive().nullable().default(null),
-    requireRoleCohortDiversity: z.boolean().default(false),
-    minimumDistinctRoleCohorts: z.number().int().positive().nullable().default(null),
-    requireReviewerTeamDiversity: z.boolean().default(false),
-    minimumDistinctReviewerTeams: z.number().int().positive().nullable().default(null),
-    requireReportingChainDiversity: z.boolean().default(false),
-    minimumDistinctReportingChains: z.number().int().positive().nullable().default(null),
-    approvalConcentrationBudget: z.number().min(0).max(1).nullable().default(null),
-    approvalConcentrationPreset: ApprovalConcentrationPreset.nullable().default(null),
-    approvalConcentrationWeights: ApprovalConcentrationWeights.default(DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS),
-  }).superRefine((requirement, ctx) => {
-    if (
-      requirement.approvalConcentrationPreset &&
-      !matchesConcentrationPreset(requirement.approvalConcentrationPreset, requirement.approvalConcentrationWeights)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `approval concentration preset ${requirement.approvalConcentrationPreset} does not match configured weights`,
-        path: ["approvalConcentrationWeights"],
-      })
-    }
-  })
+  export const ApprovalRequirement = z
+    .object({
+      minimumApprovals: z.number().int().nonnegative(),
+      minimumRole: ApprovalRole.nullable(),
+      requireDistinctApprovers: z.boolean(),
+      requireIndependentReviewer: z.boolean().default(false),
+      requirePriorApproverExclusion: z.boolean().default(false),
+      maxPriorApproverOverlapRatio: z.number().min(0).max(1).nullable().default(null),
+      reviewerCarryoverBudget: z.number().nonnegative().nullable().default(null),
+      reviewerCarryoverLookbackPromotions: z.number().int().positive().nullable().default(null),
+      teamCarryoverBudget: z.number().nonnegative().nullable().default(null),
+      teamCarryoverLookbackPromotions: z.number().int().positive().nullable().default(null),
+      maxPriorReportingChainOverlapRatio: z.number().min(0).max(1).nullable().default(null),
+      reportingChainCarryoverBudget: z.number().nonnegative().nullable().default(null),
+      reportingChainCarryoverLookbackPromotions: z.number().int().positive().nullable().default(null),
+      requireRoleCohortDiversity: z.boolean().default(false),
+      minimumDistinctRoleCohorts: z.number().int().positive().nullable().default(null),
+      requireReviewerTeamDiversity: z.boolean().default(false),
+      minimumDistinctReviewerTeams: z.number().int().positive().nullable().default(null),
+      requireReportingChainDiversity: z.boolean().default(false),
+      minimumDistinctReportingChains: z.number().int().positive().nullable().default(null),
+      approvalConcentrationBudget: z.number().min(0).max(1).nullable().default(null),
+      approvalConcentrationPreset: ApprovalConcentrationPreset.nullable().default(null),
+      approvalConcentrationWeights: ApprovalConcentrationWeights.default(DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS),
+    })
+    .superRefine((requirement, ctx) => {
+      if (
+        requirement.approvalConcentrationPreset &&
+        !matchesConcentrationPreset(requirement.approvalConcentrationPreset, requirement.approvalConcentrationWeights)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `approval concentration preset ${requirement.approvalConcentrationPreset} does not match configured weights`,
+          path: ["approvalConcentrationWeights"],
+        })
+      }
+    })
   export type ApprovalRequirement = z.output<typeof ApprovalRequirement>
 
-  export type ApprovalRequirementOverrides =
-    & Partial<Omit<ApprovalRequirement, "approvalConcentrationWeights">>
-    & {
-      approvalConcentrationWeights?: Partial<ApprovalConcentrationWeights>
-    }
+  export type ApprovalRequirementOverrides = Partial<Omit<ApprovalRequirement, "approvalConcentrationWeights">> & {
+    approvalConcentrationWeights?: Partial<ApprovalConcentrationWeights>
+  }
 
   export type PolicyOverrides = {
     none?: ApprovalRequirementOverrides
@@ -582,28 +582,34 @@ export namespace QualityPromotionApprovalPolicy {
     independentQualifiedApprovals: z.number().int().nonnegative(),
     priorPromotionID: z.string().nullable(),
     priorPromotionApprovers: z.array(z.string()),
-    teamCarryoverHistory: z.array(z.object({
-      team: z.string(),
-      weightedReuseScore: z.number().positive(),
-      appearances: z.number().int().positive(),
-      mostRecentPromotionID: z.string(),
-      mostRecentPromotedAt: z.string(),
-    })),
+    teamCarryoverHistory: z.array(
+      z.object({
+        team: z.string(),
+        weightedReuseScore: z.number().positive(),
+        appearances: z.number().int().positive(),
+        mostRecentPromotionID: z.string(),
+        mostRecentPromotedAt: z.string(),
+      }),
+    ),
     priorPromotionReportingChains: z.array(z.string()),
-    reviewerCarryoverHistory: z.array(z.object({
-      approver: z.string(),
-      weightedReuseScore: z.number().positive(),
-      appearances: z.number().int().positive(),
-      mostRecentPromotionID: z.string(),
-      mostRecentPromotedAt: z.string(),
-    })),
-    reportingChainCarryoverHistory: z.array(z.object({
-      reportingChain: z.string(),
-      weightedReuseScore: z.number().positive(),
-      appearances: z.number().int().positive(),
-      mostRecentPromotionID: z.string(),
-      mostRecentPromotedAt: z.string(),
-    })),
+    reviewerCarryoverHistory: z.array(
+      z.object({
+        approver: z.string(),
+        weightedReuseScore: z.number().positive(),
+        appearances: z.number().int().positive(),
+        mostRecentPromotionID: z.string(),
+        mostRecentPromotedAt: z.string(),
+      }),
+    ),
+    reportingChainCarryoverHistory: z.array(
+      z.object({
+        reportingChain: z.string(),
+        weightedReuseScore: z.number().positive(),
+        appearances: z.number().int().positive(),
+        mostRecentPromotionID: z.string(),
+        mostRecentPromotedAt: z.string(),
+      }),
+    ),
     freshQualifiedApprovals: z.number().int().nonnegative(),
     overlappingQualifiedApprovers: z.number().int().nonnegative(),
     priorApproverOverlapRatio: z.number().min(0).max(1).nullable(),
@@ -644,13 +650,13 @@ export namespace QualityPromotionApprovalPolicy {
   export type EvaluationSummary = z.output<typeof EvaluationSummary>
 
   const ROLE_RANK: Record<ApprovalRole, number> = {
-    "engineer": 1,
+    engineer: 1,
     "senior-engineer": 2,
     "staff-engineer": 3,
     "principal-engineer": 4,
-    "manager": 5,
-    "director": 6,
-    "vp": 7,
+    manager: 5,
+    director: 6,
+    vp: 7,
   }
 
   function normalizeRole(role: string | null | undefined): ApprovalRole | null {
@@ -729,11 +735,12 @@ export namespace QualityPromotionApprovalPolicy {
     const presetWeightBase = override?.approvalConcentrationPreset
       ? concentrationWeightsForPreset(override.approvalConcentrationPreset)
       : baseRequirement.approvalConcentrationWeights
-    const nextPreset = override?.approvalConcentrationPreset !== undefined
-      ? override.approvalConcentrationPreset
-      : hasWeightOverride
-        ? null
-        : baseRequirement.approvalConcentrationPreset
+    const nextPreset =
+      override?.approvalConcentrationPreset !== undefined
+        ? override.approvalConcentrationPreset
+        : hasWeightOverride
+          ? null
+          : baseRequirement.approvalConcentrationPreset
     const baseWeights = presetWeightBase
     return ApprovalRequirement.parse({
       ...baseRequirement,
@@ -741,9 +748,9 @@ export namespace QualityPromotionApprovalPolicy {
       approvalConcentrationPreset: hasWeightOverride ? null : nextPreset,
       approvalConcentrationWeights: override?.approvalConcentrationWeights
         ? {
-          ...baseWeights,
-          ...override.approvalConcentrationWeights,
-        }
+            ...baseWeights,
+            ...override.approvalConcentrationWeights,
+          }
         : baseWeights,
     })
   }
@@ -760,7 +767,9 @@ export namespace QualityPromotionApprovalPolicy {
       reasons.push(`decision bundle createdAt mismatch: ${approval.decisionBundle.createdAt} vs ${bundle.createdAt}`)
     }
     if (approval.decisionBundle.decision !== bundle.eligibility.decision) {
-      reasons.push(`eligibility decision mismatch: ${approval.decisionBundle.decision} vs ${bundle.eligibility.decision}`)
+      reasons.push(
+        `eligibility decision mismatch: ${approval.decisionBundle.decision} vs ${bundle.eligibility.decision}`,
+      )
     }
     if (approval.decisionBundle.requiredOverride !== bundle.eligibility.requiredOverride) {
       reasons.push(
@@ -784,143 +793,147 @@ export namespace QualityPromotionApprovalPolicy {
   }
 
   export function defaults(input?: PolicyOverrides): Policy {
-    return merge({
-      schemaVersion: 1,
-      kind: "ax-code-quality-promotion-approval-policy",
-      rules: {
-        none: {
-          minimumApprovals: 0,
-          minimumRole: null,
-          requireDistinctApprovers: false,
-          requireIndependentReviewer: false,
-          requirePriorApproverExclusion: false,
-          maxPriorApproverOverlapRatio: null,
-          reviewerCarryoverBudget: null,
-          reviewerCarryoverLookbackPromotions: null,
-          teamCarryoverBudget: null,
-          teamCarryoverLookbackPromotions: null,
-          maxPriorReportingChainOverlapRatio: null,
-          reportingChainCarryoverBudget: null,
-          reportingChainCarryoverLookbackPromotions: null,
-          requireRoleCohortDiversity: false,
-          minimumDistinctRoleCohorts: null,
-          requireReviewerTeamDiversity: false,
-          minimumDistinctReviewerTeams: null,
-          requireReportingChainDiversity: false,
-          minimumDistinctReportingChains: null,
-          approvalConcentrationBudget: null,
-          approvalConcentrationPreset: null,
-          approvalConcentrationWeights: DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS,
-        },
-        allow_warn: {
-          minimumApprovals: 1,
-          minimumRole: "staff-engineer",
-          requireDistinctApprovers: true,
-          requireIndependentReviewer: false,
-          requirePriorApproverExclusion: false,
-          maxPriorApproverOverlapRatio: null,
-          reviewerCarryoverBudget: null,
-          reviewerCarryoverLookbackPromotions: null,
-          teamCarryoverBudget: null,
-          teamCarryoverLookbackPromotions: null,
-          maxPriorReportingChainOverlapRatio: null,
-          reportingChainCarryoverBudget: null,
-          reportingChainCarryoverLookbackPromotions: null,
-          requireRoleCohortDiversity: false,
-          minimumDistinctRoleCohorts: null,
-          requireReviewerTeamDiversity: false,
-          minimumDistinctReviewerTeams: null,
-          requireReportingChainDiversity: false,
-          minimumDistinctReportingChains: null,
-          approvalConcentrationBudget: null,
-          approvalConcentrationPreset: null,
-          approvalConcentrationWeights: DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS,
-        },
-        force: {
-          minimumApprovals: 2,
-          minimumRole: "manager",
-          requireDistinctApprovers: true,
-          requireIndependentReviewer: false,
-          requirePriorApproverExclusion: false,
-          maxPriorApproverOverlapRatio: null,
-          reviewerCarryoverBudget: null,
-          reviewerCarryoverLookbackPromotions: null,
-          teamCarryoverBudget: null,
-          teamCarryoverLookbackPromotions: null,
-          maxPriorReportingChainOverlapRatio: null,
-          reportingChainCarryoverBudget: null,
-          reportingChainCarryoverLookbackPromotions: null,
-          requireRoleCohortDiversity: false,
-          minimumDistinctRoleCohorts: null,
-          requireReviewerTeamDiversity: false,
-          minimumDistinctReviewerTeams: null,
-          requireReportingChainDiversity: false,
-          minimumDistinctReportingChains: null,
-          approvalConcentrationBudget: null,
-          approvalConcentrationPreset: null,
-          approvalConcentrationWeights: DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS,
-        },
-        reentry: {
-          minimumApprovals: 1,
-          minimumRole: "staff-engineer",
-          requireDistinctApprovers: true,
-          requireIndependentReviewer: true,
-          requirePriorApproverExclusion: true,
-          maxPriorApproverOverlapRatio: 0.5,
-          reviewerCarryoverBudget: 0.5,
-          reviewerCarryoverLookbackPromotions: 3,
-          teamCarryoverBudget: 0.5,
-          teamCarryoverLookbackPromotions: 3,
-          maxPriorReportingChainOverlapRatio: 0.5,
-          reportingChainCarryoverBudget: 0.5,
-          reportingChainCarryoverLookbackPromotions: 3,
-          requireRoleCohortDiversity: true,
-          minimumDistinctRoleCohorts: 2,
-          requireReviewerTeamDiversity: true,
-          minimumDistinctReviewerTeams: 2,
-          requireReportingChainDiversity: true,
-          minimumDistinctReportingChains: 2,
-          approvalConcentrationBudget: 0.4,
-          approvalConcentrationPreset: "reviewer-heavy",
-          approvalConcentrationWeights: DEFAULT_REENTRY_APPROVAL_CONCENTRATION_WEIGHTS,
+    return merge(
+      {
+        schemaVersion: 1,
+        kind: "ax-code-quality-promotion-approval-policy",
+        rules: {
+          none: {
+            minimumApprovals: 0,
+            minimumRole: null,
+            requireDistinctApprovers: false,
+            requireIndependentReviewer: false,
+            requirePriorApproverExclusion: false,
+            maxPriorApproverOverlapRatio: null,
+            reviewerCarryoverBudget: null,
+            reviewerCarryoverLookbackPromotions: null,
+            teamCarryoverBudget: null,
+            teamCarryoverLookbackPromotions: null,
+            maxPriorReportingChainOverlapRatio: null,
+            reportingChainCarryoverBudget: null,
+            reportingChainCarryoverLookbackPromotions: null,
+            requireRoleCohortDiversity: false,
+            minimumDistinctRoleCohorts: null,
+            requireReviewerTeamDiversity: false,
+            minimumDistinctReviewerTeams: null,
+            requireReportingChainDiversity: false,
+            minimumDistinctReportingChains: null,
+            approvalConcentrationBudget: null,
+            approvalConcentrationPreset: null,
+            approvalConcentrationWeights: DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS,
+          },
+          allow_warn: {
+            minimumApprovals: 1,
+            minimumRole: "staff-engineer",
+            requireDistinctApprovers: true,
+            requireIndependentReviewer: false,
+            requirePriorApproverExclusion: false,
+            maxPriorApproverOverlapRatio: null,
+            reviewerCarryoverBudget: null,
+            reviewerCarryoverLookbackPromotions: null,
+            teamCarryoverBudget: null,
+            teamCarryoverLookbackPromotions: null,
+            maxPriorReportingChainOverlapRatio: null,
+            reportingChainCarryoverBudget: null,
+            reportingChainCarryoverLookbackPromotions: null,
+            requireRoleCohortDiversity: false,
+            minimumDistinctRoleCohorts: null,
+            requireReviewerTeamDiversity: false,
+            minimumDistinctReviewerTeams: null,
+            requireReportingChainDiversity: false,
+            minimumDistinctReportingChains: null,
+            approvalConcentrationBudget: null,
+            approvalConcentrationPreset: null,
+            approvalConcentrationWeights: DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS,
+          },
+          force: {
+            minimumApprovals: 2,
+            minimumRole: "manager",
+            requireDistinctApprovers: true,
+            requireIndependentReviewer: false,
+            requirePriorApproverExclusion: false,
+            maxPriorApproverOverlapRatio: null,
+            reviewerCarryoverBudget: null,
+            reviewerCarryoverLookbackPromotions: null,
+            teamCarryoverBudget: null,
+            teamCarryoverLookbackPromotions: null,
+            maxPriorReportingChainOverlapRatio: null,
+            reportingChainCarryoverBudget: null,
+            reportingChainCarryoverLookbackPromotions: null,
+            requireRoleCohortDiversity: false,
+            minimumDistinctRoleCohorts: null,
+            requireReviewerTeamDiversity: false,
+            minimumDistinctReviewerTeams: null,
+            requireReportingChainDiversity: false,
+            minimumDistinctReportingChains: null,
+            approvalConcentrationBudget: null,
+            approvalConcentrationPreset: null,
+            approvalConcentrationWeights: DEFAULT_APPROVAL_CONCENTRATION_WEIGHTS,
+          },
+          reentry: {
+            minimumApprovals: 1,
+            minimumRole: "staff-engineer",
+            requireDistinctApprovers: true,
+            requireIndependentReviewer: true,
+            requirePriorApproverExclusion: true,
+            maxPriorApproverOverlapRatio: 0.5,
+            reviewerCarryoverBudget: 0.5,
+            reviewerCarryoverLookbackPromotions: 3,
+            teamCarryoverBudget: 0.5,
+            teamCarryoverLookbackPromotions: 3,
+            maxPriorReportingChainOverlapRatio: 0.5,
+            reportingChainCarryoverBudget: 0.5,
+            reportingChainCarryoverLookbackPromotions: 3,
+            requireRoleCohortDiversity: true,
+            minimumDistinctRoleCohorts: 2,
+            requireReviewerTeamDiversity: true,
+            minimumDistinctReviewerTeams: 2,
+            requireReportingChainDiversity: true,
+            minimumDistinctReportingChains: 2,
+            approvalConcentrationBudget: 0.4,
+            approvalConcentrationPreset: "reviewer-heavy",
+            approvalConcentrationWeights: DEFAULT_REENTRY_APPROVAL_CONCENTRATION_WEIGHTS,
+          },
         },
       },
-    }, input)
+      input,
+    )
   }
 
-  export function resolveRequirement(input: {
-    bundle: DecisionBundleLike
-    policy?: Policy
-  }) {
+  export function resolveRequirement(input: { bundle: DecisionBundleLike; policy?: Policy }) {
     const policy = input.policy ?? defaults()
     const requiredOverride = input.bundle.eligibility.requiredOverride
     const baseRequirement = policy.rules[requiredOverride]
-    const reentryApplicable = input.bundle.eligibility.reentryContext !== null && input.bundle.eligibility.reentryContext !== undefined
+    const reentryApplicable =
+      input.bundle.eligibility.reentryContext !== null && input.bundle.eligibility.reentryContext !== undefined
     const reentryRequirement = reentryApplicable ? policy.rules.reentry : null
     const requirement = reentryRequirement
       ? ApprovalRequirement.parse({
-        minimumApprovals: Math.max(baseRequirement.minimumApprovals, reentryRequirement.minimumApprovals),
-        minimumRole: stricterRole(baseRequirement.minimumRole, reentryRequirement.minimumRole),
-        requireDistinctApprovers: baseRequirement.requireDistinctApprovers || reentryRequirement.requireDistinctApprovers,
-        requireIndependentReviewer: baseRequirement.requireIndependentReviewer || reentryRequirement.requireIndependentReviewer,
-        requirePriorApproverExclusion:
-          baseRequirement.requirePriorApproverExclusion || reentryRequirement.requirePriorApproverExclusion,
-        maxPriorApproverOverlapRatio: stricterOverlapRatioCap(
-          baseRequirement.maxPriorApproverOverlapRatio,
-          reentryRequirement.maxPriorApproverOverlapRatio,
-        ),
+          minimumApprovals: Math.max(baseRequirement.minimumApprovals, reentryRequirement.minimumApprovals),
+          minimumRole: stricterRole(baseRequirement.minimumRole, reentryRequirement.minimumRole),
+          requireDistinctApprovers:
+            baseRequirement.requireDistinctApprovers || reentryRequirement.requireDistinctApprovers,
+          requireIndependentReviewer:
+            baseRequirement.requireIndependentReviewer || reentryRequirement.requireIndependentReviewer,
+          requirePriorApproverExclusion:
+            baseRequirement.requirePriorApproverExclusion || reentryRequirement.requirePriorApproverExclusion,
+          maxPriorApproverOverlapRatio: stricterOverlapRatioCap(
+            baseRequirement.maxPriorApproverOverlapRatio,
+            reentryRequirement.maxPriorApproverOverlapRatio,
+          ),
           reviewerCarryoverBudget: stricterOverlapRatioCap(
             baseRequirement.reviewerCarryoverBudget,
             reentryRequirement.reviewerCarryoverBudget,
           ),
-          reviewerCarryoverLookbackPromotions: reentryRequirement.reviewerCarryoverLookbackPromotions
-            ?? baseRequirement.reviewerCarryoverLookbackPromotions,
+          reviewerCarryoverLookbackPromotions:
+            reentryRequirement.reviewerCarryoverLookbackPromotions ??
+            baseRequirement.reviewerCarryoverLookbackPromotions,
           teamCarryoverBudget: stricterOverlapRatioCap(
             baseRequirement.teamCarryoverBudget,
             reentryRequirement.teamCarryoverBudget,
           ),
-          teamCarryoverLookbackPromotions: reentryRequirement.teamCarryoverLookbackPromotions
-            ?? baseRequirement.teamCarryoverLookbackPromotions,
+          teamCarryoverLookbackPromotions:
+            reentryRequirement.teamCarryoverLookbackPromotions ?? baseRequirement.teamCarryoverLookbackPromotions,
           maxPriorReportingChainOverlapRatio: stricterOverlapRatioCap(
             baseRequirement.maxPriorReportingChainOverlapRatio,
             reentryRequirement.maxPriorReportingChainOverlapRatio,
@@ -929,8 +942,9 @@ export namespace QualityPromotionApprovalPolicy {
             baseRequirement.reportingChainCarryoverBudget,
             reentryRequirement.reportingChainCarryoverBudget,
           ),
-          reportingChainCarryoverLookbackPromotions: reentryRequirement.reportingChainCarryoverLookbackPromotions
-            ?? baseRequirement.reportingChainCarryoverLookbackPromotions,
+          reportingChainCarryoverLookbackPromotions:
+            reentryRequirement.reportingChainCarryoverLookbackPromotions ??
+            baseRequirement.reportingChainCarryoverLookbackPromotions,
           requireRoleCohortDiversity:
             baseRequirement.requireRoleCohortDiversity || reentryRequirement.requireRoleCohortDiversity,
           minimumDistinctRoleCohorts: stricterMinimumCount(
@@ -955,7 +969,7 @@ export namespace QualityPromotionApprovalPolicy {
           ),
           approvalConcentrationPreset: reentryRequirement.approvalConcentrationPreset,
           approvalConcentrationWeights: reentryRequirement.approvalConcentrationWeights,
-      })
+        })
       : baseRequirement
 
     return {
@@ -989,39 +1003,63 @@ export namespace QualityPromotionApprovalPolicy {
     const priorApproverExclusionRequired = resolved.reentryApplicable && requirement.requirePriorApproverExclusion
     const maxPriorApproverOverlapRatio = resolved.reentryApplicable ? requirement.maxPriorApproverOverlapRatio : null
     const reviewerCarryoverBudget = resolved.reentryApplicable ? requirement.reviewerCarryoverBudget : null
-    const reviewerCarryoverLookbackPromotions = resolved.reentryApplicable ? requirement.reviewerCarryoverLookbackPromotions : null
+    const reviewerCarryoverLookbackPromotions = resolved.reentryApplicable
+      ? requirement.reviewerCarryoverLookbackPromotions
+      : null
     const teamCarryoverBudget = resolved.reentryApplicable ? requirement.teamCarryoverBudget : null
-    const teamCarryoverLookbackPromotions = resolved.reentryApplicable ? requirement.teamCarryoverLookbackPromotions : null
-    const maxPriorReportingChainOverlapRatio = resolved.reentryApplicable ? requirement.maxPriorReportingChainOverlapRatio : null
+    const teamCarryoverLookbackPromotions = resolved.reentryApplicable
+      ? requirement.teamCarryoverLookbackPromotions
+      : null
+    const maxPriorReportingChainOverlapRatio = resolved.reentryApplicable
+      ? requirement.maxPriorReportingChainOverlapRatio
+      : null
     const reportingChainCarryoverBudget = resolved.reentryApplicable ? requirement.reportingChainCarryoverBudget : null
-    const reportingChainCarryoverLookbackPromotions = resolved.reentryApplicable ? requirement.reportingChainCarryoverLookbackPromotions : null
+    const reportingChainCarryoverLookbackPromotions = resolved.reentryApplicable
+      ? requirement.reportingChainCarryoverLookbackPromotions
+      : null
     const roleCohortDiversityRequired = resolved.reentryApplicable && requirement.requireRoleCohortDiversity
     const minimumDistinctRoleCohorts = resolved.reentryApplicable ? requirement.minimumDistinctRoleCohorts : null
     const reviewerTeamDiversityRequired = resolved.reentryApplicable && requirement.requireReviewerTeamDiversity
     const minimumDistinctReviewerTeams = resolved.reentryApplicable ? requirement.minimumDistinctReviewerTeams : null
     const reportingChainDiversityRequired = resolved.reentryApplicable && requirement.requireReportingChainDiversity
-    const minimumDistinctReportingChains = resolved.reentryApplicable ? requirement.minimumDistinctReportingChains : null
+    const minimumDistinctReportingChains = resolved.reentryApplicable
+      ? requirement.minimumDistinctReportingChains
+      : null
     const priorPromotionID = input.bundle.eligibility.reentryContext?.promotionID ?? null
-    const priorPromotionApprovers = [...new Set(input.bundle.eligibility.reentryContext?.priorPromotionApprovers ?? [])].sort()
-    const teamCarryoverHistory = [...(input.bundle.eligibility.reentryContext?.teamCarryoverHistory ?? [])].sort((a, b) => {
-      const byScore = b.weightedReuseScore - a.weightedReuseScore
-      if (byScore !== 0) return byScore
-      return a.team.localeCompare(b.team)
-    })
-    const priorPromotionReportingChains = [...new Set(input.bundle.eligibility.reentryContext?.priorPromotionReportingChains ?? [])].sort()
-    const reviewerCarryoverHistory = [...(input.bundle.eligibility.reentryContext?.reviewerCarryoverHistory ?? [])].sort((a, b) => {
+    const priorPromotionApprovers = [
+      ...new Set(input.bundle.eligibility.reentryContext?.priorPromotionApprovers ?? []),
+    ].sort()
+    const teamCarryoverHistory = [...(input.bundle.eligibility.reentryContext?.teamCarryoverHistory ?? [])].sort(
+      (a, b) => {
+        const byScore = b.weightedReuseScore - a.weightedReuseScore
+        if (byScore !== 0) return byScore
+        return a.team.localeCompare(b.team)
+      },
+    )
+    const priorPromotionReportingChains = [
+      ...new Set(input.bundle.eligibility.reentryContext?.priorPromotionReportingChains ?? []),
+    ].sort()
+    const reviewerCarryoverHistory = [
+      ...(input.bundle.eligibility.reentryContext?.reviewerCarryoverHistory ?? []),
+    ].sort((a, b) => {
       const byScore = b.weightedReuseScore - a.weightedReuseScore
       if (byScore !== 0) return byScore
       return a.approver.localeCompare(b.approver)
     })
-    const reviewerCarryoverByApprover = new Map(reviewerCarryoverHistory.map((entry) => [entry.approver, entry] as const))
+    const reviewerCarryoverByApprover = new Map(
+      reviewerCarryoverHistory.map((entry) => [entry.approver, entry] as const),
+    )
     const teamCarryoverByTeam = new Map(teamCarryoverHistory.map((entry) => [entry.team, entry] as const))
-    const reportingChainCarryoverHistory = [...(input.bundle.eligibility.reentryContext?.reportingChainCarryoverHistory ?? [])].sort((a, b) => {
+    const reportingChainCarryoverHistory = [
+      ...(input.bundle.eligibility.reentryContext?.reportingChainCarryoverHistory ?? []),
+    ].sort((a, b) => {
       const byScore = b.weightedReuseScore - a.weightedReuseScore
       if (byScore !== 0) return byScore
       return a.reportingChain.localeCompare(b.reportingChain)
     })
-    const reportingChainCarryoverByChain = new Map(reportingChainCarryoverHistory.map((entry) => [entry.reportingChain, entry] as const))
+    const reportingChainCarryoverByChain = new Map(
+      reportingChainCarryoverHistory.map((entry) => [entry.reportingChain, entry] as const),
+    )
     const verified = input.approvals.map((approval) => ({
       approval,
       reasons: approvalReasons(input.bundle, approval),
@@ -1029,35 +1067,47 @@ export namespace QualityPromotionApprovalPolicy {
     }))
     const matchingArtifacts = verified.filter((item) => item.reasons.length === 0)
     const approvedArtifacts = matchingArtifacts.filter((item) => item.approved)
-    const qualifiedApprovals = approvedArtifacts.filter((item) => qualifiesRole(item.approval.role, requirement.minimumRole))
+    const qualifiedApprovals = approvedArtifacts.filter((item) =>
+      qualifiesRole(item.approval.role, requirement.minimumRole),
+    )
     const distinctQualifiedApprovers = new Set(qualifiedApprovals.map((item) => item.approval.approver)).size
-    const independentQualifiedApprovals = independentReviewRequired && remediationAuthor
-      ? qualifiedApprovals.filter((item) => item.approval.approver !== remediationAuthor)
-      : qualifiedApprovals
-    const effectiveQualifiedApprovers = [...new Set(independentQualifiedApprovals.map((item) => item.approval.approver))].sort()
-    const freshQualifiedApprovers = priorApproverExclusionRequired && priorPromotionApprovers.length > 0
-      ? effectiveQualifiedApprovers.filter((approver) => !priorPromotionApprovers.includes(approver))
-      : effectiveQualifiedApprovers
-    const overlappingQualifiedApprovers = priorApproverExclusionRequired && priorPromotionApprovers.length > 0
-      ? effectiveQualifiedApprovers.filter((approver) => priorPromotionApprovers.includes(approver))
-      : []
-    const priorApproverOverlapRatio = maxPriorApproverOverlapRatio !== null && effectiveQualifiedApprovers.length > 0
-      ? overlappingQualifiedApprovers.length / effectiveQualifiedApprovers.length
-      : null
-    const carriedOverQualifiedApprovers = reviewerCarryoverBudget !== null
-      ? effectiveQualifiedApprovers.filter((approver) => reviewerCarryoverByApprover.has(approver))
-      : []
-    const reviewerCarryoverScore = reviewerCarryoverBudget !== null
-      ? carriedOverQualifiedApprovers.reduce(
-        (sum, approver) => sum + (reviewerCarryoverByApprover.get(approver)?.weightedReuseScore ?? 0),
-        0,
-      )
-      : 0
-    const qualifiedRoleCohorts = [...new Set(
-      qualifiedApprovals
-        .map((item) => roleCohort(item.approval.role))
-        .filter((value): value is ApprovalRoleCohort => value !== null),
-    )].sort()
+    const independentQualifiedApprovals =
+      independentReviewRequired && remediationAuthor
+        ? qualifiedApprovals.filter((item) => item.approval.approver !== remediationAuthor)
+        : qualifiedApprovals
+    const effectiveQualifiedApprovers = [
+      ...new Set(independentQualifiedApprovals.map((item) => item.approval.approver)),
+    ].sort()
+    const freshQualifiedApprovers =
+      priorApproverExclusionRequired && priorPromotionApprovers.length > 0
+        ? effectiveQualifiedApprovers.filter((approver) => !priorPromotionApprovers.includes(approver))
+        : effectiveQualifiedApprovers
+    const overlappingQualifiedApprovers =
+      priorApproverExclusionRequired && priorPromotionApprovers.length > 0
+        ? effectiveQualifiedApprovers.filter((approver) => priorPromotionApprovers.includes(approver))
+        : []
+    const priorApproverOverlapRatio =
+      maxPriorApproverOverlapRatio !== null && effectiveQualifiedApprovers.length > 0
+        ? overlappingQualifiedApprovers.length / effectiveQualifiedApprovers.length
+        : null
+    const carriedOverQualifiedApprovers =
+      reviewerCarryoverBudget !== null
+        ? effectiveQualifiedApprovers.filter((approver) => reviewerCarryoverByApprover.has(approver))
+        : []
+    const reviewerCarryoverScore =
+      reviewerCarryoverBudget !== null
+        ? carriedOverQualifiedApprovers.reduce(
+            (sum, approver) => sum + (reviewerCarryoverByApprover.get(approver)?.weightedReuseScore ?? 0),
+            0,
+          )
+        : 0
+    const qualifiedRoleCohorts = [
+      ...new Set(
+        qualifiedApprovals
+          .map((item) => roleCohort(item.approval.role))
+          .filter((value): value is ApprovalRoleCohort => value !== null),
+      ),
+    ].sort()
     const distinctQualifiedRoleCohorts = qualifiedRoleCohorts.length
     const qualifiedApprovalTeamsByApprover = new Map<string, string | null>()
     for (const item of qualifiedApprovals) {
@@ -1068,97 +1118,133 @@ export namespace QualityPromotionApprovalPolicy {
         qualifiedApprovalTeamsByApprover.set(item.approval.approver, normalizedTeam)
       }
     }
-    const qualifiedReviewerTeams = [...new Set(
-      [...qualifiedApprovalTeamsByApprover.values()].filter((value): value is string => value !== null),
-    )].sort()
+    const qualifiedReviewerTeams = [
+      ...new Set([...qualifiedApprovalTeamsByApprover.values()].filter((value): value is string => value !== null)),
+    ].sort()
     const distinctQualifiedReviewerTeams = qualifiedReviewerTeams.length
-    const missingQualifiedReviewerTeams = [...qualifiedApprovalTeamsByApprover.values()].filter((value) => value === null).length
-    const effectiveQualifiedTeams = [...new Set(
-      effectiveQualifiedApprovers
-        .map((approver) => qualifiedApprovalTeamsByApprover.get(approver) ?? null)
-        .filter((value): value is string => value !== null),
-    )].sort()
-    const carriedOverQualifiedTeams = teamCarryoverBudget !== null
-      ? effectiveQualifiedTeams.filter((team) => teamCarryoverByTeam.has(team))
-      : []
-    const teamCarryoverScore = teamCarryoverBudget !== null
-      ? carriedOverQualifiedTeams.reduce(
-        (sum, team) => sum + (teamCarryoverByTeam.get(team)?.weightedReuseScore ?? 0),
-        0,
-      )
-      : 0
+    const missingQualifiedReviewerTeams = [...qualifiedApprovalTeamsByApprover.values()].filter(
+      (value) => value === null,
+    ).length
+    const effectiveQualifiedTeams = [
+      ...new Set(
+        effectiveQualifiedApprovers
+          .map((approver) => qualifiedApprovalTeamsByApprover.get(approver) ?? null)
+          .filter((value): value is string => value !== null),
+      ),
+    ].sort()
+    const carriedOverQualifiedTeams =
+      teamCarryoverBudget !== null ? effectiveQualifiedTeams.filter((team) => teamCarryoverByTeam.has(team)) : []
+    const teamCarryoverScore =
+      teamCarryoverBudget !== null
+        ? carriedOverQualifiedTeams.reduce(
+            (sum, team) => sum + (teamCarryoverByTeam.get(team)?.weightedReuseScore ?? 0),
+            0,
+          )
+        : 0
     const qualifiedApprovalReportingChainsByApprover = new Map<string, string | null>()
     for (const item of qualifiedApprovals) {
       const normalizedReportingChain = normalizeReportingChain(item.approval.reportingChain)
       if (!qualifiedApprovalReportingChainsByApprover.has(item.approval.approver)) {
         qualifiedApprovalReportingChainsByApprover.set(item.approval.approver, normalizedReportingChain)
-      } else if (normalizedReportingChain && qualifiedApprovalReportingChainsByApprover.get(item.approval.approver) === null) {
+      } else if (
+        normalizedReportingChain &&
+        qualifiedApprovalReportingChainsByApprover.get(item.approval.approver) === null
+      ) {
         qualifiedApprovalReportingChainsByApprover.set(item.approval.approver, normalizedReportingChain)
       }
     }
-    const qualifiedReportingChains = [...new Set(
-      [...qualifiedApprovalReportingChainsByApprover.values()].filter((value): value is string => value !== null),
-    )].sort()
+    const qualifiedReportingChains = [
+      ...new Set(
+        [...qualifiedApprovalReportingChainsByApprover.values()].filter((value): value is string => value !== null),
+      ),
+    ].sort()
     const distinctQualifiedReportingChains = qualifiedReportingChains.length
-    const missingQualifiedReportingChains = [...qualifiedApprovalReportingChainsByApprover.values()].filter((value) => value === null).length
-    const effectiveQualifiedReportingChains = [...new Set(
-      effectiveQualifiedApprovers
-        .map((approver) => qualifiedApprovalReportingChainsByApprover.get(approver) ?? null)
-        .filter((value): value is string => value !== null),
-    )].sort()
-    const overlappingQualifiedReportingChains = maxPriorReportingChainOverlapRatio !== null && priorPromotionReportingChains.length > 0
-      ? effectiveQualifiedReportingChains.filter((reportingChain) => priorPromotionReportingChains.includes(reportingChain))
-      : []
-    const priorReportingChainOverlapRatio = maxPriorReportingChainOverlapRatio !== null && effectiveQualifiedReportingChains.length > 0
-      ? overlappingQualifiedReportingChains.length / effectiveQualifiedReportingChains.length
-      : null
-    const carriedOverQualifiedReportingChains = reportingChainCarryoverBudget !== null
-      ? effectiveQualifiedReportingChains.filter((reportingChain) => reportingChainCarryoverByChain.has(reportingChain))
-      : []
-    const reportingChainCarryoverScore = reportingChainCarryoverBudget !== null
-      ? carriedOverQualifiedReportingChains.reduce(
-        (sum, reportingChain) => sum + (reportingChainCarryoverByChain.get(reportingChain)?.weightedReuseScore ?? 0),
-        0,
-      )
-      : 0
-    const approverReuseRatio = reviewerCarryoverHistory.length > 0 && effectiveQualifiedApprovers.length > 0
-      ? carriedOverQualifiedApprovers.length / effectiveQualifiedApprovers.length
-      : null
-    const teamReuseRatio = teamCarryoverHistory.length > 0 && effectiveQualifiedTeams.length > 0
-      ? carriedOverQualifiedTeams.length / effectiveQualifiedTeams.length
-      : null
-    const reportingChainReuseRatio = reportingChainCarryoverHistory.length > 0 && effectiveQualifiedReportingChains.length > 0
-      ? carriedOverQualifiedReportingChains.length / effectiveQualifiedReportingChains.length
-      : null
+    const missingQualifiedReportingChains = [...qualifiedApprovalReportingChainsByApprover.values()].filter(
+      (value) => value === null,
+    ).length
+    const effectiveQualifiedReportingChains = [
+      ...new Set(
+        effectiveQualifiedApprovers
+          .map((approver) => qualifiedApprovalReportingChainsByApprover.get(approver) ?? null)
+          .filter((value): value is string => value !== null),
+      ),
+    ].sort()
+    const overlappingQualifiedReportingChains =
+      maxPriorReportingChainOverlapRatio !== null && priorPromotionReportingChains.length > 0
+        ? effectiveQualifiedReportingChains.filter((reportingChain) =>
+            priorPromotionReportingChains.includes(reportingChain),
+          )
+        : []
+    const priorReportingChainOverlapRatio =
+      maxPriorReportingChainOverlapRatio !== null && effectiveQualifiedReportingChains.length > 0
+        ? overlappingQualifiedReportingChains.length / effectiveQualifiedReportingChains.length
+        : null
+    const carriedOverQualifiedReportingChains =
+      reportingChainCarryoverBudget !== null
+        ? effectiveQualifiedReportingChains.filter((reportingChain) =>
+            reportingChainCarryoverByChain.has(reportingChain),
+          )
+        : []
+    const reportingChainCarryoverScore =
+      reportingChainCarryoverBudget !== null
+        ? carriedOverQualifiedReportingChains.reduce(
+            (sum, reportingChain) =>
+              sum + (reportingChainCarryoverByChain.get(reportingChain)?.weightedReuseScore ?? 0),
+            0,
+          )
+        : 0
+    const approverReuseRatio =
+      reviewerCarryoverHistory.length > 0 && effectiveQualifiedApprovers.length > 0
+        ? carriedOverQualifiedApprovers.length / effectiveQualifiedApprovers.length
+        : null
+    const teamReuseRatio =
+      teamCarryoverHistory.length > 0 && effectiveQualifiedTeams.length > 0
+        ? carriedOverQualifiedTeams.length / effectiveQualifiedTeams.length
+        : null
+    const reportingChainReuseRatio =
+      reportingChainCarryoverHistory.length > 0 && effectiveQualifiedReportingChains.length > 0
+        ? carriedOverQualifiedReportingChains.length / effectiveQualifiedReportingChains.length
+        : null
     const approvalConcentrationBudget = resolved.reentryApplicable ? requirement.approvalConcentrationBudget : null
     const approvalConcentrationPreset = requirement.approvalConcentrationPreset
     const approvalConcentrationWeights = requirement.approvalConcentrationWeights
     const approvalConcentrationComponents = [
-      approverReuseRatio !== null ? { axis: "approver" as const, ratio: approverReuseRatio, weight: approvalConcentrationWeights.approver } : null,
-      teamReuseRatio !== null ? { axis: "team" as const, ratio: teamReuseRatio, weight: approvalConcentrationWeights.team } : null,
-      reportingChainReuseRatio !== null ? { axis: "reporting_chain" as const, ratio: reportingChainReuseRatio, weight: approvalConcentrationWeights.reportingChain } : null,
+      approverReuseRatio !== null
+        ? { axis: "approver" as const, ratio: approverReuseRatio, weight: approvalConcentrationWeights.approver }
+        : null,
+      teamReuseRatio !== null
+        ? { axis: "team" as const, ratio: teamReuseRatio, weight: approvalConcentrationWeights.team }
+        : null,
+      reportingChainReuseRatio !== null
+        ? {
+            axis: "reporting_chain" as const,
+            ratio: reportingChainReuseRatio,
+            weight: approvalConcentrationWeights.reportingChain,
+          }
+        : null,
     ].filter(
       (value): value is { axis: "approver" | "team" | "reporting_chain"; ratio: number; weight: number } =>
         value !== null && value.weight > 0,
     )
     const approvalConcentrationApplicableAxes = approvalConcentrationComponents.map((component) => component.axis)
-    const approvalConcentrationAppliedWeightTotal = approvalConcentrationComponents.length > 0
-      ? approvalConcentrationComponents.reduce((sum, component) => sum + component.weight, 0)
-      : null
-    const approvalConcentrationScore = approvalConcentrationAppliedWeightTotal && approvalConcentrationAppliedWeightTotal > 0
-      ? approvalConcentrationComponents.reduce((sum, component) => sum + (component.ratio * component.weight), 0)
-        / approvalConcentrationAppliedWeightTotal
-      : null
+    const approvalConcentrationAppliedWeightTotal =
+      approvalConcentrationComponents.length > 0
+        ? approvalConcentrationComponents.reduce((sum, component) => sum + component.weight, 0)
+        : null
+    const approvalConcentrationScore =
+      approvalConcentrationAppliedWeightTotal && approvalConcentrationAppliedWeightTotal > 0
+        ? approvalConcentrationComponents.reduce((sum, component) => sum + component.ratio * component.weight, 0) /
+          approvalConcentrationAppliedWeightTotal
+        : null
 
     const gates: PolicyGate[] = [
       {
         name: "reentry-requirement",
-        status: !resolved.reentryApplicable || resolved.reentryRequirement === null
-          ? "pass"
-          : "pass",
-        detail: !resolved.reentryApplicable || resolved.reentryRequirement === null
-          ? "reentry approval not required"
-          : `reentry approval applies from rollback ${resolved.reentryContextRollbackID}; minimumApprovals=${resolved.reentryRequirement.minimumApprovals}; minimumRole=${resolved.reentryRequirement.minimumRole ?? "none"}`,
+        status: !resolved.reentryApplicable || resolved.reentryRequirement === null ? "pass" : "pass",
+        detail:
+          !resolved.reentryApplicable || resolved.reentryRequirement === null
+            ? "reentry approval not required"
+            : `reentry approval applies from rollback ${resolved.reentryContextRollbackID}; minimumApprovals=${resolved.reentryRequirement.minimumApprovals}; minimumRole=${resolved.reentryRequirement.minimumRole ?? "none"}`,
       },
       {
         name: "reentry-remediation-context",
@@ -1184,27 +1270,31 @@ export namespace QualityPromotionApprovalPolicy {
         name: "prior-reporting-chain-context",
         status:
           maxPriorReportingChainOverlapRatio === null ||
-            reportingChainCarryoverHistory.length === 0 ||
-            priorPromotionID === null ||
-            priorPromotionReportingChains.length > 0
+          reportingChainCarryoverHistory.length === 0 ||
+          priorPromotionID === null ||
+          priorPromotionReportingChains.length > 0
             ? "pass"
             : "fail",
-        detail: maxPriorReportingChainOverlapRatio === null
-          ? "prior reporting chain overlap cap not configured"
-          : reportingChainCarryoverHistory.length === 0
-            ? "no prior reentry reporting chain carryover history recorded"
-          : priorPromotionID === null
-            ? "prior reporting chain overlap not applicable without prior promotion provenance"
-            : priorPromotionReportingChains.length > 0
-              ? `prior promotion=${priorPromotionID}; recorded reporting chains=${priorPromotionReportingChains.join(", ")}`
-              : "prior reporting chain overlap requires prior promotion reporting chain provenance",
+        detail:
+          maxPriorReportingChainOverlapRatio === null
+            ? "prior reporting chain overlap cap not configured"
+            : reportingChainCarryoverHistory.length === 0
+              ? "no prior reentry reporting chain carryover history recorded"
+              : priorPromotionID === null
+                ? "prior reporting chain overlap not applicable without prior promotion provenance"
+                : priorPromotionReportingChains.length > 0
+                  ? `prior promotion=${priorPromotionID}; recorded reporting chains=${priorPromotionReportingChains.join(", ")}`
+                  : "prior reporting chain overlap requires prior promotion reporting chain provenance",
       },
       {
         name: "artifact-match",
         status: verified.every((item) => item.reasons.length === 0) ? "pass" : "fail",
         detail: verified.every((item) => item.reasons.length === 0)
           ? `${matchingArtifacts.length} approval artifact(s) match the decision bundle`
-          : verified.filter((item) => item.reasons.length > 0).map((item) => item.reasons[0]!).join("; "),
+          : verified
+              .filter((item) => item.reasons.length > 0)
+              .map((item) => item.reasons[0]!)
+              .join("; "),
       },
       {
         name: "approved-disposition",
@@ -1213,7 +1303,10 @@ export namespace QualityPromotionApprovalPolicy {
       },
       {
         name: "independent-reviewer",
-        status: !independentReviewRequired || remediationAuthor === null || independentQualifiedApprovals.length > 0 ? "pass" : "fail",
+        status:
+          !independentReviewRequired || remediationAuthor === null || independentQualifiedApprovals.length > 0
+            ? "pass"
+            : "fail",
         detail: !independentReviewRequired
           ? "independent reviewer not required"
           : remediationAuthor === null
@@ -1222,7 +1315,10 @@ export namespace QualityPromotionApprovalPolicy {
       },
       {
         name: "fresh-approver",
-        status: !priorApproverExclusionRequired || priorPromotionApprovers.length === 0 || freshQualifiedApprovers.length > 0 ? "pass" : "fail",
+        status:
+          !priorApproverExclusionRequired || priorPromotionApprovers.length === 0 || freshQualifiedApprovers.length > 0
+            ? "pass"
+            : "fail",
         detail: !priorApproverExclusionRequired
           ? "prior approver exclusion not required"
           : priorPromotionApprovers.length === 0
@@ -1233,10 +1329,10 @@ export namespace QualityPromotionApprovalPolicy {
         name: "prior-approver-overlap",
         status:
           !priorApproverExclusionRequired ||
-            maxPriorApproverOverlapRatio === null ||
-            priorPromotionApprovers.length === 0 ||
-            priorApproverOverlapRatio === null ||
-            priorApproverOverlapRatio <= maxPriorApproverOverlapRatio
+          maxPriorApproverOverlapRatio === null ||
+          priorPromotionApprovers.length === 0 ||
+          priorApproverOverlapRatio === null ||
+          priorApproverOverlapRatio <= maxPriorApproverOverlapRatio
             ? "pass"
             : "fail",
         detail: !priorApproverExclusionRequired
@@ -1253,86 +1349,89 @@ export namespace QualityPromotionApprovalPolicy {
         name: "reviewer-carryover-budget",
         status:
           reviewerCarryoverBudget === null ||
-            reviewerCarryoverHistory.length === 0 ||
-            reviewerCarryoverScore <= reviewerCarryoverBudget
+          reviewerCarryoverHistory.length === 0 ||
+          reviewerCarryoverScore <= reviewerCarryoverBudget
             ? "pass"
             : "fail",
-        detail: reviewerCarryoverBudget === null
-          ? "reviewer carryover budget not configured"
-          : reviewerCarryoverHistory.length === 0
-            ? "no prior reentry reviewer carryover history recorded"
-            : `${carriedOverQualifiedApprovers.length} carried-over approver(s); score=${reviewerCarryoverScore.toFixed(2)}; budget=${reviewerCarryoverBudget.toFixed(2)}; lookback=${reviewerCarryoverLookbackPromotions ?? "n/a"}; approvers=${carriedOverQualifiedApprovers.join(", ") || "none"}`,
+        detail:
+          reviewerCarryoverBudget === null
+            ? "reviewer carryover budget not configured"
+            : reviewerCarryoverHistory.length === 0
+              ? "no prior reentry reviewer carryover history recorded"
+              : `${carriedOverQualifiedApprovers.length} carried-over approver(s); score=${reviewerCarryoverScore.toFixed(2)}; budget=${reviewerCarryoverBudget.toFixed(2)}; lookback=${reviewerCarryoverLookbackPromotions ?? "n/a"}; approvers=${carriedOverQualifiedApprovers.join(", ") || "none"}`,
       },
       {
         name: "team-carryover-budget",
         status:
-          teamCarryoverBudget === null ||
-            teamCarryoverHistory.length === 0 ||
-            teamCarryoverScore <= teamCarryoverBudget
+          teamCarryoverBudget === null || teamCarryoverHistory.length === 0 || teamCarryoverScore <= teamCarryoverBudget
             ? "pass"
             : "fail",
-        detail: teamCarryoverBudget === null
-          ? "team carryover budget not configured"
-          : teamCarryoverHistory.length === 0
-            ? "no prior reentry team carryover history recorded"
-            : `${carriedOverQualifiedTeams.length} carried-over team(s); score=${teamCarryoverScore.toFixed(2)}; budget=${teamCarryoverBudget.toFixed(2)}; lookback=${teamCarryoverLookbackPromotions ?? "n/a"}; teams=${carriedOverQualifiedTeams.join(", ") || "none"}`,
+        detail:
+          teamCarryoverBudget === null
+            ? "team carryover budget not configured"
+            : teamCarryoverHistory.length === 0
+              ? "no prior reentry team carryover history recorded"
+              : `${carriedOverQualifiedTeams.length} carried-over team(s); score=${teamCarryoverScore.toFixed(2)}; budget=${teamCarryoverBudget.toFixed(2)}; lookback=${teamCarryoverLookbackPromotions ?? "n/a"}; teams=${carriedOverQualifiedTeams.join(", ") || "none"}`,
       },
       {
         name: "prior-reporting-chain-overlap",
         status:
           maxPriorReportingChainOverlapRatio === null ||
-            reportingChainCarryoverHistory.length === 0 ||
-            priorPromotionReportingChains.length === 0 ||
-            priorReportingChainOverlapRatio === null ||
-            priorReportingChainOverlapRatio <= maxPriorReportingChainOverlapRatio
+          reportingChainCarryoverHistory.length === 0 ||
+          priorPromotionReportingChains.length === 0 ||
+          priorReportingChainOverlapRatio === null ||
+          priorReportingChainOverlapRatio <= maxPriorReportingChainOverlapRatio
             ? "pass"
             : "fail",
-        detail: maxPriorReportingChainOverlapRatio === null
-          ? "prior reporting chain overlap cap not configured"
-          : reportingChainCarryoverHistory.length === 0
-            ? "no prior reentry reporting chain carryover history recorded"
-          : priorPromotionReportingChains.length === 0
-            ? "no prior promotion reporting chains recorded"
-            : priorReportingChainOverlapRatio === null
-              ? "no effective qualified reporting chains available for overlap evaluation"
-              : `${overlappingQualifiedReportingChains.length} overlapping effective reporting chain(s) across ${effectiveQualifiedReportingChains.length} effective reporting chain(s); ratio=${priorReportingChainOverlapRatio.toFixed(2)}; cap=${maxPriorReportingChainOverlapRatio.toFixed(2)}`,
+        detail:
+          maxPriorReportingChainOverlapRatio === null
+            ? "prior reporting chain overlap cap not configured"
+            : reportingChainCarryoverHistory.length === 0
+              ? "no prior reentry reporting chain carryover history recorded"
+              : priorPromotionReportingChains.length === 0
+                ? "no prior promotion reporting chains recorded"
+                : priorReportingChainOverlapRatio === null
+                  ? "no effective qualified reporting chains available for overlap evaluation"
+                  : `${overlappingQualifiedReportingChains.length} overlapping effective reporting chain(s) across ${effectiveQualifiedReportingChains.length} effective reporting chain(s); ratio=${priorReportingChainOverlapRatio.toFixed(2)}; cap=${maxPriorReportingChainOverlapRatio.toFixed(2)}`,
       },
       {
         name: "reporting-chain-carryover-budget",
         status:
           reportingChainCarryoverBudget === null ||
-            reportingChainCarryoverHistory.length === 0 ||
-            reportingChainCarryoverScore <= reportingChainCarryoverBudget
+          reportingChainCarryoverHistory.length === 0 ||
+          reportingChainCarryoverScore <= reportingChainCarryoverBudget
             ? "pass"
             : "fail",
-        detail: reportingChainCarryoverBudget === null
-          ? "reporting chain carryover budget not configured"
-          : reportingChainCarryoverHistory.length === 0
-            ? "no prior reentry reporting chain carryover history recorded"
-            : `${carriedOverQualifiedReportingChains.length} carried-over reporting chain(s); score=${reportingChainCarryoverScore.toFixed(2)}; budget=${reportingChainCarryoverBudget.toFixed(2)}; lookback=${reportingChainCarryoverLookbackPromotions ?? "n/a"}; chains=${carriedOverQualifiedReportingChains.join(", ") || "none"}`,
+        detail:
+          reportingChainCarryoverBudget === null
+            ? "reporting chain carryover budget not configured"
+            : reportingChainCarryoverHistory.length === 0
+              ? "no prior reentry reporting chain carryover history recorded"
+              : `${carriedOverQualifiedReportingChains.length} carried-over reporting chain(s); score=${reportingChainCarryoverScore.toFixed(2)}; budget=${reportingChainCarryoverBudget.toFixed(2)}; lookback=${reportingChainCarryoverLookbackPromotions ?? "n/a"}; chains=${carriedOverQualifiedReportingChains.join(", ") || "none"}`,
       },
       {
         name: "approval-concentration",
         status:
           approvalConcentrationBudget === null ||
-            approvalConcentrationApplicableAxes.length === 0 ||
-            approvalConcentrationScore === null ||
-            approvalConcentrationScore <= approvalConcentrationBudget
+          approvalConcentrationApplicableAxes.length === 0 ||
+          approvalConcentrationScore === null ||
+          approvalConcentrationScore <= approvalConcentrationBudget
             ? "pass"
             : "fail",
-        detail: approvalConcentrationBudget === null
-          ? "approval concentration budget not configured"
-          : approvalConcentrationApplicableAxes.length === 0 || approvalConcentrationScore === null
-            ? "no reusable approval concentration axes available"
-            : `score=${approvalConcentrationScore.toFixed(2)}; budget=${approvalConcentrationBudget.toFixed(2)}; weight_total=${approvalConcentrationAppliedWeightTotal?.toFixed(2) ?? "n/a"}; weights=approver:${approvalConcentrationWeights.approver.toFixed(2)},team:${approvalConcentrationWeights.team.toFixed(2)},reporting_chain:${approvalConcentrationWeights.reportingChain.toFixed(2)}; approver=${approverReuseRatio?.toFixed(2) ?? "n/a"}; team=${teamReuseRatio?.toFixed(2) ?? "n/a"}; reporting_chain=${reportingChainReuseRatio?.toFixed(2) ?? "n/a"}`,
+        detail:
+          approvalConcentrationBudget === null
+            ? "approval concentration budget not configured"
+            : approvalConcentrationApplicableAxes.length === 0 || approvalConcentrationScore === null
+              ? "no reusable approval concentration axes available"
+              : `score=${approvalConcentrationScore.toFixed(2)}; budget=${approvalConcentrationBudget.toFixed(2)}; weight_total=${approvalConcentrationAppliedWeightTotal?.toFixed(2) ?? "n/a"}; weights=approver:${approvalConcentrationWeights.approver.toFixed(2)},team:${approvalConcentrationWeights.team.toFixed(2)},reporting_chain:${approvalConcentrationWeights.reportingChain.toFixed(2)}; approver=${approverReuseRatio?.toFixed(2) ?? "n/a"}; team=${teamReuseRatio?.toFixed(2) ?? "n/a"}; reporting_chain=${reportingChainReuseRatio?.toFixed(2) ?? "n/a"}`,
       },
       {
         name: "role-cohort-diversity",
         status:
           !roleCohortDiversityRequired ||
-            reviewerCarryoverHistory.length === 0 ||
-            minimumDistinctRoleCohorts === null ||
-            distinctQualifiedRoleCohorts >= minimumDistinctRoleCohorts
+          reviewerCarryoverHistory.length === 0 ||
+          minimumDistinctRoleCohorts === null ||
+          distinctQualifiedRoleCohorts >= minimumDistinctRoleCohorts
             ? "pass"
             : "fail",
         detail: !roleCohortDiversityRequired
@@ -1346,9 +1445,7 @@ export namespace QualityPromotionApprovalPolicy {
       {
         name: "reviewer-team-provenance",
         status:
-          !reviewerTeamDiversityRequired ||
-            reviewerCarryoverHistory.length === 0 ||
-            missingQualifiedReviewerTeams === 0
+          !reviewerTeamDiversityRequired || reviewerCarryoverHistory.length === 0 || missingQualifiedReviewerTeams === 0
             ? "pass"
             : "fail",
         detail: !reviewerTeamDiversityRequired
@@ -1361,9 +1458,9 @@ export namespace QualityPromotionApprovalPolicy {
         name: "reviewer-team-diversity",
         status:
           !reviewerTeamDiversityRequired ||
-            reviewerCarryoverHistory.length === 0 ||
-            minimumDistinctReviewerTeams === null ||
-            (missingQualifiedReviewerTeams === 0 && distinctQualifiedReviewerTeams >= minimumDistinctReviewerTeams)
+          reviewerCarryoverHistory.length === 0 ||
+          minimumDistinctReviewerTeams === null ||
+          (missingQualifiedReviewerTeams === 0 && distinctQualifiedReviewerTeams >= minimumDistinctReviewerTeams)
             ? "pass"
             : "fail",
         detail: !reviewerTeamDiversityRequired
@@ -1380,8 +1477,8 @@ export namespace QualityPromotionApprovalPolicy {
         name: "reporting-chain-provenance",
         status:
           !reportingChainDiversityRequired ||
-            reviewerCarryoverHistory.length === 0 ||
-            missingQualifiedReportingChains === 0
+          reviewerCarryoverHistory.length === 0 ||
+          missingQualifiedReportingChains === 0
             ? "pass"
             : "fail",
         detail: !reportingChainDiversityRequired
@@ -1394,9 +1491,9 @@ export namespace QualityPromotionApprovalPolicy {
         name: "reporting-chain-diversity",
         status:
           !reportingChainDiversityRequired ||
-            reviewerCarryoverHistory.length === 0 ||
-            minimumDistinctReportingChains === null ||
-            (missingQualifiedReportingChains === 0 && distinctQualifiedReportingChains >= minimumDistinctReportingChains)
+          reviewerCarryoverHistory.length === 0 ||
+          minimumDistinctReportingChains === null ||
+          (missingQualifiedReportingChains === 0 && distinctQualifiedReportingChains >= minimumDistinctReportingChains)
             ? "pass"
             : "fail",
         detail: !reportingChainDiversityRequired
@@ -1411,10 +1508,12 @@ export namespace QualityPromotionApprovalPolicy {
       },
       {
         name: "minimum-role",
-        status: requirement.minimumRole === null || approvedArtifacts.length === qualifiedApprovals.length ? "pass" : "fail",
-        detail: requirement.minimumRole === null
-          ? "no minimum role required"
-          : `${qualifiedApprovals.length} approval(s) meet minimum role ${requirement.minimumRole}`,
+        status:
+          requirement.minimumRole === null || approvedArtifacts.length === qualifiedApprovals.length ? "pass" : "fail",
+        detail:
+          requirement.minimumRole === null
+            ? "no minimum role required"
+            : `${qualifiedApprovals.length} approval(s) meet minimum role ${requirement.minimumRole}`,
       },
       {
         name: "approval-count",
@@ -1423,7 +1522,10 @@ export namespace QualityPromotionApprovalPolicy {
       },
       {
         name: "distinct-approvers",
-        status: !requirement.requireDistinctApprovers || distinctQualifiedApprovers >= requirement.minimumApprovals ? "pass" : "fail",
+        status:
+          !requirement.requireDistinctApprovers || distinctQualifiedApprovers >= requirement.minimumApprovals
+            ? "pass"
+            : "fail",
         detail: requirement.requireDistinctApprovers
           ? `${distinctQualifiedApprovers} distinct approver(s); required=${requirement.minimumApprovals}`
           : "distinct approvers not required",
@@ -1539,7 +1641,9 @@ export namespace QualityPromotionApprovalPolicy {
     lines.push(`- team carryover lookback promotions: ${summary.teamCarryoverLookbackPromotions ?? "none"}`)
     lines.push(`- max prior reporting chain overlap ratio: ${summary.maxPriorReportingChainOverlapRatio ?? "none"}`)
     lines.push(`- reporting chain carryover budget: ${summary.reportingChainCarryoverBudget ?? "none"}`)
-    lines.push(`- reporting chain carryover lookback promotions: ${summary.reportingChainCarryoverLookbackPromotions ?? "none"}`)
+    lines.push(
+      `- reporting chain carryover lookback promotions: ${summary.reportingChainCarryoverLookbackPromotions ?? "none"}`,
+    )
     lines.push(`- role cohort diversity required: ${summary.roleCohortDiversityRequired}`)
     lines.push(`- minimum distinct role cohorts: ${summary.minimumDistinctRoleCohorts ?? "none"}`)
     lines.push(`- reviewer team diversity required: ${summary.reviewerTeamDiversityRequired}`)
@@ -1584,10 +1688,14 @@ export namespace QualityPromotionApprovalPolicy {
     lines.push(`- reporting chain reuse ratio: ${summary.reportingChainReuseRatio ?? "n/a"}`)
     lines.push(`- approval concentration budget: ${summary.approvalConcentrationBudget ?? "none"}`)
     lines.push(`- approval concentration preset: ${summary.approvalConcentrationPreset ?? "none"}`)
-    lines.push(`- approval concentration weights: approver=${summary.approvalConcentrationWeights.approver}, team=${summary.approvalConcentrationWeights.team}, reporting_chain=${summary.approvalConcentrationWeights.reportingChain}`)
+    lines.push(
+      `- approval concentration weights: approver=${summary.approvalConcentrationWeights.approver}, team=${summary.approvalConcentrationWeights.team}, reporting_chain=${summary.approvalConcentrationWeights.reportingChain}`,
+    )
     lines.push(`- approval concentration score: ${summary.approvalConcentrationScore ?? "n/a"}`)
     lines.push(`- approval concentration axes: ${summary.approvalConcentrationApplicableAxes.join(", ") || "n/a"}`)
-    lines.push(`- approval concentration applied weight total: ${summary.approvalConcentrationAppliedWeightTotal ?? "n/a"}`)
+    lines.push(
+      `- approval concentration applied weight total: ${summary.approvalConcentrationAppliedWeightTotal ?? "n/a"}`,
+    )
     lines.push(`- required approvals: ${summary.requirement.minimumApprovals}`)
     lines.push(`- minimum role: ${summary.requirement.minimumRole ?? "none"}`)
     lines.push(`- distinct approvers required: ${summary.requirement.requireDistinctApprovers}`)
@@ -1603,7 +1711,9 @@ export namespace QualityPromotionApprovalPolicy {
       lines.push("")
       lines.push("Accepted Approvals:")
       for (const approval of summary.acceptedApprovals) {
-        lines.push(`- ${approval.approvedAt} · ${approval.approver} · ${approval.role ?? "n/a"} · ${approval.team ?? "n/a"} · ${approval.reportingChain ?? "n/a"} · ${approval.approvalID}`)
+        lines.push(
+          `- ${approval.approvedAt} · ${approval.approver} · ${approval.role ?? "n/a"} · ${approval.team ?? "n/a"} · ${approval.reportingChain ?? "n/a"} · ${approval.approvalID}`,
+        )
       }
     }
     lines.push("")

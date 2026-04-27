@@ -110,7 +110,11 @@ import { firstCompactionMessageID, shouldShowCompactionNotice } from "./compacti
 import { createReconnectRecoveryGate } from "../../util/reconnect-recovery"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { isMissingSessionSnapshotError } from "../../context/sync-session-coordinator"
-import { createSessionEntrySyncRetryState, nextSessionEntrySyncRetry, type SessionEntrySyncRetryState } from "./entry-sync"
+import {
+  createSessionEntrySyncRetryState,
+  nextSessionEntrySyncRetry,
+  type SessionEntrySyncRetryState,
+} from "./entry-sync"
 
 addDefaultParsers(parsers.parsers)
 
@@ -364,6 +368,9 @@ export function Session() {
   )
   onCleanup(() => reconnectSession.dispose())
 
+  // plan_exit hands off to the build agent. Sync the picker so the chip
+  // matches the synthetic user message the tool created. (PlanEnterTool is
+  // disabled, so there's no symmetric plan_enter branch.)
   let lastSwitch: string | undefined = undefined
   const unsubAgentSwitch = sdk.event.on("message.part.updated", (evt) => {
     const part = evt.properties.part
@@ -371,14 +378,9 @@ export function Session() {
     if (part.sessionID !== route.sessionID) return
     if (part.state.status !== "completed") return
     if (part.id === lastSwitch) return
-
-    if (part.tool === "plan_exit") {
-      local.agent.set("build")
-      lastSwitch = part.id
-    } else if (part.tool === "plan_enter") {
-      local.agent.set("plan")
-      lastSwitch = part.id
-    }
+    if (part.tool !== "plan_exit") return
+    local.agent.set("build")
+    lastSwitch = part.id
   })
   onCleanup(() => unsubAgentSwitch())
 
@@ -532,7 +534,8 @@ export function Session() {
                 } catch (error) {
                   log.warn("session rollback abort failed", { error, sessionID: route.sessionID })
                   toast.show({
-                    message: error instanceof Error ? error.message : "Failed to stop the running session before rollback",
+                    message:
+                      error instanceof Error ? error.message : "Failed to stop the running session before rollback",
                     variant: "error",
                   })
                   return
@@ -1005,7 +1008,9 @@ export function Session() {
                   {subagentTasks().running > 0 ? (
                     <span style={{ fg: theme.primary }}> · {subagentTasks().running} active</span>
                   ) : null}
-                  {subagentTasks().done > 0 ? <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span> : null}
+                  {subagentTasks().done > 0 ? (
+                    <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
+                  ) : null}
                 </text>
               </box>
             </Show>
@@ -1460,9 +1465,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           customBorderChars={SplitBorder.customBorderChars}
           borderColor={theme.error}
         >
-          <text fg={theme.text}>
-            {props.message.error?.data?.message ?? "An error occurred"}
-          </text>
+          <text fg={theme.text}>{props.message.error?.data?.message ?? "An error occurred"}</text>
         </box>
       </Show>
       <Switch>
@@ -1489,7 +1492,10 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               </Show>
               <For each={toolSummary()}>
                 {([name, count]) => (
-                  <span style={{ fg: theme.textMuted }}> · {count} {toolSummaryLabel(name, count)}</span>
+                  <span style={{ fg: theme.textMuted }}>
+                    {" "}
+                    · {count} {toolSummaryLabel(name, count)}
+                  </span>
                 )}
               </For>
               <Show when={props.message.error?.name === "MessageAbortedError"}>
@@ -1555,9 +1561,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const [expanded, setExpanded] = createSignal(false)
   const trimmed = createMemo(() => props.part.text.trim())
   const lines = createMemo(() => trimmed().split("\n"))
-  const isFinal = createMemo(
-    () => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish),
-  )
+  const isFinal = createMemo(() => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish))
   // Only fold long completed text. Streaming text always renders in full.
   const overflow = createMemo(() => isFinal() && lines().length > 50)
   const visibleText = createMemo(() => {

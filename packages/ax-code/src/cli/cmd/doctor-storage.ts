@@ -15,7 +15,10 @@ export async function getDoctorDatabaseCheck(input: {
     input.exists ??
     // fs.access avoids the Bun-runtime coupling; Bun.file().exists()
     // is also implemented via a stat-style syscall under the hood.
-    (async (target) => access(target).then(() => true).catch(() => false))
+    (async (target) =>
+      access(target)
+        .then(() => true)
+        .catch(() => false))
   const databasePath = input.databasePath
   const databaseName = path.basename(databasePath)
   const dataDir = path.dirname(databasePath)
@@ -27,11 +30,9 @@ export async function getDoctorDatabaseCheck(input: {
   let detail = `${databasePath} (${databaseModeLabel(databaseName)}${currentExists ? "" : ", not created yet"})`
 
   const alternatePath =
-    databaseName === "ax-code.db" ? localPath
-      : databaseName === "ax-code-local.db" ? bundledPath
-      : undefined
+    databaseName === "ax-code.db" ? localPath : databaseName === "ax-code-local.db" ? bundledPath : undefined
 
-  if (alternatePath && await exists(alternatePath)) {
+  if (alternatePath && (await exists(alternatePath))) {
     status = "warn"
     detail += `; ${databaseModeLabel(path.basename(alternatePath))} also exists at ${alternatePath}; source/dev and packaged installs do not share session state`
   }

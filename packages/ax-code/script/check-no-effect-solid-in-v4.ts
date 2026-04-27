@@ -24,7 +24,9 @@ async function exists(dir: string) {
 }
 
 function skip(file: string) {
-  return file.includes("/node_modules/") || file.includes("/dist/") || file.includes("/.git/") || file.includes("/.turbo/")
+  return (
+    file.includes("/node_modules/") || file.includes("/dist/") || file.includes("/.git/") || file.includes("/.turbo/")
+  )
 }
 
 export namespace V4Guardrails {

@@ -28,7 +28,6 @@ const model: Provider.Model = {
     interleaved: false,
   },
   limit: { context: 128_000, output: 8_192 },
-  cost: { input: 0, output: 0 },
   status: "active",
   options: {},
   headers: {},

@@ -1,9 +1,6 @@
 import { appendTextPartDelta, removeByID, shiftOverflow, upsert } from "./sync-util"
 
-export function applyAskedRequest<T extends { id: string; sessionID: string }>(
-  store: Record<string, T[]>,
-  request: T,
-) {
+export function applyAskedRequest<T extends { id: string; sessionID: string }>(store: Record<string, T[]>, request: T) {
   const list = store[request.sessionID]
   if (!list) {
     store[request.sessionID] = [request]
@@ -37,10 +34,7 @@ export function applyMessageUpdate<T extends { id: string }>(
   return shiftOverflow(list, maxSize)
 }
 
-export function applyMessageUpdateCleanup<
-  TMessage extends { id: string },
-  TPart,
->(
+export function applyMessageUpdateCleanup<TMessage extends { id: string }, TPart>(
   store: {
     message: Record<string, TMessage[]>
     part: Record<string, TPart[]>
@@ -66,10 +60,7 @@ export function applyMessageRemove<T extends { id: string }>(
   return removeByID(list, messageID)
 }
 
-export function applyMessageDeleteCleanup<
-  TMessage extends { id: string },
-  TPart,
->(
+export function applyMessageDeleteCleanup<TMessage extends { id: string }, TPart>(
   store: {
     message: Record<string, TMessage[]>
     part: Record<string, TPart[]>
@@ -102,7 +93,11 @@ export function applyPartDelta<T extends { id: string; type?: string; text?: str
   return appendTextPartDelta(list, partID, delta)
 }
 
-export function applyPartRemove<T extends { id: string }>(store: Record<string, T[]>, messageID: string, partID: string) {
+export function applyPartRemove<T extends { id: string }>(
+  store: Record<string, T[]>,
+  messageID: string,
+  partID: string,
+) {
   const list = store[messageID]
   if (!list) return
   return removeByID(list, partID)

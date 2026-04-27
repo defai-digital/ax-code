@@ -7,10 +7,7 @@ export function createAutonomousPermissionReply(requestID: string) {
   }
 }
 
-export function createAutonomousQuestionReply(
-  requestID: string,
-  questions: AutonomousQuestion.QuestionLike[],
-) {
+export function createAutonomousQuestionReply(requestID: string, questions: AutonomousQuestion.QuestionLike[]) {
   return {
     requestID,
     answers: AutonomousQuestion.answers(questions),

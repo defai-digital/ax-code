@@ -15,13 +15,20 @@ export type Activity = {
 
 export function statusLabel(status: string): string {
   switch (status) {
-    case "completed": return "ok"
-    case "error": return "ERR"
-    case "running": return "running"
-    case "pending": return "pending"
-    case "delegate": return "delegate"
-    case "switch": return "switch"
-    default: return status
+    case "completed":
+      return "ok"
+    case "error":
+      return "ERR"
+    case "running":
+      return "running"
+    case "pending":
+      return "pending"
+    case "delegate":
+      return "delegate"
+    case "switch":
+      return "switch"
+    default:
+      return status
   }
 }
 
@@ -83,10 +90,7 @@ function toolItem(part: Part): Activity | undefined {
   }
 }
 
-function routeItem(
-  row: { event_data: ReplayEvent; time_created: number },
-  agents?: AgentInfo[],
-): Activity | undefined {
+function routeItem(row: { event_data: ReplayEvent; time_created: number }, agents?: AgentInfo[]): Activity | undefined {
   const item = routeEvent(row, agents)
   if (!item) return
   return {
@@ -109,6 +113,5 @@ export function activityItems(
   return [
     ...parts.map(toolItem).filter((item) => !!item),
     ...rows.map((row) => routeItem(row, agents)).filter((item) => !!item),
-  ]
-    .toSorted((a, b) => (b.time ?? 0) - (a.time ?? 0))
+  ].toSorted((a, b) => (b.time ?? 0) - (a.time ?? 0))
 }

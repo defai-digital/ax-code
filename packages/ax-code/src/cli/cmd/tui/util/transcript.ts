@@ -56,7 +56,11 @@ export function formatTranscript(
   return transcript
 }
 
-export function formatMessage(msg: UserMessage | AssistantMessage, parts: Part[], options: TranscriptOptions & { agents?: AgentInfo[] }): string {
+export function formatMessage(
+  msg: UserMessage | AssistantMessage,
+  parts: Part[],
+  options: TranscriptOptions & { agents?: AgentInfo[] },
+): string {
   let result = ""
 
   if (msg.role === "user") {

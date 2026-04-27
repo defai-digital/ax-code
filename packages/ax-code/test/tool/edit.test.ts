@@ -669,6 +669,15 @@ describe("tool.edit", () => {
       expect(output).toBe(normalize(blockNew + "\n" + blockNew + "\n", "\r\n"))
       expectCrlf(output)
     })
+
+    test("preserves untouched mixed line endings outside the replaced region", async () => {
+      const output = await apply({
+        content: "line1\r\nline2\nline3\r\n",
+        oldString: "line2",
+        newString: "line2b",
+      })
+      expect(output).toBe("line1\r\nline2b\nline3\r\n")
+    })
   })
 
   describe("concurrent editing", () => {

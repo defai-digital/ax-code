@@ -69,10 +69,7 @@ function buildPackage(pkg: NativePkg, debug: boolean): boolean {
     console.error(`✗ expected ${nodeFile} after build, but it is missing`)
     return false
   }
-  writeFileSync(
-    join(dir, "index.js"),
-    `"use strict"\nmodule.exports = require("./${pkg.binaryName}.node")\n`,
-  )
+  writeFileSync(join(dir, "index.js"), `"use strict"\nmodule.exports = require("./${pkg.binaryName}.node")\n`)
 
   console.log(`✓ ${pkg.pkgName}`)
   return true
@@ -80,9 +77,10 @@ function buildPackage(pkg: NativePkg, debug: boolean): boolean {
 
 function main() {
   const { debug, selected } = parseArgs(process.argv)
-  const toBuild = selected.length > 0
-    ? PACKAGES.filter((p) => selected.includes(p.alias) || selected.includes(p.pkgName) || selected.includes(p.dir))
-    : PACKAGES
+  const toBuild =
+    selected.length > 0
+      ? PACKAGES.filter((p) => selected.includes(p.alias) || selected.includes(p.pkgName) || selected.includes(p.dir))
+      : PACKAGES
 
   if (toBuild.length === 0) {
     console.error(`No packages matched. Available aliases: ${PACKAGES.map((p) => p.alias).join(", ")}`)

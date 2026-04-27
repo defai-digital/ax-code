@@ -53,7 +53,6 @@ async function fill(directory: string) {
         mode: "chat",
         agent: "cli",
         path: { cwd: directory, root: directory },
-        cost: 0,
         tokens: {
           input: 120,
           output: 34,
@@ -232,7 +231,10 @@ describe("cli smoke", () => {
     })
 
     Database.use((db) => {
-      db.update(SessionTable).set({ permission: { nope: true } as any }).where(eq(SessionTable.id, bad.id as any)).run()
+      db.update(SessionTable)
+        .set({ permission: { nope: true } as any })
+        .where(eq(SessionTable.id, bad.id as any))
+        .run()
     })
 
     const out = await Process.run(cmd("session", "list", "--format", "json"), {
@@ -267,7 +269,10 @@ describe("cli smoke", () => {
     })
 
     Database.use((db) => {
-      db.update(SessionTable).set({ permission: { nope: true } as any }).where(eq(SessionTable.id, bad.id as any)).run()
+      db.update(SessionTable)
+        .set({ permission: { nope: true } as any })
+        .where(eq(SessionTable.id, bad.id as any))
+        .run()
     })
 
     const out = await Process.run(cmd("stats"), {

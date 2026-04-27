@@ -11,7 +11,10 @@ const { candidatePackageNames, findBinary } = require("../../bin/binary-selectio
     names: string[]
     unsupported?: string
   }
-  findBinary(startDir: string, options?: { platform?: string; arch?: string; avx2?: boolean; musl?: boolean }): string | undefined
+  findBinary(
+    startDir: string,
+    options?: { platform?: string; arch?: string; avx2?: boolean; musl?: boolean },
+  ): string | undefined
 }
 
 describe("binary selection", () => {
@@ -58,12 +61,14 @@ describe("binary selection", () => {
     await writeFile(binary, "#!/bin/sh\n")
     await chmod(binary, 0o755)
 
-    expect(findBinary(path.join(dir, "node_modules", "@defai.digital", "ax-code"), {
-      platform: "linux",
-      arch: "x64",
-      avx2: false,
-      musl: false,
-    })).toBe(binary)
+    expect(
+      findBinary(path.join(dir, "node_modules", "@defai.digital", "ax-code"), {
+        platform: "linux",
+        arch: "x64",
+        avx2: false,
+        musl: false,
+      }),
+    ).toBe(binary)
   })
 
   test("falls back to legacy unscoped binary packages during migration", async () => {
@@ -73,11 +78,13 @@ describe("binary selection", () => {
     await writeFile(binary, "#!/bin/sh\n")
     await chmod(binary, 0o755)
 
-    expect(findBinary(path.join(dir, "node_modules", "@defai.digital", "ax-code"), {
-      platform: "linux",
-      arch: "x64",
-      avx2: true,
-      musl: false,
-    })).toBe(binary)
+    expect(
+      findBinary(path.join(dir, "node_modules", "@defai.digital", "ax-code"), {
+        platform: "linux",
+        arch: "x64",
+        avx2: true,
+        musl: false,
+      }),
+    ).toBe(binary)
   })
 })

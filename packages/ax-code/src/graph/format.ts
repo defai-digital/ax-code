@@ -2,9 +2,17 @@ import z from "zod"
 import type { ExecutionGraph } from "./index"
 
 const AGENT_DISPLAY: Record<string, string> = {
-  build: "Dev", plan: "Planner", react: "Reasoner", general: "Assistant",
-  explore: "Researcher", security: "Security", architect: "Architect",
-  debug: "Debugger", perf: "Perf", devops: "DevOps", test: "Tester",
+  build: "Dev",
+  plan: "Planner",
+  react: "Reasoner",
+  general: "Assistant",
+  explore: "Researcher",
+  security: "Security",
+  architect: "Architect",
+  debug: "Debugger",
+  perf: "Perf",
+  devops: "DevOps",
+  test: "Tester",
 }
 
 function agentDisplayName(name: string): string {
@@ -204,9 +212,7 @@ export namespace GraphFormat {
         })
     }
 
-    const steps = graph.nodes
-      .filter((n) => n.type === "step")
-      .sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0))
+    const steps = graph.nodes.filter((n) => n.type === "step").sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0))
 
     for (const step of steps) {
       const dur = step.duration != null ? ` | ${formatDuration(step.duration)}` : ""
@@ -255,7 +261,10 @@ export namespace GraphFormat {
     const steps = graph.nodes
       .filter((item) => item.type === "step")
       .sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0))
-    const criticalPath = [...lead(graph).map((item) => item.label), ...steps.flatMap((item) => [item.label, ...flow(graph, item).map((next) => next.label)])]
+    const criticalPath = [
+      ...lead(graph).map((item) => item.label),
+      ...steps.flatMap((item) => [item.label, ...flow(graph, item).map((next) => next.label)]),
+    ]
 
     if (criticalPath.length > 0) {
       out.push({
@@ -277,7 +286,9 @@ export namespace GraphFormat {
       })
     }
 
-    for (const call of graph.nodes.filter((item) => item.type === "tool_call").sort((a, b) => a.timestamp - b.timestamp)) {
+    for (const call of graph.nodes
+      .filter((item) => item.type === "tool_call")
+      .sort((a, b) => a.timestamp - b.timestamp)) {
       const res = pair(graph, call.id)
       if (!res) continue
       out.push({
@@ -465,9 +476,7 @@ export namespace GraphFormat {
   }
 
   export function svgGantt(graph: ExecutionGraph.Graph): string {
-    const steps = [...graph.nodes]
-      .filter((n) => n.type === "step")
-      .sort((a, b) => a.timestamp - b.timestamp)
+    const steps = [...graph.nodes].filter((n) => n.type === "step").sort((a, b) => a.timestamp - b.timestamp)
 
     const escSvg = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 
@@ -513,19 +522,27 @@ export namespace GraphFormat {
     ]
 
     // Header bottom border — clear axis/chart separation
-    out.push(`<line x1="0" y1="${HEADER_H}" x2="${VIEW_W}" y2="${HEADER_H}" stroke="var(--line-subtle)" stroke-width="1"/>`)
+    out.push(
+      `<line x1="0" y1="${HEADER_H}" x2="${VIEW_W}" y2="${HEADER_H}" stroke="var(--line-subtle)" stroke-width="1"/>`,
+    )
 
     // Time axis ticks — first/last anchored to edges to prevent clipping
     for (let i = 0; i <= 4; i++) {
       const frac = i / 4
       const x = toX(frac * totalDur).toFixed(1)
       const anchor = i === 0 ? "start" : i === 4 ? "end" : "middle"
-      out.push(`<line x1="${x}" y1="${HEADER_H}" x2="${x}" y2="${svgH - 8}" stroke="var(--line-subtle)" stroke-width="1" stroke-dasharray="4 4"/>`)
-      out.push(`<text x="${x}" y="17" text-anchor="${anchor}" font-size="10" fill="var(--muted)">${escSvg(formatDuration(frac * totalDur))}</text>`)
+      out.push(
+        `<line x1="${x}" y1="${HEADER_H}" x2="${x}" y2="${svgH - 8}" stroke="var(--line-subtle)" stroke-width="1" stroke-dasharray="4 4"/>`,
+      )
+      out.push(
+        `<text x="${x}" y="17" text-anchor="${anchor}" font-size="10" fill="var(--muted)">${escSvg(formatDuration(frac * totalDur))}</text>`,
+      )
     }
 
     // Left column divider
-    out.push(`<line x1="${LABEL_W}" y1="${HEADER_H}" x2="${LABEL_W}" y2="${svgH - 8}" stroke="var(--line-subtle)" stroke-width="1"/>`)
+    out.push(
+      `<line x1="${LABEL_W}" y1="${HEADER_H}" x2="${LABEL_W}" y2="${svgH - 8}" stroke="var(--line-subtle)" stroke-width="1"/>`,
+    )
 
     let prevAgentKey = ""
     for (let i = 0; i < steps.length; i++) {
@@ -536,7 +553,9 @@ export namespace GraphFormat {
 
       // Agent change separator — thin line when agent switches mid-session
       if (agentKey !== prevAgentKey && i > 0) {
-        out.push(`<line x1="${LABEL_W}" y1="${rowY}" x2="${VIEW_W - PAD_R}" y2="${rowY}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`)
+        out.push(
+          `<line x1="${LABEL_W}" y1="${rowY}" x2="${VIEW_W - PAD_R}" y2="${rowY}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`,
+        )
       }
       prevAgentKey = agentKey
 
@@ -546,8 +565,12 @@ export namespace GraphFormat {
       }
 
       // Left labels
-      out.push(`<text x="${LABEL_W - 8}" y="${rowY + BAR_V + 13}" text-anchor="end" font-size="11" font-weight="600" fill="var(--text-secondary)">Step ${step.stepIndex ?? i + 1}</text>`)
-      out.push(`<text x="${LABEL_W - 8}" y="${rowY + BAR_V + 24}" text-anchor="end" font-size="9" fill="var(--muted)">${agLabel}</text>`)
+      out.push(
+        `<text x="${LABEL_W - 8}" y="${rowY + BAR_V + 13}" text-anchor="end" font-size="11" font-weight="600" fill="var(--text-secondary)">Step ${step.stepIndex ?? i + 1}</text>`,
+      )
+      out.push(
+        `<text x="${LABEL_W - 8}" y="${rowY + BAR_V + 24}" text-anchor="end" font-size="9" fill="var(--muted)">${agLabel}</text>`,
+      )
 
       // Bar
       const relStart = step.timestamp - sessionStart
@@ -561,7 +584,9 @@ export namespace GraphFormat {
       const gradId = isError ? "bg-error" : isPending ? "bg-pending" : "bg-normal"
       const strokeColor = isError ? "var(--critical)" : isPending ? "var(--warn)" : "var(--accent-light)"
 
-      out.push(`<rect x="${barX.toFixed(1)}" y="${barY}" width="${barW.toFixed(1)}" height="${BAR_H}" rx="${RX}" fill="url(#${gradId})" stroke="${strokeColor}" stroke-width="0.75" stroke-opacity="0.4"/>`)
+      out.push(
+        `<rect x="${barX.toFixed(1)}" y="${barY}" width="${barW.toFixed(1)}" height="${BAR_H}" rx="${RX}" fill="url(#${gradId})" stroke="${strokeColor}" stroke-width="0.75" stroke-opacity="0.4"/>`,
+      )
 
       // Activity text inside bar — pending uses dark text (yellow bg), others white
       if (barW > 52) {
@@ -569,8 +594,12 @@ export namespace GraphFormat {
         const labelText = escSvg(isPending ? "in progress…" : act)
         if (labelText) {
           const textFill = isPending ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.92)"
-          out.push(`<clipPath id="bc${i}"><rect x="${barX.toFixed(1)}" y="${barY}" width="${(barW - 10).toFixed(1)}" height="${BAR_H}"/></clipPath>`)
-          out.push(`<text x="${(barX + 7).toFixed(1)}" y="${barY + 14}" font-size="9.5" font-weight="600" fill="${textFill}" clip-path="url(#bc${i})">${labelText}</text>`)
+          out.push(
+            `<clipPath id="bc${i}"><rect x="${barX.toFixed(1)}" y="${barY}" width="${(barW - 10).toFixed(1)}" height="${BAR_H}"/></clipPath>`,
+          )
+          out.push(
+            `<text x="${(barX + 7).toFixed(1)}" y="${barY + 14}" font-size="9.5" font-weight="600" fill="${textFill}" clip-path="url(#bc${i})">${labelText}</text>`,
+          )
         }
       }
 
@@ -578,7 +607,9 @@ export namespace GraphFormat {
       if (duration > 0) {
         const durX = barX + barW + 6
         if (durX < VIEW_W - PAD_R - 22) {
-          out.push(`<text x="${durX.toFixed(1)}" y="${barY + 14}" font-size="9.5" fill="var(--muted)">${escSvg(formatDuration(duration))}</text>`)
+          out.push(
+            `<text x="${durX.toFixed(1)}" y="${barY + 14}" font-size="9.5" fill="var(--muted)">${escSvg(formatDuration(duration))}</text>`,
+          )
         }
       }
     }

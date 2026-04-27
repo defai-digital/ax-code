@@ -158,43 +158,40 @@ describe("tui sync event router", () => {
   })
 
   test("returns false for unknown events", () => {
-    const handled = handleSyncEvent(
-      { type: "unknown.event" } as never,
-      {
-        request: {
-          autonomous: false,
-          updatePermission: () => undefined,
-          updateQuestion: () => undefined,
-          replyPermission: () => undefined,
-          replyQuestion: () => undefined,
-          onWarn: () => undefined,
-        },
-        session: {
-          setTodo: () => undefined,
-          setSessionDiff: () => undefined,
-          setSessionStatus: () => undefined,
-          deleteSession: () => undefined,
-          upsertSession: () => undefined,
-          clearSessionSyncState: () => undefined,
-        },
-        message: {
-          updateMessage: () => undefined,
-          deleteMessage: () => undefined,
-          updatePart: () => undefined,
-          appendPartDelta: () => undefined,
-          deletePart: () => undefined,
-        },
-        runtime: {
-          syncMcpStatus: () => undefined,
-          syncLspStatus: () => undefined,
-          syncDebugEngine: () => undefined,
-          setVcsBranch: () => undefined,
-          onWarn: () => undefined,
-        },
-        bootstrap: () => undefined,
+    const handled = handleSyncEvent({ type: "unknown.event" } as never, {
+      request: {
+        autonomous: false,
+        updatePermission: () => undefined,
+        updateQuestion: () => undefined,
+        replyPermission: () => undefined,
+        replyQuestion: () => undefined,
         onWarn: () => undefined,
       },
-    )
+      session: {
+        setTodo: () => undefined,
+        setSessionDiff: () => undefined,
+        setSessionStatus: () => undefined,
+        deleteSession: () => undefined,
+        upsertSession: () => undefined,
+        clearSessionSyncState: () => undefined,
+      },
+      message: {
+        updateMessage: () => undefined,
+        deleteMessage: () => undefined,
+        updatePart: () => undefined,
+        appendPartDelta: () => undefined,
+        deletePart: () => undefined,
+      },
+      runtime: {
+        syncMcpStatus: () => undefined,
+        syncLspStatus: () => undefined,
+        syncDebugEngine: () => undefined,
+        setVcsBranch: () => undefined,
+        onWarn: () => undefined,
+      },
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+    })
 
     expect(handled).toBe(false)
   })
@@ -291,9 +288,6 @@ describe("tui sync event router", () => {
     expect(asyncHandled).toBe(true)
     expect(syncHandled).toBe(true)
     expect(warnings).toHaveLength(2)
-    expect(warnings.map((item) => item.label)).toEqual([
-      "bootstrap sync failed",
-      "bootstrap sync failed",
-    ])
+    expect(warnings.map((item) => item.label)).toEqual(["bootstrap sync failed", "bootstrap sync failed"])
   })
 })

@@ -111,7 +111,10 @@ function isPastedImagePart(part: PromptInfo["parts"][number]) {
 
 function expandPromptTextParts(input: string, parts: PromptInfo["parts"]) {
   return parts
-    .filter((part): part is Extract<PromptInfo["parts"][number], { type: "text" }> => part.type === "text" && !!part.source?.text)
+    .filter(
+      (part): part is Extract<PromptInfo["parts"][number], { type: "text" }> =>
+        part.type === "text" && !!part.source?.text,
+    )
     .toSorted((a, b) => b.source!.text.start - a.source!.text.start)
     .reduce((text, part) => {
       const start = stringIndexFromDisplayOffset(text, part.source!.text.start)
@@ -411,10 +414,12 @@ export function Prompt(props: PromptProps) {
   }
 
   // Sync local agent/model/variant from the latest user message:
-  // - On session change: pick up the session's last-known agent
-  // - On new message in the same session: catch server-side auto-routing
-  //   that swapped the primary agent for this turn (e.g., "fix this bug" →
-  //   debug agent). Without this, the bottom-left chip stays stale.
+  // - On session change: pick up the session's last-known agent so the chip
+  //   reflects what was active when the session was last used.
+  // - On new message in the same session: catch server-generated user messages
+  //   that carry a different agent (e.g. plan_exit creates a synthetic user
+  //   message with agent="build" to hand off out of plan mode). Without this,
+  //   the bottom-left chip stays stale.
   //
   // Use `on()` so only sessionID and lastUserMessage trigger re-runs — reads
   // of local.agent inside don't add dependencies, otherwise a manual Tab-
@@ -427,8 +432,8 @@ export function Prompt(props: PromptProps) {
         syncedSessionID = sessionID
         if (!sessionID || !msg) return
       } else {
-        // Same session: only sync when the message agent actually differs from
-        // what the chip shows (i.e., auto-route just changed it).
+        // Same session: only sync when the message agent actually differs
+        // from what the chip shows (e.g. plan_exit just handed off to build).
         if (!msg?.agent || msg.agent === local.agent.current().name) return
       }
 
@@ -1684,7 +1689,9 @@ export function Prompt(props: PromptProps) {
                     footerLayout().showShellHint)
                 }
               >
-                <text fg={theme.borderSubtle} flexShrink={0}>·</text>
+                <text fg={theme.borderSubtle} flexShrink={0}>
+                  ·
+                </text>
               </Show>
               <Show
                 when={

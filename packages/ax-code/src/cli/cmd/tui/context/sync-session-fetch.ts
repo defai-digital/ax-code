@@ -4,14 +4,7 @@ export interface SessionSyncFetchResult<T> {
   data: T | undefined
 }
 
-export interface SessionSyncSnapshotLoader<
-  TSession,
-  TTodo,
-  TMessage,
-  TPart,
-  TDiff,
-  TRisk,
-> {
+export interface SessionSyncSnapshotLoader<TSession, TTodo, TMessage, TPart, TDiff, TRisk> {
   sessionID: string
   timeoutMs: number
   withTimeout: <T>(label: string, promise: Promise<T>, timeoutMs: number) => Promise<T>
@@ -22,41 +15,18 @@ export interface SessionSyncSnapshotLoader<
   fetchRisk?: () => Promise<SessionSyncFetchResult<TRisk>>
 }
 
-export async function fetchSessionSyncSnapshot<
-  TSession,
-  TTodo,
-  TMessage,
-  TPart,
-  TDiff,
-  TRisk = unknown,
->(input: SessionSyncSnapshotLoader<TSession, TTodo, TMessage, TPart, TDiff, TRisk>) {
+export async function fetchSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk = unknown>(
+  input: SessionSyncSnapshotLoader<TSession, TTodo, TMessage, TPart, TDiff, TRisk>,
+) {
   const [session, messages, todo, diff, risk] = await Promise.all([
-    input.withTimeout(
-      `tui session sync ${input.sessionID} session.get`,
-      input.fetchSession(),
-      input.timeoutMs,
-    ),
-    input.withTimeout(
-      `tui session sync ${input.sessionID} session.messages`,
-      input.fetchMessages(),
-      input.timeoutMs,
-    ),
-    input.withTimeout(
-      `tui session sync ${input.sessionID} session.todo`,
-      input.fetchTodo(),
-      input.timeoutMs,
-    ),
-    input.withTimeout(
-      `tui session sync ${input.sessionID} session.diff`,
-      input.fetchDiff(),
-      input.timeoutMs,
-    ),
+    input.withTimeout(`tui session sync ${input.sessionID} session.get`, input.fetchSession(), input.timeoutMs),
+    input.withTimeout(`tui session sync ${input.sessionID} session.messages`, input.fetchMessages(), input.timeoutMs),
+    input.withTimeout(`tui session sync ${input.sessionID} session.todo`, input.fetchTodo(), input.timeoutMs),
+    input.withTimeout(`tui session sync ${input.sessionID} session.diff`, input.fetchDiff(), input.timeoutMs),
     input.fetchRisk
-      ? input.withTimeout(
-        `tui session sync ${input.sessionID} session.risk`,
-        input.fetchRisk(),
-        input.timeoutMs,
-      ).catch(() => undefined)
+      ? input
+          .withTimeout(`tui session sync ${input.sessionID} session.risk`, input.fetchRisk(), input.timeoutMs)
+          .catch(() => undefined)
       : Promise.resolve(undefined),
   ])
 

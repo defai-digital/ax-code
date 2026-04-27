@@ -48,10 +48,7 @@ export namespace Result {
   }
 
   /** Wrap a sync operation into a Result. */
-  export function fromThrowable<T, E = Error>(
-    fn: () => T,
-    mapError?: (e: unknown) => E,
-  ): Result<T, E> {
+  export function fromThrowable<T, E = Error>(fn: () => T, mapError?: (e: unknown) => E): Result<T, E> {
     try {
       return ok(fn())
     } catch (e) {

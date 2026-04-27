@@ -151,9 +151,7 @@ export function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">)
           onFocus={() => move(itemProps.item.rawValue)}
         >
           <Kobalte.ItemLabel data-slot="select-select-item-label">
-            {local.children
-              ? local.children(itemProps.item.rawValue)
-              : labelFor(itemProps.item.rawValue)}
+            {local.children ? local.children(itemProps.item.rawValue) : labelFor(itemProps.item.rawValue)}
           </Kobalte.ItemLabel>
           <Kobalte.ItemIndicator data-slot="select-select-item-indicator">
             <Icon name="check-small" size="small" />

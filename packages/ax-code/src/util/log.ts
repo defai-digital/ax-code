@@ -191,11 +191,7 @@ export namespace Log {
       }
       return
     }
-    const name = options.name
-      ? `${options.name}.log`
-      : options.dev
-        ? "dev.log"
-        : `${stampedName("runtime")}.log`
+    const name = options.name ? `${options.name}.log` : options.dev ? "dev.log" : `${stampedName("runtime")}.log`
     const prepared = await prepareFileLogPath({
       dir: options.dir ?? Global.Path.log,
       filename: name,
@@ -258,11 +254,13 @@ export namespace Log {
   }
 
   async function cleanup(dir: string) {
-    const files = (await Glob.scan("*.log", {
-      cwd: dir,
-      absolute: true,
-      include: "file",
-    })).filter((file) => {
+    const files = (
+      await Glob.scan("*.log", {
+        cwd: dir,
+        absolute: true,
+        include: "file",
+      })
+    ).filter((file) => {
       const name = path.basename(file)
       if (name.endsWith(".json.log")) return false
       return STAMPED_LOG_PATTERN.test(name)
@@ -312,7 +310,7 @@ export namespace Log {
     }
     // Pino child is created lazily — only when pinoLogger is active (file mode)
     let child: pino.Logger | undefined
-    const pino_child = () => child ??= pinoLogger?.child(tags || {})
+    const pino_child = () => (child ??= pinoLogger?.child(tags || {}))
     const result: Logger = {
       debug(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("DEBUG")) {

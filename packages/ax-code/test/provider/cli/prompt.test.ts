@@ -51,9 +51,7 @@ describe("promptToText", () => {
     const prompt: LanguageModelV3Prompt = [
       {
         role: "assistant",
-        content: [
-          { type: "tool-call", toolCallId: "1", toolName: "bash", input: { cmd: "ls" } },
-        ],
+        content: [{ type: "tool-call", toolCallId: "1", toolName: "bash", input: { cmd: "ls" } }],
       },
     ]
     expect(promptToText(prompt)).toBe('[Assistant]: [Tool: bash({"cmd":"ls"})]')
@@ -64,7 +62,12 @@ describe("promptToText", () => {
       {
         role: "tool",
         content: [
-          { type: "tool-result", toolCallId: "1", toolName: "bash", output: { type: "json", value: { files: ["a.ts"] } } },
+          {
+            type: "tool-result",
+            toolCallId: "1",
+            toolName: "bash",
+            output: { type: "json", value: { files: ["a.ts"] } },
+          },
         ],
       },
     ]

@@ -32,20 +32,22 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
 
   const [listed, listedActions] = createResource(
     () => props.workspaceID,
-    createAbortableResourceFetcher<string | undefined, Session[]>(async (workspaceID: string | undefined, signal, info) => {
-      if (!workspaceID) return undefined
-      try {
-        const result = await sdk.client.session.list({ directory: workspaceID, roots: true }, { signal })
-        return result.data ?? []
-      } catch (error) {
-        log.warn("workspace session list load failed", { error, workspaceID })
-        toast.show({
-          message: error instanceof Error ? error.message : "Failed to load workspace sessions",
-          variant: "error",
-        })
-        return info.value
-      }
-    }),
+    createAbortableResourceFetcher<string | undefined, Session[]>(
+      async (workspaceID: string | undefined, signal, info) => {
+        if (!workspaceID) return undefined
+        try {
+          const result = await sdk.client.session.list({ directory: workspaceID, roots: true }, { signal })
+          return result.data ?? []
+        } catch (error) {
+          log.warn("workspace session list load failed", { error, workspaceID })
+          toast.show({
+            message: error instanceof Error ? error.message : "Failed to load workspace sessions",
+            variant: "error",
+          })
+          return info.value
+        }
+      },
+    ),
   )
 
   const [searchResults] = createResource(
@@ -84,7 +86,8 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
     const results = searchResults()
     if (results) return results
     if (props.workspaceID) return listed() ?? []
-    if (props.localOnly) return sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory))
+    if (props.localOnly)
+      return sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory))
     return sync.data.session
   })
 
@@ -161,7 +164,9 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
                 return
               }
               if (props.workspaceID) {
-                listedActions.mutate((sessions: Session[] | undefined) => sessions?.filter((session: Session) => session.id !== option.value))
+                listedActions.mutate((sessions: Session[] | undefined) =>
+                  sessions?.filter((session: Session) => session.id !== option.value),
+                )
                 return
               }
               sync.set(

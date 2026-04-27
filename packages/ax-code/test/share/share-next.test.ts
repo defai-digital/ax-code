@@ -92,13 +92,15 @@ test("ShareNext stops retrying after the max retry count", async () => {
   const originalFetch = globalThis.fetch
   const originalSetTimeout = globalThis.setTimeout
   const originalClearTimeout = globalThis.clearTimeout
-  const lookupSpy = spyOn(dns, "lookup").mockImplementation(async () => [{ address: "93.184.216.34", family: 4 }] as any)
+  const lookupSpy = spyOn(dns, "lookup").mockImplementation(
+    async () => [{ address: "93.184.216.34", family: 4 }] as any,
+  )
   let calls = 0
 
-  globalThis.fetch = ((async () => {
+  globalThis.fetch = (async () => {
     calls++
     return new Response("fail", { status: 500 })
-  }) as unknown) as typeof fetch
+  }) as unknown as typeof fetch
   globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) =>
     originalSetTimeout(() => fn(...args), 0)) as typeof setTimeout
   globalThis.clearTimeout = ((id: Timer) => originalClearTimeout(id)) as typeof clearTimeout

@@ -640,13 +640,18 @@ export namespace MCP {
   const connectLocks = new Map<string, Promise<unknown>>()
   export async function connect(name: string) {
     const prev = connectLocks.get(name) ?? Promise.resolve()
-    const next = prev.then(() => connectImpl(name), () => connectImpl(name))
-    const locked = next.catch((err) => {
-      log.warn("MCP connect failed", { name, error: err instanceof Error ? err.message : String(err) })
-    }).finally(() => {
-      // Clean up settled entries to prevent unbounded Map growth
-      if (connectLocks.get(name) === locked) connectLocks.delete(name)
-    })
+    const next = prev.then(
+      () => connectImpl(name),
+      () => connectImpl(name),
+    )
+    const locked = next
+      .catch((err) => {
+        log.warn("MCP connect failed", { name, error: err instanceof Error ? err.message : String(err) })
+      })
+      .finally(() => {
+        // Clean up settled entries to prevent unbounded Map growth
+        if (connectLocks.get(name) === locked) connectLocks.delete(name)
+      })
     connectLocks.set(name, locked)
     return next
   }
@@ -772,9 +777,19 @@ export namespace MCP {
         const timeout = entry?.timeout ?? defaultTimeout
         for (const mcpTool of toolsResult.tools) {
           const key = sanitize(clientName) + "_" + sanitize(mcpTool.name)
-          conversions.push(convertMcpTool(mcpTool, client, timeout).then((tool) => { result[key] = tool }).catch((e) => {
-            log.error("failed to convert MCP tool", { clientName, tool: mcpTool.name, error: NamedError.message(e) })
-          }))
+          conversions.push(
+            convertMcpTool(mcpTool, client, timeout)
+              .then((tool) => {
+                result[key] = tool
+              })
+              .catch((e) => {
+                log.error("failed to convert MCP tool", {
+                  clientName,
+                  tool: mcpTool.name,
+                  error: NamedError.message(e),
+                })
+              }),
+          )
         }
       }
       await Promise.all(conversions)
@@ -806,7 +821,11 @@ export namespace MCP {
             }
 
             return Object.entries(
-              (await fetchItemsForClient<PromptInfo>(clientName, "prompts", async () => (await client.listPrompts()).prompts)) ?? {},
+              (await fetchItemsForClient<PromptInfo>(
+                clientName,
+                "prompts",
+                async () => (await client.listPrompts()).prompts,
+              )) ?? {},
             )
           }),
         )
@@ -829,7 +848,11 @@ export namespace MCP {
             }
 
             return Object.entries(
-              (await fetchItemsForClient<ResourceInfo>(clientName, "resources", async () => (await client.listResources()).resources)) ?? {},
+              (await fetchItemsForClient<ResourceInfo>(
+                clientName,
+                "resources",
+                async () => (await client.listResources()).resources,
+              )) ?? {},
             )
           }),
         )

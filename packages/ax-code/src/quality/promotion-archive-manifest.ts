@@ -37,11 +37,13 @@ export namespace QualityPromotionArchiveManifest {
     authorizedPromotion: z.boolean(),
     inventoryCount: z.number().int().positive(),
     previousActiveSource: z.string().nullable(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ArchiveSummary = z.output<typeof ArchiveSummary>
 
@@ -102,8 +104,10 @@ export namespace QualityPromotionArchiveManifest {
     promotion: QualityPromotionExportBundle.ExportArtifact["auditManifest"]["promotion"],
     archive: ArchiveArtifact,
   ) {
-    return archive.exportBundle.auditManifest.promotion.promotionID === promotion.promotionID
-      && archive.exportBundle.auditManifest.promotion.source === promotion.source
+    return (
+      archive.exportBundle.auditManifest.promotion.promotionID === promotion.promotionID &&
+      archive.exportBundle.auditManifest.promotion.source === promotion.source
+    )
   }
 
   function buildInventory(exportBundle: QualityPromotionExportBundle.ExportArtifact) {
@@ -116,62 +120,64 @@ export namespace QualityPromotionArchiveManifest {
     const approvalPacket = submissionBundle.approvalPacket
     const decisionBundle = submissionBundle.decisionBundle
 
-    return sortInventory(InventoryItem.array().parse([
-      {
-        kind: "decision_bundle",
-        artifactID: `${decisionBundle.source}:${decisionBundle.createdAt}`,
-        createdAt: decisionBundle.createdAt,
-        digest: digest(decisionBundle),
-      },
-      {
-        kind: "approval_packet",
-        artifactID: approvalPacket.packetID,
-        createdAt: approvalPacket.createdAt,
-        digest: digest(approvalPacket),
-      },
-      {
-        kind: "submission_bundle",
-        artifactID: submissionBundle.submissionID,
-        createdAt: submissionBundle.createdAt,
-        digest: digest(submissionBundle),
-      },
-      {
-        kind: "review_dossier",
-        artifactID: reviewDossier.dossierID,
-        createdAt: reviewDossier.createdAt,
-        digest: digest(reviewDossier),
-      },
-      {
-        kind: "board_decision",
-        artifactID: boardDecision.decisionID,
-        createdAt: boardDecision.decidedAt,
-        digest: digest(boardDecision),
-      },
-      {
-        kind: "release_decision_record",
-        artifactID: releaseDecisionRecord.recordID,
-        createdAt: releaseDecisionRecord.recordedAt,
-        digest: digest(releaseDecisionRecord),
-      },
-      {
-        kind: "release_packet",
-        artifactID: releasePacket.packetID,
-        createdAt: releasePacket.createdAt,
-        digest: digest(releasePacket),
-      },
-      {
-        kind: "audit_manifest",
-        artifactID: auditManifest.manifestID,
-        createdAt: auditManifest.createdAt,
-        digest: digest(auditManifest),
-      },
-      {
-        kind: "export_bundle",
-        artifactID: exportBundle.bundleID,
-        createdAt: exportBundle.createdAt,
-        digest: digest(exportBundle),
-      },
-    ]))
+    return sortInventory(
+      InventoryItem.array().parse([
+        {
+          kind: "decision_bundle",
+          artifactID: `${decisionBundle.source}:${decisionBundle.createdAt}`,
+          createdAt: decisionBundle.createdAt,
+          digest: digest(decisionBundle),
+        },
+        {
+          kind: "approval_packet",
+          artifactID: approvalPacket.packetID,
+          createdAt: approvalPacket.createdAt,
+          digest: digest(approvalPacket),
+        },
+        {
+          kind: "submission_bundle",
+          artifactID: submissionBundle.submissionID,
+          createdAt: submissionBundle.createdAt,
+          digest: digest(submissionBundle),
+        },
+        {
+          kind: "review_dossier",
+          artifactID: reviewDossier.dossierID,
+          createdAt: reviewDossier.createdAt,
+          digest: digest(reviewDossier),
+        },
+        {
+          kind: "board_decision",
+          artifactID: boardDecision.decisionID,
+          createdAt: boardDecision.decidedAt,
+          digest: digest(boardDecision),
+        },
+        {
+          kind: "release_decision_record",
+          artifactID: releaseDecisionRecord.recordID,
+          createdAt: releaseDecisionRecord.recordedAt,
+          digest: digest(releaseDecisionRecord),
+        },
+        {
+          kind: "release_packet",
+          artifactID: releasePacket.packetID,
+          createdAt: releasePacket.createdAt,
+          digest: digest(releasePacket),
+        },
+        {
+          kind: "audit_manifest",
+          artifactID: auditManifest.manifestID,
+          createdAt: auditManifest.createdAt,
+          digest: digest(auditManifest),
+        },
+        {
+          kind: "export_bundle",
+          artifactID: exportBundle.bundleID,
+          createdAt: exportBundle.createdAt,
+          digest: digest(exportBundle),
+        },
+      ]),
+    )
   }
 
   function evaluateSummary(exportBundle: QualityPromotionExportBundle.ExportArtifact, inventory: InventoryItem[]) {
@@ -201,7 +207,11 @@ export namespace QualityPromotionArchiveManifest {
       },
       {
         name: "promotion-linkage",
-        status: exportBundle.auditManifest.promotion.releasePacket?.packetID === exportBundle.auditManifest.releasePacket.packetID ? "pass" : "fail",
+        status:
+          exportBundle.auditManifest.promotion.releasePacket?.packetID ===
+          exportBundle.auditManifest.releasePacket.packetID
+            ? "pass"
+            : "fail",
         detail: `promotion packet=${exportBundle.auditManifest.promotion.releasePacket?.packetID ?? "n/a"} archive packet=${exportBundle.auditManifest.releasePacket.packetID}`,
       },
     ] as const
@@ -221,12 +231,12 @@ export namespace QualityPromotionArchiveManifest {
     })
   }
 
-  export function create(input: {
-    exportBundle: QualityPromotionExportBundle.ExportArtifact
-  }) {
+  export function create(input: { exportBundle: QualityPromotionExportBundle.ExportArtifact }) {
     const exportReasons = QualityPromotionExportBundle.verify(input.exportBundle)
     if (exportReasons.length > 0) {
-      throw new Error(`Cannot create promotion archive manifest for ${input.exportBundle.source}: invalid export bundle (${exportReasons[0]})`)
+      throw new Error(
+        `Cannot create promotion archive manifest for ${input.exportBundle.source}: invalid export bundle (${exportReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const archiveID = `${input.exportBundle.bundleID}-archive-manifest`
@@ -295,7 +305,9 @@ export namespace QualityPromotionArchiveManifest {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion archive manifest ${archive.archiveID} already exists for source ${archive.source} with different content`)
+      throw new Error(
+        `Promotion archive manifest ${archive.archiveID} already exists for source ${archive.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(archive.source, archive.archiveID), next)
@@ -304,7 +316,9 @@ export namespace QualityPromotionArchiveManifest {
   }
 
   export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_archive_manifest", encode(source)]] : [["quality_model_archive_manifest"]]
+    const prefixes = source
+      ? [["quality_model_archive_manifest", encode(source)]]
+      : [["quality_model_archive_manifest"]]
     const archives: ArchiveArtifact[] = []
 
     for (const prefix of prefixes) {

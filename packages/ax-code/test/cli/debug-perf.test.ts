@@ -285,17 +285,13 @@ describe("cli.debug.perf", () => {
     expect(result.native?.rows["fs.walkFiles"]?.totalMs.mean).toBe(15)
     expect(result.lsp?.["touch.select"]?.p50.median).toBe(375)
     expect(result.lsp?.["client.initialize"]?.totalMs.mean).toBe(250)
-    expect(result.diagnosis).toContain(
-      "Cold start dominates: client initialize 250ms, touch.select.spawned 375ms.",
-    )
+    expect(result.diagnosis).toContain("Cold start dominates: client initialize 250ms, touch.select.spawned 375ms.")
     expect(result.diagnosis).toContain(
       "Concurrent files are stacking behind the same cold start: touch.select total 800ms vs spawned 375ms.",
     )
     expect(result.diagnosis).toContain("didOpen/didChange overhead is negligible: touch.notify 3.50ms.")
     expect(result.diagnosis).toContain("Steady-state references work is RPC-bound: references.rpc 360ms.")
-    expect(result.diagnosis).toContain(
-      "Document symbol work is RPC-bound after selection: documentSymbol.rpc 240ms.",
-    )
+    expect(result.diagnosis).toContain("Document symbol work is RPC-bound after selection: documentSymbol.rpc 240ms.")
   })
 
   test("diagnoseLsp returns empty for missing rows", () => {

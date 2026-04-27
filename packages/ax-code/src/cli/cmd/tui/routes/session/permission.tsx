@@ -215,11 +215,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   const { theme } = useTheme()
 
-  function submitPermissionReply(
-    run: () => Promise<unknown>,
-    failureLabel: string,
-    failureMessage: string,
-  ) {
+  function submitPermissionReply(run: () => Promise<unknown>, failureLabel: string, failureMessage: string) {
     void Promise.resolve()
       .then(run)
       .catch((error) => {
@@ -408,7 +404,8 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       const parent = typeof meta["parentDir"] === "string" ? meta["parentDir"] : undefined
       const filepath = typeof meta["filepath"] === "string" ? meta["filepath"] : undefined
       const pattern = props.request.patterns?.[0]
-      const derived = typeof pattern === "string" ? (pattern.includes("*") ? path.dirname(pattern) : pattern) : undefined
+      const derived =
+        typeof pattern === "string" ? (pattern.includes("*") ? path.dirname(pattern) : pattern) : undefined
 
       const raw = parent ?? filepath ?? derived
       const dir = normalizePath(raw)

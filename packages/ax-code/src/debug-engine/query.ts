@@ -33,10 +33,7 @@ export namespace DebugEngineQuery {
     )[0]
   }
 
-  export function listPlans(
-    projectID: ProjectID,
-    opts?: { status?: RefactorPlanStatus; limit?: number },
-  ): PlanRow[] {
+  export function listPlans(projectID: ProjectID, opts?: { status?: RefactorPlanStatus; limit?: number }): PlanRow[] {
     const filters = [eq(RefactorPlanTable.project_id, projectID)]
     if (opts?.status) filters.push(eq(RefactorPlanTable.status, opts.status))
     return Database.use((db) => {
@@ -79,12 +76,7 @@ export namespace DebugEngineQuery {
     // conflict policy is "newest wins".
     Database.transaction((db) => {
       db.delete(EmbeddingCacheTable)
-        .where(
-          and(
-            eq(EmbeddingCacheTable.project_id, row.project_id),
-            eq(EmbeddingCacheTable.node_id, row.node_id),
-          ),
-        )
+        .where(and(eq(EmbeddingCacheTable.project_id, row.project_id), eq(EmbeddingCacheTable.node_id, row.node_id)))
         .run()
       db.insert(EmbeddingCacheTable).values(row).run()
     })
@@ -95,9 +87,7 @@ export namespace DebugEngineQuery {
       db
         .select()
         .from(EmbeddingCacheTable)
-        .where(
-          and(eq(EmbeddingCacheTable.project_id, projectID), eq(EmbeddingCacheTable.node_id, nodeID)),
-        )
+        .where(and(eq(EmbeddingCacheTable.project_id, projectID), eq(EmbeddingCacheTable.node_id, nodeID)))
         .limit(1)
         .all(),
     )[0]
@@ -107,9 +97,7 @@ export namespace DebugEngineQuery {
     Database.use((db) =>
       db
         .delete(EmbeddingCacheTable)
-        .where(
-          and(eq(EmbeddingCacheTable.project_id, projectID), eq(EmbeddingCacheTable.node_id, nodeID)),
-        )
+        .where(and(eq(EmbeddingCacheTable.project_id, projectID), eq(EmbeddingCacheTable.node_id, nodeID)))
         .run(),
     )
   }

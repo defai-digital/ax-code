@@ -32,7 +32,9 @@ async function main() {
   const all = await list()
   check(all)
   const live = new Set(pick(all, "live"))
-  const miss = Object.values(risk).flat().filter((file) => !all.includes(file))
+  const miss = Object.values(risk)
+    .flat()
+    .filter((file) => !all.includes(file))
   if (miss.length) throw new Error(`Missing risk tests:\n${miss.join("\n")}`)
 
   const out = [] as string[]
@@ -50,7 +52,12 @@ async function main() {
   console.log(text)
   const file = process.env["GITHUB_STEP_SUMMARY"]
   if (file) {
-    await Bun.write(file, `${await Bun.file(file).text().catch(() => "")}${text}\n`)
+    await Bun.write(
+      file,
+      `${await Bun.file(file)
+        .text()
+        .catch(() => "")}${text}\n`,
+    )
   }
 
   const target = path.join(import.meta.dir, "..", ".tmp", "test-risk.md")

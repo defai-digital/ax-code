@@ -157,9 +157,7 @@ export namespace QualityShadow {
       return predictionCache.file
     }
 
-    const parsed = ProbabilisticRollout.PredictionFile.parse(
-      JSON.parse(await fs.readFile(resolved, "utf8")),
-    )
+    const parsed = ProbabilisticRollout.PredictionFile.parse(JSON.parse(await fs.readFile(resolved, "utf8")))
     predictionCache = { file: parsed, mtimeMs: stat.mtimeMs, path: resolved }
     return parsed
   }
@@ -175,9 +173,7 @@ export namespace QualityShadow {
       return modelCache.file
     }
 
-    const parsed = QualityCalibrationModel.ModelFile.parse(
-      JSON.parse(await fs.readFile(resolved, "utf8")),
-    )
+    const parsed = QualityCalibrationModel.ModelFile.parse(JSON.parse(await fs.readFile(resolved, "utf8")))
     modelCache = { file: parsed, mtimeMs: stat.mtimeMs, path: resolved }
     return parsed
   }

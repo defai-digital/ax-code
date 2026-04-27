@@ -7,7 +7,10 @@ export type MigrateDep = {
   path?: string
   exists?: (path: string) => Promise<boolean>
   db?: () => Parameters<typeof JsonMigration.run>[0]
-  run?: (db: Parameters<typeof JsonMigration.run>[0], opts?: Parameters<typeof JsonMigration.run>[1]) => Promise<unknown>
+  run?: (
+    db: Parameters<typeof JsonMigration.run>[0],
+    opts?: Parameters<typeof JsonMigration.run>[1],
+  ) => Promise<unknown>
   err?: {
     isTTY?: boolean
     write(text: string): unknown

@@ -143,6 +143,14 @@ function createManager(state: ManagerState): ServiceManager.Manager {
       const service = createManager(state).start(input.service, startedAt)
       const id = `${input.service}:${++state.nextTaskID}`
 
+      if (state.tasks.size > 1000) {
+        for (const [taskId, task] of state.tasks) {
+          if (task.state === "completed" || task.state === "failed" || task.state === "aborted") {
+            state.tasks.delete(taskId)
+          }
+        }
+      }
+
       state.tasks.set(
         id,
         ServiceManager.createBackgroundTaskStatus({
@@ -287,8 +295,18 @@ export namespace ServiceManager {
     .object({
       name: z.string().min(1).describe("Stable runtime service name"),
       state: ServiceState.describe("Current lifecycle state"),
-      startedAt: z.number().int().nonnegative().optional().describe("Unix time in milliseconds when the service started"),
-      stoppedAt: z.number().int().nonnegative().optional().describe("Unix time in milliseconds when the service stopped"),
+      startedAt: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe("Unix time in milliseconds when the service started"),
+      stoppedAt: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe("Unix time in milliseconds when the service stopped"),
       lastError: z.string().optional().describe("Metadata-safe description of the last service error"),
       pendingTasks: z
         .number()
@@ -305,7 +323,12 @@ export namespace ServiceManager {
       service: z.string().min(1).describe("Owning runtime service name"),
       label: z.string().min(1).describe("Metadata-safe task label"),
       state: BackgroundTaskState.describe("Current lifecycle state for the background task"),
-      queuedAt: z.number().int().nonnegative().optional().describe("Unix time in milliseconds when the task was queued"),
+      queuedAt: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe("Unix time in milliseconds when the task was queued"),
       startedAt: z.number().int().nonnegative().optional().describe("Unix time in milliseconds when the task started"),
       endedAt: z
         .number()

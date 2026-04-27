@@ -7,10 +7,7 @@ import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { useKeybind } from "@tui/context/keybind"
 import type { DiffFile } from "./revert"
 
-export function RevertNotice(props: {
-  count: number
-  files: DiffFile[]
-}) {
+export function RevertNotice(props: { count: number; files: DiffFile[] }) {
   const { theme } = useTheme()
   const keybind = useKeybind()
   const command = useCommandDialog()

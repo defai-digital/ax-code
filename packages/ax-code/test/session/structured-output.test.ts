@@ -134,7 +134,6 @@ describe("structured-output.AssistantMessage", () => {
     mode: "default",
     agent: "default",
     path: { cwd: "/test", root: "/test" },
-    cost: 0.001,
     tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
     time: { created: Date.now() },
   }
@@ -370,11 +369,13 @@ describe("structured-output.createStructuredOutputTool", () => {
     })
 
     expect(tool.toModelOutput).toBeDefined()
-    const modelOutput = await Promise.resolve(tool.toModelOutput!({
-      toolCallId: "test-call-id",
-      input: {},
-      output: "Test output",
-    }))
+    const modelOutput = await Promise.resolve(
+      tool.toModelOutput!({
+        toolCallId: "test-call-id",
+        input: {},
+        output: "Test output",
+      }),
+    )
 
     expect(modelOutput.type).toBe("text")
     expect((modelOutput as any).value).toBe("Test output")

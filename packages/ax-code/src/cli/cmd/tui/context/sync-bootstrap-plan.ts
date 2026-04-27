@@ -32,21 +32,13 @@ export interface BootstrapResponseTaskPlan<TInput, TOutput> {
   apply: (value: TOutput) => void
 }
 
-export function createBootstrapResponsePlanTasks<
-  const TPlans extends readonly BootstrapResponseTaskPlan<any, any>[],
->(
+export function createBootstrapResponsePlanTasks<const TPlans extends readonly BootstrapResponseTaskPlan<any, any>[]>(
   ...plans: TPlans
 ) {
   const tasks: BootstrapTask[] = []
 
   for (const plan of plans as readonly BootstrapResponseTaskPlan<any, any>[]) {
-    tasks.push(
-      createBootstrapResponseTask(
-        plan.request,
-        plan.normalize,
-        plan.apply,
-      ),
-    )
+    tasks.push(createBootstrapResponseTask(plan.request, plan.normalize, plan.apply))
   }
 
   return tasks
@@ -64,18 +56,19 @@ export function createSessionBootstrapPhaseTasks<T extends { id: string }>(input
     input.applySessions,
   )
 
-  return input.continueFromArgs
-    ? { blocking: [task], core: [] }
-    : { blocking: [], core: [task] }
+  return input.continueFromArgs ? { blocking: [task], core: [] } : { blocking: [], core: [task] }
 }
 
 export function createProviderBootstrapTask<T>(input: {
   providersPromise: () => Promise<BootstrapResponse<{ providers: T[]; default: Record<string, string> }>>
-  applyState: (value: ReturnType<typeof createProviderBootstrapSuccess<T>> | ReturnType<typeof createProviderBootstrapFailure>) => void
+  applyState: (
+    value: ReturnType<typeof createProviderBootstrapSuccess<T>> | ReturnType<typeof createProviderBootstrapFailure>,
+  ) => void
   onReady?: (failed: boolean) => void
 }) {
   return () =>
-    input.providersPromise()
+    input
+      .providersPromise()
       .then((response) => normalizeBootstrapValue(response.data, { providers: [], default: {} }))
       .then((providers) => {
         input.applyState(createProviderBootstrapSuccess(providers))

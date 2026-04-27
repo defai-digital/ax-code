@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  installResizeInputGuard,
-  resizeSignature,
-  restoreTuiInputMode,
-} from "../../../src/cli/cmd/tui/input-mode"
+import { installResizeInputGuard, resizeSignature, restoreTuiInputMode } from "../../../src/cli/cmd/tui/input-mode"
 
 function createEmitter() {
   const listeners = new Map<string, Set<() => void>>()

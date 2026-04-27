@@ -141,13 +141,62 @@ function benchmarkBundle(): QualityCalibrationModel.BenchmarkBundle {
         candidateMissingPredictionItems: 0,
       },
       metrics: {
-        precision: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        recall: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        falsePositiveRate: { baseline: null, candidate: null, delta: null, direction: "lower_is_better", improvement: false, regression: false },
-        falseNegativeRate: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
-        precisionAt1: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        precisionAt3: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        calibrationError: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
+        precision: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        recall: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falsePositiveRate: {
+          baseline: null,
+          candidate: null,
+          delta: null,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falseNegativeRate: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt1: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt3: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        calibrationError: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
       },
       gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
     },
@@ -412,8 +461,8 @@ describe("QualityPromotionSignedArchive", () => {
       const result = await QualityPromotionSignedArchive.materialize(signedArchive, outFile)
       expect(result.byteLength).toBeGreaterThan(0)
       const json = await fs.readFile(outFile, "utf8")
-      expect(json).toContain("\"kind\": \"ax-code-quality-promotion-signed-archive\"")
-      expect(json).toContain("\"keyID\": \"archive-key-v1\"")
+      expect(json).toContain('"kind": "ax-code-quality-promotion-signed-archive"')
+      expect(json).toContain('"keyID": "archive-key-v1"')
     } finally {
       await clearSignedArchives()
     }
@@ -592,8 +641,11 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const wrongRecord = QualityPromotionSignedArchiveAttestationRecord.RecordArtifact.parse({
         ...record,
         recordID: "wrong-attestation-record",
@@ -713,7 +765,8 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
         trust,
         attestation,
       })
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const tamperedRecord = QualityPromotionSignedArchiveAttestationRecord.RecordArtifact.parse({
         ...record,
         trust: {
@@ -828,8 +881,11 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const packet = QualityPromotionSignedArchiveAttestationPacket.create({
         promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
           promotionID: promotion.promotionID,
@@ -898,8 +954,11 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
       trust,
       attestation,
     })
-    const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-    const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+    const releasePacket =
+      signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+        .releasePacket
+    const promotion =
+      signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
     const packet = QualityPromotionSignedArchiveAttestationPacket.create({
       promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
         promotionID: promotion.promotionID,
@@ -966,8 +1025,11 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const packet = QualityPromotionSignedArchiveAttestationPacket.create({
         promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
           promotionID: promotion.promotionID,
@@ -1100,8 +1162,11 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const promotionRecord = QualityModelRegistry.PromotionRecord.parse({
         schemaVersion: 1,
         kind: "ax-code-quality-model-promotion",
@@ -1203,8 +1268,11 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const packet = QualityPromotionSignedArchiveAttestationPacket.create({
         promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
           promotionID: promotion.promotionID,
@@ -1332,8 +1400,11 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const attestationPacket = QualityPromotionSignedArchiveAttestationPacket.create({
         promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
           promotionID: promotion.promotionID,
@@ -1363,7 +1434,9 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
       expect(listed).toHaveLength(1)
       expect(listed[0]?.packetID).toBe(governancePacket.packetID)
       expect(listed[0]?.summary.policySource).toBe("project")
-      expect(QualityPromotionSignedArchiveGovernancePacket.renderReport(governancePacket)).toContain("release packet id")
+      expect(QualityPromotionSignedArchiveGovernancePacket.renderReport(governancePacket)).toContain(
+        "release packet id",
+      )
     } finally {
       await clearSignedArchives()
     }
@@ -1407,8 +1480,11 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
       trust,
       attestation,
     })
-    const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-    const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+    const releasePacket =
+      signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+        .releasePacket
+    const promotion =
+      signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
     const attestationPacket = QualityPromotionSignedArchiveAttestationPacket.create({
       promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
         promotionID: promotion.promotionID,
@@ -1480,8 +1556,11 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const promotionRecord = QualityModelRegistry.PromotionRecord.parse({
         schemaVersion: 1,
         kind: "ax-code-quality-model-promotion",
@@ -1587,8 +1666,11 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const attestationPacket = QualityPromotionSignedArchiveAttestationPacket.create({
         promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
           promotionID: promotion.promotionID,
@@ -1721,8 +1803,11 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const governancePacket = QualityPromotionSignedArchiveGovernancePacket.create({
         promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
           promotionID: promotion.promotionID,
@@ -1811,8 +1896,11 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const governancePacket = QualityPromotionSignedArchiveGovernancePacket.create({
         promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
           promotionID: promotion.promotionID,
@@ -1962,8 +2050,11 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
         trust,
         attestation,
       })
-      const releasePacket = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
-      const promotion = signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
       const governancePacket = QualityPromotionSignedArchiveGovernancePacket.create({
         promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
           promotionID: promotion.promotionID,
@@ -2020,7 +2111,10 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
       const governancePacketFile = path.join(tmp.path, "signed-archive-governance-packet.json")
       const handoffPackageFile = path.join(tmp.path, "handoff-package.json")
       await Bun.write(governancePacketFile, JSON.stringify(governancePacket, null, 2))
-      await Bun.write(handoffPackageFile, JSON.stringify(signedArchive.packagedArchive.portableExport.handoffPackage, null, 2))
+      await Bun.write(
+        handoffPackageFile,
+        JSON.stringify(signedArchive.packagedArchive.portableExport.handoffPackage, null, 2),
+      )
 
       const result = Bun.spawnSync({
         cmd: [

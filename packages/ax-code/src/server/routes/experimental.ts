@@ -1,5 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
+import fs from "fs/promises"
+import path from "path"
 import z from "zod"
 import { ProviderID, ModelID } from "../../provider/schema"
 import { ToolRegistry } from "../../tool/registry"
@@ -11,6 +13,13 @@ import { Session } from "../../session"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+
+async function canonicalSandboxDirectory(directory: string) {
+  const absolute = path.resolve(directory)
+  const real = await fs.realpath(absolute).catch(() => absolute)
+  const normalized = path.normalize(real)
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized
+}
 
 export const ExperimentalRoutes = lazy(() =>
   new Hono()
@@ -156,8 +165,9 @@ export const ExperimentalRoutes = lazy(() =>
       validator("json", Worktree.remove.schema),
       async (c) => {
         const body = c.req.valid("json")
+        const sandboxDirectory = await canonicalSandboxDirectory(body.directory)
         await Worktree.remove(body)
-        await Project.removeSandbox(Instance.project.id, body.directory)
+        await Project.removeSandbox(Instance.project.id, sandboxDirectory)
         return c.json(true)
       },
     )
@@ -218,7 +228,13 @@ export const ExperimentalRoutes = lazy(() =>
             .optional()
             .meta({ description: "Return sessions updated before this timestamp (milliseconds since epoch)" }),
           search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
-          limit: z.coerce.number().int().min(1).max(1000).optional().meta({ description: "Maximum number of sessions to return" }),
+          limit: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(1000)
+            .optional()
+            .meta({ description: "Maximum number of sessions to return" }),
           archived: z.coerce.boolean().optional().meta({ description: "Include archived sessions (default false)" }),
         }),
       ),

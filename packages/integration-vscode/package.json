@@ -139,7 +139,7 @@
         "axCode.serverTimeoutMs": {
           "type": "number",
           "default": 90000,
-          "minimum": 1e4,
+          "minimum": 10000,
           "description": "Milliseconds to wait for ax-code serve to report 'listening' before failing."
         },
         "axCode.requestTimeoutMs": {

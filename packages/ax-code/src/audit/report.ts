@@ -12,7 +12,10 @@ export function truncate(s: string, max: number): string {
 
 function formatTimestamp(ms: number): string {
   const d = new Date(ms)
-  return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, "")
+  return d
+    .toISOString()
+    .replace("T", " ")
+    .replace(/\.\d+Z$/, "")
 }
 
 function formatDuration(ms: number): string {

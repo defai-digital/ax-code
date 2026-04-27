@@ -24,7 +24,9 @@ const AuditPruneCommand = cmd({
         process.stderr.write(`No audit events older than ${args.days} days${EOL}`)
         return
       }
-      process.stderr.write(`Pruned ${removed} audit event${removed === 1 ? "" : "s"} older than ${args.days} days${EOL}`)
+      process.stderr.write(
+        `Pruned ${removed} audit event${removed === 1 ? "" : "s"} older than ${args.days} days${EOL}`,
+      )
     })
   },
 })
@@ -66,7 +68,9 @@ const AuditExportCommand = cmd({
       } else if (args.all) {
         const since = args.since ? new Date(args.since).getTime() : undefined
         const riskFilter = args.risk as string | undefined
-        process.stderr.write(`Exporting all events${since ? ` since ${args.since}` : ""}${riskFilter ? ` (risk >= ${riskFilter})` : ""}${EOL}`)
+        process.stderr.write(
+          `Exporting all events${since ? ` since ${args.since}` : ""}${riskFilter ? ` (risk >= ${riskFilter})` : ""}${EOL}`,
+        )
 
         if (riskFilter) {
           const { Risk } = await import("../../risk/score")
@@ -81,8 +85,7 @@ const AuditExportCommand = cmd({
                   const assessment = Risk.fromSession(record.session_id as any)
                   sessionRisks.set(record.session_id, riskOrder[assessment.level] ?? 0)
                 }
-                if ((sessionRisks.get(record.session_id) ?? 0) >= minLevel)
-                  process.stdout.write(line + EOL)
+                if ((sessionRisks.get(record.session_id) ?? 0) >= minLevel) process.stdout.write(line + EOL)
               }
             } catch {
               process.stdout.write(line + EOL)

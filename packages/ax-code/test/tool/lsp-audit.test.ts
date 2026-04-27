@@ -182,19 +182,16 @@ describe("lsp tool audit trail (S3)", () => {
         } as any)
 
         const tool = await LspTool.init()
-        await tool.execute(
-          { operation: "diagnosticsAggregated", filePath: file },
-          {
-            sessionID: session.id,
-            messageID: MessageID.make(""),
-            callID: "",
-            agent: "build",
-            abort: AbortSignal.any([]),
-            messages: [],
-            metadata: () => {},
-            ask: async () => {},
-          } as any,
-        )
+        await tool.execute({ operation: "diagnosticsAggregated", filePath: file }, {
+          sessionID: session.id,
+          messageID: MessageID.make(""),
+          callID: "",
+          agent: "build",
+          abort: AbortSignal.any([]),
+          messages: [],
+          metadata: () => {},
+          ask: async () => {},
+        } as any)
 
         AuditSemanticCall.flushNow()
 
@@ -231,19 +228,16 @@ describe("lsp tool audit trail (S3)", () => {
         } as any)
 
         const tool = await LspTool.init()
-        await tool.execute(
-          { operation: "incomingCalls", filePath: file, line: 1, character: 1 },
-          {
-            sessionID: session.id,
-            messageID: MessageID.make(""),
-            callID: "",
-            agent: "build",
-            abort: AbortSignal.any([]),
-            messages: [],
-            metadata: () => {},
-            ask: async () => {},
-          } as any,
-        )
+        await tool.execute({ operation: "incomingCalls", filePath: file, line: 1, character: 1 }, {
+          sessionID: session.id,
+          messageID: MessageID.make(""),
+          callID: "",
+          agent: "build",
+          abort: AbortSignal.any([]),
+          messages: [],
+          metadata: () => {},
+          ask: async () => {},
+        } as any)
 
         AuditSemanticCall.flushNow()
 

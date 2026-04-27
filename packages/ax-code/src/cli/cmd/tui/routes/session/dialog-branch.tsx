@@ -22,7 +22,10 @@ export function DialogBranch(props: {
 
   const options = createMemo((): DialogSelectOption<string>[] => {
     const semantic = Object.fromEntries(
-      props.sessions.map((item) => [item.id, SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null]),
+      props.sessions.map((item) => [
+        item.id,
+        SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null,
+      ]),
     )
     const detail = SessionBranch.detail({ currentID: props.currentID, sessions: props.sessions, semantic })
     if (!detail || detail.items.length <= 1) {

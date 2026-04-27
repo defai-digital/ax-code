@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  computeFindingId,
-  FINDING_ID_PATTERN,
-  FindingSchema,
-  RULE_ID_PATTERN,
-} from "../../src/quality/finding"
+import { computeFindingId, FINDING_ID_PATTERN, FindingSchema, RULE_ID_PATTERN } from "../../src/quality/finding"
 import type { Finding, FindingAnchor } from "../../src/quality/finding"
 
 const validFinding: Finding = {
@@ -72,9 +67,7 @@ describe("FindingSchema", () => {
   })
 
   test("rejects malformed ruleId", () => {
-    expect(() =>
-      FindingSchema.parse({ ...validFinding, ruleId: "unprefixed-rule" }),
-    ).toThrow()
+    expect(() => FindingSchema.parse({ ...validFinding, ruleId: "unprefixed-rule" })).toThrow()
     expect(() => FindingSchema.parse({ ...validFinding, ruleId: "vendor:Some_Rule" })).toThrow()
   })
 
@@ -121,9 +114,7 @@ describe("computeFindingId", () => {
     expect(computeFindingId({ ...baseInput, workflow: "debug" })).not.toBe(baseId)
     expect(computeFindingId({ ...baseInput, category: "security" })).not.toBe(baseId)
     expect(computeFindingId({ ...baseInput, file: "src/bar.ts" })).not.toBe(baseId)
-    expect(
-      computeFindingId({ ...baseInput, anchor: { kind: "line", line: 43 } as FindingAnchor }),
-    ).not.toBe(baseId)
+    expect(computeFindingId({ ...baseInput, anchor: { kind: "line", line: 43 } as FindingAnchor })).not.toBe(baseId)
     expect(computeFindingId({ ...baseInput, ruleId: "axcode:r1" })).not.toBe(baseId)
   })
 

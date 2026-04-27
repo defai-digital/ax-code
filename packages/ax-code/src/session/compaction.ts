@@ -13,7 +13,11 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
-import { COMPACTION_BUFFER as _COMPACTION_BUFFER, PRUNE_MINIMUM as _PRUNE_MINIMUM, PRUNE_PROTECT as _PRUNE_PROTECT } from "@/constants/session"
+import {
+  COMPACTION_BUFFER as _COMPACTION_BUFFER,
+  PRUNE_MINIMUM as _PRUNE_MINIMUM,
+  PRUNE_PROTECT as _PRUNE_PROTECT,
+} from "@/constants/session"
 import { Database } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
 import { ProviderTransform } from "@/provider/transform"
@@ -71,7 +75,7 @@ export namespace SessionCompaction {
     const config = await Config.get()
     if (config.compaction?.prune === false) return
     log.info("pruning")
-    const msgs = input.messages ?? await Session.messages({ sessionID: input.sessionID })
+    const msgs = input.messages ?? (await Session.messages({ sessionID: input.sessionID }))
     let total = 0
     let pruned = 0
     const toPrune: MessageV2.ToolPart[] = []
@@ -113,7 +117,13 @@ export namespace SessionCompaction {
             if (part.state.status !== "completed") continue
             const { id, messageID, sessionID, ...data } = part
             db.insert(PartTable)
-              .values({ id, message_id: messageID, session_id: sessionID, time_created: part.state.time?.start ?? Date.now(), data })
+              .values({
+                id,
+                message_id: messageID,
+                session_id: sessionID,
+                time_created: part.state.time?.start ?? Date.now(),
+                data,
+              })
               .onConflictDoUpdate({ target: PartTable.id, set: { data } })
               .run()
             Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))

@@ -64,9 +64,10 @@ export namespace RuntimeFailureClass {
       kind: Kind.describe("Stable failure class identifier"),
       owner: z.string().min(1).describe("Primary subsystem expected to own the fix"),
       summary: z.string().min(1).describe("Short description of the failure class"),
-      examples: z.array(z.string().min(1).describe("Representative signal for the failure class")).min(1).describe(
-        "Examples of symptoms that should map into the failure class",
-      ),
+      examples: z
+        .array(z.string().min(1).describe("Representative signal for the failure class"))
+        .min(1)
+        .describe("Examples of symptoms that should map into the failure class"),
     })
     .strict()
   export type Info = z.infer<typeof Info>

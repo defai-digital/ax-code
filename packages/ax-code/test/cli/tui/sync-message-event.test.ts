@@ -32,10 +32,7 @@ describe("tui sync message event", () => {
     )
 
     expect(handled).toBe(true)
-    expect(calls).toEqual([
-      "update:ses_1:msg_1",
-      "delete:ses_1:msg_2",
-    ])
+    expect(calls).toEqual(["update:ses_1:msg_1", "delete:ses_1:msg_2"])
   })
 
   test("routes part update and remove events to the part handlers", () => {
@@ -67,10 +64,7 @@ describe("tui sync message event", () => {
       },
     )
 
-    expect(calls).toEqual([
-      "update:msg_1:part_1",
-      "delete:msg_1:part_2",
-    ])
+    expect(calls).toEqual(["update:msg_1:part_1", "delete:msg_1:part_2"])
   })
 
   test("applies part deltas only for text field updates", () => {

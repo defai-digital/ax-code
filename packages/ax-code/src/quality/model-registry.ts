@@ -69,398 +69,468 @@ export namespace QualityModelRegistry {
     previousActiveSource: z.string().nullable(),
     decision: z.enum(["pass", "warn_override", "force"]),
     decisionBundleCreatedAt: z.string().nullable().optional(),
-    boardDecision: z.object({
-      decisionID: z.string(),
-      decidedAt: z.string(),
-      decider: z.string(),
-      role: z.string().nullable(),
-      team: z.string().nullable().default(null),
-      reportingChain: z.string().nullable().default(null),
-      disposition: z.lazy(() => QualityPromotionBoardDecision.Disposition),
-      overrideAccepted: z.boolean(),
-      dossierID: z.string(),
-      recommendation: z.lazy(() => QualityPromotionReviewDossier.Recommendation),
-      requiredOverride: z.enum(["none", "allow_warn", "force"]),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    releaseDecisionRecord: z.object({
-      recordID: z.string(),
-      recordedAt: z.string(),
-      decisionID: z.string(),
-      disposition: z.lazy(() => QualityPromotionBoardDecision.Disposition),
-      overrideAccepted: z.boolean(),
-      authorizedPromotion: z.boolean(),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    releasePacket: z.object({
-      packetID: z.string(),
-      createdAt: z.string(),
-      recordID: z.string(),
-      decisionID: z.string(),
-      authorizedPromotion: z.boolean(),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    auditManifest: z.object({
-      manifestID: z.string(),
-      createdAt: z.string(),
-      packetID: z.string(),
-      promotionID: z.string(),
-      decision: z.enum(["pass", "warn_override", "force"]),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    exportBundle: z.object({
-      bundleID: z.string(),
-      createdAt: z.string(),
-      manifestID: z.string(),
-      packetID: z.string(),
-      promotionID: z.string(),
-      decision: z.enum(["pass", "warn_override", "force"]),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    archiveManifest: z.object({
-      archiveID: z.string(),
-      createdAt: z.string(),
-      bundleID: z.string(),
-      manifestID: z.string(),
-      packetID: z.string(),
-      promotionID: z.string(),
-      inventoryCount: z.number().int().positive(),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    handoffPackage: z.object({
-      packageID: z.string(),
-      createdAt: z.string(),
-      archiveID: z.string(),
-      bundleID: z.string(),
-      manifestID: z.string(),
-      packetID: z.string(),
-      promotionID: z.string(),
-      documentCount: z.number().int().positive(),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    portableExport: z.object({
-      exportID: z.string(),
-      createdAt: z.string(),
-      packageID: z.string(),
-      archiveID: z.string(),
-      bundleID: z.string(),
-      promotionID: z.string(),
-      fileCount: z.number().int().positive(),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    packagedArchive: z.object({
-      archiveID: z.string(),
-      createdAt: z.string(),
-      exportID: z.string(),
-      packageID: z.string(),
-      promotionID: z.string(),
-      entryCount: z.number().int().positive(),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    signedArchive: z.object({
-      signedArchiveID: z.string(),
-      createdAt: z.string(),
-      archiveID: z.string(),
-      exportID: z.string(),
-      promotionID: z.string(),
-      keyID: z.string(),
-      attestedBy: z.string(),
-      algorithm: z.literal("hmac-sha256"),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    signedArchiveTrust: z.object({
-      overallStatus: z.enum(["pass", "warn", "fail"]),
-      trusted: z.boolean(),
-      signatureStatus: z.enum(["pass", "fail"]),
-      registryStatus: z.enum(["pass", "fail"]),
-      lifecycleStatus: z.enum(["pass", "warn", "fail"]),
-      resolution: z.object({
-        matched: z.boolean(),
-        scope: z.enum(["global", "project"]).nullable(),
-        projectID: z.string().nullable(),
-        trustID: z.string().nullable(),
-        lifecycle: z.enum(["active", "retired", "revoked"]).nullable(),
-        registeredAt: z.string().nullable(),
-        effectiveFrom: z.string().nullable(),
-        retiredAt: z.string().nullable(),
-        revokedAt: z.string().nullable(),
-      }),
-    }).optional(),
-    signedArchiveAttestation: z.object({
-      overallStatus: z.enum(["pass", "warn", "fail"]),
-      policySource: z.enum(["explicit", "project", "global", "default"]),
-      policyProjectID: z.string().nullable(),
-      policyDigest: z.string(),
-      acceptedByPolicy: z.boolean(),
-      trustStatus: z.enum(["pass", "warn", "fail"]),
-      minimumScopeStatus: z.enum(["pass", "fail"]),
-      lifecyclePolicyStatus: z.enum(["pass", "warn", "fail"]),
-      effectiveTrustScope: z.enum(["global", "project"]).nullable(),
-      effectiveTrustLifecycle: z.enum(["active", "retired", "revoked"]).nullable(),
-    }).optional(),
-    signedArchiveAttestationRecord: z.object({
-      recordID: z.string(),
-      createdAt: z.string(),
-      signedArchiveID: z.string(),
-      promotionID: z.string(),
-      trustStatus: z.enum(["pass", "warn", "fail"]),
-      attestationStatus: z.enum(["pass", "warn", "fail"]),
-      trusted: z.boolean(),
-      acceptedByPolicy: z.boolean(),
-      policySource: z.enum(["explicit", "project", "global", "default"]),
-      policyProjectID: z.string().nullable(),
-      overallStatus: z.enum(["pass", "warn", "fail"]),
-    }).optional(),
-    signedArchiveAttestationPacket: z.object({
-      packetID: z.string(),
-      createdAt: z.string(),
-      promotionID: z.string(),
-      signedArchiveID: z.string(),
-      trustStatus: z.enum(["pass", "warn", "fail"]),
-      attestationStatus: z.enum(["pass", "warn", "fail"]),
-      acceptedByPolicy: z.boolean(),
-      policySource: z.enum(["explicit", "project", "global", "default"]),
-      policyProjectID: z.string().nullable(),
-      overallStatus: z.enum(["pass", "warn", "fail"]),
-    }).optional(),
-    signedArchiveGovernancePacket: z.object({
-      packetID: z.string(),
-      createdAt: z.string(),
-      promotionID: z.string(),
-      releasePacketID: z.string(),
-      signedArchiveID: z.string(),
-      authorizedPromotion: z.boolean(),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      policySource: z.enum(["explicit", "project", "global", "default"]),
-      policyProjectID: z.string().nullable(),
-      overallStatus: z.enum(["pass", "warn", "fail"]),
-    }).optional(),
-    signedArchiveReviewDossier: z.object({
-      dossierID: z.string(),
-      createdAt: z.string(),
-      promotionID: z.string(),
-      governancePacketID: z.string(),
-      packageID: z.string(),
-      releasePacketID: z.string(),
-      signedArchiveID: z.string(),
-      authorizedPromotion: z.boolean(),
-      promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
-      policySource: z.enum(["explicit", "project", "global", "default"]),
-      policyProjectID: z.string().nullable(),
-      overallStatus: z.enum(["pass", "warn", "fail"]),
-    }).optional(),
-    reviewDossier: z.object({
-      dossierID: z.string(),
-      createdAt: z.string(),
-      submissionID: z.string(),
-      submissionCreatedAt: z.string(),
-      decisionBundleCreatedAt: z.string(),
-      approvalPacketID: z.string(),
-      overallStatus: z.enum(["pass", "fail"]),
-      recommendation: z.lazy(() => QualityPromotionReviewDossier.Recommendation),
-    }).optional(),
-    submissionBundle: z.object({
-      submissionID: z.string(),
-      createdAt: z.string(),
-      decisionBundleCreatedAt: z.string(),
-      approvalPacketID: z.string(),
-      overallStatus: z.enum(["pass", "fail"]),
-      eligibilityDecision: z.enum(["go", "review", "no_go"]),
-      requiredOverride: z.enum(["none", "allow_warn", "force"]),
-    }).optional(),
-    approval: z.object({
-      approvalID: z.string(),
-      approvedAt: z.string(),
-      approver: z.string(),
-      role: z.string().nullable(),
-      team: z.string().nullable().default(null),
-      reportingChain: z.string().nullable().default(null),
-      disposition: z.enum(["approved", "rejected"]),
-      decisionBundleCreatedAt: z.string(),
-      decisionBundleDigest: z.string(),
-    }).optional(),
-    approvalPacket: z.object({
-      packetID: z.string(),
-      createdAt: z.string(),
-      decisionBundleCreatedAt: z.string(),
-      decisionBundleDigest: z.string(),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-      approvalCount: z.number().int().nonnegative(),
-      adoptionReviewCount: z.number().int().nonnegative(),
-      hasDissentHandling: z.boolean(),
-      overallStatus: z.enum(["pass", "fail"]),
-    }).optional(),
-    approvals: z.array(z.object({
-      approvalID: z.string(),
-      approvedAt: z.string(),
-      approver: z.string(),
-      role: z.string().nullable(),
-      team: z.string().nullable().default(null),
-      reportingChain: z.string().nullable().default(null),
-      disposition: z.enum(["approved", "rejected"]),
-      decisionBundleCreatedAt: z.string(),
-      decisionBundleDigest: z.string(),
-    })).optional(),
-    adoptionReviews: z.array(z.object({
-      reviewID: z.string(),
-      reviewedAt: z.string(),
-      reviewer: z.string(),
-      role: z.string().nullable(),
-      disposition: z.lazy(() => QualityPromotionAdoptionReview.Disposition),
-      rationale: z.string().nullable(),
-      decisionBundleCreatedAt: z.string(),
-      decisionBundleDigest: z.string(),
-      suggestionDigest: z.string(),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-    })).optional(),
-    adoptionReviewConsensus: z.object({
-      overallStatus: z.enum(["pass", "fail"]),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-      qualifyingDisposition: z.lazy(() => QualityPromotionAdoptionReview.Disposition),
-      requiredReviews: z.number().int().nonnegative(),
-      minimumRole: z.string().nullable(),
-      distinctReviewersRequired: z.boolean(),
-      qualifyingReviews: z.number().int().nonnegative(),
-      distinctQualifiedReviewers: z.number().int().nonnegative(),
-      qualifiedRejectingReviews: z.number().int().nonnegative(),
-      distinctQualifiedRejectingReviewers: z.number().int().nonnegative(),
-    }).optional(),
-    adoptionDissentResolutions: z.array(z.object({
-      resolutionID: z.string(),
-      resolvedAt: z.string(),
-      resolver: z.string(),
-      role: z.string().nullable(),
-      rationale: z.string(),
-      targetReviewCount: z.number().int().positive(),
-      decisionBundleCreatedAt: z.string(),
-      decisionBundleDigest: z.string(),
-      suggestionDigest: z.string(),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-    })).optional(),
-    adoptionDissentResolution: z.object({
-      overallStatus: z.enum(["pass", "fail"]),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-      requiredRole: z.string().nullable(),
-      totalResolutions: z.number().int().nonnegative(),
-      qualifyingResolutions: z.number().int().nonnegative(),
-      distinctQualifyingResolvers: z.number().int().nonnegative(),
-      totalQualifiedRejectingReviews: z.number().int().nonnegative(),
-      coveredQualifiedRejectingReviews: z.number().int().nonnegative(),
-      unresolvedQualifiedRejectingReviews: z.number().int().nonnegative(),
-      distinctQualifiedRejectingReviewers: z.number().int().nonnegative(),
-    }).optional(),
-    adoptionDissentSupersessions: z.array(z.object({
-      supersessionID: z.string(),
-      supersededAt: z.string(),
-      superseder: z.string(),
-      role: z.string().nullable(),
-      disposition: z.lazy(() => QualityPromotionAdoptionDissentSupersession.Disposition),
-      rationale: z.string(),
-      targetReviewCount: z.number().int().positive(),
-      decisionBundleCreatedAt: z.string(),
-      decisionBundleDigest: z.string(),
-      suggestionDigest: z.string(),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-    })).optional(),
-    adoptionDissentSupersession: z.object({
-      overallStatus: z.enum(["pass", "fail"]),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-      requiredRole: z.string().nullable(),
-      totalSupersessions: z.number().int().nonnegative(),
-      qualifyingSupersessions: z.number().int().nonnegative(),
-      distinctQualifyingSuperseders: z.number().int().nonnegative(),
-      totalQualifiedRejectingReviews: z.number().int().nonnegative(),
-      coveredQualifiedRejectingReviews: z.number().int().nonnegative(),
-      unresolvedQualifiedRejectingReviews: z.number().int().nonnegative(),
-      coveredByReviewerRereview: z.number().int().nonnegative(),
-      coveredByEvidenceSupersession: z.number().int().nonnegative(),
-    }).optional(),
-    adoptionDissentHandlingBundle: z.object({
-      handlingID: z.string(),
-      handledAt: z.string(),
-      decisionBundleCreatedAt: z.string(),
-      decisionBundleDigest: z.string(),
-      suggestionDigest: z.string(),
-      adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
-      qualifiedRejectingReviewCount: z.number().int().nonnegative(),
-      resolutionCount: z.number().int().nonnegative(),
-      supersessionCount: z.number().int().nonnegative(),
-    }).optional(),
+    boardDecision: z
+      .object({
+        decisionID: z.string(),
+        decidedAt: z.string(),
+        decider: z.string(),
+        role: z.string().nullable(),
+        team: z.string().nullable().default(null),
+        reportingChain: z.string().nullable().default(null),
+        disposition: z.lazy(() => QualityPromotionBoardDecision.Disposition),
+        overrideAccepted: z.boolean(),
+        dossierID: z.string(),
+        recommendation: z.lazy(() => QualityPromotionReviewDossier.Recommendation),
+        requiredOverride: z.enum(["none", "allow_warn", "force"]),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    releaseDecisionRecord: z
+      .object({
+        recordID: z.string(),
+        recordedAt: z.string(),
+        decisionID: z.string(),
+        disposition: z.lazy(() => QualityPromotionBoardDecision.Disposition),
+        overrideAccepted: z.boolean(),
+        authorizedPromotion: z.boolean(),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    releasePacket: z
+      .object({
+        packetID: z.string(),
+        createdAt: z.string(),
+        recordID: z.string(),
+        decisionID: z.string(),
+        authorizedPromotion: z.boolean(),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    auditManifest: z
+      .object({
+        manifestID: z.string(),
+        createdAt: z.string(),
+        packetID: z.string(),
+        promotionID: z.string(),
+        decision: z.enum(["pass", "warn_override", "force"]),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    exportBundle: z
+      .object({
+        bundleID: z.string(),
+        createdAt: z.string(),
+        manifestID: z.string(),
+        packetID: z.string(),
+        promotionID: z.string(),
+        decision: z.enum(["pass", "warn_override", "force"]),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    archiveManifest: z
+      .object({
+        archiveID: z.string(),
+        createdAt: z.string(),
+        bundleID: z.string(),
+        manifestID: z.string(),
+        packetID: z.string(),
+        promotionID: z.string(),
+        inventoryCount: z.number().int().positive(),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    handoffPackage: z
+      .object({
+        packageID: z.string(),
+        createdAt: z.string(),
+        archiveID: z.string(),
+        bundleID: z.string(),
+        manifestID: z.string(),
+        packetID: z.string(),
+        promotionID: z.string(),
+        documentCount: z.number().int().positive(),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    portableExport: z
+      .object({
+        exportID: z.string(),
+        createdAt: z.string(),
+        packageID: z.string(),
+        archiveID: z.string(),
+        bundleID: z.string(),
+        promotionID: z.string(),
+        fileCount: z.number().int().positive(),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    packagedArchive: z
+      .object({
+        archiveID: z.string(),
+        createdAt: z.string(),
+        exportID: z.string(),
+        packageID: z.string(),
+        promotionID: z.string(),
+        entryCount: z.number().int().positive(),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    signedArchive: z
+      .object({
+        signedArchiveID: z.string(),
+        createdAt: z.string(),
+        archiveID: z.string(),
+        exportID: z.string(),
+        promotionID: z.string(),
+        keyID: z.string(),
+        attestedBy: z.string(),
+        algorithm: z.literal("hmac-sha256"),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    signedArchiveTrust: z
+      .object({
+        overallStatus: z.enum(["pass", "warn", "fail"]),
+        trusted: z.boolean(),
+        signatureStatus: z.enum(["pass", "fail"]),
+        registryStatus: z.enum(["pass", "fail"]),
+        lifecycleStatus: z.enum(["pass", "warn", "fail"]),
+        resolution: z.object({
+          matched: z.boolean(),
+          scope: z.enum(["global", "project"]).nullable(),
+          projectID: z.string().nullable(),
+          trustID: z.string().nullable(),
+          lifecycle: z.enum(["active", "retired", "revoked"]).nullable(),
+          registeredAt: z.string().nullable(),
+          effectiveFrom: z.string().nullable(),
+          retiredAt: z.string().nullable(),
+          revokedAt: z.string().nullable(),
+        }),
+      })
+      .optional(),
+    signedArchiveAttestation: z
+      .object({
+        overallStatus: z.enum(["pass", "warn", "fail"]),
+        policySource: z.enum(["explicit", "project", "global", "default"]),
+        policyProjectID: z.string().nullable(),
+        policyDigest: z.string(),
+        acceptedByPolicy: z.boolean(),
+        trustStatus: z.enum(["pass", "warn", "fail"]),
+        minimumScopeStatus: z.enum(["pass", "fail"]),
+        lifecyclePolicyStatus: z.enum(["pass", "warn", "fail"]),
+        effectiveTrustScope: z.enum(["global", "project"]).nullable(),
+        effectiveTrustLifecycle: z.enum(["active", "retired", "revoked"]).nullable(),
+      })
+      .optional(),
+    signedArchiveAttestationRecord: z
+      .object({
+        recordID: z.string(),
+        createdAt: z.string(),
+        signedArchiveID: z.string(),
+        promotionID: z.string(),
+        trustStatus: z.enum(["pass", "warn", "fail"]),
+        attestationStatus: z.enum(["pass", "warn", "fail"]),
+        trusted: z.boolean(),
+        acceptedByPolicy: z.boolean(),
+        policySource: z.enum(["explicit", "project", "global", "default"]),
+        policyProjectID: z.string().nullable(),
+        overallStatus: z.enum(["pass", "warn", "fail"]),
+      })
+      .optional(),
+    signedArchiveAttestationPacket: z
+      .object({
+        packetID: z.string(),
+        createdAt: z.string(),
+        promotionID: z.string(),
+        signedArchiveID: z.string(),
+        trustStatus: z.enum(["pass", "warn", "fail"]),
+        attestationStatus: z.enum(["pass", "warn", "fail"]),
+        acceptedByPolicy: z.boolean(),
+        policySource: z.enum(["explicit", "project", "global", "default"]),
+        policyProjectID: z.string().nullable(),
+        overallStatus: z.enum(["pass", "warn", "fail"]),
+      })
+      .optional(),
+    signedArchiveGovernancePacket: z
+      .object({
+        packetID: z.string(),
+        createdAt: z.string(),
+        promotionID: z.string(),
+        releasePacketID: z.string(),
+        signedArchiveID: z.string(),
+        authorizedPromotion: z.boolean(),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        policySource: z.enum(["explicit", "project", "global", "default"]),
+        policyProjectID: z.string().nullable(),
+        overallStatus: z.enum(["pass", "warn", "fail"]),
+      })
+      .optional(),
+    signedArchiveReviewDossier: z
+      .object({
+        dossierID: z.string(),
+        createdAt: z.string(),
+        promotionID: z.string(),
+        governancePacketID: z.string(),
+        packageID: z.string(),
+        releasePacketID: z.string(),
+        signedArchiveID: z.string(),
+        authorizedPromotion: z.boolean(),
+        promotionMode: z.lazy(() => QualityPromotionReleaseDecisionRecord.PromotionMode),
+        policySource: z.enum(["explicit", "project", "global", "default"]),
+        policyProjectID: z.string().nullable(),
+        overallStatus: z.enum(["pass", "warn", "fail"]),
+      })
+      .optional(),
+    reviewDossier: z
+      .object({
+        dossierID: z.string(),
+        createdAt: z.string(),
+        submissionID: z.string(),
+        submissionCreatedAt: z.string(),
+        decisionBundleCreatedAt: z.string(),
+        approvalPacketID: z.string(),
+        overallStatus: z.enum(["pass", "fail"]),
+        recommendation: z.lazy(() => QualityPromotionReviewDossier.Recommendation),
+      })
+      .optional(),
+    submissionBundle: z
+      .object({
+        submissionID: z.string(),
+        createdAt: z.string(),
+        decisionBundleCreatedAt: z.string(),
+        approvalPacketID: z.string(),
+        overallStatus: z.enum(["pass", "fail"]),
+        eligibilityDecision: z.enum(["go", "review", "no_go"]),
+        requiredOverride: z.enum(["none", "allow_warn", "force"]),
+      })
+      .optional(),
+    approval: z
+      .object({
+        approvalID: z.string(),
+        approvedAt: z.string(),
+        approver: z.string(),
+        role: z.string().nullable(),
+        team: z.string().nullable().default(null),
+        reportingChain: z.string().nullable().default(null),
+        disposition: z.enum(["approved", "rejected"]),
+        decisionBundleCreatedAt: z.string(),
+        decisionBundleDigest: z.string(),
+      })
+      .optional(),
+    approvalPacket: z
+      .object({
+        packetID: z.string(),
+        createdAt: z.string(),
+        decisionBundleCreatedAt: z.string(),
+        decisionBundleDigest: z.string(),
+        adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        approvalCount: z.number().int().nonnegative(),
+        adoptionReviewCount: z.number().int().nonnegative(),
+        hasDissentHandling: z.boolean(),
+        overallStatus: z.enum(["pass", "fail"]),
+      })
+      .optional(),
+    approvals: z
+      .array(
+        z.object({
+          approvalID: z.string(),
+          approvedAt: z.string(),
+          approver: z.string(),
+          role: z.string().nullable(),
+          team: z.string().nullable().default(null),
+          reportingChain: z.string().nullable().default(null),
+          disposition: z.enum(["approved", "rejected"]),
+          decisionBundleCreatedAt: z.string(),
+          decisionBundleDigest: z.string(),
+        }),
+      )
+      .optional(),
+    adoptionReviews: z
+      .array(
+        z.object({
+          reviewID: z.string(),
+          reviewedAt: z.string(),
+          reviewer: z.string(),
+          role: z.string().nullable(),
+          disposition: z.lazy(() => QualityPromotionAdoptionReview.Disposition),
+          rationale: z.string().nullable(),
+          decisionBundleCreatedAt: z.string(),
+          decisionBundleDigest: z.string(),
+          suggestionDigest: z.string(),
+          adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        }),
+      )
+      .optional(),
+    adoptionReviewConsensus: z
+      .object({
+        overallStatus: z.enum(["pass", "fail"]),
+        adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        qualifyingDisposition: z.lazy(() => QualityPromotionAdoptionReview.Disposition),
+        requiredReviews: z.number().int().nonnegative(),
+        minimumRole: z.string().nullable(),
+        distinctReviewersRequired: z.boolean(),
+        qualifyingReviews: z.number().int().nonnegative(),
+        distinctQualifiedReviewers: z.number().int().nonnegative(),
+        qualifiedRejectingReviews: z.number().int().nonnegative(),
+        distinctQualifiedRejectingReviewers: z.number().int().nonnegative(),
+      })
+      .optional(),
+    adoptionDissentResolutions: z
+      .array(
+        z.object({
+          resolutionID: z.string(),
+          resolvedAt: z.string(),
+          resolver: z.string(),
+          role: z.string().nullable(),
+          rationale: z.string(),
+          targetReviewCount: z.number().int().positive(),
+          decisionBundleCreatedAt: z.string(),
+          decisionBundleDigest: z.string(),
+          suggestionDigest: z.string(),
+          adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        }),
+      )
+      .optional(),
+    adoptionDissentResolution: z
+      .object({
+        overallStatus: z.enum(["pass", "fail"]),
+        adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        requiredRole: z.string().nullable(),
+        totalResolutions: z.number().int().nonnegative(),
+        qualifyingResolutions: z.number().int().nonnegative(),
+        distinctQualifyingResolvers: z.number().int().nonnegative(),
+        totalQualifiedRejectingReviews: z.number().int().nonnegative(),
+        coveredQualifiedRejectingReviews: z.number().int().nonnegative(),
+        unresolvedQualifiedRejectingReviews: z.number().int().nonnegative(),
+        distinctQualifiedRejectingReviewers: z.number().int().nonnegative(),
+      })
+      .optional(),
+    adoptionDissentSupersessions: z
+      .array(
+        z.object({
+          supersessionID: z.string(),
+          supersededAt: z.string(),
+          superseder: z.string(),
+          role: z.string().nullable(),
+          disposition: z.lazy(() => QualityPromotionAdoptionDissentSupersession.Disposition),
+          rationale: z.string(),
+          targetReviewCount: z.number().int().positive(),
+          decisionBundleCreatedAt: z.string(),
+          decisionBundleDigest: z.string(),
+          suggestionDigest: z.string(),
+          adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        }),
+      )
+      .optional(),
+    adoptionDissentSupersession: z
+      .object({
+        overallStatus: z.enum(["pass", "fail"]),
+        adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        requiredRole: z.string().nullable(),
+        totalSupersessions: z.number().int().nonnegative(),
+        qualifyingSupersessions: z.number().int().nonnegative(),
+        distinctQualifyingSuperseders: z.number().int().nonnegative(),
+        totalQualifiedRejectingReviews: z.number().int().nonnegative(),
+        coveredQualifiedRejectingReviews: z.number().int().nonnegative(),
+        unresolvedQualifiedRejectingReviews: z.number().int().nonnegative(),
+        coveredByReviewerRereview: z.number().int().nonnegative(),
+        coveredByEvidenceSupersession: z.number().int().nonnegative(),
+      })
+      .optional(),
+    adoptionDissentHandlingBundle: z
+      .object({
+        handlingID: z.string(),
+        handledAt: z.string(),
+        decisionBundleCreatedAt: z.string(),
+        decisionBundleDigest: z.string(),
+        suggestionDigest: z.string(),
+        adoptionStatus: z.enum(["accepted", "partially_accepted", "diverged", "no_effective_policy"]),
+        qualifiedRejectingReviewCount: z.number().int().nonnegative(),
+        resolutionCount: z.number().int().nonnegative(),
+        supersessionCount: z.number().int().nonnegative(),
+      })
+      .optional(),
     adoptionDissentHandling: z.lazy(() => QualityPromotionAdoptionDissentHandling.HandlingSummary).optional(),
-    approvalPolicy: z.object({
-      policySource: z.lazy(() => QualityPromotionApprovalPolicy.PolicySource),
-      policyProjectID: z.string().nullable(),
-      overallStatus: z.enum(["pass", "fail"]),
-      requiredOverride: z.enum(["none", "allow_warn", "force"]),
-      requiredApprovals: z.number().int().nonnegative(),
-      minimumRole: z.string().nullable(),
-      distinctApproversRequired: z.boolean(),
-      independentReviewRequired: z.boolean(),
-      priorApproverExclusionRequired: z.boolean(),
-      maxPriorApproverOverlapRatio: z.number().min(0).max(1).nullable(),
-      reviewerCarryoverBudget: z.number().nonnegative().nullable(),
-      reviewerCarryoverLookbackPromotions: z.number().int().positive().nullable(),
-      teamCarryoverBudget: z.number().nonnegative().nullable(),
-      teamCarryoverLookbackPromotions: z.number().int().positive().nullable(),
-      maxPriorReportingChainOverlapRatio: z.number().min(0).max(1).nullable(),
-      reportingChainCarryoverBudget: z.number().nonnegative().nullable(),
-      reportingChainCarryoverLookbackPromotions: z.number().int().positive().nullable(),
-      roleCohortDiversityRequired: z.boolean(),
-      minimumDistinctRoleCohorts: z.number().int().positive().nullable(),
-      reviewerTeamDiversityRequired: z.boolean(),
-      minimumDistinctReviewerTeams: z.number().int().positive().nullable(),
-      reportingChainDiversityRequired: z.boolean(),
-      minimumDistinctReportingChains: z.number().int().positive().nullable(),
-      qualifiedApprovals: z.number().int().nonnegative(),
-      independentQualifiedApprovals: z.number().int().nonnegative(),
-      freshQualifiedApprovals: z.number().int().nonnegative(),
-      overlappingQualifiedApprovers: z.number().int().nonnegative(),
-      priorApproverOverlapRatio: z.number().min(0).max(1).nullable(),
-      reviewerCarryoverScore: z.number().nonnegative(),
-      carriedOverQualifiedApprovers: z.number().int().nonnegative(),
-      teamCarryoverScore: z.number().nonnegative(),
-      carriedOverQualifiedTeams: z.number().int().nonnegative(),
-      overlappingQualifiedReportingChains: z.number().int().nonnegative(),
-      priorReportingChainOverlapRatio: z.number().min(0).max(1).nullable(),
-      reportingChainCarryoverScore: z.number().nonnegative(),
-      carriedOverQualifiedReportingChains: z.number().int().nonnegative(),
-      distinctQualifiedRoleCohorts: z.number().int().nonnegative(),
-      distinctQualifiedReviewerTeams: z.number().int().nonnegative(),
-      missingQualifiedReviewerTeams: z.number().int().nonnegative(),
-      distinctQualifiedReportingChains: z.number().int().nonnegative(),
-      missingQualifiedReportingChains: z.number().int().nonnegative(),
-      approverReuseRatio: z.number().min(0).max(1).nullable(),
-      teamReuseRatio: z.number().min(0).max(1).nullable(),
-      reportingChainReuseRatio: z.number().min(0).max(1).nullable(),
-      approvalConcentrationBudget: z.number().min(0).max(1).nullable(),
-      approvalConcentrationPreset: z.lazy(() => QualityPromotionApprovalPolicy.ApprovalConcentrationPreset).nullable(),
-      approvalConcentrationWeights: z.object({
-        approver: z.number().min(0),
-        team: z.number().min(0),
-        reportingChain: z.number().min(0),
-      }),
-      approvalConcentrationScore: z.number().min(0).max(1).nullable(),
-      approvalConcentrationApplicableAxes: z.array(z.enum(["approver", "team", "reporting_chain"])),
-      approvalConcentrationAppliedWeightTotal: z.number().positive().nullable(),
-      distinctQualifiedApprovers: z.number().int().nonnegative(),
-      priorPromotionApprovers: z.number().int().nonnegative(),
-      priorPromotionReportingChains: z.number().int().nonnegative(),
-    }).optional(),
-    releasePolicy: z.object({
-      policySource: z.enum(["explicit", "project", "global", "default"]),
-      policyProjectID: z.string().nullable(),
-      compatibilityApprovalSource: z.enum(["project", "global", "default"]).nullable(),
-      resolvedAt: z.string(),
-      persistedScope: z.enum(["global", "project"]).nullable(),
-      persistedUpdatedAt: z.string().nullable(),
-      digest: z.string(),
-      policy: z.lazy(() => QualityPromotionReleasePolicy.Policy),
-    }).optional(),
+    approvalPolicy: z
+      .object({
+        policySource: z.lazy(() => QualityPromotionApprovalPolicy.PolicySource),
+        policyProjectID: z.string().nullable(),
+        overallStatus: z.enum(["pass", "fail"]),
+        requiredOverride: z.enum(["none", "allow_warn", "force"]),
+        requiredApprovals: z.number().int().nonnegative(),
+        minimumRole: z.string().nullable(),
+        distinctApproversRequired: z.boolean(),
+        independentReviewRequired: z.boolean(),
+        priorApproverExclusionRequired: z.boolean(),
+        maxPriorApproverOverlapRatio: z.number().min(0).max(1).nullable(),
+        reviewerCarryoverBudget: z.number().nonnegative().nullable(),
+        reviewerCarryoverLookbackPromotions: z.number().int().positive().nullable(),
+        teamCarryoverBudget: z.number().nonnegative().nullable(),
+        teamCarryoverLookbackPromotions: z.number().int().positive().nullable(),
+        maxPriorReportingChainOverlapRatio: z.number().min(0).max(1).nullable(),
+        reportingChainCarryoverBudget: z.number().nonnegative().nullable(),
+        reportingChainCarryoverLookbackPromotions: z.number().int().positive().nullable(),
+        roleCohortDiversityRequired: z.boolean(),
+        minimumDistinctRoleCohorts: z.number().int().positive().nullable(),
+        reviewerTeamDiversityRequired: z.boolean(),
+        minimumDistinctReviewerTeams: z.number().int().positive().nullable(),
+        reportingChainDiversityRequired: z.boolean(),
+        minimumDistinctReportingChains: z.number().int().positive().nullable(),
+        qualifiedApprovals: z.number().int().nonnegative(),
+        independentQualifiedApprovals: z.number().int().nonnegative(),
+        freshQualifiedApprovals: z.number().int().nonnegative(),
+        overlappingQualifiedApprovers: z.number().int().nonnegative(),
+        priorApproverOverlapRatio: z.number().min(0).max(1).nullable(),
+        reviewerCarryoverScore: z.number().nonnegative(),
+        carriedOverQualifiedApprovers: z.number().int().nonnegative(),
+        teamCarryoverScore: z.number().nonnegative(),
+        carriedOverQualifiedTeams: z.number().int().nonnegative(),
+        overlappingQualifiedReportingChains: z.number().int().nonnegative(),
+        priorReportingChainOverlapRatio: z.number().min(0).max(1).nullable(),
+        reportingChainCarryoverScore: z.number().nonnegative(),
+        carriedOverQualifiedReportingChains: z.number().int().nonnegative(),
+        distinctQualifiedRoleCohorts: z.number().int().nonnegative(),
+        distinctQualifiedReviewerTeams: z.number().int().nonnegative(),
+        missingQualifiedReviewerTeams: z.number().int().nonnegative(),
+        distinctQualifiedReportingChains: z.number().int().nonnegative(),
+        missingQualifiedReportingChains: z.number().int().nonnegative(),
+        approverReuseRatio: z.number().min(0).max(1).nullable(),
+        teamReuseRatio: z.number().min(0).max(1).nullable(),
+        reportingChainReuseRatio: z.number().min(0).max(1).nullable(),
+        approvalConcentrationBudget: z.number().min(0).max(1).nullable(),
+        approvalConcentrationPreset: z
+          .lazy(() => QualityPromotionApprovalPolicy.ApprovalConcentrationPreset)
+          .nullable(),
+        approvalConcentrationWeights: z.object({
+          approver: z.number().min(0),
+          team: z.number().min(0),
+          reportingChain: z.number().min(0),
+        }),
+        approvalConcentrationScore: z.number().min(0).max(1).nullable(),
+        approvalConcentrationApplicableAxes: z.array(z.enum(["approver", "team", "reporting_chain"])),
+        approvalConcentrationAppliedWeightTotal: z.number().positive().nullable(),
+        distinctQualifiedApprovers: z.number().int().nonnegative(),
+        priorPromotionApprovers: z.number().int().nonnegative(),
+        priorPromotionReportingChains: z.number().int().nonnegative(),
+      })
+      .optional(),
+    releasePolicy: z
+      .object({
+        policySource: z.enum(["explicit", "project", "global", "default"]),
+        policyProjectID: z.string().nullable(),
+        compatibilityApprovalSource: z.enum(["project", "global", "default"]).nullable(),
+        resolvedAt: z.string(),
+        persistedScope: z.enum(["global", "project"]).nullable(),
+        persistedUpdatedAt: z.string().nullable(),
+        digest: z.string(),
+        policy: z.lazy(() => QualityPromotionReleasePolicy.Policy),
+      })
+      .optional(),
     approvalPolicySuggestion: z.lazy(() => QualityPromotionDecisionBundle.ApprovalPolicySuggestionSnapshot).optional(),
     benchmark: z.object({
       baselineSource: z.string(),
@@ -545,15 +615,17 @@ export namespace QualityModelRegistry {
       overallStatus: z.enum(["pass", "warn", "fail"]),
       totalRecords: z.number().int().nonnegative(),
       sessionsCovered: z.number().int().nonnegative(),
-      releasePolicy: z.object({
-        policySource: z.enum(["explicit", "project", "global", "default"]),
-        policyProjectID: z.string().nullable(),
-        compatibilityApprovalSource: z.enum(["project", "global", "default"]).nullable(),
-        resolvedAt: z.string(),
-        persistedScope: z.enum(["global", "project"]).nullable(),
-        persistedUpdatedAt: z.string().nullable(),
-        digest: z.string(),
-      }).optional(),
+      releasePolicy: z
+        .object({
+          policySource: z.enum(["explicit", "project", "global", "default"]),
+          policyProjectID: z.string().nullable(),
+          compatibilityApprovalSource: z.enum(["project", "global", "default"]).nullable(),
+          resolvedAt: z.string(),
+          persistedScope: z.enum(["global", "project"]).nullable(),
+          persistedUpdatedAt: z.string().nullable(),
+          digest: z.string(),
+        })
+        .optional(),
       gates: z.array(
         z.object({
           name: z.string(),
@@ -568,13 +640,13 @@ export namespace QualityModelRegistry {
 
   function canonicalPromotionOverallStatus(record: PromotionRecord): CanonicalPromotionSummary["overallStatus"] {
     return (
-      record.signedArchiveReviewDossier?.overallStatus
-      ?? record.signedArchiveAttestationRecord?.overallStatus
-      ?? record.signedArchiveAttestation?.overallStatus
-      ?? record.signedArchive?.overallStatus
-      ?? record.releasePacket?.overallStatus
-      ?? record.reviewDossier?.overallStatus
-      ?? record.benchmark.overallStatus
+      record.signedArchiveReviewDossier?.overallStatus ??
+      record.signedArchiveAttestationRecord?.overallStatus ??
+      record.signedArchiveAttestation?.overallStatus ??
+      record.signedArchive?.overallStatus ??
+      record.releasePacket?.overallStatus ??
+      record.reviewDossier?.overallStatus ??
+      record.benchmark.overallStatus
     )
   }
 
@@ -582,9 +654,10 @@ export namespace QualityModelRegistry {
     const reviewGoverned = Boolean(record.reviewDossier || record.boardDecision || record.releaseDecisionRecord)
     const releaseAuthorized = Boolean(record.releasePacket?.authorizedPromotion)
     const signedArchivePresent = Boolean(record.signedArchive)
-    const attestationAccepted = record.signedArchiveAttestation?.acceptedByPolicy
-      ?? record.signedArchiveAttestationRecord?.acceptedByPolicy
-      ?? null
+    const attestationAccepted =
+      record.signedArchiveAttestation?.acceptedByPolicy ??
+      record.signedArchiveAttestationRecord?.acceptedByPolicy ??
+      null
     const postSigningReviewed = Boolean(record.signedArchiveReviewDossier)
     const currentStage: CanonicalPromotionSummary["currentStage"] = postSigningReviewed
       ? "post_signing_reviewed"
@@ -655,14 +728,16 @@ export namespace QualityModelRegistry {
       signedArchivePresent,
       attestationAccepted,
       postSigningReviewed,
-      policySource: record.signedArchiveReviewDossier?.policySource
-        ?? record.signedArchiveAttestationRecord?.policySource
-        ?? record.signedArchiveAttestation?.policySource
-        ?? null,
-      policyProjectID: record.signedArchiveReviewDossier?.policyProjectID
-        ?? record.signedArchiveAttestationRecord?.policyProjectID
-        ?? record.signedArchiveAttestation?.policyProjectID
-        ?? null,
+      policySource:
+        record.signedArchiveReviewDossier?.policySource ??
+        record.signedArchiveAttestationRecord?.policySource ??
+        record.signedArchiveAttestation?.policySource ??
+        null,
+      policyProjectID:
+        record.signedArchiveReviewDossier?.policyProjectID ??
+        record.signedArchiveAttestationRecord?.policyProjectID ??
+        record.signedArchiveAttestation?.policyProjectID ??
+        null,
       nextAction,
       gaps,
       artifacts: {
@@ -704,7 +779,9 @@ export namespace QualityModelRegistry {
     lines.push(`- board decision: ${summary.artifacts.boardDecisionID ?? "missing"}`)
     lines.push(`- release packet: ${summary.artifacts.releasePacketID ?? "missing"}`)
     lines.push(`- signed archive: ${summary.artifacts.signedArchiveID ?? "missing"}`)
-    lines.push(`- signed archive attestation record: ${summary.artifacts.signedArchiveAttestationRecordID ?? "missing"}`)
+    lines.push(
+      `- signed archive attestation record: ${summary.artifacts.signedArchiveAttestationRecordID ?? "missing"}`,
+    )
     lines.push(`- signed archive review dossier: ${summary.artifacts.signedArchiveReviewDossierID ?? "missing"}`)
     lines.push(`- handoff package: ${summary.artifacts.handoffPackageID ?? "missing"}`)
     lines.push(`- packaged archive: ${summary.artifacts.packagedArchiveID ?? "missing"}`)
@@ -966,8 +1043,10 @@ export namespace QualityModelRegistry {
   }
 
   function releasePacketAttestationProjectID(releasePacket: QualityPromotionReleasePacket.PacketArtifact) {
-    return releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle.releasePolicy?.provenance.policyProjectID?.trim()
-      || null
+    return (
+      releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle.releasePolicy?.provenance.policyProjectID?.trim() ||
+      null
+    )
   }
 
   export async function listRollbacks(source?: string) {
@@ -1003,18 +1082,28 @@ export namespace QualityModelRegistry {
     ])
     const priorPromotion = reentryContext
       ? await getPromotion(reentryContext.promotionID).catch((err) => {
-        if (Storage.NotFoundError.isInstance(err)) return undefined
-        throw err
-      })
+          if (Storage.NotFoundError.isInstance(err)) return undefined
+          throw err
+        })
       : undefined
-    const priorPromotionApprovers = [...new Set([
-      ...(priorPromotion?.approvals?.map((approval) => approval.approver) ?? []),
-      ...(priorPromotion?.approval ? [priorPromotion.approval.approver] : []),
-    ])].sort()
-    const priorPromotionReportingChains = [...new Set([
-      ...(priorPromotion?.approvals?.map((approval) => normalizeReportingChain(approval.reportingChain)).filter((value): value is string => value !== null) ?? []),
-      ...(priorPromotion?.approval ? [normalizeReportingChain(priorPromotion.approval.reportingChain)].filter((value): value is string => value !== null) : []),
-    ])].sort()
+    const priorPromotionApprovers = [
+      ...new Set([
+        ...(priorPromotion?.approvals?.map((approval) => approval.approver) ?? []),
+        ...(priorPromotion?.approval ? [priorPromotion.approval.approver] : []),
+      ]),
+    ].sort()
+    const priorPromotionReportingChains = [
+      ...new Set([
+        ...(priorPromotion?.approvals
+          ?.map((approval) => normalizeReportingChain(approval.reportingChain))
+          .filter((value): value is string => value !== null) ?? []),
+        ...(priorPromotion?.approval
+          ? [normalizeReportingChain(priorPromotion.approval.reportingChain)].filter(
+              (value): value is string => value !== null,
+            )
+          : []),
+      ]),
+    ].sort()
     const reviewerCarryoverLookbackPromotions = options?.reviewerCarryoverLookbackPromotions ?? 3
     const teamCarryoverLookbackPromotions = options?.teamCarryoverLookbackPromotions ?? 3
     const reportingChainCarryoverLookbackPromotions = options?.reportingChainCarryoverLookbackPromotions ?? 3
@@ -1023,11 +1112,13 @@ export namespace QualityModelRegistry {
       .slice(-reviewerCarryoverLookbackPromotions)
       .reverse()
       .reduce((map, promotion, index) => {
-        const weight = 1 / (2 ** index)
-        const approvers = [...new Set([
-          ...(promotion.approvals?.map((approval) => approval.approver) ?? []),
-          ...(promotion.approval ? [promotion.approval.approver] : []),
-        ])].sort()
+        const weight = 1 / 2 ** index
+        const approvers = [
+          ...new Set([
+            ...(promotion.approvals?.map((approval) => approval.approver) ?? []),
+            ...(promotion.approval ? [promotion.approval.approver] : []),
+          ]),
+        ].sort()
         for (const approver of approvers) {
           const existing = map.get(approver)
           if (existing) {
@@ -1055,11 +1146,17 @@ export namespace QualityModelRegistry {
       .slice(-teamCarryoverLookbackPromotions)
       .reverse()
       .reduce((map, promotion, index) => {
-        const weight = 1 / (2 ** index)
-        const teams = [...new Set([
-          ...(promotion.approvals?.map((approval) => normalizeTeam(approval.team)).filter((value): value is string => value !== null) ?? []),
-          ...(promotion.approval ? [normalizeTeam(promotion.approval.team)].filter((value): value is string => value !== null) : []),
-        ])].sort()
+        const weight = 1 / 2 ** index
+        const teams = [
+          ...new Set([
+            ...(promotion.approvals
+              ?.map((approval) => normalizeTeam(approval.team))
+              .filter((value): value is string => value !== null) ?? []),
+            ...(promotion.approval
+              ? [normalizeTeam(promotion.approval.team)].filter((value): value is string => value !== null)
+              : []),
+          ]),
+        ].sort()
         for (const team of teams) {
           const existing = map.get(team)
           if (existing) {
@@ -1087,11 +1184,19 @@ export namespace QualityModelRegistry {
       .slice(-reportingChainCarryoverLookbackPromotions)
       .reverse()
       .reduce((map, promotion, index) => {
-        const weight = 1 / (2 ** index)
-        const reportingChains = [...new Set([
-          ...(promotion.approvals?.map((approval) => normalizeReportingChain(approval.reportingChain)).filter((value): value is string => value !== null) ?? []),
-          ...(promotion.approval ? [normalizeReportingChain(promotion.approval.reportingChain)].filter((value): value is string => value !== null) : []),
-        ])].sort()
+        const weight = 1 / 2 ** index
+        const reportingChains = [
+          ...new Set([
+            ...(promotion.approvals
+              ?.map((approval) => normalizeReportingChain(approval.reportingChain))
+              .filter((value): value is string => value !== null) ?? []),
+            ...(promotion.approval
+              ? [normalizeReportingChain(promotion.approval.reportingChain)].filter(
+                  (value): value is string => value !== null,
+                )
+              : []),
+          ]),
+        ].sort()
         for (const reportingChain of reportingChains) {
           const existing = map.get(reportingChain)
           if (existing) {
@@ -1116,9 +1221,9 @@ export namespace QualityModelRegistry {
     })
     const reentryRemediation = reentryContext
       ? await QualityReentryRemediation.latestForContext({
-        source: bundle.model.source,
-        contextID: reentryContext.contextID,
-      })
+          source: bundle.model.source,
+          contextID: reentryContext.contextID,
+        })
       : undefined
     const stability = QualityStabilityGuard.summarize({
       source: bundle.model.source,
@@ -1168,11 +1273,11 @@ export namespace QualityModelRegistry {
     const evaluation = await evaluatePromotionEligibility(bundle, {
       ...options,
       reviewerCarryoverLookbackPromotions:
-        options?.releasePolicyResolution?.policy.approval.rules.reentry.reviewerCarryoverLookbackPromotions,
+        options?.releasePolicyResolution?.policy?.approval?.rules?.reentry?.reviewerCarryoverLookbackPromotions,
       teamCarryoverLookbackPromotions:
-        options?.releasePolicyResolution?.policy.approval.rules.reentry.teamCarryoverLookbackPromotions,
+        options?.releasePolicyResolution?.policy?.approval?.rules?.reentry?.teamCarryoverLookbackPromotions,
       reportingChainCarryoverLookbackPromotions:
-        options?.releasePolicyResolution?.policy.approval.rules.reentry.reportingChainCarryoverLookbackPromotions,
+        options?.releasePolicyResolution?.policy?.approval?.rules?.reentry?.reportingChainCarryoverLookbackPromotions,
     })
     const decisionBundle = QualityPromotionDecisionBundle.build({
       benchmark: bundle,
@@ -1185,45 +1290,47 @@ export namespace QualityModelRegistry {
       },
       releasePolicySnapshot: options?.releasePolicyResolution
         ? {
-          policy: options.releasePolicyResolution.policy,
-          provenance: QualityPromotionReleasePolicyStore.provenance(options.releasePolicyResolution),
-        }
+            policy: options.releasePolicyResolution.policy,
+            provenance: QualityPromotionReleasePolicyStore.provenance(options.releasePolicyResolution),
+          }
         : undefined,
     })
     return { ...evaluation, decisionBundle }
   }
 
-  function finalizePromotion(
-    input: {
-      bundle: QualityCalibrationModel.BenchmarkBundle
-      currentActive: ActiveRecord | undefined
-      eligibility: QualityPromotionEligibility.EligibilitySummary
-      stability: QualityStabilityGuard.StabilitySummary
-      force?: boolean
-      promotionMetadata?: PromotionMetadata
-      decisionBundleCreatedAt?: string | null
-      submissionBundle?: QualityPromotionSubmissionBundle.BundleArtifact
-      approval?: QualityPromotionApproval.ApprovalArtifact
-      approvalPacket?: QualityPromotionApprovalPacket.PacketArtifact
-      approvals?: QualityPromotionApproval.ApprovalArtifact[]
-      adoptionReviews?: QualityPromotionAdoptionReview.ReviewArtifact[]
-      adoptionReviewConsensus?: QualityPromotionAdoptionReview.ConsensusSummary
-      adoptionDissentResolutions?: QualityPromotionAdoptionDissentResolution.ResolutionArtifact[]
-      adoptionDissentResolution?: QualityPromotionAdoptionDissentResolution.ResolutionSummary
-      adoptionDissentSupersessions?: QualityPromotionAdoptionDissentSupersession.SupersessionArtifact[]
-      adoptionDissentSupersession?: QualityPromotionAdoptionDissentSupersession.SupersessionSummary
-      adoptionDissentHandlingBundle?: QualityPromotionAdoptionDissentHandling.HandlingArtifact
-      adoptionDissentHandling?: QualityPromotionAdoptionDissentHandling.HandlingSummary
-      approvalEvaluation?: QualityPromotionApprovalPolicy.EvaluationSummary
-      releasePolicy?: QualityPromotionDecisionBundle.ReleasePolicySnapshot
-      approvalPolicySuggestion?: QualityPromotionDecisionBundle.ApprovalPolicySuggestionSnapshot
-    },
-  ) {
+  function finalizePromotion(input: {
+    bundle: QualityCalibrationModel.BenchmarkBundle
+    currentActive: ActiveRecord | undefined
+    eligibility: QualityPromotionEligibility.EligibilitySummary
+    stability: QualityStabilityGuard.StabilitySummary
+    force?: boolean
+    promotionMetadata?: PromotionMetadata
+    decisionBundleCreatedAt?: string | null
+    submissionBundle?: QualityPromotionSubmissionBundle.BundleArtifact
+    approval?: QualityPromotionApproval.ApprovalArtifact
+    approvalPacket?: QualityPromotionApprovalPacket.PacketArtifact
+    approvals?: QualityPromotionApproval.ApprovalArtifact[]
+    adoptionReviews?: QualityPromotionAdoptionReview.ReviewArtifact[]
+    adoptionReviewConsensus?: QualityPromotionAdoptionReview.ConsensusSummary
+    adoptionDissentResolutions?: QualityPromotionAdoptionDissentResolution.ResolutionArtifact[]
+    adoptionDissentResolution?: QualityPromotionAdoptionDissentResolution.ResolutionSummary
+    adoptionDissentSupersessions?: QualityPromotionAdoptionDissentSupersession.SupersessionArtifact[]
+    adoptionDissentSupersession?: QualityPromotionAdoptionDissentSupersession.SupersessionSummary
+    adoptionDissentHandlingBundle?: QualityPromotionAdoptionDissentHandling.HandlingArtifact
+    adoptionDissentHandling?: QualityPromotionAdoptionDissentHandling.HandlingSummary
+    approvalEvaluation?: QualityPromotionApprovalPolicy.EvaluationSummary
+    releasePolicy?: QualityPromotionDecisionBundle.ReleasePolicySnapshot
+    approvalPolicySuggestion?: QualityPromotionDecisionBundle.ApprovalPolicySuggestionSnapshot
+  }) {
     return (async () => {
       const registered = await register(input.bundle.model)
       const previousActive = input.currentActive
       const active = await activate(input.bundle.model.source)
-      const decision = input.force ? "force" : input.eligibility.requiredOverride === "allow_warn" ? "warn_override" : "pass"
+      const decision = input.force
+        ? "force"
+        : input.eligibility.requiredOverride === "allow_warn"
+          ? "warn_override"
+          : "pass"
       const promotedAt = input.promotionMetadata?.promotedAt ?? new Date().toISOString()
       const promotionID = input.promotionMetadata?.promotionID ?? `${Date.now()}-${encode(input.bundle.model.source)}`
       const record = PromotionRecord.parse({
@@ -1237,40 +1344,40 @@ export namespace QualityModelRegistry {
         decisionBundleCreatedAt: input.decisionBundleCreatedAt ?? null,
         submissionBundle: input.submissionBundle
           ? {
-            submissionID: input.submissionBundle.submissionID,
-            createdAt: input.submissionBundle.createdAt,
-            decisionBundleCreatedAt: input.submissionBundle.decisionBundle.createdAt,
-            approvalPacketID: input.submissionBundle.approvalPacket.packetID,
-            overallStatus: input.submissionBundle.summary.overallStatus,
-            eligibilityDecision: input.submissionBundle.summary.eligibilityDecision,
-            requiredOverride: input.submissionBundle.summary.requiredOverride,
-          }
+              submissionID: input.submissionBundle.submissionID,
+              createdAt: input.submissionBundle.createdAt,
+              decisionBundleCreatedAt: input.submissionBundle.decisionBundle.createdAt,
+              approvalPacketID: input.submissionBundle.approvalPacket.packetID,
+              overallStatus: input.submissionBundle.summary.overallStatus,
+              eligibilityDecision: input.submissionBundle.summary.eligibilityDecision,
+              requiredOverride: input.submissionBundle.summary.requiredOverride,
+            }
           : undefined,
         approval: input.approval
           ? {
-            approvalID: input.approval.approvalID,
-            approvedAt: input.approval.approvedAt,
-            approver: input.approval.approver,
-            role: input.approval.role,
-            team: input.approval.team ?? null,
-            reportingChain: input.approval.reportingChain ?? null,
-            disposition: input.approval.disposition,
-            decisionBundleCreatedAt: input.approval.decisionBundle.createdAt,
-            decisionBundleDigest: input.approval.decisionBundle.digest,
-          }
+              approvalID: input.approval.approvalID,
+              approvedAt: input.approval.approvedAt,
+              approver: input.approval.approver,
+              role: input.approval.role,
+              team: input.approval.team ?? null,
+              reportingChain: input.approval.reportingChain ?? null,
+              disposition: input.approval.disposition,
+              decisionBundleCreatedAt: input.approval.decisionBundle.createdAt,
+              decisionBundleDigest: input.approval.decisionBundle.digest,
+            }
           : undefined,
         approvalPacket: input.approvalPacket
           ? {
-            packetID: input.approvalPacket.packetID,
-            createdAt: input.approvalPacket.createdAt,
-            decisionBundleCreatedAt: input.approvalPacket.decisionBundle.createdAt,
-            decisionBundleDigest: input.approvalPacket.decisionBundle.digest,
-            adoptionStatus: input.approvalPacket.suggestion.adoptionStatus,
-            approvalCount: input.approvalPacket.approvals.length,
-            adoptionReviewCount: input.approvalPacket.adoptionReviews.length,
-            hasDissentHandling: !!input.approvalPacket.dissentHandling,
-            overallStatus: input.approvalPacket.readiness.overallStatus,
-          }
+              packetID: input.approvalPacket.packetID,
+              createdAt: input.approvalPacket.createdAt,
+              decisionBundleCreatedAt: input.approvalPacket.decisionBundle.createdAt,
+              decisionBundleDigest: input.approvalPacket.decisionBundle.digest,
+              adoptionStatus: input.approvalPacket.suggestion.adoptionStatus,
+              approvalCount: input.approvalPacket.approvals.length,
+              adoptionReviewCount: input.approvalPacket.adoptionReviews.length,
+              hasDissentHandling: !!input.approvalPacket.dissentHandling,
+              overallStatus: input.approvalPacket.readiness.overallStatus,
+            }
           : undefined,
         approvals: input.approvals?.map((approval) => ({
           approvalID: approval.approvalID,
@@ -1297,17 +1404,17 @@ export namespace QualityModelRegistry {
         })),
         adoptionReviewConsensus: input.adoptionReviewConsensus
           ? {
-            overallStatus: input.adoptionReviewConsensus.overallStatus,
-            adoptionStatus: input.adoptionReviewConsensus.adoptionStatus,
-            qualifyingDisposition: input.adoptionReviewConsensus.qualifyingDisposition,
-            requiredReviews: input.adoptionReviewConsensus.requirement.minimumReviews,
-            minimumRole: input.adoptionReviewConsensus.requirement.minimumRole,
-            distinctReviewersRequired: input.adoptionReviewConsensus.requirement.requireDistinctReviewers,
-            qualifyingReviews: input.adoptionReviewConsensus.qualifyingReviews,
-            distinctQualifiedReviewers: input.adoptionReviewConsensus.distinctQualifiedReviewers,
-            qualifiedRejectingReviews: input.adoptionReviewConsensus.qualifiedRejectingReviews,
-            distinctQualifiedRejectingReviewers: input.adoptionReviewConsensus.distinctQualifiedRejectingReviewers,
-          }
+              overallStatus: input.adoptionReviewConsensus.overallStatus,
+              adoptionStatus: input.adoptionReviewConsensus.adoptionStatus,
+              qualifyingDisposition: input.adoptionReviewConsensus.qualifyingDisposition,
+              requiredReviews: input.adoptionReviewConsensus.requirement.minimumReviews,
+              minimumRole: input.adoptionReviewConsensus.requirement.minimumRole,
+              distinctReviewersRequired: input.adoptionReviewConsensus.requirement.requireDistinctReviewers,
+              qualifyingReviews: input.adoptionReviewConsensus.qualifyingReviews,
+              distinctQualifiedReviewers: input.adoptionReviewConsensus.distinctQualifiedReviewers,
+              qualifiedRejectingReviews: input.adoptionReviewConsensus.qualifiedRejectingReviews,
+              distinctQualifiedRejectingReviewers: input.adoptionReviewConsensus.distinctQualifiedRejectingReviewers,
+            }
           : undefined,
         adoptionDissentResolutions: input.adoptionDissentResolutions?.map((resolution) => ({
           resolutionID: resolution.resolutionID,
@@ -1323,17 +1430,17 @@ export namespace QualityModelRegistry {
         })),
         adoptionDissentResolution: input.adoptionDissentResolution
           ? {
-            overallStatus: input.adoptionDissentResolution.overallStatus,
-            adoptionStatus: input.adoptionDissentResolution.adoptionStatus,
-            requiredRole: input.adoptionDissentResolution.requiredRole,
-            totalResolutions: input.adoptionDissentResolution.totalResolutions,
-            qualifyingResolutions: input.adoptionDissentResolution.qualifyingResolutions,
-            distinctQualifyingResolvers: input.adoptionDissentResolution.distinctQualifyingResolvers,
-            totalQualifiedRejectingReviews: input.adoptionDissentResolution.totalQualifiedRejectingReviews,
-            coveredQualifiedRejectingReviews: input.adoptionDissentResolution.coveredQualifiedRejectingReviews,
-            unresolvedQualifiedRejectingReviews: input.adoptionDissentResolution.unresolvedQualifiedRejectingReviews,
-            distinctQualifiedRejectingReviewers: input.adoptionDissentResolution.distinctQualifiedRejectingReviewers,
-          }
+              overallStatus: input.adoptionDissentResolution.overallStatus,
+              adoptionStatus: input.adoptionDissentResolution.adoptionStatus,
+              requiredRole: input.adoptionDissentResolution.requiredRole,
+              totalResolutions: input.adoptionDissentResolution.totalResolutions,
+              qualifyingResolutions: input.adoptionDissentResolution.qualifyingResolutions,
+              distinctQualifyingResolvers: input.adoptionDissentResolution.distinctQualifyingResolvers,
+              totalQualifiedRejectingReviews: input.adoptionDissentResolution.totalQualifiedRejectingReviews,
+              coveredQualifiedRejectingReviews: input.adoptionDissentResolution.coveredQualifiedRejectingReviews,
+              unresolvedQualifiedRejectingReviews: input.adoptionDissentResolution.unresolvedQualifiedRejectingReviews,
+              distinctQualifiedRejectingReviewers: input.adoptionDissentResolution.distinctQualifiedRejectingReviewers,
+            }
           : undefined,
         adoptionDissentSupersessions: input.adoptionDissentSupersessions?.map((supersession) => ({
           supersessionID: supersession.supersessionID,
@@ -1350,101 +1457,103 @@ export namespace QualityModelRegistry {
         })),
         adoptionDissentSupersession: input.adoptionDissentSupersession
           ? {
-            overallStatus: input.adoptionDissentSupersession.overallStatus,
-            adoptionStatus: input.adoptionDissentSupersession.adoptionStatus,
-            requiredRole: input.adoptionDissentSupersession.requiredRole,
-            totalSupersessions: input.adoptionDissentSupersession.totalSupersessions,
-            qualifyingSupersessions: input.adoptionDissentSupersession.qualifyingSupersessions,
-            distinctQualifyingSuperseders: input.adoptionDissentSupersession.distinctQualifyingSuperseders,
-            totalQualifiedRejectingReviews: input.adoptionDissentSupersession.totalQualifiedRejectingReviews,
-            coveredQualifiedRejectingReviews: input.adoptionDissentSupersession.coveredQualifiedRejectingReviews,
-            unresolvedQualifiedRejectingReviews: input.adoptionDissentSupersession.unresolvedQualifiedRejectingReviews,
-            coveredByReviewerRereview: input.adoptionDissentSupersession.coveredByReviewerRereview,
-            coveredByEvidenceSupersession: input.adoptionDissentSupersession.coveredByEvidenceSupersession,
-          }
+              overallStatus: input.adoptionDissentSupersession.overallStatus,
+              adoptionStatus: input.adoptionDissentSupersession.adoptionStatus,
+              requiredRole: input.adoptionDissentSupersession.requiredRole,
+              totalSupersessions: input.adoptionDissentSupersession.totalSupersessions,
+              qualifyingSupersessions: input.adoptionDissentSupersession.qualifyingSupersessions,
+              distinctQualifyingSuperseders: input.adoptionDissentSupersession.distinctQualifyingSuperseders,
+              totalQualifiedRejectingReviews: input.adoptionDissentSupersession.totalQualifiedRejectingReviews,
+              coveredQualifiedRejectingReviews: input.adoptionDissentSupersession.coveredQualifiedRejectingReviews,
+              unresolvedQualifiedRejectingReviews:
+                input.adoptionDissentSupersession.unresolvedQualifiedRejectingReviews,
+              coveredByReviewerRereview: input.adoptionDissentSupersession.coveredByReviewerRereview,
+              coveredByEvidenceSupersession: input.adoptionDissentSupersession.coveredByEvidenceSupersession,
+            }
           : undefined,
         adoptionDissentHandlingBundle: input.adoptionDissentHandlingBundle
           ? {
-            handlingID: input.adoptionDissentHandlingBundle.handlingID,
-            handledAt: input.adoptionDissentHandlingBundle.handledAt,
-            decisionBundleCreatedAt: input.adoptionDissentHandlingBundle.decisionBundle.createdAt,
-            decisionBundleDigest: input.adoptionDissentHandlingBundle.decisionBundle.digest,
-            suggestionDigest: input.adoptionDissentHandlingBundle.suggestion.digest,
-            adoptionStatus: input.adoptionDissentHandlingBundle.suggestion.adoptionStatus,
-            qualifiedRejectingReviewCount: input.adoptionDissentHandlingBundle.qualifiedRejectingReviews.length,
-            resolutionCount: input.adoptionDissentHandlingBundle.resolutions.length,
-            supersessionCount: input.adoptionDissentHandlingBundle.supersessions.length,
-          }
+              handlingID: input.adoptionDissentHandlingBundle.handlingID,
+              handledAt: input.adoptionDissentHandlingBundle.handledAt,
+              decisionBundleCreatedAt: input.adoptionDissentHandlingBundle.decisionBundle.createdAt,
+              decisionBundleDigest: input.adoptionDissentHandlingBundle.decisionBundle.digest,
+              suggestionDigest: input.adoptionDissentHandlingBundle.suggestion.digest,
+              adoptionStatus: input.adoptionDissentHandlingBundle.suggestion.adoptionStatus,
+              qualifiedRejectingReviewCount: input.adoptionDissentHandlingBundle.qualifiedRejectingReviews.length,
+              resolutionCount: input.adoptionDissentHandlingBundle.resolutions.length,
+              supersessionCount: input.adoptionDissentHandlingBundle.supersessions.length,
+            }
           : undefined,
         adoptionDissentHandling: input.adoptionDissentHandling ?? undefined,
         approvalPolicy: input.approvalEvaluation
           ? {
-            overallStatus: input.approvalEvaluation.overallStatus,
-            policySource: input.approvalEvaluation.policySource,
-            policyProjectID: input.approvalEvaluation.policyProjectID,
-            requiredOverride: input.approvalEvaluation.requiredOverride,
-            requiredApprovals: input.approvalEvaluation.requirement.minimumApprovals,
-            minimumRole: input.approvalEvaluation.requirement.minimumRole,
-            distinctApproversRequired: input.approvalEvaluation.requirement.requireDistinctApprovers,
-            independentReviewRequired: input.approvalEvaluation.independentReviewRequired,
-            priorApproverExclusionRequired: input.approvalEvaluation.priorApproverExclusionRequired,
-            maxPriorApproverOverlapRatio: input.approvalEvaluation.maxPriorApproverOverlapRatio,
-            reviewerCarryoverBudget: input.approvalEvaluation.reviewerCarryoverBudget,
-            reviewerCarryoverLookbackPromotions: input.approvalEvaluation.reviewerCarryoverLookbackPromotions,
-            teamCarryoverBudget: input.approvalEvaluation.teamCarryoverBudget,
-            teamCarryoverLookbackPromotions: input.approvalEvaluation.teamCarryoverLookbackPromotions,
-            maxPriorReportingChainOverlapRatio: input.approvalEvaluation.maxPriorReportingChainOverlapRatio,
-            reportingChainCarryoverBudget: input.approvalEvaluation.reportingChainCarryoverBudget,
-            reportingChainCarryoverLookbackPromotions: input.approvalEvaluation.reportingChainCarryoverLookbackPromotions,
-            roleCohortDiversityRequired: input.approvalEvaluation.roleCohortDiversityRequired,
-            minimumDistinctRoleCohorts: input.approvalEvaluation.minimumDistinctRoleCohorts,
-            reviewerTeamDiversityRequired: input.approvalEvaluation.reviewerTeamDiversityRequired,
-            minimumDistinctReviewerTeams: input.approvalEvaluation.minimumDistinctReviewerTeams,
-            reportingChainDiversityRequired: input.approvalEvaluation.reportingChainDiversityRequired,
-            minimumDistinctReportingChains: input.approvalEvaluation.minimumDistinctReportingChains,
-            qualifiedApprovals: input.approvalEvaluation.qualifiedApprovals,
-            independentQualifiedApprovals: input.approvalEvaluation.independentQualifiedApprovals,
-            freshQualifiedApprovals: input.approvalEvaluation.freshQualifiedApprovals,
-            overlappingQualifiedApprovers: input.approvalEvaluation.overlappingQualifiedApprovers,
-            priorApproverOverlapRatio: input.approvalEvaluation.priorApproverOverlapRatio,
-            reviewerCarryoverScore: input.approvalEvaluation.reviewerCarryoverScore,
-            carriedOverQualifiedApprovers: input.approvalEvaluation.carriedOverQualifiedApprovers,
-            teamCarryoverScore: input.approvalEvaluation.teamCarryoverScore,
-            carriedOverQualifiedTeams: input.approvalEvaluation.carriedOverQualifiedTeams,
-            overlappingQualifiedReportingChains: input.approvalEvaluation.overlappingQualifiedReportingChains,
-            priorReportingChainOverlapRatio: input.approvalEvaluation.priorReportingChainOverlapRatio,
-            reportingChainCarryoverScore: input.approvalEvaluation.reportingChainCarryoverScore,
-            carriedOverQualifiedReportingChains: input.approvalEvaluation.carriedOverQualifiedReportingChains,
-            distinctQualifiedRoleCohorts: input.approvalEvaluation.distinctQualifiedRoleCohorts,
-            distinctQualifiedReviewerTeams: input.approvalEvaluation.distinctQualifiedReviewerTeams,
-            missingQualifiedReviewerTeams: input.approvalEvaluation.missingQualifiedReviewerTeams,
-            distinctQualifiedReportingChains: input.approvalEvaluation.distinctQualifiedReportingChains,
-            missingQualifiedReportingChains: input.approvalEvaluation.missingQualifiedReportingChains,
-            approverReuseRatio: input.approvalEvaluation.approverReuseRatio,
-            teamReuseRatio: input.approvalEvaluation.teamReuseRatio,
-            reportingChainReuseRatio: input.approvalEvaluation.reportingChainReuseRatio,
-            approvalConcentrationBudget: input.approvalEvaluation.approvalConcentrationBudget,
-            approvalConcentrationPreset: input.approvalEvaluation.approvalConcentrationPreset,
-            approvalConcentrationWeights: input.approvalEvaluation.approvalConcentrationWeights,
-            approvalConcentrationScore: input.approvalEvaluation.approvalConcentrationScore,
-            approvalConcentrationApplicableAxes: input.approvalEvaluation.approvalConcentrationApplicableAxes,
-            approvalConcentrationAppliedWeightTotal: input.approvalEvaluation.approvalConcentrationAppliedWeightTotal,
-            distinctQualifiedApprovers: input.approvalEvaluation.distinctQualifiedApprovers,
-            priorPromotionApprovers: input.approvalEvaluation.priorPromotionApprovers.length,
-            priorPromotionReportingChains: input.approvalEvaluation.priorPromotionReportingChains.length,
-          }
+              overallStatus: input.approvalEvaluation.overallStatus,
+              policySource: input.approvalEvaluation.policySource,
+              policyProjectID: input.approvalEvaluation.policyProjectID,
+              requiredOverride: input.approvalEvaluation.requiredOverride,
+              requiredApprovals: input.approvalEvaluation.requirement.minimumApprovals,
+              minimumRole: input.approvalEvaluation.requirement.minimumRole,
+              distinctApproversRequired: input.approvalEvaluation.requirement.requireDistinctApprovers,
+              independentReviewRequired: input.approvalEvaluation.independentReviewRequired,
+              priorApproverExclusionRequired: input.approvalEvaluation.priorApproverExclusionRequired,
+              maxPriorApproverOverlapRatio: input.approvalEvaluation.maxPriorApproverOverlapRatio,
+              reviewerCarryoverBudget: input.approvalEvaluation.reviewerCarryoverBudget,
+              reviewerCarryoverLookbackPromotions: input.approvalEvaluation.reviewerCarryoverLookbackPromotions,
+              teamCarryoverBudget: input.approvalEvaluation.teamCarryoverBudget,
+              teamCarryoverLookbackPromotions: input.approvalEvaluation.teamCarryoverLookbackPromotions,
+              maxPriorReportingChainOverlapRatio: input.approvalEvaluation.maxPriorReportingChainOverlapRatio,
+              reportingChainCarryoverBudget: input.approvalEvaluation.reportingChainCarryoverBudget,
+              reportingChainCarryoverLookbackPromotions:
+                input.approvalEvaluation.reportingChainCarryoverLookbackPromotions,
+              roleCohortDiversityRequired: input.approvalEvaluation.roleCohortDiversityRequired,
+              minimumDistinctRoleCohorts: input.approvalEvaluation.minimumDistinctRoleCohorts,
+              reviewerTeamDiversityRequired: input.approvalEvaluation.reviewerTeamDiversityRequired,
+              minimumDistinctReviewerTeams: input.approvalEvaluation.minimumDistinctReviewerTeams,
+              reportingChainDiversityRequired: input.approvalEvaluation.reportingChainDiversityRequired,
+              minimumDistinctReportingChains: input.approvalEvaluation.minimumDistinctReportingChains,
+              qualifiedApprovals: input.approvalEvaluation.qualifiedApprovals,
+              independentQualifiedApprovals: input.approvalEvaluation.independentQualifiedApprovals,
+              freshQualifiedApprovals: input.approvalEvaluation.freshQualifiedApprovals,
+              overlappingQualifiedApprovers: input.approvalEvaluation.overlappingQualifiedApprovers,
+              priorApproverOverlapRatio: input.approvalEvaluation.priorApproverOverlapRatio,
+              reviewerCarryoverScore: input.approvalEvaluation.reviewerCarryoverScore,
+              carriedOverQualifiedApprovers: input.approvalEvaluation.carriedOverQualifiedApprovers,
+              teamCarryoverScore: input.approvalEvaluation.teamCarryoverScore,
+              carriedOverQualifiedTeams: input.approvalEvaluation.carriedOverQualifiedTeams,
+              overlappingQualifiedReportingChains: input.approvalEvaluation.overlappingQualifiedReportingChains,
+              priorReportingChainOverlapRatio: input.approvalEvaluation.priorReportingChainOverlapRatio,
+              reportingChainCarryoverScore: input.approvalEvaluation.reportingChainCarryoverScore,
+              carriedOverQualifiedReportingChains: input.approvalEvaluation.carriedOverQualifiedReportingChains,
+              distinctQualifiedRoleCohorts: input.approvalEvaluation.distinctQualifiedRoleCohorts,
+              distinctQualifiedReviewerTeams: input.approvalEvaluation.distinctQualifiedReviewerTeams,
+              missingQualifiedReviewerTeams: input.approvalEvaluation.missingQualifiedReviewerTeams,
+              distinctQualifiedReportingChains: input.approvalEvaluation.distinctQualifiedReportingChains,
+              missingQualifiedReportingChains: input.approvalEvaluation.missingQualifiedReportingChains,
+              approverReuseRatio: input.approvalEvaluation.approverReuseRatio,
+              teamReuseRatio: input.approvalEvaluation.teamReuseRatio,
+              reportingChainReuseRatio: input.approvalEvaluation.reportingChainReuseRatio,
+              approvalConcentrationBudget: input.approvalEvaluation.approvalConcentrationBudget,
+              approvalConcentrationPreset: input.approvalEvaluation.approvalConcentrationPreset,
+              approvalConcentrationWeights: input.approvalEvaluation.approvalConcentrationWeights,
+              approvalConcentrationScore: input.approvalEvaluation.approvalConcentrationScore,
+              approvalConcentrationApplicableAxes: input.approvalEvaluation.approvalConcentrationApplicableAxes,
+              approvalConcentrationAppliedWeightTotal: input.approvalEvaluation.approvalConcentrationAppliedWeightTotal,
+              distinctQualifiedApprovers: input.approvalEvaluation.distinctQualifiedApprovers,
+              priorPromotionApprovers: input.approvalEvaluation.priorPromotionApprovers.length,
+              priorPromotionReportingChains: input.approvalEvaluation.priorPromotionReportingChains.length,
+            }
           : undefined,
         releasePolicy: input.releasePolicy
           ? {
-            policySource: input.releasePolicy.provenance.policySource,
-            policyProjectID: input.releasePolicy.provenance.policyProjectID,
-            compatibilityApprovalSource: input.releasePolicy.provenance.compatibilityApprovalSource,
-            resolvedAt: input.releasePolicy.provenance.resolvedAt,
-            persistedScope: input.releasePolicy.provenance.persistedScope,
-            persistedUpdatedAt: input.releasePolicy.provenance.persistedUpdatedAt,
-            digest: input.releasePolicy.provenance.digest,
-            policy: input.releasePolicy.policy,
-          }
+              policySource: input.releasePolicy.provenance.policySource,
+              policyProjectID: input.releasePolicy.provenance.policyProjectID,
+              compatibilityApprovalSource: input.releasePolicy.provenance.compatibilityApprovalSource,
+              resolvedAt: input.releasePolicy.provenance.resolvedAt,
+              persistedScope: input.releasePolicy.provenance.persistedScope,
+              persistedUpdatedAt: input.releasePolicy.provenance.persistedUpdatedAt,
+              digest: input.releasePolicy.provenance.digest,
+              policy: input.releasePolicy.policy,
+            }
           : undefined,
         approvalPolicySuggestion: input.approvalPolicySuggestion,
         benchmark: {
@@ -1479,8 +1588,7 @@ export namespace QualityModelRegistry {
     })
     if (
       resolved.reentryRequirement &&
-      (
-        resolved.reentryRequirement.minimumApprovals > 0 ||
+      (resolved.reentryRequirement.minimumApprovals > 0 ||
         resolved.reentryRequirement.requireIndependentReviewer ||
         resolved.reentryRequirement.requirePriorApproverExclusion ||
         resolved.reentryRequirement.maxPriorApproverOverlapRatio !== null ||
@@ -1494,8 +1602,7 @@ export namespace QualityModelRegistry {
         resolved.reentryRequirement.minimumDistinctReviewerTeams !== null ||
         resolved.reentryRequirement.requireReportingChainDiversity ||
         resolved.reentryRequirement.minimumDistinctReportingChains !== null ||
-        resolved.reentryRequirement.approvalConcentrationBudget !== null
-      )
+        resolved.reentryRequirement.approvalConcentrationBudget !== null)
     ) {
       throw new Error(
         `Cannot promote model ${input.source}: reentry promotion requires approved decision bundle(s) (${resolved.reentryRequirement.minimumApprovals} approval(s), minimum role ${resolved.reentryRequirement.minimumRole ?? "none"})`,
@@ -1519,11 +1626,11 @@ export namespace QualityModelRegistry {
       ...options,
       releasePolicyDigest: options?.releasePolicy?.provenance.digest ?? null,
       reviewerCarryoverLookbackPromotions:
-        options?.releasePolicy?.policy.approval.rules.reentry.reviewerCarryoverLookbackPromotions,
+        options?.releasePolicy?.policy?.approval?.rules?.reentry?.reviewerCarryoverLookbackPromotions,
       teamCarryoverLookbackPromotions:
-        options?.releasePolicy?.policy.approval.rules.reentry.teamCarryoverLookbackPromotions,
+        options?.releasePolicy?.policy?.approval?.rules?.reentry?.teamCarryoverLookbackPromotions,
       reportingChainCarryoverLookbackPromotions:
-        options?.releasePolicy?.policy.approval.rules.reentry.reportingChainCarryoverLookbackPromotions,
+        options?.releasePolicy?.policy?.approval?.rules?.reentry?.reportingChainCarryoverLookbackPromotions,
     })
     if (eligibility.requiredOverride === "force" && !options?.force) {
       throw new Error(
@@ -1577,19 +1684,19 @@ export namespace QualityModelRegistry {
       ...decisionBundle.policy,
       releasePolicyDigest: decisionBundle.releasePolicy?.provenance.digest ?? null,
       reviewerCarryoverLookbackPromotions:
-        decisionBundle.releasePolicy?.policy.approval.rules.reentry.reviewerCarryoverLookbackPromotions,
+        decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.reviewerCarryoverLookbackPromotions,
       teamCarryoverLookbackPromotions:
-        decisionBundle.releasePolicy?.policy.approval.rules.reentry.teamCarryoverLookbackPromotions,
+        decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.teamCarryoverLookbackPromotions,
       reportingChainCarryoverLookbackPromotions:
-        decisionBundle.releasePolicy?.policy.approval.rules.reentry.reportingChainCarryoverLookbackPromotions,
+        decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.reportingChainCarryoverLookbackPromotions,
     })
     const drift = QualityPromotionDecisionBundle.driftReasons(decisionBundle, {
       ...evaluation,
       releasePolicy: options?.releasePolicyResolution
         ? {
-          policy: options.releasePolicyResolution.policy,
-          provenance: QualityPromotionReleasePolicyStore.provenance(options.releasePolicyResolution),
-        }
+            policy: options.releasePolicyResolution.policy,
+            provenance: QualityPromotionReleasePolicyStore.provenance(options.releasePolicyResolution),
+          }
         : undefined,
     })
     if (drift.length > 0 && !options?.force) {
@@ -1619,8 +1726,9 @@ export namespace QualityModelRegistry {
       promotionMetadata: options?.promotionMetadata,
       decisionBundleCreatedAt: decisionBundle.createdAt,
       releasePolicy: decisionBundle.releasePolicy,
-      approvalPolicySuggestion: decisionBundle.approvalPolicySuggestion
-        ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(decisionBundle),
+      approvalPolicySuggestion:
+        decisionBundle.approvalPolicySuggestion ??
+        QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(decisionBundle),
     })
   }
 
@@ -1649,16 +1757,18 @@ export namespace QualityModelRegistry {
     },
   ) {
     const approvalPackets = options?.approvalPacket
-      ? (Array.isArray(options.approvalPacket) ? options.approvalPacket : [options.approvalPacket])
+      ? Array.isArray(options.approvalPacket)
+        ? options.approvalPacket
+        : [options.approvalPacket]
       : []
     if (approvalPackets.length > 1) {
       throw new Error(`Cannot promote model ${decisionBundle.source}: provide at most one approval packet`)
     }
-    const directApprovals = approvalInput
-      ? (Array.isArray(approvalInput) ? approvalInput : [approvalInput])
-      : []
+    const directApprovals = approvalInput ? (Array.isArray(approvalInput) ? approvalInput : [approvalInput]) : []
     if (approvalPackets.length > 0 && directApprovals.length > 0) {
-      throw new Error(`Cannot promote model ${decisionBundle.source}: approval packet cannot be combined with direct approval artifacts`)
+      throw new Error(
+        `Cannot promote model ${decisionBundle.source}: approval packet cannot be combined with direct approval artifacts`,
+      )
     }
 
     let approvalPacket: QualityPromotionApprovalPacket.PacketArtifact | undefined
@@ -1689,42 +1799,54 @@ export namespace QualityModelRegistry {
       adoptionDissentHandlingBundle = approvalPacket.dissentHandling
       resolvedDissentResolutions = approvalPacket.dissentHandling?.resolutions ?? []
       resolvedDissentSupersessions = approvalPacket.dissentHandling?.supersessions ?? []
-      adoptionDissentHandling = approvalPacket.dissentHandling?.summary
-        ?? QualityPromotionAdoptionDissentHandling.evaluate(decisionBundle, resolvedAdoptionReviews, [], [])
+      adoptionDissentHandling =
+        approvalPacket.dissentHandling?.summary ??
+        QualityPromotionAdoptionDissentHandling.evaluate(decisionBundle, resolvedAdoptionReviews, [], [])
       approvalEvaluation = approvalPacket.approvalEvaluation
     } else {
       approvals = directApprovals
       if (approvals.length === 0) {
-        throw new Error(`Cannot promote model ${decisionBundle.source}: at least one approval artifact or approval packet is required`)
+        throw new Error(
+          `Cannot promote model ${decisionBundle.source}: at least one approval artifact or approval packet is required`,
+        )
       }
       for (const approval of approvals) {
         const approvalReasons = QualityPromotionApproval.verify(decisionBundle, approval)
         if (approvalReasons.length > 0) {
-          throw new Error(`Cannot promote model ${decisionBundle.source}: invalid approval artifact (${approvalReasons[0]})`)
+          throw new Error(
+            `Cannot promote model ${decisionBundle.source}: invalid approval artifact (${approvalReasons[0]})`,
+          )
         }
         await QualityPromotionApproval.assertPersisted(approval)
       }
       const adoptionReviews = options?.adoptionReviews
-        ? (Array.isArray(options.adoptionReviews) ? options.adoptionReviews : [options.adoptionReviews])
+        ? Array.isArray(options.adoptionReviews)
+          ? options.adoptionReviews
+          : [options.adoptionReviews]
         : []
       for (const review of adoptionReviews) {
         const reviewReasons = QualityPromotionAdoptionReview.verify(decisionBundle, review)
         if (reviewReasons.length > 0) {
-          throw new Error(`Cannot promote model ${decisionBundle.source}: invalid adoption review artifact (${reviewReasons[0]})`)
+          throw new Error(
+            `Cannot promote model ${decisionBundle.source}: invalid adoption review artifact (${reviewReasons[0]})`,
+          )
         }
         await QualityPromotionAdoptionReview.assertPersisted(review)
       }
       resolvedAdoptionReviews = await QualityPromotionAdoptionReview.resolveForBundle(decisionBundle, adoptionReviews)
       adoptionReviewConsensus = QualityPromotionAdoptionReview.evaluate(decisionBundle, resolvedAdoptionReviews)
-      const blockingConsensusGate = adoptionReviewConsensus.gates.find((gate) =>
-        gate.status === "fail" && gate.name !== "qualified-rejection-veto")
+      const blockingConsensusGate = adoptionReviewConsensus.gates.find(
+        (gate) => gate.status === "fail" && gate.name !== "qualified-rejection-veto",
+      )
       if (blockingConsensusGate) {
         throw new Error(
           `Cannot promote model ${decisionBundle.source}: adoption review consensus not satisfied (${blockingConsensusGate.detail})`,
         )
       }
       const dissentHandlingBundles = options?.dissentHandling
-        ? (Array.isArray(options.dissentHandling) ? options.dissentHandling : [options.dissentHandling])
+        ? Array.isArray(options.dissentHandling)
+          ? options.dissentHandling
+          : [options.dissentHandling]
         : []
       if (dissentHandlingBundles.length > 1) {
         throw new Error(`Cannot promote model ${decisionBundle.source}: provide at most one dissent handling bundle`)
@@ -1748,7 +1870,9 @@ export namespace QualityModelRegistry {
         resolvedDissentSupersessions = handlingBundle.supersessions
       } else {
         const dissentResolutions = options?.dissentResolutions
-          ? (Array.isArray(options.dissentResolutions) ? options.dissentResolutions : [options.dissentResolutions])
+          ? Array.isArray(options.dissentResolutions)
+            ? options.dissentResolutions
+            : [options.dissentResolutions]
           : []
         for (const resolution of dissentResolutions) {
           const resolutionReasons = QualityPromotionAdoptionDissentResolution.verify(decisionBundle, resolution)
@@ -1765,7 +1889,9 @@ export namespace QualityModelRegistry {
         )
 
         const dissentSupersessions = options?.dissentSupersessions
-          ? (Array.isArray(options.dissentSupersessions) ? options.dissentSupersessions : [options.dissentSupersessions])
+          ? Array.isArray(options.dissentSupersessions)
+            ? options.dissentSupersessions
+            : [options.dissentSupersessions]
           : []
         for (const supersession of dissentSupersessions) {
           const supersessionReasons = QualityPromotionAdoptionDissentSupersession.verify(decisionBundle, supersession)
@@ -1782,8 +1908,9 @@ export namespace QualityModelRegistry {
         )
       }
 
-      adoptionDissentHandling = adoptionDissentHandlingBundle?.summary
-        ?? QualityPromotionAdoptionDissentHandling.evaluate(
+      adoptionDissentHandling =
+        adoptionDissentHandlingBundle?.summary ??
+        QualityPromotionAdoptionDissentHandling.evaluate(
           decisionBundle,
           resolvedAdoptionReviews,
           resolvedDissentResolutions,
@@ -1838,19 +1965,19 @@ export namespace QualityModelRegistry {
       ...decisionBundle.policy,
       releasePolicyDigest: decisionBundle.releasePolicy?.provenance.digest ?? null,
       reviewerCarryoverLookbackPromotions:
-        decisionBundle.releasePolicy?.policy.approval.rules.reentry.reviewerCarryoverLookbackPromotions,
+        decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.reviewerCarryoverLookbackPromotions,
       teamCarryoverLookbackPromotions:
-        decisionBundle.releasePolicy?.policy.approval.rules.reentry.teamCarryoverLookbackPromotions,
+        decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.teamCarryoverLookbackPromotions,
       reportingChainCarryoverLookbackPromotions:
-        decisionBundle.releasePolicy?.policy.approval.rules.reentry.reportingChainCarryoverLookbackPromotions,
+        decisionBundle.releasePolicy?.policy?.approval?.rules?.reentry?.reportingChainCarryoverLookbackPromotions,
     })
     const drift = QualityPromotionDecisionBundle.driftReasons(decisionBundle, {
       ...evaluation,
       releasePolicy: options?.releasePolicyResolution
         ? {
-          policy: options.releasePolicyResolution.policy,
-          provenance: QualityPromotionReleasePolicyStore.provenance(options.releasePolicyResolution),
-        }
+            policy: options.releasePolicyResolution.policy,
+            provenance: QualityPromotionReleasePolicyStore.provenance(options.releasePolicyResolution),
+          }
         : undefined,
     })
     if (drift.length > 0 && !options?.force) {
@@ -1887,8 +2014,9 @@ export namespace QualityModelRegistry {
       adoptionDissentHandling,
       approvalEvaluation,
       releasePolicy: decisionBundle.releasePolicy,
-      approvalPolicySuggestion: decisionBundle.approvalPolicySuggestion
-        ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(decisionBundle),
+      approvalPolicySuggestion:
+        decisionBundle.approvalPolicySuggestion ??
+        QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(decisionBundle),
     })
   }
 
@@ -1903,7 +2031,9 @@ export namespace QualityModelRegistry {
   ) {
     const submissionReasons = QualityPromotionSubmissionBundle.verify(submissionBundle.decisionBundle, submissionBundle)
     if (submissionReasons.length > 0) {
-      throw new Error(`Cannot promote model ${submissionBundle.source}: invalid submission bundle (${submissionReasons[0]})`)
+      throw new Error(
+        `Cannot promote model ${submissionBundle.source}: invalid submission bundle (${submissionReasons[0]})`,
+      )
     }
     await QualityPromotionSubmissionBundle.assertPersisted(submissionBundle)
     if (submissionBundle.summary.overallStatus !== "pass") {
@@ -1911,17 +2041,13 @@ export namespace QualityModelRegistry {
         `Cannot promote model ${submissionBundle.source}: submission bundle not ready (${submissionBundle.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
       )
     }
-    const result = await promoteApprovedDecisionBundle(
-      submissionBundle.decisionBundle,
-      undefined,
-      {
-        allowWarn: options?.allowWarn,
-        force: options?.force,
-        promotionMetadata: options?.promotionMetadata,
-        approvalPacket: submissionBundle.approvalPacket,
-        releasePolicyResolution: options?.releasePolicyResolution,
-      },
-    )
+    const result = await promoteApprovedDecisionBundle(submissionBundle.decisionBundle, undefined, {
+      allowWarn: options?.allowWarn,
+      force: options?.force,
+      promotionMetadata: options?.promotionMetadata,
+      approvalPacket: submissionBundle.approvalPacket,
+      releasePolicyResolution: options?.releasePolicyResolution,
+    })
     const record = PromotionRecord.parse({
       ...result.record,
       submissionBundle: {
@@ -1950,7 +2076,10 @@ export namespace QualityModelRegistry {
       releasePolicyResolution?: QualityPromotionReleasePolicyStore.Resolution
     },
   ) {
-    const dossierReasons = QualityPromotionReviewDossier.verify(reviewDossier.submissionBundle.decisionBundle, reviewDossier)
+    const dossierReasons = QualityPromotionReviewDossier.verify(
+      reviewDossier.submissionBundle.decisionBundle,
+      reviewDossier,
+    )
     if (dossierReasons.length > 0) {
       throw new Error(`Cannot promote model ${reviewDossier.source}: invalid review dossier (${dossierReasons[0]})`)
     }
@@ -1960,15 +2089,12 @@ export namespace QualityModelRegistry {
         `Cannot promote model ${reviewDossier.source}: review dossier not ready (${reviewDossier.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
       )
     }
-    const result = await promoteSubmissionBundle(
-      reviewDossier.submissionBundle,
-      {
-        allowWarn: options?.allowWarn,
-        force: options?.force,
-        promotionMetadata: options?.promotionMetadata,
-        releasePolicyResolution: options?.releasePolicyResolution,
-      },
-    )
+    const result = await promoteSubmissionBundle(reviewDossier.submissionBundle, {
+      allowWarn: options?.allowWarn,
+      force: options?.force,
+      promotionMetadata: options?.promotionMetadata,
+      releasePolicyResolution: options?.releasePolicyResolution,
+    })
     const record = PromotionRecord.parse({
       ...result.record,
       reviewDossier: {
@@ -2001,7 +2127,9 @@ export namespace QualityModelRegistry {
       boardDecision,
     )
     if (boardDecisionReasons.length > 0) {
-      throw new Error(`Cannot promote model ${boardDecision.source}: invalid board decision (${boardDecisionReasons[0]})`)
+      throw new Error(
+        `Cannot promote model ${boardDecision.source}: invalid board decision (${boardDecisionReasons[0]})`,
+      )
     }
     await QualityPromotionBoardDecision.assertPersisted(boardDecision)
     if (boardDecision.summary.overallStatus !== "pass") {
@@ -2009,15 +2137,12 @@ export namespace QualityModelRegistry {
         `Cannot promote model ${boardDecision.source}: board decision not ready (${boardDecision.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
       )
     }
-    const result = await promoteReviewDossier(
-      boardDecision.reviewDossier,
-      {
-        allowWarn: boardDecision.summary.requiredOverride === "allow_warn" && boardDecision.overrideAccepted,
-        force: boardDecision.summary.requiredOverride === "force" && boardDecision.overrideAccepted,
-        promotionMetadata: options?.promotionMetadata,
-        releasePolicyResolution: options?.releasePolicyResolution,
-      },
-    )
+    const result = await promoteReviewDossier(boardDecision.reviewDossier, {
+      allowWarn: boardDecision.summary.requiredOverride === "allow_warn" && boardDecision.overrideAccepted,
+      force: boardDecision.summary.requiredOverride === "force" && boardDecision.overrideAccepted,
+      promotionMetadata: options?.promotionMetadata,
+      releasePolicyResolution: options?.releasePolicyResolution,
+    })
     const record = PromotionRecord.parse({
       ...result.record,
       boardDecision: {
@@ -2054,7 +2179,9 @@ export namespace QualityModelRegistry {
       releaseDecisionRecord,
     )
     if (recordReasons.length > 0) {
-      throw new Error(`Cannot promote model ${releaseDecisionRecord.source}: invalid release decision record (${recordReasons[0]})`)
+      throw new Error(
+        `Cannot promote model ${releaseDecisionRecord.source}: invalid release decision record (${recordReasons[0]})`,
+      )
     }
     await QualityPromotionReleaseDecisionRecord.assertPersisted(releaseDecisionRecord)
     if (releaseDecisionRecord.summary.overallStatus !== "pass") {
@@ -2062,13 +2189,10 @@ export namespace QualityModelRegistry {
         `Cannot promote model ${releaseDecisionRecord.source}: release decision record not ready (${releaseDecisionRecord.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
       )
     }
-    const result = await promoteBoardDecision(
-      releaseDecisionRecord.boardDecision,
-      {
-        releasePolicyResolution: options?.releasePolicyResolution,
-        promotionMetadata: options?.promotionMetadata,
-      },
-    )
+    const result = await promoteBoardDecision(releaseDecisionRecord.boardDecision, {
+      releasePolicyResolution: options?.releasePolicyResolution,
+      promotionMetadata: options?.promotionMetadata,
+    })
     const record = PromotionRecord.parse({
       ...result.record,
       releaseDecisionRecord: {
@@ -2191,26 +2315,24 @@ export namespace QualityModelRegistry {
       )
     }
     const attestationPolicyResolution = options?.archiveSigning
-      ? options.attestationPolicyResolution ?? await QualityPromotionSignedArchiveAttestationPolicyStore.resolve({
-        projectID: attestationProjectID ?? undefined,
-      })
+      ? (options.attestationPolicyResolution ??
+        (await QualityPromotionSignedArchiveAttestationPolicyStore.resolve({
+          projectID: attestationProjectID ?? undefined,
+        })))
       : undefined
     const promotionMetadata = options?.archiveSigning ? createPromotionMetadata(releasePacket.source) : undefined
     const preflight = options?.archiveSigning
       ? await preflightReleasePacketArtifacts({
-        releasePacket,
-        promotionMetadata: promotionMetadata!,
-        archiveSigning: options.archiveSigning,
-        attestationPolicyResolution: attestationPolicyResolution!,
-      })
+          releasePacket,
+          promotionMetadata: promotionMetadata!,
+          archiveSigning: options.archiveSigning,
+          attestationPolicyResolution: attestationPolicyResolution!,
+        })
       : undefined
-    const result = await promoteReleaseDecisionRecord(
-      releasePacket.releaseDecisionRecord,
-      {
-        releasePolicyResolution: options?.releasePolicyResolution,
-        promotionMetadata,
-      },
-    )
+    const result = await promoteReleaseDecisionRecord(releasePacket.releaseDecisionRecord, {
+      releasePolicyResolution: options?.releasePolicyResolution,
+      promotionMetadata,
+    })
     const record = PromotionRecord.parse({
       ...result.record,
       releasePacket: {
@@ -2224,84 +2346,99 @@ export namespace QualityModelRegistry {
       },
     })
     await Storage.write(promotionKey(result.record.promotionID), record)
-    const auditManifest = preflight?.auditManifest ?? QualityPromotionAuditManifest.create({
-      releasePacket,
-      promotion: auditManifestPromotionSnapshot(record),
-    })
-    await QualityPromotionAuditManifest.append(auditManifest)
-    const exportBundle = preflight?.exportBundle ?? QualityPromotionExportBundle.create({
-      auditManifest,
-    })
-    await QualityPromotionExportBundle.append(exportBundle)
-    const archiveManifest = preflight?.archiveManifest ?? QualityPromotionArchiveManifest.create({
-      exportBundle,
-    })
-    await QualityPromotionArchiveManifest.append(archiveManifest)
-    const handoffPackage = preflight?.handoffPackage ?? QualityPromotionHandoffPackage.create({
-      archiveManifest,
-    })
-    await QualityPromotionHandoffPackage.append(handoffPackage)
-    const portableExport = preflight?.portableExport ?? QualityPromotionPortableExport.create({
-      handoffPackage,
-    })
-    await QualityPromotionPortableExport.append(portableExport)
-    const packagedArchive = preflight?.packagedArchive ?? QualityPromotionPackagedArchive.create({
-      portableExport,
-    })
-    await QualityPromotionPackagedArchive.append(packagedArchive)
-    const signedArchive = preflight?.signedArchive ?? (options?.archiveSigning
-      ? QualityPromotionSignedArchive.create({
-        packagedArchive,
-        signing: options.archiveSigning,
+    const auditManifest =
+      preflight?.auditManifest ??
+      QualityPromotionAuditManifest.create({
+        releasePacket,
+        promotion: auditManifestPromotionSnapshot(record),
       })
-      : undefined)
+    await QualityPromotionAuditManifest.append(auditManifest)
+    const exportBundle =
+      preflight?.exportBundle ??
+      QualityPromotionExportBundle.create({
+        auditManifest,
+      })
+    await QualityPromotionExportBundle.append(exportBundle)
+    const archiveManifest =
+      preflight?.archiveManifest ??
+      QualityPromotionArchiveManifest.create({
+        exportBundle,
+      })
+    await QualityPromotionArchiveManifest.append(archiveManifest)
+    const handoffPackage =
+      preflight?.handoffPackage ??
+      QualityPromotionHandoffPackage.create({
+        archiveManifest,
+      })
+    await QualityPromotionHandoffPackage.append(handoffPackage)
+    const portableExport =
+      preflight?.portableExport ??
+      QualityPromotionPortableExport.create({
+        handoffPackage,
+      })
+    await QualityPromotionPortableExport.append(portableExport)
+    const packagedArchive =
+      preflight?.packagedArchive ??
+      QualityPromotionPackagedArchive.create({
+        portableExport,
+      })
+    await QualityPromotionPackagedArchive.append(packagedArchive)
+    const signedArchive =
+      preflight?.signedArchive ??
+      (options?.archiveSigning
+        ? QualityPromotionSignedArchive.create({
+            packagedArchive,
+            signing: options.archiveSigning,
+          })
+        : undefined)
     if (signedArchive) {
       await QualityPromotionSignedArchive.append(signedArchive)
     }
-    const signedArchiveAttestationRecord = signedArchive && preflight
-      ? QualityPromotionSignedArchiveAttestationRecord.create({
-        signedArchive,
-        trust: preflight.signedArchiveTrust,
-        attestation: preflight.signedArchiveAttestation,
-      })
-      : undefined
+    const signedArchiveAttestationRecord =
+      signedArchive && preflight
+        ? QualityPromotionSignedArchiveAttestationRecord.create({
+            signedArchive,
+            trust: preflight.signedArchiveTrust,
+            attestation: preflight.signedArchiveAttestation,
+          })
+        : undefined
     if (signedArchiveAttestationRecord) {
       await QualityPromotionSignedArchiveAttestationRecord.append(signedArchiveAttestationRecord)
     }
     const signedArchiveAttestationPacket = signedArchiveAttestationRecord
       ? QualityPromotionSignedArchiveAttestationPacket.create({
-        promotion: {
-          promotionID: record.promotionID,
-          source: record.source,
-          promotedAt: record.promotedAt,
-          decision: record.decision,
-          previousActiveSource: record.previousActiveSource,
-          releasePacketID: releasePacket.packetID,
-          promotionMode: releasePacket.summary.promotionMode,
-          authorizedPromotion: releasePacket.summary.authorizedPromotion,
-          signedArchiveID: signedArchiveAttestationRecord.signedArchive.signedArchiveID,
-        },
-        attestationRecord: signedArchiveAttestationRecord,
-      })
+          promotion: {
+            promotionID: record.promotionID,
+            source: record.source,
+            promotedAt: record.promotedAt,
+            decision: record.decision,
+            previousActiveSource: record.previousActiveSource,
+            releasePacketID: releasePacket.packetID,
+            promotionMode: releasePacket.summary.promotionMode,
+            authorizedPromotion: releasePacket.summary.authorizedPromotion,
+            signedArchiveID: signedArchiveAttestationRecord.signedArchive.signedArchiveID,
+          },
+          attestationRecord: signedArchiveAttestationRecord,
+        })
       : undefined
     if (signedArchiveAttestationPacket) {
       await QualityPromotionSignedArchiveAttestationPacket.append(signedArchiveAttestationPacket)
     }
     const signedArchiveGovernancePacket = signedArchiveAttestationPacket
       ? QualityPromotionSignedArchiveGovernancePacket.create({
-        promotion: signedArchiveAttestationPacket.promotion,
-        releasePacket,
-        attestationPacket: signedArchiveAttestationPacket,
-      })
+          promotion: signedArchiveAttestationPacket.promotion,
+          releasePacket,
+          attestationPacket: signedArchiveAttestationPacket,
+        })
       : undefined
     if (signedArchiveGovernancePacket) {
       await QualityPromotionSignedArchiveGovernancePacket.append(signedArchiveGovernancePacket)
     }
     const signedArchiveReviewDossier = signedArchiveGovernancePacket
       ? QualityPromotionSignedArchiveReviewDossier.create({
-        governancePacket: signedArchiveGovernancePacket,
-        handoffPackage,
-      })
+          governancePacket: signedArchiveGovernancePacket,
+          handoffPackage,
+        })
       : undefined
     if (signedArchiveReviewDossier) {
       await QualityPromotionSignedArchiveReviewDossier.append(signedArchiveReviewDossier)
@@ -2364,92 +2501,110 @@ export namespace QualityModelRegistry {
         createdAt: packagedArchive.createdAt,
         exportID: packagedArchive.portableExport.exportID,
         packageID: packagedArchive.portableExport.handoffPackage.packageID,
-        promotionID: packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID,
+        promotionID:
+          packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+            .promotionID,
         entryCount: packagedArchive.summary.entryCount,
         overallStatus: packagedArchive.summary.overallStatus,
       },
-      signedArchive: signedArchive ? {
-        signedArchiveID: signedArchive.signedArchiveID,
-        createdAt: signedArchive.createdAt,
-        archiveID: signedArchive.packagedArchive.archiveID,
-        exportID: signedArchive.packagedArchive.portableExport.exportID,
-        promotionID: signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID,
-        keyID: signedArchive.attestation.keyID,
-        attestedBy: signedArchive.attestation.attestedBy,
-        algorithm: signedArchive.attestation.algorithm,
-        overallStatus: signedArchive.summary.overallStatus,
-      } : undefined,
-      signedArchiveTrust: preflight ? {
-        overallStatus: preflight.signedArchiveTrust.overallStatus,
-        trusted: preflight.signedArchiveTrust.trusted,
-        signatureStatus: preflight.signedArchiveTrust.signatureStatus,
-        registryStatus: preflight.signedArchiveTrust.registryStatus,
-        lifecycleStatus: preflight.signedArchiveTrust.lifecycleStatus,
-        resolution: preflight.signedArchiveTrust.resolution,
-      } : undefined,
-      signedArchiveAttestation: preflight ? {
-        overallStatus: preflight.signedArchiveAttestation.overallStatus,
-        policySource: preflight.signedArchiveAttestation.policySource,
-        policyProjectID: preflight.signedArchiveAttestation.policyProjectID,
-        policyDigest: preflight.signedArchiveAttestation.policyDigest,
-        acceptedByPolicy: preflight.signedArchiveAttestation.acceptedByPolicy,
-        trustStatus: preflight.signedArchiveAttestation.trustStatus,
-        minimumScopeStatus: preflight.signedArchiveAttestation.minimumScopeStatus,
-        lifecyclePolicyStatus: preflight.signedArchiveAttestation.lifecyclePolicyStatus,
-        effectiveTrustScope: preflight.signedArchiveAttestation.effectiveTrustScope,
-        effectiveTrustLifecycle: preflight.signedArchiveAttestation.effectiveTrustLifecycle,
-      } : undefined,
-      signedArchiveAttestationRecord: signedArchiveAttestationRecord ? {
-        recordID: signedArchiveAttestationRecord.recordID,
-        createdAt: signedArchiveAttestationRecord.createdAt,
-        signedArchiveID: signedArchiveAttestationRecord.signedArchive.signedArchiveID,
-        promotionID: signedArchiveAttestationRecord.promotionID,
-        trustStatus: signedArchiveAttestationRecord.summary.trustStatus,
-        attestationStatus: signedArchiveAttestationRecord.summary.attestationStatus,
-        trusted: signedArchiveAttestationRecord.summary.trusted,
-        acceptedByPolicy: signedArchiveAttestationRecord.summary.acceptedByPolicy,
-        policySource: signedArchiveAttestationRecord.summary.policySource,
-        policyProjectID: signedArchiveAttestationRecord.summary.policyProjectID,
-        overallStatus: signedArchiveAttestationRecord.summary.overallStatus,
-      } : undefined,
-      signedArchiveAttestationPacket: signedArchiveAttestationPacket ? {
-        packetID: signedArchiveAttestationPacket.packetID,
-        createdAt: signedArchiveAttestationPacket.createdAt,
-        promotionID: signedArchiveAttestationPacket.promotion.promotionID,
-        signedArchiveID: signedArchiveAttestationPacket.summary.signedArchiveID,
-        trustStatus: signedArchiveAttestationPacket.summary.trustStatus,
-        attestationStatus: signedArchiveAttestationPacket.summary.attestationStatus,
-        acceptedByPolicy: signedArchiveAttestationPacket.summary.acceptedByPolicy,
-        policySource: signedArchiveAttestationPacket.summary.policySource,
-        policyProjectID: signedArchiveAttestationPacket.summary.policyProjectID,
-        overallStatus: signedArchiveAttestationPacket.summary.overallStatus,
-      } : undefined,
-      signedArchiveGovernancePacket: signedArchiveGovernancePacket ? {
-        packetID: signedArchiveGovernancePacket.packetID,
-        createdAt: signedArchiveGovernancePacket.createdAt,
-        promotionID: signedArchiveGovernancePacket.promotion.promotionID,
-        releasePacketID: signedArchiveGovernancePacket.summary.releasePacketID,
-        signedArchiveID: signedArchiveGovernancePacket.summary.signedArchiveID,
-        authorizedPromotion: signedArchiveGovernancePacket.summary.authorizedPromotion,
-        promotionMode: signedArchiveGovernancePacket.summary.promotionMode,
-        policySource: signedArchiveGovernancePacket.summary.policySource,
-        policyProjectID: signedArchiveGovernancePacket.summary.policyProjectID,
-        overallStatus: signedArchiveGovernancePacket.summary.overallStatus,
-      } : undefined,
-      signedArchiveReviewDossier: signedArchiveReviewDossier ? {
-        dossierID: signedArchiveReviewDossier.dossierID,
-        createdAt: signedArchiveReviewDossier.createdAt,
-        promotionID: signedArchiveReviewDossier.governancePacket.promotion.promotionID,
-        governancePacketID: signedArchiveReviewDossier.governancePacket.packetID,
-        packageID: signedArchiveReviewDossier.handoffPackage.packageID,
-        releasePacketID: signedArchiveReviewDossier.summary.releasePacketID,
-        signedArchiveID: signedArchiveReviewDossier.summary.signedArchiveID,
-        authorizedPromotion: signedArchiveReviewDossier.summary.authorizedPromotion,
-        promotionMode: signedArchiveReviewDossier.summary.promotionMode,
-        policySource: signedArchiveReviewDossier.summary.policySource,
-        policyProjectID: signedArchiveReviewDossier.summary.policyProjectID,
-        overallStatus: signedArchiveReviewDossier.summary.overallStatus,
-      } : undefined,
+      signedArchive: signedArchive
+        ? {
+            signedArchiveID: signedArchive.signedArchiveID,
+            createdAt: signedArchive.createdAt,
+            archiveID: signedArchive.packagedArchive.archiveID,
+            exportID: signedArchive.packagedArchive.portableExport.exportID,
+            promotionID:
+              signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+                .promotion.promotionID,
+            keyID: signedArchive.attestation.keyID,
+            attestedBy: signedArchive.attestation.attestedBy,
+            algorithm: signedArchive.attestation.algorithm,
+            overallStatus: signedArchive.summary.overallStatus,
+          }
+        : undefined,
+      signedArchiveTrust: preflight
+        ? {
+            overallStatus: preflight.signedArchiveTrust.overallStatus,
+            trusted: preflight.signedArchiveTrust.trusted,
+            signatureStatus: preflight.signedArchiveTrust.signatureStatus,
+            registryStatus: preflight.signedArchiveTrust.registryStatus,
+            lifecycleStatus: preflight.signedArchiveTrust.lifecycleStatus,
+            resolution: preflight.signedArchiveTrust.resolution,
+          }
+        : undefined,
+      signedArchiveAttestation: preflight
+        ? {
+            overallStatus: preflight.signedArchiveAttestation.overallStatus,
+            policySource: preflight.signedArchiveAttestation.policySource,
+            policyProjectID: preflight.signedArchiveAttestation.policyProjectID,
+            policyDigest: preflight.signedArchiveAttestation.policyDigest,
+            acceptedByPolicy: preflight.signedArchiveAttestation.acceptedByPolicy,
+            trustStatus: preflight.signedArchiveAttestation.trustStatus,
+            minimumScopeStatus: preflight.signedArchiveAttestation.minimumScopeStatus,
+            lifecyclePolicyStatus: preflight.signedArchiveAttestation.lifecyclePolicyStatus,
+            effectiveTrustScope: preflight.signedArchiveAttestation.effectiveTrustScope,
+            effectiveTrustLifecycle: preflight.signedArchiveAttestation.effectiveTrustLifecycle,
+          }
+        : undefined,
+      signedArchiveAttestationRecord: signedArchiveAttestationRecord
+        ? {
+            recordID: signedArchiveAttestationRecord.recordID,
+            createdAt: signedArchiveAttestationRecord.createdAt,
+            signedArchiveID: signedArchiveAttestationRecord.signedArchive.signedArchiveID,
+            promotionID: signedArchiveAttestationRecord.promotionID,
+            trustStatus: signedArchiveAttestationRecord.summary.trustStatus,
+            attestationStatus: signedArchiveAttestationRecord.summary.attestationStatus,
+            trusted: signedArchiveAttestationRecord.summary.trusted,
+            acceptedByPolicy: signedArchiveAttestationRecord.summary.acceptedByPolicy,
+            policySource: signedArchiveAttestationRecord.summary.policySource,
+            policyProjectID: signedArchiveAttestationRecord.summary.policyProjectID,
+            overallStatus: signedArchiveAttestationRecord.summary.overallStatus,
+          }
+        : undefined,
+      signedArchiveAttestationPacket: signedArchiveAttestationPacket
+        ? {
+            packetID: signedArchiveAttestationPacket.packetID,
+            createdAt: signedArchiveAttestationPacket.createdAt,
+            promotionID: signedArchiveAttestationPacket.promotion.promotionID,
+            signedArchiveID: signedArchiveAttestationPacket.summary.signedArchiveID,
+            trustStatus: signedArchiveAttestationPacket.summary.trustStatus,
+            attestationStatus: signedArchiveAttestationPacket.summary.attestationStatus,
+            acceptedByPolicy: signedArchiveAttestationPacket.summary.acceptedByPolicy,
+            policySource: signedArchiveAttestationPacket.summary.policySource,
+            policyProjectID: signedArchiveAttestationPacket.summary.policyProjectID,
+            overallStatus: signedArchiveAttestationPacket.summary.overallStatus,
+          }
+        : undefined,
+      signedArchiveGovernancePacket: signedArchiveGovernancePacket
+        ? {
+            packetID: signedArchiveGovernancePacket.packetID,
+            createdAt: signedArchiveGovernancePacket.createdAt,
+            promotionID: signedArchiveGovernancePacket.promotion.promotionID,
+            releasePacketID: signedArchiveGovernancePacket.summary.releasePacketID,
+            signedArchiveID: signedArchiveGovernancePacket.summary.signedArchiveID,
+            authorizedPromotion: signedArchiveGovernancePacket.summary.authorizedPromotion,
+            promotionMode: signedArchiveGovernancePacket.summary.promotionMode,
+            policySource: signedArchiveGovernancePacket.summary.policySource,
+            policyProjectID: signedArchiveGovernancePacket.summary.policyProjectID,
+            overallStatus: signedArchiveGovernancePacket.summary.overallStatus,
+          }
+        : undefined,
+      signedArchiveReviewDossier: signedArchiveReviewDossier
+        ? {
+            dossierID: signedArchiveReviewDossier.dossierID,
+            createdAt: signedArchiveReviewDossier.createdAt,
+            promotionID: signedArchiveReviewDossier.governancePacket.promotion.promotionID,
+            governancePacketID: signedArchiveReviewDossier.governancePacket.packetID,
+            packageID: signedArchiveReviewDossier.handoffPackage.packageID,
+            releasePacketID: signedArchiveReviewDossier.summary.releasePacketID,
+            signedArchiveID: signedArchiveReviewDossier.summary.signedArchiveID,
+            authorizedPromotion: signedArchiveReviewDossier.summary.authorizedPromotion,
+            promotionMode: signedArchiveReviewDossier.summary.promotionMode,
+            policySource: signedArchiveReviewDossier.summary.policySource,
+            policyProjectID: signedArchiveReviewDossier.summary.policyProjectID,
+            overallStatus: signedArchiveReviewDossier.summary.overallStatus,
+          }
+        : undefined,
     })
     await Storage.write(promotionKey(result.record.promotionID), recordWithArtifacts)
     return {
@@ -2517,24 +2672,26 @@ export namespace QualityModelRegistry {
         sessionsCovered: watch.window.sessionsCovered,
         releasePolicy: watch.releasePolicy
           ? {
-            policySource: watch.releasePolicy.provenance.policySource,
-            policyProjectID: watch.releasePolicy.provenance.policyProjectID,
-            compatibilityApprovalSource: watch.releasePolicy.provenance.compatibilityApprovalSource,
-            resolvedAt: watch.releasePolicy.provenance.resolvedAt,
-            persistedScope: watch.releasePolicy.provenance.persistedScope,
-            persistedUpdatedAt: watch.releasePolicy.provenance.persistedUpdatedAt,
-            digest: watch.releasePolicy.provenance.digest,
-          }
+              policySource: watch.releasePolicy.provenance.policySource,
+              policyProjectID: watch.releasePolicy.provenance.policyProjectID,
+              compatibilityApprovalSource: watch.releasePolicy.provenance.compatibilityApprovalSource,
+              resolvedAt: watch.releasePolicy.provenance.resolvedAt,
+              persistedScope: watch.releasePolicy.provenance.persistedScope,
+              persistedUpdatedAt: watch.releasePolicy.provenance.persistedUpdatedAt,
+              digest: watch.releasePolicy.provenance.digest,
+            }
           : undefined,
         gates: watch.gates,
       },
       stability,
     })
     await Storage.write(rollbackKey(rollbackID), record)
-    await QualityReentryContext.append(QualityReentryContext.create({
-      rollback: record,
-      watch,
-    }))
+    await QualityReentryContext.append(
+      QualityReentryContext.create({
+        rollback: record,
+        watch,
+      }),
+    )
     return { active: resultingActive ?? null, record, stability }
   }
 }

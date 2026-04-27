@@ -35,16 +35,13 @@ describe("tui sync bootstrap request", () => {
     const settled: string[] = []
 
     await expect(
-      createTimedBootstrapRequest(
-        (_label, request) => request,
-        {
-          label: "tui bootstrap failing-test",
-          request: () => Promise.reject(new Error("boom")),
-          onSettled() {
-            settled.push("done")
-          },
+      createTimedBootstrapRequest((_label, request) => request, {
+        label: "tui bootstrap failing-test",
+        request: () => Promise.reject(new Error("boom")),
+        onSettled() {
+          settled.push("done")
         },
-      )(),
+      })(),
     ).rejects.toThrow("boom")
 
     expect(settled).toEqual(["done"])
@@ -54,18 +51,15 @@ describe("tui sync bootstrap request", () => {
     const settled: string[] = []
 
     await expect(
-      createTimedBootstrapRequest(
-        (_label, request) => request,
-        {
-          label: "tui bootstrap sync-throw",
-          request: () => {
-            throw new Error("sync boom")
-          },
-          onSettled() {
-            settled.push("done")
-          },
+      createTimedBootstrapRequest((_label, request) => request, {
+        label: "tui bootstrap sync-throw",
+        request: () => {
+          throw new Error("sync boom")
         },
-      )(),
+        onSettled() {
+          settled.push("done")
+        },
+      })(),
     ).rejects.toThrow("sync boom")
 
     expect(settled).toEqual(["done"])

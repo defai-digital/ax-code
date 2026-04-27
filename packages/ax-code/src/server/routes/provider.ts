@@ -28,6 +28,7 @@ const NATIVE_PROVIDERS = new Set([
   "xai",
   "zai",
   "zai-coding-plan",
+  "openrouter",
   "claude-code",
   "gemini-cli",
   "codex-cli",

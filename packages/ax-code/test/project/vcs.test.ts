@@ -15,10 +15,7 @@ const describeVcs = FileWatcher.hasNativeBinding() && !process.env.CI ? describe
 // Helpers
 // ---------------------------------------------------------------------------
 
-function withVcs(
-  directory: string,
-  body: () => Promise<void>,
-) {
+function withVcs(directory: string, body: () => Promise<void>) {
   return Instance.provide({
     directory,
     fn: async () => {

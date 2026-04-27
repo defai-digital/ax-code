@@ -218,9 +218,12 @@ export function Autocomplete(props: {
       const { lineRange, baseQuery } = extractLineRange(query ?? "")
 
       // Get files from SDK
-      const result = await sdk.client.find.files({
-        query: baseQuery,
-      }, { signal })
+      const result = await sdk.client.find.files(
+        {
+          query: baseQuery,
+        },
+        { signal },
+      )
 
       const options: AutocompleteOption[] = []
 

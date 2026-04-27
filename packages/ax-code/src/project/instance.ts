@@ -63,7 +63,9 @@ function snapshot(input: {
   const directory = input.directory ? Filesystem.resolve(input.directory) : currentDirectory
   const worktree = input.worktree ?? (current && currentDirectory === directory ? current.worktree : undefined)
   const projectID = input.projectID ?? (current && currentDirectory === directory ? current.project.id : undefined)
-  const services = directory ? (ServiceManager.peek(directory)?.snapshot() ?? ServiceManager.createSnapshot()) : ServiceManager.createSnapshot()
+  const services = directory
+    ? (ServiceManager.peek(directory)?.snapshot() ?? ServiceManager.createSnapshot())
+    : ServiceManager.createSnapshot()
   const result = RuntimeDebugSnapshot.create({
     trigger: input.trigger,
     time: Date.now(),

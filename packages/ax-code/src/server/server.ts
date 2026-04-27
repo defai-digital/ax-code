@@ -226,11 +226,16 @@ function clean(value: string) {
   return value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim()
 }
 
-function cleanExtra(value: unknown): unknown {
+const EXTRA_MAX_DEPTH = 5
+const EXTRA_MAX_KEYS = 50
+
+function cleanExtra(value: unknown, depth = 0): unknown {
+  if (depth > EXTRA_MAX_DEPTH) return "[truncated]"
   if (typeof value === "string") return clean(value)
-  if (Array.isArray(value)) return value.map(cleanExtra)
+  if (Array.isArray(value)) return value.slice(0, EXTRA_MAX_KEYS).map((v) => cleanExtra(v, depth + 1))
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [clean(key), cleanExtra(item)]))
+    const entries = Object.entries(value).slice(0, EXTRA_MAX_KEYS)
+    return Object.fromEntries(entries.map(([key, item]) => [clean(key), cleanExtra(item, depth + 1)]))
   }
   return value
 }
@@ -473,7 +478,7 @@ export namespace Server {
     })
   }
 
-  export const createApp = (opts: { port?: number, cors?: string[] }): Hono => {
+  export const createApp = (opts: { port?: number; cors?: string[] }): Hono => {
     const app = new Hono()
     return app
       .onError((err, c) => {
@@ -497,7 +502,7 @@ export namespace Server {
         // and library versions to any caller that could reach the
         // server. Clients get a short message and a 500 — operators
         // see the full trace in the logs.
-        const message = err instanceof Error ? err.message : "Internal server error"
+        const message = err instanceof NamedError ? err.message : "Internal server error"
         return c.json(new NamedError.Unknown({ message }).toObject(), {
           status: 500,
         })
@@ -583,15 +588,9 @@ export namespace Server {
             if (!input) return
 
             const boundPort = Number(url?.port ?? "")
-            const serverPort = Number.isFinite(boundPort) && boundPort > 0
-              ? boundPort
-              : opts?.port && opts.port > 0
-                ? opts.port
-                : 4096
-            const serverOrigins = [
-              `http://localhost:${serverPort}`,
-              `http://127.0.0.1:${serverPort}`,
-            ]
+            const serverPort =
+              Number.isFinite(boundPort) && boundPort > 0 ? boundPort : opts?.port && opts.port > 0 ? opts.port : 4096
+            const serverOrigins = [`http://localhost:${serverPort}`, `http://127.0.0.1:${serverPort}`]
             if (serverOrigins.includes(input)) return input
             if (opts?.cors?.includes(input)) return input
 
@@ -887,7 +886,11 @@ export namespace Server {
         validator(
           "json",
           z.object({
-            service: z.string().max(64).regex(/^[a-zA-Z0-9._-]+$/).meta({ description: "Service name for the log entry" }),
+            service: z
+              .string()
+              .max(64)
+              .regex(/^[a-zA-Z0-9._-]+$/)
+              .meta({ description: "Service name for the log entry" }),
             level: z.enum(["debug", "info", "error", "warn"]).meta({ description: "Log level" }),
             message: z.string().max(10000).meta({ description: "Log message" }),
             extra: z
@@ -896,32 +899,32 @@ export namespace Server {
               .meta({ description: "Additional metadata for the log entry" }),
           }),
         ),
-      async (c) => {
-        const { service, level, message, extra } = c.req.valid("json")
-        const logger = Log.create({ service })
-        const text = clean(message)
-        const metadata = {
-          source: "client",
-          ...(extra ? { extra: cleanExtra(extra) } : {}),
-        }
+        async (c) => {
+          const { service, level, message, extra } = c.req.valid("json")
+          const logger = Log.create({ service })
+          const text = clean(message)
+          const metadata = {
+            source: "client",
+            ...(extra ? { extra: cleanExtra(extra) } : {}),
+          }
 
-        switch (level) {
-          case "debug":
-            logger.debug(text, metadata)
-            break
-          case "info":
-            logger.info(text, metadata)
-            break
-          case "error":
-            logger.error(text, metadata)
-            break
-          case "warn":
-            logger.warn(text, metadata)
-            break
-        }
+          switch (level) {
+            case "debug":
+              logger.debug(text, metadata)
+              break
+            case "info":
+              logger.info(text, metadata)
+              break
+            case "error":
+              logger.error(text, metadata)
+              break
+            case "warn":
+              logger.warn(text, metadata)
+              break
+          }
 
-        return c.json(true)
-      },
+          return c.json(true)
+        },
       )
       .get(
         "/context",
@@ -1306,7 +1309,7 @@ export namespace Server {
     if (!loopback && !Flag.AX_CODE_SERVER_PASSWORD) {
       throw new Error(
         "AX_CODE_SERVER_PASSWORD is required when binding to a non-loopback address. " +
-        "Set the environment variable to secure the server.",
+          "Set the environment variable to secure the server.",
       )
     }
     const app = createApp(opts)

@@ -24,6 +24,7 @@ declare global {
 }
 
 type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
+const log = Log.create({ service: "tui.thread" })
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
 
@@ -79,7 +80,10 @@ function createEventSource(client: RpcClient): EventSource {
     },
     status: () => lastStatus,
     setWorkspace: (workspaceID) => {
-      void client.call("setWorkspace", { workspaceID })
+      void client.call("setWorkspace", { workspaceID }).catch((error) => {
+        log.warn("failed to set workspace", { workspaceID, error })
+        DiagnosticLog.recordProcess("tui.setWorkspaceFailed", { workspaceID, error })
+      })
     },
   }
 }

@@ -208,8 +208,14 @@ describe("session.remove", () => {
                 { session_id: child.id, id: "shr_child", secret: "sec_child", url: "https://example.com/child" },
               ])
               .run()
-            db.update(SessionTable).set({ share_url: "https://example.com/parent" }).where(eq(SessionTable.id, parent.id)).run()
-            db.update(SessionTable).set({ share_url: "https://example.com/child" }).where(eq(SessionTable.id, child.id)).run()
+            db.update(SessionTable)
+              .set({ share_url: "https://example.com/parent" })
+              .where(eq(SessionTable.id, parent.id))
+              .run()
+            db.update(SessionTable)
+              .set({ share_url: "https://example.com/child" })
+              .where(eq(SessionTable.id, child.id))
+              .run()
           })
 
           await Session.remove(parent.id)

@@ -81,12 +81,14 @@ describe("DebugAnalyzeTool", () => {
           resolvedCount: 0,
           truncated: false,
         })
-        expect(shadowSpy).toHaveBeenCalledWith(expect.objectContaining({
-          session,
-          callID: "call_debug",
-          error: "TypeError: undefined is not a function",
-          stackTrace: "at handle (/repo/src/app.ts:10:1)",
-        }))
+        expect(shadowSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            session,
+            callID: "call_debug",
+            error: "TypeError: undefined is not a function",
+            stackTrace: "at handle (/repo/src/app.ts:10:1)",
+          }),
+        )
       },
     })
   })

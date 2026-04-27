@@ -1,19 +1,15 @@
 /**
  * Memory Injector
- * Injects cached project memory into system prompt
+ * Injects project and global memory into system prompt
  */
 
-import type { EntrySection, MemoryEntry, ProjectMemory } from "./types"
+import type { EntrySection, MemoryEntry, MemorySection, ProjectMemory } from "./types"
 import * as store from "./store"
 import { Log } from "../util/log"
 
 const log = Log.create({ service: "memory.injector" })
 
-// User-controlled entry text is rendered inside <project-memory>...</project-memory>.
-// If a body contains the literal closing tag, the LLM may interpret content after
-// it as outside the memory block (prompt-injection vector when entries come from
-// imported/automated sources). Escape both opening and closing forms here at the
-// render boundary; on-disk JSON is left untouched.
+// Escape <project-memory> tags in user-controlled text to prevent prompt injection.
 const PROJECT_MEMORY_TAG = /<\/?project-memory>/gi
 
 function escapeMemoryTags(text: string): string {
@@ -44,30 +40,71 @@ function pushEntries(parts: string[], title: string, section: EntrySection | und
   parts.push("")
 }
 
+const STALE_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+
+function stalenessNotice(sections: ProjectMemory["sections"]): string | undefined {
+  const scanned: MemorySection[] = [
+    sections.patterns,
+    sections.config,
+    sections.structure,
+    sections.readme,
+  ].filter((s): s is MemorySection => !!s?.scannedAt)
+
+  if (scanned.length === 0) return undefined
+  const oldest = scanned.reduce((a, b) => (a.scannedAt! < b.scannedAt! ? a : b))
+  const age = Date.now() - new Date(oldest.scannedAt!).getTime()
+  if (age < STALE_THRESHOLD_MS) return undefined
+  return `> Note: project scan is over 30 days old. Run \`ax-code memory warmup\` to refresh.`
+}
+
 export interface BuildContextOptions {
   /** When set, entries with an `agents` allow-list are filtered to those that include this name. */
   agent?: string
+  /** Pre-loaded global memory to merge into context. When absent, no global section is emitted. */
+  global?: ProjectMemory | null
 }
 
 /**
- * Build context string from memory sections.
+ * Build context string from project + optional global memory.
  *
- * Order is by actionability: feedback rules and user preferences come first
- * (they shape behavior), then project decisions, then scanned context.
- *
- * When `opts.agent` is supplied, recorded entries with an `agents` allow-list
- * are filtered. Scanned sections (structure/readme/config/patterns) are
- * shared across all agents and are not filtered.
+ * Injection order (highest actionability first):
+ *   1. Global Settings (cross-project feedback + user prefs)
+ *   2. Feedback Rules (project)
+ *   3. User Preferences (project)
+ *   4. Project Decisions
+ *   5. References
+ *   6. Scanned: Tech Stack → Config → Directory Structure → README
+ *   7. Staleness notice (if scanned sections are >30 days old)
  */
 export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = {}): string {
   const parts: string[] = []
   const agent = opts.agent
 
-  parts.push("<project-memory>")
+  // Global entries appear first — they apply everywhere and set the baseline.
+  // Rendered flat under a single "## Global Settings" heading to avoid
+  // duplicate ## headings colliding with project-level section headers.
+  const global = opts.global
+  if (global) {
+    const globalEntries: string[] = []
+    for (const kind of ["feedback", "userPrefs", "reference"] as const) {
+      const section = global.sections[kind]
+      if (!section) continue
+      for (const entry of section.entries) {
+        if (entryApplies(entry, agent)) globalEntries.push(renderEntry(entry))
+      }
+    }
+    if (globalEntries.length > 0) {
+      parts.push("## Global Settings")
+      parts.push(...globalEntries)
+      parts.push("")
+    }
+  }
 
+  // Project-scoped curated entries.
   pushEntries(parts, "Feedback Rules", memory.sections.feedback, agent)
   pushEntries(parts, "User Preferences", memory.sections.userPrefs, agent)
   pushEntries(parts, "Project Decisions", memory.sections.decisions, agent)
+  pushEntries(parts, "References", memory.sections.reference, agent)
 
   if (memory.sections.patterns?.content) {
     parts.push("## Tech Stack")
@@ -93,26 +130,51 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
     parts.push("")
   }
 
-  parts.push("</project-memory>")
+  const notice = stalenessNotice(memory.sections)
+  if (notice) {
+    parts.push(notice)
+    parts.push("")
+  }
 
-  return parts.join("\n")
+  // Only emit the wrapper if there is real content between the tags.
+  if (parts.length === 0) return ""
+
+  return ["<project-memory>", ...parts, "</project-memory>"].join("\n")
 }
 
 /**
- * Get memory context for injection into system prompt
- * Returns empty string if no memory cached
+ * Get memory context for injection into system prompt.
+ * Loads project memory and (if present) global memory, then merges them.
+ * Returns empty string if no memory is cached anywhere.
  */
-export async function getContext(projectRoot: string, opts: BuildContextOptions = {}): Promise<string> {
-  // store.load only throws on corrupt JSON (ENOENT returns null). Log and
-  // fall back to empty context so a corrupt memory file does not break
-  // prompt construction — but the corrupt file is preserved on disk for
-  // manual recovery rather than being silently overwritten.
-  const memory = await store.load(projectRoot).catch((err) => {
-    log.error("failed to load memory", { projectRoot, err })
-    return null
-  })
-  if (!memory) return ""
-  return buildContext(memory, opts)
+export async function getContext(projectRoot: string, opts: Omit<BuildContextOptions, "global"> = {}): Promise<string> {
+  const [memory, global] = await Promise.all([
+    store.load(projectRoot).catch((err) => {
+      log.error("failed to load project memory", { projectRoot, err })
+      return null
+    }),
+    store.loadGlobal().catch((err) => {
+      log.error("failed to load global memory", { err })
+      return null
+    }),
+  ])
+
+  if (!memory && !global) return ""
+  if (!memory && global) {
+    // Only global memory — synthesize a minimal project memory wrapper.
+    const shell: ProjectMemory = {
+      version: global.version,
+      created: global.created,
+      updated: global.updated,
+      projectRoot,
+      contentHash: "",
+      maxTokens: 0,
+      sections: {},
+      totalTokens: 0,
+    }
+    return buildContext(shell, { ...opts, global })
+  }
+  return buildContext(memory!, { ...opts, global })
 }
 
 /**
@@ -124,6 +186,7 @@ export async function getMetadata(projectRoot: string): Promise<{
   lastUpdated: string
   contentHash: string
   sections: string[]
+  stale: boolean
 } | null> {
   const memory = await store.load(projectRoot).catch((err) => {
     log.error("failed to load memory metadata", { projectRoot, err })
@@ -131,6 +194,7 @@ export async function getMetadata(projectRoot: string): Promise<{
   })
   if (!memory) return null
 
+  const notice = stalenessNotice(memory.sections)
   return {
     exists: true,
     totalTokens: memory.totalTokens,
@@ -140,5 +204,6 @@ export async function getMetadata(projectRoot: string): Promise<{
       const section = memory.sections[k as keyof typeof memory.sections]
       return section && section.tokens > 0
     }),
+    stale: !!notice,
   }
 }

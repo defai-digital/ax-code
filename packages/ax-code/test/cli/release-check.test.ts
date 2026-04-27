@@ -178,14 +178,7 @@ describe("release check (full checks)", () => {
   test("skip option omits a check", async () => {
     const repo = await makeRepo("2.21.5", "v2.21.4")
     const ctx = mkCtx(repo, "2.21.5", {
-      skip: new Set([
-        "typecheck",
-        "tests",
-        "remote-tag",
-        "branch-sync",
-        "workflow-changes",
-        "phantom-imports",
-      ]),
+      skip: new Set(["typecheck", "tests", "remote-tag", "branch-sync", "workflow-changes", "phantom-imports"]),
     })
     const results = await runChecks(ctx)
 
@@ -219,11 +212,8 @@ describe("release check (full checks)", () => {
     // Tracked source file with only COMMENTED imports of the untracked one.
     await writeFile(
       path.join(srcPath, "entry.ts"),
-      [
-        '// import { a } from "./deleted"',
-        '/* import { b } from "./deleted" */',
-        'export const x = 1',
-      ].join("\n") + "\n",
+      ['// import { a } from "./deleted"', '/* import { b } from "./deleted" */', "export const x = 1"].join("\n") +
+        "\n",
     )
     // Only commit entry.ts; deleted.ts stays untracked.
     await run("git", ["add", "packages/ax-code/src/entry.ts"], repo)
@@ -243,10 +233,7 @@ describe("release check (full checks)", () => {
     const scriptPath = path.join(repo, "packages", "ax-code", "script")
     await mkdir(scriptPath, { recursive: true })
     await writeFile(path.join(scriptPath, "helper.ts"), "export const h = 1\n") // untracked
-    await writeFile(
-      path.join(scriptPath, "build.ts"),
-      'import { h } from "./helper"\nexport const build = h\n',
-    )
+    await writeFile(path.join(scriptPath, "build.ts"), 'import { h } from "./helper"\nexport const build = h\n')
     await run("git", ["add", "packages/ax-code/script/build.ts"], repo)
     await run("git", ["commit", "-qm", "phantom in script"], repo)
 

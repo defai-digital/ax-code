@@ -131,7 +131,9 @@ function flow(nodes: string[], opts?: { max?: number }) {
         ].join(""),
       )
       .join(""),
-    truncated ? `<span class="join" aria-hidden="true"></span><span class="node trunc">+${runs.length - max} more</span>` : "",
+    truncated
+      ? `<span class="join" aria-hidden="true"></span><span class="node trunc">+${runs.length - max} more</span>`
+      : "",
     `</div>`,
     nodes.length > 10 ? `<p class="flow-summary">${nodes.length} total calls across ${runs.length} groups</p>` : "",
   ].join("")
@@ -154,11 +156,14 @@ function stepSummary(nodes: string[]) {
   const max = Math.max(...sorted.map((s) => s[1]), 1)
   return [
     `<div class="step-bars">`,
-    sorted.slice(0, 6).map(([name, count]) => {
-      const pct = Math.min(100, (count / max) * 100)
-      const color = count > 10 ? "var(--warn)" : "var(--accent)"
-      return `<div class="step-bar-row"><span class="step-bar-label">${esc(name)}</span><div class="step-bar-track"><div class="step-bar-fill" style="width:${pct.toFixed(0)}%;background:${color}"></div></div><span class="step-bar-count">${count}</span></div>`
-    }).join(""),
+    sorted
+      .slice(0, 6)
+      .map(([name, count]) => {
+        const pct = Math.min(100, (count / max) * 100)
+        const color = count > 10 ? "var(--warn)" : "var(--accent)"
+        return `<div class="step-bar-row"><span class="step-bar-label">${esc(name)}</span><div class="step-bar-track"><div class="step-bar-fill" style="width:${pct.toFixed(0)}%;background:${color}"></div></div><span class="step-bar-count">${count}</span></div>`
+      })
+      .join(""),
     sorted.length > 6 ? `<span class="muted" style="font-size:11px">+${sorted.length - 6} more tools</span>` : "",
     `</div>`,
   ].join("")
@@ -172,7 +177,8 @@ function gauge(input: { score: number; max: number; level: string }) {
   const r = 44
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - pct * 0.75) // 270° arc
-  const color = { critical: "#dc2626", high: "#ef4444", medium: "#eab308", low: "#22c55e" }[tone(input.level)] ?? "#22c55e"
+  const color =
+    { critical: "#dc2626", high: "#ef4444", medium: "#eab308", low: "#22c55e" }[tone(input.level)] ?? "#22c55e"
   return [
     `<svg class="gauge" viewBox="0 0 100 100" width="128" height="128">`,
     `<circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(39,39,42,0.8)" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ * 0.25}" stroke-dashoffset="0" transform="rotate(135 50 50)" stroke-linecap="round"/>`,
@@ -185,7 +191,12 @@ function gauge(input: { score: number; max: number; level: string }) {
 }
 
 // Horizontal bar chart — each bar shows label, value, and a proportional bar
-function barChart(input: { items: { label: string; value: number; detail?: string }[]; max?: number; unit?: string; colorFn?: (v: number) => string }) {
+function barChart(input: {
+  items: { label: string; value: number; detail?: string }[]
+  max?: number
+  unit?: string
+  colorFn?: (v: number) => string
+}) {
   if (input.items.length === 0) return `<p class="empty">No data.</p>`
   const max = input.max ?? Math.max(...input.items.map((i) => i.value), 1)
   const colorFn = input.colorFn ?? (() => "var(--accent)")
@@ -242,11 +253,7 @@ function donut(input: { segments: { label: string; value: number; color: string 
 
 // ── Section 1: Summary banner ──────────────────────────────────────
 // The first thing users see. Answers "what happened and should I care?"
-function summary(input: {
-  dre: SessionDre.Snapshot
-  risk: SessionRisk.Detail
-  graph: SessionGraph.Snapshot
-}) {
+function summary(input: { dre: SessionDre.Snapshot; risk: SessionRisk.Detail; graph: SessionGraph.Snapshot }) {
   const detail = input.dre.detail
   const riskLevel = detail?.level ?? input.risk.assessment.level
   const riskScore = detail?.score ?? input.risk.assessment.score
@@ -310,7 +317,12 @@ function summary(input: {
           chip({ label: `${detail.semantic.files} files` }),
           chip({ label: `+${detail.semantic.additions}` }),
           chip({ label: `-${detail.semantic.deletions}` }),
-          detail.semantic.signals.length ? detail.semantic.signals.slice(0, 3).map((s) => chip({ label: s })).join("") : "",
+          detail.semantic.signals.length
+            ? detail.semantic.signals
+                .slice(0, 3)
+                .map((s) => chip({ label: s }))
+                .join("")
+            : "",
           `</div>`,
           `</div>`,
         ].join("")
@@ -333,21 +345,39 @@ function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionRisk.Det
     needs_review: "Needs manual review",
     blocked: "Blocked \u2014 do not accept",
   }
-  const validationLabel = sig.validationCommands.length > 0
-    ? `${validation(sig)} (${sig.validationCommands.slice(0, 3).map((c) => esc(c.split(" ").slice(0, 3).join(" "))).join(", ")})`
-    : validation(sig)
+  const validationLabel =
+    sig.validationCommands.length > 0
+      ? `${validation(sig)} (${sig.validationCommands
+          .slice(0, 3)
+          .map((c) => esc(c.split(" ").slice(0, 3).join(" ")))
+          .join(", ")})`
+      : validation(sig)
 
   return [
     `<section class="verdict" id="verdict">`,
     `<div class="verdict-inner ${readyTone}">`,
     `<div class="verdict-headline ${readyTone}">${esc(headlines[ready] ?? readiness(ready))}</div>`,
     `<div class="verdict-grid">`,
-    stat({ label: "Confidence", value: `${Math.round(input.risk.assessment.confidence * 100)}%`, kind: confidenceTone(input.risk.assessment.confidence) }),
+    stat({
+      label: "Confidence",
+      value: `${Math.round(input.risk.assessment.confidence * 100)}%`,
+      kind: confidenceTone(input.risk.assessment.confidence),
+    }),
     stat({ label: "Risk", value: `${input.risk.assessment.score}/100`, kind: tone(input.risk.assessment.level) }),
-    stat({ label: "Validation", value: validationLabel, kind: sig.validationState === "passed" ? "low" : sig.validationState === "failed" ? "high" : "neutral" }),
-    stat({ label: "Decision", value: detail.scorecard.total.toFixed(2), kind: detail.scorecard.total >= 0.7 ? "low" : detail.scorecard.total >= 0.4 ? "medium" : "high" }),
+    stat({
+      label: "Validation",
+      value: validationLabel,
+      kind: sig.validationState === "passed" ? "low" : sig.validationState === "failed" ? "high" : "neutral",
+    }),
+    stat({
+      label: "Decision",
+      value: detail.scorecard.total.toFixed(2),
+      kind: detail.scorecard.total >= 0.7 ? "low" : detail.scorecard.total >= 0.4 ? "medium" : "high",
+    }),
     `</div>`,
-    detail.semantic ? `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">${esc(detail.semantic.headline)} \u00b7 ${chip({ label: detail.semantic.risk, kind: tone(detail.semantic.risk) })} \u00b7 ${detail.semantic.files} file${detail.semantic.files === 1 ? "" : "s"} \u00b7 <span class="diff-add">+${detail.semantic.additions}</span> <span class="diff-del">-${detail.semantic.deletions}</span></div>` : "",
+    detail.semantic
+      ? `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">${esc(detail.semantic.headline)} \u00b7 ${chip({ label: detail.semantic.risk, kind: tone(detail.semantic.risk) })} \u00b7 ${detail.semantic.files} file${detail.semantic.files === 1 ? "" : "s"} \u00b7 <span class="diff-add">+${detail.semantic.additions}</span> <span class="diff-del">-${detail.semantic.deletions}</span></div>`
+      : "",
     input.risk.assessment.unknowns.length > 0
       ? `<div class="verdict-callout"><span class="verdict-callout-icon" style="color:var(--warn)">?</span> ${esc(input.risk.assessment.unknowns[0])}</div>`
       : "",
@@ -384,7 +414,9 @@ function changesSection(input: { dre: SessionDre.Snapshot }) {
           `<span class="file-path" title="${esc(c.file)}">${esc(c.file)}</span>`,
           chip({ label: kindLabel(c.kind), kind: tone(c.risk) }),
           `<span class="diff-stat"><span class="diff-add">+${c.additions}</span> <span class="diff-del">-${c.deletions}</span></span>`,
-          c.signals[0] ? `<span class="change-signal" title="${esc(c.signals.join(" \u00b7 "))}">${esc(c.signals[0])}</span>` : `<span class="change-signal"></span>`,
+          c.signals[0]
+            ? `<span class="change-signal" title="${esc(c.signals.join(" \u00b7 "))}">${esc(c.signals[0])}</span>`
+            : `<span class="change-signal"></span>`,
           `</div>`,
         ].join(""),
       )
@@ -435,7 +467,12 @@ function qualityReadinessSection(input: SessionRisk.Detail) {
     input.quality?.review ? { workflow: "review" as const, summary: input.quality.review } : null,
     input.quality?.debug ? { workflow: "debug" as const, summary: input.quality.debug } : null,
     input.quality?.qa ? { workflow: "qa" as const, summary: input.quality.qa } : null,
-  ].filter((item): item is { workflow: "review" | "debug" | "qa"; summary: NonNullable<SessionRisk.QualityReadiness["review"]> } => !!item)
+  ].filter(
+    (
+      item,
+    ): item is { workflow: "review" | "debug" | "qa"; summary: NonNullable<SessionRisk.QualityReadiness["review"]> } =>
+      !!item,
+  )
 
   if (summaries.length === 0) return ""
 
@@ -504,12 +541,36 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
 
   // Signals grid — the detailed signal data
   const signalItems = [
-    { label: "Files changed", value: num(sig.filesChanged), kind: sig.filesChanged > 10 ? "high" : sig.filesChanged > 3 ? "medium" : "low" },
-    { label: "Lines changed", value: num(sig.linesChanged), kind: sig.linesChanged > 200 ? "high" : sig.linesChanged > 50 ? "medium" : "low" },
-    { label: "Test coverage", value: `${Math.round(sig.testCoverage * 100)}%`, kind: sig.testCoverage >= 0.8 ? "low" : sig.testCoverage >= 0.4 ? "medium" : "high" },
-    { label: "API endpoints", value: num(sig.apiEndpointsAffected), kind: sig.apiEndpointsAffected > 0 ? "medium" : "low" },
-    { label: "Tool failures", value: `${sig.toolFailures}/${sig.totalTools}`, kind: sig.toolFailures > 0 ? "high" : "low" },
-    { label: "Validations", value: `${sig.validationCount - sig.validationFailures}/${sig.validationCount} passed`, kind: sig.validationFailures > 0 ? "high" : sig.validationCount > 0 ? "low" : "neutral" },
+    {
+      label: "Files changed",
+      value: num(sig.filesChanged),
+      kind: sig.filesChanged > 10 ? "high" : sig.filesChanged > 3 ? "medium" : "low",
+    },
+    {
+      label: "Lines changed",
+      value: num(sig.linesChanged),
+      kind: sig.linesChanged > 200 ? "high" : sig.linesChanged > 50 ? "medium" : "low",
+    },
+    {
+      label: "Test coverage",
+      value: `${Math.round(sig.testCoverage * 100)}%`,
+      kind: sig.testCoverage >= 0.8 ? "low" : sig.testCoverage >= 0.4 ? "medium" : "high",
+    },
+    {
+      label: "API endpoints",
+      value: num(sig.apiEndpointsAffected),
+      kind: sig.apiEndpointsAffected > 0 ? "medium" : "low",
+    },
+    {
+      label: "Tool failures",
+      value: `${sig.toolFailures}/${sig.totalTools}`,
+      kind: sig.toolFailures > 0 ? "high" : "low",
+    },
+    {
+      label: "Validations",
+      value: `${sig.validationCount - sig.validationFailures}/${sig.validationCount} passed`,
+      kind: sig.validationFailures > 0 ? "high" : sig.validationCount > 0 ? "low" : "neutral",
+    },
   ]
   const flags = [
     ...(sig.crossModule ? [chip({ label: "cross-module", kind: "medium" })] : []),
@@ -531,12 +592,16 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
     `<div class="panel">`,
     `<h3>Signals</h3>`,
     `<div class="signal-grid">`,
-    signalItems.map((item) => [
-      `<div class="signal-item">`,
-      `<span class="signal-label">${esc(item.label)}</span>`,
-      `<span class="signal-value ${item.kind}">${item.value}</span>`,
-      `</div>`,
-    ].join("")).join(""),
+    signalItems
+      .map((item) =>
+        [
+          `<div class="signal-item">`,
+          `<span class="signal-label">${esc(item.label)}</span>`,
+          `<span class="signal-value ${item.kind}">${item.value}</span>`,
+          `</div>`,
+        ].join(""),
+      )
+      .join(""),
     `</div>`,
     qualityReadinessSection(input),
     input.assessment.breakdown.length
@@ -589,7 +654,10 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
           `<h3>Evidence</h3>`,
           `<div class="evidence-list">`,
           input.assessment.evidence
-            .map((item) => `<div class="evidence-item"><span class="ev-icon ev-evidence">●</span><span>${esc(item)}</span></div>`)
+            .map(
+              (item) =>
+                `<div class="evidence-item"><span class="ev-icon ev-evidence">●</span><span>${esc(item)}</span></div>`,
+            )
             .join(""),
           `</div></div>`,
         ].join("")
@@ -600,7 +668,10 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
           `<h3>Unknowns</h3>`,
           `<div class="evidence-list">`,
           input.assessment.unknowns
-            .map((item) => `<div class="evidence-item"><span class="ev-icon ev-unknown">?</span><span>${esc(item)}</span></div>`)
+            .map(
+              (item) =>
+                `<div class="evidence-item"><span class="ev-icon ev-unknown">?</span><span>${esc(item)}</span></div>`,
+            )
             .join(""),
           `</div></div>`,
         ].join("")
@@ -611,7 +682,10 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
           `<h3>Recommended Actions</h3>`,
           `<div class="evidence-list">`,
           input.assessment.mitigations
-            .map((item, idx) => `<div class="evidence-item"><span class="ev-icon ev-action">${idx + 1}</span><span>${esc(item)}</span></div>`)
+            .map(
+              (item, idx) =>
+                `<div class="evidence-item"><span class="ev-icon ev-action">${idx + 1}</span><span>${esc(item)}</span></div>`,
+            )
             .join(""),
           `</div></div>`,
         ].join("")
@@ -624,11 +698,7 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
 }
 
 // ── Section 3: Execution Graph ─────────────────────────────────────
-function activitySection(
-  graph: SessionGraph.Snapshot,
-  dre: SessionDre.Snapshot,
-  points: SessionRollback.Point[],
-) {
+function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot, points: SessionRollback.Point[]) {
   const parsed = parseTimeline(dre.timeline)
   const detail = dre.detail
 
@@ -648,7 +718,10 @@ function activitySection(
   function activitySummary(tools: { name: string; args: string; status: string }[]): string {
     const reads: string[] = []
     const edits: string[] = []
-    let searches = 0, shells = 0, webs = 0, others = 0
+    let searches = 0,
+      shells = 0,
+      webs = 0,
+      others = 0
     for (const t of tools) {
       const n = t.name.toLowerCase()
       const arg = t.args ? (t.args.split("/").pop()?.split("\\").pop() ?? t.args) : ""
@@ -660,8 +733,10 @@ function activitySection(
       else others++
     }
     const parts: string[] = []
-    if (reads.length) parts.push(reads.length <= 2 ? `read ${reads.filter(Boolean).join(", ")}` : `read ${reads.length} files`)
-    if (edits.length) parts.push(edits.length <= 2 ? `edited ${edits.filter(Boolean).join(", ")}` : `edited ${edits.length} files`)
+    if (reads.length)
+      parts.push(reads.length <= 2 ? `read ${reads.filter(Boolean).join(", ")}` : `read ${reads.length} files`)
+    if (edits.length)
+      parts.push(edits.length <= 2 ? `edited ${edits.filter(Boolean).join(", ")}` : `edited ${edits.length} files`)
     if (searches) parts.push(`searched ${searches}×`)
     if (shells) parts.push(`ran ${shells} command${shells > 1 ? "s" : ""}`)
     if (webs) parts.push(`fetched ${webs} URL${webs > 1 ? "s" : ""}`)
@@ -689,43 +764,58 @@ function activitySection(
           const agentLabel = step.routes.length ? step.routes[step.routes.length - 1] : ""
 
           // Tool timing breakdown — sorted slowest first, answers "why so long?"
-          const toolTiming = [...step.tools]
-            .filter((t) => t.durationMs > 0)
-            .sort((a, b) => b.durationMs - a.durationMs)
+          const toolTiming = [...step.tools].filter((t) => t.durationMs > 0).sort((a, b) => b.durationMs - a.durationMs)
           const slowestMs = toolTiming[0]?.durationMs ?? 1
           const toolTimingHtml = toolTiming.length
             ? [
                 `<div class="act-timing">`,
                 `<div class="act-timing-label">Time breakdown</div>`,
-                toolTiming.slice(0, 8).map((t) => {
-                  const tpct = Math.max(3, (t.durationMs / slowestMs) * 100)
-                  const tcolor = t.status === "ERR" ? "var(--high)" : t.durationMs > 5000 ? "var(--warn)" : "var(--low)"
-                  const ms = t.durationMs >= 1000 ? `${(t.durationMs / 1000).toFixed(1)}s` : `${t.durationMs}ms`
-                  const argLabel = t.args ? ` ${t.args.split("/").pop()?.split("\\").pop() ?? t.args}`.slice(0, 28) : ""
-                  return [
-                    `<div class="act-timing-row">`,
-                    `<span class="act-timing-name">${esc(t.name)}${argLabel ? `<span class="act-timing-arg">${esc(argLabel)}</span>` : ""}${t.status === "ERR" ? ` <span class="act-err-badge">ERR</span>` : ""}</span>`,
-                    `<div class="act-timing-track"><div class="act-timing-bar" style="width:${tpct.toFixed(0)}%;background:${tcolor}"></div></div>`,
-                    `<span class="act-timing-ms">${ms}</span>`,
-                    `</div>`,
-                  ].join("")
-                }).join(""),
-                toolTiming.length > 8 ? `<span class="muted" style="font-size:11px">+${toolTiming.length - 8} more tools (no timing)</span>` : "",
+                toolTiming
+                  .slice(0, 8)
+                  .map((t) => {
+                    const tpct = Math.max(3, (t.durationMs / slowestMs) * 100)
+                    const tcolor =
+                      t.status === "ERR" ? "var(--high)" : t.durationMs > 5000 ? "var(--warn)" : "var(--low)"
+                    const ms = t.durationMs >= 1000 ? `${(t.durationMs / 1000).toFixed(1)}s` : `${t.durationMs}ms`
+                    const argLabel = t.args
+                      ? ` ${t.args.split("/").pop()?.split("\\").pop() ?? t.args}`.slice(0, 28)
+                      : ""
+                    return [
+                      `<div class="act-timing-row">`,
+                      `<span class="act-timing-name">${esc(t.name)}${argLabel ? `<span class="act-timing-arg">${esc(argLabel)}</span>` : ""}${t.status === "ERR" ? ` <span class="act-err-badge">ERR</span>` : ""}</span>`,
+                      `<div class="act-timing-track"><div class="act-timing-bar" style="width:${tpct.toFixed(0)}%;background:${tcolor}"></div></div>`,
+                      `<span class="act-timing-ms">${ms}</span>`,
+                      `</div>`,
+                    ].join("")
+                  })
+                  .join(""),
+                toolTiming.length > 8
+                  ? `<span class="muted" style="font-size:11px">+${toolTiming.length - 8} more tools (no timing)</span>`
+                  : "",
                 `</div>`,
               ].join("")
             : ""
 
           // Files read and edited
-          const filesRead = step.tools.filter((t) => /^(read|view|cat)$/.test(t.name.toLowerCase()) && t.args).map((t) => t.args.split("/").pop() ?? t.args)
-          const filesEdited = step.tools.filter((t) => /^(edit|write|apply_patch|multiedit|patch)$/.test(t.name.toLowerCase()) && t.args).map((t) => t.args.split("/").pop() ?? t.args)
-          const filesHtml = (filesRead.length || filesEdited.length)
-            ? [
-                `<div class="act-files">`,
-                filesRead.length ? `<div class="act-files-row"><span class="act-files-label">Read</span><span class="act-files-list">${esc(filesRead.slice(0, 5).join(", "))}${filesRead.length > 5 ? ` +${filesRead.length - 5}` : ""}</span></div>` : "",
-                filesEdited.length ? `<div class="act-files-row"><span class="act-files-label">Edited</span><span class="act-files-list act-files-edited">${esc(filesEdited.slice(0, 5).join(", "))}${filesEdited.length > 5 ? ` +${filesEdited.length - 5}` : ""}</span></div>` : "",
-                `</div>`,
-              ].join("")
-            : ""
+          const filesRead = step.tools
+            .filter((t) => /^(read|view|cat)$/.test(t.name.toLowerCase()) && t.args)
+            .map((t) => t.args.split("/").pop() ?? t.args)
+          const filesEdited = step.tools
+            .filter((t) => /^(edit|write|apply_patch|multiedit|patch)$/.test(t.name.toLowerCase()) && t.args)
+            .map((t) => t.args.split("/").pop() ?? t.args)
+          const filesHtml =
+            filesRead.length || filesEdited.length
+              ? [
+                  `<div class="act-files">`,
+                  filesRead.length
+                    ? `<div class="act-files-row"><span class="act-files-label">Read</span><span class="act-files-list">${esc(filesRead.slice(0, 5).join(", "))}${filesRead.length > 5 ? ` +${filesRead.length - 5}` : ""}</span></div>`
+                    : "",
+                  filesEdited.length
+                    ? `<div class="act-files-row"><span class="act-files-label">Edited</span><span class="act-files-list act-files-edited">${esc(filesEdited.slice(0, 5).join(", "))}${filesEdited.length > 5 ? ` +${filesEdited.length - 5}` : ""}</span></div>`
+                    : "",
+                  `</div>`,
+                ].join("")
+              : ""
 
           const errorsHtml = step.errors.length
             ? `<div class="act-error-list">${step.errors.map((e) => `<div class="gantt-error">${esc(e)}</div>`).join("")}</div>`
@@ -766,7 +856,12 @@ function activitySection(
           .map((a, i) => {
             const isRouted = routedTargets.has(a)
             const conf = routeConf.get(a)
-            const role = i === 0 && !isRouted ? "primary" : isRouted ? `routed · ${conf != null ? (conf * 100).toFixed(0) + "% conf" : ""}` : "active"
+            const role =
+              i === 0 && !isRouted
+                ? "primary"
+                : isRouted
+                  ? `routed · ${conf != null ? (conf * 100).toFixed(0) + "% conf" : ""}`
+                  : "active"
             return `<div class="agent-item"><span class="agent-dot"></span><span class="agent-name">${esc(agentDisplay(a))}</span><span class="agent-tag">${esc(role)}</span></div>`
           })
           .join(""),
@@ -840,7 +935,9 @@ function activitySection(
       ? [
           `<div style="margin-top:20px"><h3>Notes</h3>`,
           `<div class="driver-list">`,
-          detail.notes.map((item) => `<div class="driver-item"><span class="driver-icon">·</span><span>${esc(item)}</span></div>`).join(""),
+          detail.notes
+            .map((item) => `<div class="driver-item"><span class="driver-icon">·</span><span>${esc(item)}</span></div>`)
+            .join(""),
           `</div></div>`,
         ].join("")
       : "",
@@ -944,26 +1041,33 @@ function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
           return [
             `<div class="cpath">`,
             `<div class="cpath-summary">${path.nodes.length.toLocaleString()} nodes across ${active.length} phase${active.length === 1 ? "" : "s"}</div>`,
-            active.map((phase, idx) => {
-              const total = [...phase.tools.values()].reduce((a, b) => a + b, 0)
-              const sorted = [...phase.tools.entries()].sort((a, b) => b[1] - a[1])
-              return [
-                idx > 0 ? `<div class="cpath-connector"><span class="cpath-arrow">↓</span></div>` : "",
-                `<div class="cpath-phase">`,
-                `<div class="cpath-phase-head">`,
-                `<span class="cpath-phase-label">${esc(phase.label)}</span>`,
-                `<span class="cpath-phase-count">${total} call${total === 1 ? "" : "s"}</span>`,
-                `</div>`,
-                `<div class="cpath-tools">`,
-                sorted.slice(0, 6).map(([name, count]) => {
-                  const pct = Math.max(8, (count / total) * 100)
-                  return `<div class="cpath-tool"><span class="cpath-tool-name">${esc(name)}${count > 1 ? ` <span class="cpath-tool-n">×${count}</span>` : ""}</span><div class="cpath-tool-bar" style="width:${pct.toFixed(0)}%"></div></div>`
-                }).join(""),
-                sorted.length > 6 ? `<span class="muted" style="font-size:11px">+${sorted.length - 6} more</span>` : "",
-                `</div>`,
-                `</div>`,
-              ].join("")
-            }).join(""),
+            active
+              .map((phase, idx) => {
+                const total = [...phase.tools.values()].reduce((a, b) => a + b, 0)
+                const sorted = [...phase.tools.entries()].sort((a, b) => b[1] - a[1])
+                return [
+                  idx > 0 ? `<div class="cpath-connector"><span class="cpath-arrow">↓</span></div>` : "",
+                  `<div class="cpath-phase">`,
+                  `<div class="cpath-phase-head">`,
+                  `<span class="cpath-phase-label">${esc(phase.label)}</span>`,
+                  `<span class="cpath-phase-count">${total} call${total === 1 ? "" : "s"}</span>`,
+                  `</div>`,
+                  `<div class="cpath-tools">`,
+                  sorted
+                    .slice(0, 6)
+                    .map(([name, count]) => {
+                      const pct = Math.max(8, (count / total) * 100)
+                      return `<div class="cpath-tool"><span class="cpath-tool-name">${esc(name)}${count > 1 ? ` <span class="cpath-tool-n">×${count}</span>` : ""}</span><div class="cpath-tool-bar" style="width:${pct.toFixed(0)}%"></div></div>`
+                    })
+                    .join(""),
+                  sorted.length > 6
+                    ? `<span class="muted" style="font-size:11px">+${sorted.length - 6} more</span>`
+                    : "",
+                  `</div>`,
+                  `</div>`,
+                ].join("")
+              })
+              .join(""),
             `</div>`,
           ].join("")
         })()
@@ -972,13 +1076,18 @@ function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
       ? [
           `<div style="margin-top:20px"><h3>Tool Pairs <span class="rb-count">${pairs.length}</span></h3>`,
           `<div class="pair-list">`,
-          pairs.slice(0, 12).map((item) => {
-            // Clean up pair labels — strip raw args
-            const callName = item.call.split(":")[0].trim()
-            const resultName = item.result.split(" ")[0].trim()
-            return `<div class="pair"><span>${esc(callName)}</span><span class="pair-arrow">→</span><span>${esc(resultName)}</span></div>`
-          }).join(""),
-          pairs.length > 12 ? `<span class="muted" style="font-size:11px;padding:6px 0;display:block">+${pairs.length - 12} more pairs</span>` : "",
+          pairs
+            .slice(0, 12)
+            .map((item) => {
+              // Clean up pair labels — strip raw args
+              const callName = item.call.split(":")[0].trim()
+              const resultName = item.result.split(" ")[0].trim()
+              return `<div class="pair"><span>${esc(callName)}</span><span class="pair-arrow">→</span><span>${esc(resultName)}</span></div>`
+            })
+            .join(""),
+          pairs.length > 12
+            ? `<span class="muted" style="font-size:11px;padding:6px 0;display:block">+${pairs.length - 12} more pairs</span>`
+            : "",
           `</div></div>`,
         ].join("")
       : "",
@@ -1049,24 +1158,29 @@ function branchSection(input?: SessionBranchRank.Family) {
       `<p class="branch-headline">${esc(item.headline)}</p>`,
       // Decision breakdown with explanations — the "why"
       `<div class="branch-scorecard">`,
-      item.decision.breakdown.map((part) => {
-        const pct = Math.round(part.value * 100)
-        const color = part.value >= 0.7 ? "var(--low)" : part.value >= 0.4 ? "var(--warn)" : "var(--high)"
-        return [
-          `<div class="branch-score-row">`,
-          `<span class="branch-score-label">${esc(part.label)}</span>`,
-          `<div class="branch-score-track"><div class="branch-score-fill" style="width:${pct}%;background:${color}"></div></div>`,
-          `<span class="branch-score-val" style="color:${color}">${pct}%</span>`,
-          `</div>`,
-          part.detail ? `<div class="branch-score-detail">${esc(part.detail)}</div>` : "",
-        ].join("")
-      }).join(""),
+      item.decision.breakdown
+        .map((part) => {
+          const pct = Math.round(part.value * 100)
+          const color = part.value >= 0.7 ? "var(--low)" : part.value >= 0.4 ? "var(--warn)" : "var(--high)"
+          return [
+            `<div class="branch-score-row">`,
+            `<span class="branch-score-label">${esc(part.label)}</span>`,
+            `<div class="branch-score-track"><div class="branch-score-fill" style="width:${pct}%;background:${color}"></div></div>`,
+            `<span class="branch-score-val" style="color:${color}">${pct}%</span>`,
+            `</div>`,
+            part.detail ? `<div class="branch-score-detail">${esc(part.detail)}</div>` : "",
+          ].join("")
+        })
+        .join(""),
       `</div>`,
       // Top evidence — specific reasons behind the risk score
       item.risk.evidence.length
         ? [
             `<div class="branch-evidence">`,
-            item.risk.evidence.slice(0, 2).map((e) => `<div class="branch-ev-item"><span class="ev-dot">·</span><span>${esc(e)}</span></div>`).join(""),
+            item.risk.evidence
+              .slice(0, 2)
+              .map((e) => `<div class="branch-ev-item"><span class="ev-dot">·</span><span>${esc(e)}</span></div>`)
+              .join(""),
             `</div>`,
           ].join("")
         : "",
@@ -1098,7 +1212,15 @@ function branchSection(input?: SessionBranchRank.Family) {
 // Parse timeline into structured steps for Gantt-style rendering
 function parseTimeline(lines: SessionDre.TimelineLine[]) {
   type ToolEntry = { name: string; args: string; status: string; durationMs: number }
-  type Step = { index: string; duration: string; tokens: string; tools: ToolEntry[]; routes: string[]; errors: string[]; llms: string[] }
+  type Step = {
+    index: string
+    duration: string
+    tokens: string
+    tools: ToolEntry[]
+    routes: string[]
+    errors: string[]
+    llms: string[]
+  }
   const header = lines.find((l) => l.kind === "heading")
   const meta = lines.filter((l) => l.kind === "meta")
   const steps: Step[] = []
@@ -1107,7 +1229,15 @@ function parseTimeline(lines: SessionDre.TimelineLine[]) {
     if (line.kind === "step") {
       // "Step 0 · 2s · tokens 2/193"
       const parts = line.text.split(" · ")
-      current = { index: parts[0] ?? "", duration: parts[1] ?? "", tokens: parts[2] ?? "", tools: [], routes: [], errors: [], llms: [] }
+      current = {
+        index: parts[0] ?? "",
+        duration: parts[1] ?? "",
+        tokens: parts[2] ?? "",
+        tools: [],
+        routes: [],
+        errors: [],
+        llms: [],
+      }
       steps.push(current)
     } else if (line.kind === "tool" && current) {
       // "read: README.md → ok (6ms)" or "tool_name → ok (6ms)"
@@ -1148,73 +1278,86 @@ function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point
 
         return [
           `<div class="gantt">`,
-          parsed.steps.map((step, idx) => {
-            const dur = durations[idx]
-            const pct = Math.max(2, (dur / maxDur) * 100)
-            const hasErrors = step.errors.length > 0
-            const barColor = hasErrors ? "var(--high)" : dur > maxDur * 0.5 ? "var(--warn)" : "var(--accent)"
+          parsed.steps
+            .map((step, idx) => {
+              const dur = durations[idx]
+              const pct = Math.max(2, (dur / maxDur) * 100)
+              const hasErrors = step.errors.length > 0
+              const barColor = hasErrors ? "var(--high)" : dur > maxDur * 0.5 ? "var(--warn)" : "var(--accent)"
 
-            // Group tools by name for compact summary
-            const counts = new Map<string, { count: number; totalMs: number; errors: number }>()
-            for (const t of step.tools) {
-              const entry = counts.get(t.name) ?? { count: 0, totalMs: 0, errors: 0 }
-              entry.count++
-              entry.totalMs += t.durationMs
-              if (t.status === "ERR") entry.errors++
-              counts.set(t.name, entry)
-            }
-            const sorted = [...counts.entries()].sort((a, b) => b[1].totalMs - a[1].totalMs)
-            const toolMaxMs = Math.max(...sorted.map((s) => s[1].totalMs), 1)
+              // Group tools by name for compact summary
+              const counts = new Map<string, { count: number; totalMs: number; errors: number }>()
+              for (const t of step.tools) {
+                const entry = counts.get(t.name) ?? { count: 0, totalMs: 0, errors: 0 }
+                entry.count++
+                entry.totalMs += t.durationMs
+                if (t.status === "ERR") entry.errors++
+                counts.set(t.name, entry)
+              }
+              const sorted = [...counts.entries()].sort((a, b) => b[1].totalMs - a[1].totalMs)
+              const toolMaxMs = Math.max(...sorted.map((s) => s[1].totalMs), 1)
 
-            // Build a short tool signature for the header (e.g., "read ×12, edit ×3")
-            const topTools = sorted.slice(0, 3).map(([n, info]) => info.count > 1 ? `${n} ×${info.count}` : n).join(", ")
-            // Use sequential "Turn N" label when all steps share the same index
-            const label = allSameIndex ? `Turn ${idx + 1}` : step.index
+              // Build a short tool signature for the header (e.g., "read ×12, edit ×3")
+              const topTools = sorted
+                .slice(0, 3)
+                .map(([n, info]) => (info.count > 1 ? `${n} ×${info.count}` : n))
+                .join(", ")
+              // Use sequential "Turn N" label when all steps share the same index
+              const label = allSameIndex ? `Turn ${idx + 1}` : step.index
 
-            return [
-              `<div class="gantt-step">`,
-              // Step header with duration bar
-              `<div class="gantt-header">`,
-              `<span class="gantt-label">${esc(label)}</span>`,
-              `<div class="gantt-bar-wrap">`,
-              `<div class="gantt-bar" style="width:${pct.toFixed(1)}%;background:${barColor}"></div>`,
-              `</div>`,
-              `<span class="gantt-dur">${esc(step.duration)}</span>`,
-              `</div>`,
-              // Tool signature + route — visible without expanding
-              `<div class="gantt-meta">`,
-              topTools ? `<span class="gantt-tools-sig">${esc(topTools)}</span>` : "",
-              step.routes.length ? `<span class="gantt-route">${step.routes.map((r) => esc(r)).join(", ")}</span>` : "",
-              `</div>`,
-              // Collapsible tool details
-              step.tools.length > 0
-                ? [
-                    `<details class="gantt-details">`,
-                    `<summary class="gantt-summary">${step.tools.length} tool call${step.tools.length === 1 ? "" : "s"}${hasErrors ? ` · <span class="gantt-err">${step.errors.length} error${step.errors.length === 1 ? "" : "s"}</span>` : ""}${step.tokens ? ` · ${esc(step.tokens)}` : ""}</summary>`,
-                    `<div class="gantt-tools">`,
-                    sorted.slice(0, 10).map(([name, info]) => {
-                      const timePct = Math.max(2, (info.totalMs / toolMaxMs) * 100)
-                      const color = info.errors > 0 ? "var(--high)" : info.totalMs > 5000 ? "var(--warn)" : "var(--low)"
-                      return [
-                        `<div class="gantt-tool-row">`,
-                        `<span class="gantt-tool-name">${esc(name)}${info.count > 1 ? ` <span class="gantt-tool-count">×${info.count}</span>` : ""}</span>`,
-                        `<div class="gantt-tool-bar-wrap"><div class="gantt-tool-bar" style="width:${timePct.toFixed(0)}%;background:${color}"></div></div>`,
-                        `<span class="gantt-tool-ms">${info.totalMs >= 1000 ? `${(info.totalMs / 1000).toFixed(1)}s` : `${info.totalMs}ms`}</span>`,
-                        `</div>`,
-                      ].join("")
-                    }).join(""),
-                    sorted.length > 10 ? `<span class="muted" style="font-size:11px;padding:4px 0">+${sorted.length - 10} more tools</span>` : "",
-                    `</div>`,
-                    `</details>`,
-                  ].join("")
-                : "",
-              // Errors inline (always visible)
-              step.errors.length > 0
-                ? step.errors.map((e) => `<div class="gantt-error">${esc(e)}</div>`).join("")
-                : "",
-              `</div>`,
-            ].join("")
-          }).join(""),
+              return [
+                `<div class="gantt-step">`,
+                // Step header with duration bar
+                `<div class="gantt-header">`,
+                `<span class="gantt-label">${esc(label)}</span>`,
+                `<div class="gantt-bar-wrap">`,
+                `<div class="gantt-bar" style="width:${pct.toFixed(1)}%;background:${barColor}"></div>`,
+                `</div>`,
+                `<span class="gantt-dur">${esc(step.duration)}</span>`,
+                `</div>`,
+                // Tool signature + route — visible without expanding
+                `<div class="gantt-meta">`,
+                topTools ? `<span class="gantt-tools-sig">${esc(topTools)}</span>` : "",
+                step.routes.length
+                  ? `<span class="gantt-route">${step.routes.map((r) => esc(r)).join(", ")}</span>`
+                  : "",
+                `</div>`,
+                // Collapsible tool details
+                step.tools.length > 0
+                  ? [
+                      `<details class="gantt-details">`,
+                      `<summary class="gantt-summary">${step.tools.length} tool call${step.tools.length === 1 ? "" : "s"}${hasErrors ? ` · <span class="gantt-err">${step.errors.length} error${step.errors.length === 1 ? "" : "s"}</span>` : ""}${step.tokens ? ` · ${esc(step.tokens)}` : ""}</summary>`,
+                      `<div class="gantt-tools">`,
+                      sorted
+                        .slice(0, 10)
+                        .map(([name, info]) => {
+                          const timePct = Math.max(2, (info.totalMs / toolMaxMs) * 100)
+                          const color =
+                            info.errors > 0 ? "var(--high)" : info.totalMs > 5000 ? "var(--warn)" : "var(--low)"
+                          return [
+                            `<div class="gantt-tool-row">`,
+                            `<span class="gantt-tool-name">${esc(name)}${info.count > 1 ? ` <span class="gantt-tool-count">×${info.count}</span>` : ""}</span>`,
+                            `<div class="gantt-tool-bar-wrap"><div class="gantt-tool-bar" style="width:${timePct.toFixed(0)}%;background:${color}"></div></div>`,
+                            `<span class="gantt-tool-ms">${info.totalMs >= 1000 ? `${(info.totalMs / 1000).toFixed(1)}s` : `${info.totalMs}ms`}</span>`,
+                            `</div>`,
+                          ].join("")
+                        })
+                        .join(""),
+                      sorted.length > 10
+                        ? `<span class="muted" style="font-size:11px;padding:4px 0">+${sorted.length - 10} more tools</span>`
+                        : "",
+                      `</div>`,
+                      `</details>`,
+                    ].join("")
+                  : "",
+                // Errors inline (always visible)
+                step.errors.length > 0
+                  ? step.errors.map((e) => `<div class="gantt-error">${esc(e)}</div>`).join("")
+                  : "",
+                `</div>`,
+              ].join("")
+            })
+            .join(""),
           `</div>`,
         ].join("")
       })()
@@ -1234,7 +1377,9 @@ function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point
       ? [
           `<div style="margin-top:20px"><h3>Notes</h3>`,
           `<div class="driver-list">`,
-          detail.notes.map((item) => `<div class="driver-item"><span class="driver-icon">·</span><span>${esc(item)}</span></div>`).join(""),
+          detail.notes
+            .map((item) => `<div class="driver-item"><span class="driver-icon">·</span><span>${esc(item)}</span></div>`)
+            .join(""),
           `</div></div>`,
         ].join("")
       : "",
@@ -1257,7 +1402,7 @@ function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point
                 // Count unique tool types
                 const uniq = new Map<string, number>()
                 for (const t of item.kinds) uniq.set(t, (uniq.get(t) ?? 0) + 1)
-                const toolSummary = [...uniq.entries()].map(([k, v]) => v > 1 ? `${k} ×${v}` : k).join(", ")
+                const toolSummary = [...uniq.entries()].map(([k, v]) => (v > 1 ? `${k} ×${v}` : k)).join(", ")
                 return [
                   `<div class="rb-row">`,
                   `<span class="rb-idx">${idx + 1}</span>`,
@@ -1530,6 +1675,7 @@ function mermaidScript(sid: string) {
     `};`,
     `function _agentName(n) { return _AGENT[n] || (n ? n.charAt(0).toUpperCase()+n.slice(1) : 'Agent'); }`,
     `function _fmtMs(ms) { const s=Math.round(ms/1000); return s>=60 ? Math.floor(s/60)+'m '+s%60+'s' : s+'s'; }`,
+    `function _esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}`,
     `function _updateSummary(graph) {`,
     `  const el = document.getElementById('gviz-summary-status');`,
     `  const dl = document.getElementById('gviz-summary-detail');`,
@@ -1556,7 +1702,7 @@ function mermaidScript(sid: string) {
     `    const risk = meta.risk.level;`,
     `    const riskColor = {LOW:'var(--low)',MEDIUM:'var(--warn)',HIGH:'var(--high)',CRITICAL:'var(--critical)'}[risk]||'var(--muted)';`,
     `    el.textContent = 'Completed \u00b7 '+meta.steps+' step'+(meta.steps===1?'':'s')+(dur?' \u00b7 '+dur:'');`,
-    `    dl.innerHTML = (topTools?topTools+' \u00b7 ':'')+'<span style="color:'+riskColor+'">'+risk+' risk</span>'+errBadge;`,
+    `    dl.innerHTML = (topTools?_esc(topTools)+' \u00b7 ':'')+'<span style="color:'+riskColor+'">'+_esc(risk)+' risk</span>'+errBadge;`,
     `  }`,
     `}`,
     `const _sid = ${json(sid)};`,
@@ -2283,21 +2429,20 @@ function index(input: { list: Session.Info[]; search: string }) {
     `<div class="panel">`,
     input.list.length
       ? `<div class="session-list">${input.list
-          .map(
-            (item) =>
-              [
-                `<div class="session-card">`,
-                `<div class="session-head">`,
-                `<strong>${esc(item.title)}</strong>`,
-                link(`/dre-graph/session/${item.id}`, "View →"),
-                `</div>`,
-                `<div class="tag-row">`,
-                chip({ label: stamp(item.time.updated) }),
-                chip({ label: item.parentID ? "fork" : "root" }),
-                `</div>`,
-                `<span class="muted" style="font-size:12px">${esc(item.id)}</span>`,
-                `</div>`,
-              ].join(""),
+          .map((item) =>
+            [
+              `<div class="session-card">`,
+              `<div class="session-head">`,
+              `<strong>${esc(item.title)}</strong>`,
+              link(`/dre-graph/session/${item.id}`, "View →"),
+              `</div>`,
+              `<div class="tag-row">`,
+              chip({ label: stamp(item.time.updated) }),
+              chip({ label: item.parentID ? "fork" : "root" }),
+              `</div>`,
+              `<span class="muted" style="font-size:12px">${esc(item.id)}</span>`,
+              `</div>`,
+            ].join(""),
           )
           .join("")}</div>`
       : `<p class="empty">No sessions recorded. Run ax-code to create your first session.</p>`,
@@ -2499,5 +2644,5 @@ export const DreGraphRoutes = lazy(() =>
           }),
         )
       },
-    )
+    ),
 )

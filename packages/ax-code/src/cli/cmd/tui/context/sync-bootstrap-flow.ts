@@ -93,11 +93,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
           syncSmartLlm: input.syncSmartLlm,
         })
 
-        const {
-          blockingTasks,
-          coreTasks,
-          deferredTasks,
-        } = input.createTasks(requests, (failed) => {
+        const { blockingTasks, coreTasks, deferredTasks } = input.createTasks(requests, (failed) => {
           input.recordStartup("tui.startup.providersReady", { failed })
         })
 

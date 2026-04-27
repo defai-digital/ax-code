@@ -436,7 +436,7 @@ export type SystemCache = {
   instructions?: string[]
   skills?: string | undefined
   skillsAgentKey?: string
-  skillsMsgCount?: number
+  skillsLastMsgID?: string
   skillsFn?: Function
 }
 
@@ -452,19 +452,39 @@ export async function systemPrompt(input: {
   memory?: typeof SystemPrompt.memory
   structuredPrompt?: string
 }) {
-  // Cache skills per agent — only recompute when agent changes or new messages arrive
+  // Skills caching:
+  //   The skills section only changes when (a) the agent changes, (b) the
+  //   skillsFn changes, or (c) a new file-tool call enters the conversation
+  //   (which can change recommended-skill matches). Keying on raw msgCount
+  //   would invalidate every loop step, forcing a re-walk of the entire
+  //   message history through extractFilePaths + Skill.matchByPaths on each
+  //   step — measurable per-step latency on long sessions. Track the last
+  //   processed message ID instead, and only recompute when a newly-added
+  //   message actually contains a file-tool call.
   const skillsFn = input.skills ?? SystemPrompt.skills
-  const msgCount = input.messages?.length ?? 0
-  if (
+  const messages = input.messages ?? []
+  const lastMsgID = messages[messages.length - 1]?.info.id
+
+  let recompute =
+    input.cache.skills === undefined ||
     input.cache.skillsAgentKey !== input.agent.name ||
-    input.cache.skillsMsgCount !== msgCount ||
     input.cache.skillsFn !== skillsFn
-  ) {
+
+  if (!recompute && lastMsgID !== input.cache.skillsLastMsgID) {
+    const sinceID = input.cache.skillsLastMsgID
+    const sinceIdx = sinceID ? messages.findIndex((m) => m.info.id === sinceID) : -1
+    // sinceID present but missing from current set ⇒ history was truncated
+    // (compaction). Recompute from scratch to avoid stale recommendations.
+    if (sinceID && sinceIdx === -1) recompute = true
+    else recompute = SystemPrompt.hasFileToolCall(messages.slice(sinceIdx + 1))
+  }
+
+  if (recompute) {
     input.cache.skills = await skillsFn(input.agent, input.messages)
     input.cache.skillsAgentKey = input.agent.name
-    input.cache.skillsMsgCount = msgCount
     input.cache.skillsFn = skillsFn
   }
+  input.cache.skillsLastMsgID = lastMsgID
   const skills = input.cache.skills
 
   // Project memory is intentionally NOT cached. The loader is a single

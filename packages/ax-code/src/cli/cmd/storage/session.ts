@@ -148,7 +148,11 @@ export const SessionListCommand = cmd({
           return
         }
 
-        const kill = () => { try { proc.kill() } catch {} }
+        const kill = () => {
+          try {
+            proc.kill()
+          } catch {}
+        }
         process.on("SIGINT", kill)
         process.on("SIGTERM", kill)
         try {

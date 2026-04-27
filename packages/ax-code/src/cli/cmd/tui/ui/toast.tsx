@@ -42,8 +42,7 @@ export function Toast() {
         >
           <Show when={current().title}>
             <text attributes={TextAttributes.BOLD} marginBottom={1} fg={theme.text}>
-              <span style={{ fg: theme[current().variant] }}>{VARIANT_ICON[current().variant]}</span>{" "}
-              {current().title}
+              <span style={{ fg: theme[current().variant] }}>{VARIANT_ICON[current().variant]}</span> {current().title}
             </text>
           </Show>
           <text fg={theme.text} wrapMode="word" width="100%">

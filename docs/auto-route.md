@@ -40,14 +40,14 @@ When keyword routing returns low confidence or no match on a substantial message
 
 ## What Auto-Route Helps With
 
-| Scenario | Without Auto-Route | With Auto-Route |
-|---|---|---|
-| "this function is sluggish and needs attention" | No route (no keyword match) | Routes to **perf** agent |
-| "the login page takes forever to load" | No route | Routes to **perf** agent |
-| "make sure the auth flow can't be bypassed" | No route | Routes to **security** agent |
-| "we need better quality gates before merging" | No route | Routes to **test** agent |
-| "what does this variable do?" | Full model used | `low` complexity → fast model |
-| "scan for vulnerabilities" | Routes to **security** (keyword) | Same — keyword handles it |
+| Scenario                                        | Without Auto-Route               | With Auto-Route               |
+| ----------------------------------------------- | -------------------------------- | ----------------------------- |
+| "this function is sluggish and needs attention" | No route (no keyword match)      | Routes to **perf** agent      |
+| "the login page takes forever to load"          | No route                         | Routes to **perf** agent      |
+| "make sure the auth flow can't be bypassed"     | No route                         | Routes to **security** agent  |
+| "we need better quality gates before merging"   | No route                         | Routes to **test** agent      |
+| "what does this variable do?"                   | Full model used                  | `low` complexity → fast model |
+| "scan for vulnerabilities"                      | Routes to **security** (keyword) | Same — keyword handles it     |
 
 Auto-route is most valuable when users describe problems in natural language rather than using technical keywords, and for routing simple questions to a cheaper model automatically.
 
@@ -95,12 +95,12 @@ The environment variable overrides the config file setting.
 
 ## Auto-Route + Other Settings
 
-| Setting | Interaction |
-|---|---|
-| **Autonomous Mode** | Auto-route works independently. Agent routing happens before permission checks. |
-| **Sandbox Mode** | No interaction. Auto-route only affects which agent and model tier is selected, not what the agent can do. |
-| **Agent Tier** | Auto-route routes to specialist agents only. Core agents (Dev, Planner, Reasoner) are not routing targets — switch to them manually. |
-| **Model Selection** | `low`-complexity messages use the provider's small model automatically when auto-route is on and no model is explicitly set. |
+| Setting             | Interaction                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Autonomous Mode** | Auto-route works independently. Agent routing happens before permission checks.                                                      |
+| **Sandbox Mode**    | No interaction. Auto-route only affects which agent and model tier is selected, not what the agent can do.                           |
+| **Agent Tier**      | Auto-route routes to specialist agents only. Core agents (Dev, Planner, Reasoner) are not routing targets — switch to them manually. |
+| **Model Selection** | `low`-complexity messages use the provider's small model automatically when auto-route is on and no model is explicitly set.         |
 
 ## When to Enable Auto-Route
 

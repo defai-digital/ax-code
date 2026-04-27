@@ -131,7 +131,7 @@ describe("LSP.prewarmFiles", () => {
         const snap = LSP.perfSnapshot()
         expect(snap.prewarm?.count).toBe(1)
         expect(snap["client.initialize"]?.count).toBe(2)
-        expect((snap.prewarm?.totalMs ?? Infinity)).toBeLessThan((snap["client.initialize"]?.totalMs ?? 0) - 150)
+        expect(snap.prewarm?.totalMs ?? Infinity).toBeLessThan((snap["client.initialize"]?.totalMs ?? 0) - 150)
       },
     })
   })

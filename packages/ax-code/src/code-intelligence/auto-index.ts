@@ -119,10 +119,7 @@ export namespace AutoIndex {
   // the project's state, updates counters, and publishes the
   // corresponding bus event so the TUI picks it up without waiting
   // on the 10s poll.
-  export function setState(
-    projectID: ProjectID,
-    patch: Partial<IndexState> & { state: IndexState["state"] },
-  ): void {
+  export function setState(projectID: ProjectID, patch: Partial<IndexState> & { state: IndexState["state"] }): void {
     const key = projectID as unknown as string
     const prev = getState(projectID)
     const next: IndexState = { ...prev, ...patch }

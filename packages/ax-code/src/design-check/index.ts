@@ -53,10 +53,7 @@ async function findFiles(dir: string, ignore: Set<string>): Promise<string[]> {
 /**
  * Run design check on specified paths
  */
-export async function runDesignCheck(
-  paths: string[],
-  config?: Partial<DesignCheckConfig>,
-): Promise<CheckResult> {
+export async function runDesignCheck(paths: string[], config?: Partial<DesignCheckConfig>): Promise<CheckResult> {
   const cfg = { ...DEFAULT_CONFIG, ...config, rules: { ...DEFAULT_CONFIG.rules, ...config?.rules } }
   const ignoreSet = new Set(cfg.ignore)
 

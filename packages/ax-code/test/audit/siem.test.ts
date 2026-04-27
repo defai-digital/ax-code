@@ -54,35 +54,71 @@ describe("R21: SIEM-compatible audit schema", () => {
         const sid = session.id
         Recorder.begin(sid)
 
-        Recorder.emit({ type: "session.start", sessionID: sid, agent: "build", model: "test/model", directory: tmp.path })
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
         Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 })
         Recorder.emit({
-          type: "llm.output", sessionID: sid, stepIndex: 0,
+          type: "llm.output",
+          sessionID: sid,
+          stepIndex: 0,
           parts: [{ type: "text", text: "test" }],
         })
         Recorder.emit({
-          type: "tool.call", sessionID: sid, tool: "read", callID: "c1",
-          input: { file_path: "/test" }, stepIndex: 0,
+          type: "tool.call",
+          sessionID: sid,
+          tool: "read",
+          callID: "c1",
+          input: { file_path: "/test" },
+          stepIndex: 0,
         })
         Recorder.emit({
-          type: "tool.result", sessionID: sid, tool: "read", callID: "c1",
-          status: "completed", output: "content", durationMs: 42, stepIndex: 0, deterministic: false,
+          type: "tool.result",
+          sessionID: sid,
+          tool: "read",
+          callID: "c1",
+          status: "completed",
+          output: "content",
+          durationMs: 42,
+          stepIndex: 0,
+          deterministic: false,
         })
         Recorder.emit({
-          type: "step.finish", sessionID: sid, stepIndex: 0, finishReason: "stop",
-          tokens: { input: 100, output: 20 },        })
-        Recorder.emit({
-          type: "llm.response", sessionID: sid, stepIndex: 0, finishReason: "stop",
-          tokens: { input: 100, output: 20 }, latencyMs: 500,
+          type: "step.finish",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: { input: 100, output: 20 },
         })
         Recorder.emit({
-          type: "permission.ask", sessionID: sid, permission: "read", patterns: ["/test"],
+          type: "llm.response",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: { input: 100, output: 20 },
+          latencyMs: 500,
         })
         Recorder.emit({
-          type: "permission.reply", sessionID: sid, permission: "read", reply: "once",
+          type: "permission.ask",
+          sessionID: sid,
+          permission: "read",
+          patterns: ["/test"],
         })
         Recorder.emit({
-          type: "error", sessionID: sid, errorType: "TestError", message: "test error",
+          type: "permission.reply",
+          sessionID: sid,
+          permission: "read",
+          reply: "once",
+        })
+        Recorder.emit({
+          type: "error",
+          sessionID: sid,
+          errorType: "TestError",
+          message: "test error",
         })
         Recorder.emit({ type: "session.end", sessionID: sid, reason: "completed", totalSteps: 1 })
 
@@ -154,9 +190,14 @@ describe("R21: SIEM-compatible audit schema", () => {
   })
 
   test("audit records with policy context include policy field", async () => {
-    const lines = [...AuditExport.streamAll({ since: 0 }, {
-      policy: { name: "test-policy", version: "1" },
-    })]
+    const lines = [
+      ...AuditExport.streamAll(
+        { since: 0 },
+        {
+          policy: { name: "test-policy", version: "1" },
+        },
+      ),
+    ]
     // Even if no events exist, the pattern works
     for (const line of lines) {
       const record = JSON.parse(line)
@@ -171,7 +212,13 @@ describe("R21: SIEM-compatible audit schema", () => {
       fn: async () => {
         const session = await Session.create({})
         Recorder.begin(session.id)
-        Recorder.emit({ type: "session.start", sessionID: session.id, agent: "build", model: "test", directory: tmp.path })
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test",
+          directory: tmp.path,
+        })
         Recorder.emit({ type: "session.end", sessionID: session.id, reason: "completed", totalSteps: 0 })
         Recorder.end(session.id)
         await new Promise((r) => setTimeout(r, 50))

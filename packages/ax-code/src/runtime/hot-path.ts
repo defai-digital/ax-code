@@ -59,7 +59,8 @@ const inventory = [
     triggers: ["startup"],
     dependencyMode: "promise",
     phase0Action: "observe_only",
-    notes: "Background semantic prewarm primes a bounded set of representative files so the first semantic request avoids cold start.",
+    notes:
+      "Background semantic prewarm primes a bounded set of representative files so the first semantic request avoids cold start.",
   },
   {
     name: "File.init",
@@ -89,7 +90,8 @@ const inventory = [
     triggers: ["startup", "reload"],
     dependencyMode: "promise",
     phase0Action: "observe_only",
-    notes: "VCS branch tracking now uses Instance.state and watcher subscriptions without Effect-managed runtime state.",
+    notes:
+      "VCS branch tracking now uses Instance.state and watcher subscriptions without Effect-managed runtime state.",
   },
   {
     name: "Snapshot.init",
@@ -149,7 +151,8 @@ const inventory = [
     triggers: ["workspace_switch", "reload", "shutdown"],
     dependencyMode: "promise",
     phase0Action: "observe_only",
-    notes: "Reload and shutdown call registered disposers through Promise cleanup hooks without Effect-managed disposal.",
+    notes:
+      "Reload and shutdown call registered disposers through Promise cleanup hooks without Effect-managed disposal.",
   },
 ] as const
 

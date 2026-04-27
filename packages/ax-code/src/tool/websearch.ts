@@ -12,7 +12,13 @@ export const WebSearchTool = Tool.define("websearch", async () => {
     },
     parameters: z.object({
       query: z.string().describe("Websearch query"),
-      numResults: z.number().int().min(1).max(25).optional().describe("Number of search results to return (default: 8)"),
+      numResults: z
+        .number()
+        .int()
+        .min(1)
+        .max(25)
+        .optional()
+        .describe("Number of search results to return (default: 8)"),
       livecrawl: z
         .enum(["fallback", "preferred"])
         .optional()

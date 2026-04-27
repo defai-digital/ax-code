@@ -5,13 +5,7 @@ import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
 import { nativeReadFilesBatch, nativeDetectSecurity } from "./native-scan"
-import {
-  DEFAULT_INCLUDE,
-  DEFAULT_MAX_FILES,
-  DEFAULT_MAX_PER_FILE,
-  isExcludedDir,
-  isTestFile,
-} from "./scanner-utils"
+import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir, isTestFile } from "./scanner-utils"
 
 // detect-security — AST-lite scanner for common security anti-patterns.
 //
@@ -36,11 +30,7 @@ const SUPPRESS_RE = /\/\/\s*@scan-suppress\s+security_scan/
 
 // Detect path traversal: path.join/resolve with user-controlled input
 // without a subsequent containment check (Filesystem.contains or similar).
-function detectPathTraversal(
-  lines: string[],
-  file: string,
-  max: number,
-): DebugEngine.SecurityFinding[] {
+function detectPathTraversal(lines: string[], file: string, max: number): DebugEngine.SecurityFinding[] {
   const findings: DebugEngine.SecurityFinding[] = []
   // Match path.join or path.resolve with a variable (not a string literal)
   const pathJoinRe = /path\.(?:join|resolve)\s*\((.+)/
@@ -78,11 +68,7 @@ function detectPathTraversal(
 
 // Detect command injection: spawn/exec with string concatenation or
 // template literals containing variables.
-function detectCommandInjection(
-  lines: string[],
-  file: string,
-  max: number,
-): DebugEngine.SecurityFinding[] {
+function detectCommandInjection(lines: string[], file: string, max: number): DebugEngine.SecurityFinding[] {
   const findings: DebugEngine.SecurityFinding[] = []
   // Template literal or string concatenation in exec/spawn/execSync
   const execRe = /(?:exec|execSync|execFile|execFileSync)\s*\(\s*(?:`[^`]*\$\{|[^,)]+\+)/
@@ -113,11 +99,7 @@ function detectCommandInjection(
 
 // Detect env leak: forwarding process.env to child processes without
 // sanitization (Env.sanitize or explicit allowlist).
-function detectEnvLeak(
-  lines: string[],
-  file: string,
-  max: number,
-): DebugEngine.SecurityFinding[] {
+function detectEnvLeak(lines: string[], file: string, max: number): DebugEngine.SecurityFinding[] {
   const findings: DebugEngine.SecurityFinding[] = []
   // Spreading process.env into a child process env config
   const envSpreadRe = /env\s*:\s*\{?\s*\.\.\.process\.env/
@@ -149,11 +131,7 @@ function detectEnvLeak(
 
 // Detect missing schema validation on HTTP route handlers.
 // Looks for Hono-style route definitions without validator() middleware.
-function detectMissingValidation(
-  lines: string[],
-  file: string,
-  max: number,
-): DebugEngine.SecurityFinding[] {
+function detectMissingValidation(lines: string[], file: string, max: number): DebugEngine.SecurityFinding[] {
   const findings: DebugEngine.SecurityFinding[] = []
   // Hono route pattern: app.post/put/patch/delete (mutation routes)
   const routeRe = /\.\s*(?:post|put|patch|delete)\s*\(\s*["'`]([^"'`]+)["'`]/
@@ -187,11 +165,7 @@ function detectMissingValidation(
 
 // Detect SSRF: fetch/axios with a variable URL without prior IP/URL
 // validation (assertPublicUrl, isPublic, etc.)
-function detectSsrf(
-  lines: string[],
-  file: string,
-  max: number,
-): DebugEngine.SecurityFinding[] {
+function detectSsrf(lines: string[], file: string, max: number): DebugEngine.SecurityFinding[] {
   const findings: DebugEngine.SecurityFinding[] = []
   // fetch or axios with a variable (not a string literal)
   const fetchRe = /(?:fetch|axios\.(?:get|post|put|delete|patch|request))\s*\(\s*(\w+)/
@@ -232,7 +206,7 @@ async function scanFile(
   maxPerFile: number,
   preread?: string,
 ): Promise<DebugEngine.SecurityFinding[]> {
-  const content = preread ?? await fs.readFile(file, "utf8").catch(() => "")
+  const content = preread ?? (await fs.readFile(file, "utf8").catch(() => ""))
   if (!content) return []
 
   const lines = content.split("\n")
@@ -337,7 +311,7 @@ export async function detectSecurityImpl(
     for (const f of filesToScan) {
       const content = preread.get(f)
       if (!content) continue
-      findings.push(...await scanFile(f, enabledPatterns, maxPerFile, content))
+      findings.push(...(await scanFile(f, enabledPatterns, maxPerFile, content)))
     }
   } else {
     for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {

@@ -5,13 +5,7 @@ import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
 import { nativeReadFilesBatch, nativeDetectLifecycle } from "./native-scan"
-import {
-  DEFAULT_INCLUDE,
-  DEFAULT_MAX_FILES,
-  DEFAULT_MAX_PER_FILE,
-  isExcludedDir,
-  isTestFile,
-} from "./scanner-utils"
+import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir, isTestFile } from "./scanner-utils"
 
 // detect-lifecycle — AST-lite scanner for resource lifecycle issues:
 // resources that are created but never cleaned up within the same
@@ -51,9 +45,7 @@ const RESOURCE_RULES: ResourceRule[] = [
   {
     type: "event_listener",
     createRe: /(\w+)\.(?:on|addEventListener)\s*\(\s*["'`](\w+)["'`]/g,
-    cleanupPatterns: [
-      /\.(?:off|removeEventListener|removeListener|removeAllListeners)\s*\(/,
-    ],
+    cleanupPatterns: [/\.(?:off|removeEventListener|removeListener|removeAllListeners)\s*\(/],
     description: "Event listener registered without corresponding removal",
     severity: "medium",
   },
@@ -110,7 +102,12 @@ function findFunctionScopes(content: string): FunctionScope[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     // Detect function-like declarations (function, method, arrow)
-    if (/(?!.*\b(?:if|for|while|switch|catch|class)\s*\()(?:function\s+\w+|(?:async\s+)?(?:\w+\s*\(|=>\s*\{)|\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{)/.test(line) && depth === 0) {
+    if (
+      /(?!.*\b(?:if|for|while|switch|catch|class)\s*\()(?:function\s+\w+|(?:async\s+)?(?:\w+\s*\(|=>\s*\{)|\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{)/.test(
+        line,
+      ) &&
+      depth === 0
+    ) {
       isFunctionLike = true
       scopeStart = i
     }
@@ -197,11 +194,7 @@ function detectResourceLeaks(
   return findings
 }
 
-function detectUnboundedMapGrowth(
-  content: string,
-  file: string,
-  maxPerFile: number,
-): DebugEngine.LifecycleFinding[] {
+function detectUnboundedMapGrowth(content: string, file: string, maxPerFile: number): DebugEngine.LifecycleFinding[] {
   const findings: DebugEngine.LifecycleFinding[] = []
   const lines = content.split("\n")
 
@@ -256,7 +249,7 @@ async function scanFile(
   maxPerFile: number,
   preread?: string,
 ): Promise<DebugEngine.LifecycleFinding[]> {
-  const content = preread ?? await fs.readFile(file, "utf8").catch(() => "")
+  const content = preread ?? (await fs.readFile(file, "utf8").catch(() => ""))
   if (!content) return []
 
   const findings: DebugEngine.LifecycleFinding[] = []
@@ -357,7 +350,7 @@ export async function detectLifecycleImpl(
     for (const f of filesToScan) {
       const content = preread.get(f)
       if (!content) continue
-      findings.push(...await scanFile(f, enabledTypes, maxPerFile, content))
+      findings.push(...(await scanFile(f, enabledTypes, maxPerFile, content)))
     }
   } else {
     for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {

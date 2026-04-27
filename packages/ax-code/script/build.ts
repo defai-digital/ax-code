@@ -140,7 +140,11 @@ async function ensureBuildDependencies(targets: { os: string; arch: string }[]) 
   const repoNodeModules = path.join(repoRoot, "node_modules")
   const repoStoreNodeModules = path.join(repoNodeModules, ".pnpm", "node_modules")
   const opentuiPackage = JSON.parse(await Bun.file(path.join(localNodeModules, "@opentui/core/package.json")).text())
-  const requiredPackages = collectBuildDependencyPackages(opentuiPackage.optionalDependencies, pkg.devDependencies, targets)
+  const requiredPackages = collectBuildDependencyPackages(
+    opentuiPackage.optionalDependencies,
+    pkg.devDependencies,
+    targets,
+  )
   const missingPackages = []
 
   for (const dependency of requiredPackages) {
@@ -211,10 +215,10 @@ async function ensureBuildDependencies(targets: { os: string; arch: string }[]) 
         resolveInstalledPackagePath(localNodeModules, dependency.name),
       ],
       [
-      resolveInstalledPackagePath(tempNodeModules, dependency.name),
-      resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
-      resolveInstalledPackagePath(localNodeModules, dependency.name),
-      resolveInstalledPackagePath(repoNodeModules, dependency.name),
+        resolveInstalledPackagePath(tempNodeModules, dependency.name),
+        resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
+        resolveInstalledPackagePath(localNodeModules, dependency.name),
+        resolveInstalledPackagePath(repoNodeModules, dependency.name),
       ],
     )
     if (!copied) {

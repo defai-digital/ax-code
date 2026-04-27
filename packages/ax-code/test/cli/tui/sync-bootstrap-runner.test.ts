@@ -56,9 +56,12 @@ describe("tui sync bootstrap runner", () => {
 
     const summaries = await runBootstrapPhaseSequence([
       {
-        tasks: [() => Promise.resolve().then(() => {
-          events.push("blocking-task")
-        })],
+        tasks: [
+          () =>
+            Promise.resolve().then(() => {
+              events.push("blocking-task")
+            }),
+        ],
         after() {
           events.push("blocking-after")
         },
@@ -73,20 +76,19 @@ describe("tui sync bootstrap runner", () => {
         },
       },
       {
-        tasks: [() => Promise.resolve().then(() => {
-          events.push("deferred-task")
-        })],
+        tasks: [
+          () =>
+            Promise.resolve().then(() => {
+              events.push("deferred-task")
+            }),
+        ],
         after() {
           events.push("deferred-after")
         },
       },
     ])
 
-    expect(summaries).toEqual([
-      { rejected: [] },
-      { rejected: ["Error: core failed"] },
-      { rejected: [] },
-    ])
+    expect(summaries).toEqual([{ rejected: [] }, { rejected: ["Error: core failed"] }, { rejected: [] }])
     expect(events).toContain("blocking-task")
     expect(events).toContain("deferred-task")
     expect(events).toContain("blocking-after")
@@ -103,19 +105,23 @@ describe("tui sync bootstrap runner", () => {
 
     await runBootstrapPhaseSequence([
       {
-        tasks: [() => {
-          events.push("blocking-start")
-          return Promise.resolve()
-        }],
+        tasks: [
+          () => {
+            events.push("blocking-start")
+            return Promise.resolve()
+          },
+        ],
         async after() {
           events.push("blocking-after")
         },
       },
       {
-        tasks: [() => {
-          events.push("deferred-start")
-          return Promise.resolve()
-        }],
+        tasks: [
+          () => {
+            events.push("deferred-start")
+            return Promise.resolve()
+          },
+        ],
       },
     ])
 
@@ -149,18 +155,12 @@ describe("tui sync bootstrap runner", () => {
       "bootstrap exploded",
     )
 
-    expect(created).toEqual([
-      "tui.startup.bootstrap",
-      "tui.startup.bootstrapCore",
-      "tui.startup.bootstrapDeferred",
-    ])
+    expect(created).toEqual(["tui.startup.bootstrap", "tui.startup.bootstrapCore", "tui.startup.bootstrapDeferred"])
     expect(spanPayloads.get("tui.startup.bootstrap")).toEqual([
       undefined,
       { ok: false, error: "Error: bootstrap exploded" },
     ])
-    expect(spanPayloads.get("tui.startup.bootstrapCore")).toEqual([
-      { ok: false, error: "Error: bootstrap exploded" },
-    ])
+    expect(spanPayloads.get("tui.startup.bootstrapCore")).toEqual([{ ok: false, error: "Error: bootstrap exploded" }])
     expect(spanPayloads.get("tui.startup.bootstrapDeferred")).toEqual([
       { ok: false, error: "Error: bootstrap exploded" },
     ])

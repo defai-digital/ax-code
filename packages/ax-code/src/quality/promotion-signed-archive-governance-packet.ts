@@ -76,8 +76,7 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
   }
 
   function matchesPromotion(promotion: PromotionReference, packet: PacketArtifact) {
-    return packet.promotion.source === promotion.source
-      && packet.promotion.promotionID === promotion.promotionID
+    return packet.promotion.source === promotion.source && packet.promotion.promotionID === promotion.promotionID
   }
 
   function evaluateSummary(input: {
@@ -85,15 +84,18 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     attestationPacket: QualityPromotionSignedArchiveAttestationPacket.PacketArtifact
   }) {
-    const decisionBundle = input.releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle
+    const decisionBundle =
+      input.releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle
     const releasePacketReasons = QualityPromotionReleasePacket.verify(decisionBundle, input.releasePacket)
     const attestationPacketReasons = QualityPromotionSignedArchiveAttestationPacket.verify(input.attestationPacket)
 
-    const releasePacketLinkagePass = input.promotion.releasePacketID === input.releasePacket.packetID
-      && input.attestationPacket.promotion.releasePacketID === input.releasePacket.packetID
+    const releasePacketLinkagePass =
+      input.promotion.releasePacketID === input.releasePacket.packetID &&
+      input.attestationPacket.promotion.releasePacketID === input.releasePacket.packetID
     const promotionReferencePass = JSON.stringify(input.promotion) === JSON.stringify(input.attestationPacket.promotion)
-    const sourceLinkagePass = input.releasePacket.source === input.attestationPacket.source
-      && input.attestationPacket.source === input.promotion.source
+    const sourceLinkagePass =
+      input.releasePacket.source === input.attestationPacket.source &&
+      input.attestationPacket.source === input.promotion.source
     const signedArchiveLinkagePass = input.promotion.signedArchiveID === input.attestationPacket.summary.signedArchiveID
 
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
@@ -176,14 +178,19 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     attestationPacket: QualityPromotionSignedArchiveAttestationPacket.PacketArtifact
   }) {
-    const decisionBundle = input.releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle
+    const decisionBundle =
+      input.releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle
     const releasePacketReasons = QualityPromotionReleasePacket.verify(decisionBundle, input.releasePacket)
     if (releasePacketReasons.length > 0) {
-      throw new Error(`Cannot create signed archive governance packet for ${input.releasePacket.source}: invalid release packet (${releasePacketReasons[0]})`)
+      throw new Error(
+        `Cannot create signed archive governance packet for ${input.releasePacket.source}: invalid release packet (${releasePacketReasons[0]})`,
+      )
     }
     const attestationPacketReasons = QualityPromotionSignedArchiveAttestationPacket.verify(input.attestationPacket)
     if (attestationPacketReasons.length > 0) {
-      throw new Error(`Cannot create signed archive governance packet for ${input.attestationPacket.source}: invalid attestation packet (${attestationPacketReasons[0]})`)
+      throw new Error(
+        `Cannot create signed archive governance packet for ${input.attestationPacket.source}: invalid attestation packet (${attestationPacketReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const packetID = `${input.attestationPacket.packetID}-governance`
@@ -204,22 +211,33 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
   export function verify(packet: PacketArtifact) {
     const reasons: string[] = []
     if (packet.source !== packet.releasePacket.source) {
-      reasons.push(`signed archive governance packet release packet source mismatch: ${packet.source} vs ${packet.releasePacket.source}`)
+      reasons.push(
+        `signed archive governance packet release packet source mismatch: ${packet.source} vs ${packet.releasePacket.source}`,
+      )
     }
     if (packet.source !== packet.attestationPacket.source) {
-      reasons.push(`signed archive governance packet attestation packet source mismatch: ${packet.source} vs ${packet.attestationPacket.source}`)
+      reasons.push(
+        `signed archive governance packet attestation packet source mismatch: ${packet.source} vs ${packet.attestationPacket.source}`,
+      )
     }
     if (packet.promotion.promotionID !== packet.attestationPacket.promotion.promotionID) {
-      reasons.push(`signed archive governance packet promotion mismatch: ${packet.promotion.promotionID} vs ${packet.attestationPacket.promotion.promotionID}`)
+      reasons.push(
+        `signed archive governance packet promotion mismatch: ${packet.promotion.promotionID} vs ${packet.attestationPacket.promotion.promotionID}`,
+      )
     }
-    const decisionBundle = packet.releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle
+    const decisionBundle =
+      packet.releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle
     const releasePacketReasons = QualityPromotionReleasePacket.verify(decisionBundle, packet.releasePacket)
     if (releasePacketReasons.length > 0) {
-      reasons.push(`signed archive governance packet release packet mismatch for ${packet.source} (${releasePacketReasons[0]})`)
+      reasons.push(
+        `signed archive governance packet release packet mismatch for ${packet.source} (${releasePacketReasons[0]})`,
+      )
     }
     const attestationPacketReasons = QualityPromotionSignedArchiveAttestationPacket.verify(packet.attestationPacket)
     if (attestationPacketReasons.length > 0) {
-      reasons.push(`signed archive governance packet attestation packet mismatch for ${packet.source} (${attestationPacketReasons[0]})`)
+      reasons.push(
+        `signed archive governance packet attestation packet mismatch for ${packet.source} (${attestationPacketReasons[0]})`,
+      )
     }
     const expectedSummary = evaluateSummary({
       promotion: packet.promotion,
@@ -232,10 +250,7 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     return reasons
   }
 
-  export async function resolveForPromotion(
-    promotion: PromotionReference,
-    packets: PacketArtifact[] = [],
-  ) {
+  export async function resolveForPromotion(promotion: PromotionReference, packets: PacketArtifact[] = []) {
     const persisted = (await list(promotion.source)).filter((packet) => matchesPromotion(promotion, packet))
     const deduped = new Map<string, PacketArtifact>()
     for (const packet of [...persisted, ...packets]) {
@@ -264,7 +279,9 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Signed archive governance packet ${packet.packetID} already exists for source ${packet.source} with different content`)
+      throw new Error(
+        `Signed archive governance packet ${packet.packetID} already exists for source ${packet.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(packet.source, packet.packetID), next)
@@ -273,7 +290,9 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
   }
 
   export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_signed_archive_governance_packet", encode(source)]] : [["quality_model_signed_archive_governance_packet"]]
+    const prefixes = source
+      ? [["quality_model_signed_archive_governance_packet", encode(source)]]
+      : [["quality_model_signed_archive_governance_packet"]]
     const packets: PacketArtifact[] = []
     for (const prefix of prefixes) {
       const keys = await Storage.list(prefix)
@@ -295,7 +314,9 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     const prev = JSON.stringify(persisted.packet)
     const curr = JSON.stringify(packet)
     if (prev !== curr) {
-      throw new Error(`Persisted signed archive governance packet ${packet.packetID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted signed archive governance packet ${packet.packetID} does not match the provided artifact`,
+      )
     }
     return persisted
   }

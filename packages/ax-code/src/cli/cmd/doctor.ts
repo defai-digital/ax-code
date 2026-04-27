@@ -20,8 +20,8 @@ import { NativeAddon } from "../../native/addon"
 import { Database } from "../../storage/db"
 import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck } from "./doctor-storage"
+import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import path from "path"
-import fs from "fs/promises"
 
 export const DoctorCommand: CommandModule = {
   command: "doctor",
@@ -65,8 +65,9 @@ export const DoctorCommand: CommandModule = {
     } catch {
       // Config.get() requires project instance which isn't available in standalone CLI mode
       // Check if config file exists instead
-      const configExists = await Bun.file(path.join(process.cwd(), ".ax-code", "ax-code.json")).exists()
-        || await Bun.file(path.join(process.cwd(), "ax-code.json")).exists()
+      const configExists =
+        (await Bun.file(path.join(process.cwd(), ".ax-code", "ax-code.json")).exists()) ||
+        (await Bun.file(path.join(process.cwd(), "ax-code.json")).exists())
       checks.push({
         name: "Configuration",
         status: configExists ? "ok" : "warn",
@@ -181,32 +182,16 @@ export const DoctorCommand: CommandModule = {
 
     // 10. Stale ax-code processes — multiple instances can block startup,
     // exhaust the port, or corrupt the shared SQLite database.
-    try {
-      const result = await Bun.spawn(["pgrep", "-a", "-x", "ax-code"], {
-        stdout: "pipe",
-        stderr: "pipe",
-      })
-      const raw = await new Response(result.stdout).text()
-      const pids = raw.trim().split("\n").filter(Boolean)
-      const others = pids.filter(line => !line.includes(`${process.pid}`))
-      if (others.length > 0) {
-        checks.push({
-          name: "Running instances",
-          status: "warn",
-          detail: `${others.length} other ax-code process(es) found — this may block startup or cause port conflicts. PIDs: ${others.map(l => l.split(/\s+/)[0]).join(", ")}. Run: killall ax-code`,
-        })
-      } else {
-        checks.push({ name: "Running instances", status: "ok", detail: "No other ax-code processes" })
-      }
-    } catch {
-      // pgrep unavailable — skip
-    }
+    const runningInstances = await getRunningInstancesCheck()
+    if (runningInstances) checks.push(runningInstances)
 
     // 11b. TUI startup — port conflict and server liveness
     try {
       const serverRunning = await fetch("http://127.0.0.1:4096/", {
         signal: AbortSignal.timeout(1500),
-      }).then(() => true).catch(() => false)
+      })
+        .then(() => true)
+        .catch(() => false)
 
       if (serverRunning) {
         checks.push({
@@ -220,7 +205,12 @@ export const DoctorCommand: CommandModule = {
           hostname: "127.0.0.1",
           port: 4096,
           socket: { open() {}, data() {}, close() {}, error() {} },
-        }).then(s => { s.end(); return true }).catch(() => false)
+        })
+          .then((s) => {
+            s.end()
+            return true
+          })
+          .catch(() => false)
 
         checks.push({
           name: "TUI server",
@@ -239,69 +229,7 @@ export const DoctorCommand: CommandModule = {
     checks.push(getTuiPreloadCheck())
 
     // 12. Recent logs analysis — scan last 5 log files for TUI crashes / errors
-    try {
-      const logDir = Global.Path.log
-      const logFiles = await fs.readdir(logDir).catch(() => [] as string[])
-      const plainLogs = logFiles.filter(f => f.endsWith(".log") && !f.endsWith(".json.log")).sort()
-      const recentLogs = plainLogs.slice(-5)
-
-      let totalErrors = 0
-      let totalWarns = 0
-      const tuiErrors: string[] = []
-
-      for (const logFile of recentLogs) {
-        const content = await fs.readFile(path.join(logDir, logFile), "utf8").catch(() => "")
-        const lines = content.split("\n").filter(Boolean)
-        const errors = lines.filter(l => l.startsWith("ERROR"))
-        const warns = lines.filter(l => l.startsWith("WARN"))
-        totalErrors += errors.length
-        totalWarns += warns.length
-
-        // Collect TUI / renderer / worker specific errors
-        for (const e of errors) {
-          const lower = e.toLowerCase()
-          if (
-            lower.includes("tui") ||
-            lower.includes("renderer") ||
-            lower.includes("worker") ||
-            lower.includes("jsx") ||
-            lower.includes("react") ||
-            lower.includes("unhandled") ||
-            lower.includes("crash")
-          ) {
-            tuiErrors.push(`[${logFile}] ${e.slice(0, 160)}`)
-          }
-        }
-      }
-
-      const recentLog = recentLogs.at(-1) ?? "none"
-      checks.push({
-        name: "Recent logs",
-        status: totalErrors > 10 ? "warn" : "ok",
-        detail: `${recentLogs.length} file(s) checked — ${totalErrors} errors, ${totalWarns} warnings`,
-      })
-
-      if (tuiErrors.length > 0) {
-        checks.push({
-          name: "TUI errors in logs",
-          status: "fail",
-          detail: tuiErrors.slice(-3).map(e => e.slice(0, 160)).join(" | "),
-        })
-      } else if (totalErrors > 0) {
-        // Show last 3 non-TUI errors from the most recent log
-        const content = await fs.readFile(path.join(logDir, recentLog), "utf8").catch(() => "")
-        const allErrors = content.split("\n").filter(l => l.startsWith("ERROR"))
-        if (allErrors.length > 0) {
-          checks.push({
-            name: "Recent errors",
-            status: "warn",
-            detail: allErrors.slice(-3).map(e => e.slice(0, 120)).join(" | "),
-          })
-        }
-      }
-    } catch {
-      // Log analysis is best-effort
-    }
+    checks.push(...(await getRecentLogsChecks({ logDir: Global.Path.log })))
 
     // 12. Code intelligence index status
     try {

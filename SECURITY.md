@@ -35,11 +35,11 @@ ax-code is an AI-powered coding assistant that runs locally on your machine. It 
 
 ax-code includes a built-in execution isolation sandbox that restricts what the AI agent can access at the tool level. Three modes are available:
 
-| Mode                          | Behavior                                                                            |
-| ----------------------------- | ----------------------------------------------------------------------------------- |
-| **Read-only**                 | Blocks all file mutations and shell commands                                        |
-| **Workspace write**           | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
-| **Full access** (default)     | Disables isolation entirely                                                          |
+| Mode                      | Behavior                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| **Read-only**             | Blocks all file mutations and shell commands                                        |
+| **Workspace write**       | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected |
+| **Full access** (default) | Disables isolation entirely                                                         |
 
 Key properties:
 

@@ -65,7 +65,10 @@ describe("tui session message helpers", () => {
       ]),
     ).toMatchObject({
       input: "hello world",
-      parts: [{ type: "file", filename: "a.ts" }, { type: "agent", name: "reviewer" }],
+      parts: [
+        { type: "file", filename: "a.ts" },
+        { type: "agent", name: "reviewer" },
+      ],
     })
   })
 })

@@ -31,12 +31,18 @@ export const BranchCommand = cmd({
         const forkedRisk = Risk.fromSession(forked.id)
 
         if (args.json) {
-          console.log(JSON.stringify({
-            original: { id: sessionID, title: original.title, risk },
-            branch: { id: forked.id, title: forked.title, risk: forkedRisk },
-            snapshot: snapshotHash,
-            branchedFrom: messageID ?? "latest",
-          }, null, 2))
+          console.log(
+            JSON.stringify(
+              {
+                original: { id: sessionID, title: original.title, risk },
+                branch: { id: forked.id, title: forked.title, risk: forkedRisk },
+                snapshot: snapshotHash,
+                branchedFrom: messageID ?? "latest",
+              },
+              null,
+              2,
+            ),
+          )
           return
         }
 

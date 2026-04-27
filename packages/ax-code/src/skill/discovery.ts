@@ -93,9 +93,7 @@ export namespace Discovery {
             return res.arrayBuffer()
           },
           catch: (err) =>
-            err instanceof DiscoveryError
-              ? err
-              : asDiscoveryError(`skill-discovery: fetch failed for ${url}`, err),
+            err instanceof DiscoveryError ? err : asDiscoveryError(`skill-discovery: fetch failed for ${url}`, err),
         })
 
       const download = Effect.fn("Discovery.download")(function* (url: string, dest: string, expectedSha256?: string) {
@@ -208,11 +206,7 @@ export namespace Discovery {
               const downloads = yield* Effect.forEach(
                 safeFiles,
                 (file) =>
-                  download(
-                    new URL(file.path, `${host}/${skill.name}/`).href,
-                    path.join(root, file.path),
-                    file.sha256,
-                  ),
+                  download(new URL(file.path, `${host}/${skill.name}/`).href, path.join(root, file.path), file.sha256),
                 {
                   concurrency: fileConcurrency,
                 },

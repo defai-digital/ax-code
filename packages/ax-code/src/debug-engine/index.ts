@@ -300,12 +300,7 @@ export namespace DebugEngine {
 
   // ─── detectSecurity output shape ────────────────────────────────────
 
-  export type SecurityPattern =
-    | "path_traversal"
-    | "command_injection"
-    | "ssrf"
-    | "missing_validation"
-    | "env_leak"
+  export type SecurityPattern = "path_traversal" | "command_injection" | "ssrf" | "missing_validation" | "env_leak"
 
   export type SecurityFinding = {
     file: string
@@ -334,66 +329,42 @@ export namespace DebugEngine {
     return analyzeBugImpl(projectID, input)
   }
 
-  export async function detectDuplicates(
-    projectID: ProjectID,
-    input: DetectDuplicatesInput,
-  ): Promise<DuplicateReport> {
+  export async function detectDuplicates(projectID: ProjectID, input: DetectDuplicatesInput): Promise<DuplicateReport> {
     log.info("detectDuplicates", { projectID, scope: input.scope })
     return detectDuplicatesImpl(projectID, input)
   }
 
-  export async function planRefactor(
-    projectID: ProjectID,
-    input: PlanRefactorInput,
-  ): Promise<RefactorPlan> {
+  export async function planRefactor(projectID: ProjectID, input: PlanRefactorInput): Promise<RefactorPlan> {
     log.info("planRefactor", { projectID, kind: input.kind, targetCount: input.targets.length })
     return planRefactorImpl(projectID, input)
   }
 
-  export async function analyzeImpact(
-    projectID: ProjectID,
-    input: AnalyzeImpactInput,
-  ): Promise<ImpactReport> {
+  export async function analyzeImpact(projectID: ProjectID, input: AnalyzeImpactInput): Promise<ImpactReport> {
     log.info("analyzeImpact", { projectID, changes: input.changes.length })
     return analyzeImpactImpl(projectID, input)
   }
 
-  export async function detectHardcodes(
-    projectID: ProjectID,
-    input: DetectHardcodesInput,
-  ): Promise<HardcodeReport> {
+  export async function detectHardcodes(projectID: ProjectID, input: DetectHardcodesInput): Promise<HardcodeReport> {
     log.info("detectHardcodes", { projectID })
     return detectHardcodesImpl(projectID, input)
   }
 
-  export async function applySafeRefactor(
-    projectID: ProjectID,
-    input: ApplySafeRefactorInput,
-  ): Promise<ApplyResult> {
+  export async function applySafeRefactor(projectID: ProjectID, input: ApplySafeRefactorInput): Promise<ApplyResult> {
     log.info("applySafeRefactor", { projectID, planId: input.planId, mode: input.mode })
     return applySafeRefactorImpl(projectID, input)
   }
 
-  export async function detectRaces(
-    projectID: ProjectID,
-    input: DetectRacesInput,
-  ): Promise<RaceReport> {
+  export async function detectRaces(projectID: ProjectID, input: DetectRacesInput): Promise<RaceReport> {
     log.info("detectRaces", { projectID })
     return detectRacesImpl(projectID, input)
   }
 
-  export async function detectLifecycle(
-    projectID: ProjectID,
-    input: DetectLifecycleInput,
-  ): Promise<LifecycleReport> {
+  export async function detectLifecycle(projectID: ProjectID, input: DetectLifecycleInput): Promise<LifecycleReport> {
     log.info("detectLifecycle", { projectID })
     return detectLifecycleImpl(projectID, input)
   }
 
-  export async function detectSecurity(
-    projectID: ProjectID,
-    input: DetectSecurityInput,
-  ): Promise<SecurityReport> {
+  export async function detectSecurity(projectID: ProjectID, input: DetectSecurityInput): Promise<SecurityReport> {
     log.info("detectSecurity", { projectID })
     return detectSecurityImpl(projectID, input)
   }

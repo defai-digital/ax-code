@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import { Project } from "../../src/project/project"
+import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { $ } from "bun"
 import path from "path"
@@ -11,7 +12,6 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { AppFileSystem } from "../../src/filesystem"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
-import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { eq } from "drizzle-orm"
 import { Filesystem } from "../../src/util/filesystem"
@@ -457,7 +457,10 @@ describe("Project.list and Project.get", () => {
     const { project } = await Project.fromDirectory(tmp.path)
 
     Database.use((db) => {
-      db.update(ProjectTable).set({ sandboxes: { nope: true } as any }).where(eq(ProjectTable.id, project.id)).run()
+      db.update(ProjectTable)
+        .set({ sandboxes: { nope: true } as any })
+        .where(eq(ProjectTable.id, project.id))
+        .run()
     })
 
     expect(Project.get(project.id)?.id).toBe(project.id)
@@ -470,7 +473,10 @@ describe("Project.list and Project.get", () => {
     const { project } = await Project.fromDirectory(tmp.path)
 
     Database.use((db) => {
-      db.update(ProjectTable).set({ commands: { start: 1 } as any }).where(eq(ProjectTable.id, project.id)).run()
+      db.update(ProjectTable)
+        .set({ commands: { start: 1 } as any })
+        .where(eq(ProjectTable.id, project.id))
+        .run()
     })
 
     const next = await Project.fromDirectory(tmp.path)
@@ -510,6 +516,21 @@ describe("Project.addSandbox and Project.removeSandbox", () => {
 
     found = Project.get(project.id)
     expect(found?.sandboxes).not.toContain(sandboxDir)
+  })
+
+  test("sandbox mutations use a database transaction", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { project } = await Project.fromDirectory(tmp.path)
+    const sandboxDir = path.join(tmp.path, "sandbox-transaction")
+    const txSpy = spyOn(Database, "transaction")
+
+    try {
+      await Project.addSandbox(project.id, sandboxDir)
+      await Project.removeSandbox(project.id, sandboxDir)
+      expect(txSpy).toHaveBeenCalledTimes(2)
+    } finally {
+      txSpy.mockRestore()
+    }
   })
 
   test("addSandbox emits GlobalBus event", async () => {

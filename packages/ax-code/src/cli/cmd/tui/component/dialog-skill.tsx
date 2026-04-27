@@ -13,10 +13,12 @@ export function DialogSkill(props: DialogSkillProps) {
   const sdk = useSDK()
   dialog.setSize("large")
 
-  const [skills] = createResource(createAbortableResourceFetcher(async (_ready: true, signal) => {
-    const result = await sdk.client.app.skills(undefined, { signal })
-    return result.data ?? []
-  }))
+  const [skills] = createResource(
+    createAbortableResourceFetcher(async (_ready: true, signal) => {
+      const result = await sdk.client.app.skills(undefined, { signal })
+      return result.data ?? []
+    }),
+  )
 
   const options = createMemo<DialogSelectOption<string>[]>(() => {
     const list = skills() ?? []

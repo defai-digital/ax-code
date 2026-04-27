@@ -22,6 +22,11 @@ export const EventLogTable = sqliteTable(
   (table) => [
     index("event_log_session_idx").on(table.session_id),
     index("event_log_session_sequence_idx").on(table.session_id, table.sequence),
+    // Backs EventQuery.bySessionAndType (e.g. "agent.route" lookups).
+    // Without this, sessions with thousands of events scan the whole
+    // session range to filter by event_type. Sequence is included so
+    // the orderBy can be satisfied by the index.
+    index("event_log_session_type_sequence_idx").on(table.session_id, table.event_type, table.sequence),
     index("event_log_time_created_idx").on(table.time_created),
   ],
 )

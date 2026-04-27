@@ -10,6 +10,7 @@
  * overwrites the prior entry rather than appending duplicates.
  */
 
+import os from "os"
 import * as store from "./store"
 import { generate } from "./generator"
 import { computeContentHash, renderEntry } from "./hash"
@@ -40,6 +41,26 @@ async function loadOrInit(projectRoot: string): Promise<ProjectMemory> {
   return generate(projectRoot)
 }
 
+function globalMemoryScaffold(): ProjectMemory {
+  const now = new Date().toISOString()
+  return {
+    version: 1,
+    created: now,
+    updated: now,
+    projectRoot: os.homedir(),
+    contentHash: "",
+    maxTokens: 2000,
+    sections: {},
+    totalTokens: 0,
+  }
+}
+
+async function loadOrInitGlobal(): Promise<ProjectMemory> {
+  const existing = await store.loadGlobal()
+  if (existing) return existing
+  return globalMemoryScaffold()
+}
+
 export interface RecordInput {
   name: string
   body: string
@@ -47,6 +68,12 @@ export interface RecordInput {
   howToApply?: string
   /** Restrict this entry to a subset of agents (empty/undefined = all agents). */
   agents?: string[]
+  /**
+   * Where to store the entry. "project" (default) saves to .ax-code/memory.json
+   * in the project root. "global" saves to ~/.ax-code/memory.json and persists
+   * across all projects — intended for user-level preferences and feedback.
+   */
+  scope?: "project" | "global"
 }
 
 /**
@@ -62,7 +89,8 @@ export async function recordEntry(
   const body = input.body.trim()
   if (!body) throw new Error("memory recorder: entry body must be non-empty")
 
-  const memory = await loadOrInit(projectRoot)
+  const isGlobal = input.scope === "global"
+  const memory = isGlobal ? await loadOrInitGlobal() : await loadOrInit(projectRoot)
   const existing = memory.sections[kind]?.entries ?? []
   const filtered = existing.filter((e) => e.name !== name)
   const agents = input.agents?.map((a) => a.trim()).filter(Boolean)
@@ -78,15 +106,22 @@ export async function recordEntry(
   memory.sections[kind] = rebuildSection(filtered)
   recomputeMetrics(memory)
 
-  await store.save(projectRoot, memory)
+  if (isGlobal) await store.saveGlobal(memory)
+  else await store.save(projectRoot, memory)
   return memory
 }
 
 /**
  * Remove an entry by name. Returns true if removed, false if not found.
  */
-export async function removeEntry(projectRoot: string, kind: MemoryEntryKind, name: string): Promise<boolean> {
-  const memory = await store.load(projectRoot).catch(() => null)
+export async function removeEntry(
+  projectRoot: string,
+  kind: MemoryEntryKind,
+  name: string,
+  scope: "project" | "global" = "project",
+): Promise<boolean> {
+  const isGlobal = scope === "global"
+  const memory = isGlobal ? await store.loadGlobal().catch(() => null) : await store.load(projectRoot).catch(() => null)
   if (!memory) return false
   const section = memory.sections[kind]
   if (!section) return false
@@ -96,17 +131,23 @@ export async function removeEntry(projectRoot: string, kind: MemoryEntryKind, na
   if (filtered.length === 0) memory.sections[kind] = undefined
   else memory.sections[kind] = rebuildSection(filtered)
   recomputeMetrics(memory)
-  await store.save(projectRoot, memory)
+  if (isGlobal) await store.saveGlobal(memory)
+  else await store.save(projectRoot, memory)
   return true
 }
 
 /**
  * List entries for a given kind, or all entry kinds if omitted.
  */
-export async function listEntries(projectRoot: string, kind?: MemoryEntryKind): Promise<MemoryEntry[]> {
-  const memory = await store.load(projectRoot).catch(() => null)
+export async function listEntries(
+  projectRoot: string,
+  kind?: MemoryEntryKind,
+  scope: "project" | "global" = "project",
+): Promise<MemoryEntry[]> {
+  const isGlobal = scope === "global"
+  const memory = isGlobal ? await store.loadGlobal().catch(() => null) : await store.load(projectRoot).catch(() => null)
   if (!memory) return []
   if (kind) return memory.sections[kind]?.entries ?? []
-  const kinds: MemoryEntryKind[] = ["userPrefs", "feedback", "decisions"]
+  const kinds: MemoryEntryKind[] = ["userPrefs", "feedback", "decisions", "reference"]
   return kinds.flatMap((k) => memory.sections[k]?.entries ?? [])
 }

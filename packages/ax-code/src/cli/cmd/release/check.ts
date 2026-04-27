@@ -343,13 +343,7 @@ async function checkBranchSync(ctx: CheckContext): Promise<CheckResult> {
     const behind = Number(parts[0])
     const ahead = Number(parts[1])
     if (!Number.isFinite(behind) || !Number.isFinite(ahead)) {
-      return mkResult(
-        "Branch sync",
-        "branch-sync",
-        "warn",
-        `unexpected rev-list output: ${counts.text().trim()}`,
-        0,
-      )
+      return mkResult("Branch sync", "branch-sync", "warn", `unexpected rev-list output: ${counts.text().trim()}`, 0)
     }
     if (behind > 0) {
       return mkResult(
@@ -420,14 +414,7 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
     // phantom reports for any cross-directory import.
     const lsRes = await git(["ls-files", "--", `${AX_CODE_PKG}/`], { cwd: ctx.repoRoot })
     if (lsRes.exitCode !== 0) {
-      return mkResult(
-        "Phantom imports",
-        "phantom-imports",
-        "fail",
-        "git ls-files failed",
-        0,
-        lsRes.stderr.toString(),
-      )
+      return mkResult("Phantom imports", "phantom-imports", "fail", "git ls-files failed", 0, lsRes.stderr.toString())
     }
     const tracked = new Set(
       lsRes
@@ -437,9 +424,7 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
         .filter((s) => s.length > 0)
         .map((rel) => path.join(ctx.repoRoot, rel)),
     )
-    const sourceFiles = [...tracked].filter(
-      (p) => scanDirs.some((d) => p.startsWith(d)) && /\.(ts|tsx)$/.test(p),
-    )
+    const sourceFiles = [...tracked].filter((p) => scanDirs.some((d) => p.startsWith(d)) && /\.(ts|tsx)$/.test(p))
     const phantoms: { file: string; importPath: string; resolved: string }[] = []
     const importRe = /(?:^|\s)(?:import|export)\s+(?:[^'"`;]+?\s+from\s+)?['"](\.\.?\/[^'"`]+)['"]/g
 
@@ -488,13 +473,7 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
     }
 
     if (phantoms.length === 0) {
-      return mkResult(
-        "Phantom imports",
-        "phantom-imports",
-        "ok",
-        `scanned ${sourceFiles.length} files, no phantoms`,
-        0,
-      )
+      return mkResult("Phantom imports", "phantom-imports", "ok", `scanned ${sourceFiles.length} files, no phantoms`, 0)
     }
     const preview = phantoms
       .slice(0, 3)
@@ -558,7 +537,10 @@ async function checkTests(ctx: CheckContext): Promise<CheckResult> {
     if (res.code === 0) {
       return mkResult("Tests", "tests", "ok", "deterministic group passed", 0)
     }
-    const failures = res.stdout.toString().split("\n").filter((l) => l.includes("(fail)")).length
+    const failures = res.stdout
+      .toString()
+      .split("\n")
+      .filter((l) => l.includes("(fail)")).length
     return mkResult(
       "Tests",
       "tests",
@@ -719,11 +701,7 @@ function renderHuman(results: CheckResult[], noColor: boolean): string {
     .filter(Boolean)
     .join(", ")
   const verdict =
-    failed > 0
-      ? "Not ready to release."
-      : warned > 0
-      ? "Ready, but review warnings above."
-      : "Ready to release."
+    failed > 0 ? "Not ready to release." : warned > 0 ? "Ready, but review warnings above." : "Ready to release."
   lines.push(`  ${summary}. ${verdict}`)
   lines.push("")
   return lines.join("\n")
@@ -777,9 +755,7 @@ export const ReleaseCheckCommand = cmd({
         .filter((s) => s.length > 0)
       const unknownSkips = skipList.filter((id) => !CHECK_IDS.includes(id))
       if (unknownSkips.length > 0) {
-        throw new Error(
-          `Unknown --skip id(s): ${unknownSkips.join(", ")}. Known ids: ${CHECK_IDS.join(", ")}`,
-        )
+        throw new Error(`Unknown --skip id(s): ${unknownSkips.join(", ")}. Known ids: ${CHECK_IDS.join(", ")}`)
       }
       const skip = new Set(skipList)
       const ctx: CheckContext = {

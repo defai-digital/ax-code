@@ -42,10 +42,7 @@ type SetupCliOptions = {
   which?: typeof Bun.which
 }
 
-export function getBunBinDir(
-  env: NodeJS.ProcessEnv = process.env,
-  which: typeof Bun.which = Bun.which,
-): string {
+export function getBunBinDir(env: NodeJS.ProcessEnv = process.env, which: typeof Bun.which = Bun.which): string {
   const bunExe = which("bun")
   if (bunExe) return path.dirname(bunExe)
   const bunPath = env.BUN_INSTALL || path.join(os.homedir(), ".bun")
@@ -67,7 +64,9 @@ export function preferredBundledTarget(input: {
   if (selection.unsupported) throw new Error(selection.unsupported)
   const preferred = selection.names[0]
   if (!preferred) {
-    throw new Error(`Unsupported local bundled target for setup:cli: ${input.platform ?? process.platform} ${input.arch ?? process.arch}`)
+    throw new Error(
+      `Unsupported local bundled target for setup:cli: ${input.platform ?? process.platform} ${input.arch ?? process.arch}`,
+    )
   }
   return {
     binary: selection.binary,
@@ -84,15 +83,7 @@ export function bundledBinaryPath(input: {
   musl?: boolean
 }) {
   const preferred = preferredBundledTarget(input)
-  return path.join(
-    input.root ?? ROOT,
-    "packages",
-    "ax-code",
-    "dist",
-    preferred.legacyName,
-    "bin",
-    preferred.binary,
-  )
+  return path.join(input.root ?? ROOT, "packages", "ax-code", "dist", preferred.legacyName, "bin", preferred.binary)
 }
 
 export function buildChannelForVersion(version: string) {
@@ -146,8 +137,8 @@ export function ensureBundledBinary(input: {
   })
 
   const version =
-    input.version
-    ?? (JSON.parse(fs.readFileSync(path.join(root, "packages", "ax-code", "package.json"), "utf8")).version as string)
+    input.version ??
+    (JSON.parse(fs.readFileSync(path.join(root, "packages", "ax-code", "package.json"), "utf8")).version as string)
   const channel = buildChannelForVersion(version)
   const buildArgs = ["--dir", "packages/ax-code", "run", "build", "--", "--single"]
   if (preferred.legacyName.includes("-baseline")) buildArgs.push("--baseline")
@@ -201,7 +192,9 @@ export function setupCli(input: SetupCliOptions = {}) {
   // Worker-based architectures. Use --bundled to opt into the compiled
   // binary if needed for distribution.
   const bundledMode = args.includes("--bundled")
-  const bundledBinary = bundledMode ? ensureBundledBinary({ root, env, platform, arch, avx2, musl, version, exists, spawnSync, log }) : undefined
+  const bundledBinary = bundledMode
+    ? ensureBundledBinary({ root, env, platform, arch, avx2, musl, version, exists, spawnSync, log })
+    : undefined
   const launcher = bundledMode
     ? {
         unix: bundledLauncherScript({

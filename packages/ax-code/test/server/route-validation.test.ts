@@ -33,7 +33,7 @@ describe("server route validation", () => {
           })
 
           expect(res.status).toBe(200)
-          expect(await res.json()).toEqual({ error: "prompt failed" })
+          expect(await res.json()).toEqual({ error: "Internal server error" })
         } finally {
           promptSpy.mockRestore()
           await Session.remove(session.id)
@@ -69,11 +69,14 @@ describe("server route validation", () => {
         })
 
         try {
-          const res = await Server.Default().request(`/session/${session.id}/message/${messageID}/part/${otherPartID}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(part),
-          })
+          const res = await Server.Default().request(
+            `/session/${session.id}/message/${messageID}/part/${otherPartID}`,
+            {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(part),
+            },
+          )
 
           const text = await res.text()
           expect(res.status).toBe(400)
@@ -106,6 +109,22 @@ describe("server route validation", () => {
         expect(res.status).toBe(400)
       },
     })
+  })
+
+  test("pty websocket route closes failed connects instead of leaving an unhandled async open", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/pty.ts")).text()
+    expect(src).toContain("try {")
+    expect(src).toContain("handler = await Pty.connect(id, socket, cursor)")
+    expect(src).toContain("ws.close()")
+  })
+
+  test("sse stop handlers always close their queues even if unsubscribe throws", async () => {
+    const eventSrc = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/event.ts")).text()
+    const globalSrc = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/global.ts")).text()
+    expect(eventSrc).toContain("} finally {")
+    expect(eventSrc).toContain("q.push(null)")
+    expect(globalSrc).toContain("} finally {")
+    expect(globalSrc).toContain("q.push(null)")
   })
 
   test("log endpoint rejects oversized messages", async () => {

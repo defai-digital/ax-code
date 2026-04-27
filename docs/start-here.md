@@ -83,12 +83,12 @@ ax-code doctor
 
 ## Doc Map
 
-| Topic | Start here |
-| ----- | ---------- |
-| Product overview | [Start Here](start-here.md) |
-| Sandbox and permissions | [Sandbox Mode](sandbox.md) |
-| Unattended execution | [Autonomous Mode](autonomous.md) |
-| Smarter routing | [Auto-Route](auto-route.md) |
-| SDK embedding | [`@ax-code/sdk`](../packages/sdk/js/README.md) |
-| VS Code integration | [VS Code integration](../packages/integration-vscode/README.md) |
-| Architecture | [Semantic Layer](architecture/semantic-layer.md) |
+| Topic                   | Start here                                                      |
+| ----------------------- | --------------------------------------------------------------- |
+| Product overview        | [Start Here](start-here.md)                                     |
+| Sandbox and permissions | [Sandbox Mode](sandbox.md)                                      |
+| Unattended execution    | [Autonomous Mode](autonomous.md)                                |
+| Smarter routing         | [Auto-Route](auto-route.md)                                     |
+| SDK embedding           | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  |
+| VS Code integration     | [VS Code integration](../packages/integration-vscode/README.md) |
+| Architecture            | [Semantic Layer](architecture/semantic-layer.md)                |

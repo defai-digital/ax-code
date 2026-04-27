@@ -246,9 +246,9 @@ describe("tool.code_intelligence", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await CodeIntelligenceTool.init()
-        await expect(
-          tool.execute({ operation: "findReferences" } as never, ctx),
-        ).rejects.toThrow("findReferences requires `symbolID`")
+        await expect(tool.execute({ operation: "findReferences" } as never, ctx)).rejects.toThrow(
+          "findReferences requires `symbolID`",
+        )
       },
     })
   })

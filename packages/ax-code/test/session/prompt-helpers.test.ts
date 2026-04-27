@@ -296,6 +296,130 @@ describe("session.prompt helpers", () => {
     expect(result).toEqual(["env", "<project-memory>...</project-memory>", "skills", "rules"])
   })
 
+  test("skills cache survives non-file-tool messages and re-runs on a new file-tool call", async () => {
+    // The skills section only changes when a new file-tool call enters the
+    // conversation. Previously the cache keyed on raw msgCount and re-ran
+    // skillsFn (which walks the full message history) on every loop step.
+    const cache = {}
+    let calls = 0
+    const skillsFn = async () => {
+      calls++
+      return `skills-${calls}`
+    }
+
+    const env = async () => ["env"]
+    const instr = async () => ["rules"]
+    const memory = async () => undefined
+
+    const userMsg = (id: string) =>
+      ({
+        info: { id, sessionID: "s1", role: "user" as const },
+        parts: [{ type: "text" as const, text: "hi" }],
+      }) as any
+
+    const fileToolMsg = (id: string) =>
+      ({
+        info: { id, sessionID: "s1", role: "assistant" as const },
+        parts: [
+          {
+            type: "tool" as const,
+            callID: `c-${id}`,
+            tool: "read",
+            state: {
+              status: "completed" as const,
+              input: { filePath: "/tmp/x.ts" },
+              output: "",
+              title: "Read",
+              metadata: {},
+              time: { start: 1, end: 2 },
+            },
+          },
+        ],
+      }) as any
+
+    const bashToolMsg = (id: string) =>
+      ({
+        info: { id, sessionID: "s1", role: "assistant" as const },
+        parts: [
+          {
+            type: "tool" as const,
+            callID: `c-${id}`,
+            tool: "bash",
+            state: {
+              status: "completed" as const,
+              input: { command: "ls" },
+              output: "",
+              title: "Run bash",
+              metadata: {},
+              time: { start: 1, end: 2 },
+            },
+          },
+        ],
+      }) as any
+
+    const args = (messages: any[]) => ({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" } as { type: string },
+      cache,
+      skills: skillsFn,
+      environment: env,
+      instructions: instr,
+      memory,
+      messages,
+    })
+
+    // Step 1: first call → recompute (cache empty)
+    await systemPrompt(args([userMsg("m1")]))
+    expect(calls).toBe(1)
+
+    // Step 2: new user + non-file tool message → cache hit (no file-tool call added)
+    await systemPrompt(args([userMsg("m1"), userMsg("m2"), bashToolMsg("m3")]))
+    expect(calls).toBe(1)
+
+    // Step 3: new file-tool message → cache miss, recompute
+    await systemPrompt(args([userMsg("m1"), userMsg("m2"), bashToolMsg("m3"), fileToolMsg("m4")]))
+    expect(calls).toBe(2)
+
+    // Step 4: another non-file message → cache hit again
+    await systemPrompt(args([userMsg("m1"), userMsg("m2"), bashToolMsg("m3"), fileToolMsg("m4"), userMsg("m5")]))
+    expect(calls).toBe(2)
+  })
+
+  test("skills cache invalidates when message history is truncated (compaction)", async () => {
+    const cache = {}
+    let calls = 0
+    const skillsFn = async () => {
+      calls++
+      return `skills-${calls}`
+    }
+    const args = (messages: any[]) => ({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" } as { type: string },
+      cache,
+      skills: skillsFn,
+      environment: async () => ["env"],
+      instructions: async () => ["rules"],
+      memory: async () => undefined,
+      messages,
+    })
+
+    const msg = (id: string) =>
+      ({
+        info: { id, sessionID: "s1", role: "user" as const },
+        parts: [{ type: "text" as const, text: "hi" }],
+      }) as any
+
+    await systemPrompt(args([msg("m1"), msg("m2"), msg("m3")]))
+    expect(calls).toBe(1)
+
+    // Compaction replaces the prefix — the previous skillsLastMsgID ("m3") is
+    // no longer in the message list. Must recompute to avoid stale state.
+    await systemPrompt(args([msg("m4"), msg("m5")]))
+    expect(calls).toBe(2)
+  })
+
   test("memory is loaded fresh on every call (no staleness when user records mid-session)", async () => {
     const cache = {}
     let memoryContent = "v1"

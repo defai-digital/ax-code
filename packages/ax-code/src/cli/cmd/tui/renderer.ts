@@ -110,7 +110,10 @@ export function setTuiTerminalTitle(
   return true
 }
 
-export function clearTuiTerminalTitle(renderer: TuiTerminalTitleRenderer, profile: TuiRenderProfile = getTuiRenderProfile()) {
+export function clearTuiTerminalTitle(
+  renderer: TuiTerminalTitleRenderer,
+  profile: TuiRenderProfile = getTuiRenderProfile(),
+) {
   return setTuiTerminalTitle(renderer, "", profile)
 }
 

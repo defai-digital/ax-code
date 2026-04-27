@@ -231,9 +231,7 @@ describe("replay with code intelligence queries", () => {
         const auditRecords = [...AuditExport.stream(sid)].map((line) => JSON.parse(line))
         const snapshotRecord = auditRecords.find((r) => r.event_type === "code.graph.snapshot")
         const routeRecord = auditRecords.find((r) => r.event_type === "agent.route")
-        const toolCallRecord = auditRecords.find(
-          (r) => r.event_type === "tool.call" && r.tool === "code_intelligence",
-        )
+        const toolCallRecord = auditRecords.find((r) => r.event_type === "tool.call" && r.tool === "code_intelligence")
         const toolResultRecord = auditRecords.find(
           (r) => r.event_type === "tool.result" && r.tool === "code_intelligence",
         )

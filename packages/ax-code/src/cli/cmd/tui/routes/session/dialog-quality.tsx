@@ -37,7 +37,8 @@ export function DialogQuality(props: { sessionID: string; setPrompt: (prompt: Pr
         {
           title: "No quality readiness available",
           value: "empty",
-          description: "Replay readiness appears after session risk sync finishes or after workflow evidence is recorded.",
+          description:
+            "Replay readiness appears after session risk sync finishes or after workflow evidence is recorded.",
           category: "Overview",
           disabled: true,
         },
@@ -86,7 +87,8 @@ export function DialogQualityDetail(props: {
       workflow: props.workflow,
       kind: props.kind,
       quality: sync.session.risk(props.sessionID)?.quality,
-    }))
+    }),
+  )
 
   const options = createMemo((): DialogSelectOption<string>[] => {
     const current = action()
@@ -107,7 +109,7 @@ export function DialogQualityDetail(props: {
                 message: error instanceof Error ? error.message : "Failed to refresh quality readiness",
                 variant: "error",
               })
-          })
+            })
         },
       },
       {

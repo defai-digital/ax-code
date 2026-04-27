@@ -126,6 +126,8 @@ import type {
   SessionBranchRankResponses,
   SessionChildrenErrors,
   SessionChildrenResponses,
+  SessionCommandAsyncErrors,
+  SessionCommandAsyncResponses,
   SessionCommandErrors,
   SessionCommandResponses,
   SessionCompareErrors,
@@ -165,6 +167,8 @@ import type {
   SessionSemanticDiffResponses,
   SessionShareErrors,
   SessionShareResponses,
+  SessionShellAsyncErrors,
+  SessionShellAsyncResponses,
   SessionShellErrors,
   SessionShellResponses,
   SessionStatusErrors,
@@ -190,8 +194,6 @@ import type {
   TuiAppendPromptErrors,
   TuiAppendPromptResponses,
   TuiClearPromptResponses,
-  TuiControlNextResponses,
-  TuiControlResponseResponses,
   TuiExecuteCommandErrors,
   TuiExecuteCommandResponses,
   TuiOpenHelpResponses,
@@ -1546,12 +1548,15 @@ export class Session2 extends HeyApiClient {
   /**
    * Get session risk detail
    *
-   * Return the explainable risk assessment, breakdown, and semantic change summary for a session.
+   * Return the explainable risk assessment, breakdown, and semantic change summary for a session. Optionally include replay readiness for review/debug/qa workflows.
    */
   public risk<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
+      quality?: boolean
+      findings?: boolean
+      envelopes?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1562,6 +1567,9 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "quality" },
+            { in: "query", key: "findings" },
+            { in: "query", key: "envelopes" },
           ],
         },
       ],
@@ -2167,6 +2175,64 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Send async command
+   *
+   * Queue a command for a session and return immediately after it is accepted.
+   */
+  public commandAsync<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      messageID?: string
+      agent?: string
+      model?: string
+      arguments?: string
+      command?: string
+      variant?: string
+      parts?: Array<{
+        id?: string
+        type: "file"
+        mime: string
+        filename?: string
+        url: string
+        source?: FilePartSource
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "messageID" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "model" },
+            { in: "body", key: "arguments" },
+            { in: "body", key: "command" },
+            { in: "body", key: "variant" },
+            { in: "body", key: "parts" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionCommandAsyncResponses, SessionCommandAsyncErrors, ThrowOnError>(
+      {
+        url: "/session/{sessionID}/command_async",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
    * Send command
    *
    * Send a new command to a session for execution by the AI assistant.
@@ -2212,6 +2278,50 @@ export class Session2 extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<SessionCommandResponses, SessionCommandErrors, ThrowOnError>({
       url: "/session/{sessionID}/command",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Run async shell command
+   *
+   * Queue a shell command for a session and return immediately after it is accepted.
+   */
+  public shellAsync<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      agent?: string
+      model?: {
+        providerID: string
+        modelID: string
+      }
+      command?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "model" },
+            { in: "body", key: "command" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionShellAsyncResponses, SessionShellAsyncErrors, ThrowOnError>({
+      url: "/session/{sessionID}/shell_async",
       ...options,
       ...params,
       headers: {
@@ -2648,7 +2758,7 @@ export class Graph extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      format?: "ascii" | "json" | "mermaid" | "markdown" | "timeline" | "topology"
+      format?: "ascii" | "json" | "mermaid" | "gantt" | "svggantt" | "markdown" | "timeline" | "topology"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3345,62 +3455,6 @@ export class Mcp extends HeyApiClient {
   }
 }
 
-export class Control extends HeyApiClient {
-  /**
-   * Get next TUI request
-   *
-   * Retrieve the next TUI (Terminal User Interface) request from the queue for processing.
-   */
-  public next<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<TuiControlNextResponses, unknown, ThrowOnError>({
-      url: "/tui/control/next",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Submit TUI response
-   *
-   * Submit a response to the TUI request queue to complete a pending request.
-   */
-  public response<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      body?: unknown
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { key: "body", map: "body" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiControlResponseResponses, unknown, ThrowOnError>({
-      url: "/tui/control/response",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
 export class Tui extends HeyApiClient {
   /**
    * Append TUI prompt
@@ -3695,11 +3749,6 @@ export class Tui extends HeyApiClient {
         ...params.headers,
       },
     })
-  }
-
-  private _control?: Control
-  get control(): Control {
-    return (this._control ??= new Control({ client: this.client }))
   }
 }
 
@@ -4056,6 +4105,7 @@ export class OpencodeClient extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      quality?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4066,6 +4116,7 @@ export class OpencodeClient extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "quality" },
           ],
         },
       ],
@@ -4081,6 +4132,7 @@ export class OpencodeClient extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      quality?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4091,6 +4143,7 @@ export class OpencodeClient extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "quality" },
           ],
         },
       ],

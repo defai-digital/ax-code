@@ -178,6 +178,7 @@ export const PtyRoutes = lazy(() =>
 
         const pending: string[] = []
         let ready = false
+        let closed = false
 
         return {
           async onOpen(_event, ws) {
@@ -186,10 +187,19 @@ export const PtyRoutes = lazy(() =>
               ws.close()
               return
             }
-            handler = await Pty.connect(id, socket, cursor)
-            ready = true
-            for (const msg of pending) handler?.onMessage(msg)
-            pending.length = 0
+            try {
+              handler = await Pty.connect(id, socket, cursor)
+              if (closed) {
+                handler?.onClose()
+                return
+              }
+              ready = true
+              for (const msg of pending) handler?.onMessage(msg)
+              pending.length = 0
+            } catch {
+              pending.length = 0
+              ws.close()
+            }
           },
           onMessage(event) {
             if (typeof event.data !== "string") return
@@ -200,9 +210,11 @@ export const PtyRoutes = lazy(() =>
             handler?.onMessage(event.data)
           },
           onClose() {
+            closed = true
             handler?.onClose()
           },
           onError() {
+            closed = true
             handler?.onClose()
           },
         }

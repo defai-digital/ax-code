@@ -473,6 +473,20 @@ async function getUserPrompt() {
     if (!url) continue
     const filename = path.basename(url)
 
+    // Only download images from known GitHub CDN hosts to prevent SSRF
+    let parsedUrl: URL
+    try {
+      parsedUrl = new URL(url)
+    } catch {
+      console.error(`Skipping invalid image URL: ${url}`)
+      continue
+    }
+    const allowedHosts = ["githubusercontent.com", "github.com", "avatars.githubusercontent.com"]
+    if (!allowedHosts.some((h) => parsedUrl.hostname === h || parsedUrl.hostname.endsWith("." + h))) {
+      console.error(`Skipping image URL from non-GitHub host: ${parsedUrl.hostname}`)
+      continue
+    }
+
     // Download image
     const res = await fetch(url, {
       headers: {

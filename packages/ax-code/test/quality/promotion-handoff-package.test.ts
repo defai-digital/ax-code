@@ -128,13 +128,62 @@ function benchmarkBundle(): QualityCalibrationModel.BenchmarkBundle {
         candidateMissingPredictionItems: 0,
       },
       metrics: {
-        precision: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        recall: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        falsePositiveRate: { baseline: null, candidate: null, delta: null, direction: "lower_is_better", improvement: false, regression: false },
-        falseNegativeRate: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
-        precisionAt1: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        precisionAt3: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        calibrationError: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
+        precision: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        recall: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falsePositiveRate: {
+          baseline: null,
+          candidate: null,
+          delta: null,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falseNegativeRate: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt1: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt3: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        calibrationError: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
       },
       gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
     },
@@ -367,7 +416,9 @@ describe("QualityPromotionHandoffPackage", () => {
       expect(listed).toHaveLength(1)
       expect(listed[0]?.packageID).toBe(packet.packageID)
       expect(listed[0]?.summary.documentCount).toBe(11)
-      expect(listed[0]?.archiveManifest.exportBundle.auditManifest.promotion.promotionID).toBe("promo_handoff_package_1")
+      expect(listed[0]?.archiveManifest.exportBundle.auditManifest.promotion.promotionID).toBe(
+        "promo_handoff_package_1",
+      )
     } finally {
       await clearHandoffPackages()
     }

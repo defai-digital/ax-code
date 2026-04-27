@@ -263,8 +263,10 @@ export namespace ReplayCompare {
       .sort((a, b) => {
         if (b.decision.total !== a.decision.total) return b.decision.total - a.decision.total
         if (a.risk.score !== b.risk.score) return a.risk.score - b.risk.score
-        if (semanticRisk(a.semantic) !== semanticRisk(b.semantic)) return semanticRisk(a.semantic) - semanticRisk(b.semantic)
-        if (semanticCost(a.semantic) !== semanticCost(b.semantic)) return semanticCost(a.semantic) - semanticCost(b.semantic)
+        if (semanticRisk(a.semantic) !== semanticRisk(b.semantic))
+          return semanticRisk(a.semantic) - semanticRisk(b.semantic)
+        if (semanticCost(a.semantic) !== semanticCost(b.semantic))
+          return semanticCost(a.semantic) - semanticCost(b.semantic)
         const av =
           a.risk.signals.validationState === "passed"
             ? 2
@@ -376,11 +378,17 @@ export namespace ReplayCompare {
 
     const semanticGap = Math.abs(semanticRisk(input.semanticA) - semanticRisk(input.semanticB))
     if (semanticGap > 0)
-      vote(semanticRisk(input.semanticA) < semanticRisk(input.semanticB) ? "A" : "B", semanticGap >= 2 ? 2 : 1, "lower semantic change risk")
+      vote(
+        semanticRisk(input.semanticA) < semanticRisk(input.semanticB) ? "A" : "B",
+        semanticGap >= 2 ? 2 : 1,
+        "lower semantic change risk",
+      )
 
     if (input.semanticA?.primary !== input.semanticB?.primary) {
-      if (input.semanticA?.primary === "rewrite" && input.semanticB?.primary !== "rewrite") vote("B", 2, "avoids a broad rewrite")
-      if (input.semanticB?.primary === "rewrite" && input.semanticA?.primary !== "rewrite") vote("A", 2, "avoids a broad rewrite")
+      if (input.semanticA?.primary === "rewrite" && input.semanticB?.primary !== "rewrite")
+        vote("B", 2, "avoids a broad rewrite")
+      if (input.semanticB?.primary === "rewrite" && input.semanticA?.primary !== "rewrite")
+        vote("A", 2, "avoids a broad rewrite")
     }
 
     if (input.deepA && input.deepB) {

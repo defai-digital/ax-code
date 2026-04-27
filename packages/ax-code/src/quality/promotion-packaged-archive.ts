@@ -28,11 +28,13 @@ export namespace QualityPromotionPackagedArchive {
     entryCount: z.number().int().positive(),
     fileCount: z.number().int().positive(),
     previousActiveSource: z.string().nullable(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ArchiveSummary = z.output<typeof ArchiveSummary>
 
@@ -88,18 +90,26 @@ export namespace QualityPromotionPackagedArchive {
     promotion: QualityPromotionPortableExport.ExportArtifact["handoffPackage"]["archiveManifest"]["exportBundle"]["auditManifest"]["promotion"],
     archive: ArchiveArtifact,
   ) {
-    return archive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID === promotion.promotionID
-      && archive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.source === promotion.source
+    return (
+      archive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID ===
+        promotion.promotionID &&
+      archive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.source ===
+        promotion.source
+    )
   }
 
   function buildEntries(portableExport: QualityPromotionPortableExport.ExportArtifact) {
-    return sortEntries(Entry.array().parse(portableExport.files.map((file) => ({
-      path: file.path,
-      format: file.format,
-      encoding: "utf8",
-      contentDigest: file.contentDigest,
-      content: file.content,
-    }))))
+    return sortEntries(
+      Entry.array().parse(
+        portableExport.files.map((file) => ({
+          path: file.path,
+          format: file.format,
+          encoding: "utf8",
+          contentDigest: file.contentDigest,
+          content: file.content,
+        })),
+      ),
+    )
   }
 
   function computePackageDigest(entries: Entry[]) {
@@ -154,12 +164,12 @@ export namespace QualityPromotionPackagedArchive {
     })
   }
 
-  export function create(input: {
-    portableExport: QualityPromotionPortableExport.ExportArtifact
-  }) {
+  export function create(input: { portableExport: QualityPromotionPortableExport.ExportArtifact }) {
     const exportReasons = QualityPromotionPortableExport.verify(input.portableExport)
     if (exportReasons.length > 0) {
-      throw new Error(`Cannot create packaged archive for ${input.portableExport.source}: invalid portable export (${exportReasons[0]})`)
+      throw new Error(
+        `Cannot create packaged archive for ${input.portableExport.source}: invalid portable export (${exportReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const archiveID = `${input.portableExport.exportID}-packaged-archive`
@@ -233,7 +243,9 @@ export namespace QualityPromotionPackagedArchive {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion packaged archive ${archive.archiveID} already exists for source ${archive.source} with different content`)
+      throw new Error(
+        `Promotion packaged archive ${archive.archiveID} already exists for source ${archive.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(archive.source, archive.archiveID), next)
@@ -242,7 +254,9 @@ export namespace QualityPromotionPackagedArchive {
   }
 
   export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_packaged_archive", encode(source)]] : [["quality_model_packaged_archive"]]
+    const prefixes = source
+      ? [["quality_model_packaged_archive", encode(source)]]
+      : [["quality_model_packaged_archive"]]
     const archives: ArchiveArtifact[] = []
 
     for (const prefix of prefixes) {
@@ -309,7 +323,9 @@ export namespace QualityPromotionPackagedArchive {
     lines.push(`- archive id: ${archive.archiveID}`)
     lines.push(`- created at: ${archive.createdAt}`)
     lines.push(`- portable export id: ${archive.portableExport.exportID}`)
-    lines.push(`- promotion id: ${archive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID}`)
+    lines.push(
+      `- promotion id: ${archive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID}`,
+    )
     lines.push(`- promotion mode: ${archive.summary.promotionMode}`)
     lines.push(`- authorized promotion: ${archive.summary.authorizedPromotion}`)
     lines.push(`- package digest: ${archive.packageDigest}`)

@@ -425,7 +425,6 @@ export namespace MessageV2 {
       cwd: z.string(),
       root: z.string(),
     }),
-    cost: z.number().optional(),
     summary: z.boolean().optional(),
     tokens: z.object({
       total: z.number().optional(),
@@ -995,7 +994,8 @@ export namespace MessageV2 {
     if (code === "EAI_AGAIN") return "DNS resolution temporarily failed"
     const msg = e instanceof Error ? e.message : String(e)
     if (msg.includes("SSE read timed out")) return "Stream stalled — no data received (possible network interruption)"
-    if (msg.includes("Stream ended without finish event")) return "Stream terminated prematurely — possible network interruption"
+    if (msg.includes("Stream ended without finish event"))
+      return "Stream terminated prematurely — possible network interruption"
     return `Network error: ${msg}`
   }
 

@@ -5,15 +5,15 @@
  * renders markdown with syntax-highlighted code blocks.
  */
 
-import * as vscode from "vscode";
-import { spawn, type ChildProcess } from "node:child_process";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
-import { marked } from "marked";
+import * as vscode from "vscode"
+import { spawn, type ChildProcess } from "node:child_process"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { marked } from "marked"
 
-const STATE_SESSION_ID = "axCode.sessionId";
-const STATE_SELECTED_MODEL = "axCode.selectedModel";
+const STATE_SESSION_ID = "axCode.sessionId"
+const STATE_SELECTED_MODEL = "axCode.selectedModel"
 
 interface SessionInfo {
   id: string
@@ -30,8 +30,10 @@ interface EventStreamHandle {
 }
 
 function enrichPath(existing: string): string {
-  if (process.platform === "win32") {return existing;}
-  const home = os.homedir();
+  if (process.platform === "win32") {
+    return existing
+  }
+  const home = os.homedir()
   const extras = [
     path.join(home, ".bun", "bin"),
     path.join(home, ".local", "bin"),
@@ -39,111 +41,113 @@ function enrichPath(existing: string): string {
     "/usr/local/bin",
     "/usr/bin",
     "/bin",
-  ];
-  const parts = existing ? existing.split(":") : [];
+  ]
+  const parts = existing ? existing.split(":") : []
   for (const p of extras) {
-    if (!parts.includes(p)) {parts.push(p);}
+    if (!parts.includes(p)) {
+      parts.push(p)
+    }
   }
-  return parts.join(":");
+  return parts.join(":")
 }
 
 function getConfig() {
-  const cfg = vscode.workspace.getConfiguration("axCode");
+  const cfg = vscode.workspace.getConfiguration("axCode")
   return {
     binaryPath: cfg.get<string>("binaryPath", "").trim(),
     serverTimeoutMs: cfg.get<number>("serverTimeoutMs", 90000),
     requestTimeoutMs: cfg.get<number>("requestTimeoutMs", 600000),
     defaultModel: cfg.get<string>("defaultModel", "").trim(),
-  };
+  }
 }
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-  private webviewView?: vscode.WebviewView;
-  private serverProcess: ChildProcess | null = null;
-  private selectedModel: SelectedModel | null = null;
-  private serverUrl: string | null = null;
-  private sessionId: string | null = null;
-  private isProcessing = false;
-  private startServerPromise: Promise<void> | null = null;
-  private activeController: AbortController | null = null;
-  private activeCancelReason: "user-cancel-stop" | "user-cancel-clear" | null = null;
-  private eventStream: EventStreamHandle | null = null;
-  private currentAssistantMessageId: string | null = null;
+  private webviewView?: vscode.WebviewView
+  private serverProcess: ChildProcess | null = null
+  private selectedModel: SelectedModel | null = null
+  private serverUrl: string | null = null
+  private sessionId: string | null = null
+  private isProcessing = false
+  private startServerPromise: Promise<void> | null = null
+  private activeController: AbortController | null = null
+  private activeCancelReason: "user-cancel-stop" | "user-cancel-clear" | null = null
+  private eventStream: EventStreamHandle | null = null
+  private currentAssistantMessageId: string | null = null
   // Tracks streaming text accumulated from message.part.delta per part id.
   // Entries expire lazily — we keep the last ~64 to bound memory without
   // racing finally/teardown against trailing deltas.
-  private streamingParts = new Map<string, string>();
+  private streamingParts = new Map<string, string>()
   // Throttle state: pending render for a part, last-flushed timestamp.
-  private streamFlushTimers = new Map<string, NodeJS.Timeout>();
-  private streamLastFlush = new Map<string, number>();
-  private readonly STREAM_FLUSH_INTERVAL_MS = 60;
-  private sessionValidated = false;
+  private streamFlushTimers = new Map<string, NodeJS.Timeout>()
+  private streamLastFlush = new Map<string, number>()
+  private readonly STREAM_FLUSH_INTERVAL_MS = 60
+  private sessionValidated = false
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    const storedModel = context.workspaceState.get<SelectedModel>(STATE_SELECTED_MODEL);
+    const storedModel = context.workspaceState.get<SelectedModel>(STATE_SELECTED_MODEL)
     if (storedModel) {
-      this.selectedModel = storedModel;
+      this.selectedModel = storedModel
     } else {
-      const fallback = getConfig().defaultModel;
+      const fallback = getConfig().defaultModel
       if (fallback.includes("/")) {
-        const [providerID, ...rest] = fallback.split("/");
-        this.selectedModel = { providerID, modelID: rest.join("/") };
+        const [providerID, ...rest] = fallback.split("/")
+        this.selectedModel = { providerID, modelID: rest.join("/") }
       }
     }
-    this.sessionId = context.workspaceState.get<string>(STATE_SESSION_ID) ?? null;
+    this.sessionId = context.workspaceState.get<string>(STATE_SESSION_ID) ?? null
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
-    this.webviewView = webviewView;
+    this.webviewView = webviewView
 
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [this.context.extensionUri],
-    };
+    }
 
-    webviewView.webview.html = this.getHtml();
+    webviewView.webview.html = this.getHtml()
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.type) {
         case "ready":
-          this.postInitialState();
-          break;
+          this.postInitialState()
+          break
         case "send":
-          await this.handleUserMessage(message.text);
-          break;
+          await this.handleUserMessage(message.text)
+          break
         case "clear":
-          await this.handleClear();
-          break;
+          await this.handleClear()
+          break
         case "stop":
-          await this.handleStop();
-          break;
+          await this.handleStop()
+          break
         case "selectModel":
-          await this.handleSelectModel();
-          break;
+          await this.handleSelectModel()
+          break
       }
-    });
+    })
 
     webviewView.onDidDispose(() => {
-      this.stopEventStream();
-      this.stopServer();
-    });
+      this.stopEventStream()
+      this.stopServer()
+    })
   }
 
   async sendMessage(text: string) {
     if (!this.webviewView) {
-      await vscode.commands.executeCommand("ax-code.chatView.focus");
-      const start = Date.now();
+      await vscode.commands.executeCommand("ax-code.chatView.focus")
+      const start = Date.now()
       while (!this.webviewView && Date.now() - start < 3000) {
-        await new Promise((r) => setTimeout(r, 50));
+        await new Promise((r) => setTimeout(r, 50))
       }
       if (!this.webviewView) {
-        vscode.window.showErrorMessage("ax-code chat view failed to open");
-        return;
+        vscode.window.showErrorMessage("ax-code chat view failed to open")
+        return
       }
     }
-    this.webviewView.show(true);
-    this.postMessage({ type: "userMessage", text });
-    await this.handleUserMessage(text);
+    this.webviewView.show(true)
+    this.postMessage({ type: "userMessage", text })
+    await this.handleUserMessage(text)
   }
 
   private postInitialState() {
@@ -151,36 +155,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.postMessage({
         type: "modelSelected",
         model: `${this.selectedModel.providerID}/${this.selectedModel.modelID}`,
-      });
+      })
     }
   }
 
   private async handleUserMessage(text: string) {
     if (this.isProcessing) {
-      vscode.window.showWarningMessage("ax-code is still processing...");
-      return;
+      vscode.window.showWarningMessage("ax-code is still processing...")
+      return
     }
 
-    this.isProcessing = true;
-    this.currentAssistantMessageId = null;
-    this.activeCancelReason = null;
-    this.postMessage({ type: "status", status: "thinking" });
+    this.isProcessing = true
+    this.currentAssistantMessageId = null
+    this.activeCancelReason = null
+    this.postMessage({ type: "status", status: "thinking" })
 
     try {
       if (!this.serverUrl) {
-        this.postMessage({ type: "status", status: "initializing" });
-        await this.startServer();
+        this.postMessage({ type: "status", status: "initializing" })
+        await this.startServer()
       }
 
-      await this.ensureEventStream();
+      await this.ensureEventStream()
 
-      const controller = new AbortController();
-      this.activeController = controller;
+      const controller = new AbortController()
+      this.activeController = controller
 
-      await this.ensureSession(controller.signal);
+      await this.ensureSession(controller.signal)
 
-      const { requestTimeoutMs } = getConfig();
-      const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
+      const { requestTimeoutMs } = getConfig()
+      const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs)
 
       try {
         const response = await fetch(`${this.serverUrl}/session/${this.sessionId}/message`, {
@@ -194,52 +198,52 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             ...(this.selectedModel ? { model: this.selectedModel } : {}),
           }),
           signal: controller.signal,
-        });
+        })
 
-        clearTimeout(timeoutId);
+        clearTimeout(timeoutId)
 
-        const responseText = await response.text();
+        const responseText = await response.text()
         if (!response.ok) {
           this.postMessage({
             type: "error",
             message: `Server error ${response.status}: ${responseText.slice(0, 300) || response.statusText}`,
-          });
-          return;
+          })
+          return
         }
 
         // Streaming happens via SSE. The POST response arrives only once the
         // turn is finished; we use it for final agent/tokens metadata.
         if (!responseText) {
-          this.postMessage({ type: "done", text: "", agent: "build", tokens: 0 });
-          return;
+          this.postMessage({ type: "done", text: "", agent: "build", tokens: 0 })
+          return
         }
 
-        let result: any;
+        let result: any
         try {
-          result = JSON.parse(responseText);
+          result = JSON.parse(responseText)
         } catch {
-          this.postMessage({ type: "error", message: `Invalid JSON: ${responseText.slice(0, 200)}` });
-          return;
+          this.postMessage({ type: "error", message: `Invalid JSON: ${responseText.slice(0, 200)}` })
+          return
         }
-        const info = result?.info;
-        const parts = result?.parts ?? [];
-        const textPart = parts.findLast((p: any) => p.type === "text" && p.text);
-        const finalText = textPart?.text ?? "";
-        const agent = info?.agent ?? "build";
-        const tokens = info?.tokens?.total ?? 0;
-        this.postMessage({ type: "done", text: finalText, agent, tokens, html: this.renderMarkdown(finalText) });
+        const info = result?.info
+        const parts = result?.parts ?? []
+        const textPart = parts.findLast((p: any) => p.type === "text" && p.text)
+        const finalText = textPart?.text ?? ""
+        const agent = info?.agent ?? "build"
+        const tokens = info?.tokens?.total ?? 0
+        this.postMessage({ type: "done", text: finalText, agent, tokens, html: this.renderMarkdown(finalText) })
       } catch (e: any) {
-        clearTimeout(timeoutId);
+        clearTimeout(timeoutId)
         if (e.name === "AbortError") {
           if (this.activeCancelReason === "user-cancel-clear") {
             // Webview already showed the 'Chat cleared' status; suppress duplicate error.
           } else if (this.activeCancelReason === "user-cancel-stop") {
-            this.postMessage({ type: "error", message: "Cancelled" });
+            this.postMessage({ type: "error", message: "Cancelled" })
           } else {
-            this.postMessage({ type: "error", message: "Request timed out." });
+            this.postMessage({ type: "error", message: "Request timed out." })
           }
         } else {
-          throw e;
+          throw e
         }
       }
     } catch (error: any) {
@@ -250,67 +254,69 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (this.activeCancelReason === "user-cancel-clear") {
           // Suppressed — webview already rendered 'Chat cleared'.
         } else if (this.activeCancelReason === "user-cancel-stop") {
-          this.postMessage({ type: "error", message: "Cancelled" });
+          this.postMessage({ type: "error", message: "Cancelled" })
         } else {
-          this.postMessage({ type: "error", message: "Request timed out." });
+          this.postMessage({ type: "error", message: "Request timed out." })
         }
       } else {
-        this.postMessage({ type: "error", message: error?.message ?? "Unknown error" });
+        this.postMessage({ type: "error", message: error?.message ?? "Unknown error" })
       }
     } finally {
-      this.activeController = null;
-      this.activeCancelReason = null;
-      this.isProcessing = false;
-      this.currentAssistantMessageId = null;
+      this.activeController = null
+      this.activeCancelReason = null
+      this.isProcessing = false
+      this.currentAssistantMessageId = null
       // Bound the streaming map rather than clearing — late deltas that arrive
       // after 'done' won't lose their accumulator mid-stream.
       if (this.streamingParts.size > 128) {
-        const keys = Array.from(this.streamingParts.keys()).slice(0, this.streamingParts.size - 64);
-        for (const k of keys) {this.streamingParts.delete(k);}
+        const keys = Array.from(this.streamingParts.keys()).slice(0, this.streamingParts.size - 64)
+        for (const k of keys) {
+          this.streamingParts.delete(k)
+        }
       }
-      this.postMessage({ type: "status", status: "idle" });
+      this.postMessage({ type: "status", status: "idle" })
     }
   }
 
   private async ensureSession(signal: AbortSignal): Promise<void> {
     if (this.sessionId && !this.sessionValidated) {
       try {
-        await this.apiCall("GET", `/session/${this.sessionId}`, undefined, signal);
-        this.sessionValidated = true;
+        await this.apiCall("GET", `/session/${this.sessionId}`, undefined, signal)
+        this.sessionValidated = true
       } catch {
         // Stale ID from a previous server instance — drop it.
-        this.sessionId = null;
-        await this.context.workspaceState.update(STATE_SESSION_ID, undefined);
+        this.sessionId = null
+        await this.context.workspaceState.update(STATE_SESSION_ID, undefined)
       }
     }
     if (!this.sessionId) {
-      const session = await this.apiCall<SessionInfo>("POST", "/session", undefined, signal);
-      this.sessionId = session.id;
-      this.sessionValidated = true;
-      await this.context.workspaceState.update(STATE_SESSION_ID, this.sessionId);
+      const session = await this.apiCall<SessionInfo>("POST", "/session", undefined, signal)
+      this.sessionId = session.id
+      this.sessionValidated = true
+      await this.context.workspaceState.update(STATE_SESSION_ID, this.sessionId)
     }
   }
 
   private async handleClear() {
-    this.activeCancelReason = "user-cancel-clear";
-    this.activeController?.abort("user-cancel-clear");
+    this.activeCancelReason = "user-cancel-clear"
+    this.activeController?.abort("user-cancel-clear")
     if (this.sessionId && this.serverUrl) {
       try {
-        await this.apiCall("POST", `/session/${this.sessionId}/abort`);
+        await this.apiCall("POST", `/session/${this.sessionId}/abort`)
       } catch {}
     }
-    this.sessionId = null;
-    this.sessionValidated = false;
-    await this.context.workspaceState.update(STATE_SESSION_ID, undefined);
-    this.postMessage({ type: "cleared" });
+    this.sessionId = null
+    this.sessionValidated = false
+    await this.context.workspaceState.update(STATE_SESSION_ID, undefined)
+    this.postMessage({ type: "cleared" })
   }
 
   private async handleStop() {
-    this.activeCancelReason = "user-cancel-stop";
-    this.activeController?.abort("user-cancel-stop");
+    this.activeCancelReason = "user-cancel-stop"
+    this.activeController?.abort("user-cancel-stop")
     if (this.sessionId && this.serverUrl) {
       try {
-        await this.apiCall("POST", `/session/${this.sessionId}/abort`);
+        await this.apiCall("POST", `/session/${this.sessionId}/abort`)
       } catch {}
     }
   }
@@ -318,28 +324,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private async handleSelectModel() {
     try {
       if (!this.serverUrl) {
-        this.postMessage({ type: "status", status: "initializing" });
-        await this.startServer();
-        this.postMessage({ type: "status", status: "idle" });
+        this.postMessage({ type: "status", status: "initializing" })
+        await this.startServer()
+        this.postMessage({ type: "status", status: "idle" })
       }
 
-      const config = await this.apiCall<any>("GET", "/config/providers");
-      const providers = config?.providers ?? [];
+      const config = await this.apiCall<any>("GET", "/config/providers")
+      const providers = config?.providers ?? []
 
-      const items: vscode.QuickPickItem[] = [];
+      const items: vscode.QuickPickItem[] = []
       for (const provider of providers) {
-        if (!provider.models) {continue;}
+        if (!provider.models) {
+          continue
+        }
         for (const modelID of Object.keys(provider.models as Record<string, any>)) {
           items.push({
             label: `${provider.id}/${modelID}`,
             description: provider.name ?? provider.id,
-          });
+          })
         }
       }
 
       if (items.length === 0) {
-        vscode.window.showWarningMessage("No models available. Run: ax-code providers login");
-        return;
+        vscode.window.showWarningMessage("No models available. Run: ax-code providers login")
+        return
       }
 
       const selected = await vscode.window.showQuickPick(items, {
@@ -347,208 +355,238 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           ? `Current: ${this.selectedModel.providerID}/${this.selectedModel.modelID}`
           : "Select a model",
         matchOnDescription: true,
-      });
+      })
 
       if (selected) {
-        const [providerID, ...modelParts] = selected.label.split("/");
-        const modelID = modelParts.join("/");
-        this.selectedModel = { providerID, modelID };
-        await this.context.workspaceState.update(STATE_SELECTED_MODEL, this.selectedModel);
-        this.postMessage({ type: "modelSelected", model: selected.label });
+        const [providerID, ...modelParts] = selected.label.split("/")
+        const modelID = modelParts.join("/")
+        this.selectedModel = { providerID, modelID }
+        await this.context.workspaceState.update(STATE_SELECTED_MODEL, this.selectedModel)
+        this.postMessage({ type: "modelSelected", model: selected.label })
       }
     } catch (error: any) {
-      vscode.window.showErrorMessage(`Failed to load models: ${error.message}`);
+      vscode.window.showErrorMessage(`Failed to load models: ${error.message}`)
     }
   }
 
   private async ensureEventStream(): Promise<void> {
-    if (this.eventStream || !this.serverUrl) {return;}
-    const controller = new AbortController();
-    const url = `${this.serverUrl}/event`;
+    if (this.eventStream || !this.serverUrl) {
+      return
+    }
+    const controller = new AbortController()
+    const url = `${this.serverUrl}/event`
     const streamPromise = (async () => {
       try {
         const response = await fetch(url, {
           headers: { Accept: "text/event-stream" },
           signal: controller.signal,
-        });
-        if (!response.ok || !response.body) {return;}
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
+        })
+        if (!response.ok || !response.body) {
+          return
+        }
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
         while (true) {
-          const { done, value } = await reader.read();
-          if (done) {break;}
-          buffer += decoder.decode(value, { stream: true });
-          let sep = buffer.indexOf("\n\n");
+          const { done, value } = await reader.read()
+          if (done) {
+            break
+          }
+          buffer += decoder.decode(value, { stream: true })
+          let sep = buffer.indexOf("\n\n")
           while (sep !== -1) {
-            const chunk = buffer.slice(0, sep);
-            buffer = buffer.slice(sep + 2);
-            this.handleSseChunk(chunk);
-            sep = buffer.indexOf("\n\n");
+            const chunk = buffer.slice(0, sep)
+            buffer = buffer.slice(sep + 2)
+            this.handleSseChunk(chunk)
+            sep = buffer.indexOf("\n\n")
           }
         }
       } catch {
         // aborted or network error — caller will retry on next turn
       }
-    })();
+    })()
 
     this.eventStream = {
       close: () => controller.abort(),
       done: streamPromise,
-    };
+    }
   }
 
   private handleSseChunk(chunk: string) {
-    const lines = chunk.split("\n");
-    const dataLines: string[] = [];
+    const lines = chunk.split("\n")
+    const dataLines: string[] = []
     for (const line of lines) {
-      if (line.startsWith("data:")) {dataLines.push(line.slice(5).trimStart());}
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trimStart())
+      }
     }
-    if (dataLines.length === 0) {return;}
-    const payload = dataLines.join("\n");
-    let event: any;
+    if (dataLines.length === 0) {
+      return
+    }
+    const payload = dataLines.join("\n")
+    let event: any
     try {
-      event = JSON.parse(payload);
+      event = JSON.parse(payload)
     } catch {
-      return;
+      return
     }
-    this.handleBusEvent(event);
+    this.handleBusEvent(event)
   }
 
   private handleBusEvent(event: any) {
-    if (!event || typeof event.type !== "string") {return;}
+    if (!event || typeof event.type !== "string") {
+      return
+    }
     // Only emit events for our current session.
     const eventSession =
-      event.properties?.sessionID ?? event.properties?.info?.sessionID ?? event.properties?.part?.sessionID;
-    if (eventSession && this.sessionId && eventSession !== this.sessionId) {return;}
+      event.properties?.sessionID ?? event.properties?.info?.sessionID ?? event.properties?.part?.sessionID
+    if (eventSession && this.sessionId && eventSession !== this.sessionId) {
+      return
+    }
 
     switch (event.type) {
       case "message.part.updated": {
-        const part = event.properties?.part;
-        if (!part) {break;}
+        const part = event.properties?.part
+        if (!part) {
+          break
+        }
         if (part.type === "text") {
-          this.currentAssistantMessageId = part.messageID ?? this.currentAssistantMessageId;
-          const text = part.text ?? "";
-          this.streamingParts.set(part.id, text);
+          this.currentAssistantMessageId = part.messageID ?? this.currentAssistantMessageId
+          const text = part.text ?? ""
+          this.streamingParts.set(part.id, text)
           // Full snapshots from `updated` always flush so the canonical text
           // isn't lost to throttling.
-          this.flushStreamText(part.id, text);
+          this.flushStreamText(part.id, text)
         } else if (part.type === "tool") {
           this.postMessage({
             type: "toolUpdate",
             partId: part.id,
             tool: part.tool,
             status: part.state?.status ?? "running",
-          });
+          })
         }
-        break;
+        break
       }
       case "message.part.delta": {
-        const { partID, field, delta } = event.properties ?? {};
-        if (!partID || field !== "text" || typeof delta !== "string") {break;}
-        const prev = this.streamingParts.get(partID) ?? "";
-        const next = prev + delta;
-        this.streamingParts.set(partID, next);
-        this.scheduleStreamFlush(partID);
-        break;
+        const { partID, field, delta } = event.properties ?? {}
+        if (!partID || field !== "text" || typeof delta !== "string") {
+          break
+        }
+        const prev = this.streamingParts.get(partID) ?? ""
+        const next = prev + delta
+        this.streamingParts.set(partID, next)
+        this.scheduleStreamFlush(partID)
+        break
       }
       case "message.updated": {
-        const info = event.properties?.info;
+        const info = event.properties?.info
         if (info?.role === "assistant" && info?.id) {
-          this.currentAssistantMessageId = info.id;
+          this.currentAssistantMessageId = info.id
           if (info.modelID) {
             this.postMessage({
               type: "agentInfo",
               agent: info.agent ?? "build",
               modelID: `${info.providerID ?? ""}/${info.modelID}`,
-            });
+            })
           }
         }
-        break;
+        break
       }
     }
   }
 
   private scheduleStreamFlush(partID: string) {
-    if (this.streamFlushTimers.has(partID)) {return;}
-    const last = this.streamLastFlush.get(partID) ?? 0;
-    const elapsed = Date.now() - last;
-    const delay = elapsed >= this.STREAM_FLUSH_INTERVAL_MS ? 0 : this.STREAM_FLUSH_INTERVAL_MS - elapsed;
+    if (this.streamFlushTimers.has(partID)) {
+      return
+    }
+    const last = this.streamLastFlush.get(partID) ?? 0
+    const elapsed = Date.now() - last
+    const delay = elapsed >= this.STREAM_FLUSH_INTERVAL_MS ? 0 : this.STREAM_FLUSH_INTERVAL_MS - elapsed
     const timer = setTimeout(() => {
-      this.streamFlushTimers.delete(partID);
-      const text = this.streamingParts.get(partID);
-      if (text === undefined) {return;}
-      this.flushStreamText(partID, text);
-    }, delay);
-    this.streamFlushTimers.set(partID, timer);
+      this.streamFlushTimers.delete(partID)
+      const text = this.streamingParts.get(partID)
+      if (text === undefined) {
+        return
+      }
+      this.flushStreamText(partID, text)
+    }, delay)
+    this.streamFlushTimers.set(partID, timer)
   }
 
   private flushStreamText(partID: string, text: string) {
-    const timer = this.streamFlushTimers.get(partID);
+    const timer = this.streamFlushTimers.get(partID)
     if (timer) {
-      clearTimeout(timer);
-      this.streamFlushTimers.delete(partID);
+      clearTimeout(timer)
+      this.streamFlushTimers.delete(partID)
     }
-    this.streamLastFlush.set(partID, Date.now());
+    this.streamLastFlush.set(partID, Date.now())
     this.postMessage({
       type: "streamText",
       partId: partID,
       text,
       html: this.renderMarkdown(text),
-    });
+    })
   }
 
   private stopEventStream() {
     if (this.eventStream) {
-      this.eventStream.close();
-      this.eventStream = null;
+      this.eventStream.close()
+      this.eventStream = null
     }
-    for (const t of this.streamFlushTimers.values()) {clearTimeout(t);}
-    this.streamFlushTimers.clear();
-    this.streamLastFlush.clear();
+    for (const t of this.streamFlushTimers.values()) {
+      clearTimeout(t)
+    }
+    this.streamFlushTimers.clear()
+    this.streamLastFlush.clear()
   }
 
   private renderMarkdown(text: string): string {
-    if (!text) {return "";}
+    if (!text) {
+      return ""
+    }
     try {
-      const html = marked.parse(text, { async: false, breaks: true, gfm: true }) as string;
-      return sanitizeHtml(html);
+      const html = marked.parse(text, { async: false, breaks: true, gfm: true }) as string
+      return sanitizeHtml(html)
     } catch {
-      return escapeHtml(text);
+      return escapeHtml(text)
     }
   }
 
   private async startServer(): Promise<void> {
-    if (this.startServerPromise) {return this.startServerPromise;}
+    if (this.startServerPromise) {
+      return this.startServerPromise
+    }
     this.startServerPromise = this.startServerWithRetry().finally(() => {
-      this.startServerPromise = null;
-    });
-    return this.startServerPromise;
+      this.startServerPromise = null
+    })
+    return this.startServerPromise
   }
 
   private async startServerWithRetry(): Promise<void> {
-    let lastError: unknown;
+    let lastError: unknown
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await this.startServerInner();
-        return;
+        await this.startServerInner()
+        return
       } catch (err: any) {
-        lastError = err;
-        const msg = String(err?.message ?? "");
-        const isPortBusy = /EADDRINUSE|address already in use|port.*in use|listen.*EACCES/i.test(msg);
-        if (!isPortBusy) {throw err;}
+        lastError = err
+        const msg = String(err?.message ?? "")
+        const isPortBusy = /EADDRINUSE|address already in use|port.*in use|listen.*EACCES/i.test(msg)
+        if (!isPortBusy) {
+          throw err
+        }
       }
     }
-    throw lastError instanceof Error ? lastError : new Error("Failed to start ax-code after 3 attempts");
+    throw lastError instanceof Error ? lastError : new Error("Failed to start ax-code after 3 attempts")
   }
 
   private async startServerInner(): Promise<void> {
-    const port = Math.floor(Math.random() * (49150 - 16384 + 1)) + 16384;
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const port = Math.floor(Math.random() * (49150 - 16384 + 1)) + 16384
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
 
-    const axCodePath = this.findAxCodePath();
-    const useShell = process.platform === "win32" && !axCodePath.useBun;
-    const { serverTimeoutMs } = getConfig();
+    const axCodePath = this.findAxCodePath()
+    const useShell = process.platform === "win32" && !axCodePath.useBun
+    const { serverTimeoutMs } = getConfig()
 
     return new Promise((resolve, reject) => {
       const env = {
@@ -556,7 +594,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         PATH: enrichPath(process.env.PATH ?? ""),
         AX_CODE_CALLER: "vscode",
         AX_CODE_ORIGINAL_CWD: workspaceFolder,
-      };
+      }
 
       const proc = axCodePath.useBun
         ? spawn(
@@ -576,143 +614,157 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             cwd: workspaceFolder,
             env,
             shell: useShell,
-          });
+          })
 
-      this.serverProcess = proc;
+      this.serverProcess = proc
 
-      let settled = false;
+      let settled = false
       const settleReject = (err: Error) => {
-        if (settled) {return;}
-        settled = true;
-        clearTimeout(timeout);
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timeout)
         try {
-          proc.kill();
+          proc.kill()
         } catch {}
         if (this.serverProcess === proc) {
-          this.serverProcess = null;
-          this.serverUrl = null;
+          this.serverProcess = null
+          this.serverUrl = null
         }
-        reject(err);
-      };
+        reject(err)
+      }
       const settleResolve = (url: string) => {
-        if (settled) {return;}
-        settled = true;
-        clearTimeout(timeout);
-        this.serverUrl = url;
-        resolve();
-      };
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timeout)
+        this.serverUrl = url
+        resolve()
+      }
 
       const timeout = setTimeout(() => {
         settleReject(
           new Error(
             `ax-code serve did not report listening within ${Math.round(serverTimeoutMs / 1000)}s. First launch compiles TypeScript — retry or increase axCode.serverTimeoutMs.`,
           ),
-        );
-      }, serverTimeoutMs);
+        )
+      }, serverTimeoutMs)
 
       // Only accumulate output until we've matched "listening" (or settled
       // with an error). After that, discard to avoid an unbounded leak over
       // the server's lifetime.
-      let output = "";
+      let output = ""
       const appendUntilSettled = (chunk: Buffer) => {
-        if (settled) {return;}
-        output += chunk.toString();
-        if (output.length > 8192) {output = output.slice(-8192);}
-        const match = output.match(/listening on\s+(https?:\/\/[^\s]+)/);
-        if (match) {settleResolve(match[1]);}
-      };
-      proc.stdout?.on("data", appendUntilSettled);
-      proc.stderr?.on("data", appendUntilSettled);
+        if (settled) {
+          return
+        }
+        output += chunk.toString()
+        if (output.length > 8192) {
+          output = output.slice(-8192)
+        }
+        const match = output.match(/listening on\s+(https?:\/\/[^\s]+)/)
+        if (match) {
+          settleResolve(match[1])
+        }
+      }
+      proc.stdout?.on("data", appendUntilSettled)
+      proc.stderr?.on("data", appendUntilSettled)
 
       proc.on("error", (error) => {
-        settleReject(new Error(`Failed to start ax-code: ${error.message}`));
-      });
+        settleReject(new Error(`Failed to start ax-code: ${error.message}`))
+      })
 
       proc.on("exit", (code) => {
         if (!settled) {
-          const tail = output.slice(-800).trim();
-          const detail = tail ? `\n${tail}` : "";
-          settleReject(new Error(`ax-code exited with code ${code}${detail}`));
-          return;
+          const tail = output.slice(-800).trim()
+          const detail = tail ? `\n${tail}` : ""
+          settleReject(new Error(`ax-code exited with code ${code}${detail}`))
+          return
         }
         if (this.serverProcess === proc) {
-          this.serverProcess = null;
-          this.serverUrl = null;
+          this.serverProcess = null
+          this.serverUrl = null
         }
-        this.stopEventStream();
-      });
-    });
+        this.stopEventStream()
+      })
+    })
   }
 
   private findAxCodePath(): { useBun: boolean; command: string; cwd: string; entry: string } {
     // Highest priority: explicit user config.
-    const override = getConfig().binaryPath;
+    const override = getConfig().binaryPath
     if (override && fs.existsSync(override)) {
-      return { useBun: false, command: override, cwd: "", entry: "" };
+      return { useBun: false, command: override, cwd: "", entry: "" }
     }
 
     // Dev mode: extension is inside the monorepo next to packages/ax-code.
     // Require both the ax-code entry AND a repo-root signal (pnpm-workspace.yaml)
     // so an installed VSIX at ~/.vscode/extensions/... with unrelated sibling dirs
     // isn't misdetected as a monorepo checkout.
-    const extensionDir = this.context.extensionPath;
-    const monorepoRoot = path.resolve(extensionDir, "..", "..");
-    const axCodeEntry = path.join(monorepoRoot, "packages", "ax-code", "src", "index.ts");
-    const axCodeCwd = path.join(monorepoRoot, "packages", "ax-code");
-    const workspaceMarker = path.join(monorepoRoot, "pnpm-workspace.yaml");
+    const extensionDir = this.context.extensionPath
+    const monorepoRoot = path.resolve(extensionDir, "..", "..")
+    const axCodeEntry = path.join(monorepoRoot, "packages", "ax-code", "src", "index.ts")
+    const axCodeCwd = path.join(monorepoRoot, "packages", "ax-code")
+    const workspaceMarker = path.join(monorepoRoot, "pnpm-workspace.yaml")
     if (fs.existsSync(axCodeEntry) && fs.existsSync(workspaceMarker)) {
-      return { useBun: true, command: "bun", cwd: axCodeCwd, entry: axCodeEntry };
+      return { useBun: true, command: "bun", cwd: axCodeCwd, entry: axCodeEntry }
     }
 
     // Fall back to globally-installed ax-code command.
-    return { useBun: false, command: "ax-code", cwd: "", entry: "" };
+    return { useBun: false, command: "ax-code", cwd: "", entry: "" }
   }
 
   dispose() {
-    this.stopEventStream();
-    this.stopServer();
+    this.stopEventStream()
+    this.stopServer()
   }
 
   private stopServer() {
     if (this.serverProcess) {
-      this.serverProcess.kill();
-      this.serverProcess = null;
-      this.serverUrl = null;
+      this.serverProcess.kill()
+      this.serverProcess = null
+      this.serverUrl = null
     }
   }
 
   private async apiCall<T>(method: string, apiPath: string, body?: any, signal?: AbortSignal): Promise<T> {
-    if (!this.serverUrl) {throw new Error("Server not running");}
+    if (!this.serverUrl) {
+      throw new Error("Server not running")
+    }
 
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-    const headers: Record<string, string> = { "x-ax-code-directory": workspaceFolder };
-    let requestBody: string | undefined;
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
+    const headers: Record<string, string> = { "x-ax-code-directory": workspaceFolder }
+    let requestBody: string | undefined
     if (method === "POST" || method === "PUT" || method === "PATCH") {
-      headers["Content-Type"] = "application/json";
-      requestBody = JSON.stringify(body ?? {});
+      headers["Content-Type"] = "application/json"
+      requestBody = JSON.stringify(body ?? {})
     }
 
-    const response = await fetch(`${this.serverUrl}${apiPath}`, { method, headers, body: requestBody, signal });
+    const response = await fetch(`${this.serverUrl}${apiPath}`, { method, headers, body: requestBody, signal })
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new Error(`API error ${response.status}: ${text.slice(0, 200)}`);
+      const text = await response.text().catch(() => "")
+      throw new Error(`API error ${response.status}: ${text.slice(0, 200)}`)
     }
-    const text = await response.text();
-    if (!text) {throw new Error(`Empty response body from ${method} ${apiPath}`);}
+    const text = await response.text()
+    if (!text) {
+      throw new Error(`Empty response body from ${method} ${apiPath}`)
+    }
     try {
-      return JSON.parse(text) as T;
+      return JSON.parse(text) as T
     } catch {
-      throw new Error(`Invalid JSON response from ${method} ${apiPath}: ${text.slice(0, 200)}`);
+      throw new Error(`Invalid JSON response from ${method} ${apiPath}: ${text.slice(0, 200)}`)
     }
   }
 
   private postMessage(message: any) {
-    this.webviewView?.webview.postMessage(message);
+    this.webviewView?.webview.postMessage(message)
   }
 
   private getHtml(): string {
-    const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 36).toString(36)).join("");
-    const cspSource = this.webviewView?.webview.cspSource ?? "vscode-webview:";
+    const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 36).toString(36)).join("")
+    const cspSource = this.webviewView?.webview.cspSource ?? "vscode-webview:"
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1064,7 +1116,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     vscode.postMessage({ type: 'ready' });
   </script>
 </body>
-</html>`;
+</html>`
   }
 }
 
@@ -1074,7 +1126,7 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/'/g, "&#39;")
 }
 
 // Minimal HTML sanitizer tailored for markdown output.
@@ -1113,7 +1165,7 @@ const ALLOWED_TAGS = new Set([
   "thead",
   "tr",
   "ul",
-]);
+])
 const ALLOWED_ATTRS: Record<string, Set<string>> = {
   a: new Set(["href", "title"]),
   code: new Set(["class"]),
@@ -1121,32 +1173,44 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
   span: new Set(["class"]),
   td: new Set(["align"]),
   th: new Set(["align"]),
-};
-const SAFE_URL = /^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i;
+}
+const SAFE_URL = /^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i
 
 function sanitizeHtml(html: string): string {
   // Drop anything we don't explicitly allow. Walk tags with a regex; for each
   // opening tag, either rewrite with filtered attrs or strip entirely.
   // Text nodes/entities pass through marked already-escaped.
   return html.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (match, closing, rawName, attrs) => {
-    const name = String(rawName).toLowerCase();
-    if (!ALLOWED_TAGS.has(name)) {return "";}
-    if (closing) {return `</${name}>`;}
-
-    const allowed = ALLOWED_ATTRS[name];
-    if (!allowed) {return `<${name}>`;}
-
-    let rewritten = "";
-    const attrRe = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*(?:=\s*("([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
-    let m: RegExpExecArray | null;
-    while ((m = attrRe.exec(attrs)) !== null) {
-      const attr = m[1].toLowerCase();
-      if (attr.startsWith("on")) {continue;}
-      if (!allowed.has(attr)) {continue;}
-      const value = m[3] ?? m[4] ?? m[5] ?? "";
-      if ((attr === "href" || attr === "src") && !SAFE_URL.test(value.trim())) {continue;}
-      rewritten += ` ${attr}="${value.replace(/"/g, "&quot;")}"`;
+    const name = String(rawName).toLowerCase()
+    if (!ALLOWED_TAGS.has(name)) {
+      return ""
     }
-    return `<${name}${rewritten}>`;
-  });
+    if (closing) {
+      return `</${name}>`
+    }
+
+    const allowed = ALLOWED_ATTRS[name]
+    if (!allowed) {
+      return `<${name}>`
+    }
+
+    let rewritten = ""
+    const attrRe = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*(?:=\s*("([^"]*)"|'([^']*)'|([^\s>]+)))?/g
+    let m: RegExpExecArray | null
+    while ((m = attrRe.exec(attrs)) !== null) {
+      const attr = m[1].toLowerCase()
+      if (attr.startsWith("on")) {
+        continue
+      }
+      if (!allowed.has(attr)) {
+        continue
+      }
+      const value = m[3] ?? m[4] ?? m[5] ?? ""
+      if ((attr === "href" || attr === "src") && !SAFE_URL.test(value.trim())) {
+        continue
+      }
+      rewritten += ` ${attr}="${value.replace(/"/g, "&quot;")}"`
+    }
+    return `<${name}${rewritten}>`
+  })
 }

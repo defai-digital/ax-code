@@ -105,10 +105,12 @@ describe("tui sync request event", () => {
     await Promise.resolve()
 
     expect(handled).toBe(true)
-    expect(payloads).toEqual([{
-      requestID: "question_2",
-      answers: [["Incremental rollout"]],
-    }])
+    expect(payloads).toEqual([
+      {
+        requestID: "question_2",
+        answers: [["Incremental rollout"]],
+      },
+    ])
   })
 
   test("removes replied and rejected requests from their stores", () => {

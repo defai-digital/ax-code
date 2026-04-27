@@ -132,13 +132,62 @@ function benchmarkBundle(): QualityCalibrationModel.BenchmarkBundle {
         candidateMissingPredictionItems: 0,
       },
       metrics: {
-        precision: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        recall: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        falsePositiveRate: { baseline: null, candidate: null, delta: null, direction: "lower_is_better", improvement: false, regression: false },
-        falseNegativeRate: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
-        precisionAt1: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        precisionAt3: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        calibrationError: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
+        precision: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        recall: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falsePositiveRate: {
+          baseline: null,
+          candidate: null,
+          delta: null,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falseNegativeRate: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt1: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt3: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        calibrationError: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
       },
       gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
     },
@@ -385,7 +434,7 @@ describe("QualityPromotionPortableExport", () => {
       const handoffJson = await fs.readFile(path.join(outDir, "manifest", "handoff-package.json"), "utf8")
       const indexDoc = await fs.readFile(path.join(outDir, "docs", "00-index.md"), "utf8")
       expect(readme).toContain("ax-code quality promotion portable export")
-      expect(handoffJson).toContain("\"kind\": \"ax-code-quality-promotion-handoff-package\"")
+      expect(handoffJson).toContain('"kind": "ax-code-quality-promotion-handoff-package"')
       expect(indexDoc).toContain("ax-code quality promotion handoff packet")
     } finally {
       await clearPortableExports()

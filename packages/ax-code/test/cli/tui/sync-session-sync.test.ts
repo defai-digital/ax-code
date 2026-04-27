@@ -85,13 +85,7 @@ describe("tui sync session sync", () => {
 
     await controller.sync("ses_1")
 
-    expect(calls).toEqual([
-      "session:ses_1",
-      "messages:ses_1",
-      "todo:ses_1",
-      "diff:ses_1",
-      "risk:ses_1",
-    ])
+    expect(calls).toEqual(["session:ses_1", "messages:ses_1", "todo:ses_1", "diff:ses_1", "risk:ses_1"])
     expect(store).toEqual({
       session: [{ id: "ses_1", title: "Session" }],
       todo: { ses_1: [{ id: "todo_1" }] },

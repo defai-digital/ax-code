@@ -18,12 +18,12 @@ This document defines how AX Code documentation stays truthful as the product su
 
 Use one of these scopes for every substantial document:
 
-| Scope | Purpose | Allowed claims |
-| ----- | ------- | -------------- |
-| `current-state` | Describes the shipped product or package surface | only what a user or integrator can use now |
-| `proposal` | Describes intended future behavior | may describe planned behavior, must not read like shipped functionality |
-| `historical` | Records past decisions, shipped phases, or retired plans | may describe old gaps if clearly marked as historical |
-| `experimental` | Describes partial or gated functionality | must name the gate, limitation, or maturity level |
+| Scope           | Purpose                                                  | Allowed claims                                                          |
+| --------------- | -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `current-state` | Describes the shipped product or package surface         | only what a user or integrator can use now                              |
+| `proposal`      | Describes intended future behavior                       | may describe planned behavior, must not read like shipped functionality |
+| `historical`    | Records past decisions, shipped phases, or retired plans | may describe old gaps if clearly marked as historical                   |
+| `experimental`  | Describes partial or gated functionality                 | must name the gate, limitation, or maturity level                       |
 
 ## Required Status Header
 
@@ -46,11 +46,11 @@ Recommended usage:
 
 When documentation names product surfaces, these code locations win:
 
-| Surface | Source of truth |
-| ------- | --------------- |
-| Tool IDs | `packages/ax-code/src/tool/registry.ts` and `Tool.define(...)` declarations |
-| Agent inventory | `packages/ax-code/src/agent/agent.ts` |
-| HTTP and SDK shape | route schemas and generated SDK artifacts |
+| Surface                   | Source of truth                                                                                            |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Tool IDs                  | `packages/ax-code/src/tool/registry.ts` and `Tool.define(...)` declarations                                |
+| Agent inventory           | `packages/ax-code/src/agent/agent.ts`                                                                      |
+| HTTP and SDK shape        | route schemas and generated SDK artifacts                                                                  |
 | Semantic contract wording | `packages/ax-code/src/tool/lsp.ts`, `packages/ax-code/src/tool/code-intelligence.ts`, replay/audit schemas |
 
 Rules:

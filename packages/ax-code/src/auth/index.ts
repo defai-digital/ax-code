@@ -230,7 +230,14 @@ export namespace Auth {
               const decrypted = decryptEntry(value)
               if (decrypted && typeof decrypted === "object" && "type" in decrypted) {
                 const d = decrypted as Record<string, unknown>
-                const sensitive = d.type === "api" ? ["key"] : d.type === "wellknown" ? ["key", "token"] : d.type === "oauth" ? ["access", "refresh"] : []
+                const sensitive =
+                  d.type === "api"
+                    ? ["key"]
+                    : d.type === "wellknown"
+                      ? ["key", "token"]
+                      : d.type === "oauth"
+                        ? ["access", "refresh"]
+                        : []
                 if (sensitive.some((f) => d[f] === undefined) && !(key in entries)) {
                   failed.push(key)
                 }

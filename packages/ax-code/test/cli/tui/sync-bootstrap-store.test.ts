@@ -12,8 +12,14 @@ import {
 
 describe("tui sync bootstrap store", () => {
   test("merges fetched sessions without dropping event-arrived sessions", () => {
-    const existing = [{ id: "ses_1", title: "existing" }, { id: "ses_3", title: "event" }]
-    const fetched = [{ id: "ses_1", title: "fresh" }, { id: "ses_2", title: "fetched" }]
+    const existing = [
+      { id: "ses_1", title: "existing" },
+      { id: "ses_3", title: "event" },
+    ]
+    const fetched = [
+      { id: "ses_1", title: "fresh" },
+      { id: "ses_2", title: "fetched" },
+    ]
 
     expect(mergeBootstrapSessions(existing, fetched)).toEqual([
       { id: "ses_1", title: "fresh" },
@@ -51,10 +57,13 @@ describe("tui sync bootstrap store", () => {
       provider_failed: false,
     }
 
-    applyProviderBootstrapState(store, createProviderBootstrapSuccess({
-      providers: [{ id: "anthropic" }],
-      default: { chat: "anthropic" },
-    }))
+    applyProviderBootstrapState(
+      store,
+      createProviderBootstrapSuccess({
+        providers: [{ id: "anthropic" }],
+        default: { chat: "anthropic" },
+      }),
+    )
 
     expect(store).toEqual({
       provider: [{ id: "anthropic" }],

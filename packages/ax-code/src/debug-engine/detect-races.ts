@@ -1,11 +1,5 @@
 import fs from "fs/promises"
-import {
-  DEFAULT_INCLUDE,
-  DEFAULT_MAX_FILES,
-  DEFAULT_MAX_PER_FILE,
-  isExcludedDir,
-  isTestFile,
-} from "./scanner-utils"
+import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir, isTestFile } from "./scanner-utils"
 import { Instance } from "../project/instance"
 import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
@@ -102,11 +96,7 @@ function findAsyncScopes(lines: LineInfo[]): Array<{ start: number; end: number 
 }
 
 // TOCTOU: read shared state → await → write shared state
-function detectToctou(
-  lines: LineInfo[],
-  file: string,
-  max: number,
-): DebugEngine.RaceFinding[] {
+function detectToctou(lines: LineInfo[], file: string, max: number): DebugEngine.RaceFinding[] {
   const findings: DebugEngine.RaceFinding[] = []
   const scopes = findAsyncScopes(lines)
 
@@ -167,11 +157,7 @@ function detectToctou(
 }
 
 // Non-atomic counter: counter++ or counter += N across async boundaries
-function detectNonAtomicCounter(
-  lines: LineInfo[],
-  file: string,
-  max: number,
-): DebugEngine.RaceFinding[] {
+function detectNonAtomicCounter(lines: LineInfo[], file: string, max: number): DebugEngine.RaceFinding[] {
   const findings: DebugEngine.RaceFinding[] = []
   const scopes = findAsyncScopes(lines)
 
@@ -217,11 +203,7 @@ function detectNonAtomicCounter(
 
 // Promise.all with conflicting mutations: multiple operations on the
 // same identifier inside a single Promise.all/Promise.allSettled call.
-function detectConflictingMutations(
-  lines: LineInfo[],
-  file: string,
-  max: number,
-): DebugEngine.RaceFinding[] {
+function detectConflictingMutations(lines: LineInfo[], file: string, max: number): DebugEngine.RaceFinding[] {
   const findings: DebugEngine.RaceFinding[] = []
   const content = lines.map((l) => l.text).join("\n")
 
@@ -258,7 +240,8 @@ function detectConflictingMutations(
 
     // Look for repeated identifiers being mutated inside the block
     const mutatedIds = new Map<string, number[]>()
-    const mutationRe = /(\w+)\s*(?:\.(?:set|delete|push|pop|shift|unshift|splice|write|append)\s*\(|\s*(?:\+\+|--|(?<!=)=(?![=>])))/g
+    const mutationRe =
+      /(\w+)\s*(?:\.(?:set|delete|push|pop|shift|unshift|splice|write|append)\s*\(|\s*(?:\+\+|--|(?<!=)=(?![=>])))/g
     let mMatch: RegExpExecArray | null
     while ((mMatch = mutationRe.exec(block)) !== null) {
       const name = mMatch[1]
@@ -290,11 +273,7 @@ function detectConflictingMutations(
 
 // Event listener registered after await — the event may fire before
 // the listener is attached.
-function detectStaleListener(
-  lines: LineInfo[],
-  file: string,
-  max: number,
-): DebugEngine.RaceFinding[] {
+function detectStaleListener(lines: LineInfo[], file: string, max: number): DebugEngine.RaceFinding[] {
   const findings: DebugEngine.RaceFinding[] = []
   const scopes = findAsyncScopes(lines)
   const listenerRe = /(\w+)\.(?:on|addEventListener|once)\s*\(/
@@ -332,7 +311,7 @@ async function scanFile(
   maxPerFile: number,
   preread?: string,
 ): Promise<DebugEngine.RaceFinding[]> {
-  const content = preread ?? await fs.readFile(file, "utf8").catch(() => "")
+  const content = preread ?? (await fs.readFile(file, "utf8").catch(() => ""))
   if (!content) return []
 
   // Quick check: skip files without async code
@@ -357,10 +336,7 @@ async function scanFile(
   return findings.slice(0, maxPerFile)
 }
 
-export async function detectRacesImpl(
-  projectID: ProjectID,
-  input: DetectRacesInput,
-): Promise<DebugEngine.RaceReport> {
+export async function detectRacesImpl(projectID: ProjectID, input: DetectRacesInput): Promise<DebugEngine.RaceReport> {
   const excludeTests = input.excludeTests ?? true
   const maxFiles = input.maxFiles ?? DEFAULT_MAX_FILES
   const maxPerFile = input.maxFindingsPerFile ?? DEFAULT_MAX_PER_FILE
@@ -417,7 +393,7 @@ export async function detectRacesImpl(
     for (const f of filesToScan) {
       const content = preread.get(f)
       if (!content) continue
-      findings.push(...await scanFile(f, enabledPatterns, maxPerFile, content))
+      findings.push(...(await scanFile(f, enabledPatterns, maxPerFile, content)))
     }
   } else {
     for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {

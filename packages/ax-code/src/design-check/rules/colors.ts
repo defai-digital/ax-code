@@ -11,8 +11,24 @@ const HSL_PATTERN = /hsla?\s*\([^)]+\)/g
 
 // Common CSS named colors to flag
 const NAMED_COLORS = new Set([
-  "red", "blue", "green", "yellow", "orange", "purple", "pink", "black", "white",
-  "gray", "grey", "cyan", "magenta", "lime", "navy", "teal", "maroon", "olive",
+  "red",
+  "blue",
+  "green",
+  "yellow",
+  "orange",
+  "purple",
+  "pink",
+  "black",
+  "white",
+  "gray",
+  "grey",
+  "cyan",
+  "magenta",
+  "lime",
+  "navy",
+  "teal",
+  "maroon",
+  "olive",
 ])
 
 export const noHardcodedColors: Rule = {

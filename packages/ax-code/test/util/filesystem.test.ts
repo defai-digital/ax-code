@@ -229,7 +229,6 @@ describe("filesystem", () => {
       const extra = await fs.readdir(tmp.path)
       expect(extra.filter((name) => name.endsWith(".tmp"))).toEqual([])
     })
-
   })
 
   describe("writeJson()", () => {

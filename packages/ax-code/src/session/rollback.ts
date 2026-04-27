@@ -120,11 +120,7 @@ export namespace SessionRollback {
     return points.filter((point) => match(point, tool))
   }
 
-  export function pick(input: {
-    points: Point[]
-    step?: number
-    tool?: string
-  }) {
+  export function pick(input: { points: Point[]; step?: number; tool?: string }) {
     if (input.step != null) return input.points.find((point) => point.step === input.step)
     if (!input.tool) return
     return [...input.points].reverse().find((point) => match(point, input.tool!))

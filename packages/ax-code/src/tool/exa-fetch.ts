@@ -39,8 +39,6 @@ export async function fetchExaTool(config: {
       redirect: "manual",
     })
 
-    clearTimeout()
-
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location")
       if (!location) throw new Error(`${config.errorPrefix}: redirect with no location`)
@@ -90,12 +88,12 @@ export async function fetchExaTool(config: {
       metadata: {},
     }
   } catch (error) {
-    clearTimeout()
-
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`${config.errorPrefix} timed out`, { cause: error })
     }
 
     throw error
+  } finally {
+    clearTimeout()
   }
 }

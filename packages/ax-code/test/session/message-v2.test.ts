@@ -43,7 +43,6 @@ const model: Provider.Model = {
     input: 0,
     output: 0,
   },
-  cost: { input: 0, output: 0 },
   status: "active",
   options: {},
   headers: {},

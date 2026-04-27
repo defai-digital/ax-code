@@ -64,7 +64,12 @@ function runtimeTask(input: {
   })
 }
 
-function background(input: { service: string; label: string; timeoutMs?: number; task: () => Promise<unknown> | unknown }) {
+function background(input: {
+  service: string
+  label: string
+  timeoutMs?: number
+  task: () => Promise<unknown> | unknown
+}) {
   fireAndForget(input.label, () => runtimeTask({ ...input, task: () => input.task() }))
 }
 

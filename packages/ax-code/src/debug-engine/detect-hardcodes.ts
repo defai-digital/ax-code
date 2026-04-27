@@ -5,13 +5,7 @@ import { Glob } from "../util/glob"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
 import { nativeReadFilesBatch, nativeDetectHardcodes } from "./native-scan"
-import {
-  DEFAULT_INCLUDE,
-  DEFAULT_MAX_FILES,
-  DEFAULT_MAX_PER_FILE,
-  isExcludedDir,
-  isTestFile,
-} from "./scanner-utils"
+import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir, isTestFile } from "./scanner-utils"
 
 // detectHardcodes — DRE-owned AST-lite scan for common anti-patterns
 // that belong in configuration instead of code.
@@ -251,7 +245,7 @@ async function scanFile(
   maxPerFile: number,
   preread?: string,
 ): Promise<DebugEngine.HardcodeFinding[]> {
-  const content = preread ?? await fs.readFile(file, "utf8").catch(() => "")
+  const content = preread ?? (await fs.readFile(file, "utf8").catch(() => ""))
   if (!content) return []
   const lines = content.split("\n")
   const findings: DebugEngine.HardcodeFinding[] = []
@@ -415,7 +409,7 @@ export async function detectHardcodesImpl(
     for (const f of filesToScan) {
       const content = preread.get(f)
       if (!content) continue
-      findings.push(...await scanFile(f, enabledKinds, maxPerFile, content))
+      findings.push(...(await scanFile(f, enabledKinds, maxPerFile, content)))
     }
   } else {
     for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {

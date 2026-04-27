@@ -14,7 +14,10 @@ export type ShareData =
   | { type: "session"; data: SDKSession }
   | { type: "message"; data: Message }
   | { type: "part"; data: Part }
-  | { type: "event"; data: { event: ReplayEvent; timeCreated?: number; sequence?: number; stepID?: string; id?: string } }
+  | {
+      type: "event"
+      data: { event: ReplayEvent; timeCreated?: number; sequence?: number; stepID?: string; id?: string }
+    }
   | { type: "session_diff"; data: unknown }
   | { type: "model"; data: unknown }
 

@@ -18,10 +18,7 @@ Log.init({ print: false })
 // the queue/state behavior. Real end-to-end integration (LSP answers
 // → indexFile → DB writes) is covered by the builder tests.
 
-function seedNode(
-  projectID: ProjectID,
-  opts: { name: string; file: string },
-) {
+function seedNode(projectID: ProjectID, opts: { name: string; file: string }) {
   const t = Date.now()
   const nodeId = CodeNodeID.ascending()
   CodeGraphQuery.insertNode({

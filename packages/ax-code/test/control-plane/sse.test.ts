@@ -58,7 +58,9 @@ describe("control-plane/sse", () => {
     const events: unknown[] = []
     const stop = new AbortController()
 
-    await parseSSE(stream(["id: abc\r\nretry: 1500\r\ndata: hello world\r\n\n"]), stop.signal, (event) => events.push(event))
+    await parseSSE(stream(["id: abc\r\nretry: 1500\r\ndata: hello world\r\n\n"]), stop.signal, (event) =>
+      events.push(event),
+    )
 
     expect(events).toEqual([
       {
@@ -76,10 +78,8 @@ describe("control-plane/sse", () => {
     const events: unknown[] = []
     const stop = new AbortController()
 
-    await parseSSE(
-      stream(['data: {"type":"tail","properties":{"ok":true}}']),
-      stop.signal,
-      (event) => events.push(event),
+    await parseSSE(stream(['data: {"type":"tail","properties":{"ok":true}}']), stop.signal, (event) =>
+      events.push(event),
     )
 
     expect(events).toEqual([

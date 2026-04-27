@@ -22,11 +22,13 @@ export namespace QualityPromotionReviewDossier {
     adoptionReviewCount: z.number().int().nonnegative(),
     qualifiedRejectingReviews: z.number().int().nonnegative(),
     coveredQualifiedRejectingReviews: z.number().int().nonnegative(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type DossierSummary = z.output<typeof DossierSummary>
 
@@ -91,32 +93,38 @@ export namespace QualityPromotionReviewDossier {
       {
         name: "submission-readiness",
         status: submissionBundle.summary.overallStatus,
-        detail: submissionBundle.summary.overallStatus === "pass"
-          ? `submission bundle ${submissionBundle.submissionID} is ready`
-          : submissionBundle.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "submission bundle not ready",
+        detail:
+          submissionBundle.summary.overallStatus === "pass"
+            ? `submission bundle ${submissionBundle.submissionID} is ready`
+            : (submissionBundle.summary.gates.find((gate) => gate.status === "fail")?.detail ??
+              "submission bundle not ready"),
       },
       {
         name: "approval-policy",
         status: readiness.approvalPolicyStatus,
-        detail: readiness.approvalPolicyStatus === "pass"
-          ? `approval policy satisfied with ${readiness.totalApprovals} approval(s)`
-          : readiness.gates.find((gate) => gate.name === "approval-policy" && gate.status === "fail")?.detail ?? "approval policy not satisfied",
+        detail:
+          readiness.approvalPolicyStatus === "pass"
+            ? `approval policy satisfied with ${readiness.totalApprovals} approval(s)`
+            : (readiness.gates.find((gate) => gate.name === "approval-policy" && gate.status === "fail")?.detail ??
+              "approval policy not satisfied"),
       },
       {
         name: "adoption-review-consensus",
         status: readiness.adoptionReviewConsensusStatus,
-        detail: readiness.adoptionReviewConsensusStatus === "pass"
-          ? `adoption review consensus satisfied with ${readiness.totalAdoptionReviews} review(s)`
-          : readiness.gates.find((gate) => gate.name === "adoption-review-consensus" && gate.status === "fail")?.detail
-            ?? "adoption review consensus not satisfied",
+        detail:
+          readiness.adoptionReviewConsensusStatus === "pass"
+            ? `adoption review consensus satisfied with ${readiness.totalAdoptionReviews} review(s)`
+            : (readiness.gates.find((gate) => gate.name === "adoption-review-consensus" && gate.status === "fail")
+                ?.detail ?? "adoption review consensus not satisfied"),
       },
       {
         name: "dissent-handling",
         status: readiness.dissentHandlingStatus,
-        detail: readiness.dissentHandlingStatus === "pass"
-          ? `${readiness.coveredQualifiedRejectingReviews}/${readiness.qualifiedRejectingReviews} qualified rejecting review(s) covered`
-          : readiness.gates.find((gate) => gate.name === "adoption-dissent-handling" && gate.status === "fail")?.detail
-            ?? "dissent handling not satisfied",
+        detail:
+          readiness.dissentHandlingStatus === "pass"
+            ? `${readiness.coveredQualifiedRejectingReviews}/${readiness.qualifiedRejectingReviews} qualified rejecting review(s) covered`
+            : (readiness.gates.find((gate) => gate.name === "adoption-dissent-handling" && gate.status === "fail")
+                ?.detail ?? "dissent handling not satisfied"),
       },
     ] as const
 
@@ -140,9 +148,7 @@ export namespace QualityPromotionReviewDossier {
     })
   }
 
-  export function create(input: {
-    submissionBundle: QualityPromotionSubmissionBundle.BundleArtifact
-  }) {
+  export function create(input: { submissionBundle: QualityPromotionSubmissionBundle.BundleArtifact }) {
     const createdAt = new Date().toISOString()
     const dossierID = `${Date.now()}-${encode(input.submissionBundle.source)}-review-dossier`
     const submissionReasons = QualityPromotionSubmissionBundle.verify(
@@ -192,7 +198,9 @@ export namespace QualityPromotionReviewDossier {
     decisionBundle: QualityPromotionSubmissionBundle.BundleArtifact["decisionBundle"],
     dossiers: DossierArtifact[] = [],
   ) {
-    const persisted = (await list(decisionBundle.source)).filter((dossier) => matchesDecisionBundle(decisionBundle, dossier))
+    const persisted = (await list(decisionBundle.source)).filter((dossier) =>
+      matchesDecisionBundle(decisionBundle, dossier),
+    )
     const deduped = new Map<string, DossierArtifact>()
     for (const dossier of [...persisted, ...dossiers]) {
       if (!matchesDecisionBundle(decisionBundle, dossier)) continue
@@ -219,7 +227,9 @@ export namespace QualityPromotionReviewDossier {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion review dossier ${dossier.dossierID} already exists for source ${dossier.source} with different content`)
+      throw new Error(
+        `Promotion review dossier ${dossier.dossierID} already exists for source ${dossier.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(dossier.source, dossier.dossierID), next)

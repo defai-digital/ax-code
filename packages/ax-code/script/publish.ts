@@ -87,14 +87,16 @@ const tasks = binaryTargets.map(async (target) => {
 await Promise.all(tasks)
 
 // Publish @defai.digital/ax-code (skip if already published)
-await $`cd ${distDir} && npm pack --workspaces=false && npm publish *.tgz --workspaces=false --access public --tag ${Script.channel}`.catch((err) => {
-  const msg = String(err?.stderr ?? err)
-  if (msg.includes("previously published") || msg.includes("cannot publish over")) {
-    console.warn(`${npmName}@${version} already published, skipping`)
-  } else {
-    throw err
-  }
-})
+await $`cd ${distDir} && npm pack --workspaces=false && npm publish *.tgz --workspaces=false --access public --tag ${Script.channel}`.catch(
+  (err) => {
+    const msg = String(err?.stderr ?? err)
+    if (msg.includes("previously published") || msg.includes("cannot publish over")) {
+      console.warn(`${npmName}@${version} already published, skipping`)
+    } else {
+      throw err
+    }
+  },
+)
 
 // Docker image publish — requires buildx with multi-platform support.
 // Skip gracefully in CI environments without docker buildx configured.

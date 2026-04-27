@@ -46,7 +46,8 @@ async function resolveGeminiModel(): Promise<CliModelInfo> {
 
   const settings = await readJson(join(HOME, ".gemini", "settings.json"))
   if (typeof settings?.model === "string") return { model: settings.model, source: "~/.gemini/settings.json" }
-  if (typeof settings?.model?.name === "string") return { model: settings.model.name, source: "~/.gemini/settings.json" }
+  if (typeof settings?.model?.name === "string")
+    return { model: settings.model.name, source: "~/.gemini/settings.json" }
 
   return { model: DEFAULTS["gemini-cli"]!, source: "default" }
 }

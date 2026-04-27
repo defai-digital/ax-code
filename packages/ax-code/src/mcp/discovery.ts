@@ -99,11 +99,7 @@ const CANDIDATES: Candidate[] = [
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-puppeteer"],
     check: () =>
-      spawnExitsCleanly(
-        "npx",
-        ["-y", "@modelcontextprotocol/server-puppeteer", "--help"],
-        { timeoutMs: 5000 },
-      ),
+      spawnExitsCleanly("npx", ["-y", "@modelcontextprotocol/server-puppeteer", "--help"], { timeoutMs: 5000 }),
   },
   {
     name: "exa",

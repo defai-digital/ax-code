@@ -238,11 +238,7 @@ export namespace Installation {
               name: "brew",
               command: () =>
                 Effect.gen(function* () {
-                  for (const formula of [
-                    "defai-digital/ax-code/ax-code",
-                    "defai-digital/ax-code/ax",
-                    "ax-code",
-                  ]) {
+                  for (const formula of ["defai-digital/ax-code/ax-code", "defai-digital/ax-code/ax", "ax-code"]) {
                     const out = yield* text(["brew", "list", "--formula", formula])
                     if (out.trim()) return "ax-code"
                   }

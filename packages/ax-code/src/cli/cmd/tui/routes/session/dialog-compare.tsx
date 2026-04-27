@@ -15,7 +15,10 @@ export function DialogCompare(props: { currentID: string; sessions: SessionCompa
 
   const options = createMemo((): DialogSelectOption<string>[] => {
     const semantic = Object.fromEntries(
-      props.sessions.map((item) => [item.id, SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null]),
+      props.sessions.map((item) => [
+        item.id,
+        SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null,
+      ]),
     )
     const items = SessionCompare.targets({
       currentID: props.currentID,
@@ -61,7 +64,10 @@ export function DialogCompareDetail(props: { currentID: string; otherID: string;
 
   const options = createMemo((): DialogSelectOption<string>[] => {
     const semantic = Object.fromEntries(
-      props.sessions.map((item) => [item.id, SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null]),
+      props.sessions.map((item) => [
+        item.id,
+        SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null,
+      ]),
     )
     const detail = SessionCompare.detail({
       currentID: props.currentID,

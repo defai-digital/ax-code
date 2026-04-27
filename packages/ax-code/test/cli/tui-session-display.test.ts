@@ -71,11 +71,7 @@ describe("tui session display helpers", () => {
   test("extracts last assistant text before revert marker", () => {
     expect(
       lastAssistantText(
-        [
-          assistant("a"),
-          assistant("b"),
-          user("c"),
-        ],
+        [assistant("a"), assistant("b"), user("c")],
         {
           a: [text("p1", "a", "old")],
           b: [text("p2", "b", "new")],
@@ -88,11 +84,7 @@ describe("tui session display helpers", () => {
   test("uses message order instead of lexicographic id ordering for revert filtering", () => {
     expect(
       lastAssistantText(
-        [
-          assistant("a-2"),
-          assistant("a-10"),
-          user("revert"),
-        ],
+        [assistant("a-2"), assistant("a-10"), user("revert")],
         {
           "a-2": [text("p1", "a-2", "older")],
           "a-10": [text("p2", "a-10", "newer")],
@@ -124,15 +116,7 @@ describe("tui session display helpers", () => {
   })
 
   test("builds transcript items with part fallback", () => {
-    expect(
-      transcriptItems(
-        [
-          user("a"),
-          assistant("b"),
-        ],
-        { a: [text("p1", "a", "hello")] },
-      ),
-    ).toEqual([
+    expect(transcriptItems([user("a"), assistant("b")], { a: [text("p1", "a", "hello")] })).toEqual([
       { info: user("a"), parts: [text("p1", "a", "hello")] },
       { info: assistant("b"), parts: [] },
     ])

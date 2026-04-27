@@ -65,6 +65,33 @@ describe("tool.bash", () => {
       },
     })
   })
+
+  test("swallows metadata publish failures from stream callbacks", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        let metadataCalls = 0
+        const noisyCtx = {
+          ...ctx,
+          metadata: () => {
+            metadataCalls++
+            throw new Error("metadata transport closed")
+          },
+        }
+        const result = await bash.execute(
+          {
+            command: "echo 'test'",
+            description: "Echo test message",
+          },
+          noisyCtx,
+        )
+        expect(metadataCalls).toBeGreaterThan(0)
+        expect(result.metadata.exit).toBe(0)
+        expect(result.metadata.output).toContain("test")
+      },
+    })
+  })
 })
 
 describe("tool.bash permissions", () => {

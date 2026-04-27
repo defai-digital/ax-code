@@ -40,7 +40,14 @@ export namespace ProbabilisticRollout {
   export const Workflow = z.enum(["review", "debug", "qa"])
   export type Workflow = z.output<typeof Workflow>
 
-  export const ArtifactKind = z.enum(["review_run", "review_finding", "debug_case", "debug_hypothesis", "qa_run", "qa_failure"])
+  export const ArtifactKind = z.enum([
+    "review_run",
+    "review_finding",
+    "debug_case",
+    "debug_hypothesis",
+    "qa_run",
+    "qa_failure",
+  ])
   export type ArtifactKind = z.output<typeof ArtifactKind>
 
   export const LabelSource = z.enum(["human", "system", "imported"])
@@ -418,7 +425,9 @@ export namespace ProbabilisticRollout {
 
   function toolResultRows(events: ReturnType<typeof EventQuery.bySessionWithTimestamp>) {
     return events.filter(
-      (row): row is EventRow & {
+      (
+        row,
+      ): row is EventRow & {
         event_data: Extract<EventRow["event_data"], { type: "tool.result" }>
       } => row.event_data.type === "tool.result",
     )
@@ -497,25 +506,29 @@ export namespace ProbabilisticRollout {
   }
 
   function reviewFindingTitle(tool: string, finding: Record<string, unknown>) {
-    const kind = stringField(finding, "pattern")
-      ?? stringField(finding, "kind")
-      ?? stringField(finding, "resourceType")
-      ?? tool
+    const kind =
+      stringField(finding, "pattern") ?? stringField(finding, "kind") ?? stringField(finding, "resourceType") ?? tool
     const file = stringField(finding, "file") ?? "unknown"
     const line = numberField(finding, "line")
     return line !== undefined ? `${kind} at ${file}:${line}` : `${kind} at ${file}`
   }
 
   function reviewFindingSummary(finding: Record<string, unknown>) {
-    return stringField(finding, "description")
-      ?? stringField(finding, "suggestion")
-      ?? stringField(finding, "detail")
-      ?? stringField(finding, "fix")
-      ?? stringField(finding, "value")
-      ?? "review finding"
+    return (
+      stringField(finding, "description") ??
+      stringField(finding, "suggestion") ??
+      stringField(finding, "detail") ??
+      stringField(finding, "fix") ??
+      stringField(finding, "value") ??
+      "review finding"
+    )
   }
 
-  function extractReviewFindings(tool: string, callID: string, metadata: Record<string, unknown> | undefined): ReviewFindingExtract[] {
+  function extractReviewFindings(
+    tool: string,
+    callID: string,
+    metadata: Record<string, unknown> | undefined,
+  ): ReviewFindingExtract[] {
     const report = metadata?.["report"]
     if (!report || typeof report !== "object") return []
     const findings = (report as Record<string, unknown>)["findings"]
@@ -548,12 +561,7 @@ export namespace ProbabilisticRollout {
     return null
   }
 
-  function qaCommandFailed(input: {
-    command: string
-    status: "completed" | "error"
-    output: string
-    error?: string
-  }) {
+  function qaCommandFailed(input: { command: string; status: "completed" | "error"; output: string; error?: string }) {
     if (input.status === "error") return true
     if (!isQATestCommand(input.command)) return false
 
@@ -561,10 +569,10 @@ export namespace ProbabilisticRollout {
     if (/\b0\s+fail(?:ed|ures?)?\b/.test(text) || /\b0\s+errors?\b/.test(text)) return false
 
     return (
-      /\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(text)
-      || /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output)
-      || /\bFAIL\b/.test(input.output)
-      || /\bfailed\b/.test(text)
+      /\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(text) ||
+      /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output) ||
+      /\bFAIL\b/.test(input.output) ||
+      /\bfailed\b/.test(text)
     )
   }
 
@@ -574,10 +582,7 @@ export namespace ProbabilisticRollout {
     return [...new Set(selected.map((run) => run.command.trim()).filter(Boolean))].slice(0, 3)
   }
 
-  function extractQARuns(
-    rows: ReturnType<typeof toolResultRows>,
-    calls: Map<string, ToolCall>,
-  ): QARunExtract[] {
+  function extractQARuns(rows: ReturnType<typeof toolResultRows>, calls: Map<string, ToolCall>): QARunExtract[] {
     return rows.flatMap((row) => {
       if (row.event_data.tool !== "bash") return []
       const call = calls.get(row.event_data.callID)
@@ -586,19 +591,21 @@ export namespace ProbabilisticRollout {
       const summary = toolSummary(row, call)
       if (!summary) return []
       const output = row.event_data.output ?? ""
-      return [{
-        callID: row.event_data.callID,
-        command,
-        failed: qaCommandFailed({
+      return [
+        {
+          callID: row.event_data.callID,
           command,
-          status: row.event_data.status,
+          failed: qaCommandFailed({
+            command,
+            status: row.event_data.status,
+            output,
+            error: row.event_data.error,
+          }),
+          framework: qaFramework(command),
           output,
-          error: row.event_data.error,
-        }),
-        framework: qaFramework(command),
-        output,
-        summary,
-      }]
+          summary,
+        },
+      ]
     })
   }
 
@@ -668,9 +675,12 @@ export namespace ProbabilisticRollout {
     const confidence = decision?.confidence ?? null
     const readiness = decision?.readiness ?? null
     const available = !!decision
-    const abstained = !available
-      || confidence === null
-      || (abstainBelow !== undefined ? confidence < abstainBelow || readiness === "needs_review" : readiness === "needs_review")
+    const abstained =
+      !available ||
+      confidence === null ||
+      (abstainBelow !== undefined
+        ? confidence < abstainBelow || readiness === "needs_review"
+        : readiness === "needs_review")
     const predictedPositive = confidence === null || abstained ? null : confidence >= threshold
 
     return {
@@ -725,7 +735,10 @@ export namespace ProbabilisticRollout {
     const resolvedLabeledItems = Math.min(Math.max(summary.resolvedLabeledItems, 0), totalItems)
     const declaredLabeledItems = Math.max(summary.labeledItems ?? 0, 0)
     const declaredUnresolvedLabeledItems = Math.max(summary.unresolvedLabeledItems ?? 0, 0)
-    const labeledItems = Math.min(totalItems, Math.max(declaredLabeledItems, resolvedLabeledItems + declaredUnresolvedLabeledItems))
+    const labeledItems = Math.min(
+      totalItems,
+      Math.max(declaredLabeledItems, resolvedLabeledItems + declaredUnresolvedLabeledItems),
+    )
     const unresolvedLabeledItems = Math.min(
       totalItems - resolvedLabeledItems,
       Math.max(declaredUnresolvedLabeledItems, labeledItems - resolvedLabeledItems),
@@ -761,13 +774,22 @@ export namespace ProbabilisticRollout {
   export function readinessState(
     summary: Pick<
       ReplayReadinessSummary,
-      "readyForBenchmark" | "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels" | "gates"
+      | "readyForBenchmark"
+      | "totalItems"
+      | "labeledItems"
+      | "resolvedLabeledItems"
+      | "unresolvedLabeledItems"
+      | "missingLabels"
+      | "gates"
     >,
   ): UserFacingReadinessState {
     const counts = normalizedReadinessCounts(summary)
-    const blockingGate = (summary.gates ?? []).find((gate) =>
-      gate.status === "fail" && (gate.name === "exportable-session-shape" || gate.name === "workflow-evidence-present"))
-      ?? (summary.gates ?? []).find((gate) => gate.status === "fail")
+    const blockingGate =
+      (summary.gates ?? []).find(
+        (gate) =>
+          gate.status === "fail" &&
+          (gate.name === "exportable-session-shape" || gate.name === "workflow-evidence-present"),
+      ) ?? (summary.gates ?? []).find((gate) => gate.status === "fail")
     if (summary.readyForBenchmark) return "ready"
     if (blockingGate) return "blocked"
     if (counts.totalItems === 0) return "blocked"
@@ -778,7 +800,13 @@ export namespace ProbabilisticRollout {
   export function readinessStateLabel(
     summary: Pick<
       ReplayReadinessSummary,
-      "readyForBenchmark" | "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels" | "gates"
+      | "readyForBenchmark"
+      | "totalItems"
+      | "labeledItems"
+      | "resolvedLabeledItems"
+      | "unresolvedLabeledItems"
+      | "missingLabels"
+      | "gates"
     >,
   ) {
     const state = readinessState(summary)
@@ -827,14 +855,23 @@ export namespace ProbabilisticRollout {
   export function readinessDetailLabel(
     summary: Pick<
       ReplayReadinessSummary,
-      "readyForBenchmark" | "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels" | "gates"
+      | "readyForBenchmark"
+      | "totalItems"
+      | "labeledItems"
+      | "resolvedLabeledItems"
+      | "unresolvedLabeledItems"
+      | "missingLabels"
+      | "gates"
     >,
   ) {
     const state = readinessState(summary)
     if (state === "blocked") {
-      const blockingGate = (summary.gates ?? []).find((gate) =>
-        gate.status === "fail" && (gate.name === "exportable-session-shape" || gate.name === "workflow-evidence-present"))
-        ?? (summary.gates ?? []).find((gate) => gate.status === "fail")
+      const blockingGate =
+        (summary.gates ?? []).find(
+          (gate) =>
+            gate.status === "fail" &&
+            (gate.name === "exportable-session-shape" || gate.name === "workflow-evidence-present"),
+        ) ?? (summary.gates ?? []).find((gate) => gate.status === "fail")
       return blockingGate?.detail ?? "no replay evidence yet"
     }
     if (state === "ready") return `benchmark ready · ${readinessResolvedLabelsSummary(summary)}`
@@ -869,26 +906,30 @@ export namespace ProbabilisticRollout {
     }
 
     if (state === "blocked") {
-      return nextAction || `Capture ${workflowPromptLabel(summary.workflow)} workflow activity before exporting replay again.`
+      return (
+        nextAction ||
+        `Capture ${workflowPromptLabel(summary.workflow)} workflow activity before exporting replay again.`
+      )
     }
 
     const coverageMode = normalizedLabelCoverageMode(summary)
-    const fallback = coverageMode === "complete"
-      ? `Check ${workflowPromptLabel(summary.workflow)} replay readiness gates before benchmarking.`
-      : coverageMode === "missing_only"
-        ? "Record outcome labels for the remaining exported artifacts."
-        : coverageMode === "unresolved_only"
-          ? "Revisit unresolved outcome labels using the current session evidence."
-          : "Finish label coverage for the remaining exported artifacts."
+    const fallback =
+      coverageMode === "complete"
+        ? `Check ${workflowPromptLabel(summary.workflow)} replay readiness gates before benchmarking.`
+        : coverageMode === "missing_only"
+          ? "Record outcome labels for the remaining exported artifacts."
+          : coverageMode === "unresolved_only"
+            ? "Revisit unresolved outcome labels using the current session evidence."
+            : "Finish label coverage for the remaining exported artifacts."
 
     if (!nextAction) return fallback
 
     if (
-      nextAction === "Finish label coverage for the remaining exported artifacts."
-      || nextAction === "Finish QA label coverage for the remaining exported test artifacts."
-      || nextAction === "Record QA outcomes for the exported test artifacts."
-      || nextAction === "Resolve at least one QA label before benchmarking."
-      || nextAction === "Resolve at least one exported artifact label before benchmarking."
+      nextAction === "Finish label coverage for the remaining exported artifacts." ||
+      nextAction === "Finish QA label coverage for the remaining exported test artifacts." ||
+      nextAction === "Record QA outcomes for the exported test artifacts." ||
+      nextAction === "Resolve at least one QA label before benchmarking." ||
+      nextAction === "Resolve at least one exported artifact label before benchmarking."
     ) {
       return fallback
     }
@@ -1122,9 +1163,9 @@ export namespace ProbabilisticRollout {
   }
 
   export function summarizeReplayReadiness(input: { replay: ReplayExport; labels?: Label[] }) {
-    const labels = (input.labels ?? []).filter((label) => (
-      label.sessionID === input.replay.sessionID && label.workflow === input.replay.workflow
-    ))
+    const labels = (input.labels ?? []).filter(
+      (label) => label.sessionID === input.replay.sessionID && label.workflow === input.replay.workflow,
+    )
     const labelMap = new Map(labels.map((label) => [label.artifactID, label]))
     const { anchorKind, evidenceKind } = readinessKinds(input.replay.workflow)
     const anchorItems = input.replay.items.filter((item) => item.artifactKind === anchorKind).length
@@ -1143,15 +1184,22 @@ export namespace ProbabilisticRollout {
 
     const exportable = input.replay.items.length > 0 && anchorItems > 0
     const hasWorkflowEvidence = evidenceItems > 0 || toolSummaryCount > 0
-    const qaRecommendedCommands = input.replay.workflow !== "qa"
-      ? []
-      : [...new Set(input.replay.items.flatMap((item) => {
-          const directCommand = stringField(item.evidence.summary, "command")
-          if (item.artifactKind === "qa_failure" && directCommand) return [directCommand]
-          const recommended = item.evidence.summary?.["recommendedCommands"]
-          if (!Array.isArray(recommended)) return []
-          return recommended.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-        }))].slice(0, 3)
+    const qaRecommendedCommands =
+      input.replay.workflow !== "qa"
+        ? []
+        : [
+            ...new Set(
+              input.replay.items.flatMap((item) => {
+                const directCommand = stringField(item.evidence.summary, "command")
+                if (item.artifactKind === "qa_failure" && directCommand) return [directCommand]
+                const recommended = item.evidence.summary?.["recommendedCommands"]
+                if (!Array.isArray(recommended)) return []
+                return recommended.filter(
+                  (value): value is string => typeof value === "string" && value.trim().length > 0,
+                )
+              }),
+            ),
+          ].slice(0, 3)
 
     const gates: ReplayReadinessGate[] = [
       {
@@ -1171,18 +1219,20 @@ export namespace ProbabilisticRollout {
       {
         name: "label-coverage",
         status: labeledItems === 0 ? "warn" : missingLabels === 0 && unresolvedLabeledItems === 0 ? "pass" : "warn",
-        detail: labeledItems === 0
-          ? "no labels recorded for exported artifacts"
-          : missingLabels === 0 && unresolvedLabeledItems === 0
-            ? `all ${labeledItems} exported artifact(s) are labeled and resolved`
-            : `${labeledItems} labeled, ${missingLabels} missing, ${unresolvedLabeledItems} unresolved`,
+        detail:
+          labeledItems === 0
+            ? "no labels recorded for exported artifacts"
+            : missingLabels === 0 && unresolvedLabeledItems === 0
+              ? `all ${labeledItems} exported artifact(s) are labeled and resolved`
+              : `${labeledItems} labeled, ${missingLabels} missing, ${unresolvedLabeledItems} unresolved`,
       },
       {
         name: "benchmark-readiness",
         status: resolvedLabeledItems > 0 ? "pass" : "warn",
-        detail: resolvedLabeledItems > 0
-          ? `${resolvedLabeledItems} resolved label(s) available for calibration or benchmark work`
-          : "no resolved labels available yet for calibration or benchmark work",
+        detail:
+          resolvedLabeledItems > 0
+            ? `${resolvedLabeledItems} resolved label(s) available for calibration or benchmark work`
+            : "no resolved labels available yet for calibration or benchmark work",
       },
     ]
 
@@ -1190,9 +1240,10 @@ export namespace ProbabilisticRollout {
       gates.push({
         name: "targeted-test-recommendation",
         status: qaRecommendedCommands.length > 0 ? "pass" : "warn",
-        detail: qaRecommendedCommands.length > 0
-          ? `prioritize these QA command(s): ${qaRecommendedCommands.join(" | ")}`
-          : "no targeted QA command recommendation could be derived from the recorded test evidence",
+        detail:
+          qaRecommendedCommands.length > 0
+            ? `prioritize these QA command(s): ${qaRecommendedCommands.join(" | ")}`
+            : "no targeted QA command recommendation could be derived from the recorded test evidence",
       })
     }
 
@@ -1316,9 +1367,10 @@ export namespace ProbabilisticRollout {
       if (!label || !isResolved(label)) continue
       if (label.workflow !== item.workflow || label.artifactKind !== item.artifactKind) continue
 
-      const abstained = abstainBelow !== undefined
-        ? confidence < abstainBelow || decision.readiness === "needs_review"
-        : decision.readiness === "needs_review"
+      const abstained =
+        abstainBelow !== undefined
+          ? confidence < abstainBelow || decision.readiness === "needs_review"
+          : decision.readiness === "needs_review"
 
       records.push({
         artifactID: item.artifactID,
@@ -1436,21 +1488,22 @@ export namespace ProbabilisticRollout {
     const tn = considered.filter((record) => !record.predictedPositive && !record.actualPositive).length
     const fn = considered.filter((record) => !record.predictedPositive && record.actualPositive).length
     const bins = calibrationBins(records, options?.bins ?? 5)
-    const calibrationError = records.length === 0
-      ? null
-      : Number(
-          (
-            bins.reduce((sum, bin) => {
-              if (bin.count === 0 || bin.avgConfidence === null || bin.empiricalRate === null) return sum
-              return sum + Math.abs(bin.avgConfidence - bin.empiricalRate) * bin.count
-            }, 0) / records.length
-          ).toFixed(4),
-        )
+    const calibrationError =
+      records.length === 0
+        ? null
+        : Number(
+            (
+              bins.reduce((sum, bin) => {
+                if (bin.count === 0 || bin.avgConfidence === null || bin.empiricalRate === null) return sum
+                return sum + Math.abs(bin.avgConfidence - bin.empiricalRate) * bin.count
+              }, 0) / records.length
+            ).toFixed(4),
+          )
 
     return {
       schemaVersion: 1,
       kind: "ax-code-quality-calibration-summary",
-      source: options?.source ?? (options?.predictions?.[0]?.source ?? "baseline"),
+      source: options?.source ?? options?.predictions?.[0]?.source ?? "baseline",
       threshold,
       abstainBelow,
       totalItems: items.length,
@@ -1543,7 +1596,10 @@ export namespace ProbabilisticRollout {
 
     gates.push({
       name: "dataset-consistency",
-      status: baseline.totalItems === candidate.totalItems && baseline.labeledItems === candidate.labeledItems ? "pass" : "warn",
+      status:
+        baseline.totalItems === candidate.totalItems && baseline.labeledItems === candidate.labeledItems
+          ? "pass"
+          : "warn",
       detail: `baseline total/labeled=${baseline.totalItems}/${baseline.labeledItems}, candidate total/labeled=${candidate.totalItems}/${candidate.labeledItems}`,
     })
     gates.push({
@@ -1568,7 +1624,8 @@ export namespace ProbabilisticRollout {
     })
     gates.push({
       name: "calibration-error",
-      status: calibrationErrorIncrease !== null && calibrationErrorIncrease > maxCalibrationErrorIncrease ? "warn" : "pass",
+      status:
+        calibrationErrorIncrease !== null && calibrationErrorIncrease > maxCalibrationErrorIncrease ? "warn" : "pass",
       detail: `candidate calibration error delta=${calibrationErrorIncrease ?? "n/a"} (allowed increase ${maxCalibrationErrorIncrease})`,
     })
 
@@ -1608,14 +1665,20 @@ export namespace ProbabilisticRollout {
     lines.push(`- overall status: ${comparison.overallStatus}`)
     lines.push("")
     lines.push("Dataset:")
-    lines.push(`- baseline total/labeled/scored: ${comparison.dataset.baselineTotalItems}/${comparison.dataset.baselineLabeledItems}/${comparison.dataset.baselineScoredItems}`)
-    lines.push(`- candidate total/labeled/scored: ${comparison.dataset.candidateTotalItems}/${comparison.dataset.candidateLabeledItems}/${comparison.dataset.candidateScoredItems}`)
+    lines.push(
+      `- baseline total/labeled/scored: ${comparison.dataset.baselineTotalItems}/${comparison.dataset.baselineLabeledItems}/${comparison.dataset.baselineScoredItems}`,
+    )
+    lines.push(
+      `- candidate total/labeled/scored: ${comparison.dataset.candidateTotalItems}/${comparison.dataset.candidateLabeledItems}/${comparison.dataset.candidateScoredItems}`,
+    )
     lines.push(`- baseline missing prediction items: ${comparison.dataset.baselineMissingPredictionItems}`)
     lines.push(`- candidate missing prediction items: ${comparison.dataset.candidateMissingPredictionItems}`)
     lines.push("")
     lines.push("Metrics:")
     for (const [name, metric] of Object.entries(comparison.metrics)) {
-      lines.push(`- ${name}: baseline=${metric.baseline ?? "n/a"}, candidate=${metric.candidate ?? "n/a"}, delta=${metric.delta ?? "n/a"}`)
+      lines.push(
+        `- ${name}: baseline=${metric.baseline ?? "n/a"}, candidate=${metric.candidate ?? "n/a"}, delta=${metric.delta ?? "n/a"}`,
+      )
     }
     lines.push("")
     lines.push("Gates:")
@@ -1656,14 +1719,13 @@ export namespace ProbabilisticRollout {
         candidateThreshold,
         candidateAbstainBelow,
       )
-      const confidenceDelta = baselineDecision.confidence === null || candidateDecision.confidence === null
-        ? null
-        : Number((candidateDecision.confidence - baselineDecision.confidence).toFixed(4))
+      const confidenceDelta =
+        baselineDecision.confidence === null || candidateDecision.confidence === null
+          ? null
+          : Number((candidateDecision.confidence - baselineDecision.confidence).toFixed(4))
       const baselineRank = baselineDecision.rank ?? null
       const candidateRank = candidateDecision.rank ?? null
-      const rankDelta = baselineRank === null || candidateRank === null
-        ? null
-        : candidateRank - baselineRank
+      const rankDelta = baselineRank === null || candidateRank === null ? null : candidateRank - baselineRank
 
       return {
         schemaVersion: 1,
@@ -1679,9 +1741,10 @@ export namespace ProbabilisticRollout {
         candidate: candidateDecision,
         disagreement: {
           candidateMissing: !candidateDecision.available,
-          predictionChanged: baselineDecision.predictedPositive !== null
-            && candidateDecision.predictedPositive !== null
-            && baselineDecision.predictedPositive !== candidateDecision.predictedPositive,
+          predictionChanged:
+            baselineDecision.predictedPositive !== null &&
+            candidateDecision.predictedPositive !== null &&
+            baselineDecision.predictedPositive !== candidateDecision.predictedPositive,
           abstentionChanged: baselineDecision.abstained !== candidateDecision.abstained,
           confidenceDelta,
           rankDelta,
@@ -1704,12 +1767,14 @@ export namespace ProbabilisticRollout {
     const confidenceDeltas = comparable
       .map((record) => record.disagreement.confidenceDelta)
       .filter((delta): delta is number => delta !== null)
-    const avgConfidenceDelta = confidenceDeltas.length === 0
-      ? null
-      : Number((confidenceDeltas.reduce((sum, delta) => sum + delta, 0) / confidenceDeltas.length).toFixed(4))
-    const maxAbsConfidenceDelta = confidenceDeltas.length === 0
-      ? null
-      : Number(Math.max(...confidenceDeltas.map((delta) => Math.abs(delta))).toFixed(4))
+    const avgConfidenceDelta =
+      confidenceDeltas.length === 0
+        ? null
+        : Number((confidenceDeltas.reduce((sum, delta) => sum + delta, 0) / confidenceDeltas.length).toFixed(4))
+    const maxAbsConfidenceDelta =
+      confidenceDeltas.length === 0
+        ? null
+        : Number(Math.max(...confidenceDeltas.map((delta) => Math.abs(delta))).toFixed(4))
 
     return {
       schemaVersion: 1,

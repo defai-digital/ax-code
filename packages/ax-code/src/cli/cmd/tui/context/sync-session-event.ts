@@ -1,9 +1,4 @@
-export type SessionSyncEvent<
-  TSession extends { id: string },
-  TTodo,
-  TDiff,
-  TStatus,
-> =
+export type SessionSyncEvent<TSession extends { id: string }, TTodo, TDiff, TStatus> =
   | { type: "todo.updated"; properties: { sessionID: string; todos: TTodo[] } }
   | { type: "session.diff"; properties: { sessionID: string; diff: TDiff[] } }
   | { type: "session.deleted"; properties: { info: { id: string } } }
@@ -11,12 +6,7 @@ export type SessionSyncEvent<
   | { type: "session.updated"; properties: { info: TSession } }
   | { type: "session.status"; properties: { sessionID: string; status: TStatus } }
 
-export interface SessionSyncEventHandlers<
-  TSession extends { id: string },
-  TTodo,
-  TDiff,
-  TStatus,
-> {
+export interface SessionSyncEventHandlers<TSession extends { id: string }, TTodo, TDiff, TStatus> {
   setTodo: (sessionID: string, todos: TTodo[]) => void
   setSessionDiff: (sessionID: string, diff: TDiff[]) => void
   setSessionStatus: (sessionID: string, status: TStatus) => void
@@ -25,12 +15,7 @@ export interface SessionSyncEventHandlers<
   clearSessionSyncState: (sessionID: string) => void
 }
 
-export function handleSessionSyncEvent<
-  TSession extends { id: string },
-  TTodo,
-  TDiff,
-  TStatus,
->(
+export function handleSessionSyncEvent<TSession extends { id: string }, TTodo, TDiff, TStatus>(
   event: SessionSyncEvent<TSession, TTodo, TDiff, TStatus>,
   handlers: SessionSyncEventHandlers<TSession, TTodo, TDiff, TStatus>,
 ) {

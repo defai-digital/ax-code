@@ -155,10 +155,7 @@ function bfsUpstream(
   visited: Map<string, { symbol: CodeIntelligence.Symbol; distance: number; parent: string | null }>
   truncated: boolean
 } {
-  const visited = new Map<
-    string,
-    { symbol: CodeIntelligence.Symbol; distance: number; parent: string | null }
-  >()
+  const visited = new Map<string, { symbol: CodeIntelligence.Symbol; distance: number; parent: string | null }>()
   // Seeds live at distance 0. They count toward the budget.
   const queue: { id: CodeNodeID; distance: number }[] = []
   for (const seed of seeds) {
@@ -238,8 +235,7 @@ function computeRisk(params: {
   if (params.maxDistance >= 3) score += 10
   score = Math.min(100, score)
 
-  const label: DebugEngine.ImpactReport["riskLabel"] =
-    score >= 60 ? "high" : score >= 30 ? "medium" : "low"
+  const label: DebugEngine.ImpactReport["riskLabel"] = score >= 60 ? "high" : score >= 30 ? "medium" : "low"
   return { score, label }
 }
 

@@ -16,20 +16,20 @@ Chat with the [AX Code](https://github.com/defai-digital/ax-code) agent directly
 
 ## Keybindings
 
-| Action | macOS | Windows / Linux |
-|---|---|---|
-| Open chat | `Cmd+Shift+A` | `Ctrl+Shift+A` |
-| Explain selection | `Cmd+Alt+E` | `Ctrl+Alt+E` |
-| Open AX Code terminal | `Cmd+Esc` | `Ctrl+Esc` |
+| Action                | macOS         | Windows / Linux |
+| --------------------- | ------------- | --------------- |
+| Open chat             | `Cmd+Shift+A` | `Ctrl+Shift+A`  |
+| Explain selection     | `Cmd+Alt+E`   | `Ctrl+Alt+E`    |
+| Open AX Code terminal | `Cmd+Esc`     | `Ctrl+Esc`      |
 
 ## Settings
 
-| Setting | Default | Description |
-|---|---|---|
-| `axCode.binaryPath` | `""` | Path to the `ax-code` binary. Empty auto-detects (monorepo dev or PATH). |
-| `axCode.serverTimeoutMs` | `90000` | How long to wait for `ax-code serve` to start. |
-| `axCode.requestTimeoutMs` | `600000` | Per-message timeout (default 10 minutes). |
-| `axCode.defaultModel` | `""` | `providerID/modelID` used until overridden via the picker. |
+| Setting                   | Default  | Description                                                              |
+| ------------------------- | -------- | ------------------------------------------------------------------------ |
+| `axCode.binaryPath`       | `""`     | Path to the `ax-code` binary. Empty auto-detects (monorepo dev or PATH). |
+| `axCode.serverTimeoutMs`  | `90000`  | How long to wait for `ax-code serve` to start.                           |
+| `axCode.requestTimeoutMs` | `600000` | Per-message timeout (default 10 minutes).                                |
+| `axCode.defaultModel`     | `""`     | `providerID/modelID` used until overridden via the picker.               |
 
 ## Prerequisites
 

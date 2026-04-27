@@ -53,5 +53,10 @@ export function collapseSessionBreadcrumbs(
 ): SessionBreadcrumb[] {
   if (!input.narrow) return items
   if (items.length <= 4) return items
-  return [items[0], { kind: "ellipsis", id: "ellipsis", label: "...", current: false }, items[items.length - 2], items[items.length - 1]]
+  return [
+    items[0],
+    { kind: "ellipsis", id: "ellipsis", label: "...", current: false },
+    items[items.length - 2],
+    items[items.length - 1],
+  ]
 }

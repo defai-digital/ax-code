@@ -59,8 +59,9 @@ export interface CliLanguageModelProbeConfig {
 
 export async function probeCliLanguageModel(config: CliLanguageModelProbeConfig) {
   const definition = getCliProviderDefinition(config.providerID)
-  const resolved = definition ?? (
-    config.args && config.parser && config.promptMode
+  const resolved =
+    definition ??
+    (config.args && config.parser && config.promptMode
       ? {
           binary: config.binary,
           args: config.args,
@@ -68,8 +69,7 @@ export async function probeCliLanguageModel(config: CliLanguageModelProbeConfig)
           promptMode: config.promptMode,
           promptFlag: config.promptFlag,
         }
-      : undefined
-  )
+      : undefined)
   if (!resolved) throw new Error(`Unsupported CLI provider: ${config.providerID}`)
 
   const authError = await (config.authCheck ?? checkCliProviderAuth)(config.providerID, config.binary)

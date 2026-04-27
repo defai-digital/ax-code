@@ -33,7 +33,7 @@ export namespace Identifier {
       lastTimestamp = currentTimestamp
       counter = 0
     }
-    counter = (counter + 1) & 0xFFF
+    counter = (counter + 1) & 0xfff
 
     let now = BigInt(currentTimestamp) * BigInt(0x1000) + BigInt(counter)
 

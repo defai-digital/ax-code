@@ -146,11 +146,15 @@ export namespace SessionCompare {
     }
 
     if ((input.session1.semantic?.headline ?? null) !== (input.session2.semantic?.headline ?? null)) {
-      out.push(`change: ${input.session1.semantic?.headline ?? "none"} vs ${input.session2.semantic?.headline ?? "none"}`)
+      out.push(
+        `change: ${input.session1.semantic?.headline ?? "none"} vs ${input.session2.semantic?.headline ?? "none"}`,
+      )
     }
 
     if (input.session1.decision.total !== input.session2.decision.total) {
-      out.push(`decision score: ${input.session1.decision.total.toFixed(2)} vs ${input.session2.decision.total.toFixed(2)}`)
+      out.push(
+        `decision score: ${input.session1.decision.total.toFixed(2)} vs ${input.session2.decision.total.toFixed(2)}`,
+      )
     }
 
     if (input.session1.risk.score !== input.session2.risk.score) {

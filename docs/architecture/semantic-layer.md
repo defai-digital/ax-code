@@ -18,9 +18,9 @@ The system does not silently route one into the other. Callers choose the surfac
 
 ## Current Semantic Surfaces
 
-| Surface | Backing source | Current role |
-| ------- | -------------- | ------------ |
-| `lsp` tool | live LSP clients | freshest semantic answers, explicit live query surface |
+| Surface                  | Backing source            | Current role                                                                         |
+| ------------------------ | ------------------------- | ------------------------------------------------------------------------------------ |
+| `lsp` tool               | live LSP clients          | freshest semantic answers, explicit live query surface                               |
 | `code_intelligence` tool | indexed SQLite code graph | deterministic graph queries over indexed symbols, references, and call relationships |
 
 The `lsp` tool is the live-semantic interface. The `code_intelligence` tool is the indexed-semantic interface. Neither is a hidden fallback for the other.

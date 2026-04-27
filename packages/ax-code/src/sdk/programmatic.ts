@@ -887,9 +887,14 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
   // Enhancement #4: Timeout on createAgent
   if (opts.timeout) {
     const timeoutMs = opts.timeout
-    await withSdkTimeout(initPromise, timeoutMs, () => new TimeoutError(timeoutMs, "createAgent"), () => {
-      resolveKeepAlive()
-    })
+    await withSdkTimeout(
+      initPromise,
+      timeoutMs,
+      () => new TimeoutError(timeoutMs, "createAgent"),
+      () => {
+        resolveKeepAlive()
+      },
+    )
   } else {
     await initPromise
   }

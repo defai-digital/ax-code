@@ -86,21 +86,26 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
     attestationRecord: QualityPromotionSignedArchiveAttestationRecord.RecordArtifact
   }) {
     const attestationRecordReasons = QualityPromotionSignedArchiveAttestationRecord.verify(input.attestationRecord)
-    const embeddedAuditManifest = input.attestationRecord.signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+    const embeddedAuditManifest =
+      input.attestationRecord.signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle
+        .auditManifest
     const embeddedPromotion = embeddedAuditManifest.promotion
     const embeddedReleasePacket = embeddedAuditManifest.releasePacket
-    const promotionLinkagePass = input.promotion.source === input.attestationRecord.source
-      && input.promotion.promotionID === input.attestationRecord.promotionID
-    const promotionReferencePass = input.promotion.source === embeddedPromotion.source
-      && input.promotion.promotionID === embeddedPromotion.promotionID
-      && input.promotion.promotedAt === embeddedPromotion.promotedAt
-      && input.promotion.decision === embeddedPromotion.decision
-      && input.promotion.previousActiveSource === embeddedPromotion.previousActiveSource
-      && input.promotion.releasePacketID === embeddedReleasePacket.packetID
-      && input.promotion.promotionMode === embeddedReleasePacket.summary.promotionMode
-      && input.promotion.authorizedPromotion === embeddedReleasePacket.summary.authorizedPromotion
-    const signedArchiveLinkagePass = (input.promotion.signedArchiveID ?? input.attestationRecord.signedArchive.signedArchiveID)
-      === input.attestationRecord.signedArchive.signedArchiveID
+    const promotionLinkagePass =
+      input.promotion.source === input.attestationRecord.source &&
+      input.promotion.promotionID === input.attestationRecord.promotionID
+    const promotionReferencePass =
+      input.promotion.source === embeddedPromotion.source &&
+      input.promotion.promotionID === embeddedPromotion.promotionID &&
+      input.promotion.promotedAt === embeddedPromotion.promotedAt &&
+      input.promotion.decision === embeddedPromotion.decision &&
+      input.promotion.previousActiveSource === embeddedPromotion.previousActiveSource &&
+      input.promotion.releasePacketID === embeddedReleasePacket.packetID &&
+      input.promotion.promotionMode === embeddedReleasePacket.summary.promotionMode &&
+      input.promotion.authorizedPromotion === embeddedReleasePacket.summary.authorizedPromotion
+    const signedArchiveLinkagePass =
+      (input.promotion.signedArchiveID ?? input.attestationRecord.signedArchive.signedArchiveID) ===
+      input.attestationRecord.signedArchive.signedArchiveID
 
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
       {
@@ -131,7 +136,9 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
       },
       {
         name: "attestation-policy-acceptance",
-        status: input.attestationRecord.summary.acceptedByPolicy ? input.attestationRecord.summary.attestationStatus : "fail",
+        status: input.attestationRecord.summary.acceptedByPolicy
+          ? input.attestationRecord.summary.attestationStatus
+          : "fail",
         detail: input.attestationRecord.summary.acceptedByPolicy
           ? `attestation accepted by ${input.attestationRecord.summary.policySource} policy`
           : `attestation rejected by ${input.attestationRecord.summary.policySource} policy`,
@@ -158,7 +165,9 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
   }) {
     const attestationRecordReasons = QualityPromotionSignedArchiveAttestationRecord.verify(input.attestationRecord)
     if (attestationRecordReasons.length > 0) {
-      throw new Error(`Cannot create signed archive attestation packet for ${input.attestationRecord.source}: invalid attestation record (${attestationRecordReasons[0]})`)
+      throw new Error(
+        `Cannot create signed archive attestation packet for ${input.attestationRecord.source}: invalid attestation record (${attestationRecordReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const packetID = `${input.attestationRecord.recordID}-packet`
@@ -178,14 +187,20 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
   export function verify(packet: PacketArtifact) {
     const reasons: string[] = []
     if (packet.source !== packet.attestationRecord.source) {
-      reasons.push(`signed archive attestation packet source mismatch: ${packet.source} vs ${packet.attestationRecord.source}`)
+      reasons.push(
+        `signed archive attestation packet source mismatch: ${packet.source} vs ${packet.attestationRecord.source}`,
+      )
     }
     if (packet.promotion.promotionID !== packet.attestationRecord.promotionID) {
-      reasons.push(`signed archive attestation packet promotion mismatch: ${packet.promotion.promotionID} vs ${packet.attestationRecord.promotionID}`)
+      reasons.push(
+        `signed archive attestation packet promotion mismatch: ${packet.promotion.promotionID} vs ${packet.attestationRecord.promotionID}`,
+      )
     }
     const attestationRecordReasons = QualityPromotionSignedArchiveAttestationRecord.verify(packet.attestationRecord)
     if (attestationRecordReasons.length > 0) {
-      reasons.push(`signed archive attestation packet attestation record mismatch for ${packet.source} (${attestationRecordReasons[0]})`)
+      reasons.push(
+        `signed archive attestation packet attestation record mismatch for ${packet.source} (${attestationRecordReasons[0]})`,
+      )
     }
     const expectedSummary = evaluateSummary({
       promotion: packet.promotion,
@@ -214,7 +229,9 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Signed archive attestation packet ${packet.packetID} already exists for source ${packet.source} with different content`)
+      throw new Error(
+        `Signed archive attestation packet ${packet.packetID} already exists for source ${packet.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(packet.source, packet.packetID), next)
@@ -223,7 +240,9 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
   }
 
   export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_signed_archive_attestation_packet", encode(source)]] : [["quality_model_signed_archive_attestation_packet"]]
+    const prefixes = source
+      ? [["quality_model_signed_archive_attestation_packet", encode(source)]]
+      : [["quality_model_signed_archive_attestation_packet"]]
     const packets: PacketArtifact[] = []
     for (const prefix of prefixes) {
       const keys = await Storage.list(prefix)
@@ -244,7 +263,9 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
     const prev = JSON.stringify(persisted.packet)
     const curr = JSON.stringify(packet)
     if (prev !== curr) {
-      throw new Error(`Persisted signed archive attestation packet ${packet.packetID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted signed archive attestation packet ${packet.packetID} does not match the provided artifact`,
+      )
     }
     return persisted
   }

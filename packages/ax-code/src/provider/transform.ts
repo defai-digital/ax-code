@@ -40,11 +40,18 @@ export namespace ProviderTransform {
       const field = model.capabilities.interleaved.field
       return msgs.map((msg) => {
         if (msg.role === "assistant" && Array.isArray(msg.content)) {
-          const reasoningParts = msg.content.filter((part: { type: string }) => part.type === "reasoning")
-          const reasoningText = reasoningParts.map((part: { type: string; text?: string }) => part.text ?? "").join("")
-
-          // Filter out reasoning parts from content
-          const filteredContent = msg.content.filter((part: { type: string }) => part.type !== "reasoning")
+          // Single pass: collect reasoning text and the non-reasoning content
+          // simultaneously. The previous impl ran two filter() passes over the
+          // same array — visible on long assistant turns with many parts.
+          let reasoningText = ""
+          const filteredContent: typeof msg.content = []
+          for (const part of msg.content as Array<{ type: string; text?: string }>) {
+            if (part.type === "reasoning") {
+              if (part.text) reasoningText += part.text
+            } else {
+              filteredContent.push(part as (typeof msg.content)[number])
+            }
+          }
 
           // Include reasoning_content | reasoning_details directly on the message for all assistant messages
           if (reasoningText) {
@@ -88,21 +95,38 @@ export namespace ProviderTransform {
       const filtered = msg.content.map((part) => {
         if (part.type !== "file" && part.type !== "image") return part
 
-        // Check for empty base64 image data
+        // Parse the image source once. For data: URLs the previous impl ran a
+        // greedy regex `/^data:([^;]+);base64,(.*)$/` against the full string
+        // and a separate `split(";")[0].replace("data:", "")` — both scan the
+        // entire base64 payload (potentially megabytes). Use indexOf so we
+        // never touch the payload bytes for header parsing.
+        let mime: string
         if (part.type === "image") {
           const imageStr = part.image.toString()
           if (imageStr.startsWith("data:")) {
-            const match = imageStr.match(/^data:([^;]+);base64,(.*)$/)
-            if (match && (!match[2] || match[2].length === 0)) {
-              return {
-                type: "text" as const,
-                text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
+            const semiIdx = imageStr.indexOf(";", 5)
+            mime = semiIdx === -1 ? imageStr.slice(5) : imageStr.slice(5, semiIdx)
+            // Empty `data:<mime>;base64,` — payload is empty.
+            if (semiIdx !== -1) {
+              const commaIdx = imageStr.indexOf(",", semiIdx + 1)
+              if (
+                commaIdx === imageStr.length - 1 &&
+                imageStr.slice(semiIdx + 1, commaIdx) === "base64"
+              ) {
+                return {
+                  type: "text" as const,
+                  text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
+                }
               }
             }
+          } else {
+            // Non-data URLs: previous impl returned the full string as the
+            // mime via split(";")[0]. Preserve that behavior.
+            mime = imageStr
           }
+        } else {
+          mime = part.mediaType
         }
-
-        const mime = part.type === "image" ? part.image.toString().split(";")[0].replace("data:", "") : part.mediaType
         const filename = part.type === "file" ? part.filename : undefined
         const modality = mimeToModality(mime)
         if (!modality) return part
@@ -216,23 +240,22 @@ export namespace ProviderTransform {
         return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
 
       case "@ai-sdk/google-vertex":
-      case "@ai-sdk/google":
+      case "@ai-sdk/google": {
         // https://v5.ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai
-        {
-          let levels = ["low", "high"]
-          if (id.includes("3.1")) levels = ["low", "medium", "high"]
-          return Object.fromEntries(
-            levels.map((effort) => [
-              effort,
-              {
-                thinkingConfig: {
-                  includeThoughts: true,
-                  thinkingLevel: effort,
-                },
+        let levels = ["low", "high"]
+        if (id.includes("3.1")) levels = ["low", "medium", "high"]
+        return Object.fromEntries(
+          levels.map((effort) => [
+            effort,
+            {
+              thinkingConfig: {
+                includeThoughts: true,
+                thinkingLevel: effort,
               },
-            ]),
-          )
-        }
+            },
+          ]),
+        )
+      }
     }
     return {}
   }

@@ -65,9 +65,7 @@ export function dispatchStoreBackedSyncEvent<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
   TStore extends SyncEventStoreState<TSession, TTodo, TDiff, TStatus, TMessage, TPart>,
->(
-  input: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>,
-) {
+>(input: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>) {
   const setStore = input.setStore as unknown as SetStoreFunction<
     SyncEventStoreState<TSession, TTodo, TDiff, TStatus, TMessage, TPart>
   >

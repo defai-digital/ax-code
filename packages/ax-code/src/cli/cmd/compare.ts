@@ -15,7 +15,11 @@ export const CompareCommand = cmd({
       .positional("session1", { describe: "First session ID", type: "string", demandOption: true })
       .positional("session2", { describe: "Second session ID", type: "string", demandOption: true })
       .option("json", { describe: "Output as JSON", type: "boolean", default: false })
-      .option("deep", { describe: "Step-level divergence analysis via replay comparison", type: "boolean", default: false }),
+      .option("deep", {
+        describe: "Step-level divergence analysis via replay comparison",
+        type: "boolean",
+        default: false,
+      }),
   async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
@@ -31,17 +35,25 @@ export const CompareCommand = cmd({
         const deep2 = args.deep ? Replay.compare(sid2) : undefined
 
         if (args.json) {
-          console.log(JSON.stringify({
-            session1: { id: sid1, title: s1.title, risk: r1, events: e1.length },
-            session2: { id: sid2, title: s2.title, risk: r2, events: e2.length },
-            differences: diff(e1, e2),
-            ...(args.deep ? {
-              replay: {
-                session1: { stepsCompared: deep1!.stepsCompared, divergences: deep1!.divergences.length },
-                session2: { stepsCompared: deep2!.stepsCompared, divergences: deep2!.divergences.length },
+          console.log(
+            JSON.stringify(
+              {
+                session1: { id: sid1, title: s1.title, risk: r1, events: e1.length },
+                session2: { id: sid2, title: s2.title, risk: r2, events: e2.length },
+                differences: diff(e1, e2),
+                ...(args.deep
+                  ? {
+                      replay: {
+                        session1: { stepsCompared: deep1!.stepsCompared, divergences: deep1!.divergences.length },
+                        session2: { stepsCompared: deep2!.stepsCompared, divergences: deep2!.divergences.length },
+                      },
+                    }
+                  : {}),
               },
-            } : {}),
-          }, null, 2))
+              null,
+              2,
+            ),
+          )
           return
         }
 
@@ -150,11 +162,18 @@ function countByType(events: ReplayEvent[]): Record<string, number> {
   return counts
 }
 
-function diff(e1: ReplayEvent[], e2: ReplayEvent[]): { toolChainDiffers: boolean; routeDiffers: boolean; eventCountDelta: number } {
+function diff(
+  e1: ReplayEvent[],
+  e2: ReplayEvent[],
+): { toolChainDiffers: boolean; routeDiffers: boolean; eventCountDelta: number } {
   const tools1 = extractToolChain(e1).join(",")
   const tools2 = extractToolChain(e2).join(",")
-  const routes1 = extractRoutes(e1).map((r) => `${r.from}-${r.to}`).join(",")
-  const routes2 = extractRoutes(e2).map((r) => `${r.from}-${r.to}`).join(",")
+  const routes1 = extractRoutes(e1)
+    .map((r) => `${r.from}-${r.to}`)
+    .join(",")
+  const routes2 = extractRoutes(e2)
+    .map((r) => `${r.from}-${r.to}`)
+    .join(",")
   return {
     toolChainDiffers: tools1 !== tools2,
     routeDiffers: routes1 !== routes2,

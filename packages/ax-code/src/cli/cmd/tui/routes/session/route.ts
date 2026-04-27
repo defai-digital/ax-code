@@ -87,8 +87,7 @@ export function messageRoute(
     if (item) {
       const event = row.event_data
       if (event.type !== "agent.route") throw new Error("narrowing")
-      const matched = event.matched?.length ? event.matched.join(", ") : undefined
-      const footer = [`confidence ${event.confidence.toFixed(2)}`, matched].filter(Boolean).join(" · ")
+      const footer = `confidence ${event.confidence.toFixed(2)}`
       return {
         title: `Routing: ${item.title}`,
         description: item.detail,

@@ -93,13 +93,10 @@ describe("isolation.assertBash", () => {
   test("allows workspace-local bash execution", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
     expect(() =>
-      Isolation.assertBash(
-        state,
-        path.join(root, "pkg"),
-        root,
-        worktree,
-        [path.join(root, "pkg/file.txt"), path.join(worktree, "other.txt")],
-      )
+      Isolation.assertBash(state, path.join(root, "pkg"), root, worktree, [
+        path.join(root, "pkg/file.txt"),
+        path.join(worktree, "other.txt"),
+      ]),
     ).not.toThrow()
   })
 
@@ -142,7 +139,7 @@ describe("isolation.assertBash", () => {
     await fs.symlink(outside, path.join(dir, "pkg", "link"))
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, dir, tree)
     expect(() =>
-      Isolation.assertBash(state, path.join(dir, "pkg"), dir, tree, [path.join(dir, "pkg", "link")])
+      Isolation.assertBash(state, path.join(dir, "pkg"), dir, tree, [path.join(dir, "pkg", "link")]),
     ).toThrow("Bash command targets path outside workspace boundary")
   })
 })

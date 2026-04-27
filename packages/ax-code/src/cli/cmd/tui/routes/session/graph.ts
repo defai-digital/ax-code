@@ -150,7 +150,10 @@ export namespace SessionGraph {
           id: `step:${item.stepIndex ?? item.id}`,
           title: `Step ${item.stepIndex ?? "?"}`,
           description: `${list.length} child event${list.length === 1 ? "" : "s"}`,
-          footer: [formatDuration(item.duration), item.tokens ? `tokens ${item.tokens.input}/${item.tokens.output}` : undefined]
+          footer: [
+            formatDuration(item.duration),
+            item.tokens ? `tokens ${item.tokens.input}/${item.tokens.output}` : undefined,
+          ]
             .filter(Boolean)
             .join(" · "),
           category: "Steps",
@@ -188,7 +191,10 @@ export namespace SessionGraph {
           id: `llm:${idx}`,
           title: item.label,
           description: item.tokens ? `${item.tokens.input}/${item.tokens.output} tokens` : undefined,
-          footer: [parent?.stepIndex != null ? `step ${parent.stepIndex}` : undefined, item.duration != null ? `${item.duration}ms` : undefined]
+          footer: [
+            parent?.stepIndex != null ? `step ${parent.stepIndex}` : undefined,
+            item.duration != null ? `${item.duration}ms` : undefined,
+          ]
             .filter(Boolean)
             .join(" · "),
           category: "LLM",

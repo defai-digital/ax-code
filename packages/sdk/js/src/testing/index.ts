@@ -184,7 +184,9 @@ export function assertToolSuccess(result: RunResult, toolName: string): ToolCall
   const match = forTool.find((tc) => tc.status === "completed")
   if (!match) {
     if (forTool.length > 0) throw new Error(`Tool "${toolName}" was called but failed (status: ${forTool[0].status})`)
-    throw new Error(`Expected a successful call to "${toolName}" but it was never called. Called: ${calls.map((tc) => tc.tool).join(", ")}`)
+    throw new Error(
+      `Expected a successful call to "${toolName}" but it was never called. Called: ${calls.map((tc) => tc.tool).join(", ")}`,
+    )
   }
   return match
 }
@@ -199,7 +201,9 @@ export function assertToolFailure(result: RunResult, toolName: string): ToolCall
   const match = forTool.find((tc) => tc.status === "error")
   if (!match) {
     if (forTool.length > 0) throw new Error(`Tool "${toolName}" was called but succeeded (expected failure)`)
-    throw new Error(`Expected a failed call to "${toolName}" but it was never called. Called: ${calls.map((tc) => tc.tool).join(", ")}`)
+    throw new Error(
+      `Expected a failed call to "${toolName}" but it was never called. Called: ${calls.map((tc) => tc.tool).join(", ")}`,
+    )
   }
   return match
 }

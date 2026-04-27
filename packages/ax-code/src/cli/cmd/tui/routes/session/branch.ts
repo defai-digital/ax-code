@@ -37,7 +37,8 @@ export namespace SessionBranch {
       out.push({
         id: `summary:${best.id}`,
         title: `Recommended ${best.title}`,
-        description: [best.semantic?.headline, ...input.reasons].filter(Boolean).join(" · ") || "signals are materially similar",
+        description:
+          [best.semantic?.headline, ...input.reasons].filter(Boolean).join(" · ") || "signals are materially similar",
         footer: `confidence ${input.confidence} · ${best.headline}`,
         category: "Overview",
         sessionID: best.id,
@@ -66,7 +67,11 @@ export namespace SessionBranch {
       {
         id: `continue:${best.id}`,
         title: best.current ? "Continue current branch" : `Continue with ${best.title}`,
-        description: [best.semantic?.headline, best.view.plan, best.current ? "recommended current session" : "recommended"]
+        description: [
+          best.semantic?.headline,
+          best.view.plan,
+          best.current ? "recommended current session" : "recommended",
+        ]
           .filter(Boolean)
           .join(" · "),
         footer: `confidence ${input.confidence} · ${best.headline}`,
@@ -82,7 +87,9 @@ export namespace SessionBranch {
       .map((item) => ({
         id: `compare:${item.id}`,
         title: `Compare with ${item.title}`,
-        description: [item.semantic?.headline, item.view.plan, item.recommended ? "recommended" : ""].filter(Boolean).join(" · "),
+        description: [item.semantic?.headline, item.view.plan, item.recommended ? "recommended" : ""]
+          .filter(Boolean)
+          .join(" · "),
         footer: `${item.headline} · risk ${item.risk.level.toLowerCase()} (${item.risk.score}/100)${item.semantic ? ` · ${item.semantic.risk} change risk` : ""}`,
         category: "Compare",
         sessionID: item.id,

@@ -63,7 +63,9 @@ export namespace QualityShadowStore {
   }
 
   export async function list(sessionID: string, candidateSource?: string) {
-    const prefixes = candidateSource ? [["quality_shadow", sessionID, encode(candidateSource)]] : [["quality_shadow", sessionID]]
+    const prefixes = candidateSource
+      ? [["quality_shadow", sessionID, encode(candidateSource)]]
+      : [["quality_shadow", sessionID]]
     const records: ProbabilisticRollout.ShadowRecord[] = []
 
     for (const prefix of prefixes) {
@@ -87,9 +89,7 @@ export namespace QualityShadowStore {
   export async function listAll(candidateSource?: string) {
     const rootKeys = await Storage.list(["quality_shadow"])
     const sessionIDs = [...new Set(rootKeys.map((parts) => parts[1]).filter((value): value is string => !!value))]
-    const records = (
-      await Promise.all(sessionIDs.map((sessionID) => list(sessionID, candidateSource)))
-    ).flat()
+    const records = (await Promise.all(sessionIDs.map((sessionID) => list(sessionID, candidateSource)))).flat()
     return sortRecords(records)
   }
 

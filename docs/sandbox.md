@@ -18,17 +18,17 @@ The setting persists across sessions in `ax-code.json`.
 
 ## What Changes
 
-| Capability | Sandbox Off | Sandbox On |
-|---|---|---|
-| File writes inside workspace | Allowed | Allowed |
-| File writes outside workspace | Allowed | **Blocked** |
-| Writes to `.git/` | Allowed | **Blocked** |
-| Writes to `.ax-code/` | Allowed | **Blocked** |
-| Bash commands | Unrestricted | **Workspace only** |
-| Bash targeting `.git/`, `.ax-code/` | Allowed | **Blocked** |
-| Bash targeting outside workspace | Allowed | **Blocked** |
-| Network access (webfetch, websearch) | Allowed | **Blocked** |
-| Read operations (read, glob, grep) | Unrestricted | Unrestricted |
+| Capability                           | Sandbox Off  | Sandbox On         |
+| ------------------------------------ | ------------ | ------------------ |
+| File writes inside workspace         | Allowed      | Allowed            |
+| File writes outside workspace        | Allowed      | **Blocked**        |
+| Writes to `.git/`                    | Allowed      | **Blocked**        |
+| Writes to `.ax-code/`                | Allowed      | **Blocked**        |
+| Bash commands                        | Unrestricted | **Workspace only** |
+| Bash targeting `.git/`, `.ax-code/`  | Allowed      | **Blocked**        |
+| Bash targeting outside workspace     | Allowed      | **Blocked**        |
+| Network access (webfetch, websearch) | Allowed      | **Blocked**        |
+| Read operations (read, glob, grep)   | Unrestricted | Unrestricted       |
 
 ## Configuration
 
@@ -69,11 +69,11 @@ CLI flag > environment variable > config file > default (full-access)
 
 ## Isolation Modes
 
-| Mode | Description |
-|---|---|
+| Mode              | Description                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
 | `workspace-write` | Writes confined to workspace. Network disabled. Protected paths enforced. Shown as "sandbox on". |
-| `full-access` | No restrictions. Shown as "sandbox off". |
-| `read-only` | All mutations blocked. No bash. No writes. No network. |
+| `full-access`     | No restrictions. Shown as "sandbox off".                                                         |
+| `read-only`       | All mutations blocked. No bash. No writes. No network.                                           |
 
 ## Protected Paths
 
@@ -116,14 +116,14 @@ To allow network while keeping write restrictions:
 
 Sandbox enforcement is application-layer, checked at each tool invocation:
 
-| Tool | Check |
-|---|---|
-| `bash` | Working directory + all resolved paths must be inside workspace |
-| `edit` | Target file must be inside workspace and not protected |
-| `write` | Target file must be inside workspace and not protected |
-| `apply_patch` | All target files must be inside workspace and not protected |
-| `webfetch` | Network access must be enabled |
-| `websearch` | Network access must be enabled |
-| `codesearch` | Network access must be enabled |
+| Tool          | Check                                                           |
+| ------------- | --------------------------------------------------------------- |
+| `bash`        | Working directory + all resolved paths must be inside workspace |
+| `edit`        | Target file must be inside workspace and not protected          |
+| `write`       | Target file must be inside workspace and not protected          |
+| `apply_patch` | All target files must be inside workspace and not protected     |
+| `webfetch`    | Network access must be enabled                                  |
+| `websearch`   | Network access must be enabled                                  |
+| `codesearch`  | Network access must be enabled                                  |
 
 When a tool violates isolation, it throws an `IsolationDeniedError` with a clear message explaining what was blocked and why.

@@ -252,7 +252,6 @@ export type AssistantMessage = {
     cwd: string
     root: string
   }
-  cost?: number
   summary?: boolean
   tokens: {
     total?: number
@@ -617,6 +616,11 @@ export type SessionStatus =
       type: "busy"
       step?: number
       maxSteps?: number
+      startedAt?: number
+      lastActivityAt?: number
+      activeTool?: string
+      toolCallID?: string
+      waitState?: "llm" | "tool"
     }
 
 export type EventSessionStatus = {
@@ -1178,19 +1182,16 @@ export type ProviderConfig = {
         input?: number
         output: number
       }
-      cost?: {
-        input: number
-        output: number
-        cache_read?: number
-        cache_write?: number
-        reasoning?: number
-      }
       modalities?: {
         input: Array<"text" | "audio" | "image" | "video" | "pdf">
         output: Array<"text" | "audio" | "image" | "video" | "pdf">
       }
-      experimental?: boolean
-      status?: "alpha" | "beta" | "deprecated"
+      experimental?:
+        | boolean
+        | {
+            [key: string]: unknown
+          }
+      status?: "alpha" | "beta" | "deprecated" | "active"
       options?: {
         [key: string]: unknown
       }
@@ -1228,9 +1229,6 @@ export type ProviderConfig = {
      * Enable promptCacheKey for this provider (default false)
      */
     setCacheKey?: boolean
-    /**
-     * Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout.
-     */
     timeout?: number | false
     /**
      * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.
@@ -1466,9 +1464,21 @@ export type Config = {
               disabled: true
             }
           | {
-              command: Array<string>
+              command?: Array<string>
               extensions?: Array<string>
               disabled?: boolean
+              semantic?: boolean
+              priority?: number
+              concurrency?: number
+              capabilities?: {
+                hover?: boolean
+                definition?: boolean
+                references?: boolean
+                implementation?: boolean
+                documentSymbol?: boolean
+                workspaceSymbol?: boolean
+                callHierarchy?: boolean
+              }
               env?: {
                 [key: string]: string
               }
@@ -1488,6 +1498,9 @@ export type Config = {
    */
   autonomous?: boolean
   isolation?: IsolationConfig
+  /**
+   * @deprecated Use 'permission' field instead
+   */
   tools?: {
     [key: string]: boolean
   }
@@ -1571,6 +1584,33 @@ export type Config = {
      * Timeout in milliseconds for model context protocol (MCP) requests
      */
     mcp_timeout?: number
+    /**
+     * When autonomous mode auto-answers a clarification question with low confidence, escalate to the user instead of guessing. Default: true.
+     */
+    autonomous_escalate_low_confidence?: boolean
+    /**
+     * When autonomous mode encounters a permission whose risk class is unknown, prompt instead of auto-approving. Default: false.
+     */
+    autonomous_strict_permission?: boolean
+    /**
+     * Override the default autonomous-mode blast-radius caps. Any field omitted falls back to the constant default.
+     */
+    autonomous_caps?: {
+      steps?: number
+      files?: number
+      lines?: number
+      blockedPaths?: Array<string>
+    }
+    /**
+     * Provider/model id used for plan generation and replanning when set; defaults to the executor model.
+     */
+    planner_architect_model?: string
+  }
+  quality?: {
+    /**
+     * Run the autonomous-mode diff critic at every phase boundary. Default: false.
+     */
+    critic_enabled?: boolean
   }
 }
 
@@ -1650,13 +1690,6 @@ export type Model = {
     context: number
     input?: number
     output: number
-  }
-  cost: {
-    input: number
-    output: number
-    cache_read?: number
-    cache_write?: number
-    reasoning?: number
   }
   status: "alpha" | "beta" | "deprecated" | "active"
   options: {
@@ -2041,6 +2074,183 @@ export type SessionRiskDetail = {
   assessment: SessionBranchRisk
   drivers: Array<string>
   semantic: SessionSemanticDiffSummary | null
+  quality?: {
+    review: {
+      schemaVersion: 1
+      kind: "ax-code-quality-replay-readiness-summary"
+      workflow: "review" | "debug" | "qa"
+      sessionID: string
+      projectID: string
+      exportedAt: string
+      totalItems: number
+      anchorItems: number
+      evidenceItems: number
+      toolSummaryCount: number
+      labeledItems: number
+      resolvedLabeledItems: number
+      unresolvedLabeledItems: number
+      missingLabels: number
+      readyForBenchmark: boolean
+      overallStatus: "pass" | "warn" | "fail"
+      nextAction: string | null
+      gates: Array<{
+        name: string
+        status: "pass" | "warn" | "fail"
+        detail: string
+      }>
+    } | null
+    debug: {
+      schemaVersion: 1
+      kind: "ax-code-quality-replay-readiness-summary"
+      workflow: "review" | "debug" | "qa"
+      sessionID: string
+      projectID: string
+      exportedAt: string
+      totalItems: number
+      anchorItems: number
+      evidenceItems: number
+      toolSummaryCount: number
+      labeledItems: number
+      resolvedLabeledItems: number
+      unresolvedLabeledItems: number
+      missingLabels: number
+      readyForBenchmark: boolean
+      overallStatus: "pass" | "warn" | "fail"
+      nextAction: string | null
+      gates: Array<{
+        name: string
+        status: "pass" | "warn" | "fail"
+        detail: string
+      }>
+    } | null
+    qa: {
+      schemaVersion: 1
+      kind: "ax-code-quality-replay-readiness-summary"
+      workflow: "review" | "debug" | "qa"
+      sessionID: string
+      projectID: string
+      exportedAt: string
+      totalItems: number
+      anchorItems: number
+      evidenceItems: number
+      toolSummaryCount: number
+      labeledItems: number
+      resolvedLabeledItems: number
+      unresolvedLabeledItems: number
+      missingLabels: number
+      readyForBenchmark: boolean
+      overallStatus: "pass" | "warn" | "fail"
+      nextAction: string | null
+      gates: Array<{
+        name: string
+        status: "pass" | "warn" | "fail"
+        detail: string
+      }>
+    } | null
+  }
+  findings?: Array<{
+    schemaVersion: 1
+    findingId: string
+    workflow: "review" | "debug" | "qa"
+    category: "bug" | "security" | "regression_risk" | "behavior_change" | "missing_verification" | "migration_safety"
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO"
+    confidence?: number
+    summary: string
+    file: string
+    anchor:
+      | {
+          kind: "line"
+          line: number
+          endLine?: number
+        }
+      | {
+          kind: "symbol"
+          symbolId: string
+        }
+    rationale: string
+    evidence: Array<string>
+    evidenceRefs?: Array<{
+      kind: "verification" | "log" | "graph" | "diff"
+      id: string
+    }>
+    suggestedNextAction: string
+    ruleId?: string
+    source: {
+      tool: string
+      version: string
+      runId: string
+    }
+  }>
+  envelopes?: Array<{
+    schemaVersion: 1
+    workflow: "review" | "debug" | "qa"
+    scope: {
+      kind: "file" | "package" | "workspace" | "custom"
+      paths?: Array<string>
+      description?: string
+    }
+    command: {
+      runner: string
+      argv: Array<string>
+      cwd: string
+    }
+    result: {
+      name: string
+      type: "typecheck" | "lint" | "test" | "custom"
+      passed: boolean
+      status: "passed" | "failed" | "skipped" | "timeout" | "error"
+      issues: Array<{
+        file: string
+        line?: number
+        column?: number
+        severity: "error" | "warning"
+        message: string
+        code?: string
+      }>
+      duration: number
+      output?: string
+    }
+    structuredFailures: Array<
+      | {
+          kind: "typecheck"
+          file: string
+          line: number
+          column?: number
+          code: string
+          message: string
+        }
+      | {
+          kind: "lint"
+          file: string
+          line: number
+          rule: string
+          severity: "error" | "warning"
+          message: string
+        }
+      | {
+          kind: "test"
+          testName: string
+          framework: string
+          file?: string
+          assertion?: string
+          stack?: string
+        }
+      | {
+          kind: "custom"
+          message: string
+          details?: unknown
+        }
+    >
+    artifactRefs: Array<{
+      kind: "finding" | "log" | "diff" | "snapshot"
+      id: string
+    }>
+    source: {
+      tool: string
+      version: string
+      runId: string
+    }
+  }>
 }
 
 export type SessionCompareSummary = {
@@ -3568,6 +3778,18 @@ export type SessionRiskData = {
   }
   query?: {
     directory?: string
+    /**
+     * Include replay readiness for review/debug/qa when replay evidence exists
+     */
+    quality?: boolean
+    /**
+     * Include the validated Finding[] emitted by register_finding tool calls in this session
+     */
+    findings?: boolean
+    /**
+     * Include the validated VerificationEnvelope[] emitted by tool calls that record verification runs (e.g. refactor_apply)
+     */
+    envelopes?: boolean
   }
   url: "/session/{sessionID}/risk"
 }
@@ -4241,6 +4463,52 @@ export type SessionPromptAsyncResponses = {
   202: unknown
 }
 
+export type SessionCommandAsyncData = {
+  body?: {
+    messageID?: string
+    agent?: string
+    model?: string
+    arguments: string
+    command: string
+    variant?: string
+    parts?: Array<{
+      id?: string
+      type: "file"
+      mime: string
+      filename?: string
+      url: string
+      source?: FilePartSource
+    }>
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/command_async"
+}
+
+export type SessionCommandAsyncErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionCommandAsyncError = SessionCommandAsyncErrors[keyof SessionCommandAsyncErrors]
+
+export type SessionCommandAsyncResponses = {
+  /**
+   * Command accepted
+   */
+  202: unknown
+}
+
 export type SessionCommandData = {
   body?: {
     messageID?: string
@@ -4291,6 +4559,44 @@ export type SessionCommandResponses = {
 }
 
 export type SessionCommandResponse = SessionCommandResponses[keyof SessionCommandResponses]
+
+export type SessionShellAsyncData = {
+  body?: {
+    agent: string
+    model?: {
+      providerID: string
+      modelID: string
+    }
+    command: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/shell_async"
+}
+
+export type SessionShellAsyncErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionShellAsyncError = SessionShellAsyncErrors[keyof SessionShellAsyncErrors]
+
+export type SessionShellAsyncResponses = {
+  /**
+   * Shell command accepted
+   */
+  202: unknown
+}
 
 export type SessionShellData = {
   body?: {
@@ -4593,7 +4899,7 @@ export type GraphGetData = {
   }
   query?: {
     directory?: string
-    format?: "ascii" | "json" | "mermaid" | "markdown" | "timeline" | "topology"
+    format?: "ascii" | "json" | "mermaid" | "gantt" | "svggantt" | "markdown" | "timeline" | "topology"
   }
   url: "/graph/{sessionID}"
 }
@@ -4627,6 +4933,7 @@ export type GetDreGraphSessionSessionIdData = {
   }
   query?: {
     directory?: string
+    quality?: boolean
   }
   url: "/dre-graph/session/{sessionID}"
 }
@@ -4642,6 +4949,7 @@ export type GetDreGraphSessionSessionIdFingerprintData = {
   }
   query?: {
     directory?: string
+    quality?: boolean
   }
   url: "/dre-graph/session/{sessionID}/fingerprint"
 }
@@ -4767,7 +5075,7 @@ export type ProviderListResponses = {
           release_date: string
           attachment: boolean
           reasoning: boolean
-          temperature: boolean
+          temperature?: boolean
           tool_call: boolean
           interleaved?:
             | true
@@ -4779,20 +5087,17 @@ export type ProviderListResponses = {
             input?: number
             output: number
           }
-          cost: {
-            input: number
-            output: number
-            cache_read?: number
-            cache_write?: number
-            reasoning?: number
-          }
           modalities?: {
             input: Array<"text" | "audio" | "image" | "video" | "pdf">
             output: Array<"text" | "audio" | "image" | "video" | "pdf">
           }
-          experimental?: boolean
-          status?: "alpha" | "beta" | "deprecated"
-          options: {
+          experimental?:
+            | boolean
+            | {
+                [key: string]: unknown
+              }
+          status?: "alpha" | "beta" | "deprecated" | "active"
+          options?: {
             [key: string]: unknown
           }
           headers?: {
@@ -5559,45 +5864,6 @@ export type TuiSelectSessionResponses = {
 }
 
 export type TuiSelectSessionResponse = TuiSelectSessionResponses[keyof TuiSelectSessionResponses]
-
-export type TuiControlNextData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tui/control/next"
-}
-
-export type TuiControlNextResponses = {
-  /**
-   * Next TUI request
-   */
-  200: {
-    path: string
-    body: unknown
-  }
-}
-
-export type TuiControlNextResponse = TuiControlNextResponses[keyof TuiControlNextResponses]
-
-export type TuiControlResponseData = {
-  body?: unknown
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tui/control/response"
-}
-
-export type TuiControlResponseResponses = {
-  /**
-   * Response submitted successfully
-   */
-  200: boolean
-}
-
-export type TuiControlResponseResponse = TuiControlResponseResponses[keyof TuiControlResponseResponses]
 
 export type InstanceDisposeData = {
   body?: never

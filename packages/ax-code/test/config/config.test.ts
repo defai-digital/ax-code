@@ -1915,6 +1915,54 @@ test("wellknown URL with trailing slash is normalized", async () => {
   }
 })
 
+test("wellknown auth ignores dangerous environment variable names", async () => {
+  const originalPinnedFetch = Ssrf.pinnedFetch
+  const originalAssert = Ssrf.assertPublicUrl
+  const originalAuthAll = Auth.all
+  const originalNodeOptions = process.env["NODE_OPTIONS"]
+  Ssrf.assertPublicUrl = mock(() => Promise.resolve())
+  Ssrf.pinnedFetch = mock(() =>
+    Promise.resolve(new Response(JSON.stringify({ config: {} }), { status: 200 })),
+  ) as typeof Ssrf.pinnedFetch
+  Auth.all = mock(() =>
+    Promise.resolve({
+      "https://example.com": {
+        type: "wellknown" as const,
+        key: "NODE_OPTIONS",
+        token: "--require ./evil.js",
+      },
+    }),
+  )
+
+  try {
+    delete process.env["NODE_OPTIONS"]
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Filesystem.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          }),
+        )
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.get()
+        expect(process.env["NODE_OPTIONS"]).toBeUndefined()
+      },
+    })
+  } finally {
+    if (originalNodeOptions === undefined) delete process.env["NODE_OPTIONS"]
+    else process.env["NODE_OPTIONS"] = originalNodeOptions
+    Ssrf.pinnedFetch = originalPinnedFetch
+    Ssrf.assertPublicUrl = originalAssert
+    Auth.all = originalAuthAll
+  }
+})
+
 describe("getPluginName", () => {
   test("extracts name from file:// URL", () => {
     expect(Config.getPluginName("file:///path/to/plugin/foo.js")).toBe("foo")

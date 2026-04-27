@@ -36,10 +36,10 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - macos-latest        # darwin arm64
-          - ubuntu-latest       # linux x64 glibc
-          - ubuntu-24.04-arm    # linux arm64 glibc
-          - windows-latest      # windows x64
+          - macos-latest # darwin arm64
+          - ubuntu-latest # linux x64 glibc
+          - ubuntu-24.04-arm # linux arm64 glibc
+          - windows-latest # windows x64
         channel:
           - source
           - latest

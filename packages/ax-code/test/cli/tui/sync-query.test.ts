@@ -12,13 +12,10 @@ describe("tui sync query", () => {
     expect(sessionRuntimeStatus({ time: { compacting: true } }, [])).toBe("compacting")
     expect(sessionRuntimeStatus({ time: {} }, [])).toBe("idle")
     expect(
-      sessionRuntimeStatus(
-        { time: {} },
-        [
-          { role: "assistant", time: { completed: true } },
-          { role: "user", time: {} },
-        ],
-      ),
+      sessionRuntimeStatus({ time: {} }, [
+        { role: "assistant", time: { completed: true } },
+        { role: "user", time: {} },
+      ]),
     ).toBe("working")
     expect(sessionRuntimeStatus({ time: {} }, [{ role: "assistant", time: { completed: false } }])).toBe("working")
     expect(sessionRuntimeStatus({ time: {} }, [{ role: "assistant", time: { completed: true } }])).toBe("idle")

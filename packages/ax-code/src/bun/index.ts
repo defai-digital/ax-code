@@ -59,9 +59,7 @@ export namespace BunProc {
    * and whether the installed Bun version post-dates the fix. When both
    * are true, delete this helper and its two call sites.
    */
-  export function installCacheWorkaroundArgs(
-    env: { proxied?: boolean; ci?: boolean } = {},
-  ): string[] {
+  export function installCacheWorkaroundArgs(env: { proxied?: boolean; ci?: boolean } = {}): string[] {
     const isProxied = env.proxied ?? proxied()
     const isCi = env.ci ?? !!process.env.CI
     return isProxied || isCi ? ["--no-cache"] : []
@@ -84,15 +82,7 @@ export namespace BunProc {
       cwd: Global.Path.cache,
     },
   ) {
-    return [
-      "add",
-      "--force",
-      "--exact",
-      ...installCacheWorkaroundArgs(dep),
-      "--cwd",
-      dep.cwd,
-      pkg + "@" + version,
-    ]
+    return ["add", "--force", "--exact", ...installCacheWorkaroundArgs(dep), "--cwd", dep.cwd, pkg + "@" + version]
   }
 
   // Validate npm package name to prevent path traversal. Packages are

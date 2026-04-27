@@ -87,19 +87,16 @@ describe("audit bug fixes", () => {
 
         const tool = await LspTool.init()
         await expect(
-          tool.execute(
-            { operation: "documentSymbol", filePath: file, line: 1, character: 1 },
-            {
-              sessionID: session.id,
-              messageID: MessageID.make(""),
-              callID: "",
-              agent: "build",
-              abort: AbortSignal.any([]),
-              messages: [],
-              metadata: () => {},
-              ask: async () => {},
-            } as any,
-          ),
+          tool.execute({ operation: "documentSymbol", filePath: file, line: 1, character: 1 }, {
+            sessionID: session.id,
+            messageID: MessageID.make(""),
+            callID: "",
+            agent: "build",
+            abort: AbortSignal.any([]),
+            messages: [],
+            metadata: () => {},
+            ask: async () => {},
+          } as any),
         ).rejects.toThrow("doc symbol crash")
 
         const rows = AuditQuery.listRecent(session.id, 10)

@@ -42,10 +42,7 @@ describe("LspScheduler.Inflight", () => {
       return calls
     }
 
-    const [a, b] = await Promise.all([
-      LspScheduler.Inflight.run("k1", fn),
-      LspScheduler.Inflight.run("k2", fn),
-    ])
+    const [a, b] = await Promise.all([LspScheduler.Inflight.run("k1", fn), LspScheduler.Inflight.run("k2", fn)])
 
     expect(calls).toBe(2)
     expect(new Set([a, b])).toEqual(new Set([1, 2]))
@@ -57,10 +54,7 @@ describe("LspScheduler.Inflight", () => {
       throw err
     }
 
-    const results = await Promise.allSettled([
-      LspScheduler.Inflight.run("k", fn),
-      LspScheduler.Inflight.run("k", fn),
-    ])
+    const results = await Promise.allSettled([LspScheduler.Inflight.run("k", fn), LspScheduler.Inflight.run("k", fn)])
 
     expect(results[0].status).toBe("rejected")
     expect(results[1].status).toBe("rejected")

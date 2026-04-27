@@ -10,7 +10,7 @@
  */
 
 export { generate } from "./generator"
-export { save, load, clear, exists } from "./store"
+export { save, load, clear, exists, saveGlobal, loadGlobal, clearGlobal, existsGlobal } from "./store"
 export { buildContext, getContext, getMetadata, type BuildContextOptions } from "./injector"
 export { recordEntry, removeEntry, listEntries, type RecordInput } from "./recorder"
 export { recall, type RecallQuery, type RecallResult } from "./recall"

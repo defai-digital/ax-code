@@ -402,11 +402,7 @@ export namespace CodeIntelligence {
   // empty array/object, "full" otherwise. `partial` is not produced
   // here — the graph doesn't have a mid-flight partial concept; a
   // query either has results or doesn't.
-  export function graphEnvelope<T>(
-    projectID: ProjectID,
-    data: T,
-    opts?: { isEmpty?: boolean },
-  ): GraphEnvelope<T> {
+  export function graphEnvelope<T>(projectID: ProjectID, data: T, opts?: { isEmpty?: boolean }): GraphEnvelope<T> {
     const cursor = CodeGraphQuery.getCursor(projectID)
     // Without a cursor we still return what we have, but mark as
     // degraded so consumers know to treat the payload with caution.

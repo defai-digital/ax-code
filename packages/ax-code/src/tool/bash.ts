@@ -85,13 +85,16 @@ export const BashTool = Tool.define("bash", async () => {
         .optional(),
       description: z
         .string()
+        .max(200)
         .describe(
           "Clear, concise description of what this command does in 5-10 words. Examples:\nInput: ls\nOutput: Lists files in current directory\n\nInput: git status\nOutput: Shows working tree status\n\nInput: npm install\nOutput: Installs package dependencies\n\nInput: mkdir foo\nOutput: Creates directory 'foo'",
         ),
     }),
     async execute(params, ctx) {
       const cwd = params.workdir
-        ? await fs.realpath(path.resolve(Instance.directory, params.workdir)).catch(() => path.resolve(Instance.directory, params.workdir!))
+        ? await fs.realpath(path.resolve(Instance.directory, params.workdir)).catch(() => {
+            throw new Error(`Working directory does not exist: ${params.workdir}`)
+          })
         : Instance.directory
       if (params.timeout !== undefined && (!Number.isFinite(params.timeout) || params.timeout < 1)) {
         // Reject NaN, Infinity, 0, and negatives: timeout=0 combined
@@ -141,8 +144,7 @@ export const BashTool = Tool.define("bash", async () => {
         // the script path. Arguments containing command substitution
         // ($(...), `...`, ${...}) are opaque — flag the whole command.
         if (["eval", "bash", "sh", "zsh", "source", "."].includes(command[0])) {
-          const isShellWithC =
-            ["bash", "sh", "zsh"].includes(command[0]) && command.includes("-c")
+          const isShellWithC = ["bash", "sh", "zsh"].includes(command[0]) && command.includes("-c")
           const isEval = command[0] === "eval"
 
           // Collect the inner command string for eval / shell -c
@@ -184,7 +186,9 @@ export const BashTool = Tool.define("bash", async () => {
                     if (innerArg.startsWith("-") || (innerParts[0] === "chmod" && innerArg.startsWith("+"))) continue
                     // Skip args with command substitution — can't resolve
                     if (/\$\(|\$\{|`/.test(innerArg)) continue
-                    const resolved = await fs.realpath(path.resolve(cwd, innerArg)).catch(() => path.resolve(cwd, innerArg))
+                    const resolved = await fs
+                      .realpath(path.resolve(cwd, innerArg))
+                      .catch(() => path.resolve(cwd, innerArg))
                     if (resolved) {
                       const normalized =
                         process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
@@ -338,36 +342,41 @@ export const BashTool = Tool.define("bash", async () => {
           killStartedAt !== undefined && killCompletedAt !== undefined ? killCompletedAt - killStartedAt : null,
       })
 
+      const publishMetadata = (outputSnapshot: string) => {
+        try {
+          ctx.metadata({
+            metadata: {
+              output: outputSnapshot,
+              description: params.description,
+              hang: hangMetadata(),
+            },
+          })
+        } catch (error) {
+          log.warn("bash metadata publish failed", {
+            pid: proc.pid,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+
       // Initialize metadata with empty output
-      ctx.metadata({
-        metadata: {
-          output: "",
-          description: params.description,
-          hang: hangMetadata(),
-        },
-      })
+      publishMetadata("")
 
       const append = (chunk: Buffer) => {
+        const priorOutputBytes = outputBytes
         outputBytes += chunk.byteLength
         lastOutputAt = Date.now()
-        if (output.length < OUTPUT_HARD_CAP) {
-          const remaining = OUTPUT_HARD_CAP - output.length
-          const text = chunk.toString()
-          if (text.length <= remaining) {
+        if (priorOutputBytes < OUTPUT_HARD_CAP) {
+          const remaining = OUTPUT_HARD_CAP - priorOutputBytes
+          if (chunk.byteLength <= remaining) {
+            const text = chunk.toString()
             output += text
           } else {
-            output += text.slice(0, remaining) + "\n\n[output truncated at 10MB]"
+            output += chunk.subarray(0, remaining).toString() + "\n\n[output truncated at 10MB]"
             truncated = true
           }
         }
-        ctx.metadata({
-          metadata: {
-            // truncate the metadata snapshot separately (smaller cap).
-            output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
-            description: params.description,
-            hang: hangMetadata(),
-          },
-        })
+        publishMetadata(output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output)
       }
       void truncated
 

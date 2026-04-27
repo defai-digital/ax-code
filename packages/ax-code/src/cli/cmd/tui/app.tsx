@@ -406,13 +406,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
 
   onMount(() => {
-    const cancel = scheduleDeferredStartupTask(
-      () =>
-        ensureSessionRouteLoaded("startup-preload")
-          .then(() => undefined)
-          .catch((error) => {
-            handleSessionRouteLoadFailure(error, { source: "startup-preload" })
-          }),
+    const cancel = scheduleDeferredStartupTask(() =>
+      ensureSessionRouteLoaded("startup-preload")
+        .then(() => undefined)
+        .catch((error) => {
+          handleSessionRouteLoadFailure(error, { source: "startup-preload" })
+        }),
     )
     onCleanup(cancel)
   })

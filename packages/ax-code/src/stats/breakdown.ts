@@ -20,7 +20,7 @@ const MODEL_LIMITS: Record<string, number> = {
   "glm-5": 32768,
   "glm-4.6": 128000,
   // Default
-  "default": 128000,
+  default: 128000,
 }
 
 // Approximate token count from text (1 token ≈ 4 characters)
@@ -83,10 +83,10 @@ export function formatBreakdown(breakdown: ContextBreakdown): string {
   const status = getStatus(usagePercent)
 
   const statusColors: Record<ContextStatus, string> = {
-    good: "\x1b[32m",      // green
-    moderate: "\x1b[33m",   // yellow
+    good: "\x1b[32m", // green
+    moderate: "\x1b[33m", // yellow
     high: "\x1b[38;5;208m", // orange
-    critical: "\x1b[31m",   // red
+    critical: "\x1b[31m", // red
   }
   const reset = "\x1b[0m"
   const dim = "\x1b[2m"

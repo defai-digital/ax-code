@@ -334,7 +334,8 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                             : theme.textMuted
                       }
                     >
-                      {isAnswered() ? "✓ " : ""}{q.header}
+                      {isAnswered() ? "✓ " : ""}
+                      {q.header}
                     </text>
                   </box>
                 )

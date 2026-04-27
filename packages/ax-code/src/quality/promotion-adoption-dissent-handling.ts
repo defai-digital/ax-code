@@ -31,11 +31,13 @@ export namespace QualityPromotionAdoptionDissentHandling {
     qualifyingSupersessions: z.number().int().nonnegative(),
     resolutionSummary: z.lazy(() => QualityPromotionAdoptionDissentResolution.ResolutionSummary),
     supersessionSummary: z.lazy(() => QualityPromotionAdoptionDissentSupersession.SupersessionSummary),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type HandlingSummary = z.output<typeof HandlingSummary>
 
@@ -107,7 +109,10 @@ export namespace QualityPromotionAdoptionDissentHandling {
       : null
   }
 
-  function qualifiesRole(role: string | null | undefined, minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null) {
+  function qualifiesRole(
+    role: string | null | undefined,
+    minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
+  ) {
     if (!minimumRole) return true
     const normalized = normalizeRole(role)
     if (!normalized) return false
@@ -115,9 +120,11 @@ export namespace QualityPromotionAdoptionDissentHandling {
   }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, handling: HandlingArtifact) {
-    return handling.decisionBundle.digest === QualityPromotionAdoptionReview.decisionBundleDigest(bundle)
-      && handling.decisionBundle.createdAt === bundle.createdAt
-      && handling.suggestion.digest === QualityPromotionAdoptionReview.suggestionDigest(bundle)
+    return (
+      handling.decisionBundle.digest === QualityPromotionAdoptionReview.decisionBundleDigest(bundle) &&
+      handling.decisionBundle.createdAt === bundle.createdAt &&
+      handling.suggestion.digest === QualityPromotionAdoptionReview.suggestionDigest(bundle)
+    )
   }
 
   export function qualifiedRejectingReviews(
@@ -126,14 +133,17 @@ export namespace QualityPromotionAdoptionDissentHandling {
   ) {
     const consensus = QualityPromotionAdoptionReview.evaluate(bundle, reviews)
     return [...reviews]
-      .filter((review) => review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole))
+      .filter(
+        (review) => review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole),
+      )
       .map((review) =>
         QualifiedRejectingReview.parse({
           reviewID: review.reviewID,
           reviewer: review.reviewer,
           role: review.role,
           reviewedAt: review.reviewedAt,
-        }))
+        }),
+      )
       .sort((a, b) => {
         const byReviewedAt = a.reviewedAt.localeCompare(b.reviewedAt)
         if (byReviewedAt !== 0) return byReviewedAt
@@ -162,7 +172,8 @@ export namespace QualityPromotionAdoptionDissentHandling {
     ).coveredReviewIDs
     const coveredQualifiedRejectingReviews = new Set([...coveredByResolution, ...coveredBySupersession])
     const coverageSatisfied = coveredQualifiedRejectingReviews.size === consensus.qualifiedRejectingReviews
-    const hasHandlingArtifacts = consensus.qualifiedRejectingReviews === 0 ||
+    const hasHandlingArtifacts =
+      consensus.qualifiedRejectingReviews === 0 ||
       resolutionSummary.qualifyingResolutions > 0 ||
       supersessionSummary.qualifyingSupersessions > 0
     const overlapCount = [...coveredByResolution].filter((reviewID) => coveredBySupersession.has(reviewID)).length
@@ -170,18 +181,20 @@ export namespace QualityPromotionAdoptionDissentHandling {
       {
         name: "qualified-rejection-dissent-handling-coverage",
         status: coverageSatisfied ? "pass" : "fail",
-        detail: consensus.qualifiedRejectingReviews === 0
-          ? "no qualified rejecting reviews present"
-          : `${coveredQualifiedRejectingReviews.size}/${consensus.qualifiedRejectingReviews} qualified rejecting review(s) resolved or superseded`,
+        detail:
+          consensus.qualifiedRejectingReviews === 0
+            ? "no qualified rejecting reviews present"
+            : `${coveredQualifiedRejectingReviews.size}/${consensus.qualifiedRejectingReviews} qualified rejecting review(s) resolved or superseded`,
       },
       {
         name: "dissent-handling-artifacts-present",
         status: hasHandlingArtifacts ? "pass" : "fail",
-        detail: consensus.qualifiedRejectingReviews === 0
-          ? "no dissent-handling artifacts required"
-          : hasHandlingArtifacts
-            ? `${resolutionSummary.qualifyingResolutions} qualifying resolution(s) and ${supersessionSummary.qualifyingSupersessions} qualifying supersession(s) present`
-            : "no qualifying dissent-handling artifacts present",
+        detail:
+          consensus.qualifiedRejectingReviews === 0
+            ? "no dissent-handling artifacts required"
+            : hasHandlingArtifacts
+              ? `${resolutionSummary.qualifyingResolutions} qualifying resolution(s) and ${supersessionSummary.qualifyingSupersessions} qualifying supersession(s) present`
+              : "no qualifying dissent-handling artifacts present",
       },
     ] as const
 
@@ -191,7 +204,10 @@ export namespace QualityPromotionAdoptionDissentHandling {
       requiredRole: consensus.requirement.minimumRole,
       totalQualifiedRejectingReviews: consensus.qualifiedRejectingReviews,
       coveredQualifiedRejectingReviews: coveredQualifiedRejectingReviews.size,
-      unresolvedQualifiedRejectingReviews: Math.max(0, consensus.qualifiedRejectingReviews - coveredQualifiedRejectingReviews.size),
+      unresolvedQualifiedRejectingReviews: Math.max(
+        0,
+        consensus.qualifiedRejectingReviews - coveredQualifiedRejectingReviews.size,
+      ),
       coveredByResolution: coveredByResolution.size,
       coveredBySupersession: coveredBySupersession.size,
       coveredByBoth: overlapCount,
@@ -213,8 +229,9 @@ export namespace QualityPromotionAdoptionDissentHandling {
   }) {
     const handledAt = new Date().toISOString()
     const handlingID = `${Date.now()}-${encode(input.bundle.source)}-dissent-handling`
-    const suggestion = input.bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
+    const suggestion =
+      input.bundle.approvalPolicySuggestion ??
+      QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
     const resolutions = input.resolutions ?? []
     const supersessions = input.supersessions ?? []
     for (const resolution of resolutions) {
@@ -264,16 +281,20 @@ export namespace QualityPromotionAdoptionDissentHandling {
     handling: HandlingArtifact,
   ) {
     const reasons: string[] = []
-    const suggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const suggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
     if (handling.source !== bundle.source) {
       reasons.push(`dissent handling source mismatch: ${handling.source} vs ${bundle.source}`)
     }
     if (handling.decisionBundle.source !== bundle.source) {
-      reasons.push(`dissent handling decision bundle source mismatch: ${handling.decisionBundle.source} vs ${bundle.source}`)
+      reasons.push(
+        `dissent handling decision bundle source mismatch: ${handling.decisionBundle.source} vs ${bundle.source}`,
+      )
     }
     if (handling.decisionBundle.createdAt !== bundle.createdAt) {
-      reasons.push(`dissent handling decision bundle createdAt mismatch: ${handling.decisionBundle.createdAt} vs ${bundle.createdAt}`)
+      reasons.push(
+        `dissent handling decision bundle createdAt mismatch: ${handling.decisionBundle.createdAt} vs ${bundle.createdAt}`,
+      )
     }
     if (handling.decisionBundle.digest !== QualityPromotionAdoptionReview.decisionBundleDigest(bundle)) {
       reasons.push(`dissent handling decision bundle digest mismatch for ${bundle.source}`)
@@ -282,18 +303,24 @@ export namespace QualityPromotionAdoptionDissentHandling {
       reasons.push(`dissent handling suggestion digest mismatch for ${bundle.source}`)
     }
     if (handling.suggestion.adoptionStatus !== suggestion.adoption.status) {
-      reasons.push(`dissent handling adoption status mismatch: ${handling.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`)
+      reasons.push(
+        `dissent handling adoption status mismatch: ${handling.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`,
+      )
     }
     for (const resolution of handling.resolutions) {
       const resolutionReasons = QualityPromotionAdoptionDissentResolution.verify(bundle, resolution)
       if (resolutionReasons.length > 0) {
-        reasons.push(`dissent handling contains invalid resolution ${resolution.resolutionID} (${resolutionReasons[0]})`)
+        reasons.push(
+          `dissent handling contains invalid resolution ${resolution.resolutionID} (${resolutionReasons[0]})`,
+        )
       }
     }
     for (const supersession of handling.supersessions) {
       const supersessionReasons = QualityPromotionAdoptionDissentSupersession.verify(bundle, supersession)
       if (supersessionReasons.length > 0) {
-        reasons.push(`dissent handling contains invalid supersession ${supersession.supersessionID} (${supersessionReasons[0]})`)
+        reasons.push(
+          `dissent handling contains invalid supersession ${supersession.supersessionID} (${supersessionReasons[0]})`,
+        )
       }
     }
     const expectedQualifiedRejectingReviews = qualifiedRejectingReviews(bundle, reviews)
@@ -338,7 +365,9 @@ export namespace QualityPromotionAdoptionDissentHandling {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Adoption dissent handling ${handling.handlingID} already exists for source ${handling.source} with different content`)
+      throw new Error(
+        `Adoption dissent handling ${handling.handlingID} already exists for source ${handling.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(handling.source, handling.handlingID), next)
@@ -391,7 +420,9 @@ export namespace QualityPromotionAdoptionDissentHandling {
     lines.push(`- dissent resolutions: ${handling.resolutions.length}`)
     lines.push(`- dissent supersessions: ${handling.supersessions.length}`)
     lines.push(`- overall status: ${handling.summary.overallStatus}`)
-    lines.push(`- covered qualified rejecting reviews: ${handling.summary.coveredQualifiedRejectingReviews}/${handling.summary.totalQualifiedRejectingReviews}`)
+    lines.push(
+      `- covered qualified rejecting reviews: ${handling.summary.coveredQualifiedRejectingReviews}/${handling.summary.totalQualifiedRejectingReviews}`,
+    )
     lines.push("")
     for (const review of handling.qualifiedRejectingReviews) {
       lines.push(`- qualified rejecting review: ${review.reviewID} · ${review.reviewer} · ${review.reviewedAt}`)

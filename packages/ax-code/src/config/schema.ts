@@ -697,18 +697,18 @@ export const Info = z
           .boolean()
           .optional()
           .describe(
-            "Disable agent auto-switching entirely. When true, the user's selected agent always handles the message; no keyword routing fires.",
+            "@deprecated Agent auto-routing was removed; specialists are invoked via @-mention. Field accepted for backwards compatibility but ignored.",
           ),
         mode: z
           .enum(["off", "delegate", "switch"])
           .optional()
           .describe(
-            "@deprecated Use routing.disable instead. The delegate/switch modes were removed; auto-routing is always switch-style. Field accepted but ignored.",
+            "@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.",
           ),
         auto_switch: z
           .boolean()
           .optional()
-          .describe("@deprecated Auto-switching is unconditional now (use routing.disable to opt out). Field accepted but ignored."),
+          .describe("@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored."),
         llm: z
           .boolean()
           .optional()
@@ -717,7 +717,7 @@ export const Info = z
           ),
       })
       .optional()
-      .describe("Agent auto-switching and message-complexity routing"),
+      .describe("Message-complexity routing for fast-model selection"),
     compaction: z
       .object({
         auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),

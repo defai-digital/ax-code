@@ -80,8 +80,10 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     promotion: QualityPromotionSignedArchiveGovernancePacket.PacketArtifact["promotion"],
     dossier: DossierArtifact,
   ) {
-    return dossier.governancePacket.promotion.source === promotion.source
-      && dossier.governancePacket.promotion.promotionID === promotion.promotionID
+    return (
+      dossier.governancePacket.promotion.source === promotion.source &&
+      dossier.governancePacket.promotion.promotionID === promotion.promotionID
+    )
   }
 
   function evaluateSummary(input: {
@@ -94,11 +96,13 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     const handoffReleasePacket = input.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
 
     const sourceLinkagePass = input.governancePacket.source === input.handoffPackage.source
-    const promotionLinkagePass = input.governancePacket.promotion.promotionID === handoffPromotion.promotionID
-      && input.governancePacket.promotion.source === handoffPromotion.source
+    const promotionLinkagePass =
+      input.governancePacket.promotion.promotionID === handoffPromotion.promotionID &&
+      input.governancePacket.promotion.source === handoffPromotion.source
     const releasePacketLinkagePass = input.governancePacket.summary.releasePacketID === handoffReleasePacket.packetID
-    const authorizationLinkagePass = input.governancePacket.summary.authorizedPromotion === input.governancePacket.promotion.authorizedPromotion
-      && input.governancePacket.summary.promotionMode === input.governancePacket.promotion.promotionMode
+    const authorizationLinkagePass =
+      input.governancePacket.summary.authorizedPromotion === input.governancePacket.promotion.authorizedPromotion &&
+      input.governancePacket.summary.promotionMode === input.governancePacket.promotion.promotionMode
 
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
       {
@@ -135,9 +139,10 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
       {
         name: "promotion-authorization",
         status: authorizationLinkagePass && input.governancePacket.summary.authorizedPromotion ? "pass" : "fail",
-        detail: authorizationLinkagePass && input.governancePacket.summary.authorizedPromotion
-          ? `promotion mode ${input.governancePacket.summary.promotionMode} remains authorized after signing`
-          : "promotion authorization is missing or inconsistent after signing",
+        detail:
+          authorizationLinkagePass && input.governancePacket.summary.authorizedPromotion
+            ? `promotion mode ${input.governancePacket.summary.promotionMode} remains authorized after signing`
+            : "promotion authorization is missing or inconsistent after signing",
       },
       {
         name: "attestation-policy-acceptance",
@@ -179,11 +184,15 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
   }) {
     const governanceReasons = QualityPromotionSignedArchiveGovernancePacket.verify(input.governancePacket)
     if (governanceReasons.length > 0) {
-      throw new Error(`Cannot create signed archive review dossier for ${input.governancePacket.source}: invalid governance packet (${governanceReasons[0]})`)
+      throw new Error(
+        `Cannot create signed archive review dossier for ${input.governancePacket.source}: invalid governance packet (${governanceReasons[0]})`,
+      )
     }
     const handoffReasons = QualityPromotionHandoffPackage.verify(input.handoffPackage)
     if (handoffReasons.length > 0) {
-      throw new Error(`Cannot create signed archive review dossier for ${input.handoffPackage.source}: invalid handoff package (${handoffReasons[0]})`)
+      throw new Error(
+        `Cannot create signed archive review dossier for ${input.handoffPackage.source}: invalid handoff package (${handoffReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const dossierID = `${input.governancePacket.packetID}-review-dossier`
@@ -203,18 +212,26 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
   export function verify(dossier: DossierArtifact) {
     const reasons: string[] = []
     if (dossier.source !== dossier.governancePacket.source) {
-      reasons.push(`signed archive review dossier governance source mismatch: ${dossier.source} vs ${dossier.governancePacket.source}`)
+      reasons.push(
+        `signed archive review dossier governance source mismatch: ${dossier.source} vs ${dossier.governancePacket.source}`,
+      )
     }
     if (dossier.source !== dossier.handoffPackage.source) {
-      reasons.push(`signed archive review dossier handoff source mismatch: ${dossier.source} vs ${dossier.handoffPackage.source}`)
+      reasons.push(
+        `signed archive review dossier handoff source mismatch: ${dossier.source} vs ${dossier.handoffPackage.source}`,
+      )
     }
     const governanceReasons = QualityPromotionSignedArchiveGovernancePacket.verify(dossier.governancePacket)
     if (governanceReasons.length > 0) {
-      reasons.push(`signed archive review dossier governance packet mismatch for ${dossier.source} (${governanceReasons[0]})`)
+      reasons.push(
+        `signed archive review dossier governance packet mismatch for ${dossier.source} (${governanceReasons[0]})`,
+      )
     }
     const handoffReasons = QualityPromotionHandoffPackage.verify(dossier.handoffPackage)
     if (handoffReasons.length > 0) {
-      reasons.push(`signed archive review dossier handoff package mismatch for ${dossier.source} (${handoffReasons[0]})`)
+      reasons.push(
+        `signed archive review dossier handoff package mismatch for ${dossier.source} (${handoffReasons[0]})`,
+      )
     }
     const expectedSummary = evaluateSummary({
       governancePacket: dossier.governancePacket,
@@ -258,7 +275,9 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Signed archive review dossier ${dossier.dossierID} already exists for source ${dossier.source} with different content`)
+      throw new Error(
+        `Signed archive review dossier ${dossier.dossierID} already exists for source ${dossier.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(dossier.source, dossier.dossierID), next)
@@ -267,7 +286,9 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
   }
 
   export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_signed_archive_review_dossier", encode(source)]] : [["quality_model_signed_archive_review_dossier"]]
+    const prefixes = source
+      ? [["quality_model_signed_archive_review_dossier", encode(source)]]
+      : [["quality_model_signed_archive_review_dossier"]]
     const dossiers: DossierArtifact[] = []
     for (const prefix of prefixes) {
       const keys = await Storage.list(prefix)
@@ -289,7 +310,9 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     const prev = JSON.stringify(persisted.dossier)
     const curr = JSON.stringify(dossier)
     if (prev !== curr) {
-      throw new Error(`Persisted signed archive review dossier ${dossier.dossierID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted signed archive review dossier ${dossier.dossierID} does not match the provided artifact`,
+      )
     }
     return persisted
   }

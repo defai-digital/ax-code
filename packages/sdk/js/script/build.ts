@@ -18,15 +18,13 @@ try {
   await fs.mkdir(path.join(tmp, "cache"), { recursive: true })
   await fs.mkdir(path.join(tmp, "state"), { recursive: true })
 
-  await $`bun dev generate > ${dir}/openapi.json`
-    .cwd(path.resolve(dir, "../../ax-code"))
-    .env({
-      ...process.env,
-      XDG_DATA_HOME: path.join(tmp, "data"),
-      XDG_CONFIG_HOME: path.join(tmp, "config"),
-      XDG_CACHE_HOME: path.join(tmp, "cache"),
-      XDG_STATE_HOME: path.join(tmp, "state"),
-    })
+  await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../ax-code")).env({
+    ...process.env,
+    XDG_DATA_HOME: path.join(tmp, "data"),
+    XDG_CONFIG_HOME: path.join(tmp, "config"),
+    XDG_CACHE_HOME: path.join(tmp, "cache"),
+    XDG_STATE_HOME: path.join(tmp, "state"),
+  })
 
   await createClient({
     input: "./openapi.json",

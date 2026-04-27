@@ -41,10 +41,7 @@ export function applySessionDeleteEvent<
   applySessionDeleteCleanup(store, sessionID)
 }
 
-export function applyMessageUpdateEvent<
-  TMessage extends { id: string },
-  TPart,
->(
+export function applyMessageUpdateEvent<TMessage extends { id: string }, TPart>(
   store: {
     message: Record<string, TMessage[]>
     part: Record<string, TPart[]>
@@ -56,10 +53,7 @@ export function applyMessageUpdateEvent<
   applyMessageUpdateCleanup(store, sessionID, message, maxSize)
 }
 
-export function applyMessageDeleteEvent<
-  TMessage extends { id: string },
-  TPart,
->(
+export function applyMessageDeleteEvent<TMessage extends { id: string }, TPart>(
   store: {
     message: Record<string, TMessage[]>
     part: Record<string, TPart[]>

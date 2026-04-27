@@ -135,12 +135,7 @@ describe("LSP.aggregateDiagnosticsForTest", () => {
     const inputs = [
       {
         serverID: "ts",
-        diagnostics: makeMap([
-          [
-            "/z.ts",
-            [diag({ startLine: 5, startCol: 0, endLine: 5, endCol: 1 }, "later", 2)],
-          ],
-        ]),
+        diagnostics: makeMap([["/z.ts", [diag({ startLine: 5, startCol: 0, endLine: 5, endCol: 1 }, "later", 2)]]]),
       },
       {
         serverID: "es",

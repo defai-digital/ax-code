@@ -7,22 +7,11 @@ export interface TimedBootstrapRequest<T> {
   onSettled?: () => void
 }
 
-export type BootstrapRequestWrap = <T>(
-  label: string,
-  promise: Promise<T>,
-  timeoutMs?: number,
-) => Promise<T>
+export type BootstrapRequestWrap = <T>(label: string, promise: Promise<T>, timeoutMs?: number) => Promise<T>
 
-export function createTimedBootstrapRequest<T>(
-  wrap: BootstrapRequestWrap,
-  input: TimedBootstrapRequest<T>,
-) {
+export function createTimedBootstrapRequest<T>(wrap: BootstrapRequestWrap, input: TimedBootstrapRequest<T>) {
   return () => {
-    const timed = wrap(
-      input.label,
-      Promise.resolve().then(input.request),
-      input.timeoutMs,
-    )
+    const timed = wrap(input.label, Promise.resolve().then(input.request), input.timeoutMs)
     return input.onSettled ? timed.finally(input.onSettled) : timed
   }
 }
@@ -34,7 +23,9 @@ export function createTimedBootstrapRequests<const T extends Record<string, Time
   const out = {} as { [K in keyof T]: () => Promise<Awaited<ReturnType<T[K]["request"]>>> }
 
   for (const key of Object.keys(requests) as Array<keyof T>) {
-    out[key] = createTimedBootstrapRequest(wrap, requests[key]) as { [K in keyof T]: () => Promise<Awaited<ReturnType<T[K]["request"]>>> }[typeof key]
+    out[key] = createTimedBootstrapRequest(wrap, requests[key]) as {
+      [K in keyof T]: () => Promise<Awaited<ReturnType<T[K]["request"]>>>
+    }[typeof key]
   }
 
   return out

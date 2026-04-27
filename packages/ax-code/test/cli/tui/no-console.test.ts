@@ -23,7 +23,7 @@ async function files(dir: string): Promise<string[]> {
   for (const entry of entries) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      result.push(...await files(full))
+      result.push(...(await files(full)))
     } else if (/\.[cm]?[tj]sx?$/.test(entry.name)) {
       result.push(full)
     }
@@ -90,11 +90,11 @@ describe("tui console hygiene", () => {
   test("does not assume non-blocking sync responses contain data", async () => {
     const sync = await fs.readFile(SYNC_SRC, "utf8")
 
-    expect(sync).not.toContain("sdk.client.lsp.status().then((x) => setStore(\"lsp\", reconcile(x.data!)))")
-    expect(sync).not.toContain("sdk.client.mcp.status().then((x) => setStore(\"mcp\", reconcile(x.data!)))")
-    expect(sync).not.toContain("sdk.client.formatter.status().then((x) => setStore(\"formatter\", reconcile(x.data!)))")
-    expect(sync).not.toContain("setStore(\"session_status\", reconcile(x.data!))")
-    expect(sync).not.toContain("sdk.client.path.get().then((x) => setStore(\"path\", reconcile(x.data!)))")
+    expect(sync).not.toContain('sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data!)))')
+    expect(sync).not.toContain('sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!)))')
+    expect(sync).not.toContain('sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data!)))')
+    expect(sync).not.toContain('setStore("session_status", reconcile(x.data!))')
+    expect(sync).not.toContain('sdk.client.path.get().then((x) => setStore("path", reconcile(x.data!)))')
     expect(sync).not.toContain("providersPromise.then((x) => x.data!)")
     expect(sync).not.toContain("providerListPromise.then((x) => x.data!)")
     expect(sync).not.toContain("configPromise.then((x) => x.data!)")
@@ -116,7 +116,11 @@ describe("tui console hygiene", () => {
   test("opens sidebar actions on mouseup after suppressing header toggle", async () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
 
-    expect(sidebar).toMatch(/onMouseUp=\{\(e: any\) => \{\s+e\.stopPropagation\(\)\s+command\.trigger\("session\.activity"\)/)
-    expect(sidebar).toMatch(/onMouseUp=\{\(e: any\) => \{\s+e\.stopPropagation\(\)\s+command\.trigger\("session\.undo"\)/)
+    expect(sidebar).toMatch(
+      /onMouseUp=\{\(e: any\) => \{\s+e\.stopPropagation\(\)\s+command\.trigger\("session\.activity"\)/,
+    )
+    expect(sidebar).toMatch(
+      /onMouseUp=\{\(e: any\) => \{\s+e\.stopPropagation\(\)\s+command\.trigger\("session\.undo"\)/,
+    )
   })
 })

@@ -30,7 +30,8 @@ export const missingAltText: Rule = {
             file,
             line: i + 1,
             column: match.index + 1,
-            message: '<img> missing alt attribute — add alt="" for decorative or alt="description" for informative images',
+            message:
+              '<img> missing alt attribute — add alt="" for decorative or alt="description" for informative images',
           })
         }
       }

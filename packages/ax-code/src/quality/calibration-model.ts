@@ -66,7 +66,10 @@ export namespace QualityCalibrationModel {
   })
   export type BenchmarkBundle = z.output<typeof BenchmarkBundle>
 
-  function groupKey(input: { workflow: ProbabilisticRollout.Workflow; artifactKind: ProbabilisticRollout.ArtifactKind }) {
+  function groupKey(input: {
+    workflow: ProbabilisticRollout.Workflow
+    artifactKind: ProbabilisticRollout.ArtifactKind
+  }) {
     return `${input.workflow}:${input.artifactKind}`
   }
 
@@ -92,18 +95,24 @@ export namespace QualityCalibrationModel {
     return ProbabilisticRollout.calibrationRecords(items, labels).flatMap((record) => {
       const item = itemMap.get(record.artifactID)
       if (!item) return []
-      return [{
-        ...record,
-        createdAt: item.createdAt,
-      }] satisfies TrainingRecord[]
+      return [
+        {
+          ...record,
+          createdAt: item.createdAt,
+        },
+      ] satisfies TrainingRecord[]
     })
   }
 
-  function buildBins(records: TrainingRecord[], globalPrior: number, input: {
-    requestedBinCount: number
-    minBinCount: number
-    laplaceAlpha: number
-  }) {
+  function buildBins(
+    records: TrainingRecord[],
+    globalPrior: number,
+    input: {
+      requestedBinCount: number
+      minBinCount: number
+      laplaceAlpha: number
+    },
+  ) {
     if (records.length === 0) return []
     const maxBinsByCount = Math.max(1, Math.floor(records.length / input.minBinCount) || 1)
     const actualBinCount = Math.max(1, Math.min(input.requestedBinCount, maxBinsByCount, records.length))
@@ -121,7 +130,7 @@ export namespace QualityCalibrationModel {
         (chunk.reduce((sum, record) => sum + record.confidence, 0) / chunk.length).toFixed(4),
       )
       const smoothedRate = Number(
-        (((positives + input.laplaceAlpha * globalPrior) / (chunk.length + input.laplaceAlpha))).toFixed(4),
+        ((positives + input.laplaceAlpha * globalPrior) / (chunk.length + input.laplaceAlpha)).toFixed(4),
       )
 
       bins.push({
@@ -139,11 +148,15 @@ export namespace QualityCalibrationModel {
     return monotonicRates(bins)
   }
 
-  function groupModel(records: TrainingRecord[], globalPrior: number, input: {
-    requestedBinCount: number
-    minBinCount: number
-    laplaceAlpha: number
-  }): GroupModel {
+  function groupModel(
+    records: TrainingRecord[],
+    globalPrior: number,
+    input: {
+      requestedBinCount: number
+      minBinCount: number
+      laplaceAlpha: number
+    },
+  ): GroupModel {
     const first = records[0]
     if (!first) {
       throw new Error("Cannot build group model from empty records")
@@ -169,20 +182,24 @@ export namespace QualityCalibrationModel {
   function predictionConfidence(item: ProbabilisticRollout.ReplayItem, model: ModelFile) {
     const baselineConfidence = item.baseline.confidence
     if (typeof baselineConfidence !== "number") return null
-    const group = model.groups.find((candidate) => candidate.workflow === item.workflow && candidate.artifactKind === item.artifactKind)
+    const group = model.groups.find(
+      (candidate) => candidate.workflow === item.workflow && candidate.artifactKind === item.artifactKind,
+    )
     if (!group || group.bins.length === 0) return model.globalPrior
 
     const nearest = group.bins.reduce((best, bin) => {
-      const bestDistance = baselineConfidence < best.start
-        ? best.start - baselineConfidence
-        : baselineConfidence > best.end
-          ? baselineConfidence - best.end
-          : 0
-      const nextDistance = baselineConfidence < bin.start
-        ? bin.start - baselineConfidence
-        : baselineConfidence > bin.end
-          ? baselineConfidence - bin.end
-          : 0
+      const bestDistance =
+        baselineConfidence < best.start
+          ? best.start - baselineConfidence
+          : baselineConfidence > best.end
+            ? baselineConfidence - best.end
+            : 0
+      const nextDistance =
+        baselineConfidence < bin.start
+          ? bin.start - baselineConfidence
+          : baselineConfidence > bin.end
+            ? baselineConfidence - bin.end
+            : 0
       if (nextDistance < bestDistance) return bin
       if (nextDistance > bestDistance) return best
       return bin.start < best.start ? bin : best
@@ -195,7 +212,13 @@ export namespace QualityCalibrationModel {
     const grouped = new Map<string, typeof next>()
 
     for (const prediction of next) {
-      if (typeof prediction.confidence !== "number" || !prediction.workflow || !prediction.artifactKind || !prediction.sessionID) continue
+      if (
+        typeof prediction.confidence !== "number" ||
+        !prediction.workflow ||
+        !prediction.artifactKind ||
+        !prediction.sessionID
+      )
+        continue
       const key = `${prediction.workflow}:${prediction.artifactKind}:${prediction.sessionID}`
       const list = grouped.get(key) ?? []
       list.push(prediction)
@@ -278,18 +301,26 @@ export namespace QualityCalibrationModel {
     })
   }
 
-  export function predict(items: ProbabilisticRollout.ReplayItem[], model: ModelFile): ProbabilisticRollout.PredictionFile {
-    const predictions = assignRanks(items.map((item) => ({
-      artifactID: item.artifactID,
-      sessionID: item.sessionID,
-      workflow: item.workflow,
-      artifactKind: item.artifactKind,
-      source: model.source,
-      confidence: predictionConfidence(item, model),
-      score: item.baseline.score ?? null,
-      readiness: item.baseline.readiness ?? null,
-      rank: null,
-    } satisfies ProbabilisticRollout.Prediction)))
+  export function predict(
+    items: ProbabilisticRollout.ReplayItem[],
+    model: ModelFile,
+  ): ProbabilisticRollout.PredictionFile {
+    const predictions = assignRanks(
+      items.map(
+        (item) =>
+          ({
+            artifactID: item.artifactID,
+            sessionID: item.sessionID,
+            workflow: item.workflow,
+            artifactKind: item.artifactKind,
+            source: model.source,
+            confidence: predictionConfidence(item, model),
+            score: item.baseline.score ?? null,
+            readiness: item.baseline.readiness ?? null,
+            rank: null,
+          }) satisfies ProbabilisticRollout.Prediction,
+      ),
+    )
 
     return ProbabilisticRollout.PredictionFile.parse({
       schemaVersion: 1,

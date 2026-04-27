@@ -4,7 +4,7 @@ import type { AuditRecord } from "./index"
 import type { SessionID } from "../session/schema"
 
 interface ExportContext {
-  policy?: { name: string, version: string }
+  policy?: { name: string; version: string }
 }
 
 function summarizeText(text: string | undefined, max: number): string {
@@ -57,8 +57,8 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
         result: event.error
           ? `error: ${summarizeText(event.error, 500)}`
           : event.output
-          ? summarizeText(event.output, 500)
-          : event.status,
+            ? summarizeText(event.output, 500)
+            : event.status,
         metadata: event.metadata,
         duration_ms: event.durationMs,
       }

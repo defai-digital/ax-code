@@ -24,19 +24,12 @@ describe("claudeCodeParser", () => {
     })
 
     test("skips non-JSON lines", () => {
-      const output = [
-        "Loading...",
-        '{"type":"result","result":"done"}',
-        "some trailing text",
-      ].join("\n")
+      const output = ["Loading...", '{"type":"result","result":"done"}', "some trailing text"].join("\n")
       expect(claudeCodeParser.parseComplete(output)).toEqual({ text: "done" })
     })
 
     test("handles malformed JSON gracefully", () => {
-      const output = [
-        '{"type":"result", broken',
-        '{"type":"result","result":"ok"}',
-      ].join("\n")
+      const output = ['{"type":"result", broken', '{"type":"result","result":"ok"}'].join("\n")
       expect(claudeCodeParser.parseComplete(output)).toEqual({ text: "ok" })
     })
   })
@@ -130,7 +123,8 @@ describe("codexCliParser", () => {
     })
 
     test("extracts item.completed with content array", () => {
-      const output = '{"type":"item.completed","item":{"content":[{"type":"text","text":"part1"},{"type":"image","url":"x"},{"type":"text","text":"part2"}]}}'
+      const output =
+        '{"type":"item.completed","item":{"content":[{"type":"text","text":"part1"},{"type":"image","url":"x"},{"type":"text","text":"part2"}]}}'
       expect(codexCliParser.parseComplete(output)).toEqual({ text: "part1part2" })
     })
 
@@ -140,10 +134,7 @@ describe("codexCliParser", () => {
     })
 
     test("collects content fields from multiple events", () => {
-      const output = [
-        '{"content":"chunk1"}',
-        '{"content":"chunk2"}',
-      ].join("\n")
+      const output = ['{"content":"chunk1"}', '{"content":"chunk2"}'].join("\n")
       expect(codexCliParser.parseComplete(output)).toEqual({ text: "chunk1\nchunk2" })
     })
 

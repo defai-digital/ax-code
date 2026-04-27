@@ -66,7 +66,12 @@ describe("tui sync subscription", () => {
 
     listener?.({ details: { type: "session.updated", properties: { info: { id: "ses_1" } } } })
     autonomous = true
-    listener?.({ details: { type: "permission.asked", properties: { id: "perm_1", sessionID: "ses_1", permission: "shell", patterns: [], metadata: {}, always: [] } } })
+    listener?.({
+      details: {
+        type: "permission.asked",
+        properties: { id: "perm_1", sessionID: "ses_1", permission: "shell", patterns: [], metadata: {}, always: [] },
+      },
+    })
 
     expect(result).toBe(unsubscribe)
     expect(dispatched).toEqual([
@@ -114,8 +119,6 @@ describe("tui sync subscription", () => {
 
     listener?.({ details: { type: "session.deleted", properties: { info: { id: "ses_1" } } } })
 
-    expect(errors).toEqual([
-      { type: "session.deleted", error: "subscription dispatch failed" },
-    ])
+    expect(errors).toEqual([{ type: "session.deleted", error: "subscription dispatch failed" }])
   })
 })

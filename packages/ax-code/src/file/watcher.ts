@@ -245,8 +245,7 @@ export namespace FileWatcher {
         const result = await git(["rev-parse", "--git-dir"], {
           cwd: Instance.project.worktree,
         })
-        const vcsDir =
-          result.exitCode === 0 ? path.resolve(Instance.project.worktree, result.text().trim()) : undefined
+        const vcsDir = result.exitCode === 0 ? path.resolve(Instance.project.worktree, result.text().trim()) : undefined
         if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
           const ignore = (await readdir(vcsDir).catch(() => [])).filter((entry) => entry !== "HEAD")
           await subscribe(vcsDir, ignore)

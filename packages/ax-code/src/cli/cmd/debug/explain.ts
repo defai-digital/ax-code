@@ -204,7 +204,9 @@ export function classifyErrors(entries: DiagnosticEntry[]): DiagnosticIssue[] {
     if (otherToolErrors.length > 0) {
       const topToolProblems = summarizeCounts(
         otherToolErrors.map((entry) => ({
-          label: entry.command ? `${entry.command}: ${entry.message || entry.errorCode || "unknown"}` : entry.message || entry.errorCode || "unknown",
+          label: entry.command
+            ? `${entry.command}: ${entry.message || entry.errorCode || "unknown"}`
+            : entry.message || entry.errorCode || "unknown",
           count: entry.count,
         })),
         2,
@@ -668,7 +670,8 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       category: "TUI",
       title: "TUI renderer is misconfigured in testing mode",
       rootCause: `Renderer profile \`${rendererProfile.profile ?? "unknown"}\` recorded \`testing: true\` with screen mode \`${rendererProfile.screenMode ?? "unknown"}\`. OpenTUI testing mode is not a production compatibility setting and can suppress real terminal output entirely.`,
-      impact: "The process can finish startup work normally while the user sees a blank or apparently hung terminal because no real frame is painted.",
+      impact:
+        "The process can finish startup work normally while the user sees a blank or apparently hung terminal because no real frame is painted.",
       suggestedFix:
         "Disable OpenTUI testing mode in production renderer options. Keep compatibility changes scoped to screen mode, input features, or threading instead of using the test harness.",
       riskLevel: "high",
@@ -825,7 +828,11 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         riskLevel: "medium",
         occurrences: 1,
       })
-    } else if (renderDispatchedAt !== undefined && appMountedAt === undefined && now - renderDispatchedAt >= TUI_STARTUP_STALL_THRESHOLD_MS) {
+    } else if (
+      renderDispatchedAt !== undefined &&
+      appMountedAt === undefined &&
+      now - renderDispatchedAt >= TUI_STARTUP_STALL_THRESHOLD_MS
+    ) {
       issues.push({
         severity: "warning",
         category: "TUI",
@@ -952,8 +959,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       category: "TUI",
       title: "TUI main thread stalled (worker watchdog)",
       rootCause: `The worker thread's liveness check missed ${workerStalls.length} main-thread ping${workerStalls.length === 1 ? "" : "s"}; the latest gap was ${formatDuration(gap)}${lastPing ? ` since the last ping at ${lastPing}` : ""}. Worker timers kept firing, so the main thread event loop is the one blocked.`,
-      impact:
-        "The TUI renderer cannot process input, paint frames, or consume backend events. User sees a frozen UI.",
+      impact: "The TUI renderer cannot process input, paint frames, or consume backend events. User sees a frozen UI.",
       suggestedFix:
         "Correlate the first `tui.worker.mainStalled` record with the preceding `tui.state.heartbeat` ring buffer and any `tui.effect.loopDetected` entries to name the stuck path. If no effect label triggered, the loop is outside the Solid reactive system (likely opentui's render layer).",
       riskLevel: "high",
@@ -961,11 +967,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
     })
   }
 
-  if (
-    lastHeartbeatMs !== undefined &&
-    !stoppedAt &&
-    now - lastHeartbeatMs >= HANG_STALL_THRESHOLD_MS
-  ) {
+  if (lastHeartbeatMs !== undefined && !stoppedAt && now - lastHeartbeatMs >= HANG_STALL_THRESHOLD_MS) {
     issues.push({
       severity: "critical",
       category: "TUI",

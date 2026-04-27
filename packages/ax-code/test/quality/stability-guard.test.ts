@@ -21,9 +21,7 @@ describe("QualityStabilityGuard", () => {
   test("fails while the latest rollback is still inside the cooling window", () => {
     const summary = QualityStabilityGuard.summarize({
       source: "cooldown-model-v1",
-      rollbacks: [
-        { source: "cooldown-model-v1", rolledBackAt: "2026-04-20T10:00:00.000Z" },
-      ],
+      rollbacks: [{ source: "cooldown-model-v1", rolledBackAt: "2026-04-20T10:00:00.000Z" }],
       now: "2026-04-20T12:00:00.000Z",
       cooldownHours: 24,
     })

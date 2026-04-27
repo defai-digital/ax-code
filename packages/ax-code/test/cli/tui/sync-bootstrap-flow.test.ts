@@ -89,7 +89,9 @@ describe("tui sync bootstrap flow", () => {
         },
         provider: {
           auth: async () => ({ data: {} }),
-          list: async () => ({ data: { all: [{ id: "openai" } as never], default: { chat: "openai" }, connected: [] } }),
+          list: async () => ({
+            data: { all: [{ id: "openai" } as never], default: { chat: "openai" }, connected: [] },
+          }),
         },
       } as never,
       syncIsolation: async () => {

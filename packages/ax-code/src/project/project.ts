@@ -281,17 +281,15 @@ export namespace Project {
         // Phase 2: upsert
         const row = yield* db((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())
         const existing = row ? safe(row) : undefined
-        const prev =
-          existing ?? {
-            id: data.id,
-            worktree: data.worktree,
-            vcs: data.vcs,
-            sandboxes: [] as string[],
-            time: { created: Date.now(), updated: Date.now() },
-          }
+        const prev = existing ?? {
+          id: data.id,
+          worktree: data.worktree,
+          vcs: data.vcs,
+          sandboxes: [] as string[],
+          time: { created: Date.now(), updated: Date.now() },
+        }
 
-        if (Flag.AX_CODE_EXPERIMENTAL_ICON_DISCOVERY)
-          yield* discover(prev).pipe(Effect.ignore, Effect.forkIn(scope))
+        if (Flag.AX_CODE_EXPERIMENTAL_ICON_DISCOVERY) yield* discover(prev).pipe(Effect.ignore, Effect.forkIn(scope))
 
         const result: Info = {
           ...prev,
@@ -630,14 +628,13 @@ export namespace Project {
 
     const row = Database.use((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())
     const existing = row ? safe(row) : undefined
-    const prev =
-      existing ?? {
-        id: data.id,
-        worktree: data.worktree,
-        vcs: data.vcs,
-        sandboxes: [] as string[],
-        time: { created: Date.now(), updated: Date.now() },
-      }
+    const prev = existing ?? {
+      id: data.id,
+      worktree: data.worktree,
+      vcs: data.vcs,
+      sandboxes: [] as string[],
+      time: { created: Date.now(), updated: Date.now() },
+    }
 
     if (Flag.AX_CODE_EXPERIMENTAL_ICON_DISCOVERY) {
       void discover(prev).catch(() => undefined)
@@ -653,7 +650,9 @@ export namespace Project {
       result.sandboxes.push(data.sandbox)
     }
     result.sandboxes = (
-      await Promise.all(result.sandboxes.map(async (sandbox) => ((await Filesystem.exists(sandbox)) ? sandbox : undefined)))
+      await Promise.all(
+        result.sandboxes.map(async (sandbox) => ((await Filesystem.exists(sandbox)) ? sandbox : undefined)),
+      )
     ).filter((sandbox): sandbox is string => sandbox !== undefined)
 
     try {
@@ -757,39 +756,41 @@ export namespace Project {
     const data = safe(row)
     if (!data) return []
     return (
-      await Promise.all(data.sandboxes.map(async (directory) => ((await Filesystem.isDir(directory)) ? directory : undefined)))
+      await Promise.all(
+        data.sandboxes.map(async (directory) => ((await Filesystem.isDir(directory)) ? directory : undefined)),
+      )
     ).filter((directory): directory is string => directory !== undefined)
   }
 
   async function addSandboxPromise(id: ProjectID, directory: string) {
-    const row = Database.use((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
-    if (!row) throw new Error(`Project not found: ${id}`)
-    const sandboxes = [...(safe(row)?.sandboxes ?? [])]
-    if (!sandboxes.includes(directory)) sandboxes.push(directory)
-    const result = Database.use((d) =>
-      d
+    const result = Database.transaction((d) => {
+      const row = d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get()
+      if (!row) throw new Error(`Project not found: ${id}`)
+      const sandboxes = [...(safe(row)?.sandboxes ?? [])]
+      if (!sandboxes.includes(directory)) sandboxes.push(directory)
+      return d
         .update(ProjectTable)
         .set({ sandboxes, time_updated: Date.now() })
         .where(eq(ProjectTable.id, id))
         .returning()
-        .get(),
-    )
+        .get()
+    })
     if (!result) throw new Error(`Project not found: ${id}`)
     emitUpdated(fromRow(result))
   }
 
   async function removeSandboxPromise(id: ProjectID, directory: string) {
-    const row = Database.use((d) => d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
-    if (!row) throw new Error(`Project not found: ${id}`)
-    const sandboxes = (safe(row)?.sandboxes ?? []).filter((sandbox) => sandbox !== directory)
-    const result = Database.use((d) =>
-      d
+    const result = Database.transaction((d) => {
+      const row = d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get()
+      if (!row) throw new Error(`Project not found: ${id}`)
+      const sandboxes = (safe(row)?.sandboxes ?? []).filter((sandbox) => sandbox !== directory)
+      return d
         .update(ProjectTable)
         .set({ sandboxes, time_updated: Date.now() })
         .where(eq(ProjectTable.id, id))
         .returning()
-        .get(),
-    )
+        .get()
+    })
     if (!result) throw new Error(`Project not found: ${id}`)
     emitUpdated(fromRow(result))
   }
@@ -832,7 +833,9 @@ export namespace Project {
     if (!which("git")) return Promise.reject(new Error("Git is not installed"))
     return runGit(["init", "--quiet"], { cwd: input.directory }).then(async (result) => {
       if (result.exitCode !== 0) {
-        throw new Error(result.stderr.toString().trim() || result.text().trim() || "Failed to initialize git repository")
+        throw new Error(
+          result.stderr.toString().trim() || result.text().trim() || "Failed to initialize git repository",
+        )
       }
       const { project } = await fromDirectoryPromise(input.directory)
       return project

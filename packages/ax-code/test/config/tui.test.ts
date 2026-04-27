@@ -196,32 +196,35 @@ test("skips migration when tui.json already exists", async () => {
   })
 })
 
-test.skipIf(process.getuid?.() === 0 || !!process.env.CI)("continues loading tui config when legacy source cannot be stripped", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "readonly-theme" }, null, 2))
-    },
-  })
-
-  const source = path.join(tmp.path, "ax-code.json")
-  await fs.chmod(source, 0o444)
-
-  try {
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const config = await TuiConfig.get()
-        expect(config.theme).toBe("readonly-theme")
-        expect(await Filesystem.exists(path.join(tmp.path, "tui.json"))).toBe(true)
-
-        const server = JSON.parse(await Filesystem.readText(source))
-        expect(server.theme).toBe("readonly-theme")
+test.skipIf(process.getuid?.() === 0 || !!process.env.CI)(
+  "continues loading tui config when legacy source cannot be stripped",
+  async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "readonly-theme" }, null, 2))
       },
     })
-  } finally {
-    await fs.chmod(source, 0o644)
-  }
-})
+
+    const source = path.join(tmp.path, "ax-code.json")
+    await fs.chmod(source, 0o444)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const config = await TuiConfig.get()
+          expect(config.theme).toBe("readonly-theme")
+          expect(await Filesystem.exists(path.join(tmp.path, "tui.json"))).toBe(true)
+
+          const server = JSON.parse(await Filesystem.readText(source))
+          expect(server.theme).toBe("readonly-theme")
+        },
+      })
+    } finally {
+      await fs.chmod(source, 0o644)
+    }
+  },
+)
 
 test("migration backup preserves JSONC comments", async () => {
   await using tmp = await tmpdir({

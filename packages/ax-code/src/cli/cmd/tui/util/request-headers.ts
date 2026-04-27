@@ -1,8 +1,10 @@
-export function directoryRequestHeaders(input: {
-  directory?: string
-  accept?: string
-  contentType?: string
-} = {}) {
+export function directoryRequestHeaders(
+  input: {
+    directory?: string
+    accept?: string
+    contentType?: string
+  } = {},
+) {
   const headers: Record<string, string> = {}
 
   if (input.accept) headers.accept = input.accept

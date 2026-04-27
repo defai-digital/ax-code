@@ -36,12 +36,7 @@ export namespace DreGraphServer {
     return shared
   }
 
-  export async function page(input: {
-    base?: string
-    sessionID?: string
-    directory?: string
-    index?: boolean
-  }) {
+  export async function page(input: { base?: string; sessionID?: string; directory?: string; index?: boolean }) {
     const server = local(input.base)
     const root = server ?? new URL(`http://127.0.0.1:${(await ensure()).port}`)
     const url = new URL(input.index ? "/dre-graph" : `/dre-graph/session/${input.sessionID}`, root.toString())

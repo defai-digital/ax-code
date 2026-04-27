@@ -77,17 +77,22 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     attestation: QualityPromotionSignedArchiveAttestationPolicy.Summary
   }) {
     const signedArchiveReasons = QualityPromotionSignedArchive.verify(input.signedArchive)
-    const trustIdentityPass = input.trust.attestedBy === input.signedArchive.attestation.attestedBy
-      && input.trust.keyID === input.signedArchive.attestation.keyID
-    const attestationTrustConsistencyPass = input.attestation.trustStatus === input.trust.overallStatus
-      && input.attestation.effectiveTrustScope === input.trust.resolution.scope
-      && input.attestation.effectiveTrustLifecycle === input.trust.resolution.lifecycle
-    const linkagePass = input.trust.source === input.signedArchive.source
-      && input.trust.signedArchiveID === input.signedArchive.signedArchiveID
-      && input.attestation.source === input.signedArchive.source
-      && input.attestation.signedArchiveID === input.signedArchive.signedArchiveID
-      && input.attestation.promotionID === input.signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID
-      && input.trust.promotionID === input.attestation.promotionID
+    const trustIdentityPass =
+      input.trust.attestedBy === input.signedArchive.attestation.attestedBy &&
+      input.trust.keyID === input.signedArchive.attestation.keyID
+    const attestationTrustConsistencyPass =
+      input.attestation.trustStatus === input.trust.overallStatus &&
+      input.attestation.effectiveTrustScope === input.trust.resolution.scope &&
+      input.attestation.effectiveTrustLifecycle === input.trust.resolution.lifecycle
+    const linkagePass =
+      input.trust.source === input.signedArchive.source &&
+      input.trust.signedArchiveID === input.signedArchive.signedArchiveID &&
+      input.attestation.source === input.signedArchive.source &&
+      input.attestation.signedArchiveID === input.signedArchive.signedArchiveID &&
+      input.attestation.promotionID ===
+        input.signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .promotion.promotionID &&
+      input.trust.promotionID === input.attestation.promotionID
 
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
       {
@@ -153,7 +158,9 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   }) {
     const signedArchiveReasons = QualityPromotionSignedArchive.verify(input.signedArchive)
     if (signedArchiveReasons.length > 0) {
-      throw new Error(`Cannot create signed archive attestation record for ${input.signedArchive.source}: invalid signed archive (${signedArchiveReasons[0]})`)
+      throw new Error(
+        `Cannot create signed archive attestation record for ${input.signedArchive.source}: invalid signed archive (${signedArchiveReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const recordID = `${input.signedArchive.signedArchiveID}-attestation-record`
@@ -175,14 +182,20 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   export function verify(record: RecordArtifact) {
     const reasons: string[] = []
     if (record.source !== record.signedArchive.source) {
-      reasons.push(`signed archive attestation record source mismatch: ${record.source} vs ${record.signedArchive.source}`)
+      reasons.push(
+        `signed archive attestation record source mismatch: ${record.source} vs ${record.signedArchive.source}`,
+      )
     }
     if (record.promotionID !== record.attestation.promotionID) {
-      reasons.push(`signed archive attestation record promotion mismatch: ${record.promotionID} vs ${record.attestation.promotionID}`)
+      reasons.push(
+        `signed archive attestation record promotion mismatch: ${record.promotionID} vs ${record.attestation.promotionID}`,
+      )
     }
     const signedArchiveReasons = QualityPromotionSignedArchive.verify(record.signedArchive)
     if (signedArchiveReasons.length > 0) {
-      reasons.push(`signed archive attestation record signed archive mismatch for ${record.source} (${signedArchiveReasons[0]})`)
+      reasons.push(
+        `signed archive attestation record signed archive mismatch for ${record.source} (${signedArchiveReasons[0]})`,
+      )
     }
     const expectedSummary = evaluateSummary({
       signedArchive: record.signedArchive,
@@ -212,7 +225,9 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Signed archive attestation record ${record.recordID} already exists for source ${record.source} with different content`)
+      throw new Error(
+        `Signed archive attestation record ${record.recordID} already exists for source ${record.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(record.source, record.recordID), next)
@@ -221,7 +236,9 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   }
 
   export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_signed_archive_attestation_record", encode(source)]] : [["quality_model_signed_archive_attestation_record"]]
+    const prefixes = source
+      ? [["quality_model_signed_archive_attestation_record", encode(source)]]
+      : [["quality_model_signed_archive_attestation_record"]]
     const records: RecordArtifact[] = []
     for (const prefix of prefixes) {
       const keys = await Storage.list(prefix)
@@ -242,7 +259,9 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     const prev = JSON.stringify(persisted.record)
     const curr = JSON.stringify(record)
     if (prev !== curr) {
-      throw new Error(`Persisted signed archive attestation record ${record.recordID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted signed archive attestation record ${record.recordID} does not match the provided artifact`,
+      )
     }
     return persisted
   }

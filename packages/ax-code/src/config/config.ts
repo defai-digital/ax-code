@@ -50,6 +50,22 @@ import * as ConfigSchema from "./schema"
 const CONFIG_SCHEMA_URL =
   "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json"
 
+const DANGEROUS_WELLKNOWN_ENV_KEYS = new Set([
+  "NODE_OPTIONS",
+  "NODE_PATH",
+  "NODE_EXTRA_CA_CERTS",
+  "ELECTRON_RUN_AS_NODE",
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "PYTHONPATH",
+  "PYTHONSTARTUP",
+  "CLASSPATH",
+  "PATH",
+  "SHELL",
+  "HOME",
+])
+
 export namespace Config {
   const log = Log.create({ service: "config" })
 
@@ -110,6 +126,16 @@ export namespace Config {
             command: "config.load",
             status: "error",
             errorCode: "INVALID_ENV_VAR",
+            key: value.key,
+            url: key,
+          })
+          continue
+        }
+        if (DANGEROUS_WELLKNOWN_ENV_KEYS.has(value.key)) {
+          log.warn("ignoring wellknown auth with dangerous env var name", {
+            command: "config.load",
+            status: "error",
+            errorCode: "DANGEROUS_ENV_VAR",
             key: value.key,
             url: key,
           })

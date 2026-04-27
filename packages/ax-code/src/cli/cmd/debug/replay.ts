@@ -55,19 +55,17 @@ async function rerun(args: RecordedArgs): Promise<RecordedEnvelope> {
         character: (args.character ?? 1) - 1,
       })) as unknown as RecordedEnvelope
     case "findReferences":
-      return (
-        (await LSP.referencesCachedEnvelope({
-          file: args.filePath!,
-          line: (args.line ?? 1) - 1,
-          character: (args.character ?? 1) - 1,
-        })) ??
+      return ((await LSP.referencesCachedEnvelope({
+        file: args.filePath!,
+        line: (args.line ?? 1) - 1,
+        character: (args.character ?? 1) - 1,
+      })) ??
         (await LSP.referencesEnvelope({
           file: args.filePath!,
           line: (args.line ?? 1) - 1,
           character: (args.character ?? 1) - 1,
           cache: true,
-        }))
-      ) as unknown as RecordedEnvelope
+        }))) as unknown as RecordedEnvelope
     case "hover":
       return (await LSP.hoverEnvelope({
         file: args.filePath!,
@@ -114,13 +112,11 @@ export const ReplayCommand = cmd({
   command: "replay <id>",
   describe: "replay a recorded semantic call by audit id",
   builder: (yargs) =>
-    yargs
-      .positional("id", { type: "string", demandOption: true, describe: "audit call id (asc_...)" })
-      .option("json", {
-        describe: "output machine-readable JSON",
-        type: "boolean",
-        default: false,
-      }),
+    yargs.positional("id", { type: "string", demandOption: true, describe: "audit call id (asc_...)" }).option("json", {
+      describe: "output machine-readable JSON",
+      type: "boolean",
+      default: false,
+    }),
   async handler(argv) {
     await bootstrap(process.cwd(), async () => {
       const id = AuditCallID.make(argv.id)

@@ -97,8 +97,9 @@ export namespace QualityPromotionApproval {
         requiredOverride: input.bundle.eligibility.requiredOverride,
       },
       releasePolicy: input.bundle.releasePolicy,
-      approvalPolicySuggestion: input.bundle.approvalPolicySuggestion
-        ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle),
+      approvalPolicySuggestion:
+        input.bundle.approvalPolicySuggestion ??
+        QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle),
       snapshot: {
         currentActiveSource: input.bundle.snapshot.currentActiveSource,
         lastPromotionAt: input.bundle.snapshot.lastPromotionAt,
@@ -124,7 +125,9 @@ export namespace QualityPromotionApproval {
       reasons.push(`decision bundle digest mismatch for ${bundle.source}`)
     }
     if (approval.decisionBundle.decision !== bundle.eligibility.decision) {
-      reasons.push(`eligibility decision mismatch: ${approval.decisionBundle.decision} vs ${bundle.eligibility.decision}`)
+      reasons.push(
+        `eligibility decision mismatch: ${approval.decisionBundle.decision} vs ${bundle.eligibility.decision}`,
+      )
     }
     if (approval.decisionBundle.requiredOverride !== bundle.eligibility.requiredOverride) {
       reasons.push(
@@ -149,8 +152,8 @@ export namespace QualityPromotionApproval {
         )
       }
     }
-    const expectedSuggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const expectedSuggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
     if (bundle.approvalPolicySuggestion && !approval.approvalPolicySuggestion) {
       reasons.push(`approval policy suggestion snapshot missing for ${bundle.source}`)
     }
@@ -179,7 +182,9 @@ export namespace QualityPromotionApproval {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Approval ${approval.approvalID} already exists for source ${approval.source} with different content`)
+      throw new Error(
+        `Approval ${approval.approvalID} already exists for source ${approval.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(approval.source, approval.approvalID), next)
@@ -234,11 +239,19 @@ export namespace QualityPromotionApproval {
     lines.push(`- required override: ${approval.decisionBundle.requiredOverride}`)
     lines.push(`- release policy source: ${approval.releasePolicy?.provenance.policySource ?? "n/a"}`)
     lines.push(`- release policy digest: ${approval.releasePolicy?.provenance.digest ?? "n/a"}`)
-    lines.push(`- suggested concentration preset: ${approval.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationPreset ?? "n/a"}`)
-    lines.push(`- suggested concentration budget: ${approval.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationBudget ?? "n/a"}`)
-    lines.push(`- suggestion aligned with effective policy: ${approval.approvalPolicySuggestion?.alignment?.overall ?? "n/a"}`)
+    lines.push(
+      `- suggested concentration preset: ${approval.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationPreset ?? "n/a"}`,
+    )
+    lines.push(
+      `- suggested concentration budget: ${approval.approvalPolicySuggestion?.suggestedReentryPolicy.approvalConcentrationBudget ?? "n/a"}`,
+    )
+    lines.push(
+      `- suggestion aligned with effective policy: ${approval.approvalPolicySuggestion?.alignment?.overall ?? "n/a"}`,
+    )
     lines.push(`- suggestion adoption status: ${approval.approvalPolicySuggestion?.adoption.status ?? "n/a"}`)
-    lines.push(`- suggestion adoption differing fields: ${approval.approvalPolicySuggestion?.adoption.differingFields ?? "n/a"}`)
+    lines.push(
+      `- suggestion adoption differing fields: ${approval.approvalPolicySuggestion?.adoption.differingFields ?? "n/a"}`,
+    )
     lines.push(`- current active source: ${approval.snapshot.currentActiveSource ?? "none"}`)
     lines.push(`- last promotion at: ${approval.snapshot.lastPromotionAt ?? "n/a"}`)
     lines.push(`- last rollback at: ${approval.snapshot.lastRollbackAt ?? "n/a"}`)

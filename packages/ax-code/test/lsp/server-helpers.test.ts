@@ -104,8 +104,18 @@ describe("lsp server helpers", () => {
   })
 
   test("builds nested managed tool paths for directory-based installs", () => {
-    expect(managedToolPath("lua-language-server", "3.15.0", path.join("bin", "lua-language-server"), "darwin", "arm64")).toBe(
-      path.join(Global.Path.bin, ".managed", "lua-language-server", "3.15.0", "darwin-arm64", "bin", "lua-language-server"),
+    expect(
+      managedToolPath("lua-language-server", "3.15.0", path.join("bin", "lua-language-server"), "darwin", "arm64"),
+    ).toBe(
+      path.join(
+        Global.Path.bin,
+        ".managed",
+        "lua-language-server",
+        "3.15.0",
+        "darwin-arm64",
+        "bin",
+        "lua-language-server",
+      ),
     )
   })
 
@@ -162,9 +172,7 @@ describe("lsp server helpers", () => {
   test("maps pinned LLVM clangd assets for supported targets", () => {
     expect(llvmClangdAsset("llvmorg-22.1.3", "darwin", "arm64")).toBe("LLVM-22.1.3-macOS-ARM64.tar.xz")
     expect(llvmClangdAsset("llvmorg-22.1.3", "linux", "x64")).toBe("LLVM-22.1.3-Linux-X64.tar.xz")
-    expect(llvmClangdAsset("llvmorg-22.1.3", "win32", "x64")).toBe(
-      "clang+llvm-22.1.3-x86_64-pc-windows-msvc.tar.xz",
-    )
+    expect(llvmClangdAsset("llvmorg-22.1.3", "win32", "x64")).toBe("clang+llvm-22.1.3-x86_64-pc-windows-msvc.tar.xz")
     expect(llvmClangdAsset("llvmorg-22.1.3", "darwin", "x64")).toBeUndefined()
   })
 
@@ -363,12 +371,7 @@ describe("lsp server helpers", () => {
 
     expect(bin).toBe("/tmp/tinymist")
     expect(commands).toEqual([
-      [
-        "tar",
-        "-xzf",
-        "/tmp/tinymist-dir/tinymist-x86_64-unknown-linux-gnu.tar.gz",
-        "--strip-components=1",
-      ],
+      ["tar", "-xzf", "/tmp/tinymist-dir/tinymist-x86_64-unknown-linux-gnu.tar.gz", "--strip-components=1"],
     ])
   })
 

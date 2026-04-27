@@ -81,10 +81,11 @@ describe("message-part.logic", () => {
   })
 
   test("extracts unique URLs without trailing punctuation", () => {
-    expect(urls("See https://github.com/defai-digital/ax-code, then https://github.com/defai-digital/ax-code and https://example.com/test.")).toEqual([
-      "https://github.com/defai-digital/ax-code",
-      "https://example.com/test",
-    ])
+    expect(
+      urls(
+        "See https://github.com/defai-digital/ax-code, then https://github.com/defai-digital/ax-code and https://example.com/test.",
+      ),
+    ).toEqual(["https://github.com/defai-digital/ax-code", "https://example.com/test"])
   })
 
   test("builds session links from the current route or custom href builder", () => {

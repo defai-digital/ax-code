@@ -8,7 +8,10 @@ import { tmpdir } from "../fixture/fixture"
 
 function breakRow(id: string) {
   Database.use((db) => {
-    db.update(SessionTable).set({ permission: { nope: true } as any }).where(eq(SessionTable.id, id as any)).run()
+    db.update(SessionTable)
+      .set({ permission: { nope: true } as any })
+      .where(eq(SessionTable.id, id as any))
+      .run()
   })
 }
 

@@ -75,7 +75,10 @@ export namespace Skill {
       const paths = Array.isArray(raw)
         ? raw.filter((p: unknown) => typeof p === "string")
         : typeof raw === "string"
-          ? raw.split(",").map((s: string) => s.trim()).filter(Boolean)
+          ? raw
+              .split(",")
+              .map((s: string) => s.trim())
+              .filter(Boolean)
           : undefined
 
       state.dirs.add(path.dirname(match))
@@ -137,7 +140,11 @@ export namespace Skill {
               }
               return result
             })
-            yield* Effect.forEach(roots, (root) => scanDir(s, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "project" }), { discard: true })
+            yield* Effect.forEach(
+              roots,
+              (root) => scanDir(s, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "project" }),
+              { discard: true },
+            )
           }
 
           const configDirs = yield* Effect.promise(() => Config.directories())
@@ -152,7 +159,12 @@ export namespace Skill {
             const resolved = path.resolve(dir)
             const home = os.homedir()
             const workspace = path.resolve(ctx.directory)
-            if (!resolved.startsWith(workspace + path.sep) && !resolved.startsWith(home + path.sep) && resolved !== workspace && resolved !== home) {
+            if (
+              !resolved.startsWith(workspace + path.sep) &&
+              !resolved.startsWith(home + path.sep) &&
+              resolved !== workspace &&
+              resolved !== home
+            ) {
               log.warn("skill path outside workspace and home; skipping", { path: dir, resolved })
               continue
             }

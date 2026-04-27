@@ -1042,8 +1042,9 @@ test("provider.sort prioritizes preferred models", () => {
   ] as any[]
 
   const sorted = Provider.sort(models)
-  expect(sorted[0].id).toContain("sonnet-4")
-  expect(sorted[0].id).toContain("latest")
+  expect(sorted[0].id).toContain("gpt-5")
+  expect(sorted[1].id).toContain("sonnet-4")
+  expect(sorted[1].id).toContain("latest")
   expect(sorted[sorted.length - 1].id).not.toContain("grok-4")
   expect(sorted[sorted.length - 1].id).not.toContain("sonnet-4")
 })

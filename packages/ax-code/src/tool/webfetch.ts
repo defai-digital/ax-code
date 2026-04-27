@@ -78,6 +78,10 @@ export const WebFetchTool = Tool.define("webfetch", {
       "Accept-Language": "en-US,en;q=0.9",
     }
 
+    let response: Response | undefined
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+    let bodyConsumed = false
+
     try {
       // Manual redirect handling so each hop gets DNS-pinned and
       // re-validated. Uses pinnedFetch which resolves DNS once and
@@ -86,7 +90,6 @@ export const WebFetchTool = Tool.define("webfetch", {
       // redirects internally without any hook to inspect the target.
       const MAX_REDIRECTS = 10
       let currentUrl = params.url
-      let response: Response | undefined
       for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
         const attemptHeaders = hop === 0 ? headers : { ...headers }
         let res = await pinnedFetch(currentUrl, { signal, headers: attemptHeaders, redirect: "manual" })
@@ -140,7 +143,7 @@ export const WebFetchTool = Tool.define("webfetch", {
       // was buffered via response.arrayBuffer() before the size check,
       // meaning a malicious server could send gigabytes before we
       // noticed.
-      const reader = response.body?.getReader()
+      reader = response.body?.getReader()
       if (!reader) throw new Error("Response has no body")
       const chunks: Uint8Array[] = []
       let totalBytes = 0
@@ -155,6 +158,8 @@ export const WebFetchTool = Tool.define("webfetch", {
         chunks.push(value)
       }
       reader.releaseLock()
+      reader = undefined
+      bodyConsumed = true
       const assembled = new Uint8Array(totalBytes)
       let byteOffset = 0
       for (const chunk of chunks) {
@@ -165,6 +170,7 @@ export const WebFetchTool = Tool.define("webfetch", {
 
       const contentType = response.headers.get("content-type") || ""
       const mime = contentType.split(";")[0]?.trim().toLowerCase() || ""
+      const charset = contentType.match(/charset=([^;\s]+)/i)?.[1]?.trim()
       const title = `${params.url} (${contentType})`
 
       // Check if response is an image
@@ -186,7 +192,13 @@ export const WebFetchTool = Tool.define("webfetch", {
         }
       }
 
-      const content = new TextDecoder().decode(arrayBuffer)
+      const content = (() => {
+        try {
+          return new TextDecoder(charset || "utf-8").decode(arrayBuffer)
+        } catch {
+          return new TextDecoder().decode(arrayBuffer)
+        }
+      })()
 
       // Handle content based on requested format and actual content type
       switch (params.format) {
@@ -236,6 +248,12 @@ export const WebFetchTool = Tool.define("webfetch", {
       }
     } finally {
       clearTimeout()
+      try {
+        reader?.releaseLock()
+      } catch {}
+      if (!bodyConsumed) {
+        await response?.body?.cancel().catch(() => {})
+      }
     }
   },
 })

@@ -109,7 +109,17 @@ export namespace SystemPrompt {
     ].join("\n")
   }
 
-  const FILE_TOOLS = new Set(["read", "edit", "write", "multiedit"])
+  export const FILE_TOOLS = new Set(["read", "edit", "write", "multiedit"])
+
+  /** True if any message contains a file-tool call (read/edit/write/multiedit). */
+  export function hasFileToolCall(messages: MessageV2.WithParts[]): boolean {
+    for (const msg of messages) {
+      for (const part of msg.parts) {
+        if (part.type === "tool" && FILE_TOOLS.has(part.tool)) return true
+      }
+    }
+    return false
+  }
 
   export function extractFilePaths(messages: MessageV2.WithParts[]): string[] {
     const worktree = Instance.worktree

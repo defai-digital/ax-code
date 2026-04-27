@@ -67,7 +67,9 @@ export namespace QualityStabilityGuard {
     const cooldownUntil = latestRollbackAt ? addHours(latestRollbackAt, cooldownHours) : null
     const coolingWindowActive = cooldownUntil ? evaluatedAt < cooldownUntil : false
     const windowStart = subtractHours(evaluatedAt, repeatFailureWindowHours)
-    const recentRollbackCount = records.filter((record) => record.rolledBackAt >= windowStart && record.rolledBackAt <= evaluatedAt).length
+    const recentRollbackCount = records.filter(
+      (record) => record.rolledBackAt >= windowStart && record.rolledBackAt <= evaluatedAt,
+    ).length
     const escalationRequired = recentRollbackCount >= repeatFailureThreshold
 
     const gates: StabilityGate[] = [

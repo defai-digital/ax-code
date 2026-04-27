@@ -46,11 +46,13 @@ export namespace QualityPromotionSignedArchive {
     entryCount: z.number().int().positive(),
     fileCount: z.number().int().positive(),
     previousActiveSource: z.string().nullable(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type ArchiveSummary = z.output<typeof ArchiveSummary>
 
@@ -143,21 +145,23 @@ export namespace QualityPromotionSignedArchive {
     promotion: QualityPromotionPackagedArchive.ArchiveArtifact["portableExport"]["handoffPackage"]["archiveManifest"]["exportBundle"]["auditManifest"]["promotion"],
     archive: ArchiveArtifact,
   ) {
-    return archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID === promotion.promotionID
-      && archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.source === promotion.source
+    return (
+      archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+        .promotionID === promotion.promotionID &&
+      archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+        .source === promotion.source
+    )
   }
 
-  function evaluateSummary(
-    packagedArchive: QualityPromotionPackagedArchive.ArchiveArtifact,
-    attestation: Attestation,
-  ) {
+  function evaluateSummary(packagedArchive: QualityPromotionPackagedArchive.ArchiveArtifact, attestation: Attestation) {
     const archiveReasons = QualityPromotionPackagedArchive.verify(packagedArchive)
     const expectedPayloadDigest = computePayloadDigest(packagedArchive)
     const payloadMatches = attestation.payloadDigest === expectedPayloadDigest
-    const attestationRecorded = attestation.attestedBy.length > 0
-      && attestation.keyID.length > 0
-      && attestation.keyLocator.length > 0
-      && attestation.signature.length > 0
+    const attestationRecorded =
+      attestation.attestedBy.length > 0 &&
+      attestation.keyID.length > 0 &&
+      attestation.keyLocator.length > 0 &&
+      attestation.signature.length > 0
 
     const gates = [
       {
@@ -218,7 +222,9 @@ export namespace QualityPromotionSignedArchive {
   }) {
     const archiveReasons = QualityPromotionPackagedArchive.verify(input.packagedArchive)
     if (archiveReasons.length > 0) {
-      throw new Error(`Cannot create signed archive for ${input.packagedArchive.source}: invalid packaged archive (${archiveReasons[0]})`)
+      throw new Error(
+        `Cannot create signed archive for ${input.packagedArchive.source}: invalid packaged archive (${archiveReasons[0]})`,
+      )
     }
     const createdAt = new Date().toISOString()
     const signedArchiveID = `${Date.now()}-${input.packagedArchive.archiveID}-${encode(input.signing.keyID)}-signed`
@@ -312,7 +318,9 @@ export namespace QualityPromotionSignedArchive {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion signed archive ${archive.signedArchiveID} already exists for source ${archive.source} with different content`)
+      throw new Error(
+        `Promotion signed archive ${archive.signedArchiveID} already exists for source ${archive.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(archive.source, archive.signedArchiveID), next)
@@ -344,7 +352,9 @@ export namespace QualityPromotionSignedArchive {
     const prev = JSON.stringify(persisted.archive)
     const curr = JSON.stringify(archive)
     if (prev !== curr) {
-      throw new Error(`Persisted promotion signed archive ${archive.signedArchiveID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted promotion signed archive ${archive.signedArchiveID} does not match the provided artifact`,
+      )
     }
     return persisted
   }
@@ -371,7 +381,9 @@ export namespace QualityPromotionSignedArchive {
     lines.push(`- signed archive id: ${archive.signedArchiveID}`)
     lines.push(`- created at: ${archive.createdAt}`)
     lines.push(`- packaged archive id: ${archive.packagedArchive.archiveID}`)
-    lines.push(`- promotion id: ${archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID}`)
+    lines.push(
+      `- promotion id: ${archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID}`,
+    )
     lines.push(`- promotion mode: ${archive.summary.promotionMode}`)
     lines.push(`- authorized promotion: ${archive.summary.authorizedPromotion}`)
     lines.push(`- attested by: ${archive.attestation.attestedBy}`)

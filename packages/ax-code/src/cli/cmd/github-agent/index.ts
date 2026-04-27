@@ -844,7 +844,7 @@ export const GithubRunCommand = cmd({
           }
 
           const errorMsg = err.data?.message || ""
-          throw new Error(`${err.name}: ${errorMsg}`)
+          throw new Error(`${err.name}: ${errorMsg}`, { cause: err })
         }
 
         const text = extractResponseText(result.parts)
@@ -879,7 +879,7 @@ export const GithubRunCommand = cmd({
           }
 
           const errorMsg = err.data?.message || ""
-          throw new Error(`${err.name}: ${errorMsg}`)
+          throw new Error(`${err.name}: ${errorMsg}`, { cause: err })
         }
 
         const summaryText = extractResponseText(summary.parts)
@@ -1090,7 +1090,7 @@ export const GithubRunCommand = cmd({
           console.log(`  permission: ${permission}`)
         } catch (error) {
           console.error(`Failed to check permissions: ${error}`)
-          throw new Error(`Failed to check permissions for user ${actor}: ${error}`)
+          throw new Error(`Failed to check permissions for user ${actor}: ${error}`, { cause: error })
         }
 
         if (!["admin", "write"].includes(permission)) throw new Error(`User ${actor} does not have write permissions`)
@@ -1319,7 +1319,9 @@ query($owner: String!, $repo: String!, $number: Int!) {
             },
           )
         } catch (err) {
-          throw new Error(`Failed to fetch issue #${issueId}: ${err instanceof Error ? err.message : String(err)}`, { cause: err })
+          throw new Error(`Failed to fetch issue #${issueId}: ${err instanceof Error ? err.message : String(err)}`, {
+            cause: err,
+          })
         }
 
         const issue = issueResult.repository.issue
@@ -1462,7 +1464,9 @@ query($owner: String!, $repo: String!, $number: Int!) {
             },
           )
         } catch (err) {
-          throw new Error(`Failed to fetch PR #${issueId}: ${err instanceof Error ? err.message : String(err)}`, { cause: err })
+          throw new Error(`Failed to fetch PR #${issueId}: ${err instanceof Error ? err.message : String(err)}`, {
+            cause: err,
+          })
         }
 
         const pr = prResult.repository.pullRequest

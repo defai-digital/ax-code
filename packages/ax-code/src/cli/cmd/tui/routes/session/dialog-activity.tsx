@@ -28,11 +28,5 @@ export function DialogActivity(props: { sessionID: string }) {
     }))
   })
 
-  return (
-    <DialogSelect
-      title="Activity History"
-      options={options()}
-      skipFilter={false}
-    />
-  )
+  return <DialogSelect title="Activity History" options={options()} skipFilter={false} />
 }

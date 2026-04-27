@@ -28,7 +28,9 @@ export namespace SessionCompare {
       .map((item) => ({
         id: `target:${item.id}`,
         title: item.title,
-        description: [item.semantic?.headline, item.view.plan, item.recommended ? "recommended" : ""].filter(Boolean).join(" · "),
+        description: [item.semantic?.headline, item.view.plan, item.recommended ? "recommended" : ""]
+          .filter(Boolean)
+          .join(" · "),
         footer: `${item.headline} · risk ${item.risk.level.toLowerCase()} (${item.risk.score}/100)${item.semantic ? ` · ${item.semantic.risk} change risk` : ""}`,
         category: "Branches",
         sessionID: item.id,

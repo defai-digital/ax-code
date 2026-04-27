@@ -18,7 +18,11 @@ export interface RequestSyncEventHandlers {
   onWarn: (label: string, error: unknown) => void
 }
 
-function warnAsync(action: () => Promise<unknown> | unknown, label: string, onWarn: RequestSyncEventHandlers["onWarn"]) {
+function warnAsync(
+  action: () => Promise<unknown> | unknown,
+  label: string,
+  onWarn: RequestSyncEventHandlers["onWarn"],
+) {
   try {
     void Promise.resolve(action()).catch((error) => onWarn(label, error))
   } catch (error) {

@@ -24,6 +24,7 @@ export const GrepTool = Tool.define("grep", {
     if (!params.pattern) {
       throw new Error("pattern is required")
     }
+    if (params.path?.includes("\x00")) throw new Error("File path contains null byte")
 
     await ctx.ask({
       permission: "grep",
@@ -142,13 +143,20 @@ export const GrepTool = Tool.define("grep", {
       abort: ctx.abort,
     })
 
-    if (!proc.stdout || !proc.stderr) {
-      throw new Error("Process output not available")
+    let output: string
+    let errorOutput: string
+    let exitCode: number
+    try {
+      if (!proc.stdout || !proc.stderr) {
+        throw new Error("Process output not available")
+      }
+      output = await text(proc.stdout)
+      errorOutput = await text(proc.stderr)
+      exitCode = await proc.exited
+    } catch (err) {
+      if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGTERM")
+      throw err
     }
-
-    const output = await text(proc.stdout)
-    const errorOutput = await text(proc.stderr)
-    const exitCode = await proc.exited
 
     // Exit codes: 0 = matches found, 1 = no matches, 2 = errors (but may still have matches)
     // With --no-messages, we suppress error output but still get exit code 2 for broken symlinks etc.

@@ -199,7 +199,9 @@ export namespace SessionBranchRank {
         const kids = await Session.children(rootID)
         const list = [root, ...kids].map((item) => ({ id: item.id, title: item.title }))
         const semantic = Object.fromEntries(
-          await Promise.all(list.map(async (item) => [item.id, (await SessionSemanticDiff.load(SessionID.make(item.id))) ?? null])),
+          await Promise.all(
+            list.map(async (item) => [item.id, (await SessionSemanticDiff.load(SessionID.make(item.id))) ?? null]),
+          ),
         )
         const ranked = detail({
           currentID: sessionID,

@@ -12,7 +12,9 @@ export function DialogDreGraph(props: { sessionID: string }) {
     dialog.setSize("large")
   })
 
-  const graph = createMemo(() => SessionGraph.loadGraph(props.sessionID as Parameters<typeof SessionGraph.loadGraph>[0]))
+  const graph = createMemo(() =>
+    SessionGraph.loadGraph(props.sessionID as Parameters<typeof SessionGraph.loadGraph>[0]),
+  )
   const lines = createMemo(() => {
     const data = graph()
     if (!data) return []
@@ -38,7 +40,9 @@ export function DialogDreGraph(props: { sessionID: string }) {
         when={lines().length > 0}
         fallback={
           <box paddingTop={1}>
-            <text fg={theme.textMuted}>No execution graph recorded. Run a session with tools or routes to populate execution evidence.</text>
+            <text fg={theme.textMuted}>
+              No execution graph recorded. Run a session with tools or routes to populate execution evidence.
+            </text>
           </box>
         }
       >
@@ -50,11 +54,7 @@ export function DialogDreGraph(props: { sessionID: string }) {
         <scrollbox maxHeight={10} paddingLeft={1} scrollbarOptions={{ visible: false }}>
           <box flexDirection="column">
             <For each={lines()}>
-              {(line, idx) => (
-                <text fg={idx() === 0 ? theme.textMuted : theme.text}>
-                  {line}
-                </text>
-              )}
+              {(line, idx) => <text fg={idx() === 0 ? theme.textMuted : theme.text}>{line}</text>}
             </For>
           </box>
         </scrollbox>

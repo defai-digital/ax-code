@@ -58,7 +58,9 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
 
       if (!skill) {
         const available = await Skill.all().then((x) => x.map((skill) => escapePromptMetadata(skill.name)).join(", "))
-        throw new Error(`Skill "${escapePromptMetadata(params.name)}" not found. Available skills: ${available || "none"}`)
+        throw new Error(
+          `Skill "${escapePromptMetadata(params.name)}" not found. Available skills: ${available || "none"}`,
+        )
       }
 
       await ctx.ask({

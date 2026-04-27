@@ -41,7 +41,11 @@ if (process.env.MODELS_DEV_API_JSON || process.env.AX_CODE_UPDATE_MODELS === "1"
   const modelsData = process.env.MODELS_DEV_API_JSON
     ? await Bun.file(process.env.MODELS_DEV_API_JSON).text()
     : await fetch(`${modelsUrl}/api.json`).then((x) => x.text())
-  const existingSnapshot = JSON.parse(await Bun.file(snapshotPath).text().catch(() => "{}"))
+  const existingSnapshot = JSON.parse(
+    await Bun.file(snapshotPath)
+      .text()
+      .catch(() => "{}"),
+  )
   const fetched = JSON.parse(modelsData)
   await Bun.write(snapshotPath, formatModelsSnapshot(preserveLocalProviders(fetched, existingSnapshot)))
   console.log("Generated models-snapshot.json")
@@ -53,9 +57,7 @@ if (process.env.MODELS_DEV_API_JSON || process.env.AX_CODE_UPDATE_MODELS === "1"
 // constant, exactly the same way the compiled build does. The runtime never
 // reads the migration/ directory at runtime, so the source distribution does
 // not need to ship those files.
-const migrationDirs = (
-  await fs.promises.readdir(path.join(dir, "migration"), { withFileTypes: true })
-)
+const migrationDirs = (await fs.promises.readdir(path.join(dir, "migration"), { withFileTypes: true }))
   .filter((entry) => entry.isDirectory() && /^\d{4}\d{2}\d{2}\d{2}\d{2}\d{2}/.test(entry.name))
   .map((entry) => entry.name)
   .sort()

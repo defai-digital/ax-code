@@ -421,15 +421,7 @@ export namespace File {
 
     const untrackedOutput = (
       await git(
-        [
-          "-c",
-          "core.fsmonitor=false",
-          "-c",
-          "core.quotepath=false",
-          "ls-files",
-          "--others",
-          "--exclude-standard",
-        ],
+        ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"],
         {
           cwd: Instance.directory,
         },
@@ -465,16 +457,7 @@ export namespace File {
 
     const deletedOutput = (
       await git(
-        [
-          "-c",
-          "core.fsmonitor=false",
-          "-c",
-          "core.quotepath=false",
-          "diff",
-          "--name-only",
-          "--diff-filter=D",
-          "HEAD",
-        ],
+        ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--name-only", "--diff-filter=D", "HEAD"],
         {
           cwd: Instance.directory,
         },
@@ -482,11 +465,21 @@ export namespace File {
     ).text()
 
     if (deletedOutput.trim()) {
-      for (const file of deletedOutput.trim().split("\n").map((item) => item.trim()).filter(Boolean)) {
+      for (const file of deletedOutput
+        .trim()
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean)) {
         const removed =
           parseInt(
-            (await git(["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD", "--", file], { cwd: Instance.directory })).text().split("\t")[1] ??
-              "0",
+            (
+              await git(
+                ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD", "--", file],
+                { cwd: Instance.directory },
+              )
+            )
+              .text()
+              .split("\t")[1] ?? "0",
             10,
           ) || 0
         changed.push({ path: file, added: 0, removed, status: "deleted" })
@@ -510,9 +503,9 @@ export namespace File {
       throw new Error("Access denied: path escapes project directory")
     }
 
-    const realFull = await fs.promises.realpath(full).catch((error: NodeJS.ErrnoException) =>
-      error.code === "ENOENT" ? null : Promise.reject(error),
-    )
+    const realFull = await fs.promises
+      .realpath(full)
+      .catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error)))
     if (realFull && !Filesystem.contains(Instance.directory, realFull)) {
       throw new Error("Access denied: symlink target escapes project directory")
     }
@@ -634,12 +627,7 @@ export namespace File {
     })
   }
 
-  export async function search(input: {
-    query: string
-    limit?: number
-    dirs?: boolean
-    type?: "file" | "directory"
-  }) {
+  export async function search(input: { query: string; limit?: number; dirs?: boolean; type?: "file" | "directory" }) {
     await ensure()
     const { cache } = await state()
 

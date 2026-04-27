@@ -14,11 +14,13 @@ export namespace QualityPromotionSubmissionBundle {
     approvalCount: z.number().int().nonnegative(),
     adoptionReviewCount: z.number().int().nonnegative(),
     hasDissentHandling: z.boolean(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type SubmissionSummary = z.output<typeof SubmissionSummary>
 
@@ -80,9 +82,11 @@ export namespace QualityPromotionSubmissionBundle {
       {
         name: "approval-packet-readiness",
         status: input.approvalPacket.readiness.overallStatus,
-        detail: input.approvalPacket.readiness.overallStatus === "pass"
-          ? `approval packet ${input.approvalPacket.packetID} is ready`
-          : input.approvalPacket.readiness.gates.find((gate) => gate.status === "fail")?.detail ?? "approval packet not ready",
+        detail:
+          input.approvalPacket.readiness.overallStatus === "pass"
+            ? `approval packet ${input.approvalPacket.packetID} is ready`
+            : (input.approvalPacket.readiness.gates.find((gate) => gate.status === "fail")?.detail ??
+              "approval packet not ready"),
       },
       {
         name: "decision-bundle-alignment",
@@ -113,7 +117,9 @@ export namespace QualityPromotionSubmissionBundle {
     const submissionID = `${Date.now()}-${encode(input.decisionBundle.source)}-submission`
     const packetReasons = QualityPromotionApprovalPacket.verify(input.decisionBundle, input.approvalPacket)
     if (packetReasons.length > 0) {
-      throw new Error(`Cannot create promotion submission bundle for ${input.decisionBundle.source}: invalid approval packet (${packetReasons[0]})`)
+      throw new Error(
+        `Cannot create promotion submission bundle for ${input.decisionBundle.source}: invalid approval packet (${packetReasons[0]})`,
+      )
     }
     const summary = evaluateSummary(input)
     return BundleArtifact.parse({
@@ -128,10 +134,7 @@ export namespace QualityPromotionSubmissionBundle {
     })
   }
 
-  export function verify(
-    decisionBundle: QualityPromotionDecisionBundle.DecisionBundle,
-    submission: BundleArtifact,
-  ) {
+  export function verify(decisionBundle: QualityPromotionDecisionBundle.DecisionBundle, submission: BundleArtifact) {
     const reasons: string[] = []
     if (submission.source !== decisionBundle.source) {
       reasons.push(`submission bundle source mismatch: ${submission.source} vs ${decisionBundle.source}`)
@@ -157,7 +160,9 @@ export namespace QualityPromotionSubmissionBundle {
     decisionBundle: QualityPromotionDecisionBundle.DecisionBundle,
     submissions: BundleArtifact[] = [],
   ) {
-    const persisted = (await list(decisionBundle.source)).filter((submission) => matchesDecisionBundle(decisionBundle, submission))
+    const persisted = (await list(decisionBundle.source)).filter((submission) =>
+      matchesDecisionBundle(decisionBundle, submission),
+    )
     const deduped = new Map<string, BundleArtifact>()
     for (const submission of [...persisted, ...submissions]) {
       if (!matchesDecisionBundle(decisionBundle, submission)) continue
@@ -195,7 +200,9 @@ export namespace QualityPromotionSubmissionBundle {
   }
 
   export async function list(source?: string) {
-    const prefixes = source ? [["quality_model_submission_bundle", encode(source)]] : [["quality_model_submission_bundle"]]
+    const prefixes = source
+      ? [["quality_model_submission_bundle", encode(source)]]
+      : [["quality_model_submission_bundle"]]
     const submissions: BundleArtifact[] = []
 
     for (const prefix of prefixes) {
@@ -218,7 +225,9 @@ export namespace QualityPromotionSubmissionBundle {
     const prev = JSON.stringify(persisted.submission)
     const curr = JSON.stringify(submission)
     if (prev !== curr) {
-      throw new Error(`Persisted promotion submission bundle ${submission.submissionID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted promotion submission bundle ${submission.submissionID} does not match the provided artifact`,
+      )
     }
     return persisted
   }

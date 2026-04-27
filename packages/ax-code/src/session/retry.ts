@@ -58,7 +58,9 @@ export namespace SessionRetry {
       }
     }
 
-    return jitter(Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS))
+    return jitter(
+      Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS),
+    )
   }
 
   /** Add +/-25% jitter to prevent thundering herd on simultaneous retries. */

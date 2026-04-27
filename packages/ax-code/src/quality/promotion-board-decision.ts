@@ -13,11 +13,13 @@ export namespace QualityPromotionBoardDecision {
     requiredOverride: z.enum(["none", "allow_warn", "force"]),
     disposition: Disposition,
     overrideAccepted: z.boolean(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type DecisionSummary = z.output<typeof DecisionSummary>
 
@@ -87,33 +89,42 @@ export namespace QualityPromotionBoardDecision {
       {
         name: "review-dossier-readiness",
         status: input.reviewDossier.summary.overallStatus,
-        detail: input.reviewDossier.summary.overallStatus === "pass"
-          ? `review dossier ${input.reviewDossier.dossierID} is ready`
-          : input.reviewDossier.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "review dossier not ready",
+        detail:
+          input.reviewDossier.summary.overallStatus === "pass"
+            ? `review dossier ${input.reviewDossier.dossierID} is ready`
+            : (input.reviewDossier.summary.gates.find((gate) => gate.status === "fail")?.detail ??
+              "review dossier not ready"),
       },
       {
         name: "board-disposition",
         status: input.disposition === "approved" ? "pass" : "fail",
-        detail: input.disposition === "approved"
-          ? "board decision authorizes promotion"
-          : `board decision marked promotion as ${input.disposition}`,
+        detail:
+          input.disposition === "approved"
+            ? "board decision authorizes promotion"
+            : `board decision marked promotion as ${input.disposition}`,
       },
       {
         name: "override-acknowledgement",
-        status: requiredOverride === "none"
-          ? input.overrideAccepted ? "fail" : "pass"
-          : input.disposition !== "approved"
-            ? "fail"
-            : input.overrideAccepted ? "pass" : "fail",
-        detail: requiredOverride === "none"
-          ? input.overrideAccepted
-            ? "override accepted even though no override is required"
-            : "no override required"
-          : input.disposition !== "approved"
-            ? `required override ${requiredOverride} cannot be accepted because the board did not approve promotion`
-            : input.overrideAccepted
-              ? `board accepted required override ${requiredOverride}`
-              : `required override ${requiredOverride} was not accepted by the board decision`,
+        status:
+          requiredOverride === "none"
+            ? input.overrideAccepted
+              ? "fail"
+              : "pass"
+            : input.disposition !== "approved"
+              ? "fail"
+              : input.overrideAccepted
+                ? "pass"
+                : "fail",
+        detail:
+          requiredOverride === "none"
+            ? input.overrideAccepted
+              ? "override accepted even though no override is required"
+              : "no override required"
+            : input.disposition !== "approved"
+              ? `required override ${requiredOverride} cannot be accepted because the board did not approve promotion`
+              : input.overrideAccepted
+                ? `board accepted required override ${requiredOverride}`
+                : `required override ${requiredOverride} was not accepted by the board decision`,
       },
     ] as const
 
@@ -204,7 +215,9 @@ export namespace QualityPromotionBoardDecision {
     decisionBundle: QualityPromotionReviewDossier.DossierArtifact["submissionBundle"]["decisionBundle"],
     decisions: DecisionArtifact[] = [],
   ) {
-    const persisted = (await list(decisionBundle.source)).filter((decision) => matchesDecisionBundle(decisionBundle, decision))
+    const persisted = (await list(decisionBundle.source)).filter((decision) =>
+      matchesDecisionBundle(decisionBundle, decision),
+    )
     const deduped = new Map<string, DecisionArtifact>()
     for (const decision of [...persisted, ...decisions]) {
       if (!matchesDecisionBundle(decisionBundle, decision)) continue
@@ -231,7 +244,9 @@ export namespace QualityPromotionBoardDecision {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion board decision ${decision.decisionID} already exists for source ${decision.source} with different content`)
+      throw new Error(
+        `Promotion board decision ${decision.decisionID} already exists for source ${decision.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(decision.source, decision.decisionID), next)

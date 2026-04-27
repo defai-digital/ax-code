@@ -41,7 +41,10 @@ export namespace Bus {
     },
   )
 
-  function prepare<Definition extends BusEvent.Definition>(def: Definition, properties: z.output<Definition["properties"]>) {
+  function prepare<Definition extends BusEvent.Definition>(
+    def: Definition,
+    properties: z.output<Definition["properties"]>,
+  ) {
     const payload = {
       type: def.type,
       properties,

@@ -5,6 +5,8 @@
 export interface MemorySection {
   content: string
   tokens: number
+  /** ISO8601 timestamp of when this section was last scanned. Used for staleness detection. */
+  scannedAt?: string
 }
 
 export interface MemoryEntry {
@@ -20,7 +22,7 @@ export interface MemoryEntry {
   agents?: string[]
 }
 
-export type MemoryEntryKind = "userPrefs" | "feedback" | "decisions"
+export type MemoryEntryKind = "userPrefs" | "feedback" | "decisions" | "reference"
 
 export interface EntrySection {
   entries: MemoryEntry[]
@@ -42,6 +44,7 @@ export interface ProjectMemory {
     userPrefs?: EntrySection
     feedback?: EntrySection
     decisions?: EntrySection
+    reference?: EntrySection
   }
   totalTokens: number
 }

@@ -64,11 +64,13 @@ export namespace QualityPromotionAdoptionDissentSupersession {
     unresolvedQualifiedRejectingReviews: z.number().int().nonnegative(),
     coveredByReviewerRereview: z.number().int().nonnegative(),
     coveredByEvidenceSupersession: z.number().int().nonnegative(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type SupersessionSummary = z.output<typeof SupersessionSummary>
 
@@ -110,7 +112,10 @@ export namespace QualityPromotionAdoptionDissentSupersession {
       : null
   }
 
-  function qualifiesRole(role: string | null | undefined, minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null) {
+  function qualifiesRole(
+    role: string | null | undefined,
+    minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
+  ) {
     if (!minimumRole) return true
     const normalized = normalizeRole(role)
     if (!normalized) return false
@@ -118,9 +123,11 @@ export namespace QualityPromotionAdoptionDissentSupersession {
   }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, supersession: SupersessionArtifact) {
-    return supersession.decisionBundle.digest === QualityPromotionAdoptionReview.decisionBundleDigest(bundle)
-      && supersession.decisionBundle.createdAt === bundle.createdAt
-      && supersession.suggestion.digest === QualityPromotionAdoptionReview.suggestionDigest(bundle)
+    return (
+      supersession.decisionBundle.digest === QualityPromotionAdoptionReview.decisionBundleDigest(bundle) &&
+      supersession.decisionBundle.createdAt === bundle.createdAt &&
+      supersession.suggestion.digest === QualityPromotionAdoptionReview.suggestionDigest(bundle)
+    )
   }
 
   export function create(input: {
@@ -133,14 +140,17 @@ export namespace QualityPromotionAdoptionDissentSupersession {
   }): SupersessionArtifact {
     const supersededAt = new Date().toISOString()
     const supersessionID = `${Date.now()}-${encode(input.bundle.source)}-${encode(input.superseder)}`
-    const suggestion = input.bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
+    const suggestion =
+      input.bundle.approvalPolicySuggestion ??
+      QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(input.bundle)
     const rationale = input.rationale.trim()
     if (!rationale) {
       throw new Error(`Adoption dissent supersession for ${input.bundle.source} requires rationale`)
     }
     if (input.targetReviews.length === 0) {
-      throw new Error(`Adoption dissent supersession for ${input.bundle.source} requires at least one rejected adoption review`)
+      throw new Error(
+        `Adoption dissent supersession for ${input.bundle.source} requires at least one rejected adoption review`,
+      )
     }
     if (input.disposition !== "superseded_by_new_evidence" && input.targetReviews.length !== 1) {
       throw new Error(
@@ -155,7 +165,9 @@ export namespace QualityPromotionAdoptionDissentSupersession {
         )
       }
       if (review.disposition !== "rejected") {
-        throw new Error(`Cannot create dissent supersession for ${input.bundle.source}: target review ${review.reviewID} is not rejected`)
+        throw new Error(
+          `Cannot create dissent supersession for ${input.bundle.source}: target review ${review.reviewID} is not rejected`,
+        )
       }
     }
     if (input.disposition !== "superseded_by_new_evidence" && input.targetReviews[0]!.reviewer !== input.superseder) {
@@ -200,16 +212,20 @@ export namespace QualityPromotionAdoptionDissentSupersession {
 
   export function verify(bundle: QualityPromotionDecisionBundle.DecisionBundle, supersession: SupersessionArtifact) {
     const reasons: string[] = []
-    const suggestion = bundle.approvalPolicySuggestion
-      ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
+    const suggestion =
+      bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
     if (supersession.source !== bundle.source) {
       reasons.push(`dissent supersession source mismatch: ${supersession.source} vs ${bundle.source}`)
     }
     if (supersession.decisionBundle.source !== bundle.source) {
-      reasons.push(`dissent supersession decision bundle source mismatch: ${supersession.decisionBundle.source} vs ${bundle.source}`)
+      reasons.push(
+        `dissent supersession decision bundle source mismatch: ${supersession.decisionBundle.source} vs ${bundle.source}`,
+      )
     }
     if (supersession.decisionBundle.createdAt !== bundle.createdAt) {
-      reasons.push(`dissent supersession decision bundle createdAt mismatch: ${supersession.decisionBundle.createdAt} vs ${bundle.createdAt}`)
+      reasons.push(
+        `dissent supersession decision bundle createdAt mismatch: ${supersession.decisionBundle.createdAt} vs ${bundle.createdAt}`,
+      )
     }
     if (supersession.decisionBundle.digest !== QualityPromotionAdoptionReview.decisionBundleDigest(bundle)) {
       reasons.push(`dissent supersession decision bundle digest mismatch for ${bundle.source}`)
@@ -218,13 +234,17 @@ export namespace QualityPromotionAdoptionDissentSupersession {
       reasons.push(`dissent supersession suggestion digest mismatch for ${bundle.source}`)
     }
     if (supersession.suggestion.adoptionStatus !== suggestion.adoption.status) {
-      reasons.push(`dissent supersession adoption status mismatch: ${supersession.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`)
+      reasons.push(
+        `dissent supersession adoption status mismatch: ${supersession.suggestion.adoptionStatus} vs ${suggestion.adoption.status}`,
+      )
     }
     if (supersession.targetReviews.length === 0) {
       reasons.push(`dissent supersession for ${bundle.source} has no target reviews`)
     }
     if (supersession.disposition !== "superseded_by_new_evidence" && supersession.targetReviews.length !== 1) {
-      reasons.push(`dissent supersession for ${bundle.source} may only target one review for disposition ${supersession.disposition}`)
+      reasons.push(
+        `dissent supersession for ${bundle.source} may only target one review for disposition ${supersession.disposition}`,
+      )
     }
     const seenReviewIDs = new Set<string>()
     for (const review of supersession.targetReviews) {
@@ -245,7 +265,10 @@ export namespace QualityPromotionAdoptionDissentSupersession {
       }
       seenReviewIDs.add(review.reviewID)
     }
-    if (supersession.disposition !== "superseded_by_new_evidence" && supersession.targetReviews[0]?.reviewer !== supersession.superseder) {
+    if (
+      supersession.disposition !== "superseded_by_new_evidence" &&
+      supersession.targetReviews[0]?.reviewer !== supersession.superseder
+    ) {
       reasons.push(`dissent supersession ${supersession.supersessionID} must be filed by the original dissent reviewer`)
     }
     return reasons
@@ -257,8 +280,9 @@ export namespace QualityPromotionAdoptionDissentSupersession {
     supersessions: SupersessionArtifact[],
   ) {
     const consensus = QualityPromotionAdoptionReview.evaluate(bundle, reviews)
-    const qualifiedRejectingReviews = reviews.filter((review) =>
-      review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole))
+    const qualifiedRejectingReviews = reviews.filter(
+      (review) => review.disposition === "rejected" && qualifiesRole(review.role, consensus.requirement.minimumRole),
+    )
     const qualifiedRejectingReviewIDSet = new Set(qualifiedRejectingReviews.map((review) => review.reviewID))
     const coveredByReviewerRereview = new Set<string>()
     const coveredByEvidenceSupersession = new Set<string>()
@@ -308,9 +332,10 @@ export namespace QualityPromotionAdoptionDissentSupersession {
       {
         name: "qualified-rejection-supersession-coverage",
         status: coverageSatisfied ? "pass" : "fail",
-        detail: analysis.totalQualifiedRejectingReviews === 0
-          ? "no qualified rejecting reviews present"
-          : `${analysis.coveredReviewIDs.size}/${analysis.totalQualifiedRejectingReviews} qualified rejecting review(s) superseded`,
+        detail:
+          analysis.totalQualifiedRejectingReviews === 0
+            ? "no qualified rejecting reviews present"
+            : `${analysis.coveredReviewIDs.size}/${analysis.totalQualifiedRejectingReviews} qualified rejecting review(s) superseded`,
       },
     ] as const
 
@@ -320,10 +345,15 @@ export namespace QualityPromotionAdoptionDissentSupersession {
       requiredRole: consensus.requirement.minimumRole,
       totalSupersessions: supersessions.length,
       qualifyingSupersessions: analysis.qualifyingSupersessions.length,
-      distinctQualifyingSuperseders: new Set(analysis.qualifyingSupersessions.map((supersession) => supersession.superseder)).size,
+      distinctQualifyingSuperseders: new Set(
+        analysis.qualifyingSupersessions.map((supersession) => supersession.superseder),
+      ).size,
       totalQualifiedRejectingReviews: analysis.totalQualifiedRejectingReviews,
       coveredQualifiedRejectingReviews: analysis.coveredReviewIDs.size,
-      unresolvedQualifiedRejectingReviews: Math.max(0, analysis.totalQualifiedRejectingReviews - analysis.coveredReviewIDs.size),
+      unresolvedQualifiedRejectingReviews: Math.max(
+        0,
+        analysis.totalQualifiedRejectingReviews - analysis.coveredReviewIDs.size,
+      ),
       coveredByReviewerRereview: analysis.coveredByReviewerRereview.size,
       coveredByEvidenceSupersession: analysis.coveredByEvidenceSupersession.size,
       gates,
@@ -394,7 +424,9 @@ export namespace QualityPromotionAdoptionDissentSupersession {
     const prev = JSON.stringify(persisted.supersession)
     const curr = JSON.stringify(supersession)
     if (prev !== curr) {
-      throw new Error(`Persisted adoption dissent supersession ${supersession.supersessionID} does not match the provided artifact`)
+      throw new Error(
+        `Persisted adoption dissent supersession ${supersession.supersessionID} does not match the provided artifact`,
+      )
     }
     return persisted
   }

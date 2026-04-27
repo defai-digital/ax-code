@@ -18,11 +18,13 @@ export namespace QualityPromotionReleasePacket {
     approvalCount: z.number().int().nonnegative(),
     adoptionReviewCount: z.number().int().nonnegative(),
     hasDissentHandling: z.boolean(),
-    gates: z.array(z.object({
-      name: z.string(),
-      status: z.enum(["pass", "fail"]),
-      detail: z.string(),
-    })),
+    gates: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["pass", "fail"]),
+        detail: z.string(),
+      }),
+    ),
   })
   export type PacketSummary = z.output<typeof PacketSummary>
 
@@ -69,9 +71,12 @@ export namespace QualityPromotionReleasePacket {
     packet: PacketArtifact,
   ) {
     return (
-      packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle.createdAt === decisionBundle.createdAt &&
-      packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle.source === decisionBundle.source &&
-      JSON.stringify(packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle) === JSON.stringify(decisionBundle)
+      packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle.createdAt ===
+        decisionBundle.createdAt &&
+      packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle.source ===
+        decisionBundle.source &&
+      JSON.stringify(packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle) ===
+        JSON.stringify(decisionBundle)
     )
   }
 
@@ -85,9 +90,11 @@ export namespace QualityPromotionReleasePacket {
       {
         name: "release-decision-record-readiness",
         status: releaseDecisionRecord.summary.overallStatus,
-        detail: releaseDecisionRecord.summary.overallStatus === "pass"
-          ? `release decision record ${releaseDecisionRecord.recordID} is ready`
-          : releaseDecisionRecord.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "release decision record not ready",
+        detail:
+          releaseDecisionRecord.summary.overallStatus === "pass"
+            ? `release decision record ${releaseDecisionRecord.recordID} is ready`
+            : (releaseDecisionRecord.summary.gates.find((gate) => gate.status === "fail")?.detail ??
+              "release decision record not ready"),
       },
       {
         name: "promotion-authorization",
@@ -98,11 +105,18 @@ export namespace QualityPromotionReleasePacket {
       },
       {
         name: "release-mode-consistency",
-        status: releaseDecisionRecord.summary.requiredOverride === "none"
-          ? releaseDecisionRecord.summary.promotionMode === "pass" ? "pass" : "fail"
-          : releaseDecisionRecord.summary.requiredOverride === "allow_warn"
-            ? releaseDecisionRecord.summary.promotionMode === "warn_override" ? "pass" : "fail"
-            : releaseDecisionRecord.summary.promotionMode === "force" ? "pass" : "fail",
+        status:
+          releaseDecisionRecord.summary.requiredOverride === "none"
+            ? releaseDecisionRecord.summary.promotionMode === "pass"
+              ? "pass"
+              : "fail"
+            : releaseDecisionRecord.summary.requiredOverride === "allow_warn"
+              ? releaseDecisionRecord.summary.promotionMode === "warn_override"
+                ? "pass"
+                : "fail"
+              : releaseDecisionRecord.summary.promotionMode === "force"
+                ? "pass"
+                : "fail",
         detail: `required override ${releaseDecisionRecord.summary.requiredOverride} maps to promotion mode ${releaseDecisionRecord.summary.promotionMode}`,
       },
     ] as const
@@ -126,9 +140,7 @@ export namespace QualityPromotionReleasePacket {
     })
   }
 
-  export function create(input: {
-    releaseDecisionRecord: QualityPromotionReleaseDecisionRecord.RecordArtifact
-  }) {
+  export function create(input: { releaseDecisionRecord: QualityPromotionReleaseDecisionRecord.RecordArtifact }) {
     const createdAt = new Date().toISOString()
     const packetID = `${Date.now()}-${encode(input.releaseDecisionRecord.source)}-release-packet`
     const recordReasons = QualityPromotionReleaseDecisionRecord.verify(
@@ -160,7 +172,10 @@ export namespace QualityPromotionReleasePacket {
     if (packet.source !== decisionBundle.source) {
       reasons.push(`release packet source mismatch: ${packet.source} vs ${decisionBundle.source}`)
     }
-    if (JSON.stringify(packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle) !== JSON.stringify(decisionBundle)) {
+    if (
+      JSON.stringify(packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle) !==
+      JSON.stringify(decisionBundle)
+    ) {
       reasons.push(`release packet decision bundle mismatch for ${decisionBundle.source}`)
     }
     const recordReasons = QualityPromotionReleaseDecisionRecord.verify(decisionBundle, packet.releaseDecisionRecord)
@@ -178,7 +193,9 @@ export namespace QualityPromotionReleasePacket {
     decisionBundle: QualityPromotionReleaseDecisionRecord.RecordArtifact["boardDecision"]["reviewDossier"]["submissionBundle"]["decisionBundle"],
     packets: PacketArtifact[] = [],
   ) {
-    const persisted = (await list(decisionBundle.source)).filter((packet) => matchesDecisionBundle(decisionBundle, packet))
+    const persisted = (await list(decisionBundle.source)).filter((packet) =>
+      matchesDecisionBundle(decisionBundle, packet),
+    )
     const deduped = new Map<string, PacketArtifact>()
     for (const packet of [...persisted, ...packets]) {
       if (!matchesDecisionBundle(decisionBundle, packet)) continue
@@ -205,7 +222,9 @@ export namespace QualityPromotionReleasePacket {
       const prev = JSON.stringify(existing)
       const curr = JSON.stringify(next)
       if (prev === curr) return existing
-      throw new Error(`Promotion release packet ${packet.packetID} already exists for source ${packet.source} with different content`)
+      throw new Error(
+        `Promotion release packet ${packet.packetID} already exists for source ${packet.source} with different content`,
+      )
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
       await Storage.write(key(packet.source, packet.packetID), next)

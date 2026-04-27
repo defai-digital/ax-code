@@ -10,7 +10,10 @@ describe("script.check-no-effect-solid-in-v4", () => {
     await mkdir(path.join(tmp.path, "src/runtime"), { recursive: true })
     await mkdir(path.join(tmp.path, "src/cli/cmd/tui/state"), { recursive: true })
     await mkdir(path.join(tmp.path, "src/cli/cmd/tui"), { recursive: true })
-    await writeFile(path.join(tmp.path, "src/runtime/safe.ts"), `import z from "zod"\nexport const value = z.string()\n`)
+    await writeFile(
+      path.join(tmp.path, "src/runtime/safe.ts"),
+      `import z from "zod"\nexport const value = z.string()\n`,
+    )
     await writeFile(
       path.join(tmp.path, "src/cli/cmd/tui/state/safe.ts"),
       `import type { Stats } from "node:fs"\nexport const value = "ok"\n`,
@@ -27,7 +30,10 @@ describe("script.check-no-effect-solid-in-v4", () => {
     await mkdir(path.join(tmp.path, "src/runtime"), { recursive: true })
     await writeFile(path.join(tmp.path, "src/runtime/effect.ts"), `import { Effect } from "effect"\n`)
     await writeFile(path.join(tmp.path, "src/cli/cmd/tui/input/solid.ts"), `import { batch } from "solid-js"\n`)
-    await writeFile(path.join(tmp.path, "src/cli/cmd/tui/native/opentui.ts"), `import { render } from "@opentui/core"\n`)
+    await writeFile(
+      path.join(tmp.path, "src/cli/cmd/tui/native/opentui.ts"),
+      `import { render } from "@opentui/core"\n`,
+    )
 
     expect((await V4Guardrails.check(tmp.path)).map((item) => V4Guardrails.format(item))).toEqual([
       "src/cli/cmd/tui/input/solid.ts imports solid-js (solid)",

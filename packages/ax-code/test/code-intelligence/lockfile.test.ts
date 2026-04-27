@@ -12,7 +12,7 @@ Log.init({ print: false })
 // test so they don't collide — the real branded type is just a
 // string underneath, so a cast is enough for a unit test.
 function mkProjectID(tag: string): ProjectID {
-  return (`lockfile-test-${tag}-${Math.random().toString(36).slice(2, 8)}` as unknown) as ProjectID
+  return `lockfile-test-${tag}-${Math.random().toString(36).slice(2, 8)}` as unknown as ProjectID
 }
 
 async function lockPath(projectID: ProjectID): Promise<string> {
@@ -56,10 +56,7 @@ describe("IndexLock", () => {
     // systems and is definitely not us.
     const target = await lockPath(id)
     await fs.mkdir(path.dirname(target), { recursive: true })
-    await fs.writeFile(
-      target,
-      JSON.stringify({ pid: 1, startedAt: Date.now(), host: process.env.HOSTNAME ?? "" }),
-    )
+    await fs.writeFile(target, JSON.stringify({ pid: 1, startedAt: Date.now(), host: process.env.HOSTNAME ?? "" }))
 
     const handle = await IndexLock.tryAcquire(id)
     expect(handle).toBeUndefined()
@@ -144,10 +141,7 @@ describe("IndexLock", () => {
     // Hold the lock with a live foreign pid (pid 1).
     const target = await lockPath(id)
     await fs.mkdir(path.dirname(target), { recursive: true })
-    await fs.writeFile(
-      target,
-      JSON.stringify({ pid: 1, startedAt: Date.now(), host: process.env.HOSTNAME ?? "" }),
-    )
+    await fs.writeFile(target, JSON.stringify({ pid: 1, startedAt: Date.now(), host: process.env.HOSTNAME ?? "" }))
 
     await expect(IndexLock.acquire(id, { timeoutMs: 200 })).rejects.toThrow(/timed out/)
 

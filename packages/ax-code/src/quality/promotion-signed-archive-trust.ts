@@ -112,20 +112,24 @@ export namespace QualityPromotionSignedArchiveTrust {
   }
 
   function matchesArchive(archive: QualityPromotionSignedArchive.ArchiveArtifact, trust: TrustArtifact) {
-    return trust.attestedBy === archive.attestation.attestedBy
-      && trust.keyID === archive.attestation.keyID
-      && trust.algorithm === archive.attestation.algorithm
-      && trust.keySource === archive.attestation.keySource
-      && trust.keyLocator === archive.attestation.keyLocator
+    return (
+      trust.attestedBy === archive.attestation.attestedBy &&
+      trust.keyID === archive.attestation.keyID &&
+      trust.algorithm === archive.attestation.algorithm &&
+      trust.keySource === archive.attestation.keySource &&
+      trust.keyLocator === archive.attestation.keyLocator
+    )
   }
 
   function pickBestMatch(matches: TrustArtifact[]) {
-    return [...matches].sort((a, b) => {
-      if (a.scope !== b.scope) return a.scope === "project" ? -1 : 1
-      const byRegisteredAt = b.registeredAt.localeCompare(a.registeredAt)
-      if (byRegisteredAt !== 0) return byRegisteredAt
-      return b.trustID.localeCompare(a.trustID)
-    })[0] ?? null
+    return (
+      [...matches].sort((a, b) => {
+        if (a.scope !== b.scope) return a.scope === "project" ? -1 : 1
+        const byRegisteredAt = b.registeredAt.localeCompare(a.registeredAt)
+        if (byRegisteredAt !== 0) return byRegisteredAt
+        return b.trustID.localeCompare(a.trustID)
+      })[0] ?? null
+    )
   }
 
   function severity(status: Gate["status"]) {
@@ -178,14 +182,16 @@ export namespace QualityPromotionSignedArchiveTrust {
       keyFingerprint: fingerprintKeyMaterial(input.signing.keyMaterial),
       lifecycle,
       effectiveFrom: input.effectiveFrom ?? registeredAt,
-      retiredAt: lifecycle === "retired" || input.retiredAt ? input.retiredAt ?? null : null,
-      revokedAt: lifecycle === "revoked" || input.revokedAt ? input.revokedAt ?? null : null,
+      retiredAt: lifecycle === "retired" || input.retiredAt ? (input.retiredAt ?? null) : null,
+      revokedAt: lifecycle === "revoked" || input.revokedAt ? (input.revokedAt ?? null) : null,
       rationale: input.rationale ?? null,
     })
   }
 
   export async function get(input: { scope: Scope; projectID?: string | null; trustID: string }) {
-    const record = await Storage.read<unknown>(key(input.scope, input.scope === "project" ? input.projectID ?? null : null, input.trustID))
+    const record = await Storage.read<unknown>(
+      key(input.scope, input.scope === "project" ? (input.projectID ?? null) : null, input.trustID),
+    )
     return TrustRecord.parse(record)
   }
 
@@ -210,13 +216,20 @@ export namespace QualityPromotionSignedArchiveTrust {
 
   export async function list(input?: { scope?: Scope; projectID?: string }) {
     const prefixes = input?.scope
-      ? [[
-        "quality_model_signed_archive_trust",
-        input.scope,
-        input.scope === "global" ? "__global__" : encode(input.projectID ?? (() => {
-          throw new Error("projectID is required to list project-scoped signed archive trust entries")
-        })()),
-      ]]
+      ? [
+          [
+            "quality_model_signed_archive_trust",
+            input.scope,
+            input.scope === "global"
+              ? "__global__"
+              : encode(
+                  input.projectID ??
+                    (() => {
+                      throw new Error("projectID is required to list project-scoped signed archive trust entries")
+                    })(),
+                ),
+          ],
+        ]
       : [["quality_model_signed_archive_trust"]]
     const trusts: TrustArtifact[] = []
 
@@ -248,7 +261,7 @@ export namespace QualityPromotionSignedArchiveTrust {
   ) {
     const persisted = [
       ...(options?.projectID ? await list({ scope: "project", projectID: options.projectID }) : []),
-      ...await list({ scope: "global" }),
+      ...(await list({ scope: "global" })),
     ]
     const deduped = new Map<string, TrustArtifact>()
     for (const trust of [...persisted, ...(options?.trusts ?? [])]) {
@@ -271,9 +284,10 @@ export namespace QualityPromotionSignedArchiveTrust {
   }) {
     const evaluatedAt = new Date().toISOString()
     const structuralReasons = QualityPromotionSignedArchive.verify(input.archive)
-    const signatureReasons = structuralReasons.length > 0
-      ? structuralReasons
-      : QualityPromotionSignedArchive.verifySignature(input.archive, input.keyMaterial)
+    const signatureReasons =
+      structuralReasons.length > 0
+        ? structuralReasons
+        : QualityPromotionSignedArchive.verifySignature(input.archive, input.keyMaterial)
     const { selected } = await resolve(input.archive, {
       projectID: input.projectID,
       trusts: input.trusts,
@@ -304,9 +318,9 @@ export namespace QualityPromotionSignedArchiveTrust {
         name: "trust-key-fingerprint",
         status: selected ? (fingerprintMatches ? "pass" : "fail") : "fail",
         detail: selected
-          ? (fingerprintMatches
+          ? fingerprintMatches
             ? `provided key matches registered fingerprint for ${selected.keyID}`
-            : `provided key fingerprint does not match trust entry ${selected.trustID}`)
+            : `provided key fingerprint does not match trust entry ${selected.trustID}`
           : "cannot compare key fingerprint without a matched trust entry",
       },
     ]
@@ -354,7 +368,9 @@ export namespace QualityPromotionSignedArchiveTrust {
       kind: "ax-code-quality-promotion-signed-archive-trust-summary",
       source: input.archive.source,
       signedArchiveID: input.archive.signedArchiveID,
-      promotionID: input.archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID,
+      promotionID:
+        input.archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+          .promotionID,
       evaluatedAt,
       attestedBy: input.archive.attestation.attestedBy,
       keyID: input.archive.attestation.keyID,

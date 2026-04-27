@@ -31,7 +31,10 @@ export const DebugAnalyzeTool = Tool.define("debug_analyze", {
   parameters: z.object({
     error: z.string().min(1).describe("The error message or short description of the failure"),
     stackTrace: z.string().optional().describe("Raw stack trace text (V8/Node/Bun format)"),
-    entrySymbol: z.string().optional().describe("Alternative seed symbol id (from findSymbol) if no stack trace is available"),
+    entrySymbol: z
+      .string()
+      .optional()
+      .describe("Alternative seed symbol id (from findSymbol) if no stack trace is available"),
     chainDepth: z
       .number()
       .int()
@@ -60,9 +63,7 @@ export const DebugAnalyzeTool = Tool.define("debug_analyze", {
     lines.push("")
     lines.push(`Confidence: ${result.confidence.toFixed(2)} (capped at 0.95)`)
     if (result.truncated) lines.push("Warning: caller walk was truncated at chain depth cap")
-    lines.push(
-      `Heuristics: ${result.explain.heuristicsApplied.join(", ") || "(none)"}`,
-    )
+    lines.push(`Heuristics: ${result.explain.heuristicsApplied.join(", ") || "(none)"}`)
     lines.push(`Graph queries consulted: ${result.explain.graphQueries.length}`)
 
     const metadata = {
@@ -74,13 +75,15 @@ export const DebugAnalyzeTool = Tool.define("debug_analyze", {
     }
 
     void Session.get(ctx.sessionID)
-      .then((session) => QualityShadow.captureDebugAnalyze({
-        session,
-        callID: ctx.callID ?? "debug_analyze",
-        error: args.error,
-        stackTrace: args.stackTrace,
-        metadata,
-      }))
+      .then((session) =>
+        QualityShadow.captureDebugAnalyze({
+          session,
+          callID: ctx.callID ?? "debug_analyze",
+          error: args.error,
+          stackTrace: args.stackTrace,
+          metadata,
+        }),
+      )
       .catch((err) => {
         log.warn("quality debug shadow capture failed", { sessionID: ctx.sessionID, err })
       })

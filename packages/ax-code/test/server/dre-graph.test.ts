@@ -166,8 +166,8 @@ describe("dre graph quality readiness", () => {
           expect(baseFingerprint.status).toBe(200)
           expect(enrichedFingerprint.status).toBe(200)
 
-          const baseFingerprintBody = await baseFingerprint.json() as any
-          const enrichedFingerprintBody = await enrichedFingerprint.json() as any
+          const baseFingerprintBody = (await baseFingerprint.json()) as any
+          const enrichedFingerprintBody = (await enrichedFingerprint.json()) as any
           expect(baseFingerprintBody.risk.quality).toBeNull()
           expect(enrichedFingerprintBody.risk.quality.review).toMatchObject({
             status: "pass",

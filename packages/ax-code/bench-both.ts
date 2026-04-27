@@ -4,9 +4,9 @@
  * Same machine, same provider, same prompt, same directory
  */
 
-console.log("=" .repeat(60))
+console.log("=".repeat(60))
 console.log("  BENCHMARK: OpenCode SDK vs ax-code Programmatic SDK")
-console.log("=" .repeat(60))
+console.log("=".repeat(60))
 
 // ============================================
 // TEST 1: OpenCode SDK approach (spawn server)
@@ -39,11 +39,22 @@ try {
     proc.stdout?.on("data", (chunk: Buffer) => {
       output += chunk.toString()
       const match = output.match(/listening on\s+(https?:\/\/[^\s]+)/)
-      if (match) { clearTimeout(timeout); resolve(match[1]) }
+      if (match) {
+        clearTimeout(timeout)
+        resolve(match[1])
+      }
     })
-    proc.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString() })
-    proc.on("error", (e: Error) => { clearTimeout(timeout); reject(e) })
-    proc.on("exit", (code: number) => { clearTimeout(timeout); reject(new Error("Server exited: " + code)) })
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      output += chunk.toString()
+    })
+    proc.on("error", (e: Error) => {
+      clearTimeout(timeout)
+      reject(e)
+    })
+    proc.on("exit", (code: number) => {
+      clearTimeout(timeout)
+      reject(new Error("Server exited: " + code))
+    })
   })
   const spawn_time = Date.now() - s1
   console.log("  Step 1 - Spawn server:", spawn_time, "ms")
@@ -89,7 +100,7 @@ try {
 
   // Wait max 60 seconds for response
   const timeout_promise = new Promise<void>((_, reject) =>
-    setTimeout(() => reject(new Error("Response timeout (60s)")), 60000)
+    setTimeout(() => reject(new Error("Response timeout (60s)")), 60000),
   )
 
   try {
@@ -106,7 +117,6 @@ try {
   const opencode_total = Date.now() - opencode_start
   console.log("\n  OPENCODE TOTAL:", opencode_total, "ms")
   console.log("  Got response:", got_response)
-
 } catch (e: any) {
   console.log("  OPENCODE FAILED:", e.message)
   console.log("  Time before failure:", Date.now() - opencode_start, "ms")
@@ -146,7 +156,6 @@ try {
   const axcode_total = Date.now() - axcode_start
   console.log("\n  AX-CODE TOTAL:", axcode_total, "ms")
   console.log("  Got response: true")
-
 } catch (e: any) {
   console.log("  AX-CODE FAILED:", e.message)
   console.log("  Time before failure:", Date.now() - axcode_start, "ms")
@@ -155,8 +164,8 @@ try {
 // ============================================
 // COMPARISON
 // ============================================
-console.log("\n" + "=" .repeat(60))
+console.log("\n" + "=".repeat(60))
 console.log("  COMPARISON COMPLETE")
-console.log("=" .repeat(60))
+console.log("=".repeat(60))
 
 process.exit(0)

@@ -119,13 +119,62 @@ function benchmarkBundle(): QualityCalibrationModel.BenchmarkBundle {
         candidateMissingPredictionItems: 0,
       },
       metrics: {
-        precision: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        recall: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        falsePositiveRate: { baseline: null, candidate: null, delta: null, direction: "lower_is_better", improvement: false, regression: false },
-        falseNegativeRate: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
-        precisionAt1: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        precisionAt3: { baseline: 1, candidate: 1, delta: 0, direction: "higher_is_better", improvement: false, regression: false },
-        calibrationError: { baseline: 0, candidate: 0, delta: 0, direction: "lower_is_better", improvement: false, regression: false },
+        precision: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        recall: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falsePositiveRate: {
+          baseline: null,
+          candidate: null,
+          delta: null,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        falseNegativeRate: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt1: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        precisionAt3: {
+          baseline: 1,
+          candidate: 1,
+          delta: 0,
+          direction: "higher_is_better",
+          improvement: false,
+          regression: false,
+        },
+        calibrationError: {
+          baseline: 0,
+          candidate: 0,
+          delta: 0,
+          direction: "lower_is_better",
+          improvement: false,
+          regression: false,
+        },
       },
       gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
     },
@@ -238,7 +287,9 @@ describe("QualityPromotionAdoptionDissentHandling", () => {
         resolutions: [resolution],
       })
 
-      expect(QualityPromotionAdoptionDissentHandling.verify(bundle, [acceptedOne, acceptedTwo, rejected], handling)).toEqual([])
+      expect(
+        QualityPromotionAdoptionDissentHandling.verify(bundle, [acceptedOne, acceptedTwo, rejected], handling),
+      ).toEqual([])
 
       await QualityPromotionAdoptionDissentHandling.append(handling)
       await QualityPromotionAdoptionDissentHandling.assertPersisted(handling)
@@ -294,7 +345,11 @@ describe("QualityPromotionAdoptionDissentHandling", () => {
     })
 
     expect(
-      QualityPromotionAdoptionDissentHandling.verify(bundle, [acceptedOne, acceptedTwo, rejected, newRejected], handling),
+      QualityPromotionAdoptionDissentHandling.verify(
+        bundle,
+        [acceptedOne, acceptedTwo, rejected, newRejected],
+        handling,
+      ),
     ).toContain("dissent handling qualified rejecting review snapshot mismatch for adoption-dissent-handling-model-v1")
   })
 })

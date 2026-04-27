@@ -8,14 +8,6 @@ import bundledSnapshot from "./models-snapshot.json"
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
 
-  export const Cost = z.object({
-    input: z.number(),
-    output: z.number(),
-    cache_read: z.number().optional(),
-    cache_write: z.number().optional(),
-    reasoning: z.number().optional(),
-  })
-
   function gemini3(id: string) {
     return id.toLowerCase().includes("gemini-3")
   }
@@ -29,13 +21,24 @@ export namespace ModelsDev {
 
   function grok4(id: string) {
     const lower = id.toLowerCase()
+    if (!lower.includes("grok")) return true
+    // Support only after Grok 4.0 (grok-4 and newer)
     return lower.includes("grok-4") || lower.includes("grok-code")
   }
 
   function glm46(id: string) {
     const lower = id.toLowerCase()
     if (!lower.includes("glm")) return true
-    return !lower.includes("glm-4.5")
+    // Support only GLM 4.7+ (exclude glm-4, glm-4.5, glm-4.6, etc.)
+    if (
+      lower.includes("glm-4") &&
+      !lower.match(/glm-4\.[7-9]/) &&
+      !lower.includes("glm-4-flash") &&
+      !lower.includes("glm-4-air")
+    ) {
+      return false
+    }
+    return true
   }
 
   function supported(providerID: string, modelID: string) {
@@ -48,7 +51,12 @@ export namespace ModelsDev {
       if (!modelID.toLowerCase().includes("grok")) return true
       return grok4(modelID)
     }
-    if (providerID === "zhipuai" || providerID === "zhipuai-coding-plan" || providerID === "zai" || providerID === "zai-coding-plan")
+    if (
+      providerID === "zhipuai" ||
+      providerID === "zhipuai-coding-plan" ||
+      providerID === "zai" ||
+      providerID === "zai-coding-plan"
+    )
       return glm46(modelID)
     return true
   }
@@ -89,7 +97,6 @@ export namespace ModelsDev {
       input: z.number().optional(),
       output: z.number(),
     }),
-    cost: Cost.default({ input: 0, output: 0 }),
     modalities: z
       .object({
         input: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),

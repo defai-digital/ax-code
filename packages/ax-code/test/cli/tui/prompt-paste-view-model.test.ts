@@ -57,21 +57,19 @@ describe("prompt paste view model", () => {
 
   test("ignores non-summary virtual text parts such as svg tokens", () => {
     expect(
-      summarizedPasteViews(
-        [
-          {
-            type: "text",
-            text: "<svg />",
-            source: {
-              text: {
-                start: 0,
-                end: 11,
-                value: "[SVG: icon.svg]",
-              },
+      summarizedPasteViews([
+        {
+          type: "text",
+          text: "<svg />",
+          source: {
+            text: {
+              start: 0,
+              end: 11,
+              value: "[SVG: icon.svg]",
             },
           },
-        ] as any,
-      ),
+        },
+      ] as any),
     ).toEqual([])
   })
 })

@@ -10,6 +10,44 @@ import { lazy } from "../../util/lazy"
 
 const log = Log.create({ service: "server" })
 
+const REDACTED = "[redacted]"
+
+function redactConfig(config: Config.Info): Config.Info {
+  const maskRecord = (rec: Record<string, string> | undefined) =>
+    rec ? Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, v ? REDACTED : v])) : rec
+
+  return {
+    ...config,
+    provider: config.provider
+      ? Object.fromEntries(
+          Object.entries(config.provider).map(([id, p]) => [
+            id,
+            { ...p, options: p.options ? { ...p.options, apiKey: p.options.apiKey ? REDACTED : p.options.apiKey } : p.options },
+          ]),
+        )
+      : config.provider,
+    mcp: config.mcp
+      ? Object.fromEntries(
+          Object.entries(config.mcp).map(([name, m]) => {
+            if (!("type" in m)) return [name, m]
+            if (m.type === "remote") {
+              return [
+                name,
+                {
+                  ...m,
+                  headers: maskRecord(m.headers),
+                  oauth: m.oauth && typeof m.oauth === "object" ? { ...m.oauth, clientSecret: m.oauth.clientSecret ? REDACTED : m.oauth.clientSecret } : m.oauth,
+                },
+              ]
+            }
+            // McpLocal
+            return [name, { ...m, environment: maskRecord(m.environment) }]
+          }),
+        )
+      : config.mcp,
+  }
+}
+
 export const ConfigRoutes = lazy(() =>
   new Hono()
     .get(
@@ -30,7 +68,7 @@ export const ConfigRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(await Config.get())
+        return c.json(redactConfig(await Config.get()))
       },
     )
     .patch(

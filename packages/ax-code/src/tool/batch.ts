@@ -214,7 +214,11 @@ export const BatchTool = Tool.define("batch", async () => {
         settled.map((r, idx) =>
           r.status === "fulfilled"
             ? r.value
-            : { success: false as const, tool: toolCalls[idx].tool, error: r.reason instanceof Error ? r.reason : new Error(String(r.reason)) },
+            : {
+                success: false as const,
+                tool: toolCalls[idx].tool,
+                error: r.reason instanceof Error ? r.reason : new Error(String(r.reason)),
+              },
         ),
       )
 

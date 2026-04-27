@@ -31,7 +31,10 @@ export namespace Incremental {
 
     // Get changed files from git. Use --diff-filter=ACMR to exclude
     // deleted files (D) — we can't scan files that no longer exist.
-    const result = await $`git diff --name-only --diff-filter=ACMR ${ref} -- ${includeGlobs.join(" ")}`.cwd(cwd).text().catch(() => "")
+    const result = await $`git diff --name-only --diff-filter=ACMR ${ref} -- ${includeGlobs.join(" ")}`
+      .cwd(cwd)
+      .text()
+      .catch(() => "")
     const relPaths = result
       .trim()
       .split("\n")
@@ -60,7 +63,10 @@ export namespace Incremental {
     // Use git log to find the commit closest to `seconds` ago, then
     // diff against it.
     const sinceDate = new Date(Date.now() - seconds * 1000).toISOString()
-    const ref = await $`git log --since=${sinceDate} --format=%H --reverse`.cwd(cwd).text().catch(() => "")
+    const ref = await $`git log --since=${sinceDate} --format=%H --reverse`
+      .cwd(cwd)
+      .text()
+      .catch(() => "")
     const firstCommit = ref.trim().split("\n")[0]
 
     if (!firstCommit) {
@@ -97,7 +103,10 @@ export namespace Incremental {
 
     // Use git grep for speed — it respects .gitignore automatically
     const pattern = patterns.join("|")
-    const result = await $`git grep -l -E "from\\s+['\"].*(?:${pattern})['\"]" -- ${includeGlobs.join(" ")}`.cwd(cwd).text().catch(() => "")
+    const result = await $`git grep -l -E "from\\s+['\"].*(?:${pattern})['\"]" -- ${includeGlobs.join(" ")}`
+      .cwd(cwd)
+      .text()
+      .catch(() => "")
 
     const importers = result
       .trim()

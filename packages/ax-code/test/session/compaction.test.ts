@@ -29,7 +29,6 @@ function createModel(opts: { context: number; output: number; input?: number; np
       output: { text: true, image: false, audio: false, video: false },
     },
     api: { npm: opts.npm ?? "@ai-sdk/openai" },
-    cost: { input: 0, output: 0 },
     status: "active",
     options: {},
     headers: {},

@@ -145,9 +145,9 @@ describe("project.initGit endpoint", () => {
         worktree: tmp.path,
       })
       expect(reloadSpy).toHaveBeenCalledTimes(0)
-      expect(seen.filter((evt) => evt.directory === subdir && evt.payload.type === "server.instance.disposed").length).toBe(
-        0,
-      )
+      expect(
+        seen.filter((evt) => evt.directory === subdir && evt.payload.type === "server.instance.disposed").length,
+      ).toBe(0)
       expect(await Filesystem.exists(path.join(subdir, ".git"))).toBe(false)
     } finally {
       await Instance.disposeAll()

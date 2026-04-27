@@ -22,9 +22,5 @@ export function createBootstrapResponseTask<TInput, TOutput>(
   normalize: (value: TInput | undefined) => TOutput,
   apply: (value: TOutput) => void,
 ) {
-  return createBootstrapTask(
-    request,
-    (response) => normalize(response.data),
-    apply,
-  )
+  return createBootstrapTask(request, (response) => normalize(response.data), apply)
 }

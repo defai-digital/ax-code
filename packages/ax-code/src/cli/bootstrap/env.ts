@@ -37,7 +37,11 @@ export function level(log?: string, _local = Installation.isLocal(), debug = fal
 
 export function debugOptions(opts: Pick<Opts, "debug" | "debugDir" | "debugIncludeContent">, cwd = process.cwd()) {
   const enabled = opts.debug === true
-  const baseDir = enabled ? (opts.debugDir ? path.resolve(cwd, opts.debugDir) : path.join(os.tmpdir(), "ax-code-log")) : undefined
+  const baseDir = enabled
+    ? opts.debugDir
+      ? path.resolve(cwd, opts.debugDir)
+      : path.join(os.tmpdir(), "ax-code-log")
+    : undefined
   return {
     enabled,
     baseDir,
@@ -47,7 +51,11 @@ export function debugOptions(opts: Pick<Opts, "debug" | "debugDir" | "debugInclu
 }
 
 export function debugRunDir(baseDir: string, pid = process.pid, now = new Date()) {
-  const stamp = now.toISOString().replace(/\.\d{3}Z$/, "Z").replace(/[-:]/g, "").replace("T", "-")
+  const stamp = now
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z")
+    .replace(/[-:]/g, "")
+    .replace("T", "-")
   return path.join(baseDir, `${stamp}-${pid}`)
 }
 
