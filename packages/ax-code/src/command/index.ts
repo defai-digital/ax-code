@@ -102,9 +102,16 @@ export namespace Command {
           get template() {
             return (async () => {
               const policy = await Policy.loadReviewPolicy({ worktree: ctx.worktree })
-              return PROMPT_REVIEW.replace("${path}", ctx.worktree).replace(
+              const policyText = policy ? policy.trim() : "(no project-specific review policy configured)"
+              // Use replacement functions so user-provided content (worktree
+              // path, policy file body) is inserted verbatim. String.replace
+              // with a string replacement interprets $1, $&, $$, etc. as
+              // special patterns, which would mangle a worktree path that
+              // contains literal $ characters or any policy content with the
+              // same.
+              return PROMPT_REVIEW.replace("${path}", () => ctx.worktree).replace(
                 "${review_policy}",
-                policy ? policy.trim() : "(no project-specific review policy configured)",
+                () => policyText,
               )
             })()
           },

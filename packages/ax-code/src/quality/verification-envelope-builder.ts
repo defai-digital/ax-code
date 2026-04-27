@@ -31,14 +31,17 @@ function joinErrors(errors: readonly string[]): string | undefined {
 // Mirrors the regex in src/planner/verification/index.ts parseTypeScriptErrors.
 // Inlined here so this module stays free of node-only deps from planner/.
 // Format: `file(line,col): error TSxxxx: message`
+//
+// String.prototype.matchAll is used (not exec + lastIndex) because the
+// previous exec-with-shared-lastIndex pattern raced when concurrent
+// envelope builds shared the module-scope RegExp object — each iteration
+// here gets its own independent iterator.
 const TS_ERROR_PATTERN = /^(.+)\((\d+),(\d+)\):\s+(?:error|warning)\s+(TS\d+):\s+(.+)$/gm
 
 function parseTypecheckFailures(text: string | undefined): StructuredFailure[] {
   if (!text) return []
   const failures: StructuredFailure[] = []
-  TS_ERROR_PATTERN.lastIndex = 0
-  let match: RegExpExecArray | null
-  while ((match = TS_ERROR_PATTERN.exec(text)) !== null) {
+  for (const match of text.matchAll(TS_ERROR_PATTERN)) {
     const [, file, line, column, code, message] = match
     failures.push({
       kind: "typecheck",

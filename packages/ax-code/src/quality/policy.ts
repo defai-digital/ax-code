@@ -1,16 +1,21 @@
 import path from "path"
 import * as fs from "fs/promises"
-import { ConfigPaths } from "../config/paths"
+import { Filesystem } from "../util/filesystem"
+import { Global } from "../global"
 import { Log } from "../util/log"
 
 export namespace Policy {
   const log = Log.create({ service: "quality.policy" })
 
-  // Phase 4 P4.1/P4.2: locate `.ax-code/review.md` and `.ax-code/qa.md` using
-  // the same precedence-walked directory list as the rest of ax-code's config
-  // (ConfigPaths.directories). Only the most-specific match wins in v1 —
-  // concatenation across levels (workspace + user + global) is a future slice
-  // once we have a real consumer that needs additive policy.
+  // Phase 4 P4.1/P4.2: locate `.ax-code/review.md` and `.ax-code/qa.md` with
+  // workspace-first precedence per the Phase 0 contract:
+  //   workspace (.ax-code walk up from cwd to worktree) > user (~/.ax-code/)
+  //
+  // We do NOT reuse `ConfigPaths.directories` because that helper is built
+  // for ax-code.json config (where global is the base and project overrides),
+  // and its iteration order puts `Global.Path.config` first. For policy files
+  // we want most-specific-wins, the inverse precedence. Mixing the two
+  // semantics caused user-global review.md to win over project — fixed here.
   //
   // Files are intentionally loaded ONLY when the matching workflow is
   // invoked (per Phase 0 contract) — there is no eager bootstrap. Callers
@@ -24,10 +29,17 @@ export namespace Policy {
     return loadByName({ ...input, name: "qa.md" })
   }
 
+  async function* policyDirs(input: { worktree: string; cwd: string }): AsyncGenerator<string> {
+    // 1. Project: .ax-code dirs walking up from cwd, stopping at worktree.
+    //    Filesystem.up yields nearest-first, which is the precedence we want.
+    yield* Filesystem.up({ targets: [".ax-code"], start: input.cwd, stop: input.worktree })
+    // 2. User-home: ~/.ax-code (single-level check).
+    yield* Filesystem.up({ targets: [".ax-code"], start: Global.Path.home, stop: Global.Path.home })
+  }
+
   async function loadByName(input: { worktree: string; cwd?: string; name: string }): Promise<string | undefined> {
     const cwd = input.cwd ?? input.worktree
-    const dirs = await ConfigPaths.directories(cwd, input.worktree)
-    for (const dir of dirs) {
+    for await (const dir of policyDirs({ worktree: input.worktree, cwd })) {
       const candidate = path.join(dir, input.name)
       try {
         const text = await fs.readFile(candidate, "utf8")

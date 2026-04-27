@@ -119,4 +119,61 @@ describe("Policy.loadQaPolicy", () => {
       },
     })
   })
+
+  test("workspace .ax-code/review.md precedence: nearest dir wins over a parent", async () => {
+    await using tmp = await tmpdir({ git: true })
+    // Place a review.md at the worktree root AND inside a nested package dir.
+    // Walking up from the nested dir (cwd) should hit the nested one first.
+    await writeFile(tmp.path, ".ax-code/review.md", "# root policy\nROOT_TOKEN")
+    await writeFile(tmp.path, "packages/inner/.ax-code/review.md", "# nested policy\nNESTED_TOKEN")
+    const inner = path.join(tmp.path, "packages", "inner")
+    await Instance.provide({
+      directory: inner,
+      fn: async () => {
+        const policy = await Policy.loadReviewPolicy({ worktree: tmp.path, cwd: inner })
+        expect(policy).toBeDefined()
+        expect(policy).toContain("NESTED_TOKEN")
+        expect(policy).not.toContain("ROOT_TOKEN")
+      },
+    })
+  })
+
+  test("policy content with $&, $1, $$ survives the review template substitution verbatim", async () => {
+    // Regression for a String.replace special-pattern bug — see
+    // src/command/index.ts. Without the fix, a policy that mentions e.g.
+    // "$1 was injected" would get the substitution pattern interpreted by
+    // String.prototype.replace and emit garbled output.
+    await using tmp = await tmpdir({ git: true })
+    const policy = "Block any commit message containing $&, $1, or $$ literally."
+    await writeFile(tmp.path, ".ax-code/review.md", policy)
+
+    // Re-implement the substitution path manually to keep the test
+    // hermetic (avoid loading the full Command service / Effect layer).
+    const PROMPT_REVIEW = "before ${review_policy} after"
+    const loaded = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Policy.loadReviewPolicy({ worktree: tmp.path }),
+    })
+    const text = (loaded ?? "").trim()
+    const rendered = PROMPT_REVIEW.replace("${review_policy}", () => text)
+    expect(rendered).toContain("$&")
+    expect(rendered).toContain("$1")
+    expect(rendered).toContain("$$")
+    expect(rendered).toBe(`before ${text} after`)
+  })
+
+  test("falls back to a parent .ax-code/review.md when the nearest dir has none", async () => {
+    await using tmp = await tmpdir({ git: true })
+    // Only the worktree root has the policy file; the nested cwd does not.
+    await writeFile(tmp.path, ".ax-code/review.md", "ROOT_ONLY_POLICY")
+    const inner = path.join(tmp.path, "packages", "inner")
+    await fs.mkdir(inner, { recursive: true })
+    await Instance.provide({
+      directory: inner,
+      fn: async () => {
+        const policy = await Policy.loadReviewPolicy({ worktree: tmp.path, cwd: inner })
+        expect(policy).toContain("ROOT_ONLY_POLICY")
+      },
+    })
+  })
 })
