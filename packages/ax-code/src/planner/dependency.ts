@@ -30,7 +30,12 @@ export function resolve(phases: TaskPhase[]): ResolutionResult {
   for (const phase of phases) {
     for (const dep of phase.dependencies) {
       if (!ids.has(dep)) {
-        return { success: false, batches: [], error: `Phase "${phase.id}" depends on unknown phase "${dep}"`, criticalPath: [] }
+        return {
+          success: false,
+          batches: [],
+          error: `Phase "${phase.id}" depends on unknown phase "${dep}"`,
+          criticalPath: [],
+        }
       }
       if (dep === phase.id) {
         return { success: false, batches: [], error: `Phase "${phase.id}" depends on itself`, criticalPath: [] }

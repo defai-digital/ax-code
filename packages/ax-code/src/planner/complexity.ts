@@ -37,11 +37,25 @@ const MULTI_FILE_INDICATORS = [
 
 const STEP_INDICATORS = ["first", "then", "next", "after", "finally", "step", "phase", "before", "followed by"]
 
+/** Optional pre-computed signal from the router or another upstream classifier. */
+export type ComplexityHint = "low" | "medium" | "high"
+
 /**
- * Determine if a request is complex enough to warrant multi-phase planning
+ * Determine if a request is complex enough to warrant multi-phase planning.
+ *
+ * When `hint` is supplied (e.g. by the router that already classified the
+ * message), it acts as a floor/ceiling on the keyword-only decision:
+ *   - "high": always complex
+ *   - "low":  treated as simple unless multi-file or multi-step keywords are present
+ *   - "medium": no override; keyword logic decides
  */
-export function isComplex(request: string): boolean {
+export function isComplex(request: string, hint?: ComplexityHint): boolean {
   const lower = request.toLowerCase()
+  const multiFile = hasMultiFile(lower)
+  const multiStep = hasMultiStep(lower)
+
+  if (hint === "high") return true
+  if (hint === "low" && !multiFile && !multiStep) return false
 
   // Short requests are simple
   if (request.length < 50) return false
@@ -50,16 +64,18 @@ export function isComplex(request: string): boolean {
   const hasSimple = SIMPLE_KEYWORDS.some((k) => lower.includes(k))
   const hasComplex = COMPLEX_KEYWORDS.some((k) => lower.includes(k))
 
-  if (hasSimple && !hasComplex && !hasMultiFile(lower) && !hasMultiStep(lower)) return false
+  if (hasSimple && !hasComplex && !multiFile && !multiStep) return false
 
   // Complex if: complex keywords, multi-file, multi-step, or long
-  return hasComplex || hasMultiFile(lower) || hasMultiStep(lower) || request.length > 300
+  return hasComplex || multiFile || multiStep || request.length > 300
 }
 
 /**
- * Get complexity score 0-100
+ * Get complexity score 0-100. When `hint` is supplied, the keyword-only score
+ * is adjusted: "high" raises the floor to 65, "low" caps the ceiling at 35,
+ * "medium" adds a small bonus to break ties.
  */
-export function score(request: string): number {
+export function score(request: string, hint?: ComplexityHint): number {
   const lower = request.toLowerCase()
   let s = 0
 
@@ -81,7 +97,11 @@ export function score(request: string): number {
   const taskCount = countDistinctTasks(lower)
   s += Math.min(20, (taskCount - 1) * 10)
 
-  return Math.min(100, s)
+  if (hint === "high") s = Math.max(s, 65)
+  else if (hint === "low") s = Math.min(s, 35)
+  else if (hint === "medium") s += 5
+
+  return Math.min(100, Math.max(0, s))
 }
 
 /**
@@ -89,7 +109,18 @@ export function score(request: string): number {
  */
 export function minPhases(request: string): number {
   const lower = request.toLowerCase()
-  const actions = ["create", "test", "document", "refactor", "implement", "add", "update", "remove", "configure", "deploy"]
+  const actions = [
+    "create",
+    "test",
+    "document",
+    "refactor",
+    "implement",
+    "add",
+    "update",
+    "remove",
+    "configure",
+    "deploy",
+  ]
   const count = actions.filter((a) => lower.includes(a)).length
   const steps = STEP_INDICATORS.filter((k) => lower.includes(k)).length
   return Math.max(1, Math.min(5, Math.max(count, Math.ceil(steps / 2))))
