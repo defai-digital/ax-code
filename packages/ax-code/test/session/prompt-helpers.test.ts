@@ -296,17 +296,14 @@ describe("session.prompt helpers", () => {
     expect(result).toEqual(["env", "<project-memory>...</project-memory>", "skills", "rules"])
   })
 
-  test("memory is recomputed when agent changes", async () => {
+  test("memory is loaded fresh on every call (no staleness when user records mid-session)", async () => {
     const cache = {}
-    const seen: string[] = []
-    const memoryFn = async (agent: any) => {
-      seen.push(agent.name)
-      return `memory-for-${agent.name}`
-    }
+    let memoryContent = "v1"
+    const memoryFn = async () => `memory-${memoryContent}`
     const env = async () => ["env"]
     const instr = async () => ["rules"]
 
-    await systemPrompt({
+    const first = await systemPrompt({
       agent: { name: "build" } as any,
       model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
       format: { type: "text" },
@@ -316,29 +313,23 @@ describe("session.prompt helpers", () => {
       instructions: instr,
       memory: memoryFn,
     })
-    await systemPrompt({
-      agent: { name: "debug" } as any,
-      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
-      format: { type: "text" },
-      cache,
-      skills: async () => undefined,
-      environment: env,
-      instructions: instr,
-      memory: memoryFn,
-    })
-    // second call with same agent must hit cache
-    await systemPrompt({
-      agent: { name: "debug" } as any,
-      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
-      format: { type: "text" },
-      cache,
-      skills: async () => undefined,
-      environment: env,
-      instructions: instr,
-      memory: memoryFn,
-    })
+    expect(first).toContain("memory-v1")
 
-    expect(seen).toEqual(["build", "debug"])
+    // Simulate user running `ax-code memory remember` between prompt loops.
+    memoryContent = "v2"
+
+    const second = await systemPrompt({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache,
+      skills: async () => undefined,
+      environment: env,
+      instructions: instr,
+      memory: memoryFn,
+    })
+    expect(second).toContain("memory-v2")
+    expect(second).not.toContain("memory-v1")
   })
 
   test("formats missing agent errors with available names", async () => {

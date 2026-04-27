@@ -438,9 +438,6 @@ export type SystemCache = {
   skillsAgentKey?: string
   skillsMsgCount?: number
   skillsFn?: Function
-  memory?: string | undefined
-  memoryAgentKey?: string
-  memoryFn?: Function
 }
 
 export async function systemPrompt(input: {
@@ -470,16 +467,14 @@ export async function systemPrompt(input: {
   }
   const skills = input.cache.skills
 
-  // Project memory is per-agent (same allow-list filtering as buildContext),
-  // so the cache key matches `agent.name` and is invalidated together with
-  // the loader function for tests that swap implementations.
+  // Project memory is intentionally NOT cached. The loader is a single
+  // file read + JSON.parse + string concat (sub-millisecond on typical
+  // memory.json), so the cache savings are negligible — but caching across
+  // prompt loops would mean a mid-session `ax-code memory remember` is
+  // invisible to the agent until session restart, which silently breaks
+  // the user-curated entry contract. Always load fresh.
   const memoryFn = input.memory ?? SystemPrompt.memory
-  if (input.cache.memoryAgentKey !== input.agent.name || input.cache.memoryFn !== memoryFn) {
-    input.cache.memory = await memoryFn(input.agent)
-    input.cache.memoryAgentKey = input.agent.name
-    input.cache.memoryFn = memoryFn
-  }
-  const memory = input.cache.memory
+  const memory = await memoryFn(input.agent)
 
   const modelKey = `${input.model.providerID}/${input.model.api.id}`
   if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
