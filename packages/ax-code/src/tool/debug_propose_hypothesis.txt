@@ -14,7 +14,7 @@ Input:
 - caseId: the open case (rejected if not in session — no fabricated ids).
 - claim: a one-sentence falsifiable explanation. Bad: "something with the cache". Good: "Connection pool exhaustion when concurrency > 50 because pool size is hardcoded to 32".
 - staticAnalysis (optional): when debug_analyze produced a chain you want to anchor on, supply { sourceCallId, chainLength, chainConfidence } from its tool.result.
-- evidenceRefs (optional): array of 16-char hex evidence ids (from debug_capture_evidence in this session). All ids are strict-validated.
+- evidenceRefs (optional): array of 16-char hex ids that justify the hypothesis. Each id may point at EITHER a DebugEvidence (from debug_capture_evidence) OR a VerificationEnvelope (from refactor_apply / future qa runs). Both namespaces share the 16-char hex format. The tool strict-validates the union — an id that exists in neither is rejected.
 - status (optional, default "active"): "active" | "refuted" | "confirmed" | "unresolved". Use "active" for a new candidate; later tools update status as the case progresses.
 
 Output:

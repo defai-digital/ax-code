@@ -225,6 +225,38 @@ describe("SessionFindings.load", () => {
     })
   })
 
+  test("dedups by findingId across multiple tool.result emits (keeps first occurrence)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const finding = buildFinding({
+          source: { tool: "review", version: "4.x.x", runId: session.id },
+        })
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        // Same finding emitted three times (model re-runs /review)
+        await emitRegisterFinding(session.id, "call-1", finding)
+        await emitRegisterFinding(session.id, "call-2", finding)
+        await emitRegisterFinding(session.id, "call-3", finding)
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const findings = SessionFindings.load(session.id)
+        expect(findings).toHaveLength(1)
+        expect(findings[0].findingId).toBe(finding.findingId)
+      },
+    })
+  })
+
   test("ignores register_finding tool.result events with status: 'error'", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

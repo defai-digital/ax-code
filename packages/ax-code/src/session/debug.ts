@@ -35,9 +35,19 @@ export namespace SessionDebug {
 
   export function load(sessionID: SessionID): Loaded {
     const events = EventQuery.bySession(sessionID)
+    // Dedup by deterministic id within each kind. Cases and evidence are
+    // keep-FIRST: cases are written once at open, evidence is content-
+    // addressed (same content → same id → same payload). Hypotheses are
+    // keep-LAST: a re-emit with the same caseId + claim produces the same
+    // hypothesisId, but its `status` (active / refuted / confirmed) is
+    // part of the input and may transition over time (e.g. a future
+    // verify-after-fix flow flips active → confirmed). Keeping last lets
+    // status updates win.
+    const seenCases = new Set<string>()
+    const seenEvidence = new Set<string>()
     const cases: DebugCase[] = []
     const evidence: DebugEvidence[] = []
-    const hypotheses: DebugHypothesis[] = []
+    const hypothesesById = new Map<string, DebugHypothesis>()
     for (const event of events) {
       if (event.type !== "tool.result") continue
       if (event.status !== "completed") continue
@@ -46,21 +56,33 @@ export namespace SessionDebug {
 
       if (meta.debugCase) {
         const parsed = DebugCaseSchema.safeParse(meta.debugCase)
-        if (parsed.success) cases.push(parsed.data)
-        else logSkip(sessionID, event.callID, "debugCase", parsed.error.issues.length)
+        if (parsed.success) {
+          if (!seenCases.has(parsed.data.caseId)) {
+            seenCases.add(parsed.data.caseId)
+            cases.push(parsed.data)
+          }
+        } else logSkip(sessionID, event.callID, "debugCase", parsed.error.issues.length)
       }
       if (meta.debugEvidence) {
         const parsed = DebugEvidenceSchema.safeParse(meta.debugEvidence)
-        if (parsed.success) evidence.push(parsed.data)
-        else logSkip(sessionID, event.callID, "debugEvidence", parsed.error.issues.length)
+        if (parsed.success) {
+          if (!seenEvidence.has(parsed.data.evidenceId)) {
+            seenEvidence.add(parsed.data.evidenceId)
+            evidence.push(parsed.data)
+          }
+        } else logSkip(sessionID, event.callID, "debugEvidence", parsed.error.issues.length)
       }
       if (meta.debugHypothesis) {
         const parsed = DebugHypothesisSchema.safeParse(meta.debugHypothesis)
-        if (parsed.success) hypotheses.push(parsed.data)
-        else logSkip(sessionID, event.callID, "debugHypothesis", parsed.error.issues.length)
+        if (parsed.success) {
+          // Map.set on an existing key updates value but preserves
+          // insertion order; later events overwrite earlier ones with
+          // the same hypothesisId.
+          hypothesesById.set(parsed.data.hypothesisId, parsed.data)
+        } else logSkip(sessionID, event.callID, "debugHypothesis", parsed.error.issues.length)
       }
     }
-    return { cases, evidence, hypotheses }
+    return { cases, evidence, hypotheses: [...hypothesesById.values()] }
   }
 
   function logSkip(sessionID: SessionID, callID: string, kind: string, issues: number): void {

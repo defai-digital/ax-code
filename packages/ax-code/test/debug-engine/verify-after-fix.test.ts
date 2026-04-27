@@ -150,6 +150,23 @@ describe("applyVerificationToHypothesis", () => {
     applyVerificationToHypothesis({ hypothesis: before, envelope: envelope() })
     expect(JSON.stringify(before)).toBe(beforeJson)
   })
+
+  test("returned evidenceRefs is a fresh array reference (mutation isolation)", () => {
+    // confirmed branch — even when the envelope id is ALREADY in evidenceRefs
+    // (no append needed), the returned hypothesis must own a fresh array so
+    // a caller mutating it does not corrupt the input.
+    const ev = envelope()
+    const seeded = applyVerificationToHypothesis({ hypothesis: hypothesis(), envelope: ev })
+    const envelopeIdAlreadyPresent = seeded.evidenceRefs[0]
+
+    const original = hypothesis({ evidenceRefs: [envelopeIdAlreadyPresent] })
+    const result = applyVerificationToHypothesis({ hypothesis: original, envelope: ev })
+
+    expect(result.evidenceRefs).not.toBe(original.evidenceRefs)
+    // Mutating the result must not bleed back into the input.
+    result.evidenceRefs.push("new000aaaa1111bb")
+    expect(original.evidenceRefs).toEqual([envelopeIdAlreadyPresent])
+  })
 })
 
 describe("resolveCaseStatus", () => {

@@ -9,6 +9,7 @@ import {
 } from "../debug-engine/runtime-debug"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
+import { SessionVerifications } from "../session/verifications"
 import type { SessionID } from "../session/schema"
 
 const StaticAnalysisInput = z.object({
@@ -49,9 +50,11 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
   execute: async (args, ctx) => {
     const sessionID = ctx.sessionID as SessionID
 
-    // Strict-validate caseId AND every evidenceRef. Use indexedIds() so we
-    // walk the session event log once for both checks (caseIdSet +
-    // evidenceIdSet would walk it twice).
+    // Strict-validate caseId AND every evidenceRef. evidenceRefs can point
+    // at EITHER a DebugEvidence id OR a VerificationEnvelope id (the
+    // Phase 0 design intent — see verify-after-fix.ts: a hypothesis that
+    // has been verified-after-fix carries the envelope id alongside the
+    // raw evidence ids). Reject only ids that exist in NEITHER namespace.
     const evidenceRefs = args.evidenceRefs ?? []
     const { caseIds, evidenceIds } = SessionDebug.indexedIds(sessionID)
     if (!caseIds.has(args.caseId)) {
@@ -59,11 +62,14 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
         `caseId references an unknown debug case: ${args.caseId} (no DebugCase with this id was opened in session ${ctx.sessionID})`,
       )
     }
-    for (const id of evidenceRefs) {
-      if (!evidenceIds.has(id)) {
-        throw new Error(
-          `evidenceRefs references an unknown evidence id: ${id} (no DebugEvidence with this id was captured in session ${ctx.sessionID})`,
-        )
+    if (evidenceRefs.length > 0) {
+      const envelopeIds = SessionVerifications.envelopeIdSet(sessionID)
+      for (const id of evidenceRefs) {
+        if (!evidenceIds.has(id) && !envelopeIds.has(id)) {
+          throw new Error(
+            `evidenceRefs references an unknown id: ${id} (no DebugEvidence and no VerificationEnvelope with this id exist in session ${ctx.sessionID})`,
+          )
+        }
       }
     }
 

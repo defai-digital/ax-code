@@ -18,6 +18,11 @@ export namespace SessionFindings {
   // corrupted record cannot block the whole list.
   export function load(sessionID: SessionID): Finding[] {
     const events = EventQuery.bySession(sessionID)
+    // Dedup by findingId (deterministic hash). Multiple tool calls for the
+    // same defect — e.g. the model re-runs /review and re-emits the same
+    // anchor — produce identical findingIds; we keep the first occurrence
+    // so the audit trail and the rendered list don't diverge.
+    const seen = new Set<string>()
     const findings: Finding[] = []
     for (const event of events) {
       if (event.type !== "tool.result") continue
@@ -34,6 +39,8 @@ export namespace SessionFindings {
         })
         continue
       }
+      if (seen.has(parsed.data.findingId)) continue
+      seen.add(parsed.data.findingId)
       findings.push(parsed.data)
     }
     return findings

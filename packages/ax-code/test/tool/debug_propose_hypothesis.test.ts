@@ -11,7 +11,9 @@ import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
 import { Installation } from "../../src/installation"
+import { computeEnvelopeId } from "../../src/quality/verification-envelope"
 import type { SessionID } from "../../src/session/schema"
+import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 
 function fakeCtx(sessionID: string) {
   return {
@@ -122,7 +124,7 @@ describe("DebugProposeHypothesisTool", () => {
             { caseId, claim: "It is X", evidenceRefs: ["2222cccc3333dddd"] } as any,
             fakeCtx(session.id),
           ),
-        ).rejects.toThrow(/unknown evidence id/)
+        ).rejects.toThrow(/unknown id/)
       },
     })
   })
@@ -196,6 +198,79 @@ describe("DebugProposeHypothesisTool", () => {
         const tool = await DebugProposeHypothesisTool.init()
         const result = await tool.execute({ caseId, claim: "x" }, fakeCtx(session.id))
         expect(result.metadata.debugHypothesis.status).toBe("active")
+      },
+    })
+  })
+
+  test("evidenceRefs accepts VerificationEnvelope ids in addition to DebugEvidence ids (verify-after-fix loop)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "log content")
+
+        // Emit a VerificationEnvelope into the session — same shape that
+        // refactor_apply produces. applyVerificationToHypothesis would
+        // append this envelope id to evidenceRefs; the tool must accept it.
+        const envelope: VerificationEnvelope = {
+          schemaVersion: 1,
+          workflow: "qa",
+          scope: { kind: "file", paths: ["src/foo.ts"] },
+          command: { runner: "typecheck", argv: [], cwd: "/tmp" },
+          result: {
+            name: "typecheck",
+            type: "typecheck",
+            passed: true,
+            status: "passed",
+            issues: [],
+            duration: 0,
+          },
+          structuredFailures: [],
+          artifactRefs: [],
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        }
+        const envelopeId = computeEnvelopeId(envelope)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "refactor_apply",
+          callID: "call-apply",
+          status: "completed",
+          metadata: { verificationEnvelopes: [envelope] },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const tool = await DebugProposeHypothesisTool.init()
+        const result = await tool.execute(
+          {
+            caseId,
+            claim: "fix verified by typecheck",
+            evidenceRefs: [envelopeId],
+          },
+          fakeCtx(session.id),
+        )
+        expect(result.metadata.debugHypothesis.evidenceRefs).toContain(envelopeId)
+      },
+    })
+  })
+
+  test("rejects evidenceRefs id that exists in neither DebugEvidence nor VerificationEnvelope", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "log content")
+
+        const tool = await DebugProposeHypothesisTool.init()
+        await expect(
+          tool.execute(
+            { caseId, claim: "fabricated", evidenceRefs: ["00ffffffffffffff"] } as any,
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/unknown id/)
       },
     })
   })

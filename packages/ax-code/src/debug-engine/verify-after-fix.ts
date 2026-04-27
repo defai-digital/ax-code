@@ -34,7 +34,12 @@ export type VerifyApplication = {
 
 // Returns a new hypothesis with status updated based on the envelope, plus
 // a verification evidence ref appended so the trail is queryable later.
-// Hypothesis is unchanged when outcome is "inconclusive".
+// Hypothesis is unchanged (same reference) when outcome is "inconclusive".
+//
+// On confirmed / refuted the returned hypothesis is a fresh object whose
+// evidenceRefs array is also a fresh copy — never shares a reference with
+// input.hypothesis.evidenceRefs. This protects callers that hold onto the
+// original from non-local mutations through the returned object.
 export function applyVerificationToHypothesis(input: VerifyApplication): DebugHypothesis {
   const outcome = classifyEnvelope(input.envelope)
   if (outcome === "inconclusive") return input.hypothesis
@@ -42,11 +47,10 @@ export function applyVerificationToHypothesis(input: VerifyApplication): DebugHy
   const envelopeId = computeEnvelopeId(input.envelope)
   // We track the envelope id in evidenceRefs even though it's an envelope
   // id (not an evidence id). The Phase 0 contract is the union of "ids
-  // that justify this hypothesis"; consumers that care about the kind can
-  // resolve via SessionVerifications + SessionDebug at render time.
-  // (Adding kind discrimination would require a Hypothesis schema bump.)
+  // that justify this hypothesis"; consumers (and debug_propose_hypothesis
+  // strict-validation) accept ids from either namespace.
   const evidenceRefs = input.hypothesis.evidenceRefs.includes(envelopeId)
-    ? input.hypothesis.evidenceRefs
+    ? [...input.hypothesis.evidenceRefs]
     : [...input.hypothesis.evidenceRefs, envelopeId]
 
   return {

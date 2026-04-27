@@ -165,6 +165,94 @@ describe("SessionDebug.load", () => {
     })
   })
 
+  test("hypothesis dedup is keep-LAST so status updates (active → confirmed) win", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const c = buildCase(session.id, "p")
+        const active = buildHypothesis(session.id, c.caseId, "claim X", "active")
+        const confirmed = buildHypothesis(session.id, c.caseId, "claim X", "confirmed")
+        // Sanity — same caseId+claim → same hypothesisId
+        expect(active.hypothesisId).toBe(confirmed.hypothesisId)
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        await emit(session.id, tmp.path, {
+          kind: "debug_open_case",
+          metadata: { caseId: c.caseId, debugCase: c.debugCase },
+        })
+        // First emit: active. Second emit: confirmed. The latter must win.
+        await emit(session.id, tmp.path, {
+          kind: "debug_propose_hypothesis",
+          metadata: { hypothesisId: active.hypothesisId, debugHypothesis: active.debugHypothesis },
+        })
+        await emit(session.id, tmp.path, {
+          kind: "debug_propose_hypothesis",
+          metadata: { hypothesisId: confirmed.hypothesisId, debugHypothesis: confirmed.debugHypothesis },
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const loaded = SessionDebug.load(session.id)
+        expect(loaded.hypotheses).toHaveLength(1)
+        expect(loaded.hypotheses[0].status).toBe("confirmed")
+      },
+    })
+  })
+
+  test("dedups cases / evidence / hypotheses by id across repeated emits", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const c = buildCase(session.id, "the same problem")
+        const e = buildEvidence(session.id, c.caseId, "log line")
+        const h = buildHypothesis(session.id, c.caseId, "claim X")
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        // Each emitted three times (model re-opens, re-captures, re-proposes)
+        for (const callSuffix of ["a", "b", "c"]) {
+          await emit(session.id, tmp.path, {
+            kind: "debug_open_case",
+            metadata: { caseId: c.caseId, debugCase: c.debugCase },
+          })
+          await emit(session.id, tmp.path, {
+            kind: "debug_capture_evidence",
+            metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence },
+          })
+          await emit(session.id, tmp.path, {
+            kind: "debug_propose_hypothesis",
+            metadata: { hypothesisId: h.hypothesisId, debugHypothesis: h.debugHypothesis },
+          })
+          void callSuffix
+        }
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const loaded = SessionDebug.load(session.id)
+        expect(loaded.cases).toHaveLength(1)
+        expect(loaded.evidence).toHaveLength(1)
+        expect(loaded.hypotheses).toHaveLength(1)
+      },
+    })
+  })
+
   test("ignores tool.result events with status: 'error'", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

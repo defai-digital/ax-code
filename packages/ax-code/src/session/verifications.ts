@@ -22,6 +22,11 @@ export namespace SessionVerifications {
   // record cannot block the rest.
   export function load(sessionID: SessionID): VerificationEnvelope[] {
     const events = EventQuery.bySession(sessionID)
+    // Dedup by computeEnvelopeId (deterministic hash of envelope content).
+    // Re-running refactor_apply on the same plan in the same session
+    // produces identical envelopes; we keep the first so consumers and
+    // sidebar counts don't double-count the same verification run.
+    const seen = new Set<string>()
     const envelopes: VerificationEnvelope[] = []
     for (const event of events) {
       if (event.type !== "tool.result") continue
@@ -40,6 +45,9 @@ export namespace SessionVerifications {
           })
           continue
         }
+        const id = computeEnvelopeId(parsed.data)
+        if (seen.has(id)) continue
+        seen.add(id)
         envelopes.push(parsed.data)
       }
     }

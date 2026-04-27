@@ -294,6 +294,52 @@ describe("SessionVerifications.load", () => {
     })
   })
 
+  test("dedups envelopes by computeEnvelopeId across multiple tool.result emits", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const env = buildEnvelope({
+          source: { tool: "refactor_apply", version: "4.x.x", runId: session.id },
+        })
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        // Same envelope emitted twice (re-run of refactor_apply)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "refactor_apply",
+          callID: "call-1",
+          status: "completed",
+          metadata: { verificationEnvelopes: [env] },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "refactor_apply",
+          callID: "call-2",
+          status: "completed",
+          metadata: { verificationEnvelopes: [env] },
+          durationMs: 1,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const envs = SessionVerifications.load(session.id)
+        expect(envs).toHaveLength(1)
+      },
+    })
+  })
+
   test("ignores tool.result events with status: 'error'", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
