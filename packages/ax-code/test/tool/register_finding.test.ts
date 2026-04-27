@@ -1,0 +1,155 @@
+import { describe, expect, test } from "bun:test"
+import { RegisterFindingTool } from "../../src/tool/register_finding"
+import { computeFindingId, FindingSchema } from "../../src/quality/finding"
+
+const ctx = {
+  sessionID: "ses_test_register_finding",
+  messageID: "msg_test" as any,
+  agent: "build",
+  abort: new AbortController().signal,
+  callID: "call_test",
+  messages: [],
+  metadata: () => {},
+  ask: async () => {},
+} as any
+
+const validInput = {
+  workflow: "review" as const,
+  category: "bug" as const,
+  severity: "HIGH" as const,
+  summary: "Off-by-one in pagination loop",
+  file: "src/server/routes/list.ts",
+  anchor: { kind: "line" as const, line: 42 },
+  rationale: "Loop runs n+1 times when limit equals total.",
+  evidence: ["src/server/routes/list.ts:42 - condition uses <= instead of <"],
+  suggestedNextAction: "Change condition to `<` and add a regression test.",
+}
+
+describe("RegisterFindingTool", () => {
+  test("validates a minimal valid input and returns a stable findingId", async () => {
+    const tool = await RegisterFindingTool.init()
+    const result = await tool.execute(validInput, ctx)
+
+    expect(result.metadata.findingId).toMatch(/^[0-9a-f]{16}$/)
+    expect(result.metadata.findingId).toBe(
+      computeFindingId({
+        workflow: validInput.workflow,
+        category: validInput.category,
+        file: validInput.file,
+        anchor: validInput.anchor,
+      }),
+    )
+    expect(result.title).toContain("HIGH")
+    expect(result.title).toContain("bug")
+  })
+
+  test("returns the full Finding shape in metadata.finding and it parses against FindingSchema", async () => {
+    const tool = await RegisterFindingTool.init()
+    const result = await tool.execute(validInput, ctx)
+
+    expect(() => FindingSchema.parse(result.metadata.finding)).not.toThrow()
+    const finding = result.metadata.finding
+    expect(finding.schemaVersion).toBe(1)
+    expect(finding.findingId).toBe(result.metadata.findingId)
+    expect(finding.severity).toBe("HIGH")
+    expect(finding.category).toBe("bug")
+    expect(finding.source.runId).toBe(ctx.sessionID)
+    expect(finding.source.tool).toBe("review")
+  })
+
+  test("output line includes the file:line anchor and the summary", async () => {
+    const tool = await RegisterFindingTool.init()
+    const result = await tool.execute(validInput, ctx)
+
+    expect(result.output).toContain("src/server/routes/list.ts:42")
+    expect(result.output).toContain("Off-by-one in pagination loop")
+    expect(result.output).toContain(result.metadata.findingId)
+  })
+
+  test("rejects invalid severity", async () => {
+    const tool = await RegisterFindingTool.init()
+    await expect(
+      tool.execute({ ...validInput, severity: "BLOCKER" } as any, ctx),
+    ).rejects.toThrow()
+  })
+
+  test("rejects invalid category", async () => {
+    const tool = await RegisterFindingTool.init()
+    await expect(
+      tool.execute({ ...validInput, category: "style" } as any, ctx),
+    ).rejects.toThrow()
+  })
+
+  test("rejects malformed ruleId", async () => {
+    const tool = await RegisterFindingTool.init()
+    await expect(
+      tool.execute({ ...validInput, ruleId: "vendor:Some_Rule" } as any, ctx),
+    ).rejects.toThrow()
+  })
+
+  test("rejects summary over 200 chars", async () => {
+    const tool = await RegisterFindingTool.init()
+    await expect(
+      tool.execute({ ...validInput, summary: "x".repeat(201) } as any, ctx),
+    ).rejects.toThrow()
+  })
+
+  test("findingId is deterministic across two calls with the same anchor and category", async () => {
+    const tool = await RegisterFindingTool.init()
+    const a = await tool.execute(validInput, ctx)
+    const b = await tool.execute(validInput, ctx)
+    expect(a.metadata.findingId).toBe(b.metadata.findingId)
+  })
+
+  test("findingId differs when anchor.line changes", async () => {
+    const tool = await RegisterFindingTool.init()
+    const a = await tool.execute(validInput, ctx)
+    const b = await tool.execute({ ...validInput, anchor: { kind: "line", line: 43 } }, ctx)
+    expect(a.metadata.findingId).not.toBe(b.metadata.findingId)
+  })
+
+  test("findingId includes ruleId so the same defect under two rules dedups separately", async () => {
+    const tool = await RegisterFindingTool.init()
+    const a = await tool.execute({ ...validInput, ruleId: "axcode:rule-a" }, ctx)
+    const b = await tool.execute({ ...validInput, ruleId: "axcode:rule-b" }, ctx)
+    expect(a.metadata.findingId).not.toBe(b.metadata.findingId)
+  })
+
+  test("symbol anchor produces a different findingId than a line anchor on the same file", async () => {
+    const tool = await RegisterFindingTool.init()
+    const a = await tool.execute(validInput, ctx)
+    const b = await tool.execute(
+      {
+        ...validInput,
+        anchor: { kind: "symbol", symbolId: "node://src/server/routes/list.ts#paginate" },
+      },
+      ctx,
+    )
+    expect(a.metadata.findingId).not.toBe(b.metadata.findingId)
+  })
+
+  test("optional confidence and ruleId are preserved in the output finding when provided", async () => {
+    const tool = await RegisterFindingTool.init()
+    const result = await tool.execute(
+      { ...validInput, confidence: 0.83, ruleId: "axcode:bug-empty-catch" },
+      ctx,
+    )
+    expect(result.metadata.finding.confidence).toBe(0.83)
+    expect(result.metadata.finding.ruleId).toBe("axcode:bug-empty-catch")
+  })
+
+  test("source.tool defaults to 'review' but accepts user override", async () => {
+    const tool = await RegisterFindingTool.init()
+    const def = await tool.execute(validInput, ctx)
+    expect(def.metadata.finding.source.tool).toBe("review")
+    const override = await tool.execute({ ...validInput, tool: "manual-audit" }, ctx)
+    expect(override.metadata.finding.source.tool).toBe("manual-audit")
+  })
+
+  test("source.runId is taken from ctx.sessionID", async () => {
+    const tool = await RegisterFindingTool.init()
+    const customCtx = { ...ctx, sessionID: "ses_other_session" }
+    const result = await tool.execute(validInput, customCtx)
+    expect(result.metadata.finding.source.runId).toBe("ses_other_session")
+  })
+})

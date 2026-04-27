@@ -37,6 +37,7 @@ import { LifecycleScanTool } from "./lifecycle_scan"
 import { SecurityScanTool } from "./security_scan"
 import { Truncate } from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
+import { RegisterFindingTool } from "./register_finding"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { Effect, Layer, ServiceMap } from "effect"
@@ -153,6 +154,7 @@ export namespace ToolRegistry {
           CodeSearchTool,
           SkillTool,
           ApplyPatchTool,
+          RegisterFindingTool,
           ...(Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE
