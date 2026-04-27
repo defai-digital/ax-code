@@ -496,7 +496,7 @@ describe("session.agent-resolution", () => {
 })
 
 describe("session.prompt auto routing", () => {
-  test("delegates to a specialist by default on the first user turn", async () => {
+  test("switches the primary agent by default on the first user turn", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -520,10 +520,8 @@ describe("session.prompt auto routing", () => {
           parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
         })
         if (msg.info.role !== "user") throw new Error("expected user message")
-        expect(msg.info.agent).toBe("build")
-        const subtask = msg.parts.find((part) => part.type === "subtask")
-        expect(subtask).toBeDefined()
-        if (subtask?.type === "subtask") expect(subtask.agent).toBe("perf")
+        expect(msg.info.agent).toBe("perf")
+        expect(msg.parts.some((part) => part.type === "subtask")).toBe(false)
 
         await Session.remove(session.id)
       },

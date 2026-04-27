@@ -697,7 +697,7 @@ export const Info = z
           .enum(["off", "delegate", "switch"])
           .optional()
           .describe(
-            "How specialist routing behaves: off disables auto-routing, delegate runs the specialist as a subtask while keeping the primary agent, switch replaces the primary agent (default: delegate)",
+            "How specialist routing behaves: off disables auto-routing, delegate runs the specialist as a subtask while keeping the primary agent, switch replaces the primary agent (default: switch)",
           ),
         auto_switch: z.boolean().optional().describe("@deprecated Legacy alias for routing.mode='switch' when true"),
         llm: z
