@@ -5,6 +5,7 @@ import { Instance } from "../project/instance"
 import { Log } from "../util/log"
 import { CodeIntelligence } from "../code-intelligence"
 import type { ProjectID } from "../project/schema"
+import { resolveCommands, runCheck, runTests } from "../planner/verification/runner"
 import { DebugEngine } from "./index"
 import { DebugEngineQuery } from "./query"
 import { ShadowWorktree } from "./shadow-worktree"
@@ -72,152 +73,7 @@ export type ApplySafeRefactorInput = {
   skipTests?: boolean
 }
 
-type CommandSet = {
-  typecheck: string | null
-  lint: string | null
-  test: string | null
-}
-
-async function resolveCommands(cwd: string, override?: ApplySafeRefactorInput["commands"]): Promise<CommandSet> {
-  const pkgPath = path.join(cwd, "package.json")
-  let scripts: Record<string, string> = {}
-  try {
-    const raw = await fs.readFile(pkgPath, "utf8")
-    const pkg = JSON.parse(raw)
-    scripts = pkg.scripts ?? {}
-  } catch {
-    scripts = {}
-  }
-
-  const typecheck = override?.typecheck !== undefined
-    ? override.typecheck
-    : scripts.typecheck
-      ? "bun run typecheck"
-      : null
-  const lint = override?.lint !== undefined
-    ? override.lint
-    : scripts.lint
-      ? "bun run lint"
-      : null
-  const test = override?.test !== undefined
-    ? override.test
-    : scripts.test
-      ? "bun test"
-      : null
-
-  return { typecheck, lint, test }
-}
-
-// Hard cap on subprocess runtime. Typecheck/lint/test commands can
-// hang (misconfigured tsc, infinite-loop test), and without a timeout
-// the entire apply-safe-refactor pipeline blocks forever while the
-// child holds its PID and pipe fds. 5 minutes is conservative enough
-// for large test suites but still bounded.
-const RUN_COMMAND_TIMEOUT_MS = 5 * 60 * 1000
-
-async function runCommand(
-  cmd: string,
-  cwd: string,
-  timeoutMs: number = RUN_COMMAND_TIMEOUT_MS,
-): Promise<{ ok: boolean; stdout: string; stderr: string; code: number; timedOut: boolean }> {
-  const proc = Bun.spawn({
-    cmd: ["sh", "-c", cmd],
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    proc.kill("SIGKILL")
-  }, timeoutMs)
-  try {
-    const [stdout, stderr] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ])
-    const code = await proc.exited
-    return { ok: code === 0 && !timedOut, stdout, stderr, code, timedOut }
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-async function runCheck(
-  label: string,
-  cmd: string | null,
-  cwd: string,
-): Promise<DebugEngine.CheckResult & { skipped: boolean }> {
-  if (!cmd) {
-    log.info(`${label}: skipped (no command configured)`)
-    return { ok: true, errors: [], skipped: true }
-  }
-  const result = await runCommand(cmd, cwd)
-  log.info(`${label}: ${result.ok ? "ok" : "failed"}`, { code: result.code })
-  if (result.ok) return { ok: true, errors: [], skipped: false }
-  // Surface the first ~20 lines of the error stream. Full output is
-  // captured in the log; the returned `errors` array is what callers
-  // show to the user.
-  const lines = (result.stderr || result.stdout).split("\n").filter(Boolean).slice(0, 20)
-  return { ok: false, errors: lines, skipped: false }
-}
-
-// Run tests with optional targeted selection. Phase 3 honest behavior:
-// we compute dependent files via CodeIntelligence.findDependents and,
-// if that returns anything, tack them on as a test-pattern filter. If
-// it returns empty (Phase 2 imports edges not yet populated, which is
-// the common case today), we fall back to a full test run.
-async function runTests(
-  cmd: string | null,
-  cwd: string,
-  affectedFiles: string[],
-  projectID: ProjectID,
-  scope: "worktree" | "none",
-): Promise<DebugEngine.TestResult & { skipped: boolean }> {
-  if (!cmd) return { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped", skipped: true }
-
-  let selection: DebugEngine.TestResult["selection"] = "full-fallback"
-  const dependents = new Set<string>()
-  for (const file of affectedFiles) {
-    const deps = CodeIntelligence.findDependents(projectID, file, { scope })
-    for (const d of deps) dependents.add(d)
-  }
-  if (dependents.size > 0) selection = "targeted"
-
-  // We don't try to rewrite the test command with a selector in Phase 3
-  // — each test runner has its own filter flag syntax, and guessing
-  // wrong produces false greens. If the command itself supports a
-  // `--` escape or similar, the user configures it via the `test`
-  // override. Otherwise we run the full suite and record the selection
-  // we *would* have used for audit purposes.
-  const result = await runCommand(cmd, cwd)
-  if (result.ok) {
-    return {
-      ok: true,
-      errors: [],
-      ran: dependents.size || 1,
-      failed: 0,
-      failures: [],
-      selection,
-      skipped: false,
-    }
-  }
-  const lines = (result.stderr || result.stdout).split("\n").filter(Boolean).slice(0, 30)
-  return {
-    ok: false,
-    errors: lines,
-    ran: dependents.size || 1,
-    failed: 1,
-    failures: lines.slice(0, 5),
-    selection,
-    skipped: false,
-  }
-}
-
-function isPlanStale(params: {
-  planCursor: string | null
-  currentCursor: string | null
-}): boolean {
+function isPlanStale(params: { planCursor: string | null; currentCursor: string | null }): boolean {
   // No cursor recorded at plan time → freshly-created plan on a
   // not-yet-committed branch. Treat as fresh.
   if (params.planCursor === null) return false
@@ -301,7 +157,10 @@ export async function applySafeRefactorImpl(
     // .gitignore'd directories aren't present in git worktrees.
     const realNodeModules = path.join(Instance.worktree, "node_modules")
     const shadowNodeModules = path.join(shadowHandle.path, "node_modules")
-    const hasNodeModules = await fs.stat(realNodeModules).then(() => true).catch(() => false)
+    const hasNodeModules = await fs
+      .stat(realNodeModules)
+      .then(() => true)
+      .catch(() => false)
     if (hasNodeModules) {
       await fs.symlink(realNodeModules, shadowNodeModules, "junction").catch(async () => {
         // Symlink failed (e.g., Windows without dev mode) — skip, checks
@@ -372,13 +231,7 @@ export async function applySafeRefactorImpl(
           selection: "skipped" as const,
           skipped: true,
         } satisfies DebugEngine.TestResult & { skipped: boolean })
-      : await runTests(
-          commands.test,
-          shadowHandle.path,
-          row.affected_files,
-          projectID,
-          scope,
-        )
+      : await runTests(commands.test, shadowHandle.path, row.affected_files, projectID, scope)
     if (!testResult.ok) {
       return abort("tests-failed", {
         typecheck: { ok: true, errors: [] },
