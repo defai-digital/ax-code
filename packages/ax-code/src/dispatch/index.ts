@@ -7,9 +7,10 @@
  * Agent / AI SDK plumbing.
  *
  * Scope (ADR-005 P0): parallel fan-out, per-spec timeout, parent AbortSignal
- * propagation, structured results. Out of scope here: Permission integration,
- * Bus event emission, race / majority merge strategies, worktree isolation.
- * Those land as separate follow-ups when there's a concrete use case.
+ * propagation, structured results, merge strategies (`all` / `first-success`
+ * / `majority`), and an injectable event sink for the session layer to
+ * adapt into Bus events. Out of scope here: Tool registration, worktree
+ * isolation. Those land as separate follow-ups (P1+).
  */
 
 import { Log } from "../util/log"
@@ -58,11 +59,40 @@ export interface ExecutorOutput {
  */
 export type DispatchExecutor = (spec: DispatchSpec, signal: AbortSignal) => Promise<ExecutorOutput>
 
+/**
+ * Merge strategy controls when the dispatcher considers itself "done":
+ *
+ *  - `all`:           wait for every spec; never auto-cancel (default).
+ *  - `first-success`: as soon as any spec returns `completed`, cancel the
+ *                     rest. Useful for "race two analysers".
+ *  - `majority`:      once more than half of specs have returned
+ *                     `completed`, cancel the rest. Critic-style consensus.
+ *
+ * Specs cancelled by the strategy come back with `status: "cancelled"`.
+ */
+export type MergeStrategy = "all" | "first-success" | "majority"
+
+/**
+ * Optional event sink for the session layer to adapt into Bus events.
+ * The dispatcher does NOT depend on Bus directly so it can be unit-tested
+ * without the session-layer plumbing.
+ */
+export interface DispatcherEventSink {
+  onDispatchStart?: (specs: DispatchSpec[]) => void
+  onSubagentStart?: (spec: DispatchSpec) => void
+  onSubagentComplete?: (result: DispatchResult) => void
+  onDispatchComplete?: (results: DispatchResult[]) => void
+}
+
 export interface DispatchOptions {
   /** Max number of concurrent subagents. Defaults to 3. */
   maxParallel?: number
   /** Parent AbortSignal — when it fires, all in-flight subagents are aborted. */
   signal?: AbortSignal
+  /** Merge strategy controlling early termination. Defaults to `"all"`. */
+  mergeStrategy?: MergeStrategy
+  /** Per-call event sink — translated to Bus events by the session layer. */
+  events?: DispatcherEventSink
   onSubagentStart?: (spec: DispatchSpec) => void
   onSubagentComplete?: (result: DispatchResult) => void
 }
@@ -85,31 +115,152 @@ export async function dispatch(
   const rawMax = options.maxParallel
   const maxParallel =
     rawMax === undefined || !Number.isFinite(rawMax) ? DEFAULT_MAX_PARALLEL : Math.max(1, Math.floor(rawMax))
-  const results: DispatchResult[] = []
+  const merge: MergeStrategy = options.mergeStrategy ?? "all"
 
-  for (let i = 0; i < specs.length; i += maxParallel) {
-    if (options.signal?.aborted) {
-      // Parent already cancelled — emit cancelled stubs for every remaining
-      // spec so the caller sees a complete result array indexed by input.
-      for (const spec of specs.slice(i)) {
-        results.push(cancelled(spec))
-      }
-      break
-    }
-    const batch = specs.slice(i, i + maxParallel)
-    const batchResults = await Promise.all(batch.map((spec) => runOne(spec, executor, options)))
-    results.push(...batchResults)
-  }
+  safeCallback(options.events?.onDispatchStart, specs, "events.onDispatchStart")
+
+  const results =
+    merge === "all"
+      ? await dispatchAll(specs, executor, options, maxParallel)
+      : await dispatchUntil(specs, executor, options, maxParallel, merge)
 
   log.info("dispatch complete", {
     count: specs.length,
+    mergeStrategy: merge,
     completed: results.filter((r) => r.status === "completed").length,
     failed: results.filter((r) => r.status === "failed").length,
     timeout: results.filter((r) => r.status === "timeout").length,
     cancelled: results.filter((r) => r.status === "cancelled").length,
   })
 
+  safeCallback(options.events?.onDispatchComplete, results, "events.onDispatchComplete")
   return results
+}
+
+/** Wait-for-all batched dispatch — the legacy behavior. */
+async function dispatchAll(
+  specs: DispatchSpec[],
+  executor: DispatchExecutor,
+  options: DispatchOptions,
+  maxParallel: number,
+): Promise<DispatchResult[]> {
+  const results: DispatchResult[] = []
+  for (let i = 0; i < specs.length; i += maxParallel) {
+    if (options.signal?.aborted) {
+      // Parent already cancelled — emit cancelled stubs for every remaining
+      // spec so the caller sees a complete result array indexed by input.
+      for (const spec of specs.slice(i)) results.push(cancelled(spec))
+      break
+    }
+    const batch = specs.slice(i, i + maxParallel)
+    const batchResults = await Promise.all(batch.map((spec) => runOne(spec, executor, options)))
+    results.push(...batchResults)
+  }
+  return results
+}
+
+/**
+ * Run all specs up to `maxParallel` at a time, watching for the merge
+ * strategy's trigger condition. On trigger, the local AbortController
+ * cancels still-running specs (their results come back as `cancelled`)
+ * and any not-yet-started specs are emitted as cancelled stubs.
+ *
+ * The result array preserves input order regardless of completion order.
+ */
+async function dispatchUntil(
+  specs: DispatchSpec[],
+  executor: DispatchExecutor,
+  options: DispatchOptions,
+  maxParallel: number,
+  merge: Exclude<MergeStrategy, "all">,
+): Promise<DispatchResult[]> {
+  const target = merge === "first-success" ? 1 : Math.floor(specs.length / 2) + 1
+  const localAc = new AbortController()
+  const combinedSignal = combineSignals(options.signal, localAc.signal)
+  const results: (DispatchResult | undefined)[] = new Array(specs.length).fill(undefined)
+  let completedCount = 0
+  let nextIndex = 0
+  let inflight = 0
+
+  return new Promise<DispatchResult[]>((resolve) => {
+    const finalize = () => {
+      // Backfill any spec that never started with a cancelled stub so the
+      // result array is complete and order-preserving.
+      for (let i = 0; i < specs.length; i++) {
+        if (!results[i]) results[i] = cancelled(specs[i]!)
+      }
+      resolve(results as DispatchResult[])
+    }
+
+    const launchNext = () => {
+      // Stop spawning when the trigger fired or parent aborted.
+      if (localAc.signal.aborted || options.signal?.aborted) {
+        if (inflight === 0) finalize()
+        return
+      }
+      while (inflight < maxParallel && nextIndex < specs.length) {
+        const idx = nextIndex++
+        const spec = specs[idx]!
+        inflight++
+        runOne(spec, executor, { ...options, signal: combinedSignal })
+          .then((result) => {
+            results[idx] = result
+            inflight--
+            if (result.status === "completed") {
+              completedCount++
+              if (completedCount >= target) localAc.abort()
+            }
+            if (nextIndex >= specs.length && inflight === 0) {
+              finalize()
+            } else {
+              launchNext()
+            }
+          })
+          .catch((err) => {
+            // runOne is supposed to never throw — every error becomes a
+            // result. Be defensive: log and treat as failed so we don't
+            // hang the dispatch.
+            log.warn("runOne threw unexpectedly", { agent: spec.agent, error: String(err) })
+            results[idx] = {
+              agent: spec.agent,
+              status: "failed",
+              error: err instanceof Error ? err.message : String(err),
+              filesModified: [],
+              tokensUsed: 0,
+              durationMs: 0,
+            }
+            inflight--
+            if (nextIndex >= specs.length && inflight === 0) finalize()
+            else launchNext()
+          })
+      }
+      if (specs.length === 0) finalize()
+    }
+
+    if (options.signal?.aborted) {
+      finalize()
+      return
+    }
+    launchNext()
+  })
+}
+
+/**
+ * Build a derived AbortSignal that aborts when any of `parents` aborts.
+ * Returns a no-op (never-abort) signal when all parents are undefined.
+ */
+function combineSignals(...parents: (AbortSignal | undefined)[]): AbortSignal {
+  const real = parents.filter((s): s is AbortSignal => s !== undefined)
+  if (real.length === 0) return new AbortController().signal
+  const ac = new AbortController()
+  for (const s of real) {
+    if (s.aborted) {
+      ac.abort()
+      return ac.signal
+    }
+    s.addEventListener("abort", () => ac.abort(), { once: true })
+  }
+  return ac.signal
 }
 
 function safeCallback<T>(fn: ((arg: T) => void) | undefined, arg: T, label: string): void {
@@ -130,6 +281,7 @@ async function runOne(
 ): Promise<DispatchResult> {
   const start = Date.now()
   safeCallback(options.onSubagentStart, spec, "onSubagentStart")
+  safeCallback(options.events?.onSubagentStart, spec, "events.onSubagentStart")
 
   // Local AC fires on per-spec timeout; we forward the parent signal so the
   // caller can cancel the whole dispatch in one place.
@@ -164,6 +316,7 @@ async function runOne(
       durationMs: Date.now() - start,
     }
     safeCallback(options.onSubagentComplete, result, "onSubagentComplete")
+    safeCallback(options.events?.onSubagentComplete, result, "events.onSubagentComplete")
     return result
   } catch (err) {
     // Disambiguate timeout vs parent-cancel vs ordinary throw. We track
@@ -178,6 +331,7 @@ async function runOne(
       durationMs: Date.now() - start,
     }
     safeCallback(options.onSubagentComplete, result, "onSubagentComplete")
+    safeCallback(options.events?.onSubagentComplete, result, "events.onSubagentComplete")
     return result
   } finally {
     clearTimeout(timer)

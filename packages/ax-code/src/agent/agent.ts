@@ -7,7 +7,6 @@ import { Instance } from "../project/instance"
 import { Truncate } from "../tool/truncate"
 import { Auth } from "../auth"
 
-
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
@@ -205,6 +204,10 @@ export namespace Agent {
                 Permission.fromConfig({
                   todoread: "deny",
                   todowrite: "deny",
+                  // Subagent-tier agents do not get to fan out further
+                  // (ADR-005). Prevents fork bombs and keeps cost
+                  // bounded — only primary agents orchestrate.
+                  dispatcher: "deny",
                 }),
                 user,
               ),
@@ -215,12 +218,7 @@ export namespace Agent {
             explore: {
               name: "explore",
               displayName: "Researcher",
-              permission: Permission.merge(
-                defaults,
-                policy("explore"),
-                readOnlyWithWeb(whitelistedDirs),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("explore"), readOnlyWithWeb(whitelistedDirs), user),
               description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
               prompt: PROMPT_EXPLORE,
               options: {},
@@ -255,12 +253,7 @@ export namespace Agent {
               description:
                 "Security Auditor agent. Scans code for vulnerabilities, secrets, OWASP issues, and compliance problems. Read-only — reports findings without modifying code.",
               prompt: PROMPT_SECURITY,
-              permission: Permission.merge(
-                defaults,
-                policy("security"),
-                readOnlyWithWeb(whitelistedDirs),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("security"), readOnlyWithWeb(whitelistedDirs), user),
               options: {},
               mode: "primary",
               native: true,
@@ -273,12 +266,7 @@ export namespace Agent {
               description:
                 "Architecture Analyst agent. Analyzes system design, dependencies, coupling, patterns, and suggests structural improvements. Read-only — analyzes without modifying code.",
               prompt: PROMPT_ARCHITECT,
-              permission: Permission.merge(
-                defaults,
-                policy("architect"),
-                readOnlyWithWeb(whitelistedDirs),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("architect"), readOnlyWithWeb(whitelistedDirs), user),
               options: {},
               mode: "primary",
               native: true,
@@ -312,12 +300,7 @@ export namespace Agent {
               description:
                 "Performance Analyst agent. Finds bottlenecks, inefficient algorithms, memory issues, and optimization opportunities. Read-only — benchmarks and reports without modifying code.",
               prompt: PROMPT_PERF,
-              permission: Permission.merge(
-                defaults,
-                policy("perf"),
-                readOnlyNoWeb(whitelistedDirs),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("perf"), readOnlyNoWeb(whitelistedDirs), user),
               options: {},
               mode: "primary",
               native: true,
@@ -405,8 +388,7 @@ export namespace Agent {
                 console.warn(`[agent] cannot disable internal agent "${key}" — it is required for core operations`)
                 continue
               }
-              if (tier === "core")
-                console.warn(`[agent] disabling core agent "${key}" via config`)
+              if (tier === "core") console.warn(`[agent] disabling core agent "${key}" via config`)
               delete agents[key]
               continue
             }
@@ -549,7 +531,10 @@ export namespace Agent {
           } satisfies Parameters<typeof generateObject>[0]
 
           const result = yield* Effect.promise(() => generateObject(params).then((r) => r.object))
-          result.identifier = result.identifier.toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 50)
+          result.identifier = result.identifier
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]/g, "-")
+            .slice(0, 50)
           if (existing.some((a) => a.name === result.identifier))
             result.identifier = `${result.identifier}-${Date.now().toString(36).slice(-4)}`
           return result

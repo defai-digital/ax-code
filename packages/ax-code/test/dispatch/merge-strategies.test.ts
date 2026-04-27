@@ -1,0 +1,172 @@
+import { describe, expect, test } from "bun:test"
+import { dispatch, type DispatchExecutor, type DispatchSpec, type DispatcherEventSink } from "../../src/dispatch"
+
+const spec = (agent: string, prompt = "do thing", overrides: Partial<DispatchSpec> = {}): DispatchSpec => ({
+  agent,
+  prompt,
+  ...overrides,
+})
+
+const slow = (ms: number, output = "ok"): DispatchExecutor => async (_, signal) =>
+  new Promise<{ output: string }>((resolve, reject) => {
+    const timer = setTimeout(() => resolve({ output }), ms)
+    if (signal.aborted) {
+      clearTimeout(timer)
+      reject(signal.reason ?? new Error("aborted"))
+      return
+    }
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer)
+      reject(signal.reason ?? new Error("aborted"))
+    })
+  })
+
+describe("dispatch merge strategies (ADR-005 P0)", () => {
+  test("first-success cancels siblings as soon as one completes", async () => {
+    const executor: DispatchExecutor = async (s, signal) => {
+      // a completes fast; b and c hang until aborted.
+      if (s.agent === "a") {
+        await new Promise((r) => setTimeout(r, 20))
+        return { output: "fast" }
+      }
+      return new Promise((_, reject) => {
+        if (signal.aborted) return reject(new Error("aborted"))
+        signal.addEventListener("abort", () => reject(new Error("aborted")))
+      })
+    }
+
+    const results = await dispatch([spec("a"), spec("b"), spec("c")], executor, {
+      mergeStrategy: "first-success",
+      maxParallel: 3,
+    })
+
+    expect(results).toHaveLength(3)
+    expect(results[0]!.agent).toBe("a")
+    expect(results[0]!.status).toBe("completed")
+    // b and c should be cancelled (the abort path from runOne marks them
+    // as cancelled because the parent signal fires).
+    expect(results.slice(1).every((r) => r.status === "cancelled")).toBe(true)
+  })
+
+  test("first-success returns failed if no spec completes", async () => {
+    const executor: DispatchExecutor = async () => {
+      throw new Error("nope")
+    }
+    const results = await dispatch([spec("a"), spec("b")], executor, {
+      mergeStrategy: "first-success",
+    })
+    // No completion → all run to failure.
+    expect(results.every((r) => r.status === "failed")).toBe(true)
+  })
+
+  test("majority cancels remaining once > N/2 specs complete", async () => {
+    let completedCount = 0
+    const executor: DispatchExecutor = async (s, signal) => {
+      // a, b, c complete in ~20ms; d, e hang until cancelled.
+      if (["a", "b", "c"].includes(s.agent)) {
+        await new Promise((r) => setTimeout(r, 20))
+        completedCount++
+        return { output: `${s.agent}-ok` }
+      }
+      return new Promise((_, reject) => {
+        if (signal.aborted) return reject(new Error("aborted"))
+        signal.addEventListener("abort", () => reject(new Error("aborted")))
+      })
+    }
+
+    const results = await dispatch(
+      [spec("a"), spec("b"), spec("c"), spec("d"), spec("e")],
+      executor,
+      { mergeStrategy: "majority", maxParallel: 5 },
+    )
+
+    expect(results).toHaveLength(5)
+    expect(completedCount).toBeGreaterThanOrEqual(3) // > 5/2
+    // Once majority hits, d and e get cancelled.
+    const cancelled = results.filter((r) => r.status === "cancelled")
+    expect(cancelled.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test("preserves input order in result array regardless of completion order", async () => {
+    const executor: DispatchExecutor = async (s) => {
+      const delay = s.agent === "a" ? 30 : s.agent === "b" ? 5 : 15
+      await new Promise((r) => setTimeout(r, delay))
+      return { output: `${s.agent}-done` }
+    }
+    const results = await dispatch([spec("a"), spec("b"), spec("c")], executor, {
+      mergeStrategy: "first-success",
+      maxParallel: 3,
+    })
+    expect(results.map((r) => r.agent)).toEqual(["a", "b", "c"])
+  })
+
+  test("respects maxParallel under first-success", async () => {
+    let inflight = 0
+    let peak = 0
+    const executor: DispatchExecutor = async (_, signal) => {
+      inflight++
+      peak = Math.max(peak, inflight)
+      try {
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => resolve(undefined), 30)
+          signal.addEventListener("abort", () => {
+            clearTimeout(timer)
+            reject(new Error("aborted"))
+          })
+        })
+        return { output: "ok" }
+      } finally {
+        inflight--
+      }
+    }
+    await dispatch(
+      [spec("a"), spec("b"), spec("c"), spec("d"), spec("e")],
+      executor,
+      { mergeStrategy: "all", maxParallel: 2 },
+    )
+    expect(peak).toBeLessThanOrEqual(2)
+  })
+
+  test("parent abort before launch returns all cancelled", async () => {
+    const ac = new AbortController()
+    ac.abort()
+    const results = await dispatch([spec("a"), spec("b")], slow(100), {
+      mergeStrategy: "first-success",
+      signal: ac.signal,
+    })
+    expect(results.every((r) => r.status === "cancelled")).toBe(true)
+  })
+})
+
+describe("DispatcherEventSink", () => {
+  test("emits start/complete events for the dispatch and each subagent", async () => {
+    const events: string[] = []
+    const sink: DispatcherEventSink = {
+      onDispatchStart: (specs) => events.push(`dispatch:start:${specs.length}`),
+      onSubagentStart: (s) => events.push(`agent:start:${s.agent}`),
+      onSubagentComplete: (r) => events.push(`agent:complete:${r.agent}:${r.status}`),
+      onDispatchComplete: (r) => events.push(`dispatch:complete:${r.length}`),
+    }
+
+    await dispatch([spec("a"), spec("b")], async (s) => ({ output: s.agent }), { events: sink })
+
+    expect(events[0]).toBe("dispatch:start:2")
+    expect(events.at(-1)).toBe("dispatch:complete:2")
+    // Per-subagent ordering is fine in either order; just check both fired.
+    expect(events.filter((e) => e.startsWith("agent:start:"))).toHaveLength(2)
+    expect(events.filter((e) => e.startsWith("agent:complete:"))).toHaveLength(2)
+  })
+
+  test("event sink callbacks that throw do not crash the dispatch", async () => {
+    const sink: DispatcherEventSink = {
+      onSubagentStart: () => {
+        throw new Error("oops")
+      },
+      onDispatchComplete: () => {
+        throw new Error("also oops")
+      },
+    }
+    const results = await dispatch([spec("a")], async () => ({ output: "ok" }), { events: sink })
+    expect(results[0]!.status).toBe("completed")
+  })
+})

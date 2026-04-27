@@ -19,6 +19,9 @@ export const readOnlyWithWeb = (whitelistedDirs: string[]) =>
     codesearch: "allow",
     webfetch: "allow",
     websearch: "allow",
+    // Subagent-tier read-only agents (e.g. explore) must not fan out
+    // further (ADR-005); leaf nodes only.
+    dispatcher: "deny",
     // Debugging & Refactoring Engine read-only tools. Only effective
     // when AX_CODE_EXPERIMENTAL_DEBUG_ENGINE is set; otherwise the
     // registry never registers them and the allow entries are inert.
