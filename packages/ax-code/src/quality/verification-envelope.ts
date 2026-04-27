@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import z from "zod"
 import { ArtifactRefKindEnum, FindingSource, WorkflowEnum } from "./finding"
 
@@ -91,3 +92,31 @@ export const VerificationEnvelopeSchema = z.object({
   source: FindingSource,
 })
 export type VerificationEnvelope = z.infer<typeof VerificationEnvelopeSchema>
+
+export const ENVELOPE_ID_PATTERN = /^[0-9a-f]{16}$/
+
+// Deterministic 16-char hex hash of the envelope content. Sets up Phase 2
+// P2.5: future Finding.evidenceRefs entries with kind === "verification"
+// will cite an envelopeId computed from the envelope they reference, so a
+// reviewer's finding can deterministically link to the typecheck/lint/test
+// run that produced its evidence. The schema is unchanged — IDs are
+// derived, not stored, so v1 envelopes remain bit-identical to what
+// refactor_apply already emits.
+//
+// Object keys are sorted before hashing so two envelopes with identical
+// content but different key insertion order produce the same id (JSON
+// canonicalisation).
+export function computeEnvelopeId(envelope: VerificationEnvelope): string {
+  return createHash("sha256").update(canonicalJSON(envelope)).digest("hex").slice(0, 16)
+}
+
+function canonicalJSON(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value)
+  }
+  if (Array.isArray(value)) {
+    return "[" + value.map(canonicalJSON).join(",") + "]"
+  }
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return "{" + entries.map(([k, v]) => JSON.stringify(k) + ":" + canonicalJSON(v)).join(",") + "}"
+}

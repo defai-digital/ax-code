@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
+  computeEnvelopeId,
+  ENVELOPE_ID_PATTERN,
   StructuredFailureSchema,
   VerificationEnvelopeSchema,
   VerificationResultSchema,
@@ -92,15 +94,11 @@ describe("StructuredFailureSchema", () => {
   })
 
   test("rejects unknown kind", () => {
-    expect(() =>
-      StructuredFailureSchema.parse({ kind: "compile", message: "x" }),
-    ).toThrow()
+    expect(() => StructuredFailureSchema.parse({ kind: "compile", message: "x" })).toThrow()
   })
 
   test("typecheck failure rejects missing required fields", () => {
-    expect(() =>
-      StructuredFailureSchema.parse({ kind: "typecheck", file: "x", line: 1 }),
-    ).toThrow()
+    expect(() => StructuredFailureSchema.parse({ kind: "typecheck", file: "x", line: 1 })).toThrow()
   })
 })
 
@@ -110,15 +108,11 @@ describe("VerificationEnvelopeSchema", () => {
   })
 
   test("rejects schemaVersion other than 1", () => {
-    expect(() =>
-      VerificationEnvelopeSchema.parse({ ...validEnvelope, schemaVersion: 2 }),
-    ).toThrow()
+    expect(() => VerificationEnvelopeSchema.parse({ ...validEnvelope, schemaVersion: 2 })).toThrow()
   })
 
   test("rejects unknown workflow", () => {
-    expect(() =>
-      VerificationEnvelopeSchema.parse({ ...validEnvelope, workflow: "lint" }),
-    ).toThrow()
+    expect(() => VerificationEnvelopeSchema.parse({ ...validEnvelope, workflow: "lint" })).toThrow()
   })
 
   test("rejects unknown scope kind", () => {
@@ -140,14 +134,74 @@ describe("VerificationEnvelopeSchema", () => {
   })
 
   test("requires structuredFailures to be an array (empty allowed)", () => {
-    expect(() =>
-      VerificationEnvelopeSchema.parse({ ...validEnvelope, structuredFailures: [] }),
-    ).not.toThrow()
+    expect(() => VerificationEnvelopeSchema.parse({ ...validEnvelope, structuredFailures: [] })).not.toThrow()
     expect(() =>
       VerificationEnvelopeSchema.parse({
         ...validEnvelope,
         structuredFailures: undefined as unknown as VerificationEnvelope["structuredFailures"],
       }),
     ).toThrow()
+  })
+})
+
+describe("computeEnvelopeId", () => {
+  test("returns a 16-char lowercase hex matching ENVELOPE_ID_PATTERN", () => {
+    const id = computeEnvelopeId(validEnvelope)
+    expect(id).toMatch(ENVELOPE_ID_PATTERN)
+    expect(id).toHaveLength(16)
+  })
+
+  test("is deterministic for identical content", () => {
+    expect(computeEnvelopeId(validEnvelope)).toBe(computeEnvelopeId(validEnvelope))
+  })
+
+  test("is independent of object key insertion order (canonical JSON)", () => {
+    const reordered: VerificationEnvelope = {
+      source: validEnvelope.source,
+      artifactRefs: validEnvelope.artifactRefs,
+      structuredFailures: validEnvelope.structuredFailures,
+      result: validEnvelope.result,
+      command: validEnvelope.command,
+      scope: validEnvelope.scope,
+      workflow: validEnvelope.workflow,
+      schemaVersion: validEnvelope.schemaVersion,
+    }
+    expect(computeEnvelopeId(reordered)).toBe(computeEnvelopeId(validEnvelope))
+  })
+
+  test("changes when command.runner changes", () => {
+    const a = computeEnvelopeId(validEnvelope)
+    const b = computeEnvelopeId({ ...validEnvelope, command: { ...validEnvelope.command, runner: "lint" } })
+    expect(a).not.toBe(b)
+  })
+
+  test("changes when result.status changes", () => {
+    const passing: VerificationEnvelope = {
+      ...validEnvelope,
+      result: { ...validEnvelope.result, passed: true, status: "passed" },
+    }
+    const failing: VerificationEnvelope = {
+      ...validEnvelope,
+      result: { ...validEnvelope.result, passed: false, status: "failed" },
+    }
+    expect(computeEnvelopeId(passing)).not.toBe(computeEnvelopeId(failing))
+  })
+
+  test("changes when source.runId changes (so envelopes from different sessions don't collide)", () => {
+    const a = computeEnvelopeId(validEnvelope)
+    const b = computeEnvelopeId({ ...validEnvelope, source: { ...validEnvelope.source, runId: "ses_other" } })
+    expect(a).not.toBe(b)
+  })
+
+  test("changes when structuredFailures content changes", () => {
+    const empty = computeEnvelopeId({ ...validEnvelope, structuredFailures: [] })
+    const populated = computeEnvelopeId(validEnvelope) // has one structured failure
+    expect(empty).not.toBe(populated)
+  })
+
+  test("identical envelopes from different runs produce different ids via runId", () => {
+    const run1 = { ...validEnvelope, source: { ...validEnvelope.source, runId: "ses_1" } }
+    const run2 = { ...validEnvelope, source: { ...validEnvelope.source, runId: "ses_2" } }
+    expect(computeEnvelopeId(run1)).not.toBe(computeEnvelopeId(run2))
   })
 })
