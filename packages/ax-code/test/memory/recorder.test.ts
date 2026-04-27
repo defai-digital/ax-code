@@ -207,9 +207,7 @@ describe("memory.recorder", () => {
     await fs.mkdir(path.join(tmp.path, ".ax-code"), { recursive: true })
     await fs.writeFile(path.join(tmp.path, ".ax-code", "memory.json"), '{"version": 1, "sections": {"feed')
 
-    await expect(
-      recordEntry(tmp.path, "userPrefs", { name: "x", body: "y" }),
-    ).rejects.toThrow(/corrupt JSON/)
+    await expect(recordEntry(tmp.path, "userPrefs", { name: "x", body: "y" })).rejects.toThrow(/corrupt JSON/)
 
     // Corrupt file is preserved on disk for manual recovery.
     const after = await fs.readFile(path.join(tmp.path, ".ax-code", "memory.json"), "utf8")

@@ -177,19 +177,15 @@ describe("dispatch primitive", () => {
   test("survives a callback that throws — log and continue", async () => {
     const executor: DispatchExecutor = async (s) => ({ output: s.agent })
     const completed: string[] = []
-    const results = await dispatch(
-      [spec("a"), spec("b"), spec("c")],
-      executor,
-      {
-        onSubagentStart: (s) => {
-          if (s.agent === "b") throw new Error("bad start callback")
-        },
-        onSubagentComplete: (r) => {
-          if (r.agent === "c") throw new Error("bad complete callback")
-          completed.push(r.agent)
-        },
+    const results = await dispatch([spec("a"), spec("b"), spec("c")], executor, {
+      onSubagentStart: (s) => {
+        if (s.agent === "b") throw new Error("bad start callback")
       },
-    )
+      onSubagentComplete: (r) => {
+        if (r.agent === "c") throw new Error("bad complete callback")
+        completed.push(r.agent)
+      },
+    })
     expect(results.map((r) => r.agent)).toEqual(["a", "b", "c"])
     expect(results.every((r) => r.status === "completed")).toBe(true)
     // Both throws happened, but other results still landed:
