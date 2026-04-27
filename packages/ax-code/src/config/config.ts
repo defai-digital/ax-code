@@ -49,6 +49,9 @@ import * as ConfigSchema from "./schema"
 // schema URLs into random users' configs. See issue #17.
 const CONFIG_SCHEMA_URL =
   "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json"
+const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
+const UNIX_SYSTEM_CONFIG_DIR = "/etc/ax-code"
+const PLATFORM_CONFIG_DIR = "ax-code"
 
 const DANGEROUS_WELLKNOWN_ENV_KEYS = new Set([
   "NODE_OPTIONS",
@@ -76,9 +79,9 @@ export namespace Config {
       case "darwin":
         return "/Library/Application Support/ax-code"
       case "win32":
-        return path.join(process.env.ProgramData || "C:\\ProgramData", "ax-code")
+        return path.join(process.env.ProgramData || PROGRAM_DATA_FALLBACK_DIR, PLATFORM_CONFIG_DIR)
       default:
-        return "/etc/ax-code"
+        return UNIX_SYSTEM_CONFIG_DIR
     }
   }
 

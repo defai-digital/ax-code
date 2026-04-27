@@ -14,6 +14,9 @@ import { waitForAbortOrTimeout } from "./abort"
 
 export namespace Workspace {
   const log = Log.create({ service: "workspace" })
+  const WORKSPACE_SYNC_INITIAL_BACKOFF_MS = 1000
+  const WORKSPACE_SYNC_MAX_BACKOFF_MS = 30_000
+  const WORKSPACE_SYNC_ENDPOINT = "http://workspace.test/event"
 
   export const Info = z.object({
     id: WorkspaceID.zod,
@@ -110,14 +113,14 @@ export namespace Workspace {
       .map(async (item) => {
         const adaptor = getAdaptor(item.type)
         if (!adaptor) return
-        let backoff = 1000
+        let backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
         while (!stop.signal.aborted) {
           try {
-            const response = await adaptor.fetch(item.extra, "http://workspace.test/event", {
+            const response = await adaptor.fetch(item.extra, WORKSPACE_SYNC_ENDPOINT, {
               signal: stop.signal,
             })
             if (!response.body) return
-            backoff = 1000
+            backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
             await parseSSE(response.body, stop.signal, (payload) => {
               GlobalBus.emit("event", {
                 directory: item.id,
@@ -132,7 +135,7 @@ export namespace Workspace {
               err,
             })
             await waitForAbortOrTimeout(stop.signal, backoff)
-            backoff = Math.min(backoff * 2, 30000)
+            backoff = Math.min(backoff * 2, WORKSPACE_SYNC_MAX_BACKOFF_MS)
           }
         }
       })

@@ -362,6 +362,13 @@ export const BashTool = Tool.define("bash", async () => {
       // Initialize metadata with empty output
       publishMetadata("")
 
+      // Once output has crossed the metadata-length cap, every subsequent
+      // append() call would publish a byte-identical truncated snapshot
+      // (the first MAX_METADATA_LENGTH bytes never change once we've seen
+      // them). Skip those duplicate publishes to avoid flooding the bus
+      // and the TUI on high-volume streams (e.g. `find /`).
+      let lastPublishedLength = -1
+
       const append = (chunk: Buffer) => {
         const priorOutputBytes = outputBytes
         outputBytes += chunk.byteLength
@@ -376,7 +383,10 @@ export const BashTool = Tool.define("bash", async () => {
             truncated = true
           }
         }
-        publishMetadata(output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output)
+        const isPastCap = output.length >= MAX_METADATA_LENGTH
+        if (isPastCap && lastPublishedLength >= MAX_METADATA_LENGTH) return
+        publishMetadata(isPastCap ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output)
+        lastPublishedLength = output.length
       }
       void truncated
 

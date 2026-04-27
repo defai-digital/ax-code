@@ -142,6 +142,34 @@ export namespace EventQuery {
     )
   }
 
+  export type InsertEvent = {
+    id: EventLogID
+    session_id: SessionID
+    step_id: string | null
+    event_type: string
+    event_data: ReplayEvent
+    sequence: number
+  }
+
+  /**
+   * Multi-row insert. Used by the recorder to coalesce events emitted within
+   * the same microtask tick into a single SQL statement. SQLite limits
+   * compound INSERTs to 500 rows by default, so we chunk to be safe.
+   */
+  export function insertMany(events: InsertEvent[]) {
+    if (events.length === 0) return
+    const now = Date.now()
+    const rows = events.map((event) => ({ ...event, time_created: now, time_updated: now }))
+    const CHUNK = 250
+    Database.use((db) => {
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        db.insert(EventLogTable)
+          .values(rows.slice(i, i + CHUNK))
+          .run()
+      }
+    })
+  }
+
   export function deleteBySession(sessionID: SessionID) {
     Database.use((db) => db.delete(EventLogTable).where(eq(EventLogTable.session_id, sessionID)).run())
   }

@@ -15,6 +15,7 @@ import type { ProjectID } from "../project/schema"
 import { INDEXER_SEMANTIC_METHODS } from "../lsp/prewarm-profile"
 
 const log = Log.create({ service: "code-intelligence.builder" })
+const SYMBOL_RANGE_SCALE = 1000
 
 // LSP's textDocument/documentSymbol returns DocumentSymbol objects with
 // a numeric `kind` field matching the LSP spec SymbolKind enum.
@@ -132,7 +133,7 @@ function resolveContainingNodeInMemory(
     const kind = bookmarkKind.get(node.id)
     if (!kind || !isNamedContainer(node.name, kind)) continue
     if (!rangeContains(node, line, char)) continue
-    const size = (node.range_end_line - node.range_start_line) * 1000 + (node.range_end_char - node.range_start_char)
+    const size = (node.range_end_line - node.range_start_line) * SYMBOL_RANGE_SCALE + (node.range_end_char - node.range_start_char)
     if (!best || size < best.size) {
       best = { id: node.id, size }
     }
@@ -169,7 +170,7 @@ function resolveContainingNodeFromRows(
   for (const row of rows) {
     if (!isNamedContainer(row.name, row.kind)) continue
     if (!rangeContains(row, line, char)) continue
-    const size = (row.range_end_line - row.range_start_line) * 1000 + (row.range_end_char - row.range_start_char)
+    const size = (row.range_end_line - row.range_start_line) * SYMBOL_RANGE_SCALE + (row.range_end_char - row.range_start_char)
     if (!best || size < best.size) {
       best = { id: row.id, size }
     }

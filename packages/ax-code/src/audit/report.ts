@@ -10,6 +10,10 @@ export function truncate(s: string, max: number): string {
   return s.slice(0, max - 3) + "..."
 }
 
+const MS_PER_SECOND = 1000
+const SECONDS_PER_HOUR = 3600
+const TENTH_SECOND_UNIT_MS = 100
+
 function formatTimestamp(ms: number): string {
   const d = new Date(ms)
   return d
@@ -19,14 +23,14 @@ function formatTimestamp(ms: number): string {
 }
 
 function formatDuration(ms: number): string {
-  const total = Math.floor(ms / 1000)
-  const h = Math.floor(total / 3600)
-  const m = Math.floor((total % 3600) / 60)
+  const total = Math.floor(ms / MS_PER_SECOND)
+  const h = Math.floor(total / SECONDS_PER_HOUR)
+  const m = Math.floor((total % SECONDS_PER_HOUR) / 60)
   const s = total % 60
   if (h > 0) return `${h}h ${m}m ${s}s`
   if (m > 0) return `${m}m ${s}s`
   if (s === 0) return `${ms}ms`
-  return `${s}.${Math.floor((ms % 1000) / 100)}s`
+  return `${s}.${Math.floor((ms % MS_PER_SECOND) / TENTH_SECOND_UNIT_MS)}s`
 }
 
 function summarize(s: string | undefined, max: number): string {

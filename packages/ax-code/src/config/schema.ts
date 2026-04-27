@@ -3,14 +3,22 @@ import { ModelsDev } from "../provider/models"
 import { Log } from "../util/log"
 import { LSPServer } from "../lsp/server"
 
-const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
+const MODEL_SCHEMA_URL = "https://models.dev/model-schema.json#/$defs/Model"
+const REPO_URL = "https://github.com/defai-digital/ax-code"
+const MCP_TIMEOUT_MS = 5000
+const MCP_TIMEOUT_SECONDS = MCP_TIMEOUT_MS / 1000
+const PROVIDER_TIMEOUT_MS = 300_000
+const PROVIDER_TIMEOUT_MINUTES = 5
+const RFC_DYNAMIC_CLIENT_REGISTRATION = "RFC 7591"
+
+const ModelId = z.string().meta({ $ref: MODEL_SCHEMA_URL })
 
 const McpTimeout = z
   .number()
   .int()
   .positive()
   .optional()
-  .describe("Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.")
+  .describe(`Timeout in ms for MCP server requests. Defaults to ${MCP_TIMEOUT_MS} (${MCP_TIMEOUT_SECONDS} seconds) if not specified.`)
 
 export const McpLocal = z
   .object({
@@ -31,9 +39,9 @@ export const McpLocal = z
 export const McpOAuth = z
   .object({
     clientId: z
-      .string()
-      .optional()
-      .describe("OAuth client ID. If not provided, dynamic client registration (RFC 7591) will be attempted."),
+    .string()
+    .optional()
+    .describe(`OAuth client ID. If not provided, dynamic client registration (${RFC_DYNAMIC_CLIENT_REGISTRATION}) will be attempted.`),
     clientSecret: z.string().optional().describe("OAuth client secret (if required by the authorization server)"),
     scope: z.string().optional().describe("OAuth scopes to request during authorization"),
   })
@@ -473,7 +481,7 @@ export const Provider = ModelsDev.Provider.partial()
               .int()
               .positive()
               .describe(
-                "Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout.",
+                `Timeout in milliseconds for requests to this provider. Default is ${PROVIDER_TIMEOUT_MS} (${PROVIDER_TIMEOUT_MINUTES} minutes). Set to false to disable timeout.`,
               ),
             z.literal(false).describe("Disable timeout for this provider entirely."),
           ])
@@ -504,7 +512,7 @@ export const Info = z
     command: z
       .record(z.string(), Command)
       .optional()
-      .describe("Command configuration, see https://github.com/defai-digital/ax-code"),
+      .describe(`Command configuration, see ${REPO_URL}`),
     skills: Skills.optional().describe("Additional skill folder paths"),
     watcher: z
       .object({
@@ -574,7 +582,7 @@ export const Info = z
       })
       .catchall(Agent)
       .optional()
-      .describe("Agent configuration, see https://github.com/defai-digital/ax-code"),
+      .describe(`Agent configuration, see ${REPO_URL}`),
     provider: z.record(z.string(), Provider).optional().describe("Custom provider configurations and model overrides"),
     mcp: z
       .record(

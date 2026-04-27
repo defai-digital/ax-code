@@ -19,6 +19,24 @@ export namespace Pty {
 
   const BUFFER_LIMIT = 1024 * 1024 * 2
   const BUFFER_CHUNK = 64 * 1024
+  const TERM_VALUE = "xterm-256color"
+  const AX_CODE_TERMINAL_VALUE = "1"
+  const FORBIDDEN_USER_ENV_KEYS = new Set([
+    "LD_PRELOAD",
+    "DYLD_INSERT_LIBRARIES",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "NODE_EXTRA_CA_CERTS",
+    "RUBYOPT",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "JAVA_TOOL_OPTIONS",
+    "JAVA_OPTIONS",
+    "PATH",
+    "SHELL",
+    "HOME",
+    "LD_LIBRARY_PATH",
+  ])
   const encoder = new TextEncoder()
 
   type Socket = {
@@ -71,6 +89,23 @@ export namespace Pty {
     } catch {
       return false
     }
+  }
+
+  const sanitizeUserEnv = (input?: Record<string, string>): Record<string, string> => {
+    const out: Record<string, string> = {}
+    if (!input) return out
+
+    const sanitized = Env.sanitize(input)
+    for (const [key, value] of Object.entries(sanitized)) {
+      if (value === undefined) continue
+      if (FORBIDDEN_USER_ENV_KEYS.has(key.toUpperCase())) continue
+      out[key] = value
+    }
+    return out
+  }
+
+  export function __sanitizeUserEnvForTest(input?: Record<string, string>): Record<string, string> {
+    return sanitizeUserEnv(input)
   }
 
   const pty = lazy(async () => {
@@ -229,9 +264,9 @@ export namespace Pty {
           })
           const env = {
             ...baseEnv,
-            ...input.env,
-            TERM: "xterm-256color",
-            AX_CODE_TERMINAL: "1",
+            ...sanitizeUserEnv(input.env),
+            TERM: TERM_VALUE,
+            AX_CODE_TERMINAL: AX_CODE_TERMINAL_VALUE,
           } as Record<string, string>
 
           if (process.platform === "win32") {
@@ -243,7 +278,7 @@ export namespace Pty {
 
           const spawn = await pty()
           const proc = spawn(command, args, {
-            name: "xterm-256color",
+            name: TERM_VALUE,
             cwd,
             env,
           })

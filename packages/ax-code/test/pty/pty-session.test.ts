@@ -20,6 +20,22 @@ const pick = (log: Array<{ type: "created" | "exited" | "deleted"; id: PtyID }>,
 }
 
 describe("pty", () => {
+  test("sanitizes user-provided terminal env before spawn", () => {
+    const env = Pty.__sanitizeUserEnvForTest({
+      OPENAI_API_KEY: "api_key_from_user",
+      NODE_OPTIONS: "--require ./shim.js",
+      LD_PRELOAD: "/tmp/malicious.so",
+      PATH: "/tmp/evil/bin",
+      SAFE: "ok",
+    })
+
+    expect(env.OPENAI_API_KEY).toBeUndefined()
+    expect(env.NODE_OPTIONS).toBeUndefined()
+    expect(env.LD_PRELOAD).toBeUndefined()
+    expect(env.PATH).toBeUndefined()
+    expect(env.SAFE).toBe("ok")
+  })
+
   test("publishes created, exited, deleted in order for a short-lived process", async () => {
     if (process.platform === "win32") return
 

@@ -28,6 +28,7 @@ const AUTH_TAG_LENGTH = 16 // 128 bits
 const PBKDF2_ITERATIONS = 600_000 // OWASP 2024 recommendation
 const PBKDF2_LEGACY_ITERATIONS = 100_000 // backward compat
 const ENCRYPTION_VERSION = 1
+const TEST_KEY_VALUE = "test-api-key-12345"
 
 // Sentinel value encrypted alongside real keys. On startup we try to
 // decrypt this first — if it fails, we know the crypto runtime changed
@@ -249,7 +250,7 @@ export function decryptField<T extends Record<string, unknown>>(obj: T, field: s
  */
 export function test(): boolean {
   try {
-    const plain = "test-api-key-12345"
+    const plain = TEST_KEY_VALUE
     const enc = encrypt(plain)
     return decrypt(enc) === plain
   } catch {
