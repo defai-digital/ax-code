@@ -6,7 +6,8 @@
 import fs from "fs/promises"
 import path from "path"
 import crypto from "crypto"
-import type { ProjectMemory, MemorySection, WarmupOptions } from "./types"
+import type { EntrySection, MemoryEntry, ProjectMemory, MemorySection, WarmupOptions } from "./types"
+import * as store from "./store"
 
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
@@ -20,13 +21,19 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
 }
 
+const TRUNCATE_SUFFIX = "\n... (truncated)"
+
 function truncateToTokens(text: string, maxTokens: number): string {
   const maxChars = maxTokens * 4
   if (text.length <= maxChars) return text
-  let truncated = text.slice(0, maxChars)
+  // Reserve room for the suffix so the final result never exceeds maxChars.
+  // Without this, estimateTokens(result) over-shoots maxTokens by ~4 per
+  // truncated section, breaking the global token budget.
+  const sliceLen = Math.max(0, maxChars - TRUNCATE_SUFFIX.length)
+  let truncated = text.slice(0, sliceLen)
   const last = truncated.charCodeAt(truncated.length - 1)
   if (last >= 0xd800 && last <= 0xdbff) truncated = truncated.slice(0, -1)
-  return truncated + "\n... (truncated)"
+  return truncated + TRUNCATE_SUFFIX
 }
 
 /**
@@ -204,12 +211,30 @@ async function scanPatterns(root: string): Promise<MemorySection> {
   return { content, tokens: estimateTokens(content) }
 }
 
+function renderEntry(entry: MemoryEntry): string {
+  const parts = [`- ${entry.name}: ${entry.body}`]
+  if (entry.why) parts.push(`  - Why: ${entry.why}`)
+  if (entry.howToApply) parts.push(`  - Apply: ${entry.howToApply}`)
+  return parts.join("\n")
+}
+
+function entryContent(section: EntrySection | undefined): string {
+  if (!section) return ""
+  return section.entries.map(renderEntry).join("\n")
+}
+
 /**
- * Generate project memory
+ * Generate project memory.
+ *
+ * Recorded entries (userPrefs, feedback, decisions) on disk are preserved —
+ * `generate()` only refreshes scanned sections. This lets the warmup CLI run
+ * on a schedule without wiping user-curated memories.
  */
 export async function generate(root: string, options?: WarmupOptions): Promise<ProjectMemory> {
   const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS
   const depth = options?.depth ?? DEFAULT_DEPTH
+
+  const existing = await store.load(root).catch(() => null)
 
   // Scan all sections in parallel
   const results = await Promise.allSettled([
@@ -224,13 +249,20 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   const config = results[2].status === "fulfilled" ? results[2].value : empty
   const patterns = results[3].status === "fulfilled" ? results[3].value : empty
 
-  // Calculate token budget per section
-  let totalTokens = structure.tokens + readme.tokens + config.tokens + patterns.tokens
-
-  // Truncate if over budget (prioritize: patterns > config > structure > readme)
+  // Entry sections (user-curated) are preserved verbatim and given priority.
+  // Their tokens are subtracted from the budget so scanned sections shrink to
+  // fit — `totalTokens` then never exceeds `maxTokens`.
   const sections: ProjectMemory["sections"] = {}
-  let remaining = maxTokens
+  if (existing?.sections.userPrefs) sections.userPrefs = existing.sections.userPrefs
+  if (existing?.sections.feedback) sections.feedback = existing.sections.feedback
+  if (existing?.sections.decisions) sections.decisions = existing.sections.decisions
 
+  const entryTokens =
+    (sections.userPrefs?.tokens ?? 0) + (sections.feedback?.tokens ?? 0) + (sections.decisions?.tokens ?? 0)
+  let remaining = Math.max(0, maxTokens - entryTokens)
+
+  // Truncate scanned sections within the remaining budget.
+  // Priority: patterns > config > structure > readme.
   for (const [key, section] of [
     ["patterns", patterns],
     ["config", config],
@@ -245,19 +277,26 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
     }
   }
 
-  totalTokens = Object.values(sections).reduce((sum, s) => sum + (s?.tokens ?? 0), 0)
+  const totalTokens = Object.values(sections).reduce((sum, s) => sum + (s?.tokens ?? 0), 0)
 
-  // Content hash for change detection
-  const allContent = Object.values(sections)
-    .map((s) => s?.content ?? "")
-    .join("\n")
+  // Hash includes both scanned content and rendered entries so any user
+  // record change is reflected in the content hash.
+  const allContent = [
+    sections.patterns?.content ?? "",
+    sections.config?.content ?? "",
+    sections.structure?.content ?? "",
+    sections.readme?.content ?? "",
+    entryContent(sections.userPrefs),
+    entryContent(sections.feedback),
+    entryContent(sections.decisions),
+  ].join("\n")
   const contentHash = crypto.createHash("sha256").update(allContent).digest("hex").slice(0, 16)
 
   const now = new Date().toISOString()
 
   return {
-    version: 1,
-    created: now,
+    version: existing?.version ?? 1,
+    created: existing?.created ?? now,
     updated: now,
     projectRoot: root,
     contentHash,

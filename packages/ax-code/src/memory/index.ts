@@ -11,5 +11,15 @@
 
 export { generate } from "./generator"
 export { save, load, clear, exists } from "./store"
-export { buildContext, getContext, getMetadata } from "./injector"
-export type { ProjectMemory, MemorySection, WarmupOptions, WarmupResult } from "./types"
+export { buildContext, getContext, getMetadata, type BuildContextOptions } from "./injector"
+export { recordEntry, removeEntry, listEntries, type RecordInput } from "./recorder"
+export { recall, type RecallQuery, type RecallResult } from "./recall"
+export type {
+  ProjectMemory,
+  MemorySection,
+  MemoryEntry,
+  MemoryEntryKind,
+  EntrySection,
+  WarmupOptions,
+  WarmupResult,
+} from "./types"

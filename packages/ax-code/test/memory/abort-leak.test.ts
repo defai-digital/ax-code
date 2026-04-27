@@ -21,7 +21,9 @@ describe("memory: closure vs bind pattern", () => {
     for (let i = 0; i < ITERATIONS; i++) {
       const content = "x".repeat(50 * 1024) // 50KB captured by closure
       const controller = new AbortController()
-      const handler = () => { if (content.length > 1e9) controller.abort() }
+      const handler = () => {
+        if (content.length > 1e9) controller.abort()
+      }
       closureMap.set(i, handler)
       timers.push(setTimeout(handler, 30000))
     }

@@ -7,6 +7,26 @@ export interface MemorySection {
   tokens: number
 }
 
+export interface MemoryEntry {
+  name: string
+  body: string
+  savedAt: string
+  why?: string
+  howToApply?: string
+  /**
+   * Optional allow-list of agent names. When set, the entry is only injected
+   * into prompts for those agents. Absent or empty means "applies to all".
+   */
+  agents?: string[]
+}
+
+export type MemoryEntryKind = "userPrefs" | "feedback" | "decisions"
+
+export interface EntrySection {
+  entries: MemoryEntry[]
+  tokens: number
+}
+
 export interface ProjectMemory {
   version: number
   created: string
@@ -19,6 +39,9 @@ export interface ProjectMemory {
     readme?: MemorySection
     config?: MemorySection
     patterns?: MemorySection
+    userPrefs?: EntrySection
+    feedback?: EntrySection
+    decisions?: EntrySection
   }
   totalTokens: number
 }
