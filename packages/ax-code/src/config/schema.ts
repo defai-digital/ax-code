@@ -18,7 +18,9 @@ const McpTimeout = z
   .int()
   .positive()
   .optional()
-  .describe(`Timeout in ms for MCP server requests. Defaults to ${MCP_TIMEOUT_MS} (${MCP_TIMEOUT_SECONDS} seconds) if not specified.`)
+  .describe(
+    `Timeout in ms for MCP server requests. Defaults to ${MCP_TIMEOUT_MS} (${MCP_TIMEOUT_SECONDS} seconds) if not specified.`,
+  )
 
 export const McpLocal = z
   .object({
@@ -39,9 +41,11 @@ export const McpLocal = z
 export const McpOAuth = z
   .object({
     clientId: z
-    .string()
-    .optional()
-    .describe(`OAuth client ID. If not provided, dynamic client registration (${RFC_DYNAMIC_CLIENT_REGISTRATION}) will be attempted.`),
+      .string()
+      .optional()
+      .describe(
+        `OAuth client ID. If not provided, dynamic client registration (${RFC_DYNAMIC_CLIENT_REGISTRATION}) will be attempted.`,
+      ),
     clientSecret: z.string().optional().describe("OAuth client secret (if required by the authorization server)"),
     scope: z.string().optional().describe("OAuth scopes to request during authorization"),
   })
@@ -509,10 +513,7 @@ export const Info = z
     $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
     logLevel: Log.Level.optional().describe("Log level"),
     server: Server.optional().describe("Server configuration for ax-code serve and web commands"),
-    command: z
-      .record(z.string(), Command)
-      .optional()
-      .describe(`Command configuration, see ${REPO_URL}`),
+    command: z.record(z.string(), Command).optional().describe(`Command configuration, see ${REPO_URL}`),
     skills: Skills.optional().describe("Additional skill folder paths"),
     watcher: z
       .object({
@@ -716,7 +717,9 @@ export const Info = z
         auto_switch: z
           .boolean()
           .optional()
-          .describe("@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored."),
+          .describe(
+            "@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.",
+          ),
         llm: z
           .boolean()
           .optional()

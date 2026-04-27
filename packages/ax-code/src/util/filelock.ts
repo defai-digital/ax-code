@@ -1,4 +1,5 @@
 import fs from "fs/promises"
+import { unlinkSync } from "fs"
 import path from "path"
 import { Log } from "./log"
 
@@ -121,13 +122,20 @@ export namespace FileLock {
   function makeDisposable(target: string): Disposable {
     let disposed = false
     return {
+      // Symbol.dispose is a synchronous protocol — using fs.unlink (async)
+      // here lets the lockfile linger on disk after `using` exits, which
+      // makes another acquirer see a stale body and wait one poll interval
+      // before succeeding (BUG-117). unlinkSync removes the file before
+      // dispose returns, matching the semantics callers expect.
       [Symbol.dispose]: () => {
         if (disposed) return
         disposed = true
-        fs.unlink(target).catch((err: NodeJS.ErrnoException) => {
-          if (err?.code === "ENOENT") return
+        try {
+          unlinkSync(target)
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return
           log.error("failed to release file lock", { target, err })
-        })
+        }
       },
     }
   }

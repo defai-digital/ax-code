@@ -44,6 +44,18 @@ function wrap(txt: string, max = 18) {
   let row = ""
 
   for (const part of txt.split(" ")) {
+    if (part.length > max) {
+      if (row) {
+        out.push(row)
+        row = ""
+      }
+
+      for (let idx = 0; idx < part.length; idx += max) {
+        out.push(part.slice(idx, idx + max))
+      }
+      continue
+    }
+
     const next = row ? `${row} ${part}` : part
     if (next.length <= max) {
       row = next

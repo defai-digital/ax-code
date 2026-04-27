@@ -221,11 +221,7 @@ describe("Policy.loadReviewRules / loadQaRules", () => {
 
   test("returns undefined when rules fail schema validation (unknown field)", async () => {
     await using tmp = await tmpdir({ git: true })
-    await writeFile(
-      tmp.path,
-      ".ax-code/review.rules.json",
-      JSON.stringify({ unknown_field: "x" }),
-    )
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ unknown_field: "x" }))
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -237,16 +233,8 @@ describe("Policy.loadReviewRules / loadQaRules", () => {
 
   test("review and qa rules files are isolated", async () => {
     await using tmp = await tmpdir({ git: true })
-    await writeFile(
-      tmp.path,
-      ".ax-code/review.rules.json",
-      JSON.stringify({ severity_floor: "HIGH" }),
-    )
-    await writeFile(
-      tmp.path,
-      ".ax-code/qa.rules.json",
-      JSON.stringify({ severity_floor: "LOW" }),
-    )
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ severity_floor: "HIGH" }))
+    await writeFile(tmp.path, ".ax-code/qa.rules.json", JSON.stringify({ severity_floor: "LOW" }))
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -260,11 +248,7 @@ describe("Policy.loadReviewRules / loadQaRules", () => {
 
   test("rules and prose are loaded independently — having rules.json without review.md works", async () => {
     await using tmp = await tmpdir({ git: true })
-    await writeFile(
-      tmp.path,
-      ".ax-code/review.rules.json",
-      JSON.stringify({ severity_floor: "MEDIUM" }),
-    )
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ severity_floor: "MEDIUM" }))
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {

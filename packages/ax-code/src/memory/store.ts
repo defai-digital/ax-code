@@ -24,27 +24,19 @@ function getGlobalMemoryPath(): string {
 // mutate the returned object (e.g. recordEntry) never observe each other's writes.
 type CacheEntry = { mtimeMs: number; size: number; text: string }
 const readCache = new Map<string, CacheEntry>()
+// Coalesces concurrent cache-miss reads for the same path so two callers that
+// both pass the cache-miss check don't issue duplicate fs.readFile calls and
+// race to populate the cache (BUG-108). Entries live only for the duration of
+// the in-flight read; the cache itself remains the long-lived store.
+const inFlightReads = new Map<string, Promise<string | null>>()
 
 /** Test-only: drop cached entries. */
 export function _resetReadCache(): void {
   readCache.clear()
+  inFlightReads.clear()
 }
 
-async function readWithCache(filePath: string): Promise<string | null> {
-  let stat: Awaited<ReturnType<typeof fs.stat>>
-  try {
-    stat = await fs.stat(filePath)
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
-      readCache.delete(filePath)
-      return null
-    }
-    throw err
-  }
-  const cached = readCache.get(filePath)
-  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-    return cached.text
-  }
+async function readFresh(filePath: string): Promise<string | null> {
   let text: string
   try {
     text = await fs.readFile(filePath, "utf-8")
@@ -62,6 +54,30 @@ async function readWithCache(filePath: string): Promise<string | null> {
     readCache.delete(filePath)
   }
   return text
+}
+
+async function readWithCache(filePath: string): Promise<string | null> {
+  let stat: Awaited<ReturnType<typeof fs.stat>>
+  try {
+    stat = await fs.stat(filePath)
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      readCache.delete(filePath)
+      return null
+    }
+    throw err
+  }
+  const cached = readCache.get(filePath)
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.text
+  }
+  const pending = inFlightReads.get(filePath)
+  if (pending) return pending
+  const promise = readFresh(filePath).finally(() => {
+    inFlightReads.delete(filePath)
+  })
+  inFlightReads.set(filePath, promise)
+  return promise
 }
 
 /**

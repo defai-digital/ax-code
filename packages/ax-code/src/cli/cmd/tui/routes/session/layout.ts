@@ -5,7 +5,8 @@
 export function computeSidebarWidth(terminalWidth: number): number {
   if (terminalWidth >= 200) return 52
   if (terminalWidth >= 160) return 46
-  return 42
+  if (terminalWidth >= 120) return 36
+  return 28
 }
 
 export function computeSessionMainPaneWidth(input: {

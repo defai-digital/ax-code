@@ -116,17 +116,14 @@ describe("renderTerminal", () => {
       artifactRefs: [],
       source: { tool: "refactor_apply", version: "4.x.x", runId: "ses_test" },
     }
-    const out = renderTerminal(
-      [makeFinding({ evidenceRefs: [{ kind: "verification", id: "envelope-id-1" }] })],
-      { envelopes: new Map([["envelope-id-1", envelope]]) },
-    )
+    const out = renderTerminal([makeFinding({ evidenceRefs: [{ kind: "verification", id: "envelope-id-1" }] })], {
+      envelopes: new Map([["envelope-id-1", envelope]]),
+    })
     expect(out).toContain("verified by: typecheck ✗ src/foo.ts:10 TS2322")
   })
 
   test("evidenceRefs verification entries fall back to plain '<kind>: <id>' when envelopes lookup is missing", () => {
-    const out = renderTerminal([
-      makeFinding({ evidenceRefs: [{ kind: "verification", id: "envelope-id-2" }] }),
-    ])
+    const out = renderTerminal([makeFinding({ evidenceRefs: [{ kind: "verification", id: "envelope-id-2" }] })])
     expect(out).toContain("verification: envelope-id-2")
     expect(out).not.toContain("verified by:")
   })
@@ -164,10 +161,9 @@ describe("renderTerminal", () => {
       artifactRefs: [],
       source: { tool: "refactor_apply", version: "4.x.x", runId: "ses_test" },
     }
-    const out = renderTerminal(
-      [makeFinding({ evidenceRefs: [{ kind: "verification", id: "ok-1" }] })],
-      { envelopes: new Map([["ok-1", passed]]) },
-    )
+    const out = renderTerminal([makeFinding({ evidenceRefs: [{ kind: "verification", id: "ok-1" }] })], {
+      envelopes: new Map([["ok-1", passed]]),
+    })
     expect(out).toContain("verified by: lint ✓")
   })
 })

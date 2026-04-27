@@ -1,11 +1,7 @@
 import z from "zod"
 import { FindingSchema } from "../../../../quality/finding"
 import { VerificationEnvelopeSchema } from "../../../../quality/verification-envelope"
-import {
-  DebugCaseSchema,
-  DebugEvidenceSchema,
-  DebugHypothesisSchema,
-} from "../../../../debug-engine/runtime-debug"
+import { DebugCaseSchema, DebugEvidenceSchema, DebugHypothesisSchema } from "../../../../debug-engine/runtime-debug"
 
 export const SyncedSessionQualityReadiness = z.object({
   workflow: z.enum(["review", "debug", "qa"]),

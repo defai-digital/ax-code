@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { DebugOpenCaseTool } from "../../src/tool/debug_open_case"
-import {
-  computeDebugCaseId,
-  DebugCaseSchema,
-  DEBUG_ID_PATTERN,
-} from "../../src/debug-engine/runtime-debug"
+import { computeDebugCaseId, DebugCaseSchema, DEBUG_ID_PATTERN } from "../../src/debug-engine/runtime-debug"
 import { Installation } from "../../src/installation"
 
 const ctx = {
@@ -23,9 +19,7 @@ describe("DebugOpenCaseTool", () => {
     const tool = await DebugOpenCaseTool.init()
     const result = await tool.execute({ problem: "tests time out in CI" }, ctx)
     expect(result.metadata.caseId).toMatch(DEBUG_ID_PATTERN)
-    expect(result.metadata.caseId).toBe(
-      computeDebugCaseId({ problem: "tests time out in CI", runId: ctx.sessionID }),
-    )
+    expect(result.metadata.caseId).toBe(computeDebugCaseId({ problem: "tests time out in CI", runId: ctx.sessionID }))
   })
 
   test("metadata.debugCase parses against DebugCaseSchema with status='open' and current source/version", async () => {

@@ -115,9 +115,7 @@ describe("applyPolicyFilter", () => {
       required_categories: ["bug"],
       severity_floor: "HIGH",
     }
-    const findings = [
-      makeFinding({ category: "bug", severity: "LOW", findingId: "1111111111111111" }),
-    ]
+    const findings = [makeFinding({ category: "bug", severity: "LOW", findingId: "1111111111111111" })]
     const result = applyPolicyFilter(findings, rules)
     expect(result.kept).toHaveLength(0)
     expect(result.dropped).toHaveLength(1)

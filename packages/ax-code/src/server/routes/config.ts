@@ -22,7 +22,10 @@ export function redactConfig(config: Config.Info): Config.Info {
       ? Object.fromEntries(
           Object.entries(config.provider).map(([id, p]) => [
             id,
-            { ...p, options: p.options ? { ...p.options, apiKey: p.options.apiKey ? REDACTED : p.options.apiKey } : p.options },
+            {
+              ...p,
+              options: p.options ? { ...p.options, apiKey: p.options.apiKey ? REDACTED : p.options.apiKey } : p.options,
+            },
           ]),
         )
       : config.provider,
@@ -36,7 +39,10 @@ export function redactConfig(config: Config.Info): Config.Info {
                 {
                   ...m,
                   headers: maskRecord(m.headers),
-                  oauth: m.oauth && typeof m.oauth === "object" ? { ...m.oauth, clientSecret: m.oauth.clientSecret ? REDACTED : m.oauth.clientSecret } : m.oauth,
+                  oauth:
+                    m.oauth && typeof m.oauth === "object"
+                      ? { ...m.oauth, clientSecret: m.oauth.clientSecret ? REDACTED : m.oauth.clientSecret }
+                      : m.oauth,
                 },
               ]
             }

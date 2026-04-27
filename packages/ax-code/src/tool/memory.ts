@@ -39,12 +39,19 @@ export const MemorySaveTool = Tool.define("memory_save", {
   parameters: z.object({
     kind: z
       .enum(["feedback", "userPrefs", "decisions", "reference"])
-      .describe("Category of memory: feedback (rules/corrections), userPrefs (user identity/style), decisions (project choices), reference (where things live)"),
-    name: z.string().min(1).describe("Short stable slug, unique within the kind. Re-using a name overwrites the prior entry."),
+      .describe(
+        "Category of memory: feedback (rules/corrections), userPrefs (user identity/style), decisions (project choices), reference (where things live)",
+      ),
+    name: z
+      .string()
+      .min(1)
+      .describe("Short stable slug, unique within the kind. Re-using a name overwrites the prior entry."),
     body: z
       .string()
       .min(1)
-      .describe("The rule, fact, or pointer itself. Self-contained — future sessions read this without current context."),
+      .describe(
+        "The rule, fact, or pointer itself. Self-contained — future sessions read this without current context.",
+      ),
     why: z.string().optional().describe("The reason or incident behind this entry. Helps judge edge cases later."),
     howToApply: z.string().optional().describe("When or where this entry kicks in."),
     agents: z

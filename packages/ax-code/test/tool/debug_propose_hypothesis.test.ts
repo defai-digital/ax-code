@@ -101,10 +101,7 @@ describe("DebugProposeHypothesisTool", () => {
 
         const tool = await DebugProposeHypothesisTool.init()
         await expect(
-          tool.execute(
-            { caseId: "0000aaaa1111bbbb", claim: "It is X" } as any,
-            fakeCtx(session.id),
-          ),
+          tool.execute({ caseId: "0000aaaa1111bbbb", claim: "It is X" } as any, fakeCtx(session.id)),
         ).rejects.toThrow(/unknown debug case/)
       },
     })
@@ -120,10 +117,7 @@ describe("DebugProposeHypothesisTool", () => {
 
         const tool = await DebugProposeHypothesisTool.init()
         await expect(
-          tool.execute(
-            { caseId, claim: "It is X", evidenceRefs: ["2222cccc3333dddd"] } as any,
-            fakeCtx(session.id),
-          ),
+          tool.execute({ caseId, claim: "It is X", evidenceRefs: ["2222cccc3333dddd"] } as any, fakeCtx(session.id)),
         ).rejects.toThrow(/unknown id/)
       },
     })
@@ -168,10 +162,7 @@ describe("DebugProposeHypothesisTool", () => {
         const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
 
         const tool = await DebugProposeHypothesisTool.init()
-        const noEvidence = await tool.execute(
-          { caseId, claim: "claim a" },
-          fakeCtx(session.id),
-        )
+        const noEvidence = await tool.execute({ caseId, claim: "claim a" }, fakeCtx(session.id))
         const withStatic = await tool.execute(
           {
             caseId,
@@ -266,10 +257,7 @@ describe("DebugProposeHypothesisTool", () => {
 
         const tool = await DebugProposeHypothesisTool.init()
         await expect(
-          tool.execute(
-            { caseId, claim: "fabricated", evidenceRefs: ["00ffffffffffffff"] } as any,
-            fakeCtx(session.id),
-          ),
+          tool.execute({ caseId, claim: "fabricated", evidenceRefs: ["00ffffffffffffff"] } as any, fakeCtx(session.id)),
         ).rejects.toThrow(/unknown id/)
       },
     })

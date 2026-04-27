@@ -21,7 +21,10 @@ import { BlastRadius } from "@/session/blast-radius"
 const log = Log.create({ service: "tool.apply_patch" })
 
 const PatchParams = z.object({
-  patchText: z.string().max(5 * 1024 * 1024).describe("The full patch text that describes all changes to be made"),
+  patchText: z
+    .string()
+    .max(5 * 1024 * 1024)
+    .describe("The full patch text that describes all changes to be made"),
 })
 
 export const ApplyPatchTool = Tool.define("apply_patch", {

@@ -710,9 +710,7 @@ export namespace Session {
       )
     }
     SelfCorrection.reset(sessionID)
-    await SessionPrompt.cancel(sessionID).catch((e) =>
-      log.warn("session cancel failed", { sessionID, error: e }),
-    )
+    await SessionPrompt.cancel(sessionID).catch((e) => log.warn("session cancel failed", { sessionID, error: e }))
   })
 
   /**

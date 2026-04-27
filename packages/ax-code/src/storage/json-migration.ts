@@ -85,22 +85,27 @@ export namespace JsonMigration {
       return Glob.scan(pattern, { cwd: storageDir, absolute: true })
     }
 
+    // Bounded concurrency for batch reads so a 1000-file batch doesn't blow
+    // through macOS's 256 default soft fd limit and surface as EMFILE on every
+    // overage (BUG-116). 32 matches the worker-pool size used by File.status()
+    // for the same reason.
+    const READ_CONCURRENCY = 32
     async function read(files: string[], start: number, end: number) {
       const count = end - start
-      const tasks = new Array(count)
-      for (let i = 0; i < count; i++) {
-        tasks[i] = Filesystem.readJson(files[start + i])
-      }
-      const results = await Promise.allSettled(tasks)
       const items = new Array(count)
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i]
-        if (result.status === "fulfilled") {
-          items[i] = result.value
-          continue
+      let next = 0
+      const worker = async () => {
+        while (true) {
+          const i = next++
+          if (i >= count) return
+          try {
+            items[i] = await Filesystem.readJson(files[start + i])
+          } catch (err) {
+            errs.push(`failed to read ${files[start + i]}: ${err}`)
+          }
         }
-        errs.push(`failed to read ${files[start + i]}: ${result.reason}`)
       }
+      await Promise.all(Array.from({ length: Math.min(READ_CONCURRENCY, count) }, worker))
       return items
     }
 

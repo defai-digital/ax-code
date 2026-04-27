@@ -1,39 +1,33 @@
 # Bug Reports
 
-## Status (2026-04-27, third pass)
+## Status (2026-04-27, full BUGS folder triage)
 
-Last triage scan: 2026-04-27 (IO/file read-write focused scan, third pass).
+Last triage and hardening pass: 2026-04-27.  
+Outcome: all open bugs in this folder are now closed as fixed or false positives.
 
-### Active Bugs
+### Closed in this pass (fixed)
 
-None.
+| ID | Component | Summary |
+|----|-----------|---------|
+| ui-001 | `scroll-view.tsx` | Thumb drag `pointermove`/`pointerup` listeners are cleaned up on unmount and drag end. |
+| ui-002 | `revert-notice.tsx` | Revert message pluralization now matches message count. |
+| ui-003 | `dialog-rollback.tsx` | Rollback errors now surface via toast and preserve dialog flow. |
+| ui-004 | `layout.ts` | Sidebar width now scales by terminal width with narrow-screen behavior. |
+| ui-005 | `session-graph.logic.ts` | Long node labels are wrapped in fixed-width chunks. |
+| ui-006 | `overlay/popover.tsx` | Popover close behavior is focus-safe and resets dismiss state deterministically. |
+| ui-007 | `footer.tsx` | Welcome prompt is one-shot until reconnect and no longer flashes periodically. |
+| ui-008 | `sidebar.tsx` | MCP status branches now use typed status values without string casts. |
+| ui-009 | `session-graph.tsx` | Session graph edge path now scales control points by span distance. |
+| ui-012 | `message-part.tsx` | Tool error rendering uses typed error-state guard instead of `any` cast. |
+| ui-013 | `session-turn.tsx` | Message rendering is callback-driven and avoids non-null assertions. |
 
-### Resolved in this pass (2026-04-27, sidebar pass)
+### Cleared as false positive
 
-Eight sidebar findings were fixed or reclassified:
+| ID | Component | Reason |
+|----|-----------|--------|
+| ui-010 | Multiple files | Existing map stores are session-local lifecycle containers with bounded intended lifetime; no reliable leak repro found in code-path review. |
+| ui-011 | Multiple files | Reported path operations use `Global.Path.*` base directories and trusted persistence keys; no untrusted sink was identified. |
 
-- **sidebar-001** (Medium) — `prompt/index.tsx` prompt width now consumes
-  the session-level sidebar visibility signal.
-- **sidebar-002** (Low-Medium) — `sidebar.tsx` MCP color lookup now has explicit
-  safe fallback for unknown statuses.
-- **sidebar-003** (Low) — `sidebar.tsx` validates `session_status` shape before
-  casting it into `FooterSessionStatus`.
-- **sidebar-004** (Low-Medium) — `sidebar.tsx` retry label now reuses
-  `footerSessionStatusView`, including countdown text.
-- **sidebar-005** (Low) — `sidebar.tsx` timer effect now tracks only
-  `status().type`, avoiding timer churn on busy-step transitions.
-- **sidebar-006** (Medium) — `quality.ts` now treats `overallStatus: "fail"` as
-  user-actionable in sidebar quality filtering.
-- **sidebar-007** (Low-Medium) — `sidebar.tsx` Todo header now shows remaining
-  item count when collapsed.
-- **sidebar-008** (Low) — `sidebar.tsx` `qualityColor` now falls back to muted
-  for unknown/missing readiness status.
+### Historical status
 
-### Closed / False Positives (this pass)
-
-- **No additional bug IDs** were processed in this pass.
-
-### Historical Status
-
-Earlier passes (sidebar-001 through sidebar-008 and prior triage cycles) are cleared
-and not re-listed here. See git history for resolution details.
+Prior triage passes are available in git history.

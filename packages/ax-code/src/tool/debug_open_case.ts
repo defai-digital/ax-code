@@ -1,10 +1,7 @@
 import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./debug_open_case.txt"
-import {
-  computeDebugCaseId,
-  DebugCaseSchema,
-} from "../debug-engine/runtime-debug"
+import { computeDebugCaseId, DebugCaseSchema } from "../debug-engine/runtime-debug"
 import { Installation } from "../installation"
 
 export const DebugOpenCaseTool = Tool.define("debug_open_case", {

@@ -2,7 +2,7 @@ import z from "zod"
 import * as path from "path"
 import * as fs from "fs"
 import { Tool } from "./tool"
-import { createTwoFilesPatch } from "diff"
+import { createTwoFilesPatch, diffLines } from "diff"
 import DESCRIPTION from "./write.txt"
 import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
@@ -73,10 +73,18 @@ export const WriteTool = Tool.define("write", {
       await Filesystem.write(filepath, params.content)
       await notifyFileEdited(filepath, exists ? "change" : "add")
       await FileTime.read(ctx.sessionID, filepath)
-      // Approximate line delta — the diff package would be more
-      // precise but newline-counting is sufficient for cap accounting.
-      const lineDelta = params.content.split("\n").length + (exists ? contentOld.split("\n").length : 0)
-      BlastRadius.recordWriteAndAssert(ctx.sessionID, filepath, lineDelta)
+      // Match edit/multiedit/apply_patch: feed BlastRadius the diff churn
+      // (additions + deletions), not raw line counts. Summing old + new
+      // line counts double-charged unchanged lines and inflated the cap
+      // by up to 2x for full overwrites of mostly-identical content
+      // (BUG-119).
+      let additions = 0
+      let deletions = 0
+      for (const change of diffLines(contentOld, params.content)) {
+        if (change.added) additions += change.count || 0
+        else if (change.removed) deletions += change.count || 0
+      }
+      BlastRadius.recordWriteAndAssert(ctx.sessionID, filepath, additions + deletions)
     })
 
     const { diagnostics, output: diagOutput } = await collectDiagnostics([filepath], {

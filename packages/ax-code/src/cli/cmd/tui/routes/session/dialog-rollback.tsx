@@ -2,6 +2,7 @@ import { createMemo, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { type DialogContext, useDialog } from "../../ui/dialog"
 import { SessionRollback } from "./rollback"
+import { useToast } from "../../ui/toast"
 
 export function DialogRollback(props: {
   sessionID: string
@@ -9,6 +10,7 @@ export function DialogRollback(props: {
   onSelect?: (point: SessionRollback.Point) => Promise<void> | void
 }) {
   const dialog = useDialog()
+  const toast = useToast()
 
   onMount(() => {
     dialog.setSize("large")
@@ -40,7 +42,12 @@ export function DialogRollback(props: {
           try {
             await props.onSelect?.(point)
             dialog.clear()
-          } catch {}
+          } catch (error) {
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to rollback",
+              variant: "error",
+            })
+          }
         }
       })(),
     }))

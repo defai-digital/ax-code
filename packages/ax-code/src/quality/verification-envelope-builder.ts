@@ -59,7 +59,8 @@ function parseTypecheckFailures(text: string | undefined): StructuredFailure[] {
 // formatters (stylish, codeframe, json) are not parsed — projects that use
 // them will see envelope.result.output preserved as raw text. To opt into
 // structured failures, configure ESLint with --format compact.
-const ESLINT_COMPACT_PATTERN = /^(.+?):(\d+):(\d+):\s*(?:(error|warning)\s*-\s*)?(.+?)\s*\(([\w-]+(?:\/[\w-]+)*)\)\s*$/gm
+const ESLINT_COMPACT_PATTERN =
+  /^(.+?):(\d+):(\d+):\s*(?:(error|warning)\s*-\s*)?(.+?)\s*\(([\w-]+(?:\/[\w-]+)*)\)\s*$/gm
 
 function parseLintFailures(text: string | undefined): StructuredFailure[] {
   if (!text) return []

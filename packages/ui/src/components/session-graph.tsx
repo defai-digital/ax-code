@@ -53,6 +53,21 @@ function edge(type: ExecutionGraph["edges"][number]["type"]) {
   return "var(--border-primary)"
 }
 
+function sessionEdgePath(item: {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}) {
+  const span = Math.max(0, item.x2 - item.x1)
+  const curveX = Math.max(28, Math.min(72, Math.round(span / 4)))
+  const laneColumn = Math.floor(item.x1 / 88)
+  const isWide = span > 176
+  const curveY = isWide ? ((laneColumn % 2 === 0 ? -1 : 1) * 36) : 0
+
+  return `M ${item.x1} ${item.y1} C ${item.x1 + curveX} ${item.y1 + curveY}, ${item.x2 - curveX} ${item.y2 + curveY}, ${item.x2} ${item.y2}`
+}
+
 export function SessionGraph(props: SessionGraphProps) {
   const [local, rest] = splitProps(props, ["graph", "topology", "title", "class", "classList"])
   const lay = createMemo(() => (local.graph ? sessionGraphLayout(local.graph, local.topology) : undefined))
@@ -97,16 +112,19 @@ export function SessionGraph(props: SessionGraphProps) {
                   aria-label="Execution graph"
                 >
                   <For each={value().edges}>
-                    {(item) => (
-                      <path
-                        d={`M ${item.x1} ${item.y1} C ${item.x1 + 28} ${item.y1}, ${item.x2 - 28} ${item.y2}, ${item.x2} ${item.y2}`}
-                        fill="none"
-                        stroke={edge(item.type)}
-                        stroke-width={item.type === "call_result" ? 2 : 1.5}
-                        stroke-dasharray={item.type === "step_contains" ? "5 4" : undefined}
-                        opacity={0.9}
-                      />
-                    )}
+                    {(item) => {
+                      const path = sessionEdgePath(item)
+                      return (
+                        <path
+                          d={path}
+                          fill="none"
+                          stroke={edge(item.type)}
+                          stroke-width={item.type === "call_result" ? 2 : 1.5}
+                          stroke-dasharray={item.type === "step_contains" ? "5 4" : undefined}
+                          opacity={0.9}
+                        />
+                      )
+                    }}
                   </For>
                   <For each={value().nodes}>
                     {(item) => {

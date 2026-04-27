@@ -149,9 +149,7 @@ describe("briefFromFailure", () => {
     const brief = briefFromFailure(
       envelope({
         command: { runner: "test", argv: [], cwd: "/tmp" },
-        structuredFailures: [
-          { kind: "test", framework: "bun:test", testName: "auth > rejects expired token" },
-        ],
+        structuredFailures: [{ kind: "test", framework: "bun:test", testName: "auth > rejects expired token" }],
       }),
     )
     expect(brief).toContain("bun:test: auth > rejects expired token")

@@ -180,20 +180,20 @@ describe("resolveCaseStatus", () => {
   })
 
   test("any confirmed hypothesis → 'resolved'", () => {
-    expect(
-      resolveCaseStatus("open", [hypothesis({ status: "refuted" }), hypothesis({ status: "confirmed" })]),
-    ).toBe("resolved")
+    expect(resolveCaseStatus("open", [hypothesis({ status: "refuted" }), hypothesis({ status: "confirmed" })])).toBe(
+      "resolved",
+    )
   })
 
   test("all hypotheses refuted/unresolved → 'unresolved'", () => {
-    expect(
-      resolveCaseStatus("open", [hypothesis({ status: "refuted" }), hypothesis({ status: "unresolved" })]),
-    ).toBe("unresolved")
+    expect(resolveCaseStatus("open", [hypothesis({ status: "refuted" }), hypothesis({ status: "unresolved" })])).toBe(
+      "unresolved",
+    )
   })
 
   test("at least one active and no confirmed → 'investigating'", () => {
-    expect(
-      resolveCaseStatus("open", [hypothesis({ status: "refuted" }), hypothesis({ status: "active" })]),
-    ).toBe("investigating")
+    expect(resolveCaseStatus("open", [hypothesis({ status: "refuted" }), hypothesis({ status: "active" })])).toBe(
+      "investigating",
+    )
   })
 })

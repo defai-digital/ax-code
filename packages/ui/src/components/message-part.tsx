@@ -370,6 +370,12 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   const part = () => props.part as ToolPart
   if (part().tool === "todowrite" || part().tool === "todoread") return null
 
+  const errorState = createMemo(() => {
+    const state = part().state
+    if (state.status === "error") return state
+    return null
+  })
+
   const hideQuestion = createMemo(
     () => part().tool === "question" && (part().state.status === "pending" || part().state.status === "running"),
   )
@@ -402,9 +408,10 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
     <Show when={!hideQuestion()}>
       <div data-component="tool-part-wrapper">
         <Switch>
-          <Match when={part().state.status === "error" && (part().state as any).error}>
+          <Match when={errorState()}>
             {(error) => {
-              const cleaned = error().replace("Error: ", "")
+              const toolError = error().error
+              const cleaned = toolError ? toolError.replace("Error: ", "") : ""
               if (part().tool === "question" && cleaned.includes("dismissed this question")) {
                 return (
                   <div style="width: 100%; display: flex; justify-content: flex-end;">
@@ -417,7 +424,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               return (
                 <ToolErrorCard
                   tool={part().tool}
-                  error={error()}
+                  error={cleaned || "Unexpected tool error"}
                   defaultOpen={props.defaultOpen}
                   subtitle={taskSubtitle()}
                   href={taskHref()}

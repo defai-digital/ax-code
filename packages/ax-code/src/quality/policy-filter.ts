@@ -31,10 +31,7 @@ export type PolicyFilterResult = {
   warnings: string[]
 }
 
-export function applyPolicyFilter(
-  findings: readonly Finding[],
-  rules: PolicyRules | undefined,
-): PolicyFilterResult {
+export function applyPolicyFilter(findings: readonly Finding[], rules: PolicyRules | undefined): PolicyFilterResult {
   if (!rules) {
     return { kept: [...findings], dropped: [], warnings: [] }
   }
@@ -74,9 +71,7 @@ export function applyPolicyFilter(
     const present = new Set(kept.map((f) => f.category))
     const missing = rules.required_categories.filter((c) => !present.has(c))
     if (missing.length > 0) {
-      warnings.push(
-        `required_categories missing from kept findings: ${missing.join(", ")}`,
-      )
+      warnings.push(`required_categories missing from kept findings: ${missing.join(", ")}`)
     }
   }
 

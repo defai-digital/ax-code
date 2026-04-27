@@ -54,7 +54,12 @@ function buildEvidence(sessionID: string, caseId: string, content: string) {
   }
 }
 
-function buildHypothesis(sessionID: string, caseId: string, claim: string, status: "active" | "refuted" | "confirmed" | "unresolved" = "active") {
+function buildHypothesis(
+  sessionID: string,
+  caseId: string,
+  claim: string,
+  status: "active" | "refuted" | "confirmed" | "unresolved" = "active",
+) {
   const hypothesisId = computeDebugHypothesisId({ caseId, claim })
   return {
     hypothesisId,
@@ -114,9 +119,18 @@ describe("SessionDebug.load", () => {
           model: "test/model",
           directory: tmp.path,
         })
-        await emit(session.id, tmp.path, { kind: "debug_open_case", metadata: { caseId: c.caseId, debugCase: c.debugCase } })
-        await emit(session.id, tmp.path, { kind: "debug_capture_evidence", metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence } })
-        await emit(session.id, tmp.path, { kind: "debug_propose_hypothesis", metadata: { hypothesisId: h.hypothesisId, debugHypothesis: h.debugHypothesis } })
+        await emit(session.id, tmp.path, {
+          kind: "debug_open_case",
+          metadata: { caseId: c.caseId, debugCase: c.debugCase },
+        })
+        await emit(session.id, tmp.path, {
+          kind: "debug_capture_evidence",
+          metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence },
+        })
+        await emit(session.id, tmp.path, {
+          kind: "debug_propose_hypothesis",
+          metadata: { hypothesisId: h.hypothesisId, debugHypothesis: h.debugHypothesis },
+        })
         await new Promise((resolve) => setTimeout(resolve, 30))
 
         const loaded = SessionDebug.load(session.id)
@@ -302,8 +316,14 @@ describe("SessionDebug.load", () => {
           model: "test/model",
           directory: tmp.path,
         })
-        await emit(session.id, tmp.path, { kind: "debug_open_case", metadata: { caseId: c.caseId, debugCase: c.debugCase } })
-        await emit(session.id, tmp.path, { kind: "debug_capture_evidence", metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence } })
+        await emit(session.id, tmp.path, {
+          kind: "debug_open_case",
+          metadata: { caseId: c.caseId, debugCase: c.debugCase },
+        })
+        await emit(session.id, tmp.path, {
+          kind: "debug_capture_evidence",
+          metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence },
+        })
         await new Promise((resolve) => setTimeout(resolve, 30))
 
         const indexed = SessionDebug.indexedIds(session.id)
@@ -333,8 +353,14 @@ describe("SessionDebug.load", () => {
           model: "test/model",
           directory: tmp.path,
         })
-        await emit(session.id, tmp.path, { kind: "debug_open_case", metadata: { caseId: a.caseId, debugCase: a.debugCase } })
-        await emit(session.id, tmp.path, { kind: "debug_open_case", metadata: { caseId: b.caseId, debugCase: b.debugCase } })
+        await emit(session.id, tmp.path, {
+          kind: "debug_open_case",
+          metadata: { caseId: a.caseId, debugCase: a.debugCase },
+        })
+        await emit(session.id, tmp.path, {
+          kind: "debug_open_case",
+          metadata: { caseId: b.caseId, debugCase: b.debugCase },
+        })
         await new Promise((resolve) => setTimeout(resolve, 30))
 
         const ids = SessionDebug.caseIdSet(session.id)

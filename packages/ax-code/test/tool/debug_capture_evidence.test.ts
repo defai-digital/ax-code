@@ -63,7 +63,16 @@ describe("DebugCaptureEvidenceTool", () => {
         await expect(
           tool.execute(
             { caseId: "0000aaaa1111bbbb", kind: "log_capture", content: "stuff" } as any,
-            { sessionID: session.id, messageID: "" as any, agent: "build", abort: new AbortController().signal, callID: "x", messages: [], metadata() {}, ask: async () => {} } as any,
+            {
+              sessionID: session.id,
+              messageID: "" as any,
+              agent: "build",
+              abort: new AbortController().signal,
+              callID: "x",
+              messages: [],
+              metadata() {},
+              ask: async () => {},
+            } as any,
           ),
         ).rejects.toThrow(/unknown debug case/)
       },
@@ -81,7 +90,16 @@ describe("DebugCaptureEvidenceTool", () => {
         const tool = await DebugCaptureEvidenceTool.init()
         const result = await tool.execute(
           { caseId, kind: "log_capture", content: "[INFO] worker pool: timeout waiting for slot" },
-          { sessionID: session.id, messageID: "" as any, agent: "build", abort: new AbortController().signal, callID: "y", messages: [], metadata() {}, ask: async () => {} } as any,
+          {
+            sessionID: session.id,
+            messageID: "" as any,
+            agent: "build",
+            abort: new AbortController().signal,
+            callID: "y",
+            messages: [],
+            metadata() {},
+            ask: async () => {},
+          } as any,
         )
 
         expect(result.metadata.evidenceId).toMatch(DEBUG_ID_PATTERN)
@@ -103,7 +121,16 @@ describe("DebugCaptureEvidenceTool", () => {
         const caseId = await emitOpenedCase(session.id, tmp.path, "tests time out")
 
         const tool = await DebugCaptureEvidenceTool.init()
-        const c = { sessionID: session.id, messageID: "" as any, agent: "build", abort: new AbortController().signal, callID: "z", messages: [], metadata() {}, ask: async () => {} } as any
+        const c = {
+          sessionID: session.id,
+          messageID: "" as any,
+          agent: "build",
+          abort: new AbortController().signal,
+          callID: "z",
+          messages: [],
+          metadata() {},
+          ask: async () => {},
+        } as any
         const a = await tool.execute({ caseId, kind: "stack_trace", content: "Error: boom\n  at foo:1" }, c)
         const b = await tool.execute({ caseId, kind: "stack_trace", content: "Error: boom\n  at foo:1" }, c)
         expect(a.metadata.evidenceId).toBe(b.metadata.evidenceId)
@@ -120,10 +147,17 @@ describe("DebugCaptureEvidenceTool", () => {
         const caseId = await emitOpenedCase(session.id, tmp.path, "tests time out")
 
         const tool = await DebugCaptureEvidenceTool.init()
-        const c = { sessionID: session.id, messageID: "" as any, agent: "build", abort: new AbortController().signal, callID: "z", messages: [], metadata() {}, ask: async () => {} } as any
-        await expect(
-          tool.execute({ caseId, kind: "screenshot", content: "x" } as any, c),
-        ).rejects.toThrow()
+        const c = {
+          sessionID: session.id,
+          messageID: "" as any,
+          agent: "build",
+          abort: new AbortController().signal,
+          callID: "z",
+          messages: [],
+          metadata() {},
+          ask: async () => {},
+        } as any
+        await expect(tool.execute({ caseId, kind: "screenshot", content: "x" } as any, c)).rejects.toThrow()
       },
     })
   })

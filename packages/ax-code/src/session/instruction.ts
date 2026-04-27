@@ -206,7 +206,12 @@ export namespace InstructionPrompt {
             chunks.push(value)
           }
           return new TextDecoder().decode(
-            chunks.reduce((acc, c) => { const merged = new Uint8Array(acc.byteLength + c.byteLength); merged.set(acc); merged.set(c, acc.byteLength); return merged }, new Uint8Array()),
+            chunks.reduce((acc, c) => {
+              const merged = new Uint8Array(acc.byteLength + c.byteLength)
+              merged.set(acc)
+              merged.set(c, acc.byteLength)
+              return merged
+            }, new Uint8Array()),
           )
         })
         .catch((err) => {

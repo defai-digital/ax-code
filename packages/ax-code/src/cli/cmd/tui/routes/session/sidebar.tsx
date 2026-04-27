@@ -17,6 +17,7 @@ import { SessionRollback } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { footerSessionStatusView, type FooterSessionStatus } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
+import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
 import {
@@ -44,7 +45,7 @@ export function activityColor(status: string, theme: ReturnType<typeof useTheme>
   }
 }
 
-function mcpStatusColor(theme: ReturnType<typeof useTheme>["theme"], status: string) {
+function mcpStatusColor(theme: ReturnType<typeof useTheme>["theme"], status: McpStatus["status"]) {
   switch (status) {
     case "connected":
       return theme.success
@@ -229,7 +230,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   )
 
   // Sort MCP servers alphabetically for consistent display order
-  const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
+  const mcpEntries = createMemo(() =>
+    Object.entries(sync.data.mcp as Record<string, McpStatus>).sort(([a], [b]) => a.localeCompare(b)),
+  )
 
   // Count connected and error MCP servers for collapsed header display
   const connectedMcpCount = createMemo(() => mcpEntries().filter(([_, item]) => item.status === "connected").length)
@@ -322,10 +325,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                                 <Match when={item.status === "connected"}>Connected</Match>
                                 <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
                                 <Match when={item.status === "disabled"}>Disabled</Match>
-                                <Match when={(item.status as string) === "needs_auth"}>Needs auth</Match>
-                                <Match when={(item.status as string) === "needs_client_registration"}>
-                                  Needs client ID
-                                </Match>
+                              <Match when={item.status === "needs_auth"}>Needs auth</Match>
+                              <Match when={item.status === "needs_client_registration"}>
+                                Needs client ID
+                              </Match>
                               </Switch>
                             </span>
                           </text>

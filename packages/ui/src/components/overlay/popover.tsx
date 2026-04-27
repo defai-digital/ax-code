@@ -53,6 +53,8 @@ export function Popover<T extends ValidComponent = "div">(props: PopoverProps<T>
     uncontrolledOpen: local.defaultOpen ?? false,
   })
 
+  let outsideCloseTarget: HTMLElement | null = null
+
   const controlled = () => local.open !== undefined
   const opened = () => {
     if (controlled()) return local.open ?? false
@@ -94,6 +96,7 @@ export function Popover<T extends ValidComponent = "div">(props: PopoverProps<T>
       const target = event.target
       if (!(target instanceof Node)) return
       if (inside(target)) return
+      outsideCloseTarget = target instanceof HTMLElement ? target : null
       close("outside")
     }
 
@@ -101,6 +104,7 @@ export function Popover<T extends ValidComponent = "div">(props: PopoverProps<T>
       const target = event.target
       if (!(target instanceof Node)) return
       if (inside(target)) return
+      outsideCloseTarget = target instanceof HTMLElement ? target : null
       close("outside")
     }
 
@@ -125,7 +129,15 @@ export function Popover<T extends ValidComponent = "div">(props: PopoverProps<T>
       }}
       style={local.style}
       onCloseAutoFocus={(event: Event) => {
-        if (state.dismiss === "outside") event.preventDefault()
+        if (state.dismiss === "outside") {
+          event.preventDefault()
+          if (outsideCloseTarget) {
+            outsideCloseTarget.focus()
+            outsideCloseTarget = null
+          } else if (state.triggerRef) {
+            state.triggerRef.focus()
+          }
+        }
         setState("dismiss", null)
       }}
     >

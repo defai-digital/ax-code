@@ -43,12 +43,9 @@ function pushEntries(parts: string[], title: string, section: EntrySection | und
 const STALE_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 function stalenessNotice(sections: ProjectMemory["sections"]): string | undefined {
-  const scanned: MemorySection[] = [
-    sections.patterns,
-    sections.config,
-    sections.structure,
-    sections.readme,
-  ].filter((s): s is MemorySection => !!s?.scannedAt)
+  const scanned: MemorySection[] = [sections.patterns, sections.config, sections.structure, sections.readme].filter(
+    (s): s is MemorySection => !!s?.scannedAt,
+  )
 
   if (scanned.length === 0) return undefined
   const oldest = scanned.reduce((a, b) => (a.scannedAt! < b.scannedAt! ? a : b))

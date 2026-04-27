@@ -720,6 +720,20 @@ export namespace ProbabilisticRollout {
     return status === "fail" ? 2 : status === "warn" ? 1 : 0
   }
 
+  // Gates whose failure means the replay export itself is broken (no anchor
+  // items, no workflow evidence). These are real, user-visible breakage; gates
+  // outside this set that fail/warn are pipeline progress signals (label
+  // coverage, benchmark readiness) that are noisy for ordinary sessions.
+  export const BLOCKING_GATE_NAMES = ["exportable-session-shape", "workflow-evidence-present"] as const
+
+  function findBlockingGate(gates: ReadonlyArray<ReplayReadinessGate> | undefined) {
+    const list = gates ?? []
+    return (
+      list.find((gate) => gate.status === "fail" && (BLOCKING_GATE_NAMES as readonly string[]).includes(gate.name)) ??
+      list.find((gate) => gate.status === "fail")
+    )
+  }
+
   function summarizeReplayReadinessOverall(gates: ReplayReadinessGate[]) {
     const highest = gates.reduce((max, gate) => Math.max(max, readinessSeverity(gate.status)), 0)
     return highest === 2 ? "fail" : highest === 1 ? "warn" : "pass"
@@ -784,12 +798,7 @@ export namespace ProbabilisticRollout {
     >,
   ): UserFacingReadinessState {
     const counts = normalizedReadinessCounts(summary)
-    const blockingGate =
-      (summary.gates ?? []).find(
-        (gate) =>
-          gate.status === "fail" &&
-          (gate.name === "exportable-session-shape" || gate.name === "workflow-evidence-present"),
-      ) ?? (summary.gates ?? []).find((gate) => gate.status === "fail")
+    const blockingGate = findBlockingGate(summary.gates)
     if (summary.readyForBenchmark) return "ready"
     if (blockingGate) return "blocked"
     if (counts.totalItems === 0) return "blocked"
@@ -866,13 +875,7 @@ export namespace ProbabilisticRollout {
   ) {
     const state = readinessState(summary)
     if (state === "blocked") {
-      const blockingGate =
-        (summary.gates ?? []).find(
-          (gate) =>
-            gate.status === "fail" &&
-            (gate.name === "exportable-session-shape" || gate.name === "workflow-evidence-present"),
-        ) ?? (summary.gates ?? []).find((gate) => gate.status === "fail")
-      return blockingGate?.detail ?? "no replay evidence yet"
+      return findBlockingGate(summary.gates)?.detail ?? "no replay evidence yet"
     }
     if (state === "ready") return `benchmark ready · ${readinessResolvedLabelsSummary(summary)}`
     if (state === "not_ready") return `label coverage complete · ${readinessResolvedLabelsSummary(summary)}`

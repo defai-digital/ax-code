@@ -124,6 +124,32 @@ export function ScrollView(props: ScrollViewProps) {
 
   let startY = 0
   let startScrollTop = 0
+  let thumbPointerId: number | null = null
+  let onPointerMove: ((event: PointerEvent) => void) | null = null
+  let onPointerUp: ((event: PointerEvent) => void) | null = null
+
+  const cleanupThumbDrag = () => {
+    if (onPointerMove) {
+      window.removeEventListener("pointermove", onPointerMove)
+      onPointerMove = null
+    }
+    if (onPointerUp) {
+      window.removeEventListener("pointerup", onPointerUp)
+      onPointerUp = null
+    }
+    if (thumbPointerId !== null && Number.isFinite(thumbPointerId)) {
+      try {
+        thumbRef.releasePointerCapture(thumbPointerId)
+      } catch {
+        // Ignore when capture already ended or the element is detached.
+      }
+      thumbPointerId = null
+    }
+  }
+
+  onCleanup(() => {
+    cleanupThumbDrag()
+  })
 
   const onThumbPointerDown = (e: PointerEvent) => {
     e.preventDefault()
@@ -131,11 +157,12 @@ export function ScrollView(props: ScrollViewProps) {
     setState("isDragging", true)
     startY = e.clientY
     startScrollTop = viewportRef.scrollTop
+    thumbPointerId = e.pointerId
 
     thumbRef.setPointerCapture(e.pointerId)
 
-    const onPointerMove = (e: PointerEvent) => {
-      const deltaY = e.clientY - startY
+    onPointerMove = (event: PointerEvent) => {
+      const deltaY = event.clientY - startY
       const { scrollHeight, clientHeight } = viewportRef
       const maxScrollTop = scrollHeight - clientHeight
       const maxThumbTop = clientHeight - thumbHeight()
@@ -146,15 +173,13 @@ export function ScrollView(props: ScrollViewProps) {
       }
     }
 
-    const onPointerUp = (e: PointerEvent) => {
+    onPointerUp = (event: PointerEvent) => {
       setState("isDragging", false)
-      thumbRef.releasePointerCapture(e.pointerId)
-      thumbRef.removeEventListener("pointermove", onPointerMove)
-      thumbRef.removeEventListener("pointerup", onPointerUp)
+      cleanupThumbDrag()
     }
 
-    thumbRef.addEventListener("pointermove", onPointerMove)
-    thumbRef.addEventListener("pointerup", onPointerUp)
+    window.addEventListener("pointermove", onPointerMove)
+    window.addEventListener("pointerup", onPointerUp)
   }
 
   // Keybinds implementation

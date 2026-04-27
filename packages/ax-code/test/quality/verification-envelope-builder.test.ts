@@ -207,10 +207,7 @@ describe("fromRefactorApplyResult", () => {
             errors: [],
             ran: 5,
             failed: 2,
-            failures: [
-              "(fail) describe > should pass [0.08ms]",
-              "(fail) auth > rejects expired token [12ms]",
-            ],
+            failures: ["(fail) describe > should pass [0.08ms]", "(fail) auth > rejects expired token [12ms]"],
             selection: "targeted",
           },
         },

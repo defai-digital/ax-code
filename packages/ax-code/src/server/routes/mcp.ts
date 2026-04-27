@@ -82,7 +82,16 @@ export const McpRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ name: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/) })),
+      validator(
+        "param",
+        z.object({
+          name: z
+            .string()
+            .min(1)
+            .max(64)
+            .regex(/^[a-zA-Z0-9_-]+$/),
+        }),
+      ),
       async (c) => {
         const { name } = c.req.valid("param")
         const supportsOAuth = await MCP.supportsOAuth(name)
@@ -112,7 +121,16 @@ export const McpRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ name: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/) })),
+      validator(
+        "param",
+        z.object({
+          name: z
+            .string()
+            .min(1)
+            .max(64)
+            .regex(/^[a-zA-Z0-9_-]+$/),
+        }),
+      ),
       validator(
         "json",
         z.object({
@@ -144,7 +162,16 @@ export const McpRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ name: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/) })),
+      validator(
+        "param",
+        z.object({
+          name: z
+            .string()
+            .min(1)
+            .max(64)
+            .regex(/^[a-zA-Z0-9_-]+$/),
+        }),
+      ),
       async (c) => {
         const { name } = c.req.valid("param")
         const supportsOAuth = await MCP.supportsOAuth(name)
@@ -173,7 +200,16 @@ export const McpRoutes = lazy(() =>
           ...errors(404),
         },
       }),
-      validator("param", z.object({ name: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/) })),
+      validator(
+        "param",
+        z.object({
+          name: z
+            .string()
+            .min(1)
+            .max(64)
+            .regex(/^[a-zA-Z0-9_-]+$/),
+        }),
+      ),
       async (c) => {
         const { name } = c.req.valid("param")
         await MCP.removeAuth(name)

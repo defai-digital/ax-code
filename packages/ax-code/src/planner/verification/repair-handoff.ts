@@ -36,14 +36,9 @@ export type HandoffPolicy = {
 const DEFAULT_MAX_FAILURES = 25
 const DEFAULT_ALLOWED_STATUSES: ReadonlyArray<VerificationEnvelope["result"]["status"]> = ["failed"]
 
-export type HandoffDecision =
-  | { handoff: true; reasoning: string }
-  | { handoff: false; reasoning: string }
+export type HandoffDecision = { handoff: true; reasoning: string } | { handoff: false; reasoning: string }
 
-export function shouldHandoff(
-  envelope: VerificationEnvelope,
-  policy?: HandoffPolicy,
-): HandoffDecision {
+export function shouldHandoff(envelope: VerificationEnvelope, policy?: HandoffPolicy): HandoffDecision {
   const allowedRunners = policy?.allowedRunners
   const allowedStatuses = policy?.allowedStatuses ?? DEFAULT_ALLOWED_STATUSES
   const maxFailures = policy?.maxFailures ?? DEFAULT_MAX_FAILURES
