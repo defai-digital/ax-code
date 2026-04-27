@@ -3,6 +3,7 @@ import {
   createEffect,
   createMemo,
   type JSX,
+  type Accessor,
   onMount,
   createSignal,
   onCleanup,
@@ -76,6 +77,7 @@ export type PromptProps = {
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
+  sidebarVisible?: Accessor<boolean>
 }
 
 export type PromptRef = {
@@ -223,11 +225,10 @@ export function Prompt(props: PromptProps) {
   }
 
   const promptContentWidth = createMemo(() => {
-    const sidebarVisible =
-      route.data.type === "session" &&
-      !sync.session.get(route.data.sessionID)?.parentID &&
-      sidebarPreference() === "auto" &&
-      dimensions().width > 120
+    const routeIsChildlessSession = route.data.type === "session" && !sync.session.get(route.data.sessionID)?.parentID
+    const sidebarVisible = routeIsChildlessSession
+      ? (props.sidebarVisible?.() ?? (sidebarPreference() === "auto" && dimensions().width > 120))
+      : false
     return computeSessionMainPaneWidth({
       terminalWidth: dimensions().width,
       sidebarVisible,
@@ -1716,9 +1717,7 @@ export function Prompt(props: PromptProps) {
                   ·
                 </text>
               </Show>
-              <Show
-                when={footerLayout().showAgents || footerLayout().showVariants || footerLayout().showShellHint}
-              >
+              <Show when={footerLayout().showAgents || footerLayout().showVariants || footerLayout().showShellHint}>
                 <box gap={2} flexDirection="row" flexShrink={0}>
                   <Switch>
                     <Match when={store.mode === "normal"}>

@@ -305,6 +305,23 @@ export function renderSessionQualityInlineSummary(action: SessionQualityAction) 
   return `${inlineActionLabel(action)} · ${actionReadinessState(action)} · ${actionSummaryDetail(action)}${targetedRecommendationInlineSuffix(action)}`
 }
 
+// Decides whether a workflow's quality entry should appear in the sidebar.
+// Replay-readiness gates (label-coverage, benchmark-readiness) are an internal
+// QA training-pipeline metric — for ordinary coding sessions, no labels are
+// ever recorded, so these gates are perpetually `warn` and surface as noisy
+// "N warnings" / "N issues" rows that the user can't act on. We only want
+// the sidebar row when there's a user-actionable signal:
+//   - severity-graded findings exist for this workflow, or
+//   - the workflow is blocked (overallStatus === fail), or
+//   - the user has begun labeling artifacts (so they care about readiness).
+// The /quality dialog still shows every workflow with a summary regardless,
+// since opening it is an explicit opt-in.
+export function hasSidebarSignal(action: Pick<SessionQualityAction, "summary">, findingCount?: number): boolean {
+  if ((findingCount ?? 0) > 0) return true
+  if (action.summary.overallStatus === "fail") return true
+  return (action.summary.labeledItems ?? 0) > 0
+}
+
 // User-facing one-liner for the sidebar Quality section. The verbose internal
 // vocabulary (replay readiness, label coverage, capture evidence) stays inside
 // the /quality dialog via renderSessionQualityInlineSummary; the sidebar gets

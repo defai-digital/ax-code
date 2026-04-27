@@ -20,6 +20,7 @@ import { computeSidebarWidth } from "./layout"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
 import {
+  hasSidebarSignal,
   renderSessionChecksSummary,
   renderSessionDebugCasesSummary,
   renderSessionQualitySidebarLine,
@@ -43,13 +44,31 @@ export function activityColor(status: string, theme: ReturnType<typeof useTheme>
   }
 }
 
+function mcpStatusColor(theme: ReturnType<typeof useTheme>["theme"], status: string) {
+  switch (status) {
+    case "connected":
+      return theme.success
+    case "failed":
+      return theme.error
+    case "needs_auth":
+      return theme.warning
+    case "needs_client_registration":
+      return theme.error
+    case "disabled":
+      return theme.textMuted
+    default:
+      return theme.textMuted
+  }
+}
+
 function qualityColor(
   status: SyncedSessionQualityReadiness["overallStatus"],
   theme: ReturnType<typeof useTheme>["theme"],
 ) {
   if (status === "pass") return theme.success
   if (status === "warn") return theme.warning
-  return theme.error
+  if (status === "fail") return theme.error
+  return theme.textMuted
 }
 
 function sidebarStatusText(input: { status: FooterSessionStatus; hasMessages: boolean; now: number }) {
@@ -60,7 +79,7 @@ function sidebarStatusText(input: { status: FooterSessionStatus; hasMessages: bo
 
   if (input.status.type === "retry") {
     return {
-      label: "Retrying...",
+      label: view.label ?? "Retrying",
       stale: false,
     }
   }
@@ -92,6 +111,19 @@ function sidebarStatusText(input: { status: FooterSessionStatus; hasMessages: bo
   }
 }
 
+function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
+  if (!value || typeof value !== "object") return false
+
+  const status = value as Record<string, unknown>
+  if (status.type === "idle") return true
+  if (status.type === "retry") {
+    return typeof status.attempt === "number" && typeof status.message === "string" && typeof status.next === "number"
+  }
+  if (status.type === "busy") return true
+
+  return false
+}
+
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
   const { theme } = useTheme()
@@ -101,19 +133,22 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
-  const status = createMemo<FooterSessionStatus>(
-    () => (sync.data.session_status?.[props.sessionID] as FooterSessionStatus | undefined) ?? { type: "idle" },
-  )
+  const status = createMemo<FooterSessionStatus>(() => {
+    const candidate = sync.data.session_status?.[props.sessionID]
+    return isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
+  })
   const [statusTick, setStatusTick] = createSignal(0)
   const dimensions = useTerminalDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
 
   createEffect(() => {
-    const current = status()
-    if (current.type === "idle") return
+    const statusType = status().type
+    if (statusType === "idle") return
     const timer = setInterval(() => setStatusTick((tick) => tick + 1), 30_000)
     onCleanup(() => clearInterval(timer))
   })
+
+  const todoRemaining = createMemo(() => todo().filter((item) => item.status !== "completed").length)
 
   const [expanded, setExpanded] = createStore({
     mcp: true,
@@ -180,6 +215,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     }),
   )
   const findingCounts = createMemo(() => countFindingsByWorkflow(risk()?.findings ?? []))
+  // Only surface workflows that have a user-actionable signal — see
+  // hasSidebarSignal. The /quality dialog still uses qualityActions() directly.
+  const sidebarQualityActions = createMemo(() =>
+    qualityActions().filter((action) => hasSidebarSignal(action, findingCounts()[action.workflow]?.total)),
+  )
   const checksSummary = createMemo(() => renderSessionChecksSummary(risk()?.envelopes ?? []))
   const debugCasesSummary = createMemo(() =>
     renderSessionDebugCasesSummary({
@@ -272,20 +312,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     <For each={mcpEntries()}>
                       {([key, item]) => (
                         <box flexDirection="row" gap={1}>
-                          <text
-                            flexShrink={0}
-                            style={{
-                              fg: (
-                                {
-                                  connected: theme.success,
-                                  failed: theme.error,
-                                  disabled: theme.textMuted,
-                                  needs_auth: theme.warning,
-                                  needs_client_registration: theme.error,
-                                } as Record<string, typeof theme.success>
-                              )[item.status],
-                            }}
-                          >
+                          <text flexShrink={0} style={{ fg: mcpStatusColor(theme, item.status) }}>
                             •
                           </text>
                           <text fg={theme.text} wrapMode="word">
@@ -488,6 +515,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     </Show>
                     <text fg={theme.text}>
                       <b>Todo</b>
+                      <Show when={!expanded.todo}>
+                        <span style={{ fg: theme.textMuted }}> ({todoRemaining()} remaining)</span>
+                      </Show>
                     </text>
                   </box>
                   <box border={["top"]} borderColor={theme.borderSubtle} />
@@ -496,7 +526,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   </Show>
                 </box>
               </Show>
-              <Show when={qualityActions().length > 0}>
+              <Show when={sidebarQualityActions().length > 0}>
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
@@ -512,7 +542,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     </text>
                   </box>
                   <box border={["top"]} borderColor={theme.borderSubtle} />
-                  <For each={qualityActions()}>
+                  <For each={sidebarQualityActions()}>
                     {(action) => (
                       <box
                         flexDirection="row"

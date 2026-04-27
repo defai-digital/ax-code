@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import {
   findSessionQualityAction,
+  hasSidebarSignal,
   renderSessionChecksSummary,
   renderSessionQualityBrief,
   renderSessionQualityInlineSummary,
@@ -1185,6 +1186,113 @@ describe("tui session quality actions", () => {
       expect(line).not.toContain("replay readiness")
       expect(line).not.toContain("capture evidence")
       expect(line).not.toContain("benchmark")
+    })
+  })
+
+  describe("hasSidebarSignal", () => {
+    test("hides workflows with only baseline warns and no labels or findings", () => {
+      // Typical ax-code coding session: anchor + evidence pass, but
+      // label-coverage and benchmark-readiness perpetually warn because no
+      // one labels artifacts during ordinary use. Should not surface.
+      const action = sessionQualityActions({
+        sessionID: "ses_baseline",
+        quality: {
+          review: {
+            workflow: "review",
+            overallStatus: "warn",
+            readyForBenchmark: false,
+            labeledItems: 0,
+            resolvedLabeledItems: 0,
+            unresolvedLabeledItems: 0,
+            missingLabels: 3,
+            totalItems: 3,
+            nextAction: null,
+            gates: [
+              { name: "exportable-session-shape", status: "pass", detail: "ok" },
+              { name: "workflow-evidence-present", status: "pass", detail: "ok" },
+              { name: "label-coverage", status: "warn", detail: "no labels recorded" },
+              { name: "benchmark-readiness", status: "warn", detail: "no resolved labels yet" },
+            ],
+          },
+          debug: null,
+        },
+      })[0]!
+      expect(hasSidebarSignal(action)).toBe(false)
+      expect(hasSidebarSignal(action, 0)).toBe(false)
+    })
+
+    test("shows workflow when the user has begun labeling artifacts", () => {
+      const action = sessionQualityActions({
+        sessionID: "ses_labels",
+        quality: {
+          review: {
+            workflow: "review",
+            overallStatus: "warn",
+            readyForBenchmark: false,
+            labeledItems: 1,
+            resolvedLabeledItems: 0,
+            unresolvedLabeledItems: 1,
+            missingLabels: 2,
+            totalItems: 3,
+            nextAction: null,
+            gates: [{ name: "label-coverage", status: "warn", detail: "1 labeled, 2 missing" }],
+          },
+          debug: null,
+        },
+      })[0]!
+      expect(hasSidebarSignal(action)).toBe(true)
+    })
+
+    test("shows workflow when severity-graded findings exist for it", () => {
+      const action = sessionQualityActions({
+        sessionID: "ses_findings",
+        quality: {
+          review: {
+            workflow: "review",
+            overallStatus: "warn",
+            readyForBenchmark: false,
+            labeledItems: 0,
+            resolvedLabeledItems: 0,
+            unresolvedLabeledItems: 0,
+            missingLabels: 0,
+            totalItems: 0,
+            nextAction: null,
+            gates: [],
+          },
+          debug: null,
+        },
+      })[0]!
+      expect(hasSidebarSignal(action, 2)).toBe(true)
+      expect(hasSidebarSignal(action, 0)).toBe(false)
+    })
+
+    test("shows workflow when overall status is fail even without labels or findings", () => {
+      const action = sessionQualityActions({
+        sessionID: "ses_failed_gate",
+        quality: {
+          review: {
+            workflow: "review",
+            overallStatus: "fail",
+            readyForBenchmark: false,
+            labeledItems: 0,
+            resolvedLabeledItems: 0,
+            unresolvedLabeledItems: 0,
+            missingLabels: 0,
+            totalItems: 0,
+            nextAction: "Check review replay readiness gates before benchmarking.",
+            gates: [
+              {
+                name: "exportable-session-shape",
+                status: "fail",
+                detail: "no anchor items exported for workflow review",
+              },
+            ],
+          },
+          debug: null,
+        },
+      })[0]!
+      expect(hasSidebarSignal(action)).toBe(true)
+      expect(hasSidebarSignal(action, 0)).toBe(true)
     })
   })
 })
