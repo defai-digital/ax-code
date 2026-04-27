@@ -143,3 +143,43 @@ describe("isolation.assertBash", () => {
     ).toThrow("Bash command targets path outside workspace boundary")
   })
 })
+
+describe("isolation.DeniedError", () => {
+  test("carries the offending resolved path so callers can scope a bypass", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    try {
+      Isolation.assertWrite(state, "/tmp/other/file.txt", root, worktree)
+      throw new Error("expected DeniedError")
+    } catch (e) {
+      expect(e).toBeInstanceOf(Isolation.DeniedError)
+      const err = e as Isolation.DeniedError
+      expect(err.reason).toBe("write")
+      expect(err.path).toBe(path.resolve("/tmp/other/file.txt"))
+    }
+  })
+})
+
+describe("isolation.bypass", () => {
+  test("scoped per-path bypass allows the listed path but still rejects others", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    const approved = path.resolve("/tmp/approved/x.txt")
+    const denied = path.resolve("/tmp/other/y.txt")
+    const withBypass: Isolation.State = { ...state, bypass: [approved] }
+    expect(() => Isolation.assertWrite(withBypass, approved, root, worktree)).not.toThrow()
+    expect(() => Isolation.assertWrite(withBypass, denied, root, worktree)).toThrow(
+      "Path is outside workspace boundary",
+    )
+  })
+
+  test("bypass also covers protected paths and bash targets, but only the listed entries", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    const protectedPath = path.resolve(root, ".git/config")
+    const otherProtected = path.resolve(root, ".ax-code/secret")
+    const withBypass: Isolation.State = { ...state, bypass: [protectedPath] }
+    expect(() => Isolation.assertWrite(withBypass, protectedPath, root, worktree)).not.toThrow()
+    expect(() => Isolation.assertBash(withBypass, root, root, worktree, [protectedPath])).not.toThrow()
+    expect(() => Isolation.assertWrite(withBypass, otherProtected, root, worktree)).toThrow(
+      "Path is protected by isolation policy",
+    )
+  })
+})

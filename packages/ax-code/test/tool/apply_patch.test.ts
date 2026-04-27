@@ -331,6 +331,35 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test.skipIf(process.platform === "win32")("rejects add when a parent directory is a symlink escaping the project", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const outside = path.join(fixture.path, "..", `apply-patch-add-outside-${Date.now()}`)
+        await fs.mkdir(outside, { recursive: true })
+        const linkDir = path.join(fixture.path, "linkdir")
+        await fs.symlink(outside, linkDir)
+        // The new file's path is inside the project at the surface
+        // (linkdir/new.txt) but linkdir is a symlink to a directory
+        // outside the project. Without the parent-realpath check this
+        // would silently write to the outside directory.
+        const patchText =
+          "*** Begin Patch\n*** Add File: linkdir/new.txt\n+hello\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow(
+          "Access denied: parent directory escapes project directory",
+        )
+        // The outside directory must remain empty.
+        const entries = await fs.readdir(outside)
+        expect(entries.length).toBe(0)
+        await fs.rm(outside, { recursive: true, force: true })
+      },
+    })
+  })
+
   test.skipIf(process.platform === "win32")("rejects move destination symlink that escapes the project", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

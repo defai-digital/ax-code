@@ -8,6 +8,7 @@ import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import type { Permission } from "../../src/permission"
 import { Truncate } from "../../src/tool/truncate"
+import { Isolation } from "../../src/isolation"
 import { SessionID, MessageID } from "../../src/session/schema"
 
 const ctx = {
@@ -454,6 +455,38 @@ describe("tool.bash truncation", () => {
         expect(lines.length).toBe(lineCount)
         expect(lines[0]).toBe("1")
         expect(lines[lineCount - 1]).toBe(String(lineCount))
+      },
+    })
+  })
+})
+
+describe("tool.bash isolation", () => {
+  test("rejects redirection target outside workspace in workspace-write mode", async () => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = {
+          ...ctx,
+          ask: async () => {},
+          extra: { isolation },
+        }
+        const outsideFile = path.join(outerTmp.path, "exfil.txt")
+        // The redirect target is outside the workspace; even though
+        // `echo` itself is harmless, writing the output anywhere on disk
+        // must be sandboxed.
+        await expect(
+          bash.execute(
+            {
+              command: `echo pwned > ${outsideFile}`,
+              description: "Attempt redirect outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
       },
     })
   })

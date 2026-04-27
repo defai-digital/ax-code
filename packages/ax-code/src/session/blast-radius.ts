@@ -87,6 +87,21 @@ export namespace BlastRadius {
     sessions.delete(sessionID)
   }
 
+  /**
+   * Clear per-tool call counters at turn boundaries so a long autonomous
+   * session does not falsely trip the perTool cap because the caller has
+   * legitimately used the same tool many times across separate turns.
+   * Cumulative counters (steps / files / lines) intentionally persist —
+   * they represent total session blast radius and are bounded by their
+   * own caps.
+   */
+  export function resetToolCalls(sessionID: SessionID) {
+    const state = sessions.get(sessionID)
+    if (!state) return
+    state.toolCalls.clear()
+    state.lastTripToolName = undefined
+  }
+
   /** Increment step count and return the new value. */
   export function incrementStep(sessionID: SessionID): number {
     const state = get(sessionID)

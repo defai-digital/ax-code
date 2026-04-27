@@ -159,6 +159,11 @@ export namespace SessionProcessor {
           // limits for long refactors without code changes.
           const caps = (await Config.get()).experimental?.autonomous_caps
           if (caps) BlastRadius.get(input.sessionID, caps)
+          // Per-tool counters reset every turn — tool-call cap is meant
+          // to catch a single runaway loop, not the cumulative total
+          // across many user turns. Cumulative caps (steps/files/lines)
+          // intentionally do not reset.
+          BlastRadius.resetToolCalls(input.sessionID)
         }
         while (true) {
           blocked = false

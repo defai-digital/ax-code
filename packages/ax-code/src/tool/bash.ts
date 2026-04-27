@@ -249,6 +249,31 @@ export const BashTool = Tool.define("bash", async () => {
         if (command.length) foundCommands = true
       }
 
+      // Redirection targets (`> /etc/x`, `tee /etc/x`-style file_redirect)
+      // must be sandboxed: in workspace-write mode the model could
+      // otherwise overwrite arbitrary files outside the workspace through
+      // a stdout redirect that the per-command path scan ignored.
+      for (const redirect of tree.rootNode.descendantsOfType("file_redirect")) {
+        if (!redirect) continue
+        for (let i = 0; i < redirect.childCount; i++) {
+          const child = redirect.child(i)
+          if (!child) continue
+          if (!["word", "string", "raw_string", "concatenation"].includes(child.type)) continue
+          const target = child.text.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
+          // Skip command substitution / fd dup (&1 etc.) — opaque or non-path.
+          if (!target || /\$\(|\$\{|`|^&/.test(target)) continue
+          const resolved = await fs.realpath(path.resolve(cwd, target)).catch(() => path.resolve(cwd, target))
+          if (!resolved) continue
+          const normalized =
+            process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
+          resolvedPaths.add(normalized)
+          if (!Instance.containsPath(normalized)) {
+            const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
+            directories.add(dir)
+          }
+        }
+      }
+
       Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
 
       if (directories.size > 0) {

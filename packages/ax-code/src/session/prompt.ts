@@ -1084,12 +1084,20 @@ export namespace SessionPrompt {
     if (!_schemaCache) _schemaCache = new Map()
     const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
 
-    const context = (args: any, options: ToolCallOptions): Tool.Context => ({
+    const context = (
+      args: any,
+      options: ToolCallOptions,
+      isolationOverride?: Isolation.State,
+    ): Tool.Context => ({
       sessionID: input.session.id,
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
-      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, isolation },
+      extra: {
+        model: input.model,
+        bypassAgentCheck: input.bypassAgentCheck,
+        isolation: isolationOverride ?? isolation,
+      },
       agent: input.agent.name,
       messages: input.messages,
       metadata: async (val: { title?: string; metadata?: any }) => {
@@ -1166,26 +1174,71 @@ export namespace SessionPrompt {
               args,
             },
           )
-          let result: Awaited<ReturnType<typeof item.execute>>
-          try {
-            result = await item.execute(args, ctx)
-          } catch (e) {
-            if (e instanceof Isolation.DeniedError) {
+          let result: Awaited<ReturnType<typeof item.execute>> | undefined
+          // Per-path bypass: when the user approves an isolation_escalation
+          // for one path inside a multi-path tool call (e.g. apply_patch
+          // with several hunks), we must NOT exempt every other path in
+          // the same call. Accumulate approved paths and re-run the tool;
+          // if a later path also fails, ask again. Cap retries to bound
+          // the loop in the rare case the tool is non-deterministic about
+          // which path it touches first.
+          //
+          // Unscoped denials (network — `assertNetwork` has no `e.path`)
+          // fall back to the legacy ask-once + full-bypass semantics so
+          // tools like webfetch can still be escalated.
+          const bypass: string[] = []
+          let unscopedBypass = false
+          let lastError: Isolation.DeniedError | undefined
+          for (let attempt = 0; attempt < 16; attempt++) {
+            let attemptCtx = ctx
+            if (attempt > 0) {
+              if (unscopedBypass) {
+                attemptCtx = context(args, options, {
+                  mode: "full-access",
+                  network: true,
+                  protected: [],
+                })
+              } else if (ctx.extra?.isolation) {
+                attemptCtx = context(args, options, { ...ctx.extra.isolation, bypass: [...bypass] })
+              }
+            }
+            try {
+              result = await item.execute(args, attemptCtx)
+              break
+            } catch (e) {
+              if (!(e instanceof Isolation.DeniedError)) throw e
               if (ctx.extra?.isolation?.mode === "read-only")
                 throw new Error(`Tool denied in read-only mode: ${e.reason}`)
+              if (!e.path) {
+                if (unscopedBypass) {
+                  lastError = e
+                  throw e
+                }
+                await ctx.ask({
+                  permission: "isolation_escalation",
+                  patterns: [e.message],
+                  always: [],
+                  metadata: { reason: e.reason, requireInteractive: true },
+                })
+                unscopedBypass = true
+                lastError = e
+                continue
+              }
+              if (bypass.includes(e.path)) {
+                lastError = e
+                throw e
+              }
               await ctx.ask({
                 permission: "isolation_escalation",
                 patterns: [e.message],
                 always: [],
-                metadata: { reason: e.reason, requireInteractive: true },
+                metadata: { reason: e.reason, path: e.path, requireInteractive: true },
               })
-              const bypassed = context(args, options)
-              bypassed.extra = { ...bypassed.extra, isolation: undefined }
-              result = await item.execute(args, bypassed)
-            } else {
-              throw e
+              bypass.push(e.path)
+              lastError = e
             }
           }
+          if (result === undefined) throw lastError ?? new Error("Tool execution exhausted isolation retries")
           const output = {
             ...result,
             attachments: result.attachments?.map((attachment) => ({

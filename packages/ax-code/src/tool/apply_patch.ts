@@ -88,6 +88,18 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
       switch (hunk.type) {
         case "add": {
+          // Defense in depth against symlinked parent dirs: a fresh-add
+          // path doesn't exist yet so assertSymlinkInsideProject only
+          // walks ancestors; if a deep parent dir is itself a symlink
+          // pointing outside the project, realpath() resolves it and we
+          // must reject. (Mirrors the move_path branch in `update`.)
+          if (Filesystem.contains(Instance.directory, filePath)) {
+            const parentDir = path.dirname(filePath)
+            const realParent = await fs.realpath(parentDir).catch(() => parentDir)
+            if (!Filesystem.contains(Instance.directory, realParent)) {
+              throw new Error("Access denied: parent directory escapes project directory")
+            }
+          }
           const existed = await fs
             .stat(filePath)
             .then((stats) => {

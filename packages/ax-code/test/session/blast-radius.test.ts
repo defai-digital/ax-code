@@ -142,6 +142,33 @@ describe("BlastRadius", () => {
     expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
   })
 
+  test("resetToolCalls clears per-tool counters but preserves cumulative caps", () => {
+    BlastRadius.get(SID, { steps: 1000, files: 1000, lines: 100_000, perTool: { bash: 5 } })
+    BlastRadius.incrementStep(SID)
+    BlastRadius.recordWrite(SID, "/a/b.ts", 7)
+    for (let i = 0; i < 4; i++) BlastRadius.incrementToolCall(SID, "bash")
+    expect(BlastRadius.get(SID).toolCalls.get("bash")).toBe(4)
+
+    BlastRadius.resetToolCalls(SID)
+    const state = BlastRadius.get(SID)
+    expect(state.toolCalls.size).toBe(0)
+    // Cumulative counters are intentionally preserved across turns.
+    expect(state.steps).toBe(1)
+    expect(state.lines).toBe(7)
+    expect(state.files.size).toBe(1)
+
+    // After reset the bash cap is fresh, so a new burst starts from zero.
+    for (let i = 0; i < 5; i++) BlastRadius.incrementToolCall(SID, "bash")
+    expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
+    BlastRadius.incrementToolCall(SID, "bash")
+    expect(BlastRadius.checkAfterIncrement(SID)?.kind).toBe("tool_calls")
+  })
+
+  test("resetToolCalls is a no-op when no state exists", () => {
+    BlastRadius.reset(SID)
+    expect(() => BlastRadius.resetToolCalls(SID)).not.toThrow()
+  })
+
   test("perTool override merges into default seed instead of replacing it (regression)", () => {
     // A user who sets only `perTool: { bash: 0 }` to disable the bash
     // cap must not lose the seeded edit/write/apply_patch caps. The

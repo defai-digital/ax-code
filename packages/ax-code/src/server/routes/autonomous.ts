@@ -33,13 +33,13 @@ export const AutonomousRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        // Check env var first (runtime override), then fall back to persisted config
-        if (process.env["AX_CODE_AUTONOMOUS"] !== undefined) {
-          return c.json({ enabled: process.env["AX_CODE_AUTONOMOUS"] === "true" })
-        }
+        // Always reconcile from persisted config so an external edit to
+        // ax-code.json propagates without a server restart. The env var
+        // is the runtime authority for in-process readers (Permission /
+        // Session / Question), so keep it in sync — but never let a
+        // stale env reading short-circuit the config read.
         const config = await readProjectConfig()
         const enabled = config?.autonomous !== false
-        // Cache in env var for subsequent reads and processor access
         process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
         return c.json({ enabled })
       },
