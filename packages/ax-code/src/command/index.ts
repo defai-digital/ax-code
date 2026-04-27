@@ -91,7 +91,7 @@ export namespace Command {
           description: "create/update AGENTS.md",
           source: "command",
           get template() {
-            return PROMPT_INITIALIZE.replace("${path}", ctx.worktree)
+            return PROMPT_INITIALIZE.replace("${path}", () => ctx.worktree)
           },
           hints: hints(PROMPT_INITIALIZE),
         }
@@ -109,10 +109,7 @@ export namespace Command {
               // special patterns, which would mangle a worktree path that
               // contains literal $ characters or any policy content with the
               // same.
-              return PROMPT_REVIEW.replace("${path}", () => ctx.worktree).replace(
-                "${review_policy}",
-                () => policyText,
-              )
+              return PROMPT_REVIEW.replace("${path}", () => ctx.worktree).replace("${review_policy}", () => policyText)
             })()
           },
           subtask: true,
@@ -123,7 +120,7 @@ export namespace Command {
           description: "generate an Architecture Decision Record",
           source: "command",
           get template() {
-            return PROMPT_ADR.replace("${path}", ctx.worktree)
+            return PROMPT_ADR.replace("${path}", () => ctx.worktree)
           },
           hints: hints(PROMPT_ADR),
         }
@@ -132,7 +129,7 @@ export namespace Command {
           description: "generate an Impact Assessment for a proposed change",
           source: "command",
           get template() {
-            return PROMPT_IMPACT.replace("${path}", ctx.worktree)
+            return PROMPT_IMPACT.replace("${path}", () => ctx.worktree)
           },
           hints: hints(PROMPT_IMPACT),
         }
@@ -141,7 +138,7 @@ export namespace Command {
           description: "generate a Product Requirements Document for a feature",
           source: "command",
           get template() {
-            return PROMPT_PRD.replace("${path}", ctx.worktree)
+            return PROMPT_PRD.replace("${path}", () => ctx.worktree)
           },
           hints: hints(PROMPT_PRD),
         }
