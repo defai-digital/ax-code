@@ -264,7 +264,11 @@ export namespace Agent {
               description:
                 "Security Auditor agent. Scans code for vulnerabilities, secrets, OWASP issues, and compliance problems. Read-only — reports findings without modifying code.",
               prompt: PROMPT_SECURITY,
-              permission: Permission.merge(defaults, policy("security"), readOnlyWithWeb(whitelistedDirs), user),
+              // No readOnly preset — auto-routing can land users on this agent for
+              // mixed analyze-then-fix asks ("fix the SQL injection"); blocking edits
+              // would turn misroutes into dead-ends. Specialist personality lives in
+              // the prompt, not in artificial permission constraints.
+              permission: Permission.merge(defaults, policy("security"), user),
               options: {},
               mode: "primary",
               native: true,
@@ -277,7 +281,8 @@ export namespace Agent {
               description:
                 "Architecture Analyst agent. Analyzes system design, dependencies, coupling, patterns, and suggests structural improvements. Read-only — analyzes without modifying code.",
               prompt: PROMPT_ARCHITECT,
-              permission: Permission.merge(defaults, policy("architect"), readOnlyWithWeb(whitelistedDirs), user),
+              // No readOnly preset — see security agent for rationale.
+              permission: Permission.merge(defaults, policy("architect"), user),
               options: {},
               mode: "primary",
               native: true,
@@ -311,7 +316,8 @@ export namespace Agent {
               description:
                 "Performance Analyst agent. Finds bottlenecks, inefficient algorithms, memory issues, and optimization opportunities. Read-only — benchmarks and reports without modifying code.",
               prompt: PROMPT_PERF,
-              permission: Permission.merge(defaults, policy("perf"), readOnlyNoWeb(whitelistedDirs), user),
+              // No readOnly preset — see security agent for rationale.
+              permission: Permission.merge(defaults, policy("perf"), user),
               options: {},
               mode: "primary",
               native: true,

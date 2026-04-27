@@ -41,15 +41,28 @@ export function routeNote(msg: UserMessage, parts: Part[], agents?: AgentInfo[])
 export function routeEvent(row: { event_data: ReplayEvent; time_created: number }, agents?: AgentInfo[]) {
   const event = row.event_data
   if (event.type !== "agent.route") return
-  // Only "complexity" events are emitted now; legacy "switch"/"delegate" rows from
-  // older sessions are tolerated but rendered as the same fast-model indicator
-  // (the agent-routing feature was removed; see src/agent/router.ts).
+  const mode = event.routeMode ?? "switch"
+
+  if (mode === "complexity") {
+    return {
+      id: `route:${row.time_created}:complexity`,
+      mode,
+      icon: "⚡",
+      title: "Fast model",
+      detail: `simple task · ${agentLabel(event.fromAgent, agents)}`,
+      time: row.time_created,
+    }
+  }
+
+  const to = agentLabel(event.toAgent, agents)
+  const from = agentLabel(event.fromAgent, agents)
+  const matched = event.matched?.length ? ` · ${event.matched.join(", ")}` : ""
   return {
-    id: `route:${row.time_created}:complexity`,
-    mode: event.routeMode ?? "complexity",
-    icon: "⚡",
-    title: "Fast model",
-    detail: `simple task · ${agentLabel(event.fromAgent, agents)}`,
+    id: `route:${row.time_created}:${event.toAgent}`,
+    mode: "switch" as const,
+    icon: "⇄",
+    title: `Switched to ${to}`,
+    detail: `From ${from}${matched}`,
     time: row.time_created,
   }
 }
