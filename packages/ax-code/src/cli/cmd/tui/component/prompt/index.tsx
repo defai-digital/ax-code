@@ -359,7 +359,6 @@ export function Prompt(props: PromptProps) {
     promptFooterLayout({
       contentWidth: promptContentWidth(),
       toggleWidth:
-        footerToggleLabel("Fast-model", sync.data.smartLlm).length +
         footerToggleLabel("Autonomous", sync.data.autonomous).length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
@@ -1649,13 +1648,6 @@ export function Prompt(props: PromptProps) {
               flexShrink={0}
             >
               <box flexDirection="row" flexShrink={0}>
-                {footerToggleChip({
-                  label: "Fast-model",
-                  active: sync.data.smartLlm,
-                  activeFg: theme.primary,
-                  inactiveFg: theme.textMuted,
-                  onMouseUp: () => command.trigger("app.toggle.smart_llm"),
-                })}
                 {footerToggleChip({
                   label: "Autonomous",
                   active: sync.data.autonomous,
