@@ -365,7 +365,6 @@ export function Prompt(props: PromptProps) {
         footerToggleLabel("Autonomous", sync.data.autonomous).length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
-      commandsWidth: footerHintWidth(keybind.print("command_list"), "commands"),
       agentsWidth: footerHintWidth(keybind.print("agent_cycle"), "agents"),
       variantsWidth:
         local.model.variant.list().length > 0 ? footerHintWidth(keybind.print("variant_cycle"), "variants") : 0,
@@ -1683,10 +1682,7 @@ export function Prompt(props: PromptProps) {
               <Show
                 when={
                   !footerLayout().stacked &&
-                  (footerLayout().showCommands ||
-                    footerLayout().showAgents ||
-                    footerLayout().showVariants ||
-                    footerLayout().showShellHint)
+                  (footerLayout().showAgents || footerLayout().showVariants || footerLayout().showShellHint)
                 }
               >
                 <text fg={theme.borderSubtle} flexShrink={0}>
@@ -1694,12 +1690,7 @@ export function Prompt(props: PromptProps) {
                 </text>
               </Show>
               <Show
-                when={
-                  footerLayout().showCommands ||
-                  footerLayout().showAgents ||
-                  footerLayout().showVariants ||
-                  footerLayout().showShellHint
-                }
+                when={footerLayout().showAgents || footerLayout().showVariants || footerLayout().showShellHint}
               >
                 <box gap={2} flexDirection="row" flexShrink={0}>
                   <Switch>
@@ -1712,11 +1703,6 @@ export function Prompt(props: PromptProps) {
                       <Show when={footerLayout().showAgents}>
                         <text fg={theme.text}>
                           {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
-                        </text>
-                      </Show>
-                      <Show when={footerLayout().showCommands}>
-                        <text fg={theme.text}>
-                          {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
                         </text>
                       </Show>
                     </Match>

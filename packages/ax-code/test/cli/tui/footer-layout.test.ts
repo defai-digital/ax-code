@@ -7,14 +7,12 @@ describe("promptFooterLayout", () => {
       contentWidth: 48,
       toggleWidth: 39,
       mode: "normal",
-      commandsWidth: footerHintWidth("/", "commands"),
       agentsWidth: footerHintWidth("tab", "agents"),
       variantsWidth: footerHintWidth("shift-tab", "variants"),
       shellWidth: footerHintWidth("esc", "exit shell mode"),
     })
 
     expect(layout.stacked).toBe(true)
-    expect(layout.showCommands).toBe(false)
     expect(layout.showAgents).toBe(false)
     expect(layout.showVariants).toBe(false)
   })
@@ -24,14 +22,12 @@ describe("promptFooterLayout", () => {
       contentWidth: 124,
       toggleWidth: 39,
       mode: "normal",
-      commandsWidth: footerHintWidth("/", "commands"),
       agentsWidth: footerHintWidth("tab", "agents"),
       variantsWidth: footerHintWidth("shift-tab", "variants"),
       shellWidth: footerHintWidth("esc", "exit shell mode"),
     })
 
     expect(layout.stacked).toBe(false)
-    expect(layout.showCommands).toBe(true)
     expect(layout.showAgents).toBe(true)
     expect(layout.showVariants).toBe(true)
   })
@@ -41,7 +37,6 @@ describe("promptFooterLayout", () => {
       contentWidth: 92,
       toggleWidth: 39,
       mode: "shell",
-      commandsWidth: footerHintWidth("/", "commands"),
       agentsWidth: footerHintWidth("tab", "agents"),
       variantsWidth: 0,
       shellWidth: footerHintWidth("esc", "exit shell mode"),
@@ -49,7 +44,6 @@ describe("promptFooterLayout", () => {
 
     expect(layout.stacked).toBe(true)
     expect(layout.showShellHint).toBe(true)
-    expect(layout.showCommands).toBe(false)
     expect(layout.showAgents).toBe(false)
     expect(layout.showVariants).toBe(false)
   })
