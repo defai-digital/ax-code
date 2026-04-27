@@ -49,25 +49,21 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
   execute: async (args, ctx) => {
     const sessionID = ctx.sessionID as SessionID
 
-    // Strict-validate caseId belongs to this session.
-    const knownCases = SessionDebug.caseIdSet(sessionID)
-    if (!knownCases.has(args.caseId)) {
+    // Strict-validate caseId AND every evidenceRef. Use indexedIds() so we
+    // walk the session event log once for both checks (caseIdSet +
+    // evidenceIdSet would walk it twice).
+    const evidenceRefs = args.evidenceRefs ?? []
+    const { caseIds, evidenceIds } = SessionDebug.indexedIds(sessionID)
+    if (!caseIds.has(args.caseId)) {
       throw new Error(
         `caseId references an unknown debug case: ${args.caseId} (no DebugCase with this id was opened in session ${ctx.sessionID})`,
       )
     }
-
-    // Strict-validate evidenceRefs (when provided) all exist in the
-    // session. Same rationale as register_finding's verification refs.
-    const evidenceRefs = args.evidenceRefs ?? []
-    if (evidenceRefs.length > 0) {
-      const knownEvidence = SessionDebug.evidenceIdSet(sessionID)
-      for (const id of evidenceRefs) {
-        if (!knownEvidence.has(id)) {
-          throw new Error(
-            `evidenceRefs references an unknown evidence id: ${id} (no DebugEvidence with this id was captured in session ${ctx.sessionID})`,
-          )
-        }
+    for (const id of evidenceRefs) {
+      if (!evidenceIds.has(id)) {
+        throw new Error(
+          `evidenceRefs references an unknown evidence id: ${id} (no DebugEvidence with this id was captured in session ${ctx.sessionID})`,
+        )
       }
     }
 

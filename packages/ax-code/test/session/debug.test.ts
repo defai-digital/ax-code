@@ -197,6 +197,37 @@ describe("SessionDebug.load", () => {
     })
   })
 
+  test("indexedIds returns both caseIds and evidenceIds in a single walk (matches narrow helpers)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const c = buildCase(session.id, "p")
+        const e = buildEvidence(session.id, c.caseId, "log line")
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        await emit(session.id, tmp.path, { kind: "debug_open_case", metadata: { caseId: c.caseId, debugCase: c.debugCase } })
+        await emit(session.id, tmp.path, { kind: "debug_capture_evidence", metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence } })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const indexed = SessionDebug.indexedIds(session.id)
+        expect(indexed.caseIds.has(c.caseId)).toBe(true)
+        expect(indexed.evidenceIds.has(e.evidenceId)).toBe(true)
+        // the narrow helpers must match what indexedIds returns
+        expect([...SessionDebug.caseIdSet(session.id)].sort()).toEqual([...indexed.caseIds].sort())
+        expect([...SessionDebug.evidenceIdSet(session.id)].sort()).toEqual([...indexed.evidenceIds].sort())
+      },
+    })
+  })
+
   test("caseIdSet returns the full set of opened case ids", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

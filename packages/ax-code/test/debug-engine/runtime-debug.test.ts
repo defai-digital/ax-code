@@ -91,6 +91,14 @@ describe("DebugEvidenceSchema", () => {
   test("rejects empty content", () => {
     expect(() => DebugEvidenceSchema.parse({ ...validEvidence, content: "" })).toThrow()
   })
+
+  test("rejects content exceeding the 200KB safety cap (DoS guard)", () => {
+    const huge = "x".repeat(200_001)
+    expect(() => DebugEvidenceSchema.parse({ ...validEvidence, content: huge })).toThrow()
+    // sanity: just under the cap is fine
+    const justBelow = "x".repeat(200_000)
+    expect(() => DebugEvidenceSchema.parse({ ...validEvidence, content: justBelow })).not.toThrow()
+  })
 })
 
 describe("DebugHypothesisSchema", () => {

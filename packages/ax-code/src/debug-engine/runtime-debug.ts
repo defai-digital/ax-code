@@ -42,6 +42,14 @@ export const DebugCaseSchema = z.object({
 })
 export type DebugCase = z.infer<typeof DebugCaseSchema>
 
+// Soft upper bound on a single evidence record. Logs, stack traces, and
+// graph-query payloads are usually well under this — but a pasted megabyte
+// of CI output would be recorded into the session event log on every call
+// and re-parsed on every SessionDebug.load. 200 KB is generous enough for
+// any realistic log capture and bounded enough to cap the worst-case
+// memory cost of replaying a session.
+const DEBUG_EVIDENCE_CONTENT_MAX = 200_000
+
 export const DebugEvidenceSchema = z.object({
   schemaVersion: z.literal(1),
   evidenceId: z.string().regex(DEBUG_ID_PATTERN, "evidenceId must be 16-char lowercase hex"),
@@ -50,7 +58,7 @@ export const DebugEvidenceSchema = z.object({
   capturedAt: z.string().datetime(),
   // Free-form text. Logs and stack traces are usually multi-line plaintext;
   // graph queries are JSON-serialized payloads. Consumers handle their kind.
-  content: z.string().min(1),
+  content: z.string().min(1).max(DEBUG_EVIDENCE_CONTENT_MAX),
   source: FindingSource,
 })
 export type DebugEvidence = z.infer<typeof DebugEvidenceSchema>

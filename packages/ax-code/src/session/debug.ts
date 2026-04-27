@@ -70,17 +70,32 @@ export namespace SessionDebug {
   // Cheap helpers for the strict validators in debug_capture_evidence /
   // debug_propose_hypothesis — they reject artefacts that reference an
   // id not present in the session.
+  //
+  // Single-call sites (capture_evidence only needs caseIds) keep the
+  // narrow helpers below; callers that need BOTH sets — like
+  // propose_hypothesis, which validates caseId AND every evidenceRef —
+  // must use indexedIds() so we walk the event log once instead of twice.
+
+  export type IndexedIds = {
+    caseIds: Set<string>
+    evidenceIds: Set<string>
+  }
+
+  export function indexedIds(sessionID: SessionID): IndexedIds {
+    const loaded = load(sessionID)
+    const caseIds = new Set<string>()
+    const evidenceIds = new Set<string>()
+    for (const c of loaded.cases) caseIds.add(c.caseId)
+    for (const e of loaded.evidence) evidenceIds.add(e.evidenceId)
+    return { caseIds, evidenceIds }
+  }
 
   export function caseIdSet(sessionID: SessionID): Set<string> {
-    const ids = new Set<string>()
-    for (const c of load(sessionID).cases) ids.add(c.caseId)
-    return ids
+    return indexedIds(sessionID).caseIds
   }
 
   export function evidenceIdSet(sessionID: SessionID): Set<string> {
-    const ids = new Set<string>()
-    for (const e of load(sessionID).evidence) ids.add(e.evidenceId)
-    return ids
+    return indexedIds(sessionID).evidenceIds
   }
 
   // Aggregates per-case status by walking hypotheses. A case is:
