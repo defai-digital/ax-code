@@ -9,10 +9,23 @@ import { Log } from "../util/log"
 
 const log = Log.create({ service: "memory.injector" })
 
+// User-controlled entry text is rendered inside <project-memory>...</project-memory>.
+// If a body contains the literal closing tag, the LLM may interpret content after
+// it as outside the memory block (prompt-injection vector when entries come from
+// imported/automated sources). Escape both opening and closing forms here at the
+// render boundary; on-disk JSON is left untouched.
+const PROJECT_MEMORY_TAG = /<\/?project-memory>/gi
+
+function escapeMemoryTags(text: string): string {
+  return text.replace(PROJECT_MEMORY_TAG, (match) =>
+    match.startsWith("</") ? "[/project-memory]" : "[project-memory]",
+  )
+}
+
 function renderEntry(entry: MemoryEntry): string {
-  const parts = [`- ${entry.name}: ${entry.body}`]
-  if (entry.why) parts.push(`  - Why: ${entry.why}`)
-  if (entry.howToApply) parts.push(`  - Apply: ${entry.howToApply}`)
+  const parts = [`- ${escapeMemoryTags(entry.name)}: ${escapeMemoryTags(entry.body)}`]
+  if (entry.why) parts.push(`  - Why: ${escapeMemoryTags(entry.why)}`)
+  if (entry.howToApply) parts.push(`  - Apply: ${escapeMemoryTags(entry.howToApply)}`)
   return parts.join("\n")
 }
 
