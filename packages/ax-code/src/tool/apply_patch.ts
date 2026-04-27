@@ -284,25 +284,21 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     const appliedChanges: typeof fileChanges = []
     let activeChange: (typeof fileChanges)[number] | undefined
     let activeDirty = false
+    // Rollback errors used to be `.catch()`d and silently logged, leaving
+    // the user with an opaque "patch failed" message and a partially-
+    // rolled-back filesystem. Collect them here so the outer catch can
+    // surface them in the thrown error (BUG-107).
+    const rollbackErrors: Array<{ file: string; error: unknown }> = []
+
     const rollback = async (changes: typeof fileChanges) => {
       for (const change of [...changes].reverse()) {
-        if (change.type === "move" && change.movePath) {
-          const dest = change.movePath
-          const [first, second] = [change.filePath, dest].sort()
-          if (first === second) {
-            await FileTime.withLock(first, async () => {
-              await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-              await fs.writeFile(change.filePath, change.oldContent, "utf-8")
-              if (change.moveExisted) {
-                await fs.mkdir(path.dirname(dest), { recursive: true })
-                await fs.writeFile(dest, change.moveOldContent ?? "", "utf-8")
-                return
-              }
-              await fs.unlink(dest).catch(() => undefined)
-            })
-          } else {
-            await FileTime.withLock(first, async () => {
-              await FileTime.withLock(second, async () => {
+        const target = change.type === "move" ? (change.movePath ?? change.filePath) : change.filePath
+        try {
+          if (change.type === "move" && change.movePath) {
+            const dest = change.movePath
+            const [first, second] = [change.filePath, dest].sort()
+            if (first === second) {
+              await FileTime.withLock(first, async () => {
                 await fs.mkdir(path.dirname(change.filePath), { recursive: true })
                 await fs.writeFile(change.filePath, change.oldContent, "utf-8")
                 if (change.moveExisted) {
@@ -312,20 +308,34 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                 }
                 await fs.unlink(dest).catch(() => undefined)
               })
-            })
+            } else {
+              await FileTime.withLock(first, async () => {
+                await FileTime.withLock(second, async () => {
+                  await fs.mkdir(path.dirname(change.filePath), { recursive: true })
+                  await fs.writeFile(change.filePath, change.oldContent, "utf-8")
+                  if (change.moveExisted) {
+                    await fs.mkdir(path.dirname(dest), { recursive: true })
+                    await fs.writeFile(dest, change.moveOldContent ?? "", "utf-8")
+                    return
+                  }
+                  await fs.unlink(dest).catch(() => undefined)
+                })
+              })
+            }
+            continue
           }
-          continue
+          await FileTime.withLock(change.filePath, async () => {
+            if (!change.existed && change.type === "add") {
+              await fs.unlink(change.filePath).catch(() => undefined)
+              return
+            }
+            await fs.mkdir(path.dirname(change.filePath), { recursive: true })
+            await fs.writeFile(change.filePath, change.oldContent, "utf-8")
+          })
+        } catch (err) {
+          rollbackErrors.push({ file: target, error: err })
+          log.warn("apply_patch rollback failed for file", { file: target, error: err })
         }
-        await FileTime.withLock(change.filePath, async () => {
-          if (!change.existed && change.type === "add") {
-            await fs.unlink(change.filePath).catch(() => undefined)
-            return
-          }
-          await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-          await fs.writeFile(change.filePath, change.oldContent, "utf-8")
-        }).catch((err) => {
-          log.warn("apply_patch rollback failed for file", { file: change.filePath, error: err })
-        })
       }
     }
 
@@ -431,6 +441,18 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     } catch (error) {
       const rollbackChanges = activeChange && activeDirty ? [...appliedChanges, activeChange] : appliedChanges
       await rollback(rollbackChanges)
+      if (rollbackErrors.length > 0) {
+        // Surface partial-rollback to the user instead of silently logging.
+        // The original error is still the proximate cause, but rollback
+        // failures mean the filesystem is in an inconsistent state that
+        // the caller needs to know about (BUG-107).
+        const files = rollbackErrors.map((e) => e.file).join(", ")
+        const wrapped = new Error(
+          `apply_patch failed and rollback was incomplete for: ${files}. Original error: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error },
+        )
+        throw wrapped
+      }
       throw error
     }
 

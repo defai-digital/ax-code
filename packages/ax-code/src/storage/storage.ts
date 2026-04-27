@@ -142,12 +142,32 @@ export namespace Storage {
 
   const state = lazy(async () => {
     const dir = path.join(Global.Path.data, "storage")
+    // Distinguish "first run" (ENOENT) from "corrupt marker" (any other
+    // read/parse failure) so corruption is logged loudly instead of
+    // silently masquerading as a fresh install. Both paths still default
+    // to 0 because current migrations are idempotent — but a future
+    // non-idempotent migration would benefit from a recovery hook hung
+    // off this log line (BUG-105). Also clamp values outside the valid
+    // range [0, MIGRATIONS.length] so a downgraded marker doesn't cause
+    // an out-of-bounds index access at the loop below.
     const migration = await Filesystem.readJson<string>(path.join(dir, "migration"))
       .then((x) => {
         const n = parseInt(x, 10)
-        return Number.isNaN(n) ? 0 : n
+        if (Number.isNaN(n)) {
+          log.warn("storage migration marker not numeric, defaulting to 0", { value: x })
+          return 0
+        }
+        if (n < 0 || n > MIGRATIONS.length) {
+          log.warn("storage migration marker out of range, clamping", { value: n, max: MIGRATIONS.length })
+          return Math.max(0, Math.min(n, MIGRATIONS.length))
+        }
+        return n
       })
-      .catch(() => 0)
+      .catch((err) => {
+        if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return 0
+        log.error("storage migration marker unreadable, replaying from 0", { err })
+        return 0
+      })
     for (let index = migration; index < MIGRATIONS.length; index++) {
       log.info("running migration", { index })
       const migration = MIGRATIONS[index]

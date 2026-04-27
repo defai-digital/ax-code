@@ -434,19 +434,35 @@ export namespace File {
         .split("\n")
         .map((file) => file.trim())
         .filter(Boolean)
-      const untrackedResults = await Promise.all(
-        untrackedFiles.map(async (file) => {
-          try {
-            const content = await Filesystem.readText(path.join(Instance.directory, file))
-            const lines = content.split("\n")
-            return {
-              path: file,
-              added: content.endsWith("\n") ? lines.length - 1 : lines.length,
-              removed: 0,
-              status: "added",
-            } as File.Info
-          } catch {
-            return null
+      // Bounded worker-pool read to avoid fd-exhaustion (EMFILE) and heap
+      // pressure on monorepos / data-science repos with thousands of
+      // untracked files. The previous Promise.all opened one fd per file
+      // simultaneously and read every byte into memory; the macOS default
+      // is 256 fds, so a few hundred untracked files reliably broke the
+      // status bar (BUG-102).
+      const UNTRACKED_CONCURRENCY = 32
+      const queue = [...untrackedFiles]
+      const untrackedResults: (File.Info | null)[] = []
+      const readOne = async (file: string): Promise<File.Info | null> => {
+        try {
+          const content = await Filesystem.readText(path.join(Instance.directory, file))
+          const lines = content.split("\n")
+          return {
+            path: file,
+            added: content.endsWith("\n") ? lines.length - 1 : lines.length,
+            removed: 0,
+            status: "added",
+          }
+        } catch {
+          return null
+        }
+      }
+      await Promise.all(
+        Array.from({ length: Math.min(UNTRACKED_CONCURRENCY, queue.length) }, async () => {
+          while (queue.length > 0) {
+            const file = queue.shift()
+            if (file === undefined) return
+            untrackedResults.push(await readOne(file))
           }
         }),
       )

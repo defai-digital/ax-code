@@ -6,6 +6,7 @@
 import fs from "fs/promises"
 import path from "path"
 import os from "os"
+import { Filesystem } from "../util/filesystem"
 import type { ProjectMemory } from "./types"
 
 function getMemoryPath(projectRoot: string): string {
@@ -64,12 +65,17 @@ async function readWithCache(filePath: string): Promise<string | null> {
 }
 
 /**
- * Save memory to disk
+ * Save memory to disk.
+ *
+ * Uses `Filesystem.write` (atomic tmp + rename) so a process crash mid-write
+ * never leaves `memory.json` in a half-written state. Direct `fs.writeFile`
+ * truncates the target before writing the new bytes, which can corrupt the
+ * file on SIGKILL/OOM/power-loss and cause the next `load()` to throw on
+ * malformed JSON, silently discarding accumulated memory entries (BUG-101).
  */
 export async function save(projectRoot: string, memory: ProjectMemory): Promise<string> {
   const memoryPath = getMemoryPath(projectRoot)
-  await fs.mkdir(path.dirname(memoryPath), { recursive: true })
-  await fs.writeFile(memoryPath, JSON.stringify(memory, null, 2))
+  await Filesystem.write(memoryPath, JSON.stringify(memory, null, 2))
   // Drop the cached entry; the next load() will re-stat and pick up the new mtime.
   readCache.delete(memoryPath)
   return memoryPath
@@ -138,8 +144,8 @@ export async function exists(projectRoot: string): Promise<boolean> {
 
 export async function saveGlobal(memory: ProjectMemory): Promise<string> {
   const memoryPath = getGlobalMemoryPath()
-  await fs.mkdir(path.dirname(memoryPath), { recursive: true })
-  await fs.writeFile(memoryPath, JSON.stringify(memory, null, 2))
+  // Atomic write — see save() above for rationale (BUG-101).
+  await Filesystem.write(memoryPath, JSON.stringify(memory, null, 2))
   readCache.delete(memoryPath)
   return memoryPath
 }
