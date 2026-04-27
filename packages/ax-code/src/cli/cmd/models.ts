@@ -18,7 +18,7 @@ export const ModelsCommand = cmd({
         array: false,
       })
       .option("verbose", {
-        describe: "use more verbose model output (includes metadata like costs)",
+        describe: "use more verbose model output (full model metadata)",
         type: "boolean",
       })
       .option("refresh", {
