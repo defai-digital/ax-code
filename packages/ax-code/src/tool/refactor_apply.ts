@@ -6,6 +6,7 @@ import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
 import { RefactorPlanID } from "../debug-engine/id"
 import { extractFilesFromDiff } from "../debug-engine/analyze-impact"
+import { fromRefactorApplyResult } from "../quality/verification-envelope-builder"
 
 // Tool wrapper around DebugEngine.applySafeRefactor. This is the ONLY
 // DRE tool that writes files. It goes through the permission system
@@ -22,7 +23,10 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
   parameters: z.object({
     planId: z.string().describe("RefactorPlanID returned by refactor_plan"),
     patch: z.string().optional().describe("Unified diff to apply; omit to run pre-flight checks only"),
-    mode: z.enum(MODES).optional().describe("'safe' runs every check (default); 'aggressive' allows skipLint/skipTests"),
+    mode: z
+      .enum(MODES)
+      .optional()
+      .describe("'safe' runs every check (default); 'aggressive' allows skipLint/skipTests"),
     skipLint: z.boolean().optional().describe("Aggressive mode only: skip lint"),
     skipTests: z.boolean().optional().describe("Aggressive mode only: skip tests"),
   }),
@@ -35,9 +39,10 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
     // can execute arbitrary project commands — permission is about
     // intent, not just file writes.
     const patternFiles = args.patch ? extractFilesFromDiff(args.patch) : []
-    const relativePatterns = patternFiles.length > 0
-      ? patternFiles.map((f) => path.isAbsolute(f) ? path.relative(Instance.worktree, f).replaceAll("\\", "/") : f)
-      : ["*"]
+    const relativePatterns =
+      patternFiles.length > 0
+        ? patternFiles.map((f) => (path.isAbsolute(f) ? path.relative(Instance.worktree, f).replaceAll("\\", "/") : f))
+        : ["*"]
     await ctx.ask({
       permission: "edit",
       patterns: relativePatterns,
@@ -79,6 +84,12 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
       for (const f of result.filesChanged) lines.push(`  - ${f}`)
     }
 
+    const verificationEnvelopes = fromRefactorApplyResult({
+      applyResult: result,
+      sessionID: ctx.sessionID,
+      cwd: Instance.worktree,
+    })
+
     return {
       title: result.applied
         ? `refactor_apply ✓ ${result.filesChanged.length} file(s)`
@@ -90,6 +101,7 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
         abortReason: result.abortReason,
         filesChanged: result.filesChanged,
         result,
+        verificationEnvelopes,
       },
     }
   },
