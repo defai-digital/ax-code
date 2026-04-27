@@ -262,6 +262,7 @@ describe("session.prompt helpers", () => {
       skills: async () => "skills",
       environment: async () => ["env"],
       instructions: async () => ["rules"],
+      memory: async () => undefined,
       structuredPrompt: "structured",
     })
     expect(first).toEqual(["env", "skills", "rules", "structured"])
@@ -274,9 +275,70 @@ describe("session.prompt helpers", () => {
       skills: async () => undefined,
       environment: async () => ["other"],
       instructions: async () => ["ignored"],
+      memory: async () => undefined,
       structuredPrompt: "structured",
     })
     expect(second).toEqual(["env", "rules"])
+  })
+
+  test("includes project memory between environment and skills when present", async () => {
+    const cache = {}
+    const result = await systemPrompt({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache,
+      skills: async () => "skills",
+      environment: async () => ["env"],
+      instructions: async () => ["rules"],
+      memory: async () => "<project-memory>...</project-memory>",
+    })
+    expect(result).toEqual(["env", "<project-memory>...</project-memory>", "skills", "rules"])
+  })
+
+  test("memory is recomputed when agent changes", async () => {
+    const cache = {}
+    const seen: string[] = []
+    const memoryFn = async (agent: any) => {
+      seen.push(agent.name)
+      return `memory-for-${agent.name}`
+    }
+    const env = async () => ["env"]
+    const instr = async () => ["rules"]
+
+    await systemPrompt({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache,
+      skills: async () => undefined,
+      environment: env,
+      instructions: instr,
+      memory: memoryFn,
+    })
+    await systemPrompt({
+      agent: { name: "debug" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache,
+      skills: async () => undefined,
+      environment: env,
+      instructions: instr,
+      memory: memoryFn,
+    })
+    // second call with same agent must hit cache
+    await systemPrompt({
+      agent: { name: "debug" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache,
+      skills: async () => undefined,
+      environment: env,
+      instructions: instr,
+      memory: memoryFn,
+    })
+
+    expect(seen).toEqual(["build", "debug"])
   })
 
   test("formats missing agent errors with available names", async () => {

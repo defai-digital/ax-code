@@ -438,6 +438,9 @@ export type SystemCache = {
   skillsAgentKey?: string
   skillsMsgCount?: number
   skillsFn?: Function
+  memory?: string | undefined
+  memoryAgentKey?: string
+  memoryFn?: Function
 }
 
 export async function systemPrompt(input: {
@@ -449,6 +452,7 @@ export async function systemPrompt(input: {
   skills?: typeof SystemPrompt.skills
   environment?: typeof SystemPrompt.environment
   instructions?: typeof InstructionPrompt.system
+  memory?: typeof SystemPrompt.memory
   structuredPrompt?: string
 }) {
   // Cache skills per agent — only recompute when agent changes or new messages arrive
@@ -466,6 +470,17 @@ export async function systemPrompt(input: {
   }
   const skills = input.cache.skills
 
+  // Project memory is per-agent (same allow-list filtering as buildContext),
+  // so the cache key matches `agent.name` and is invalidated together with
+  // the loader function for tests that swap implementations.
+  const memoryFn = input.memory ?? SystemPrompt.memory
+  if (input.cache.memoryAgentKey !== input.agent.name || input.cache.memoryFn !== memoryFn) {
+    input.cache.memory = await memoryFn(input.agent)
+    input.cache.memoryAgentKey = input.agent.name
+    input.cache.memoryFn = memoryFn
+  }
+  const memory = input.cache.memory
+
   const modelKey = `${input.model.providerID}/${input.model.api.id}`
   if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
     input.cache.environment = await (input.environment ?? SystemPrompt.environment)(input.model as any)
@@ -473,7 +488,12 @@ export async function systemPrompt(input: {
   }
   if (!input.cache.instructions) input.cache.instructions = await (input.instructions ?? InstructionPrompt.system)()
 
-  const system = [...input.cache.environment, ...(skills ? [skills] : []), ...input.cache.instructions]
+  const system = [
+    ...input.cache.environment,
+    ...(memory ? [memory] : []),
+    ...(skills ? [skills] : []),
+    ...input.cache.instructions,
+  ]
   if (input.format.type === "json_schema" && input.structuredPrompt) {
     system.push(input.structuredPrompt)
   }

@@ -13,11 +13,17 @@ import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
 import { Skill } from "@/skill"
+import { getContext as getMemoryContext } from "../memory/injector"
 import type { MessageV2 } from "./message-v2"
 
 export namespace SystemPrompt {
   export function provider(model: Provider.Model) {
-    if (model.api.id.includes("gpt-4") || model.api.id.includes("o1") || model.api.id.includes("o3") || model.api.id.includes("gpt"))
+    if (
+      model.api.id.includes("gpt-4") ||
+      model.api.id.includes("o1") ||
+      model.api.id.includes("o3") ||
+      model.api.id.includes("gpt")
+    )
       return [PROMPT_BEAST]
     if (model.api.id.includes("gemini-")) return [PROMPT_GEMINI]
     if (model.api.id.includes("claude")) return [PROMPT_ANTHROPIC]
@@ -64,6 +70,19 @@ export namespace SystemPrompt {
         ...autonomousWorkflow,
       ].join("\n"),
     ]
+  }
+
+  /**
+   * Project memory for the active agent.
+   *
+   * Reads `.ax-code/memory.json` and renders the entries that apply to this
+   * agent (entries with no `agents` allow-list apply to all). Returns
+   * `undefined` when no memory is cached or when nothing applies, so callers
+   * can skip the section cleanly.
+   */
+  export async function memory(agent: Agent.Info): Promise<string | undefined> {
+    const ctx = await getMemoryContext(Instance.directory, { agent: agent.name })
+    return ctx ? ctx : undefined
   }
 
   export async function skills(agent: Agent.Info, messages?: MessageV2.WithParts[]) {
