@@ -303,6 +303,28 @@ export function renderSessionQualityInlineSummary(action: SessionQualityAction) 
   return `${inlineActionLabel(action)} · ${actionReadinessState(action)} · ${actionSummaryDetail(action)}${targetedRecommendationInlineSuffix(action)}`
 }
 
+// User-facing one-liner for the sidebar Quality section. The verbose internal
+// vocabulary (replay readiness, label coverage, capture evidence) stays inside
+// the /quality dialog via renderSessionQualityInlineSummary; the sidebar gets
+// just status + the most actionable problem detail.
+export function renderSessionQualitySidebarLine(
+  action: Pick<SessionQualityAction, "workflow" | "summary">,
+): string {
+  const label = sessionQualityWorkflowLabel(action.workflow)
+  const status = action.summary.overallStatus
+  if (status === "pass") return `${label} · ok`
+
+  const problemGates = (action.summary.gates ?? []).filter((g) => g.status !== "pass")
+  if (problemGates.length === 0) {
+    return `${label} · ${status === "warn" ? "warning" : "needs attention"}`
+  }
+  if (problemGates.length === 1) {
+    return `${label} · ${problemGates[0].detail}`
+  }
+  const noun = status === "fail" ? "issues" : "warnings"
+  return `${label} · ${problemGates.length} ${noun}`
+}
+
 export function renderSessionQualityPrompt(action: SessionQualityAction, sessionID: string) {
   const recommended = targetedQATestRecommendations(action.summary)
   const lines = [

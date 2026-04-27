@@ -19,7 +19,7 @@ import { footerSessionStatusView, type FooterSessionStatus } from "./footer-view
 import { computeSidebarWidth } from "./layout"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import {
-  renderSessionQualityInlineSummary,
+  renderSessionQualitySidebarLine,
   sessionQualityActions,
   sessionQualityActionValue,
   sessionQualityWorkflowIcon,
@@ -514,7 +514,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                           {sessionQualityWorkflowIcon(action.workflow)}
                         </text>
                         <text fg={theme.textMuted} wrapMode="word">
-                          {renderSessionQualityInlineSummary(action)}
+                          {renderSessionQualitySidebarLine(action)}
                         </text>
                       </box>
                     )}
