@@ -74,7 +74,14 @@ export function messageRoute(
   agents?: AgentInfo[],
 ) {
   const matches = rows.filter((row) => row.event_data.type === "agent.route" && row.event_data.messageID === msg.id)
-  const row = matches.at(-1)
+  // A single turn can record both an agent switch AND a complexity event
+  // (small/fast model decision). The switch is more user-relevant; prefer it
+  // when present, otherwise fall back to whatever's there.
+  const row =
+    matches.find((r) => {
+      const e = r.event_data
+      return e.type === "agent.route" && e.routeMode !== "complexity"
+    }) ?? matches.at(-1)
   if (row) {
     const item = routeEvent(row, agents)
     if (item) {

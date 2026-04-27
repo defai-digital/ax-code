@@ -124,6 +124,45 @@ describe("tui session routing helpers", () => {
     })
   })
 
+  test("messageRoute prefers the switch event when both switch and complexity fire on the same turn", () => {
+    // Auto-routing fires emits both events for one message — the agent swap and
+    // the small-model decision. The switch is the more user-relevant signal,
+    // so it must win even when the complexity event was recorded second.
+    const item = messageRoute(
+      user("u1"),
+      [],
+      [
+        {
+          time_created: 10,
+          event_data: {
+            type: "agent.route",
+            sessionID: "s",
+            messageID: "u1",
+            fromAgent: "build",
+            toAgent: "debug",
+            confidence: 0.7,
+            routeMode: "switch",
+            matched: ["bug", "stack trace"],
+          },
+        },
+        {
+          time_created: 11,
+          event_data: {
+            type: "agent.route",
+            sessionID: "s",
+            messageID: "u1",
+            fromAgent: "build",
+            toAgent: "build",
+            confidence: 0,
+            routeMode: "complexity",
+            complexity: "low",
+          },
+        },
+      ],
+    )
+    expect(item?.title).toBe("Routing: Switched to Debug")
+  })
+
   test("merges tool and route activity by timestamp", () => {
     const items = activityItems(
       [tool("t1", "bash", 20)],

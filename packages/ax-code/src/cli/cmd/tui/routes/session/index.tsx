@@ -1337,7 +1337,13 @@ function RouteIndicator(props: { messageID: string; sessionID: string }) {
       (r) => r.event_data.type === "agent.route" && r.event_data.messageID === props.messageID,
     )
     if (matches.length === 0) return null
-    const primary = matches[matches.length - 1]
+    // Prefer the switch event over a same-turn complexity event — the agent
+    // change is more visually informative than the fast-model indicator.
+    const primary =
+      matches.find((r) => {
+        const e = r.event_data
+        return e.type === "agent.route" && e.routeMode !== "complexity"
+      }) ?? matches[matches.length - 1]
     if (!primary) return null
     return routeEvent(primary, sync.data.agent)
   })
