@@ -115,6 +115,7 @@ describe("memory command", () => {
     expect(introSpy).not.toHaveBeenCalled()
     const parsed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
     expect(parsed.status).toBe("ok")
+    expect(parsed.summary.total).toBe(0)
     expect(parsed.checked.project).toBe(true)
   })
 

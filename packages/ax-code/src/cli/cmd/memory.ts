@@ -459,6 +459,7 @@ export const MemoryDoctorCommand = cmd({
     prompts.intro("Memory Doctor")
 
     prompts.log.info(`Status: ${report.status}`)
+    prompts.log.info(`Issues: ${report.summary.total} (${report.summary.errors} error, ${report.summary.warnings} warn)`)
     prompts.log.info(
       `Checked: ${[report.checked.project ? "project" : "", report.checked.global ? "global" : ""]
         .filter(Boolean)

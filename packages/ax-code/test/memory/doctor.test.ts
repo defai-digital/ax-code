@@ -15,6 +15,7 @@ describe("memory.doctor", () => {
 
     expect(report.status).toBe("ok")
     expect(report.issues).toEqual([])
+    expect(report.summary).toEqual({ total: 0, warnings: 0, errors: 0, byCode: {} })
     expect(report.checked).toEqual({ project: true, global: true })
   })
 
@@ -37,6 +38,12 @@ describe("memory.doctor", () => {
 
     expect(report.status).toBe("warn")
     expect(report.issues.map((issue) => issue.code).sort()).toEqual(["expired_entry", "low_confidence"])
+    expect(report.summary).toEqual({
+      total: 2,
+      warnings: 2,
+      errors: 0,
+      byCode: { expired_entry: 1, low_confidence: 1 },
+    })
   })
 
   test("detects duplicate content across differently named entries", async () => {
@@ -94,6 +101,8 @@ describe("memory.doctor", () => {
     const report = await doctor(tmp.path, { scope: "project", now: new Date("2026-02-01T00:00:00.000Z") })
 
     expect(report.status).toBe("error")
+    expect(report.summary.errors).toBe(2)
+    expect(report.summary.warnings).toBe(3)
     expect(report.issues.map((issue) => issue.code).sort()).toEqual([
       "blank_scope_value",
       "duplicate_entry",

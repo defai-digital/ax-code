@@ -25,6 +25,12 @@ export interface MemoryDoctorIssue {
 export interface MemoryDoctorReport {
   status: MemoryDoctorStatus
   issues: MemoryDoctorIssue[]
+  summary: {
+    total: number
+    warnings: number
+    errors: number
+    byCode: Partial<Record<MemoryDoctorIssue["code"], number>>
+  }
   checked: {
     project: boolean
     global: boolean
@@ -77,7 +83,21 @@ export async function doctor(projectRoot: string, opts: MemoryDoctorOptions = {}
   return {
     status: issues.some((issue) => issue.status === "error") ? "error" : issues.length > 0 ? "warn" : "ok",
     issues,
+    summary: summarizeIssues(issues),
     checked,
+  }
+}
+
+function summarizeIssues(issues: MemoryDoctorIssue[]): MemoryDoctorReport["summary"] {
+  const byCode: Partial<Record<MemoryDoctorIssue["code"], number>> = {}
+  for (const issue of issues) {
+    byCode[issue.code] = (byCode[issue.code] ?? 0) + 1
+  }
+  return {
+    total: issues.length,
+    warnings: issues.filter((issue) => issue.status === "warn").length,
+    errors: issues.filter((issue) => issue.status === "error").length,
+    byCode,
   }
 }
 
