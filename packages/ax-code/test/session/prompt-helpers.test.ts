@@ -456,6 +456,49 @@ describe("session.prompt helpers", () => {
     expect(second).not.toContain("memory-v1")
   })
 
+  test("passes messages into memory loader for path-scoped context", async () => {
+    const cache = {}
+    let received: MessageV2.WithParts[] | undefined
+    const messages = [
+      {
+        info: { id: "m1", sessionID: "s1", role: "assistant" as const },
+        parts: [
+          {
+            type: "tool" as const,
+            callID: "c1",
+            tool: "read",
+            state: {
+              status: "completed" as const,
+              input: { filePath: "/repo/src/memory/recall.ts" },
+              output: "",
+              title: "Read file",
+              metadata: {},
+              time: { start: 1, end: 2 },
+            },
+          },
+        ],
+      },
+    ] as any as MessageV2.WithParts[]
+
+    const result = await systemPrompt({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache,
+      skills: async () => undefined,
+      environment: async () => ["env"],
+      instructions: async () => ["rules"],
+      memory: async (_agent, nextMessages) => {
+        received = nextMessages
+        return "memory"
+      },
+      messages,
+    })
+
+    expect(result).toContain("memory")
+    expect(received).toBe(messages)
+  })
+
   test("formats missing agent errors with available names", async () => {
     const err = await agentInfo({
       sessionID: "ses_test" as any,

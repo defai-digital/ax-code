@@ -9,12 +9,12 @@ import os from "os"
 import { Filesystem } from "../util/filesystem"
 import type { ProjectMemory } from "./types"
 
-function getMemoryPath(projectRoot: string): string {
+export function getMemoryPath(projectRoot: string): string {
   return path.join(projectRoot, ".ax-code", "memory.json")
 }
 
-function getGlobalMemoryPath(): string {
-  return path.join(os.homedir(), ".ax-code", "memory.json")
+export function getGlobalMemoryPath(): string {
+  return path.join(process.env.AX_CODE_TEST_HOME || os.homedir(), ".ax-code", "memory.json")
 }
 
 // In-process mtime/size-keyed read cache. The injector calls `load` on every

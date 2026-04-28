@@ -5,6 +5,7 @@
 
 import type { EntrySection, MemoryEntry, MemorySection, ProjectMemory } from "./types"
 import * as store from "./store"
+import { entryApplies } from "./applicability"
 import { Log } from "../util/log"
 
 const log = Log.create({ service: "memory.injector" })
@@ -22,18 +23,32 @@ function renderEntry(entry: MemoryEntry): string {
   const parts = [`- ${escapeMemoryTags(entry.name)}: ${escapeMemoryTags(entry.body)}`]
   if (entry.why) parts.push(`  - Why: ${escapeMemoryTags(entry.why)}`)
   if (entry.howToApply) parts.push(`  - Apply: ${escapeMemoryTags(entry.howToApply)}`)
+  if (entry.tags?.length) parts.push(`  - Tags: ${entry.tags.map(escapeMemoryTags).join(", ")}`)
+  if (entry.pathGlobs?.length) parts.push(`  - Paths: ${entry.pathGlobs.map(escapeMemoryTags).join(", ")}`)
+  if (entry.confidence !== undefined) parts.push(`  - Confidence: ${entry.confidence}`)
   return parts.join("\n")
 }
 
-function entryApplies(entry: MemoryEntry, agent?: string): boolean {
-  if (!entry.agents || entry.agents.length === 0) return true
-  if (!agent) return true
-  return entry.agents.includes(agent)
+function confidence(entry: MemoryEntry): number {
+  return entry.confidence ?? 1
 }
 
-function pushEntries(parts: string[], title: string, section: EntrySection | undefined, agent?: string) {
+function orderEntriesForPrompt(entries: MemoryEntry[]): MemoryEntry[] {
+  return [...entries].sort((a, b) => {
+    const confidenceDelta = confidence(b) - confidence(a)
+    if (confidenceDelta !== 0) return confidenceDelta
+    return b.savedAt.localeCompare(a.savedAt)
+  })
+}
+
+function pushEntries(
+  parts: string[],
+  title: string,
+  section: EntrySection | undefined,
+  opts: { agent?: string; paths?: string[]; projectRoot: string },
+) {
   if (!section || section.entries.length === 0) return
-  const applicable = section.entries.filter((e) => entryApplies(e, agent))
+  const applicable = orderEntriesForPrompt(section.entries.filter((e) => entryApplies(e, opts)))
   if (applicable.length === 0) return
   parts.push(`## ${title}`)
   for (const entry of applicable) parts.push(renderEntry(entry))
@@ -57,6 +72,8 @@ function stalenessNotice(sections: ProjectMemory["sections"]): string | undefine
 export interface BuildContextOptions {
   /** When set, entries with an `agents` allow-list are filtered to those that include this name. */
   agent?: string
+  /** When provided, entries with pathGlobs only apply if at least one path matches. */
+  paths?: string[]
   /** Pre-loaded global memory to merge into context. When absent, no global section is emitted. */
   global?: ProjectMemory | null
 }
@@ -76,6 +93,7 @@ export interface BuildContextOptions {
 export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = {}): string {
   const parts: string[] = []
   const agent = opts.agent
+  const paths = opts.paths
 
   // Global entries appear first — they apply everywhere and set the baseline.
   // Rendered flat under a single "## Global Settings" heading to avoid
@@ -86,8 +104,9 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
     for (const kind of ["feedback", "userPrefs", "reference"] as const) {
       const section = global.sections[kind]
       if (!section) continue
-      for (const entry of section.entries) {
-        if (entryApplies(entry, agent)) globalEntries.push(renderEntry(entry))
+      for (const entry of orderEntriesForPrompt(section.entries)) {
+        if (entryApplies(entry, { agent, paths, projectRoot: memory.projectRoot }))
+          globalEntries.push(renderEntry(entry))
       }
     }
     if (globalEntries.length > 0) {
@@ -98,10 +117,11 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
   }
 
   // Project-scoped curated entries.
-  pushEntries(parts, "Feedback Rules", memory.sections.feedback, agent)
-  pushEntries(parts, "User Preferences", memory.sections.userPrefs, agent)
-  pushEntries(parts, "Project Decisions", memory.sections.decisions, agent)
-  pushEntries(parts, "References", memory.sections.reference, agent)
+  const entryOpts = { agent, paths, projectRoot: memory.projectRoot }
+  pushEntries(parts, "Feedback Rules", memory.sections.feedback, entryOpts)
+  pushEntries(parts, "User Preferences", memory.sections.userPrefs, entryOpts)
+  pushEntries(parts, "Project Decisions", memory.sections.decisions, entryOpts)
+  pushEntries(parts, "References", memory.sections.reference, entryOpts)
 
   if (memory.sections.patterns?.content) {
     parts.push("## Tech Stack")

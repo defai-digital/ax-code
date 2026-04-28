@@ -494,7 +494,7 @@ export async function systemPrompt(input: {
   // invisible to the agent until session restart, which silently breaks
   // the user-curated entry contract. Always load fresh.
   const memoryFn = input.memory ?? SystemPrompt.memory
-  const memory = await memoryFn(input.agent)
+  const memory = await memoryFn(input.agent, input.messages)
 
   const modelKey = `${input.model.providerID}/${input.model.api.id}`
   if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {

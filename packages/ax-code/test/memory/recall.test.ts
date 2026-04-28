@@ -45,6 +45,16 @@ describe("memory.recall", () => {
     expect(names).not.toContain("d")
   })
 
+  test("query: multi-term search can match terms across one entry", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", { name: "db-tests", body: "Use Real DB integration tests" })
+    await recordEntry(tmp.path, "feedback", { name: "real-ui", body: "Real browser coverage" })
+
+    const results = await recall(tmp.path, { query: "real tests" })
+    expect(results[0].entry.name).toBe("db-tests")
+    expect(results.map((r) => r.entry.name)).toContain("db-tests")
+  })
+
   test("kind filter: single", async () => {
     await using tmp = await tmpdir()
     await recordEntry(tmp.path, "feedback", { name: "f1", body: "x" })
@@ -90,6 +100,75 @@ describe("memory.recall", () => {
       await recordEntry(tmp.path, "feedback", { name: `f${i}`, body: "x" })
     }
     expect(await recall(tmp.path, { limit: 2 })).toHaveLength(2)
+  })
+
+  test("tag filter requires all requested tags", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", {
+      name: "memory-ranking",
+      body: "Prefer explainable recall",
+      tags: ["memory", "ranking"],
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "memory-storage",
+      body: "Keep writes atomic",
+      tags: ["memory", "storage"],
+    })
+
+    const names = (await recall(tmp.path, { tags: ["memory", "ranking"] })).map((r) => r.entry.name)
+    expect(names).toEqual(["memory-ranking"])
+  })
+
+  test("path filter only returns path-scoped entries that match the path", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", {
+      name: "ts-rule",
+      body: "TypeScript rule",
+      pathGlobs: ["src/**/*.ts"],
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "md-rule",
+      body: "Markdown rule",
+      pathGlobs: ["docs/**/*.md"],
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "global-rule",
+      body: "Applies everywhere",
+    })
+
+    const names = (await recall(tmp.path, { path: `${tmp.path}/src/memory/recall.ts` })).map((r) => r.entry.name)
+    expect(names).toContain("ts-rule")
+    expect(names).toContain("global-rule")
+    expect(names).not.toContain("md-rule")
+  })
+
+  test("path filter normalizes backslash glob patterns", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", {
+      name: "windows-pattern",
+      body: "Backslash path glob",
+      pathGlobs: ["src\\**\\*.ts"],
+    })
+
+    const results = await recall(tmp.path, { path: `${tmp.path}/src/memory/recall.ts` })
+    expect(results.map((r) => r.entry.name)).toContain("windows-pattern")
+  })
+
+  test("expired entries are ignored by default but can be included", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", {
+      name: "expired",
+      body: "old migration rule",
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    })
+    await recordEntry(tmp.path, "feedback", { name: "active", body: "current migration rule" })
+
+    const activeOnly = (await recall(tmp.path, { query: "migration" })).map((r) => r.entry.name)
+    expect(activeOnly).toEqual(["active"])
+
+    const withExpired = (await recall(tmp.path, { query: "migration", includeExpired: true })).map((r) => r.entry.name)
+    expect(withExpired).toContain("expired")
+    expect(withExpired).toContain("active")
   })
 
   test("ordering: feedback > userPrefs > decisions > reference; ties broken by score then savedAt desc", async () => {
@@ -162,6 +241,17 @@ describe("memory.recall", () => {
     const stale = results.find((r) => r.entry.name === "stale")!
     expect(fresh.score).toBeGreaterThan(stale.score)
     expect(fresh.score - stale.score).toBe(2) // exactly the RECENCY_BONUS
+  })
+
+  test("confidence adjusts ranking and explain returns score evidence", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", { name: "high", body: "parser cache rule", confidence: 1 })
+    await recordEntry(tmp.path, "feedback", { name: "low", body: "parser cache rule", confidence: 0.2 })
+
+    const results = await recall(tmp.path, { query: "parser cache" })
+    expect(results[0].entry.name).toBe("high")
+    expect(results[0].reasons.length).toBeGreaterThan(0)
+    expect(results.find((r) => r.entry.name === "low")?.reasons).toContain("confidence 0.2")
   })
 
   test("scope=global: searches global store, not project store", async () => {

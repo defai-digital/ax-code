@@ -32,6 +32,27 @@ describe("memory.recorder", () => {
     expect(all).toHaveLength(2)
   })
 
+  test("records recall metadata fields", async () => {
+    await using tmp = await tmpdir()
+
+    await recordEntry(tmp.path, "feedback", {
+      name: "scoped-rule",
+      body: "Use focused recall",
+      tags: ["memory", "memory", "ranking"],
+      pathGlobs: ["src\\**\\*.ts"],
+      confidence: 0.75,
+      expiresAt: "2030-01-02T03:04:05Z",
+      sourceSessionId: "ses_123",
+    })
+
+    const entries = await listEntries(tmp.path, "feedback")
+    expect(entries[0]?.tags).toEqual(["memory", "ranking"])
+    expect(entries[0]?.pathGlobs).toEqual(["src/**/*.ts"])
+    expect(entries[0]?.confidence).toBe(0.75)
+    expect(entries[0]?.expiresAt).toBe("2030-01-02T03:04:05.000Z")
+    expect(entries[0]?.sourceSessionId).toBe("ses_123")
+  })
+
   test("dedupes by name within a kind", async () => {
     await using tmp = await tmpdir()
 
@@ -97,6 +118,16 @@ describe("memory.recorder", () => {
     await expect(recordEntry(tmp.path, "userPrefs", { name: "x", body: "" })).rejects.toThrow(/non-empty/)
   })
 
+  test("rejects invalid confidence or expiresAt", async () => {
+    await using tmp = await tmpdir()
+    await expect(recordEntry(tmp.path, "feedback", { name: "x", body: "y", confidence: 2 })).rejects.toThrow(
+      /confidence/,
+    )
+    await expect(recordEntry(tmp.path, "feedback", { name: "x", body: "y", expiresAt: "not-a-date" })).rejects.toThrow(
+      /expiresAt/,
+    )
+  })
+
   test("agent-conditional: entries with agents allow-list filter on buildContext", async () => {
     await using tmp = await tmpdir()
 
@@ -125,6 +156,60 @@ describe("memory.recorder", () => {
     const noAgent = buildContext(memory!)
     expect(noAgent).toContain("no-mocks")
     expect(noAgent).toContain("lint-clean")
+  })
+
+  test("path-scoped entries filter on buildContext when paths are provided", async () => {
+    await using tmp = await tmpdir()
+
+    await recordEntry(tmp.path, "feedback", {
+      name: "ts-rule",
+      body: "Only for TypeScript files",
+      pathGlobs: ["src/**/*.ts"],
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "md-rule",
+      body: "Only for Markdown files",
+      pathGlobs: ["docs/**/*.md"],
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "global-rule",
+      body: "Always visible",
+    })
+
+    const memory = await store.load(tmp.path)
+    expect(memory).not.toBeNull()
+
+    const forTs = buildContext(memory!, { paths: ["src/memory/recall.ts"] })
+    expect(forTs).toContain("ts-rule")
+    expect(forTs).toContain("global-rule")
+    expect(forTs).not.toContain("md-rule")
+
+    const withoutPathContext = buildContext(memory!)
+    expect(withoutPathContext).toContain("ts-rule")
+    expect(withoutPathContext).toContain("md-rule")
+  })
+
+  test("buildContext shows confidence and orders higher-confidence entries first", async () => {
+    await using tmp = await tmpdir()
+
+    await recordEntry(tmp.path, "feedback", {
+      name: "low-confidence",
+      body: "Tentative rule",
+      confidence: 0.2,
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "high-confidence",
+      body: "Reliable rule",
+      confidence: 0.95,
+    })
+
+    const memory = await store.load(tmp.path)
+    expect(memory).not.toBeNull()
+    const ctx = buildContext(memory!)
+
+    expect(ctx).toContain("Confidence: 0.95")
+    expect(ctx).toContain("Confidence: 0.2")
+    expect(ctx.indexOf("high-confidence")).toBeLessThan(ctx.indexOf("low-confidence"))
   })
 
   test("agent-conditional: empty agents array is treated as 'all'", async () => {
@@ -260,6 +345,28 @@ describe("memory.recorder", () => {
 
     expect(hashAfterRoundTrip).toBe(hashAfterWarmup)
     expect(hashAfterReWarmup).toBe(hashAfterWarmup)
+  })
+
+  test("contentHash changes when semantic entry metadata changes", async () => {
+    await using tmp = await tmpdir()
+
+    await recordEntry(tmp.path, "feedback", {
+      name: "scoped",
+      body: "Use scoped recall",
+      tags: ["memory"],
+    })
+    const hashWithTag = (await store.load(tmp.path))!.contentHash
+
+    await recordEntry(tmp.path, "feedback", {
+      name: "scoped",
+      body: "Use scoped recall",
+      pathGlobs: ["src/**/*.ts"],
+      confidence: 0.75,
+      agents: ["build"],
+    })
+    const hashWithScope = (await store.load(tmp.path))!.contentHash
+
+    expect(hashWithScope).not.toBe(hashWithTag)
   })
 
   test("reference kind: records, lists, removes like other kinds", async () => {
@@ -418,6 +525,25 @@ describe("memory.recorder", () => {
 
     // On-disk JSON keeps the original literal text — sanitization is render-time only.
     expect(memory!.sections.feedback?.entries[0]?.body).toContain("</project-memory>")
+  })
+
+  test("buildContext omits expired entries", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", {
+      name: "expired",
+      body: "old rule",
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "active",
+      body: "current rule",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    })
+
+    const memory = await store.load(tmp.path)
+    const ctx = buildContext(memory!)
+    expect(ctx).not.toContain("expired")
+    expect(ctx).toContain("active")
   })
 
   test("agent-conditional: section header is omitted when no entries apply", async () => {

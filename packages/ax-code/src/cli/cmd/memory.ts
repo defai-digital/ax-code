@@ -6,6 +6,7 @@ import * as store from "../../memory/store"
 import { getMetadata } from "../../memory/injector"
 import { recordEntry, removeEntry, listEntries } from "../../memory/recorder"
 import { recall } from "../../memory/recall"
+import { doctor as doctorMemory } from "../../memory/doctor"
 import type { MemoryEntryKind } from "../../memory/types"
 
 const KIND_BY_FLAG: Record<string, MemoryEntryKind> = {
@@ -13,6 +14,14 @@ const KIND_BY_FLAG: Record<string, MemoryEntryKind> = {
   feedback: "feedback",
   decision: "decisions",
   reference: "reference",
+}
+
+function parseCommaList(value: string | undefined): string[] | undefined {
+  const parsed = value
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return parsed && parsed.length > 0 ? parsed : undefined
 }
 
 export const MemoryCommand = cmd({
@@ -27,6 +36,7 @@ export const MemoryCommand = cmd({
       .command(MemoryForgetCommand)
       .command(MemoryListCommand)
       .command(MemoryRecallCommand)
+      .command(MemoryDoctorCommand)
       .demandCommand(),
   async handler() {},
 })
@@ -174,6 +184,26 @@ export const MemoryRememberCommand = cmd({
         describe: "comma-separated agent names that should see this entry (default: all)",
         type: "string",
       })
+      .option("tags", {
+        describe: "comma-separated labels for recall filters and ranking",
+        type: "string",
+      })
+      .option("paths", {
+        describe: "comma-separated file globs where this entry applies",
+        type: "string",
+      })
+      .option("expires-at", {
+        describe: "ISO date/time after which this memory is ignored by default",
+        type: "string",
+      })
+      .option("confidence", {
+        describe: "confidence score from 0 to 1",
+        type: "number",
+      })
+      .option("source-session", {
+        describe: "session id that produced or justified this memory",
+        type: "string",
+      })
       .option("global", {
         alias: "g",
         describe: "save to global memory (~/.ax-code/memory.json) instead of project memory",
@@ -185,12 +215,7 @@ export const MemoryRememberCommand = cmd({
     prompts.intro("Memory Remember")
 
     const kind = KIND_BY_FLAG[args.kind]
-    const agents = args.agents
-      ? args.agents
-          .split(",")
-          .map((a) => a.trim())
-          .filter(Boolean)
-      : undefined
+    const agents = parseCommaList(args.agents)
     const scope = args.global ? "global" : "project"
     await recordEntry(process.cwd(), kind, {
       name: args.name,
@@ -198,6 +223,11 @@ export const MemoryRememberCommand = cmd({
       why: args.why,
       howToApply: args.apply,
       agents,
+      tags: parseCommaList(args.tags),
+      pathGlobs: parseCommaList(args.paths),
+      expiresAt: args.expiresAt,
+      confidence: args.confidence,
+      sourceSessionId: args.sourceSession,
       scope,
     })
 
@@ -257,6 +287,24 @@ export const MemoryRecallCommand = cmd({
         describe: "filter to entries applicable to this agent",
         type: "string",
       })
+      .option("tags", {
+        describe: "comma-separated tags that entries must contain",
+        type: "string",
+      })
+      .option("path", {
+        describe: "file path used to filter path-scoped memories",
+        type: "string",
+      })
+      .option("include-expired", {
+        describe: "include memories whose expires-at is in the past",
+        type: "boolean",
+        default: false,
+      })
+      .option("explain", {
+        describe: "show ranking evidence for each match",
+        type: "boolean",
+        default: false,
+      })
       .option("limit", {
         describe: "cap on result count",
         type: "number",
@@ -281,6 +329,9 @@ export const MemoryRecallCommand = cmd({
       query: args.query,
       kind,
       agent: args.agent,
+      tags: parseCommaList(args.tags),
+      path: args.path,
+      includeExpired: args.includeExpired,
       limit: args.limit,
       scope,
     })
@@ -295,7 +346,11 @@ export const MemoryRecallCommand = cmd({
       prompts.log.info(`[${r.kind}/${r.source}] ${r.entry.name}: ${r.entry.body}  (score ${r.score})`)
       if (r.entry.why) prompts.log.info(`  why: ${r.entry.why}`)
       if (r.entry.howToApply) prompts.log.info(`  apply: ${r.entry.howToApply}`)
+      if (r.entry.tags?.length) prompts.log.info(`  tags: ${r.entry.tags.join(", ")}`)
+      if (r.entry.pathGlobs?.length) prompts.log.info(`  paths: ${r.entry.pathGlobs.join(", ")}`)
       if (r.entry.agents?.length) prompts.log.info(`  agents: ${r.entry.agents.join(", ")}`)
+      if (r.entry.expiresAt) prompts.log.info(`  expires: ${r.entry.expiresAt}`)
+      if (args.explain) prompts.log.info(`  explain: ${r.reasons.join(", ")}`)
     }
     prompts.outro(`${results.length} matches`)
   },
@@ -333,7 +388,48 @@ export const MemoryListCommand = cmd({
       prompts.log.info(`${entry.name}: ${entry.body}`)
       if (entry.why) prompts.log.info(`  why: ${entry.why}`)
       if (entry.howToApply) prompts.log.info(`  apply: ${entry.howToApply}`)
+      if (entry.tags?.length) prompts.log.info(`  tags: ${entry.tags.join(", ")}`)
+      if (entry.pathGlobs?.length) prompts.log.info(`  paths: ${entry.pathGlobs.join(", ")}`)
+      if (entry.expiresAt) prompts.log.info(`  expires: ${entry.expiresAt}`)
     }
     prompts.outro(`${entries.length} entries`)
+  },
+})
+
+export const MemoryDoctorCommand = cmd({
+  command: "doctor",
+  describe: "diagnose memory store quality and stale metadata",
+  builder: (yargs) =>
+    yargs.option("scope", {
+      describe: 'which store to inspect: "project", "global", or "all"',
+      choices: ["project", "global", "all"] as const,
+      default: "all" as const,
+    }),
+  async handler(args) {
+    UI.empty()
+    prompts.intro("Memory Doctor")
+
+    const report = await doctorMemory(process.cwd(), { scope: args.scope })
+    prompts.log.info(`Status: ${report.status}`)
+    prompts.log.info(
+      `Checked: ${[report.checked.project ? "project" : "", report.checked.global ? "global" : ""]
+        .filter(Boolean)
+        .join(", ")}`,
+    )
+
+    if (report.issues.length === 0) {
+      prompts.log.success("No memory issues found")
+      prompts.outro("Done")
+      return
+    }
+
+    for (const issue of report.issues) {
+      const parts = [`[${issue.status}]`, issue.code, issue.source]
+      if (issue.kind) parts.push(issue.kind)
+      if (issue.entryName) parts.push(issue.entryName)
+      prompts.log[issue.status](parts.join(" / "))
+      prompts.log.info(`  ${issue.message}`)
+    }
+    prompts.outro(`${report.issues.length} issue${report.issues.length === 1 ? "" : "s"}`)
   },
 })

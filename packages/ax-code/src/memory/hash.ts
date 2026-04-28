@@ -20,6 +20,12 @@ export function renderEntry(entry: MemoryEntry): string {
   const parts = [`- ${entry.name}: ${entry.body}`]
   if (entry.why) parts.push(`  - Why: ${entry.why}`)
   if (entry.howToApply) parts.push(`  - Apply: ${entry.howToApply}`)
+  if (entry.tags?.length) parts.push(`  - Tags: ${entry.tags.join(", ")}`)
+  if (entry.pathGlobs?.length) parts.push(`  - Paths: ${entry.pathGlobs.join(", ")}`)
+  if (entry.agents?.length) parts.push(`  - Agents: ${entry.agents.join(", ")}`)
+  if (entry.expiresAt) parts.push(`  - Expires: ${entry.expiresAt}`)
+  if (entry.confidence !== undefined) parts.push(`  - Confidence: ${entry.confidence}`)
+  if (entry.sourceSessionId) parts.push(`  - Source session: ${entry.sourceSessionId}`)
   return parts.join("\n")
 }
 

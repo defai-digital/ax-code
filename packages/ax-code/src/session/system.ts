@@ -80,8 +80,9 @@ export namespace SystemPrompt {
    * `undefined` when no memory is cached or when nothing applies, so callers
    * can skip the section cleanly.
    */
-  export async function memory(agent: Agent.Info): Promise<string | undefined> {
-    const ctx = await getMemoryContext(Instance.directory, { agent: agent.name })
+  export async function memory(agent: Agent.Info, messages?: MessageV2.WithParts[]): Promise<string | undefined> {
+    const paths = messages ? extractFilePaths(messages) : undefined
+    const ctx = await getMemoryContext(Instance.directory, { agent: agent.name, paths })
     return ctx ? ctx : undefined
   }
 

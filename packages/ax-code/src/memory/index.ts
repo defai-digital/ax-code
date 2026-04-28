@@ -14,6 +14,17 @@ export { save, load, clear, exists, saveGlobal, loadGlobal, clearGlobal, existsG
 export { buildContext, getContext, getMetadata, type BuildContextOptions } from "./injector"
 export { recordEntry, removeEntry, listEntries, type RecordInput } from "./recorder"
 export { recall, type RecallQuery, type RecallResult } from "./recall"
+export { doctor, type MemoryDoctorIssue, type MemoryDoctorOptions, type MemoryDoctorReport } from "./doctor"
+export {
+  entryApplies,
+  isExpired,
+  matchesAgent,
+  matchesPath,
+  matchesTags,
+  normalizePathForMatch,
+  normalizeTags,
+  type MemoryApplicabilityOptions,
+} from "./applicability"
 export type {
   ProjectMemory,
   MemorySection,

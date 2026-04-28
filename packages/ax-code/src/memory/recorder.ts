@@ -16,6 +16,7 @@ import { generate } from "./generator"
 import { computeContentHash, renderEntry } from "./hash"
 import type { EntrySection, MemoryEntry, MemoryEntryKind, ProjectMemory } from "./types"
 import { Log } from "../util/log"
+import { FileLock } from "../util/filelock"
 
 const log = Log.create({ service: "memory.recorder" })
 
@@ -106,6 +107,16 @@ export interface RecordInput {
   body: string
   why?: string
   howToApply?: string
+  /** Labels that help recall filter and rank the entry. */
+  tags?: string[]
+  /** File globs where this entry applies. */
+  pathGlobs?: string[]
+  /** ISO8601 timestamp after which the entry is ignored by default. */
+  expiresAt?: string
+  /** Confidence from 0 to 1. Defaults to 1 when omitted. */
+  confidence?: number
+  /** Optional session id for provenance and later auditing. */
+  sourceSessionId?: string
   /** Restrict this entry to a subset of agents (empty/undefined = all agents). */
   agents?: string[]
   /**
@@ -114,6 +125,32 @@ export interface RecordInput {
    * across all projects — intended for user-level preferences and feedback.
    */
   scope?: "project" | "global"
+}
+
+function normalizeList(values: string[] | undefined): string[] | undefined {
+  const normalized = values?.map((value) => value.trim()).filter(Boolean)
+  return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
+}
+
+function normalizePathGlobs(values: string[] | undefined): string[] | undefined {
+  const normalized = normalizeList(values)?.map((value) => value.replace(/\\/g, "/"))
+  return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
+}
+
+function normalizeConfidence(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error("memory recorder: confidence must be between 0 and 1")
+  }
+  return value
+}
+
+function normalizeExpiresAt(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  const time = new Date(trimmed).getTime()
+  if (Number.isNaN(time)) throw new Error("memory recorder: expiresAt must be a valid date")
+  return new Date(time).toISOString()
 }
 
 /**
@@ -136,16 +173,29 @@ export async function recordEntry(
   const isGlobal = input.scope === "global"
   const queueKey = isGlobal ? GLOBAL_KEY : projectRoot
   return withWriteQueue(queueKey, async () => {
+    using _crossProcess = await FileLock.acquire(
+      isGlobal ? store.getGlobalMemoryPath() : store.getMemoryPath(projectRoot),
+    )
     const memory = isGlobal ? await loadOrInitGlobal() : await loadOrInit(projectRoot)
     const existing = memory.sections[kind]?.entries ?? []
     const filtered = existing.filter((e) => e.name !== name)
-    const agents = input.agents?.map((a) => a.trim()).filter(Boolean)
+    const agents = normalizeList(input.agents)
+    const tags = normalizeList(input.tags)
+    const pathGlobs = normalizePathGlobs(input.pathGlobs)
+    const confidence = normalizeConfidence(input.confidence)
+    const expiresAt = normalizeExpiresAt(input.expiresAt)
+    const sourceSessionId = input.sourceSessionId?.trim()
     const entry: MemoryEntry = {
       name,
       body,
       savedAt: new Date().toISOString(),
       ...(input.why ? { why: input.why.trim() } : {}),
       ...(input.howToApply ? { howToApply: input.howToApply.trim() } : {}),
+      ...(tags ? { tags } : {}),
+      ...(pathGlobs ? { pathGlobs } : {}),
+      ...(expiresAt ? { expiresAt } : {}),
+      ...(confidence !== undefined ? { confidence } : {}),
+      ...(sourceSessionId ? { sourceSessionId } : {}),
       ...(agents && agents.length > 0 ? { agents } : {}),
     }
     filtered.push(entry)
@@ -173,6 +223,9 @@ export async function removeEntry(
   const isGlobal = scope === "global"
   const queueKey = isGlobal ? GLOBAL_KEY : projectRoot
   return withWriteQueue(queueKey, async () => {
+    using _crossProcess = await FileLock.acquire(
+      isGlobal ? store.getGlobalMemoryPath() : store.getMemoryPath(projectRoot),
+    )
     const memory = isGlobal
       ? await store.loadGlobal().catch(() => null)
       : await store.load(projectRoot).catch(() => null)
