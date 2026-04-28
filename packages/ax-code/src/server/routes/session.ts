@@ -965,7 +965,24 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const params = c.req.valid("param")
-        SessionPrompt.assertNotBusy(params.sessionID)
+        // The busy gate exists to stop concurrent edits from racing
+        // in-flight reads/writes of the conversation. It can be safely
+        // skipped when the delete cannot affect any in-flight state:
+        //   - the message no longer exists (idempotent no-op delete), or
+        //   - the message is a user message that the loop has not yet
+        //     picked up (no assistant references it as parent). The
+        //     loop reads from DB at step boundaries, so removing such a
+        //     message before any assistant has been spawned for it is
+        //     safe regardless of busy state. All other deletes still
+        //     gate on the busy lock.
+        const msgs = await Session.messages({ sessionID: params.sessionID })
+        const target = msgs.find((m) => m.info.id === params.messageID)?.info
+        if (target) {
+          const isUnpickedUser =
+            target.role === "user" &&
+            !msgs.some((m) => m.info.role === "assistant" && m.info.parentID === params.messageID)
+          if (!isUnpickedUser) SessionPrompt.assertNotBusy(params.sessionID)
+        }
         await Session.removeMessage({
           sessionID: params.sessionID,
           messageID: params.messageID,

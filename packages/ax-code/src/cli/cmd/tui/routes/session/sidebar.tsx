@@ -8,6 +8,9 @@ import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
 import { useCommandDialog } from "../../component/dialog-command"
+import { useSDK } from "@tui/context/sdk"
+import { useToast } from "../../ui/toast"
+import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { EventQuery } from "@/replay/query"
 import { activityItems as items } from "./activity"
@@ -29,6 +32,17 @@ import {
   sessionQualityActionValue,
   sessionQualityWorkflowIcon,
 } from "./quality"
+
+const log = Log.create({ service: "tui.sidebar.queue" })
+
+const QUEUE_SNIPPET_MAX = 48
+
+function queuedSnippet(parts: { type: string; text?: string; synthetic?: boolean; ignored?: boolean }[]) {
+  const text = parts.find((p) => p.type === "text" && !p.synthetic && !p.ignored)?.text?.trim()
+  if (!text) return "(empty message)"
+  const single = text.replace(/\s+/g, " ")
+  return single.length > QUEUE_SNIPPET_MAX ? single.slice(0, QUEUE_SNIPPET_MAX - 1) + "…" : single
+}
 
 export function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
@@ -127,6 +141,8 @@ function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
+  const sdk = useSDK()
+  const toast = useToast()
   const { theme } = useTheme()
   const command = useCommandDialog()
   const session = createMemo(() => sync.session.get(props.sessionID))
@@ -151,10 +167,29 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
 
   const todoRemaining = createMemo(() => todo().filter((item) => item.status !== "completed").length)
 
+  // A user message is "queued" iff the loop has not yet picked it up,
+  // i.e. no assistant message references it as `parentID`. We can't gate
+  // on assistant `finish` strings: in autonomous tool-heavy turns the
+  // whole turn is a chain of `finish: "tool-calls"` steps with no
+  // terminal `stop` ever emitted, so a finish-based cutoff would treat
+  // already-addressed users as still pending and offer a delete that
+  // the server (correctly) refuses with a busy error. The parent-link
+  // signal matches what the server checks on delete.
+  const queued = createMemo(() => {
+    if (status().type === "idle") return []
+    const msgs = messages()
+    const addressed = new Set<string>()
+    for (const m of msgs) {
+      if (m.role === "assistant") addressed.add(m.parentID)
+    }
+    return msgs.filter((m) => m.role === "user" && !addressed.has(m.id))
+  })
+
   const [expanded, setExpanded] = createStore({
     mcp: true,
     diff: true,
     todo: true,
+    queued: true,
     // DRE section defaults to expanded so users see the pending-plan
     // list (or the "DRE is active" placeholder) immediately after
     // enabling the experimental flag. Collapses if the plan list
@@ -162,6 +197,36 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     dre: true,
     activity: true,
   })
+
+  async function dropQueued(messageID: string) {
+    if (!queued().some((m) => m.id === messageID)) return
+    // The generated SDK has ThrowOnError=false by default, so server-side
+    // 4xx/5xx come back via `result.error` instead of a thrown exception.
+    // Without this branch the failure was swallowed silently.
+    try {
+      const result = await sdk.client.session.deleteMessage({ sessionID: props.sessionID, messageID })
+      if (result.error) {
+        const detail = (result.error as { data?: { message?: string } })?.data?.message
+        log.warn("delete queued message rejected", {
+          command: "tui.sidebar.queue.delete",
+          status: "error",
+          sessionID: props.sessionID,
+          messageID,
+          error: result.error,
+        })
+        toast.show({ message: detail ?? "Failed to remove queued message", variant: "error" })
+      }
+    } catch (error) {
+      log.warn("delete queued message failed", {
+        command: "tui.sidebar.queue.delete",
+        status: "error",
+        sessionID: props.sessionID,
+        messageID,
+        error,
+      })
+      toast.show({ message: "Failed to remove queued message", variant: "error" })
+    }
+  }
 
   const activity = createMemo(() => {
     const msgs = messages()
@@ -501,6 +566,44 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         )}
                       </For>
                     </Show>
+                  </Show>
+                </box>
+              </Show>
+              <Show when={queued().length > 0}>
+                <box>
+                  <box
+                    flexDirection="row"
+                    gap={1}
+                    onMouseDown={() => queued().length > 2 && setExpanded("queued", !expanded.queued)}
+                  >
+                    <Show when={queued().length > 2}>
+                      <text fg={theme.text}>{expanded.queued ? "−" : "+"}</text>
+                    </Show>
+                    <text fg={theme.text}>
+                      <b>Queued</b>
+                      <span style={{ fg: theme.textMuted }}> ({queued().length})</span>
+                    </text>
+                  </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
+                  <Show when={queued().length <= 2 || expanded.queued}>
+                    <For each={queued()}>
+                      {(message) => (
+                        <box flexDirection="row" gap={1}>
+                          <text
+                            flexShrink={0}
+                            style={{ fg: theme.warning }}
+                            onMouseUp={() => {
+                              void dropQueued(message.id)
+                            }}
+                          >
+                            ✕
+                          </text>
+                          <text fg={theme.textMuted} wrapMode="word">
+                            {queuedSnippet(sync.data.part[message.id] ?? [])}
+                          </text>
+                        </box>
+                      )}
+                    </For>
                   </Show>
                 </box>
               </Show>

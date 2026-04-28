@@ -156,3 +156,33 @@ describe("session.prompt_async error handling", () => {
     expect(route).toContain("Bus.publishDetached(Session.Event.Error")
   })
 })
+
+describe("session.deleteMessage queue gate", () => {
+  test("removes a user message with no assistant child", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const ids = await fill(session.id, 2)
+        const app = Server.Default()
+
+        const res = await app.request(`/session/${session.id}/message/${ids[1]}`, { method: "DELETE" })
+        expect(res.status).toBe(200)
+
+        const remaining = await Session.messages({ sessionID: session.id })
+        expect(remaining.map((m) => m.info.id)).toEqual([ids[0]])
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("structural: skips busy gate only when the target is missing or an unpicked user", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    // The relaxed gate must (a) bail when target is undefined, and (b)
+    // only allow user messages with no assistant child to bypass busy.
+    expect(src).toContain('m.info.role === "assistant" && m.info.parentID === params.messageID')
+    expect(src).toContain("if (!isUnpickedUser) SessionPrompt.assertNotBusy(params.sessionID)")
+    expect(src).toMatch(/if \(target\)\s*\{[\s\S]*?isUnpickedUser/)
+  })
+})
