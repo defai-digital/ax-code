@@ -26,6 +26,12 @@ export type InitDep = {
   info?: (msg: string, data: Record<string, unknown>) => void
 }
 
+export type RestoreOriginalCwdDep = {
+  env?: Record<string, string | undefined>
+  cwd?: () => string
+  chdir?: (dir: string) => void
+}
+
 export function level(log?: string, _local = Installation.isLocal(), debug = false): Log.Level {
   if (debug) return "DEBUG"
   if (log) return log as Log.Level
@@ -57,6 +63,23 @@ export function debugRunDir(baseDir: string, pid = process.pid, now = new Date()
     .replace(/[-:]/g, "")
     .replace("T", "-")
   return path.join(baseDir, `${stamp}-${pid}`)
+}
+
+export function restoreOriginalCwd(dep: RestoreOriginalCwdDep = {}) {
+  const env = dep.env ?? process.env
+  const cwd = dep.cwd ?? (() => process.cwd())
+  const chdir = dep.chdir ?? ((dir: string) => process.chdir(dir))
+  const current = cwd()
+  const original = env.AX_CODE_ORIGINAL_CWD
+  if (!original) return current
+  if (path.resolve(current) === path.resolve(original)) return current
+
+  try {
+    chdir(original)
+    return cwd()
+  } catch {
+    return current
+  }
 }
 
 export function apply(
@@ -125,9 +148,9 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   const local = dep.local ?? Installation.isLocal()
   const version = dep.version ?? Installation.VERSION
   const pid = dep.pid ?? process.pid
-  const cwd = dep.cwd ?? process.cwd()
-  const now = dep.now ?? new Date()
   const env = dep.env ?? process.env
+  const cwd = dep.cwd ?? restoreOriginalCwd({ env })
+  const now = dep.now ?? new Date()
   const log = dep.log ?? Log.init
   const info = dep.info ?? ((msg: string, data: Record<string, unknown>) => Log.Default.info(msg, data))
 

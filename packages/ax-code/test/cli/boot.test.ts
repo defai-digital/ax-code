@@ -1,11 +1,16 @@
 import { NamedError } from "@ax-code/util/error"
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import os from "os"
 import path from "path"
 import z from "zod"
-import { apply, debugOptions, debugRunDir, init, level } from "../../src/cli/bootstrap/env"
+import { clearForcedExitTimer, scheduleForcedExit } from "../../src/cli/boot"
+import { apply, debugOptions, debugRunDir, init, level, restoreOriginalCwd } from "../../src/cli/bootstrap/env"
 import { data, fatal } from "../../src/cli/bootstrap/fatal"
 import { migrate } from "../../src/cli/bootstrap/migrate"
+
+afterEach(() => {
+  clearForcedExitTimer()
+})
 
 describe("cli.boot.level", () => {
   test("prefers explicit log level", () => {
@@ -76,6 +81,49 @@ describe("cli.boot.debugOptions", () => {
     expect(debugRunDir("/repo/ax-code-log", 42, new Date("2026-04-12T23:32:46.123Z"))).toBe(
       "/repo/ax-code-log/20260412-233246Z-42",
     )
+  })
+})
+
+describe("cli.boot.restoreOriginalCwd", () => {
+  test("restores the cwd captured by the source launcher", () => {
+    let current = "/repo/packages/ax-code"
+    const calls: string[] = []
+
+    const cwd = restoreOriginalCwd({
+      env: { AX_CODE_ORIGINAL_CWD: "/work/project" },
+      cwd: () => current,
+      chdir: (dir) => {
+        calls.push(dir)
+        current = dir
+      },
+    })
+
+    expect(cwd).toBe("/work/project")
+    expect(calls).toEqual(["/work/project"])
+  })
+
+  test("keeps the current cwd when the launcher cwd is missing", () => {
+    const cwd = restoreOriginalCwd({
+      env: {},
+      cwd: () => "/repo/packages/ax-code",
+      chdir: () => {
+        throw new Error("should not chdir")
+      },
+    })
+
+    expect(cwd).toBe("/repo/packages/ax-code")
+  })
+
+  test("falls back to the current cwd when restoring fails", () => {
+    const cwd = restoreOriginalCwd({
+      env: { AX_CODE_ORIGINAL_CWD: "/deleted/project" },
+      cwd: () => "/repo/packages/ax-code",
+      chdir: () => {
+        throw new Error("missing directory")
+      },
+    })
+
+    expect(cwd).toBe("/repo/packages/ax-code")
   })
 })
 
@@ -212,5 +260,18 @@ describe("cli.boot.fatal", () => {
     expect(err).toHaveLength(1)
     expect(ui[0]).toContain("/tmp/ax-code.log")
     expect(out).toEqual(["ERR:boom\n"])
+  })
+})
+
+describe("cli.boot.forced-exit", () => {
+  test("clears the prior forced-exit timer before scheduling another", () => {
+    const clearSpy = spyOn(globalThis, "clearTimeout")
+    const first = scheduleForcedExit(() => {})
+    const second = scheduleForcedExit(() => {})
+
+    expect(clearSpy).toHaveBeenCalledWith(first)
+    expect(second).not.toBe(first)
+
+    clearSpy.mockRestore()
   })
 })
