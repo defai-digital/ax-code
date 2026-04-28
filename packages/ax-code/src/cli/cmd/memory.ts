@@ -305,6 +305,11 @@ export const MemoryRecallCommand = cmd({
         type: "boolean",
         default: false,
       })
+      .option("json", {
+        describe: "emit machine-readable JSON",
+        type: "boolean",
+        default: false,
+      })
       .option("limit", {
         describe: "cap on result count",
         type: "number",
@@ -320,9 +325,6 @@ export const MemoryRecallCommand = cmd({
         choices: ["project", "global", "all"] as const,
       }),
   async handler(args) {
-    UI.empty()
-    prompts.intro("Memory Recall")
-
     const kind = args.kind ? KIND_BY_FLAG[args.kind] : undefined
     const scope = args.scope ?? (args.global ? "global" : "project")
     const results = await recall(process.cwd(), {
@@ -335,6 +337,14 @@ export const MemoryRecallCommand = cmd({
       limit: args.limit,
       scope,
     })
+
+    if (args.json) {
+      console.log(JSON.stringify({ query: args.query ?? "", scope, count: results.length, results }, null, 2))
+      return
+    }
+
+    UI.empty()
+    prompts.intro("Memory Recall")
 
     if (results.length === 0) {
       prompts.log.warn("No matching entries")
@@ -400,16 +410,27 @@ export const MemoryDoctorCommand = cmd({
   command: "doctor",
   describe: "diagnose memory store quality and stale metadata",
   builder: (yargs) =>
-    yargs.option("scope", {
-      describe: 'which store to inspect: "project", "global", or "all"',
-      choices: ["project", "global", "all"] as const,
-      default: "all" as const,
-    }),
+    yargs
+      .option("scope", {
+        describe: 'which store to inspect: "project", "global", or "all"',
+        choices: ["project", "global", "all"] as const,
+        default: "all" as const,
+      })
+      .option("json", {
+        describe: "emit machine-readable JSON",
+        type: "boolean",
+        default: false,
+      }),
   async handler(args) {
+    const report = await doctorMemory(process.cwd(), { scope: args.scope })
+    if (args.json) {
+      console.log(JSON.stringify(report, null, 2))
+      return
+    }
+
     UI.empty()
     prompts.intro("Memory Doctor")
 
-    const report = await doctorMemory(process.cwd(), { scope: args.scope })
     prompts.log.info(`Status: ${report.status}`)
     prompts.log.info(
       `Checked: ${[report.checked.project ? "project" : "", report.checked.global ? "global" : ""]

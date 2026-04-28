@@ -63,4 +63,49 @@ describe("memory command", () => {
     expect(infoSpy.mock.calls.some(([message]) => String(message).includes("Status: ok"))).toBe(true)
     expect(successSpy.mock.calls.some(([message]) => String(message).includes("No memory issues found"))).toBe(true)
   })
+
+  test("recall --json emits parseable results without clack output", async () => {
+    await using tmp = await tmpdir()
+    process.chdir(tmp.path)
+
+    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
+    spyOn(prompts, "outro").mockImplementation(() => {})
+    spyOn(prompts.log, "success").mockImplementation(() => {})
+    const logSpy = spyOn(console, "log").mockImplementation(() => {})
+
+    await MemoryRememberCommand.handler({
+      kind: "feedback",
+      name: "json-recall",
+      body: "Machine readable recall",
+      global: false,
+    } as any)
+    introSpy.mockClear()
+    logSpy.mockClear()
+
+    await MemoryRecallCommand.handler({
+      query: "machine",
+      scope: "project",
+      json: true,
+    } as any)
+
+    expect(introSpy).not.toHaveBeenCalled()
+    const parsed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(parsed.count).toBe(1)
+    expect(parsed.results[0].entry.name).toBe("json-recall")
+  })
+
+  test("doctor --json emits parseable report without clack output", async () => {
+    await using tmp = await tmpdir()
+    process.chdir(tmp.path)
+
+    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
+    const logSpy = spyOn(console, "log").mockImplementation(() => {})
+
+    await MemoryDoctorCommand.handler({ scope: "project", json: true } as any)
+
+    expect(introSpy).not.toHaveBeenCalled()
+    const parsed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(parsed.status).toBe("ok")
+    expect(parsed.checked.project).toBe(true)
+  })
 })
