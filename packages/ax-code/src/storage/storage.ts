@@ -170,14 +170,19 @@ export namespace Storage {
       })
     for (let index = migration; index < MIGRATIONS.length; index++) {
       log.info("running migration", { index })
-      const migration = MIGRATIONS[index]
+      // Renamed to avoid shadowing the outer `migration` (the parsed
+      // version-number marker) — a future maintainer adding logging or
+      // recovery to the catch block below would otherwise reach for
+      // `migration` and silently get the migration function instead of
+      // the version number.
+      const migrationFn = MIGRATIONS[index]
       // Do NOT advance the version marker on failure — a failed migration
       // must be retried on the next startup, otherwise storage can be
       // left in a permanently corrupt state. The previous code swallowed
       // the error and wrote the next index unconditionally, which meant
       // broken migrations were silently skipped forever.
       try {
-        await migration(dir)
+        await migrationFn(dir)
       } catch (err) {
         log.error("failed to run migration", { index, err })
         throw err
@@ -193,7 +198,13 @@ export namespace Storage {
     const dir = await state().then((x) => x.dir)
     const target = path.join(dir, ...key) + ".json"
     return withErrorHandling(async () => {
-      using _ = await Lock.write(target)
+      using _inProcess = await Lock.write(target)
+      // Match `update`: cross-process lock so an unlink can't race with
+      // a concurrent ax-code process's read-modify-write on the same
+      // key. The previous in-process-only lock was safe within one
+      // process but allowed CLI + TUI co-operation on the same target
+      // to interleave delete and rename operations.
+      using _crossProcess = await FileLock.acquire(target)
       // ENOENT is expected (already removed). Any other error
       // (EPERM, EBUSY, EIO) should surface — a silent catch left
       // callers believing removal succeeded when it hadn't.
@@ -236,7 +247,15 @@ export namespace Storage {
     const dir = await state().then((x) => x.dir)
     const target = path.join(dir, ...key) + ".json"
     return withErrorHandling(async () => {
-      using _ = await Lock.write(target)
+      using _inProcess = await Lock.write(target)
+      // Pair with `update`'s cross-process lock so a write from one
+      // ax-code process can't be silently overwritten by a concurrent
+      // write from another (CLI + TUI / desktop running against the
+      // same project). `Filesystem.writeJson` is atomic per-write
+      // (tmp+rename), but two interleaved overwrites still produce a
+      // last-writer-wins race where one caller's content is lost
+      // without any error surfacing.
+      using _crossProcess = await FileLock.acquire(target)
       await Filesystem.writeJson(target, content)
     })
   }
@@ -269,8 +288,15 @@ export namespace Storage {
       }).then((results) => results.map((x) => [...prefix, ...x.replace(/\.json$/, "").split(path.sep)]))
       result.sort()
       return result
-    } catch {
-      return []
+    } catch (err) {
+      // Only "directory does not exist yet" legitimately means an empty
+      // listing. Other errors (EACCES, EIO, corrupt directory) must
+      // surface — a bare `catch {}` here let permission and I/O failures
+      // masquerade as "no sessions/projects found", which silently broke
+      // discovery callers and could prompt them to write fresh state on
+      // top of unreadable existing data.
+      if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return []
+      throw err
     }
   }
 }

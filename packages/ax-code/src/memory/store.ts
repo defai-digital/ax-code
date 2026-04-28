@@ -24,11 +24,29 @@ function getGlobalMemoryPath(): string {
 // mutate the returned object (e.g. recordEntry) never observe each other's writes.
 type CacheEntry = { mtimeMs: number; size: number; text: string }
 const readCache = new Map<string, CacheEntry>()
+// Cap matches the typical project-switch working set on a multi-project
+// server / desktop — well above what a single user touches in one session,
+// low enough that stale entries from week-old projects don't accumulate.
+// Insertion-order LRU: every `set` re-inserts to MRU, the oldest key is
+// dropped when over cap.
+const READ_CACHE_MAX_ENTRIES = 32
 // Coalesces concurrent cache-miss reads for the same path so two callers that
 // both pass the cache-miss check don't issue duplicate fs.readFile calls and
 // race to populate the cache (BUG-108). Entries live only for the duration of
 // the in-flight read; the cache itself remains the long-lived store.
 const inFlightReads = new Map<string, Promise<string | null>>()
+
+function cacheSet(filePath: string, entry: CacheEntry) {
+  // Promote to MRU on every set. Map iteration order is insertion order,
+  // so deleting first guarantees the just-set entry sits at the tail.
+  readCache.delete(filePath)
+  readCache.set(filePath, entry)
+  while (readCache.size > READ_CACHE_MAX_ENTRIES) {
+    const oldest = readCache.keys().next().value
+    if (oldest === undefined) break
+    readCache.delete(oldest)
+  }
+}
 
 /** Test-only: drop cached entries. */
 export function _resetReadCache(): void {
@@ -37,6 +55,22 @@ export function _resetReadCache(): void {
 }
 
 async function readFresh(filePath: string): Promise<string | null> {
+  // Stat → read → verify-stat: cache only when the mtime/size before and
+  // after the read agree, otherwise the file changed under us between the
+  // two syscalls and the cached `text` would not match the cached
+  // `mtimeMs/size`, leaving subsequent `readWithCache` callers serving stale
+  // text indefinitely (until the file is mutated again to invalidate the
+  // mismatched key). This is the TOCTOU window that BUG-memstore-toctou
+  // documented. We still return `text` to the current caller — they got a
+  // legitimate snapshot — but we skip caching it.
+  const initialStat = await fs.stat(filePath).catch((err: NodeJS.ErrnoException) => {
+    if (err?.code === "ENOENT") return null
+    throw err
+  })
+  if (!initialStat) {
+    readCache.delete(filePath)
+    return null
+  }
   let text: string
   try {
     text = await fs.readFile(filePath, "utf-8")
@@ -47,9 +81,16 @@ async function readFresh(filePath: string): Promise<string | null> {
     }
     throw err
   }
-  const finalStat = await fs.stat(filePath).catch(() => null)
-  if (finalStat) {
-    readCache.set(filePath, { mtimeMs: finalStat.mtimeMs, size: finalStat.size, text })
+  const finalStat = await fs.stat(filePath).catch((err: NodeJS.ErrnoException) => {
+    if (err?.code === "ENOENT") return null
+    throw err
+  })
+  if (
+    finalStat &&
+    finalStat.mtimeMs === initialStat.mtimeMs &&
+    finalStat.size === initialStat.size
+  ) {
+    cacheSet(filePath, { mtimeMs: finalStat.mtimeMs, size: finalStat.size, text })
   } else {
     readCache.delete(filePath)
   }

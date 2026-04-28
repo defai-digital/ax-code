@@ -18,6 +18,8 @@ import { MessageV2 } from "./message-v2"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
 import { SelfCorrection } from "./correction"
+import { BlastRadius } from "./blast-radius"
+import { SessionStatus } from "./status"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
@@ -693,24 +695,46 @@ export namespace Session {
       }
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
     })
-    // Publish events after the transaction commits so subscribers never
-    // observe a deletion event while the rows are still present.
-    for (const desc of allDescendants) {
-      Database.effect(() => Bus.publishDetached(Event.Deleted, { info: desc }))
-    }
-    Database.effect(() => Bus.publishDetached(Event.Deleted, { info: session }))
+    // Cleanup ordering — every step before the final publish must finish
+    // so subscribers can treat `session.deleted` as an "all resources
+    // released" signal (BUG-013):
+    //
+    //   1. unshare — independent of the prompt; do first so external
+    //      share URLs are invalidated as early as possible.
+    //   2. SessionPrompt.cancel — must complete BEFORE clearing
+    //      in-process state. The prompt's blast-radius writes go through
+    //      `BlastRadius.get` which lazily re-creates an entry on miss; if
+    //      we cleared first and the dying prompt then logged one final
+    //      tool call, we'd leak a fresh State. Awaiting cancel guarantees
+    //      no further writes can land on a cleared map.
+    //   3. Drop in-process per-session caches — `SelfCorrection`,
+    //      `BlastRadius`, `SessionStatus` (BUG-001 / BUG-002).
+    //      `SessionStatus.clear` is used instead of `set(..., idle)` so
+    //      we don't fire spurious `session.status` / `session.idle`
+    //      events for a session that's being destroyed, not transitioning
+    //      idle.
+    //   4. Publish `session.deleted` directly via `Bus.publishDetached`
+    //      (not `Database.effect`) — we're outside the transaction
+    //      context anyway, so `Database.effect` would fall through to
+    //      immediate execution; calling Bus directly is clearer.
     const items = [...allDescendants, session]
     for (const item of items) {
       await unshare(item.id).catch((e) => log.warn("session unshare failed", { sessionID: item.id, error: e }))
     }
-    for (const desc of allDescendants) {
-      SelfCorrection.reset(desc.id)
-      await SessionPrompt.cancel(desc.id).catch((e) =>
-        log.warn("session cancel failed", { sessionID: desc.id, error: e }),
+    for (const item of items) {
+      await SessionPrompt.cancel(item.id).catch((e) =>
+        log.warn("session cancel failed", { sessionID: item.id, error: e }),
       )
     }
-    SelfCorrection.reset(sessionID)
-    await SessionPrompt.cancel(sessionID).catch((e) => log.warn("session cancel failed", { sessionID, error: e }))
+    for (const item of items) {
+      SelfCorrection.reset(item.id)
+      BlastRadius.reset(item.id)
+      SessionStatus.clear(item.id)
+    }
+    for (const desc of allDescendants) {
+      Bus.publishDetached(Event.Deleted, { info: desc })
+    }
+    Bus.publishDetached(Event.Deleted, { info: session })
   })
 
   /**

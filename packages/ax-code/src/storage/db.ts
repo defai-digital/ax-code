@@ -15,6 +15,7 @@ import { Installation } from "../installation"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { init } from "#db"
+import { NativeStore } from "@/code-intelligence/native-store"
 
 declare const AX_CODE_MIGRATIONS: { sql: string; timestamp: number; name: string }[] | undefined
 
@@ -139,22 +140,47 @@ export namespace Database {
   export function close() {
     Client().$client.close()
     Client.reset()
+    // Release the native code-intelligence index store's SQLite handle
+    // alongside the main DB. Without this, `ax-code-index.db` and its WAL
+    // stay open for the lifetime of the process — a real fd / WAL leak in
+    // long-running server / desktop / TUI hosts (BUG-008). NativeStore.close
+    // is idempotent and safe to call when the addon isn't loaded.
+    NativeStore.close()
   }
 
   export type TxOrDb = Transaction | Client
   type SyncTransactionResult<T> =
     T extends Promise<any> ? DrizzleTypeError<"Sync drivers can't use async functions in transactions!"> : T
 
+  // Effects are intended to be synchronous. The narrowed type signals intent
+  // but TypeScript's `void` return is bivariant: a function returning
+  // `Promise<void>` is still assignable to `() => void`, so an accidental
+  // `async () => { ... }` compiles. The runtime guard below catches that
+  // and logs the rejection instead of leaving it as an unhandled rejection
+  // (BUG-003). Fire-and-forget async work must be wrapped explicitly:
+  // `Database.effect(() => { void doAsync().catch(log) })`.
+  type Effect = () => void
+
   const ctx = Context.create<{
     tx: TxOrDb
-    effects: (() => void | Promise<void>)[]
+    effects: Effect[]
   }>("database")
 
-  function runEffects(effects: (() => void | Promise<void>)[]) {
+  function runEffects(effects: Effect[]) {
     const errors: { index: number; error: unknown }[] = []
     for (let i = 0; i < effects.length; i++) {
       try {
-        effects[i]()
+        const result = effects[i]() as unknown
+        if (result instanceof Promise) {
+          const idx = i
+          result.catch((err) => {
+            log.warn("post-commit async effect rejected", {
+              index: idx,
+              error: err instanceof Error ? err.message : String(err),
+              hint: "Database.effect callbacks should be synchronous; wrap async work in fire-and-forget",
+            })
+          })
+        }
       } catch (e) {
         errors.push({ index: i, error: e })
       }
@@ -173,7 +199,7 @@ export namespace Database {
       return callback(ctx.use().tx)
     } catch (err) {
       if (err instanceof Context.NotFound) {
-        const effects: (() => void | Promise<void>)[] = []
+        const effects: Effect[] = []
         const result = ctx.provide({ effects, tx: Client() }, () => callback(Client()))
         runEffects(effects)
         return result
@@ -182,7 +208,7 @@ export namespace Database {
     }
   }
 
-  export function effect(fn: () => any | Promise<any>) {
+  export function effect(fn: Effect) {
     try {
       ctx.use().effects.push(fn)
     } catch (err) {
@@ -203,7 +229,7 @@ export namespace Database {
       return callback(ctx.use().tx) as SyncTransactionResult<T>
     } catch (err) {
       if (err instanceof Context.NotFound) {
-        const effects: (() => void | Promise<void>)[] = []
+        const effects: Effect[] = []
         const result = Client().transaction<T>((tx) => {
           return ctx.provide({ tx, effects }, () => callback(tx)) as SyncTransactionResult<T>
         }) as SyncTransactionResult<T>

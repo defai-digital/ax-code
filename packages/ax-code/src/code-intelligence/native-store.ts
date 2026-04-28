@@ -9,12 +9,18 @@ import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 const log = Log.create({ service: "code-intelligence.native-store" })
 
 let storeInstance: any | undefined
+// Once `NativeStore.close()` runs we must not lazily reopen a fresh
+// connection on the next op call — that would defeat the shutdown release
+// and resurface BUG-008. The flag stays set for the rest of the process
+// lifetime; a clean reopen requires a new process.
+let storeClosed = false
 
 function getDbPath(): string {
   return Global.Path.data + "/ax-code-index.db"
 }
 
 function store(): any {
+  if (storeClosed) return undefined
   if (storeInstance) return storeInstance
   const native = NativeAddon.index()
   if (!native) return undefined
@@ -34,6 +40,30 @@ function op<T>(name: string, input: unknown, fn: (store: any) => T): T | undefin
 
 export namespace NativeStore {
   export const available = !!NativeAddon.index()
+
+  /**
+   * Release the native IndexStore's SQLite connection. Idempotent. Wires
+   * into `Database.close()` so `ax-code` shutdown paths release the
+   * `ax-code-index.db` fd and run the final WAL checkpoint instead of
+   * leaking it for the lifetime of the process (BUG-008).
+   *
+   * After close the singleton is cleared and the closed flag is set, so
+   * further `op()` calls fall through to the no-native-addon path
+   * (returning `undefined` / `[]` like the addon-not-available branch).
+   * Callers don't need to special-case post-close behaviour.
+   */
+  export function close(): void {
+    if (storeClosed) return
+    storeClosed = true
+    const instance = storeInstance
+    storeInstance = undefined
+    if (!instance) return
+    try {
+      instance.close()
+    } catch (err) {
+      log.warn("native IndexStore close failed", { error: String(err) })
+    }
+  }
 
   // Safe JSON.parse wrapper — returns fallback on corrupted native output (BUG-005)
   function safeParse<T>(json: string, fallback: T): T {

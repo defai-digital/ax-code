@@ -16,6 +16,30 @@ import { generate } from "./generator"
 import { computeContentHash, renderEntry } from "./hash"
 import type { EntrySection, MemoryEntry, MemoryEntryKind, ProjectMemory } from "./types"
 
+// Serialize concurrent recordEntry / removeEntry calls for the same memory
+// file. Two parallel callers would otherwise both `loadOrInit` the same
+// snapshot, each apply their mutation, and the second `save` would overwrite
+// the first — a classic lost-update race. Cross-process safety is handled by
+// `store.save` (atomic tmp+rename); this in-process queue is the missing
+// layer for concurrent in-process callers (TUI sessions, parallel agent
+// turns, etc.). Each key (project root or "global") gets its own promise
+// chain; the entry is dropped once its tail resolves so the Map stays
+// bounded by the number of currently in-flight write paths.
+const writeQueues = new Map<string, Promise<unknown>>()
+
+async function withWriteQueue<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = writeQueues.get(key) ?? Promise.resolve()
+  const next = prev.then(fn, fn)
+  writeQueues.set(key, next)
+  try {
+    return await next
+  } finally {
+    if (writeQueues.get(key) === next) writeQueues.delete(key)
+  }
+}
+
+const GLOBAL_KEY = "__global__"
+
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
 }
@@ -78,6 +102,10 @@ export interface RecordInput {
 
 /**
  * Add or replace an entry within the given kind. Returns the persisted memory.
+ *
+ * Serialized per memory file via `withWriteQueue` so two concurrent record
+ * calls for the same project (or both global) don't race on
+ * load → modify → save and lose one writer's entry.
  */
 export async function recordEntry(
   projectRoot: string,
@@ -90,29 +118,35 @@ export async function recordEntry(
   if (!body) throw new Error("memory recorder: entry body must be non-empty")
 
   const isGlobal = input.scope === "global"
-  const memory = isGlobal ? await loadOrInitGlobal() : await loadOrInit(projectRoot)
-  const existing = memory.sections[kind]?.entries ?? []
-  const filtered = existing.filter((e) => e.name !== name)
-  const agents = input.agents?.map((a) => a.trim()).filter(Boolean)
-  const entry: MemoryEntry = {
-    name,
-    body,
-    savedAt: new Date().toISOString(),
-    ...(input.why ? { why: input.why.trim() } : {}),
-    ...(input.howToApply ? { howToApply: input.howToApply.trim() } : {}),
-    ...(agents && agents.length > 0 ? { agents } : {}),
-  }
-  filtered.push(entry)
-  memory.sections[kind] = rebuildSection(filtered)
-  recomputeMetrics(memory)
+  const queueKey = isGlobal ? GLOBAL_KEY : projectRoot
+  return withWriteQueue(queueKey, async () => {
+    const memory = isGlobal ? await loadOrInitGlobal() : await loadOrInit(projectRoot)
+    const existing = memory.sections[kind]?.entries ?? []
+    const filtered = existing.filter((e) => e.name !== name)
+    const agents = input.agents?.map((a) => a.trim()).filter(Boolean)
+    const entry: MemoryEntry = {
+      name,
+      body,
+      savedAt: new Date().toISOString(),
+      ...(input.why ? { why: input.why.trim() } : {}),
+      ...(input.howToApply ? { howToApply: input.howToApply.trim() } : {}),
+      ...(agents && agents.length > 0 ? { agents } : {}),
+    }
+    filtered.push(entry)
+    memory.sections[kind] = rebuildSection(filtered)
+    recomputeMetrics(memory)
 
-  if (isGlobal) await store.saveGlobal(memory)
-  else await store.save(projectRoot, memory)
-  return memory
+    if (isGlobal) await store.saveGlobal(memory)
+    else await store.save(projectRoot, memory)
+    return memory
+  })
 }
 
 /**
  * Remove an entry by name. Returns true if removed, false if not found.
+ *
+ * Shares the per-file write queue with `recordEntry` so a remove can't
+ * interleave with a record on the same file.
  */
 export async function removeEntry(
   projectRoot: string,
@@ -121,19 +155,24 @@ export async function removeEntry(
   scope: "project" | "global" = "project",
 ): Promise<boolean> {
   const isGlobal = scope === "global"
-  const memory = isGlobal ? await store.loadGlobal().catch(() => null) : await store.load(projectRoot).catch(() => null)
-  if (!memory) return false
-  const section = memory.sections[kind]
-  if (!section) return false
-  const before = section.entries.length
-  const filtered = section.entries.filter((e) => e.name !== name)
-  if (filtered.length === before) return false
-  if (filtered.length === 0) memory.sections[kind] = undefined
-  else memory.sections[kind] = rebuildSection(filtered)
-  recomputeMetrics(memory)
-  if (isGlobal) await store.saveGlobal(memory)
-  else await store.save(projectRoot, memory)
-  return true
+  const queueKey = isGlobal ? GLOBAL_KEY : projectRoot
+  return withWriteQueue(queueKey, async () => {
+    const memory = isGlobal
+      ? await store.loadGlobal().catch(() => null)
+      : await store.load(projectRoot).catch(() => null)
+    if (!memory) return false
+    const section = memory.sections[kind]
+    if (!section) return false
+    const before = section.entries.length
+    const filtered = section.entries.filter((e) => e.name !== name)
+    if (filtered.length === before) return false
+    if (filtered.length === 0) memory.sections[kind] = undefined
+    else memory.sections[kind] = rebuildSection(filtered)
+    recomputeMetrics(memory)
+    if (isGlobal) await store.saveGlobal(memory)
+    else await store.save(projectRoot, memory)
+    return true
+  })
 }
 
 /**

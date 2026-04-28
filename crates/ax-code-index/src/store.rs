@@ -9,9 +9,14 @@ pub(crate) fn json_str<T: serde::Serialize>(val: &T) -> Result<String, rusqlite:
   serde_json::to_string(val).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
 }
 
+/// `Option<Connection>` rather than bare `Connection` so `close` can take the
+/// connection out and run `Connection::close` (which consumes self, runs the
+/// final WAL checkpoint, and surfaces close-time errors). After close every
+/// further `with_conn*` call returns "store is closed" instead of silently
+/// reopening, which would defeat the point of the shutdown release.
 #[napi]
 pub struct IndexStore {
-  pub(crate) conn: Mutex<Connection>,
+  pub(crate) conn: Mutex<Option<Connection>>,
 }
 
 #[napi]
@@ -29,7 +34,39 @@ impl IndexStore {
     conn.execute_batch(schema::CREATE_TABLES)
       .map_err(|e| napi::Error::from_reason(format!("failed to create tables: {e}")))?;
 
-    Ok(Self { conn: Mutex::new(conn) })
+    Ok(Self { conn: Mutex::new(Some(conn)) })
+  }
+
+  /// Explicitly release the underlying SQLite connection. Truncates the WAL
+  /// before closing so external readers see a fully-checkpointed main DB,
+  /// then consumes the connection via `Connection::close` to run SQLite's
+  /// own clean-shutdown path. Idempotent — calling close on an already-
+  /// closed store is a no-op.
+  ///
+  /// Once closed, every other method on this store returns
+  /// "index store is closed" (see `with_conn` / `with_conn_mut`). Callers
+  /// must drop their JS handle and re-construct an `IndexStore` if they
+  /// need to resume work; the singleton in `native-store.ts` enforces this
+  /// by clearing its cached instance on close.
+  #[napi]
+  pub fn close(&self) -> napi::Result<()> {
+    let mut guard = self
+      .conn
+      .lock()
+      .map_err(|e| napi::Error::from_reason(format!("lock poisoned: {e}")))?;
+    let Some(conn) = guard.take() else {
+      return Ok(());
+    };
+    // Best-effort WAL checkpoint. Failure here doesn't block close — the
+    // checkpoint is a courtesy for external SQLite readers, not required
+    // for correctness, and we still want the connection to be released.
+    let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+    if let Err((_, err)) = conn.close() {
+      return Err(napi::Error::from_reason(format!(
+        "failed to close index store cleanly: {err}"
+      )));
+    }
+    Ok(())
   }
 }
 
@@ -38,16 +75,28 @@ impl IndexStore {
   where
     F: FnOnce(&Connection) -> Result<T, rusqlite::Error>,
   {
-    let conn = self.conn.lock().map_err(|e| napi::Error::from_reason(format!("lock poisoned: {e}")))?;
-    f(&conn).map_err(|e| napi::Error::from_reason(format!("sqlite error: {e}")))
+    let guard = self
+      .conn
+      .lock()
+      .map_err(|e| napi::Error::from_reason(format!("lock poisoned: {e}")))?;
+    let conn = guard
+      .as_ref()
+      .ok_or_else(|| napi::Error::from_reason("index store is closed"))?;
+    f(conn).map_err(|e| napi::Error::from_reason(format!("sqlite error: {e}")))
   }
 
   pub(crate) fn with_conn_mut<T, F>(&self, f: F) -> napi::Result<T>
   where
     F: FnOnce(&mut Connection) -> Result<T, rusqlite::Error>,
   {
-    let mut conn = self.conn.lock().map_err(|e| napi::Error::from_reason(format!("lock poisoned: {e}")))?;
-    f(&mut conn).map_err(|e| napi::Error::from_reason(format!("sqlite error: {e}")))
+    let mut guard = self
+      .conn
+      .lock()
+      .map_err(|e| napi::Error::from_reason(format!("lock poisoned: {e}")))?;
+    let conn = guard
+      .as_mut()
+      .ok_or_else(|| napi::Error::from_reason("index store is closed"))?;
+    f(conn).map_err(|e| napi::Error::from_reason(format!("sqlite error: {e}")))
   }
 }
 
@@ -63,7 +112,7 @@ mod tests {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(crate::schema::PRAGMAS).unwrap();
     conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
-    IndexStore { conn: Mutex::new(conn) }
+    IndexStore { conn: Mutex::new(Some(conn)) }
   }
 
   fn make_node(id: &str, project_id: &str, name: &str, file: &str) -> NodeRow {
@@ -388,5 +437,22 @@ mod tests {
     let nodes = vec![make_node("n1", "proj1", "func", "/a.ts")];
     store.insert_nodes(serde_json::to_string(&nodes).unwrap()).unwrap();
     store.analyze().unwrap();
+  }
+
+  #[test]
+  fn test_close_releases_connection_and_blocks_further_ops() {
+    let store = test_store();
+    let nodes = vec![make_node("n1", "proj1", "func", "/a.ts")];
+    store.insert_nodes(serde_json::to_string(&nodes).unwrap()).unwrap();
+
+    // Close consumes the connection.
+    store.close().unwrap();
+
+    // Subsequent operations must fail rather than silently reopening.
+    let err = store.count_nodes("proj1".into()).unwrap_err();
+    assert!(err.reason.contains("closed"), "got: {}", err.reason);
+
+    // Idempotent: a second close on an already-closed store is a no-op.
+    store.close().unwrap();
   }
 }

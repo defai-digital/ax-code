@@ -58,20 +58,21 @@ export function writeTransfer(data: SessionTransfer) {
     projectID: Instance.project.id,
   })
   const row = Session.toRow(info)
-  Database.use((db) =>
-    db
-      .insert(SessionTable)
+  // Single transaction so a mid-import failure (FK violation on a part
+  // whose message wasn't inserted, malformed event data, etc.) rolls back
+  // the whole batch instead of leaving the DB with a half-imported session
+  // that has no parent row, dangling parts, or a partial event log. Matches
+  // the all-or-nothing pattern used by `Session.fork`.
+  Database.transaction((db) => {
+    db.insert(SessionTable)
       .values(row)
       .onConflictDoUpdate({ target: SessionTable.id, set: { project_id: row.project_id } })
-      .run(),
-  )
+      .run()
 
-  for (const msg of data.messages) {
-    const msgInfo = MessageV2.Info.parse(msg.info)
-    const { id, sessionID: _sid, ...msgData } = msgInfo
-    Database.use((db) =>
-      db
-        .insert(MessageTable)
+    for (const msg of data.messages) {
+      const msgInfo = MessageV2.Info.parse(msg.info)
+      const { id, sessionID: _sid, ...msgData } = msgInfo
+      db.insert(MessageTable)
         .values({
           id,
           session_id: row.id,
@@ -79,15 +80,12 @@ export function writeTransfer(data: SessionTransfer) {
           data: msgData,
         })
         .onConflictDoNothing()
-        .run(),
-    )
+        .run()
 
-    for (const part of msg.parts) {
-      const partInfo = MessageV2.Part.parse(part)
-      const { id: partID, sessionID: _partSid, messageID, ...partData } = partInfo
-      Database.use((db) =>
-        db
-          .insert(PartTable)
+      for (const part of msg.parts) {
+        const partInfo = MessageV2.Part.parse(part)
+        const { id: partID, sessionID: _partSid, messageID, ...partData } = partInfo
+        db.insert(PartTable)
           .values({
             id: partID,
             message_id: messageID,
@@ -95,15 +93,12 @@ export function writeTransfer(data: SessionTransfer) {
             data: partData,
           })
           .onConflictDoNothing()
-          .run(),
-      )
+          .run()
+      }
     }
-  }
 
-  for (const event of (data.events ?? []).toSorted((a, b) => a.sequence - b.sequence)) {
-    Database.use((db) =>
-      db
-        .insert(EventLogTable)
+    for (const event of (data.events ?? []).toSorted((a, b) => a.sequence - b.sequence)) {
+      db.insert(EventLogTable)
         .values({
           id: event.id ? EventLogID.make(event.id) : EventLogID.ascending(),
           session_id: row.id,
@@ -115,7 +110,7 @@ export function writeTransfer(data: SessionTransfer) {
           time_updated: event.timeCreated,
         })
         .onConflictDoNothing()
-        .run(),
-    )
-  }
+        .run()
+    }
+  })
 }

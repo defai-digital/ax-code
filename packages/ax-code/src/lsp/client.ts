@@ -353,18 +353,32 @@ export namespace LSPClient {
     // than just a fingerprint so we can reproduce the server's notion of
     // the document and diff against it line-by-line.
     //
-    // Memory budget: text is held only for files the server has open. The
-    // diagnostics LRU cap and notify.close cleanup bound this indirectly.
-    const lastContent: {
-      [path: string]: { hash: string; length: number; text: string }
-    } = {}
+    // Memory budget: capped at MAX_CACHED_DIAGNOSTICS entries with
+    // insertion-order LRU eviction. Without the cap, every file the
+    // server ever opened stayed resident for the lifetime of the LSP
+    // client, which on large worktrees (2000+ files) reached tens of MB
+    // per client × multiple clients (BUG-007). Each `setLastContent`
+    // promotes the entry to the most-recently-used position by deleting
+    // and re-inserting it.
+    const lastContent = new Map<string, { hash: string; length: number; text: string }>()
 
     function contentFingerprint(text: string) {
       return { hash: fingerprintHash(text), length: text.length, text }
     }
 
+    function setLastContent(filePath: string, text: string) {
+      // Promote to MRU position (Map iterates in insertion order).
+      lastContent.delete(filePath)
+      lastContent.set(filePath, contentFingerprint(text))
+      while (lastContent.size > MAX_CACHED_DIAGNOSTICS) {
+        const oldest = lastContent.keys().next().value
+        if (oldest === undefined) break
+        lastContent.delete(oldest)
+      }
+    }
+
     function contentUnchanged(filePath: string, text: string) {
-      const prev = lastContent[filePath]
+      const prev = lastContent.get(filePath)
       if (!prev) return false
       if (prev.length !== text.length) return false
       return prev.hash === fingerprintHash(text)
@@ -431,7 +445,7 @@ export namespace LSPClient {
           })
       }
       delete files[normalized]
-      delete lastContent[normalized]
+      lastContent.delete(normalized)
       diagnostics.delete(normalized)
       return true
     }
@@ -525,7 +539,7 @@ export namespace LSPClient {
                     text: string
                   }
               >
-              const prevText = lastContent[input.path]?.text
+              const prevText = lastContent.get(input.path)?.text
               const incremental = prevText ? computeIncrementalChanges(prevText, text) : null
               if (incremental && incremental.length > 0) {
                 contentChanges = incremental
@@ -548,7 +562,7 @@ export namespace LSPClient {
                 },
                 contentChanges,
               })
-              lastContent[input.path] = contentFingerprint(text)
+              setLastContent(input.path, text)
               await wait
               return true
             }
@@ -575,7 +589,7 @@ export namespace LSPClient {
               },
             })
             files[input.path] = 0
-            lastContent[input.path] = contentFingerprint(text)
+            setLastContent(input.path, text)
             await wait
             return true
           })

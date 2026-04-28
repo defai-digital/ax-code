@@ -111,6 +111,19 @@ export namespace JsonMigration {
 
     function insert<T>(values: T[], execute: (values: T[]) => void, label: string) {
       if (values.length === 0) return 0
+      // Try the whole batch first — `db.insert(...).values(values).run()`
+      // packs the rows into a single multi-row INSERT statement, cutting
+      // 1000-row batches from ~1000 SQL round-trips down to one. The
+      // previous one-row-per-call loop dominated migration time on large
+      // storage directories. If the batch fails (e.g. a single row
+      // violates an FK or unique constraint), fall back to per-row so
+      // one bad record doesn't poison the rest of the batch.
+      try {
+        execute(values)
+        return values.length
+      } catch (e) {
+        log.warn(`batch insert failed for ${label}, falling back to per-row`, { error: String(e), count: values.length })
+      }
       let count = 0
       for (const value of values) {
         try {

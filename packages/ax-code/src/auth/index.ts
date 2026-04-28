@@ -1,5 +1,6 @@
 import path from "path"
 import fsPromises from "fs/promises"
+import { unlinkSync, readFileSync } from "fs"
 import { randomUUID } from "crypto"
 import { Effect, Layer, Record, Result, Schema, ServiceMap } from "effect"
 import { makeRunPromise } from "@/effect/run-service"
@@ -31,7 +32,45 @@ type AuthLockBody = {
 // Prevents two concurrent ax-code processes (e.g. CLI + desktop app)
 // from racing on auth.json. Falls back to in-process Lock.write("auth")
 // for same-process mutual exclusion.
-async function acquireFileLock(): Promise<() => void> {
+//
+// Returns a `Disposable` so callers can use `using` syntax. The dispose
+// path runs synchronously (`unlinkSync`) — the previous async release
+// returned a `() => Promise<void>` that callers invoked without `await`,
+// so the unlink raced with subsequent acquires and could leave the
+// lockfile on disk after release (BUG-208). With sync dispose, the
+// lockfile is gone the moment the `using` block exits.
+//
+// We still verify the token on release: between acquire and release,
+// another process may have stolen the lock (if `maybeSteal` decided this
+// process was dead). Deleting their lockfile would be a real bug.
+function makeAuthLockDisposable(ownToken: string): Disposable {
+  let disposed = false
+  return {
+    [Symbol.dispose]: () => {
+      if (disposed) return
+      disposed = true
+      try {
+        const text = readFileSync(lockFile, "utf-8")
+        const parsed = JSON.parse(text) as Partial<AuthLockBody>
+        if (parsed.token !== ownToken) return
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return
+        // Unreadable / corrupt lockfile: someone else's problem to clean
+        // up (or `maybeSteal` will reap it on the next acquire).
+        log.warn("auth lock release: failed to read lockfile", { err })
+        return
+      }
+      try {
+        unlinkSync(lockFile)
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return
+        log.error("auth lock release failed", { err })
+      }
+    },
+  }
+}
+
+async function acquireFileLock(): Promise<Disposable> {
   const body: AuthLockBody = {
     host: process.env.HOSTNAME ?? "",
     pid: process.pid,
@@ -102,11 +141,7 @@ async function acquireFileLock(): Promise<() => void> {
   while (true) {
     try {
       if (await tryCreate()) {
-        return async () => {
-          const current = await readBody()
-          if (!current || current.token !== body.token) return
-          await fsPromises.unlink(lockFile).catch(() => {})
-        }
+        return makeAuthLockDisposable(body.token)
       }
     } catch (e: any) {
       if (e.code !== "EEXIST") throw e
@@ -260,13 +295,9 @@ export namespace Auth {
               }
               return Effect.tryPromise({
                 try: async () => {
-                  const releaseFileLock = await acquireFileLock()
-                  try {
-                    using _ = await Lock.write("auth")
-                    await Filesystem.writeJson(file, updated, 0o600)
-                  } finally {
-                    releaseFileLock()
-                  }
+                  using _crossProcess = await acquireFileLock()
+                  using _inProcess = await Lock.write("auth")
+                  await Filesystem.writeJson(file, updated, 0o600)
                 },
                 catch: fail("Failed to migrate auth entries"),
               }).pipe(Effect.map(() => entries as Record<string, Info>))
@@ -285,17 +316,13 @@ export namespace Auth {
         if (!norm || norm.includes("..")) return yield* new AuthError({ message: "Invalid provider ID" })
         yield* Effect.tryPromise({
           try: async () => {
-            const releaseFileLock = await acquireFileLock()
-            try {
-              using _ = await Lock.write("auth")
-              const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
-              if (norm !== key) delete data[key]
-              delete data[norm + "/"]
-              if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
-              await Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600)
-            } finally {
-              releaseFileLock()
-            }
+            using _crossProcess = await acquireFileLock()
+            using _inProcess = await Lock.write("auth")
+            const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
+            if (norm !== key) delete data[key]
+            delete data[norm + "/"]
+            if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
+            await Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600)
           },
           catch: fail("Failed to write auth data"),
         })
@@ -305,17 +332,13 @@ export namespace Auth {
         const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
         yield* Effect.tryPromise({
           try: async () => {
-            const releaseFileLock = await acquireFileLock()
-            try {
-              using _ = await Lock.write("auth")
-              const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
-              delete data[key]
-              delete data[norm]
-              delete data[norm + "/"]
-              await Filesystem.writeJson(file, data, 0o600)
-            } finally {
-              releaseFileLock()
-            }
+            using _crossProcess = await acquireFileLock()
+            using _inProcess = await Lock.write("auth")
+            const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
+            delete data[key]
+            delete data[norm]
+            delete data[norm + "/"]
+            await Filesystem.writeJson(file, data, 0o600)
           },
           catch: fail("Failed to write auth data"),
         })

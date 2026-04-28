@@ -8,6 +8,16 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 const log = Log.create({ service: "replay.recorder" })
 
 export namespace Recorder {
+  // Backstop cap that bounds memory if `end()` is skipped (process crash
+  // between begin and end, or a buggy caller). The per-entry footprint is
+  // tiny — `{ sequence: number }` ≈ 24 bytes — so we set the cap high
+  // enough that legitimate concurrent sessions never trigger eviction.
+  // Eviction here is begin-time-only (we don't promote on `emit`), so a
+  // low cap could silently drop subsequent events for a long-running
+  // active session whose entry happens to be the oldest by begin order.
+  // Logging on eviction surfaces the case if it ever happens in practice
+  // (BUG-010).
+  const MAX_SESSIONS = 10_000
   const sessions = new Map<string, { sequence: number }>()
 
   // Pending events buffered between microtask flushes. Long sessions emit
@@ -54,6 +64,16 @@ export namespace Recorder {
 
   export function begin(sessionID: SessionID) {
     sessions.set(sessionID, { sequence: 0 })
+    while (sessions.size > MAX_SESSIONS) {
+      const oldest = sessions.keys().next().value
+      if (oldest === undefined || oldest === sessionID) break
+      sessions.delete(oldest)
+      log.warn("evicting recorder session entry — likely indicates leaked sessions", {
+        evictedSessionID: oldest,
+        cap: MAX_SESSIONS,
+        hint: "subsequent emit() calls for the evicted session will be silently dropped",
+      })
+    }
   }
 
   export function end(sessionID: SessionID) {

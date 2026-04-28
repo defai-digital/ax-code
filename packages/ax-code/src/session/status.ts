@@ -73,4 +73,15 @@ export namespace SessionStatus {
     data.set(sessionID, status)
     Bus.publishDetached(Event.Status, { sessionID, status })
   }
+
+  /**
+   * Drop the in-process status entry without publishing status / idle events.
+   * Use from teardown paths (e.g. `Session.remove`) where the session is being
+   * destroyed: subscribers receive a `session.deleted` event instead, and the
+   * usual "session went idle" notification would be a false positive (it never
+   * went idle — it ceased to exist).
+   */
+  export function clear(sessionID: SessionID) {
+    state().delete(sessionID)
+  }
 }

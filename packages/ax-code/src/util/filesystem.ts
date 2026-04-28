@@ -98,11 +98,12 @@ export namespace Filesystem {
 
     const nodeStream = stream instanceof ReadableStream ? Readable.fromWeb(stream as any) : stream
     try {
+      // `createWriteStream(tmp, { mode })` opens the file with the requested
+      // mode at creation, so the previous follow-up `fs.chmod(tmp, mode)`
+      // was redundant and added a window between stream-close and rename
+      // where the tmp file existed without the rename being staged. Drop it.
       const writeStream = createWriteStream(tmp, mode ? { mode } : undefined)
       await pipeline(nodeStream, writeStream)
-      if (mode) {
-        await fs.chmod(tmp, mode)
-      }
       await fs.rename(tmp, p)
     } catch (error) {
       await fs.unlink(tmp).catch(() => {})
