@@ -7,6 +7,7 @@ import {
   MemoryEvalCommand,
   MemoryRecallCommand,
   MemoryRememberCommand,
+  applyMemoryDoctorExitCode,
   applyMemoryEvalExitCode,
 } from "../../src/cli/cmd/memory"
 
@@ -115,6 +116,20 @@ describe("memory command", () => {
     const parsed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
     expect(parsed.status).toBe("ok")
     expect(parsed.checked.project).toBe(true)
+  })
+
+  test("doctor exit helper honors fail-on thresholds", () => {
+    const warnTarget: { exitCode?: number | string | undefined } = {}
+    const errorOnlyTarget: { exitCode?: number | string | undefined } = {}
+    const neverTarget: { exitCode?: number | string | undefined } = {}
+
+    applyMemoryDoctorExitCode({ status: "warn" }, "warn", warnTarget)
+    applyMemoryDoctorExitCode({ status: "warn" }, "error", errorOnlyTarget)
+    applyMemoryDoctorExitCode({ status: "error" }, "never", neverTarget)
+
+    expect(warnTarget.exitCode).toBe(1)
+    expect(errorOnlyTarget.exitCode).toBeUndefined()
+    expect(neverTarget.exitCode).toBeUndefined()
   })
 
   test("eval --json emits parseable recall metrics", async () => {

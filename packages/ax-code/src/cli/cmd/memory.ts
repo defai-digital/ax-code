@@ -7,6 +7,7 @@ import { getMetadata } from "../../memory/injector"
 import { recordEntry, removeEntry, listEntries } from "../../memory/recorder"
 import { recall } from "../../memory/recall"
 import { doctor as doctorMemory } from "../../memory/doctor"
+import type { MemoryDoctorReport } from "../../memory/doctor"
 import { evaluate as evaluateMemory } from "../../memory/evaluation"
 import type { MemoryEvaluationReport } from "../../memory/evaluation"
 import type { MemoryEntryKind } from "../../memory/types"
@@ -31,6 +32,16 @@ export function applyMemoryEvalExitCode(
   target: { exitCode?: number | string | undefined } = process,
 ) {
   if (!report.passedThreshold) target.exitCode = 1
+}
+
+export function applyMemoryDoctorExitCode(
+  report: Pick<MemoryDoctorReport, "status">,
+  failOn: "warn" | "error" | "never" | undefined,
+  target: { exitCode?: number | string | undefined } = process,
+) {
+  if (!failOn || failOn === "never") return
+  if (failOn === "error" && report.status === "error") target.exitCode = 1
+  if (failOn === "warn" && report.status !== "ok") target.exitCode = 1
 }
 
 export const MemoryCommand = cmd({
@@ -430,9 +441,15 @@ export const MemoryDoctorCommand = cmd({
         describe: "emit machine-readable JSON",
         type: "boolean",
         default: false,
+      })
+      .option("fail-on", {
+        describe: 'set exit code 1 when doctor status reaches "warn" or "error"',
+        choices: ["warn", "error", "never"] as const,
+        default: "never" as const,
       }),
   async handler(args) {
     const report = await doctorMemory(process.cwd(), { scope: args.scope })
+    applyMemoryDoctorExitCode(report, args.failOn)
     if (args.json) {
       console.log(JSON.stringify(report, null, 2))
       return
