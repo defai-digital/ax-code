@@ -218,6 +218,13 @@ export namespace ACP {
       this.permissionQueues.clear()
       this.replaying.clear()
       this.replayQueue.clear()
+      // Drop the per-session state map too — without this, an agent
+      // disposed in the middle of a long-lived ACP server still leaks
+      // one ACPSessionState per session it ever saw, including the
+      // mcpServers list each holds. The sessions Map has a soft cap
+      // (LRU eviction in `track`) but explicit clear on dispose is the
+      // canonical lifecycle release.
+      this.sessionManager.clear()
       // Cancel any fire-and-forget session-update timers that were
       // scheduled during session creation but haven't fired yet —
       // without this, the timer callback would call sessionUpdate()
