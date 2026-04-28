@@ -307,6 +307,13 @@ export namespace MCP {
       cachedTools = undefined
       toolsPromise = undefined
       await closeAllPendingOAuthTransports()
+      // Drop any in-flight connect promises tracked here so a graceful
+      // instance shutdown doesn't leave entries pointing at promises
+      // that still resolve and try to write to state we just tore down.
+      // Self-cleaning via `finally` would still happen, but explicit
+      // clear keeps shutdown deterministic and stops confusing post-
+      // shutdown error logs from late `connectImpl` writes.
+      connectLocks.clear()
     },
   )
 
