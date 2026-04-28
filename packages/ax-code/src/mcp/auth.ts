@@ -199,6 +199,30 @@ export namespace McpAuth {
     })
   }
 
+  // Atomic field clears used by `oauth-provider.invalidateCredentials`.
+  // They exist as their own helpers so callers don't have to do a manual
+  // `get → mutate → set` sequence under a separate lock —
+  // `withFileEntryLock` serializes on `filepath`, the same key that
+  // `set()` and `remove()` use, so concurrent writes to mcp-auth.json
+  // never lose updates. The previous `invalidateCredentials`
+  // implementation acquired a lock on `mcpName`, then called `set()`
+  // which acquires a lock on `filepath`. Those are different lock
+  // instances, so a parallel `updateTokens()` for the same server could
+  // resurrect a token we just tried to drop.
+  export async function clearClientInfo(mcpName: string): Promise<void> {
+    await withFileEntryLock(mcpName, (entry) => {
+      if (!entry.clientInfo) return
+      delete entry.clientInfo
+    })
+  }
+
+  export async function clearTokens(mcpName: string): Promise<void> {
+    await withFileEntryLock(mcpName, (entry) => {
+      if (!entry.tokens) return
+      delete entry.tokens
+    })
+  }
+
   /**
    * Check if stored tokens are expired.
    * Returns null if no tokens exist, false if no expiry or not expired, true if expired.

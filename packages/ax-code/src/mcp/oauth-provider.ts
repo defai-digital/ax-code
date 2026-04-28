@@ -172,26 +172,24 @@ export class McpOAuthProvider implements OAuthClientProvider {
 
   async invalidateCredentials(type: "all" | "client" | "tokens"): Promise<void> {
     log.info("invalidating credentials", { mcpName: this.mcpName, type })
-    await McpAuth.withLock(this.mcpName, async () => {
-      const entry = await McpAuth.get(this.mcpName)
-      if (!entry) {
+    // Use the field-specific atomic clears (or `remove`) so the read,
+    // mutate, and write all happen under the same `filepath` lock that
+    // every other auth.json mutation uses. Previously this method
+    // acquired a lock on `mcpName` and then called `set()` which
+    // acquires a lock on `filepath` — two different lock instances, so
+    // a parallel `updateTokens()` could land between our get() and
+    // set() and have its write trampled by ours.
+    switch (type) {
+      case "all":
+        await McpAuth.remove(this.mcpName)
         return
-      }
-
-      switch (type) {
-        case "all":
-          await McpAuth.remove(this.mcpName)
-          break
-        case "client":
-          delete entry.clientInfo
-          await McpAuth.set(this.mcpName, entry)
-          break
-        case "tokens":
-          delete entry.tokens
-          await McpAuth.set(this.mcpName, entry)
-          break
-      }
-    })
+      case "client":
+        await McpAuth.clearClientInfo(this.mcpName)
+        return
+      case "tokens":
+        await McpAuth.clearTokens(this.mcpName)
+        return
+    }
   }
 }
 
