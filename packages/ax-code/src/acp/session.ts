@@ -8,9 +8,49 @@ const log = Log.create({ service: "acp-session-manager" })
 export class ACPSessionManager {
   private sessions = new Map<string, ACPSessionState>()
   private sdk: OpencodeClient
+  // Backstop cap to bound long-running ACP servers. The ACP protocol has
+  // no `session.close` notification today, so without this the map grows
+  // monotonically as the client creates / loads / forks / resumes
+  // sessions across the agent's lifetime. Eviction is insertion-order
+  // LRU on `create` / `load` / `track` (the same paths that grow the
+  // map), so the oldest unused state is dropped first. 1024 is well
+  // above any realistic concurrent-session count for a single ACP
+  // connection while keeping memory bounded.
+  private static readonly MAX_SESSIONS = 1024
 
   constructor(sdk: OpencodeClient) {
     this.sdk = sdk
+  }
+
+  private track(sessionId: string, state: ACPSessionState) {
+    // Re-insert to MRU position — Map iteration order is insertion
+    // order, so deleting first guarantees the just-set entry sits at
+    // the tail.
+    this.sessions.delete(sessionId)
+    this.sessions.set(sessionId, state)
+    while (this.sessions.size > ACPSessionManager.MAX_SESSIONS) {
+      const oldest = this.sessions.keys().next().value
+      if (oldest === undefined || oldest === sessionId) break
+      this.sessions.delete(oldest)
+      log.warn("evicting oldest acp session — likely indicates leaked sessions", {
+        evictedSessionId: oldest,
+        cap: ACPSessionManager.MAX_SESSIONS,
+      })
+    }
+  }
+
+  /**
+   * Drop a session's state. Call when the ACP client signals end of a
+   * session, or from connection-teardown paths so we don't leak state
+   * for sessions the client will never reuse.
+   */
+  remove(sessionId: string) {
+    this.sessions.delete(sessionId)
+  }
+
+  /** Drop all session state — used on full agent disposal. */
+  clear() {
+    this.sessions.clear()
   }
 
   tryGet(sessionId: string): ACPSessionState | undefined {
@@ -42,7 +82,7 @@ export class ACPSessionManager {
     }
     log.info("creating_session", { state })
 
-    this.sessions.set(sessionId, state)
+    this.track(sessionId, state)
     return state
   }
 
@@ -76,7 +116,7 @@ export class ACPSessionManager {
     }
     log.info("loading_session", { state })
 
-    this.sessions.set(sessionId, state)
+    this.track(sessionId, state)
     return state
   }
 
