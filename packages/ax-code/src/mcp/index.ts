@@ -469,9 +469,6 @@ export namespace MCP {
           }
           break
         } catch (error) {
-          if (client) {
-            await closeIfPossible(client, key, `connect attempt failed (${name})`)
-          }
           lastError = error instanceof Error ? error : new Error(String(error))
 
           // Handle OAuth-specific errors.
@@ -486,6 +483,11 @@ export namespace MCP {
 
             // Check if this is a "needs registration" error
             if (lastError.message.includes("registration") || lastError.message.includes("client_id")) {
+              // Registration failure: nothing left to reuse — close client
+              // and the failed transport.
+              if (client) {
+                await closeIfPossible(client, key, `connect attempt failed (${name})`)
+              }
               await transport.close?.().catch(() => {})
               status = {
                 status: "needs_client_registration" as const,
@@ -499,11 +501,16 @@ export namespace MCP {
                 duration: 8000,
               })
             } else {
-              // Close any transport candidates we did not try.
+              // needs_auth path: the client/transport will be reused by
+              // `finishAuth` once the user completes the OAuth flow.
+              // Closing the client here would close the underlying
+              // transport too (the SDK chains close), so by the time
+              // finishAuth tried to call `transport.finishAuth(code)` the
+              // transport would already be dead. Leave both open and only
+              // close the *other* untried candidates.
               for (let j = i + 1; j < transports.length; j++) {
                 await transports[j].transport.close?.().catch(() => {})
               }
-              // Store transport for later finishAuth call
               await closePendingOAuthTransport(key)
               pendingOAuthTransports.set(key, transport)
               status = { status: "needs_auth" as const }
@@ -518,6 +525,11 @@ export namespace MCP {
             break
           }
 
+          // Non-auth error: clean up everything before falling through to
+          // the next transport candidate.
+          if (client) {
+            await closeIfPossible(client, key, `connect attempt failed (${name})`)
+          }
           await transport.close?.().catch(() => {})
           log.debug("transport connection failed", {
             key,
