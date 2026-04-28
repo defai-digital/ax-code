@@ -151,6 +151,13 @@ export namespace ACP {
     private permissionQueues = new Map<string, Promise<void>>()
     private replaying = new Set<string>()
     private replayQueue = new Map<string, Event[]>()
+    // Cap per-session replay buffer. Long replays (thousands of historical
+    // messages) used to accumulate every concurrently-arriving live event
+    // until `endReplay()` drained them, which produced bursts of hundreds
+    // of `sessionUpdate` calls when replay finally finished. The cap means
+    // we drop oldest live events once the buffer is full and log a warn,
+    // so the connection isn't flooded post-replay.
+    private static readonly REPLAY_QUEUE_MAX = 500
     // Deferred sessionUpdate timers scheduled during session creation.
     // Tracked so dispose() can cancel them before they fire against a
     // connection that has been closed. Keyed by session id to allow
@@ -223,6 +230,20 @@ export namespace ACP {
       const sessionId = this.eventSession(event)
       if (sessionId && this.replaying.has(sessionId)) {
         const queued = this.replayQueue.get(sessionId) ?? []
+        if (queued.length >= Agent.REPLAY_QUEUE_MAX) {
+          // Drop oldest event so we cap memory and avoid a post-replay
+          // burst of hundreds of `sessionUpdate` calls. The dropped
+          // event would have been a live update that arrived during
+          // replay; replay reconstructs state from history anyway, so
+          // the dropped delta just means the client sees the next
+          // delta one update later than it otherwise would.
+          const dropped = queued.shift()
+          log.warn("replayQueue overflow — dropping oldest event", {
+            sessionId,
+            cap: Agent.REPLAY_QUEUE_MAX,
+            droppedType: (dropped as { type?: string } | undefined)?.type,
+          })
+        }
         queued.push(event)
         this.replayQueue.set(sessionId, queued)
         return
