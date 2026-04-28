@@ -1,6 +1,19 @@
 # Bug Reports
 
-## Status (2026-04-27, BUG-301..306 triage)
+## Status (2026-04-28, BUG-315..318 LSP & DRE scan)
+
+### Open
+
+No open items remain in this batch.
+
+### Fixed in this pass (BUG-315..318)
+
+| ID | Severity | Component | What changed |
+|----|----------|-----------|--------------|
+| BUG-315 | High | `src/lsp/client.ts` | Use normalized path key for incremental reopen diff lookup in `LSPClient.notify.open()`. |
+| BUG-316 | Medium | `src/lsp/client.ts`, `src/lsp/language.ts` | Add basename fallback and language map entry for extensionless files (`Dockerfile`, `Makefile`) when resolving `languageId`. |
+| BUG-317 | Low | `src/server/routes/dre-graph.ts` | Escape U+2028 and U+2029 in embedded JSON script payloads. |
+| BUG-318 | Low | `src/lsp/server-defs.ts` | Cache Oxlint `--lsp` capability detection to avoid repeated `--help` probes.
 
 ### Fixed in this pass (BUG-307..314)
 

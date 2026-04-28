@@ -7,7 +7,9 @@ import { EventQuery } from "../../src/replay/query"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { Storage } from "../../src/storage/storage"
-import { tmpdir } from "../fixture/fixture"
+import { promises as fsp } from "fs"
+import path from "path"
+    import { tmpdir } from "../fixture/fixture"
 
 describe("dre graph quality readiness", () => {
   async function clearSessionLabels(sessionID: string) {
@@ -28,7 +30,7 @@ describe("dre graph quality readiness", () => {
         const projectID = Instance.project.id
         const app = Server.Default()
 
-        try {
+      try {
           Recorder.begin(sid)
           Recorder.emit({
             type: "session.start",
@@ -182,6 +184,74 @@ describe("dre graph quality readiness", () => {
         } finally {
           EventQuery.deleteBySession(sid)
           await clearSessionLabels(sid)
+          await Session.remove(sid)
+        }
+      },
+    })
+  })
+
+  test("escapes unicode line separators in embedded JSON payload", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const weirdDir = path.join(tmp.path, "line\u2028dir")
+    await fsp.mkdir(weirdDir, { recursive: true })
+
+    await Instance.provide({
+      directory: weirdDir,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        const app = Server.Default()
+
+        try {
+          Recorder.begin(sid)
+          Recorder.emit({
+            type: "session.start",
+            sessionID: sid,
+            agent: "build",
+            model: "test/model",
+            directory: weirdDir,
+          })
+          Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call-weird",
+            input: { command: "echo weird" },
+          })
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call-weird",
+            status: "completed",
+            output: "done",
+            metadata: {},
+            durationMs: 4,
+          })
+          Recorder.emit({
+            type: "session.end",
+            sessionID: sid,
+            reason: "completed",
+            totalSteps: 0,
+          })
+          Recorder.end(sid)
+
+          await new Promise((resolve) => setTimeout(resolve, 20))
+
+          const response = await app.request(`/dre-graph/session/${sid}`)
+          expect(response.status).toBe(200)
+          const html = await response.text()
+
+          const cfgStart = html.indexOf("const cfg = {")
+          expect(cfgStart).toBeGreaterThanOrEqual(0)
+
+          const cfgEnd = html.indexOf("</script>", cfgStart)
+          expect(cfgEnd).toBeGreaterThan(cfgStart)
+          const cfgBlock = html.slice(cfgStart, cfgEnd)
+          expect(cfgBlock).toContain("line\\u2028dir")
+          expect(cfgBlock).not.toContain("\u2028")
+        } finally {
+          EventQuery.deleteBySession(sid)
           await Session.remove(sid)
         }
       },

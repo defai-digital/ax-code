@@ -41,7 +41,12 @@ function esc(input: string) {
 
 function json(value: unknown) {
   const text = JSON.stringify(value) ?? "null"
-  return text.replaceAll("<", "\\u003c").replaceAll(">", "\\u003e").replaceAll("&", "\\u0026")
+  return text
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029")
 }
 
 function time(ms?: number) {

@@ -62,6 +62,27 @@ import {
 
 type Info = ServerInfo
 
+const oxlintLspSupportCache = new Map<string, boolean>()
+
+async function oxlintSupportsLsp(lintBin: string): Promise<boolean> {
+  if (oxlintLspSupportCache.has(lintBin)) return oxlintLspSupportCache.get(lintBin) ?? false
+
+  let help = ""
+  try {
+    const proc = spawn(lintBin, ["--help"])
+    const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
+    ;[help] = await Promise.all([helpPromise, proc.exited])
+  } catch (error) {
+    log.warn("oxlint --help check failed", { lintBin, error })
+    oxlintLspSupportCache.set(lintBin, false)
+    return false
+  }
+
+  const supports = help.includes("--lsp")
+  oxlintLspSupportCache.set(lintBin, supports)
+  return supports
+}
+
 export const Deno: Info = {
   id: "deno",
   root: async (file) => {
@@ -261,14 +282,8 @@ export const Oxlint: Info = {
     }
 
     if (lintBin) {
-      const proc = spawn(lintBin, ["--help"])
-      // Read stdout concurrently with awaiting exit so the child cannot
-      // block on a full pipe buffer. Small output in practice (typical
-      // --help is <10KB), but the concurrent pattern is still safer and
-      // mirrors what Promise.all([text(stream), exited]) guarantees.
-      const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
-      const [help] = await Promise.all([helpPromise, proc.exited])
-      if (help.includes("--lsp")) {
+      const hasLsp = await oxlintSupportsLsp(lintBin)
+      if (hasLsp) {
         return {
           process: spawn(lintBin, ["--lsp"], {
             cwd: root,

@@ -496,8 +496,9 @@ export namespace LSPClient {
               }
             }
             const text = await Filesystem.readText(normalized)
-            const extension = path.extname(normalized)
-            const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
+            const extension = path.extname(normalized).toLowerCase()
+            const base = path.basename(normalized).toLowerCase()
+            const languageId = LANGUAGE_EXTENSIONS[extension] ?? LANGUAGE_EXTENSIONS[base] ?? "plaintext"
 
             const version = files[normalized]
             if (version !== undefined) {
@@ -539,7 +540,7 @@ export namespace LSPClient {
                     text: string
                   }
               >
-              const prevText = lastContent.get(input.path)?.text
+              const prevText = lastContent.get(normalized)?.text
               const incremental = prevText ? computeIncrementalChanges(prevText, text) : null
               if (incremental && incremental.length > 0) {
                 contentChanges = incremental

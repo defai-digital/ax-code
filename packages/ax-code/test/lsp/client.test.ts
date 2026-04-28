@@ -261,6 +261,92 @@ describe("LSPClient interop", () => {
     await client.shutdown()
   })
 
+  test("notify.open normalizes relative paths for incremental reopen", async () => {
+    await using tmp = await tmpdir()
+    const relativePath = path.join("src", "index.ts")
+    const absolutePath = path.join(tmp.path, relativePath)
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true })
+    await Bun.write(absolutePath, "export const x = 1\n")
+
+    const handle = spawnFakeServer() as any
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        const sent: { method: string; params: any }[] = []
+        const conn = client.connection as typeof client.connection & {
+          sendNotification: (method: string, params: any) => Promise<void>
+        }
+        const originalSendNotification = conn.sendNotification.bind(conn)
+        conn.sendNotification = ((method: string, params: any) => {
+          sent.push({ method, params })
+          return originalSendNotification(method, params)
+        }) as typeof conn.sendNotification
+
+        await client.notify.open({ path: relativePath })
+        sent.length = 0
+
+        await Bun.write(absolutePath, "export const x = 1\nexport const y = 2\n")
+        const changed = await client.notify.open({ path: relativePath })
+        expect(changed).toBe(true)
+
+        const didChange = sent.find((entry) => entry.method === "textDocument/didChange")
+        expect(didChange).toBeDefined()
+        expect(didChange?.params?.contentChanges?.length).toBeGreaterThan(0)
+        const incremental = didChange?.params?.contentChanges?.some((change: { range?: object }) => "range" in change)
+        expect(incremental).toBe(true)
+
+        await client.shutdown()
+      },
+    })
+  })
+
+  test("notify.open resolves languageId for extensionless files", async () => {
+    await using tmp = await tmpdir()
+    const dockerfilePath = path.join(tmp.path, "Dockerfile")
+    const makefilePath = path.join(tmp.path, "Makefile")
+    await Bun.write(dockerfilePath, "FROM node:20-alpine\n")
+    await Bun.write(makefilePath, "all:\n\t@echo hi\n")
+
+    const handle = spawnFakeServer() as any
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        const sent: { method: string; params: any }[] = []
+        const conn = client.connection as typeof client.connection & {
+          sendNotification: (method: string, params: any) => Promise<void>
+        }
+        const originalSendNotification = conn.sendNotification.bind(conn)
+        conn.sendNotification = ((method: string, params: any) => {
+          sent.push({ method, params })
+          return originalSendNotification(method, params)
+        }) as typeof conn.sendNotification
+
+        await client.notify.open({ path: "Dockerfile" })
+        await client.notify.open({ path: "Makefile" })
+
+        const openEntries = sent.filter((entry) => entry.method === "textDocument/didOpen")
+        expect(openEntries.length).toBe(2)
+
+        expect(openEntries[0]?.params?.textDocument?.languageId).toBe("dockerfile")
+        expect(openEntries[1]?.params?.textDocument?.languageId).toBe("makefile")
+
+        await client.shutdown()
+      },
+    })
+  })
+
   test("ping returns true for live process, false after process dies", async () => {
     await using tmp = await tmpdir()
     const handle = spawnFakeServer() as any
