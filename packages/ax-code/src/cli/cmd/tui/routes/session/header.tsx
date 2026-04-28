@@ -3,11 +3,12 @@ import { useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
-import type { Session } from "@ax-code/sdk/v2"
+import type { AssistantMessage, Session } from "@ax-code/sdk/v2"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { Flag } from "@/flag/flag"
 import { useTerminalDimensions } from "@opentui/solid"
+import { Usage } from "./usage"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
 
@@ -38,10 +39,52 @@ const WorkspaceInfo = (props: { workspace: Accessor<string | undefined> }) => {
   )
 }
 
+// Token / context utilization read-out shown on the right side of the
+// header (#180 — was inadvertently removed during a header polish pass
+// in ca1fceb). Strictly token usage; ax-code does not track or display
+// monetary cost (see script/check-no-cost.ts CI guard).
+const ContextInfo = (props: { context: Accessor<string | undefined> }) => {
+  const { theme } = useTheme()
+  return (
+    <Show when={props.context()}>
+      <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
+        {props.context()}
+      </text>
+    </Show>
+  )
+}
+
 export function Header() {
   const route = useRouteData("session")
   const sync = useSync()
   const session = createMemo(() => sync.session.get(route.sessionID))
+  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+
+  // Build the right-side read-out: total tokens + context-window bar +
+  // tokens/sec for the most recent assistant turn that has usage data.
+  // Returns undefined when no assistant message has been received yet,
+  // which keeps the header clean on a brand-new session.
+  const context = createMemo(() => {
+    const last = Usage.last(messages()) as AssistantMessage | undefined
+    if (!last) return
+    const total = Usage.total(last)
+    const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
+    let result = total.toLocaleString()
+    if (model?.limit?.context) {
+      const pct = Math.min(100, Math.round((total / model.limit.context) * 100))
+      const filled = Math.round(pct / 10)
+      const bar = "█".repeat(filled) + "░".repeat(10 - filled)
+      result += "  " + bar + " " + pct + "%"
+    }
+    if (last.time.completed && last.time.created && (last.tokens?.output ?? 0) > 0) {
+      const durationSecs = (last.time.completed - last.time.created) / 1000
+      if (durationSecs > 0) {
+        const tps = Math.round((last.tokens?.output ?? 0) / durationSecs)
+        result += "  " + tps + " tok/s"
+      }
+    }
+    return result
+  })
 
   const workspace = createMemo(() => {
     const id = session()?.directory
@@ -103,14 +146,17 @@ export function Header() {
                   </For>
                 </text>
               </Show>
-              <box flexDirection="column">
-                <text fg={theme.text}>
-                  <b>Subagent session</b>
-                </text>
-                <Show when={session()?.id}>{(id) => <text fg={theme.textMuted}>{id()}</text>}</Show>
-                <Show when={Flag.AX_CODE_EXPERIMENTAL_WORKSPACES}>
-                  <WorkspaceInfo workspace={workspace} />
-                </Show>
+              <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
+                <box flexDirection="column">
+                  <text fg={theme.text}>
+                    <b>Subagent session</b>
+                  </text>
+                  <Show when={session()?.id}>{(id) => <text fg={theme.textMuted}>{id()}</text>}</Show>
+                  <Show when={Flag.AX_CODE_EXPERIMENTAL_WORKSPACES}>
+                    <WorkspaceInfo workspace={workspace} />
+                  </Show>
+                </box>
+                <ContextInfo context={context} />
               </box>
               <box flexDirection="row" gap={2}>
                 <box flexDirection="row" gap={1}>
@@ -150,11 +196,14 @@ export function Header() {
             </box>
           </Match>
           <Match when={true}>
-            <box flexDirection="column">
-              <Title session={session} />
-              <Show when={Flag.AX_CODE_EXPERIMENTAL_WORKSPACES}>
-                <WorkspaceInfo workspace={workspace} />
-              </Show>
+            <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
+              <box flexDirection="column">
+                <Title session={session} />
+                <Show when={Flag.AX_CODE_EXPERIMENTAL_WORKSPACES}>
+                  <WorkspaceInfo workspace={workspace} />
+                </Show>
+              </box>
+              <ContextInfo context={context} />
             </box>
           </Match>
         </Switch>
