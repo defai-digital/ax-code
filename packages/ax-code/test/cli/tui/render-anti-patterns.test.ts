@@ -881,6 +881,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain("DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000")
     expect(thread).toContain("DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS = 30_000")
     expect(thread).toContain("DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS = 5_000")
+    expect(thread).toContain("DEFAULT_TUI_BACKEND_TERMINATE_GRACE_MS = 1_000")
     expect(thread).toContain("AX_CODE_TUI_WORKER_READY_TIMEOUT_MS")
     expect(thread).toContain("AX_CODE_TUI_UPGRADE_CHECK_DELAY_MS")
     expect(thread).toContain("AX_CODE_TUI_BACKEND_TRANSPORT")
@@ -894,12 +895,15 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.backendHandshakeFailed"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.workerHandshakeFailed"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.backendProtocolNoise"')
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.backendProcessStdinClosed"')
+    expect(thread).toContain('child.kill("SIGKILL")')
     expect(thread).toContain("worker.terminate()")
     expect(worker).toContain("health()")
     expect(worker).toContain("runtimeMode()")
     expect(worker).toContain("startTuiBackend")
     expect(worker).toContain("isWorkerEntrypoint")
     expect(worker).toContain('Rpc.listenStdio(rpc)')
+    expect(worker).toContain('DiagnosticLog.recordProcess("backend.signalExit"')
   })
 
   test("surfaces workspace sync failures instead of leaving rejected RPC calls detached", async () => {
