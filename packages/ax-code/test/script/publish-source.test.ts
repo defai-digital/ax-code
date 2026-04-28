@@ -11,9 +11,15 @@ describe("script.publish-source", () => {
     expect(text).toContain("npm publish *.tgz --workspaces=false")
   })
 
-  test("publishes under the source dist-tag by default", async () => {
+  test("publishes under a per-version dist-tag, overridable via env", async () => {
     const text = await Bun.file(publishSourcePath).text()
-    expect(text).toContain('SOURCE_DIST_TAG = process.env.AX_CODE_SOURCE_TAG ?? "source"')
+    // The default dist-tag is now derived from the version string
+    // (`buildChannelForVersion(buildVersion)` → "latest" for stable,
+    // "beta" / "alpha" / etc. for prereleases) instead of the old
+    // hardcoded "source". The env override `AX_CODE_SOURCE_TAG` still
+    // wins, and `npm publish` consumes the resolved tag verbatim.
+    expect(text).toContain("AX_CODE_SOURCE_TAG ?? buildChannelForVersion(buildVersion)")
+    expect(text).toContain("function buildChannelForVersion(version: string)")
     expect(text).toContain("--tag ${SOURCE_DIST_TAG}")
   })
 

@@ -371,6 +371,16 @@ export const TuiThreadCommand = cmd({
         target: file ? String(file) : processCommand?.label,
         runtimeMode: runtimeMode(),
       })
+      // Sibling event under the worker-era name. Kept alongside
+      // backendTargetResolved for observability backwards compat — the
+      // other backend/worker event pairs (Spawned, Ready, HandshakeFailed)
+      // already emit both names, and dashboards / log-watchers tuned to
+      // the older `tui.worker*` taxonomy continue to fire here.
+      DiagnosticLog.recordProcess("tui.workerTargetResolved", {
+        mode: backendTransport,
+        target: file ? String(file) : processCommand?.label,
+        runtimeMode: runtimeMode(),
+      })
       try {
         process.chdir(next)
       } catch {
