@@ -12,6 +12,17 @@ export namespace Rpc {
   type MessageTarget = {
     postMessage: (data: string) => void | null
     onmessage: ((ev: MessageEvent<any>) => any) | null
+    /**
+     * Optional fast-fail hook. The wire (e.g. process-stdio transport
+     * in `cli/cmd/tui/thread.ts createProcessWire`) calls this when it
+     * detects it can no longer deliver messages — broken stdin pipe,
+     * child exit, stdout error, etc. The RPC client registers a
+     * handler here that immediately rejects every pending call,
+     * instead of letting each one wait the full 60s `RPC_TIMEOUT_MS`.
+     * Without this, a backend crash makes the TUI appear frozen for
+     * up to a minute while in-flight calls drain one by one.
+     */
+    onWireDeath?: (() => void) | null
   }
 
   let emitMessage: ((data: string) => void) | undefined
@@ -222,6 +233,19 @@ export namespace Rpc {
     // a lot of RPC traffic through here; the bound is defensive.
     const ID_WRAP = Number.MAX_SAFE_INTEGER - 1
     let id = 0
+    // Fast-fail every pending call when the wire signals it's dead.
+    // Without this hook, a backend crash leaves callers waiting up to
+    // RPC_TIMEOUT_MS each before they reject — which is what made the
+    // TUI appear frozen for ~60s after a backend exit.
+    target.onWireDeath = () => {
+      if (pending.size === 0) return
+      const error = new Error("RPC wire closed")
+      for (const [pendingId, entry] of pending) {
+        clearTimeout(entry.timer)
+        entry.reject(error)
+        pending.delete(pendingId)
+      }
+    }
     target.onmessage = async (evt) => {
       // See Rpc.listen — drop malformed messages instead of crashing.
       let parsed: any

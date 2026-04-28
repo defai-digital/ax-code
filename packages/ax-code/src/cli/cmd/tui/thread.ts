@@ -34,6 +34,11 @@ type BackendTransport = "worker" | "process"
 type RpcWireTarget = {
   postMessage: (data: string) => void | null
   onmessage: ((ev: MessageEvent<any>) => any) | null
+  // See `Rpc.MessageTarget.onWireDeath` — process-stdio transport calls
+  // this on broken stdin / EPIPE / child exit so the RPC client can
+  // fast-fail every pending call instead of waiting the full
+  // RPC_TIMEOUT_MS each.
+  onWireDeath?: (() => void) | null
 }
 
 type BackendRuntime = {
@@ -91,25 +96,31 @@ function isBackendProtocolMessage(line: string) {
 function createProcessWire(child: any, target: string): RpcWireTarget {
   const wire: RpcWireTarget = {
     onmessage: null,
+    onWireDeath: null,
     postMessage(data) {
       const stdin = child.stdin
       if (!stdin || stdin.destroyed) {
-        // Pipe is gone (child exited / stdin closed). Mark the wire dead
-        // so the RPC client's pending-call timeout fires immediately
-        // instead of waiting 60s for a response that will never arrive.
-        wire.onmessage = null
+        // Pipe is gone (child exited / stdin closed). Fire onWireDeath
+        // so the RPC client fast-fails every pending call instead of
+        // waiting the full 60s `RPC_TIMEOUT_MS` each. Idempotent —
+        // null'd handlers below mean a second death event is a no-op.
         DiagnosticLog.recordProcess("tui.backendStdinUnavailable", { target })
+        wire.onWireDeath?.()
+        wire.onmessage = null
+        wire.onWireDeath = null
         return
       }
       try {
         stdin.write(data + "\n")
       } catch (error) {
-        wire.onmessage = null
         DiagnosticLog.recordProcess("tui.backendStdinWriteFailed", { target, error })
         Log.Default.warn("TUI backend stdin write failed", {
           target,
           error: error instanceof Error ? error.message : String(error),
         })
+        wire.onWireDeath?.()
+        wire.onmessage = null
+        wire.onWireDeath = null
       }
     },
   }
@@ -125,7 +136,9 @@ function createProcessWire(child: any, target: string): RpcWireTarget {
       target,
       error: error instanceof Error ? error.message : String(error),
     })
+    wire.onWireDeath?.()
     wire.onmessage = null
+    wire.onWireDeath = null
   })
   child.stdout?.on("error", (error: unknown) => {
     DiagnosticLog.recordProcess("tui.backendStdoutStreamError", { target, error })

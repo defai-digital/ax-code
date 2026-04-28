@@ -8,6 +8,9 @@ import { randomBytes } from "crypto"
 import { Filesystem } from "../../../../util/filesystem"
 import { Process } from "../../../../util/process"
 import { which } from "../../../../util/which"
+import { Log } from "../../../../util/log"
+
+const log = Log.create({ service: "tui.clipboard" })
 
 /**
  * Writes text to clipboard via OSC 52 escape sequence.
@@ -236,7 +239,22 @@ export namespace Clipboard {
   })
 
   export async function copy(text: string): Promise<void> {
+    // OSC52 runs first (synchronously emits the terminal escape that
+    // most modern terminals translate into a real clipboard write). If
+    // the system-tool path then fails — the most common reason on
+    // Linux is no xclip / wl-copy / xsel installed, which throws an
+    // install-instruction error from the fallback branch — propagating
+    // that rejection to callers like `Selection.copy(.catch(toast.error))`
+    // shows a "Failed to copy" toast even though OSC52 already did the
+    // copy successfully. Swallow the error here; the user already got
+    // the clipboard write through the terminal.
     writeOsc52(text)
-    await getCopyMethod()(text)
+    try {
+      await getCopyMethod()(text)
+    } catch (err) {
+      log.warn("system clipboard tool failed; OSC52 may have handled it", {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 }

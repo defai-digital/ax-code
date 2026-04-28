@@ -64,15 +64,25 @@ export function Header() {
   // tokens/sec for the most recent assistant turn that has usage data.
   // Returns undefined when no assistant message has been received yet,
   // which keeps the header clean on a brand-new session.
+  //
+  // Two-stage memo so the formatting work below only re-runs when the
+  // *identity* of the last assistant message changes — not on every
+  // tool-call or tool-result message that gets appended during a turn.
+  // `messages()` returns a fresh array reference on every append, so a
+  // single-stage memo would re-scan and re-format on every event during
+  // an active response. SolidJS tracks `lastAssistantWithUsage()`
+  // separately; the formatter only re-runs when the upstream value
+  // actually changes.
+  const lastAssistantWithUsage = createMemo(
+    () => Usage.last(messages()) as AssistantMessage | undefined,
+  )
+
   const context = createMemo(() => {
-    // `Usage.last` selects on the presence of a `tokens` field. The SDK
-    // schema only puts `tokens` on assistant messages, but a corrupt
-    // session payload (replay artifact, custom provider stuffing tokens
-    // into the wrong place, etc.) would otherwise pass the `as
-    // AssistantMessage` cast and feed garbage into `last.time.completed`
-    // / `last.tokens.output`. Defensive role check keeps the read-out
-    // honest under malformed data.
-    const candidate = Usage.last(messages()) as AssistantMessage | undefined
+    // `Usage.last` already filters by `role === "assistant"`, but the
+    // explicit guard below is defense-in-depth against future helper
+    // changes plus protects callers from a corrupt payload that ever
+    // managed to slip a non-assistant message through.
+    const candidate = lastAssistantWithUsage()
     if (!candidate || candidate.role !== "assistant") return
     const last = candidate
     const total = Usage.total(last)

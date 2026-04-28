@@ -170,6 +170,13 @@ export const rpc = {
     requireAuthForNetwork(input.hostname)
     if (server) await server.stop(true)
     server = await Server.listen(input)
+    // A new server instance means any cached shutdown is stale: the
+    // resolved promise represents the prior teardown. If we left it in
+    // place a follow-up `shutdown()` would early-return that resolved
+    // promise and the new server would never be stopped. Production
+    // doesn't hit this today (start → optional server → shutdown →
+    // exit is the lifecycle), but reload + restart cycles in tests do.
+    shutdownPromise = undefined
     return { url: server.url.toString() }
   },
   async checkUpgrade(input: { directory: string }) {
