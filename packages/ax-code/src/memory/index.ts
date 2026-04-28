@@ -16,6 +16,14 @@ export { recordEntry, removeEntry, listEntries, type RecordInput } from "./recor
 export { recall, type RecallQuery, type RecallResult } from "./recall"
 export { doctor, type MemoryDoctorIssue, type MemoryDoctorOptions, type MemoryDoctorReport } from "./doctor"
 export {
+  evaluate,
+  type MemoryEvaluationCase,
+  type MemoryEvaluationCaseResult,
+  type MemoryEvaluationFile,
+  type MemoryEvaluationOptions,
+  type MemoryEvaluationReport,
+} from "./evaluation"
+export {
   entryApplies,
   isExpired,
   matchesAgent,

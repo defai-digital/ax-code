@@ -7,6 +7,7 @@ import { getMetadata } from "../../memory/injector"
 import { recordEntry, removeEntry, listEntries } from "../../memory/recorder"
 import { recall } from "../../memory/recall"
 import { doctor as doctorMemory } from "../../memory/doctor"
+import { evaluate as evaluateMemory } from "../../memory/evaluation"
 import type { MemoryEntryKind } from "../../memory/types"
 
 const KIND_BY_FLAG: Record<string, MemoryEntryKind> = {
@@ -37,6 +38,7 @@ export const MemoryCommand = cmd({
       .command(MemoryListCommand)
       .command(MemoryRecallCommand)
       .command(MemoryDoctorCommand)
+      .command(MemoryEvalCommand)
       .demandCommand(),
   async handler() {},
 })
@@ -452,5 +454,56 @@ export const MemoryDoctorCommand = cmd({
       prompts.log.info(`  ${issue.message}`)
     }
     prompts.outro(`${report.issues.length} issue${report.issues.length === 1 ? "" : "s"}`)
+  },
+})
+
+export const MemoryEvalCommand = cmd({
+  command: "eval",
+  describe: "evaluate memory recall against JSON cases",
+  builder: (yargs) =>
+    yargs
+      .option("cases", {
+        describe: "path to JSON file with { cases: [...] }",
+        type: "string",
+        demandOption: true,
+      })
+      .option("limit", {
+        describe: "recall result limit used as k",
+        type: "number",
+        default: 5,
+      })
+      .option("scope", {
+        describe: 'which store to evaluate: "project", "global", or "all"',
+        choices: ["project", "global", "all"] as const,
+        default: "project" as const,
+      })
+      .option("json", {
+        describe: "emit machine-readable JSON",
+        type: "boolean",
+        default: false,
+      }),
+  async handler(args) {
+    const report = await evaluateMemory(process.cwd(), {
+      casesPath: args.cases,
+      limit: args.limit,
+      scope: args.scope,
+    })
+
+    if (args.json) {
+      console.log(JSON.stringify(report, null, 2))
+      return
+    }
+
+    UI.empty()
+    prompts.intro("Memory Eval")
+    prompts.log.info(`Cases: ${report.passed}/${report.total}`)
+    prompts.log.info(`Recall@${report.limit}: ${Math.round(report.recallAtK * 100)}%`)
+    for (const item of report.cases) {
+      const status = item.hit ? "pass" : "fail"
+      prompts.log[item.hit ? "success" : "warn"](`[${status}] ${item.name}`)
+      if (!item.hit) prompts.log.info(`  missing: ${item.missing.join(", ")}`)
+      prompts.log.info(`  returned: ${item.returned.join(", ") || "(none)"}`)
+    }
+    prompts.outro("Done")
   },
 })

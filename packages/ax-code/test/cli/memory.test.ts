@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import * as prompts from "@clack/prompts"
+import path from "path"
 import { tmpdir } from "../fixture/fixture"
-import { MemoryDoctorCommand, MemoryRecallCommand, MemoryRememberCommand } from "../../src/cli/cmd/memory"
+import {
+  MemoryDoctorCommand,
+  MemoryEvalCommand,
+  MemoryRecallCommand,
+  MemoryRememberCommand,
+} from "../../src/cli/cmd/memory"
 
 const originalCwd = process.cwd()
 
@@ -107,5 +113,43 @@ describe("memory command", () => {
     const parsed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
     expect(parsed.status).toBe("ok")
     expect(parsed.checked.project).toBe(true)
+  })
+
+  test("eval --json emits parseable recall metrics", async () => {
+    await using tmp = await tmpdir()
+    process.chdir(tmp.path)
+
+    spyOn(prompts, "intro").mockImplementation(() => {})
+    spyOn(prompts, "outro").mockImplementation(() => {})
+    spyOn(prompts.log, "success").mockImplementation(() => {})
+    const logSpy = spyOn(console, "log").mockImplementation(() => {})
+
+    await MemoryRememberCommand.handler({
+      kind: "feedback",
+      name: "eval-target",
+      body: "Recall evaluation target",
+      global: false,
+    } as any)
+    logSpy.mockClear()
+
+    const casesPath = path.join(tmp.path, "memory-cases.json")
+    await Bun.write(
+      casesPath,
+      JSON.stringify({
+        cases: [{ query: "evaluation", expected: ["eval-target"] }],
+      }),
+    )
+
+    await MemoryEvalCommand.handler({
+      cases: casesPath,
+      limit: 3,
+      scope: "project",
+      json: true,
+    } as any)
+
+    const parsed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(parsed.total).toBe(1)
+    expect(parsed.passed).toBe(1)
+    expect(parsed.recallAtK).toBe(1)
   })
 })
