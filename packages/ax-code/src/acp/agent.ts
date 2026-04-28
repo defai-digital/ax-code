@@ -290,7 +290,13 @@ export namespace ACP {
                     const content = (await Filesystem.exists(filepath)) ? await Filesystem.readText(filepath) : ""
                     const newContent = getNewContent(content, diff)
                     if (newContent) {
-                      this.connection.writeTextFile({
+                      // Await the ACP write so any failure surfaces here and
+                      // so the permission reply below cannot race ahead of
+                      // the file change. Previously the promise was
+                      // discarded, silently swallowing write errors and
+                      // letting the client receive `permission.reply`
+                      // before it had observed the edit.
+                      await this.connection.writeTextFile({
                         sessionId: session.id,
                         path: filepath,
                         content: newContent,
