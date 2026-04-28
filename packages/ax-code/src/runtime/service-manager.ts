@@ -144,9 +144,26 @@ function createManager(state: ManagerState): ServiceManager.Manager {
       const id = `${input.service}:${++state.nextTaskID}`
 
       if (state.tasks.size > 1000) {
+        // Pass 1: drop terminal entries first. They're free to evict
+        // and usually cover the burst.
         for (const [taskId, task] of state.tasks) {
           if (task.state === "completed" || task.state === "failed" || task.state === "aborted") {
             state.tasks.delete(taskId)
+          }
+        }
+        // Pass 2: if the cap is still breached (every entry still
+        // running / queued — e.g. a stuck task that never settles, or a
+        // genuine flood of long-lived background work), evict the
+        // oldest entries until we drop below a soft watermark of 900.
+        // Map preserves insertion order, so iterating gives us
+        // queuedAt-ascending without a sort. Without this fallback the
+        // cap was a no-op and the Map grew unbounded.
+        if (state.tasks.size > 1000) {
+          const oldest = state.tasks.keys()
+          while (state.tasks.size > 900) {
+            const next = oldest.next()
+            if (next.done) break
+            state.tasks.delete(next.value)
           }
         }
       }

@@ -1,5 +1,4 @@
 import {
-  batch,
   createContext,
   createEffect,
   createMemo,
@@ -261,11 +260,17 @@ export function Session() {
     if (sidebar() === "auto" && wide()) return true
     return false
   })
+  // "Visible" includes the narrow-mode overlay (used for the render
+  // gate). "Panel" means the sidebar is rendered as a side column that
+  // reduces the main pane's width — only true when also `wide()`.
+  // Layout math (main pane, prompt) must use the panel signal so the
+  // prompt isn't shrunk when the sidebar is floating as an overlay.
+  const sidebarPanelVisible = createMemo(() => sidebarVisible() && wide())
   const showTimestamps = createMemo(() => timestamps() === "show")
   const contentWidth = createMemo(() =>
     computeSessionMainPaneWidth({
       terminalWidth: dimensions().width,
-      sidebarVisible: sidebarVisible() && wide(),
+      sidebarVisible: sidebarPanelVisible(),
     }),
   )
 
@@ -1101,7 +1106,7 @@ export function Session() {
                 <QuestionPrompt request={questions()[0]} />
               </Show>
               <Prompt
-                sidebarVisible={sidebarVisible}
+                sidebarVisible={sidebarPanelVisible}
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
                 ref={(r) => {
                   prompt = r
@@ -1136,10 +1141,12 @@ export function Session() {
                 alignItems="flex-end"
                 backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
                 onMouseDown={() => {
-                  batch(() => {
-                    setSidebar(() => "hide")
-                    setSidebarOpen(false)
-                  })
+                  // Only dismiss the overlay; preserve the user's
+                  // sidebar preference. Setting sidebar to "hide" here
+                  // permanently disables the auto-show on resize, so a
+                  // user who clicks the backdrop in narrow mode would
+                  // never see the sidebar again after resizing wider.
+                  setSidebarOpen(false)
                 }}
               >
                 <Sidebar sessionID={route.sessionID} overlay />

@@ -59,14 +59,25 @@ export const EventRoutes = lazy(() =>
           return result
         }
 
-        push({
+        // Control frames (`server.connected`, `server.heartbeat`)
+        // bypass the soft/hard backpressure caps. They are tiny, never
+        // burst, and dropping them is worse than letting them sit
+        // alongside the queue: a heartbeat lost during a near-cap burst
+        // can mask a stalled proxy until the next 10s tick, and an
+        // overflow trip on a heartbeat would tear down a connection
+        // that data frames could still reach.
+        const pushControl = (payload: unknown) => {
+          q.push(JSON.stringify(payload))
+        }
+
+        pushControl({
           type: Event.Connected.type,
           properties: {},
         })
 
         // Send heartbeat every 10s to prevent stalled proxy streams.
         heartbeat = setInterval(() => {
-          push({
+          pushControl({
             type: "server.heartbeat",
             properties: {},
           })

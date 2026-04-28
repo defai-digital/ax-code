@@ -15,6 +15,9 @@ import * as store from "./store"
 import { generate } from "./generator"
 import { computeContentHash, renderEntry } from "./hash"
 import type { EntrySection, MemoryEntry, MemoryEntryKind, ProjectMemory } from "./types"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "memory.recorder" })
 
 // Serialize concurrent recordEntry / removeEntry calls for the same memory
 // file. Two parallel callers would otherwise both `loadOrInit` the same
@@ -29,7 +32,20 @@ const writeQueues = new Map<string, Promise<unknown>>()
 
 async function withWriteQueue<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const prev = writeQueues.get(key) ?? Promise.resolve()
-  const next = prev.then(fn, fn)
+  // Recover from a prior write failure but log it. `then(fn, fn)` would
+  // silently swallow the rejection, so an earlier disk error (full disk,
+  // permission denied, etc.) was never surfaced to operators — only the
+  // mutation it carried was lost. The log gives a forensic trail without
+  // breaking the chain (subsequent writes still proceed).
+  const next = prev.then(fn, (error) => {
+    log.warn("prior memory write failed; proceeding with next write", {
+      command: "memory.write_queue",
+      status: "error",
+      key,
+      error,
+    })
+    return fn()
+  })
   writeQueues.set(key, next)
   try {
     return await next

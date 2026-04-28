@@ -161,7 +161,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   createEffect(() => {
     const statusType = status().type
     if (statusType === "idle") return
-    const timer = setInterval(() => setStatusTick((tick) => tick + 1), 30_000)
+    // 5s ticks keep the sidebar stall detection in step with the
+    // Prompt's status indicator. A 30s tick was leaving the sidebar
+    // showing "Thinking..." for up to 30s after the LLM had stalled.
+    const timer = setInterval(() => setStatusTick((tick) => tick + 1), 5_000)
     onCleanup(() => clearInterval(timer))
   })
 

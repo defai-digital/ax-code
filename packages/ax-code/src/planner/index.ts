@@ -365,13 +365,22 @@ export namespace Planner {
 
     let lastResult: PhaseResult | undefined
     const maxAttempts = phase.maxRetries + 1
-    const run = async () =>
-      Promise.race([
-        executor(phase, plan),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Phase timed out after ${timeout}ms`)), timeout),
-        ),
-      ])
+    const run = async () => {
+      // Capture the timer so it can be cleared once the executor
+      // settles. Without this, a successful early resolve leaves the
+      // setTimeout pending until it fires (`phaseTimeoutMs`, default
+      // 10 minutes) — `Promise.race` does not cancel the loser. In
+      // short-lived CLI processes this delays exit by the timeout.
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Phase timed out after ${timeout}ms`)), timeout)
+      })
+      try {
+        return await Promise.race([executor(phase, plan), timeoutPromise])
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
+    }
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {

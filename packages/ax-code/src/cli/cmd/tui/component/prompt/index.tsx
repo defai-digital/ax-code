@@ -151,7 +151,6 @@ export function Prompt(props: PromptProps) {
   const [expandedPastes, setExpandedPastes] = createSignal<Set<number>>(new Set<number>())
   const inputBlocked = createMemo(() => props.disabled || submitPending())
   const [statusTick, setStatusTick] = createSignal(0)
-  const [sidebarPreference] = kv.signal<"auto" | "hide">("sidebar", "auto")
   const pendingCancelHint = createMemo(() => {
     const hints = new Set<string>()
     const sessionInterrupt = keybind.print("session_interrupt")
@@ -225,10 +224,15 @@ export function Prompt(props: PromptProps) {
   }
 
   const promptContentWidth = createMemo(() => {
+    // Trust the parent's signal: the Session route owns the canonical
+    // "sidebar reduces width" computation (panel mode only, not the
+    // narrow-mode overlay). The fallback used to recompute a partial
+    // approximation here, which drifted from the parent and ignored
+    // the user's explicit `sidebarOpen()` toggle. Routes without a
+    // sidebar (home, etc.) do not pass the prop and naturally fall to
+    // false.
     const routeIsChildlessSession = route.data.type === "session" && !sync.session.get(route.data.sessionID)?.parentID
-    const sidebarVisible = routeIsChildlessSession
-      ? (props.sidebarVisible?.() ?? (sidebarPreference() === "auto" && dimensions().width > 120))
-      : false
+    const sidebarVisible = routeIsChildlessSession ? (props.sidebarVisible?.() ?? false) : false
     return computeSessionMainPaneWidth({
       terminalWidth: dimensions().width,
       sidebarVisible,
