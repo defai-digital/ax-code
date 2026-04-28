@@ -231,9 +231,15 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
     // listener.
     const onSignal = (signal: NodeJS.Signals) => {
       DiagnosticLog.recordProcess("backend.signalShutdown", { signal })
-      void rpc.shutdown().catch((error) => {
-        DiagnosticLog.recordProcess("backend.signalShutdownFailed", { signal, error })
-      })
+      void rpc
+        .shutdown()
+        .catch((error) => {
+          DiagnosticLog.recordProcess("backend.signalShutdownFailed", { signal, error })
+        })
+        .finally(() => {
+          DiagnosticLog.recordProcess("backend.signalExit", { signal })
+          process.exit(signal === "SIGINT" ? 130 : 0)
+        })
     }
     process.once("SIGTERM", onSignal)
     process.once("SIGINT", onSignal)

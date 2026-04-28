@@ -31,6 +31,7 @@ const log = Log.create({ service: "tui.thread" })
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
 export const DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS = 30_000
 export const DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS = 5_000
+export const DEFAULT_TUI_BACKEND_TERMINATE_GRACE_MS = 1_000
 
 type BackendTransport = "worker" | "process"
 type RpcWireTarget = {
@@ -48,7 +49,7 @@ type BackendRuntime = {
   target: string
   pid?: number
   wire: RpcWireTarget
-  terminate: () => void
+  terminate: () => Promise<void>
 }
 
 export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> = process.env) {
@@ -211,7 +212,9 @@ async function createBackendRuntime(input: {
       mode: "worker",
       target: String(input.workerTarget),
       wire: worker as unknown as RpcWireTarget,
-      terminate: () => worker.terminate(),
+      terminate: async () => {
+        worker.terminate()
+      },
     }
   }
 
@@ -222,6 +225,11 @@ async function createBackendRuntime(input: {
     stdio: ["pipe", "pipe", "pipe"],
   }) as any
   let terminating = false
+  let exited = false
+  let resolveExited: () => void = () => {}
+  const exitedPromise = new Promise<void>((resolve) => {
+    resolveExited = resolve
+  })
   child.on("error", (error: unknown) => {
     DiagnosticLog.recordProcess("tui.backendProcessError", { error, target: command.label })
     Log.Default.error("TUI backend process failed", {
@@ -230,18 +238,79 @@ async function createBackendRuntime(input: {
     })
   })
   child.on("exit", (code: number | null, signal: string | null) => {
+    exited = true
+    resolveExited()
     if (terminating) return
     DiagnosticLog.recordProcess("tui.backendProcessExited", { code, signal, target: command.label })
     Log.Default.warn("TUI backend process exited", { code, signal, target: command.label })
   })
+  const waitForExit = async (timeoutMs: number) => {
+    const timeout = new Promise<"timeout">((resolve) => {
+      const timer = setTimeout(() => resolve("timeout"), timeoutMs)
+      timer.unref?.()
+    })
+    return Promise.race([exitedPromise.then(() => "exited" as const), timeout])
+  }
   return {
     mode: "process",
     target: command.label,
     pid: child.pid,
     wire: createProcessWire(child, command.label),
-    terminate: () => {
+    terminate: async () => {
       terminating = true
-      child.kill()
+      DiagnosticLog.recordProcess("tui.backendProcessTerminateStarted", {
+        target: command.label,
+        pid: child.pid,
+      })
+      try {
+        child.stdin?.end()
+        DiagnosticLog.recordProcess("tui.backendProcessStdinClosed", {
+          target: command.label,
+          pid: child.pid,
+        })
+      } catch (error) {
+        DiagnosticLog.recordProcess("tui.backendProcessStdinCloseFailed", {
+          target: command.label,
+          pid: child.pid,
+          error,
+        })
+      }
+      if (!exited) {
+        try {
+          child.kill("SIGTERM")
+          DiagnosticLog.recordProcess("tui.backendProcessSigterm", {
+            target: command.label,
+            pid: child.pid,
+          })
+        } catch (error) {
+          DiagnosticLog.recordProcess("tui.backendProcessSigtermFailed", {
+            target: command.label,
+            pid: child.pid,
+            error,
+          })
+        }
+      }
+      if ((await waitForExit(DEFAULT_TUI_BACKEND_TERMINATE_GRACE_MS)) === "timeout" && !exited) {
+        try {
+          child.kill("SIGKILL")
+          DiagnosticLog.recordProcess("tui.backendProcessSigkill", {
+            target: command.label,
+            pid: child.pid,
+          })
+        } catch (error) {
+          DiagnosticLog.recordProcess("tui.backendProcessSigkillFailed", {
+            target: command.label,
+            pid: child.pid,
+            error,
+          })
+        }
+        await waitForExit(DEFAULT_TUI_BACKEND_TERMINATE_GRACE_MS)
+      }
+      DiagnosticLog.recordProcess("tui.backendProcessTerminateCompleted", {
+        target: command.label,
+        pid: child.pid,
+        exited,
+      })
     },
   }
 }
@@ -448,7 +517,7 @@ export const TuiThreadCommand = cmd({
         client.call("health", undefined),
         workerReadyTimeoutMs,
         `TUI backend did not become ready after ${workerReadyTimeoutMs}ms`,
-      ).catch((error) => {
+      ).catch(async (error) => {
         DiagnosticLog.recordProcess("tui.backendHandshakeFailed", {
           error,
           mode: backend.mode,
@@ -477,7 +546,7 @@ export const TuiThreadCommand = cmd({
             "Run with --debug --print-logs and inspect process.jsonl around tui.backendHandshakeFailed.",
           ].join("\n"),
         )
-        backend.terminate()
+        await backend.terminate()
         process.exitCode = 1
         return undefined
       })
@@ -524,7 +593,7 @@ export const TuiThreadCommand = cmd({
             error: error instanceof Error ? error.message : String(error),
           })
         })
-        backend.terminate()
+        await backend.terminate()
       }
 
       const prompt = await input(args.prompt)
