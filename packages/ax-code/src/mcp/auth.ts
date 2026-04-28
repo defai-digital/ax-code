@@ -110,6 +110,17 @@ export namespace McpAuth {
     return result
   }
 
+  async function withFileEntryLock<T>(mcpName: string, fn: (entry: Entry) => Promise<T> | T): Promise<T> {
+    return withLock(filepath, async () => {
+      const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(() => ({}))
+      const entry = raw[mcpName] ? decryptEntry(raw[mcpName] as Record<string, unknown>) : ({} as Entry)
+      const result = await fn(entry)
+      raw[mcpName] = encryptEntry(entry)
+      await Filesystem.writeJson(filepath, raw, 0o600)
+      return result
+    })
+  }
+
   // All set/remove/update operations serialize on the same shared lock
   // key (`filepath`) so concurrent OAuth completions for different MCP
   // servers cannot race on the read-modify-write of mcp-auth.json.
@@ -140,44 +151,39 @@ export namespace McpAuth {
   }
 
   export async function updateTokens(mcpName: string, tokens: Tokens, serverUrl?: string): Promise<void> {
-    await withLock(mcpName, async () => {
-      const entry = (await get(mcpName)) ?? {}
+    await withFileEntryLock(mcpName, (entry) => {
       entry.tokens = tokens
-      await set(mcpName, entry, serverUrl)
-    })
-  }
-
-  export async function updateClientInfo(mcpName: string, clientInfo: ClientInfo, serverUrl?: string): Promise<void> {
-    await withLock(mcpName, async () => {
-      const entry = (await get(mcpName)) ?? {}
-      entry.clientInfo = clientInfo
-      await set(mcpName, entry, serverUrl)
-    })
-  }
-
-  export async function updateCodeVerifier(mcpName: string, codeVerifier: string): Promise<void> {
-    await withLock(mcpName, async () => {
-      const entry = (await get(mcpName)) ?? {}
-      entry.codeVerifier = codeVerifier
-      await set(mcpName, entry)
-    })
-  }
-
-  export async function clearCodeVerifier(mcpName: string): Promise<void> {
-    await withLock(mcpName, async () => {
-      const entry = await get(mcpName)
-      if (entry) {
-        delete entry.codeVerifier
-        await set(mcpName, entry)
+      if (serverUrl) {
+        entry.serverUrl = serverUrl
       }
     })
   }
 
+  export async function updateClientInfo(mcpName: string, clientInfo: ClientInfo, serverUrl?: string): Promise<void> {
+    await withFileEntryLock(mcpName, (entry) => {
+      entry.clientInfo = clientInfo
+      if (serverUrl) {
+        entry.serverUrl = serverUrl
+      }
+    })
+  }
+
+  export async function updateCodeVerifier(mcpName: string, codeVerifier: string): Promise<void> {
+    await withFileEntryLock(mcpName, (entry) => {
+      entry.codeVerifier = codeVerifier
+    })
+  }
+
+  export async function clearCodeVerifier(mcpName: string): Promise<void> {
+    await withFileEntryLock(mcpName, (entry) => {
+      if (!entry.codeVerifier) return
+      delete entry.codeVerifier
+    })
+  }
+
   export async function updateOAuthState(mcpName: string, oauthState: string): Promise<void> {
-    await withLock(mcpName, async () => {
-      const entry = (await get(mcpName)) ?? {}
+    await withFileEntryLock(mcpName, (entry) => {
       entry.oauthState = oauthState
-      await set(mcpName, entry)
     })
   }
 
@@ -187,12 +193,9 @@ export namespace McpAuth {
   }
 
   export async function clearOAuthState(mcpName: string): Promise<void> {
-    await withLock(mcpName, async () => {
-      const entry = await get(mcpName)
-      if (entry) {
-        delete entry.oauthState
-        await set(mcpName, entry)
-      }
+    await withFileEntryLock(mcpName, (entry) => {
+      if (!entry.oauthState) return
+      delete entry.oauthState
     })
   }
 

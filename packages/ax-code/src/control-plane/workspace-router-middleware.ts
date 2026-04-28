@@ -6,6 +6,42 @@ import { getAdaptor } from "./adaptors"
 import { WorkspaceContext } from "./workspace-context"
 import { Workspace } from "./workspace"
 import type { WorkspaceID } from "./schema"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "workspace-router-middleware" })
+const WORKSPACE_PROXY_BASE_URL = "http://workspace.test"
+
+function normalizeWorkspacePath(rawPath: string): string {
+  const rawPathLower = rawPath.toLowerCase()
+  let decodedPath = rawPath
+  try {
+    decodedPath = decodeURIComponent(rawPath)
+  } catch {
+    // Keep the raw value if malformed percent-encoding appears.
+  }
+
+  const decodedPathname = decodeURIComponent(new URL(rawPath, WORKSPACE_PROXY_BASE_URL).pathname)
+
+  if (
+    rawPath.startsWith("//") ||
+    decodedPath.startsWith("//") ||
+    decodedPathname.startsWith("//") ||
+    decodedPathname.includes("://") ||
+    rawPathLower.includes("%3a%2f%2f") ||
+    rawPathLower.includes("%2f%2f")
+  ) {
+    throw new Error(`Invalid workspace proxy path: ${rawPath}`)
+  }
+
+  const requestUrl = new URL(rawPath, WORKSPACE_PROXY_BASE_URL)
+  // If a caller passes a full URL-like path (e.g. //host or https://...), this
+  // check rejects it before it can reach the adaptor layer.
+  if (requestUrl.origin !== WORKSPACE_PROXY_BASE_URL) {
+    throw new Error(`Invalid workspace proxy path: ${rawPath}`)
+  }
+
+  return `${requestUrl.pathname}${requestUrl.search}`
+}
 
 export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
   if (!Flag.AX_CODE_EXPERIMENTAL_WORKSPACES) return next()
@@ -26,7 +62,16 @@ export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
   const adaptor = getAdaptor(row.type)
   if (!adaptor) return next()
   const requestUrl = new URL(c.req.url)
-  return adaptor.fetch(row.extra, `${requestUrl.pathname}${requestUrl.search}`, {
+
+  let requestPath: string
+  try {
+    requestPath = normalizeWorkspacePath(`${requestUrl.pathname}${requestUrl.search}`)
+  } catch (error) {
+    log.warn("invalid workspace session path", { path: requestUrl.pathname, workspaceID })
+    return c.json({ error: error instanceof Error ? error.message : "Invalid workspace path" }, 400)
+  }
+
+  return adaptor.fetch(row.extra, requestPath, {
     method: c.req.method,
     headers: c.req.raw.headers,
     body: c.req.raw.body,

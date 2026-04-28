@@ -1,4 +1,3 @@
-import { createConnection } from "net"
 import { Log } from "../util/log"
 import { OAUTH_CALLBACK_PORT, OAUTH_CALLBACK_PATH, setCallbackPort } from "./oauth-provider"
 
@@ -162,9 +161,16 @@ export namespace McpOAuthCallback {
 
   export function waitForCallback(oauthState: string, mcpName?: string): Promise<string> {
     return new Promise((resolve, reject) => {
+      const previous = pendingAuths.get(oauthState)
+      if (previous) {
+        clearTimeout(previous.timeout)
+        previous.reject(new Error("OAuth callback request superseded"))
+      }
+
       if (mcpName) pendingStates.set(mcpName, oauthState)
       const timeout = setTimeout(() => {
-        if (pendingAuths.has(oauthState)) {
+        const current = pendingAuths.get(oauthState)
+        if (current?.timeout === timeout) {
           pendingAuths.delete(oauthState)
           if (mcpName) pendingStates.delete(mcpName)
           reject(new Error("OAuth callback timeout - authorization took too long"))
@@ -188,27 +194,7 @@ export namespace McpOAuthCallback {
   }
 
   export async function isPortInUse(): Promise<boolean> {
-    return new Promise((resolve) => {
-      const socket = createConnection(OAUTH_CALLBACK_PORT, "127.0.0.1")
-      let settled = false
-      // Cap the probe at 1s. The previous implementation had no
-      // timeout — on systems where a half-open TCP socket doesn't
-      // error (firewall silently dropping SYNs, stale LISTEN with
-      // no accept) the promise would hang until the OS TCP connect
-      // timeout (~75s on Linux, longer elsewhere), blocking the
-      // entire MCP OAuth flow with no diagnostic. A local loopback
-      // probe should resolve in milliseconds; 1s is generous.
-      const finish = (result: boolean) => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        socket.destroy()
-        resolve(result)
-      }
-      const timer = setTimeout(() => finish(false), 1000)
-      socket.once("connect", () => finish(true))
-      socket.once("error", () => finish(false))
-    })
+    return isRunning()
   }
 
   export async function stop(): Promise<void> {

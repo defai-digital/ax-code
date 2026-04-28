@@ -15,9 +15,11 @@ const transportCalls: Array<{
   options: { authProvider?: unknown }
 }> = []
 const transportInstances: Array<{ url: string; closeCalls: number }> = []
+const clientInstances: Array<{ closeCalls: number }> = []
 const authenticatedUrls = new Set<string>()
 const pendingOauthStates = new Map<string, { reject: (error: Error) => void }>()
 const pendingOauthNames = new Map<string, string>()
+let callbackRunning = false
 
 // Controls whether the mock transport simulates a 401 that triggers the SDK
 // auth flow (which calls provider.state()) or a simple UnauthorizedError.
@@ -103,15 +105,20 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
 
 mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
+    closeCalls = 0
     constructor(url: URL, options?: { authProvider?: unknown }) {
       transportCalls.push({
         type: "sse",
         url: url.toString(),
         options: options ?? {},
       })
+      transportInstances.push(this)
     }
     async start() {
       throw new Error("Mock SSE transport cannot connect")
+    }
+    async close() {
+      this.closeCalls++
     }
   },
 }))
@@ -119,6 +126,7 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
 // Mock the MCP SDK Client
 mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
+    closeCalls = 0
     setNotificationHandler() {}
     async connect(transport: { start: () => Promise<void> }) {
       await transport.start()
@@ -126,7 +134,12 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
     async listTools() {
       return { tools: [] }
     }
-    async close() {}
+    async close() {
+      this.closeCalls++
+    }
+    constructor() {
+      clientInstances.push(this)
+    }
   },
 }))
 
@@ -146,13 +159,15 @@ mock.module("../../src/util/ssrf", () => ({
 
 mock.module("../../src/mcp/oauth-callback", () => ({
   McpOAuthCallback: {
-    ensureRunning: async () => {},
+    ensureRunning: async () => {
+      callbackRunning = true
+    },
     waitForCallback: (oauthState: string, mcpName?: string) =>
       new Promise<string>((_resolve, reject) => {
         pendingOauthStates.set(oauthState, { reject })
         if (mcpName) pendingOauthNames.set(mcpName, oauthState)
       }),
-    cancelPending: (mcpName: string) => {
+  cancelPending: (mcpName: string) => {
       const oauthState = pendingOauthNames.get(mcpName)
       if (!oauthState) return
       const pending = pendingOauthStates.get(oauthState)
@@ -161,20 +176,22 @@ mock.module("../../src/mcp/oauth-callback", () => ({
       pendingOauthNames.delete(mcpName)
       pending.reject(new Error("Authorization cancelled"))
     },
-    stop: async () => {
-      for (const [oauthState, pending] of pendingOauthStates) {
-        pending.reject(new Error("OAuth callback server stopped"))
+  stop: async () => {
+      callbackRunning = false
+      for (const oauthState of [...pendingOauthStates.keys()]) {
         pendingOauthStates.delete(oauthState)
       }
       pendingOauthNames.clear()
     },
-    isRunning: () => false,
+    isRunning: () => callbackRunning,
+    isPortInUse: async () => callbackRunning,
   },
 }))
 
 beforeEach(() => {
   transportCalls.length = 0
   transportInstances.length = 0
+  clientInstances.length = 0
   authenticatedUrls.clear()
   simulateAuthFlow = true
   pendingOauthStates.clear()
@@ -220,6 +237,41 @@ test("first connect to OAuth server shows needs_auth instead of failed", async (
       // not caught as UnauthorizedError, causing status to be "failed".
       expect(serverStatus["test-oauth"]).toBeDefined()
       expect(serverStatus["test-oauth"].status).toBe("needs_auth")
+    },
+  })
+})
+
+test("connect path closes unused SSE transport when StreamableHTTP path is selected first", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {},
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const result = await MCP.add("test-oauth-close", {
+        type: "remote",
+        url: "https://example.com/mcp",
+      })
+
+      const serverStatus = result.status as Record<string, { status: string; error?: string }>
+      expect(serverStatus["test-oauth-close"]).toBeDefined()
+      expect(serverStatus["test-oauth-close"].status).toBe("needs_auth")
+
+      const streamable = transportInstances[0]
+      const sse = transportInstances[1]
+      const firstClient = clientInstances[0]
+      expect(streamable?.closeCalls).toBe(0)
+      expect(sse?.closeCalls).toBe(1)
+      expect(firstClient?.closeCalls).toBe(1)
     },
   })
 })
@@ -339,16 +391,57 @@ test("startAuth closes prior pending OAuth transport before creating a new one",
     fn: async () => {
       await MCP.startAuth("test-oauth-rotate")
       const firstTransport = transportInstances[0]
+      const firstClient = clientInstances[0]
       expect(firstTransport?.closeCalls).toBe(0)
+      expect(firstClient?.closeCalls).toBe(1)
 
       await MCP.startAuth("test-oauth-rotate")
+      const secondClient = clientInstances[1]
+
       expect(firstTransport?.closeCalls).toBe(1)
       expect(transportInstances).toHaveLength(2)
+      expect(clientInstances).toHaveLength(2)
 
       const secondTransport = transportInstances[1]
       expect(secondTransport?.closeCalls).toBe(0)
+      expect(secondClient?.closeCalls).toBe(1)
+
       await MCP.removeAuth("test-oauth-rotate")
       expect(secondTransport?.closeCalls).toBe(1)
+    },
+  })
+})
+
+test("startAuth closes temporary client and transport when authentication is already valid", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {
+            "test-oauth-success": {
+              type: "remote",
+              url: "https://example.com/mcp",
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      authenticatedUrls.add("https://example.com/mcp")
+
+      const result = await MCP.startAuth("test-oauth-success")
+      expect(result.authorizationUrl).toBe("")
+
+      const transport = transportInstances[0]
+      const client = clientInstances[0]
+      expect(transport?.closeCalls).toBe(1)
+      expect(client?.closeCalls).toBe(1)
     },
   })
 })

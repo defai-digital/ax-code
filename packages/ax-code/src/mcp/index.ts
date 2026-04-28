@@ -157,6 +157,18 @@ export namespace MCP {
 
   // Store transports for OAuth servers to allow finishing auth
   type TransportWithAuth = StreamableHTTPClientTransport | SSEClientTransport
+  function closeIfPossible(
+    target: { close?: (() => Promise<unknown>) | undefined } | undefined,
+    mcpName: string,
+    context: string,
+  ) {
+    if (!target || typeof target.close !== "function") {
+      return Promise.resolve()
+    }
+    return target.close().catch((error) => {
+      log.debug("failed to close MCP object", { mcpName, context, error })
+    })
+  }
   const pendingOAuthTransports = new Map<string, TransportWithAuth>()
   async function closePendingOAuthTransport(mcpName: string) {
     const transport = pendingOAuthTransports.get(mcpName)
@@ -396,6 +408,11 @@ export namespace MCP {
       let authProvider: McpOAuthProvider | undefined
 
       if (!oauthDisabled) {
+        // Open callback listener first so the OAuth redirect URI is always bound
+        // to a real local port before creating the provider or attempting
+        // discovery/registration.
+        await McpOAuthCallback.ensureRunning()
+
         authProvider = new McpOAuthProvider(
           key,
           mcp.url,
@@ -434,16 +451,27 @@ export namespace MCP {
 
       let lastError: Error | undefined
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
-      for (const { name, transport } of transports) {
+      for (let i = 0; i < transports.length; i++) {
+        const { name, transport } = transports[i]!
+        let client: MCPClient | undefined
         try {
-          const client = createClient()
+          client = createClient()
           await withTimeout(client.connect(transport), connectTimeout)
           registerNotificationHandlers(client, key)
           mcpClient = client
           log.info("connected", { key, transport: name })
           status = { status: "connected" }
+
+          // Close transports that were never tried. This keeps constructor-created
+          // clients from leaking sockets (notably SSE when StreamableHTTP succeeds).
+          for (let j = i + 1; j < transports.length; j++) {
+            await transports[j].transport.close?.().catch(() => {})
+          }
           break
         } catch (error) {
+          if (client) {
+            await closeIfPossible(client, key, `connect attempt failed (${name})`)
+          }
           lastError = error instanceof Error ? error : new Error(String(error))
 
           // Handle OAuth-specific errors.
@@ -471,6 +499,10 @@ export namespace MCP {
                 duration: 8000,
               })
             } else {
+              // Close any transport candidates we did not try.
+              for (let j = i + 1; j < transports.length; j++) {
+                await transports[j].transport.close?.().catch(() => {})
+              }
               // Store transport for later finishAuth call
               await closePendingOAuthTransport(key)
               pendingOAuthTransports.set(key, transport)
@@ -689,9 +721,7 @@ export namespace MCP {
       // Close existing client if present to prevent memory leaks
       const existingClient = s.clients[name]
       if (existingClient) {
-        await existingClient.close().catch((error) => {
-          log.error("Failed to close existing MCP client", { name, error })
-        })
+        await closeIfPossible(existingClient, name, "disconnecting existing client")
       }
       s.clients[name] = result.mcpClient
     }
@@ -703,11 +733,10 @@ export namespace MCP {
     const s = await state()
     const client = s.clients[name]
     if (client) {
-      await client.close().catch((error) => {
-        log.error("Failed to close MCP client", { name, error })
-      })
+      await closeIfPossible(client, name, "disconnecting")
       delete s.clients[name]
     }
+    await closePendingOAuthTransport(name)
     s.status[name] = { status: "disabled" }
   }
 
@@ -977,21 +1006,28 @@ export namespace MCP {
     const transport = new StreamableHTTPClientTransport(new URL(mcpConfig.url), {
       authProvider,
     })
+    const client = createClient()
 
     // Try to connect - this will trigger the OAuth flow
     try {
-      const client = createClient()
       await client.connect(transport)
-      // If we get here, we're already authenticated
+      // If we get here, we're already authenticated.
+      await transport.close?.().catch(() => {})
+      await closeIfPossible(client, mcpName, "startAuth authenticated")
       return { authorizationUrl: "" }
     } catch (error) {
+      if (!error) {
+        throw new Error("Unknown OAuth error")
+      }
       if (error instanceof UnauthorizedError && capturedUrl) {
+        await closeIfPossible(client, mcpName, "startAuth unauthorized redirect")
         // Store transport for finishAuth
         await closePendingOAuthTransport(mcpName)
         pendingOAuthTransports.set(mcpName, transport)
         return { authorizationUrl: capturedUrl.toString() }
       }
       await transport.close?.().catch(() => {})
+      await closeIfPossible(client, mcpName, "startAuth error recovery")
       throw error
     }
   }

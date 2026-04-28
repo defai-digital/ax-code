@@ -197,6 +197,26 @@ describe("control-plane/session-proxy-middleware", () => {
     ])
   })
 
+  test("rejects URL-like paths before proxying", async () => {
+    const state: State = {
+      workspace: "first",
+      calls: [],
+    }
+
+    const ctx = await setup(state)
+
+    const response = await ctx.request("http://workspace.test/session/%68%74%74%70%3A%2F%2Fevil.com/authorize", {
+      method: "POST",
+      body: "payload",
+    })
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: "Invalid workspace proxy path: /session/%68%74%74%70%3A%2F%2Fevil.com/authorize",
+    })
+    expect(state.calls).toEqual([])
+  })
+
   // It will behave this way when we have syncing
   //
   // test("does not forward GET requests", async () => {

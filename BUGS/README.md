@@ -1,5 +1,31 @@
 # Bug Reports
 
+## Status (2026-04-27, BUG-319..327 MCP & ACP scan)
+
+### Open
+
+No open items remain in this batch.
+
+### Fixed in this pass
+
+| ID | Severity | Component | What changed |
+|----|----------|-----------|--------------|
+| BUG-319 | High | `packages/ax-code/src/mcp/index.ts` | Close untried transports after successful `StreamableHTTP` connect so no Streamable/SSE leak remains. |
+| BUG-320 | High | `packages/ax-code/src/mcp/index.ts` | Close temporary OAuth clients/transports on non-accepted `startAuth()` paths and guard client close calls for mock/test compatibility. |
+| BUG-321 | High | `packages/ax-code/src/mcp/oauth-callback.ts` | Cancel superseded `waitForCallback()` waiters and ensure timeout only affects the current waiter. |
+| BUG-322 | Medium | `packages/ax-code/src/mcp/auth.ts` | Serialize file read-modify-write under file lock to prevent auth entry resurrection races. |
+| BUG-323 | High | `packages/ax-code/src/control-plane/workspace.ts`, `packages/ax-code/src/control-plane/workspace-router-middleware.ts` | Restrict proxy/sync request paths to local path+query and block URL-like inputs before adaptor calls. |
+| BUG-324 | Medium | `packages/ax-code/src/mcp/oauth-callback.ts` | Return callback server running state in `isPortInUse()` so checks match random port binding. |
+| BUG-325 | Medium | `packages/ax-code/src/mcp/index.ts`, `packages/ax-code/src/mcp/oauth-provider.ts`, `packages/ax-code/src/mcp/oauth-callback.ts` | Ensure callback listener is started before provider creation in `create()`/`startAuth()` so redirect URI uses active callback port. |
+| BUG-326 | Low | `packages/ax-code/src/mcp/index.ts` | Add pending OAuth transport cleanup in `disconnect()`. |
+| BUG-327 | Low | `packages/ax-code/src/control-plane/workspace.ts` | Emit workspace directory when available in `startSyncing()` events, with fallback to workspace id. |
+
+### Cleared as false positive / accepted-risk
+
+- BUG-328 (`packages/ax-code/src/control-plane/workspace-server/server.ts`) remained validly classified as false-positive after re-check; heartbeat stop logic is correct.
+
+---
+
 ## Status (2026-04-28, BUG-315..318 LSP & DRE scan)
 
 ### Open

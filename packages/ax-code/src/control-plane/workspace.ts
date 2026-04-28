@@ -16,7 +16,16 @@ export namespace Workspace {
   const log = Log.create({ service: "workspace" })
   const WORKSPACE_SYNC_INITIAL_BACKOFF_MS = 1000
   const WORKSPACE_SYNC_MAX_BACKOFF_MS = 30_000
-  const WORKSPACE_SYNC_ENDPOINT = "http://workspace.test/event"
+  const WORKSPACE_SYNC_BASE_URL = "http://workspace.test"
+  const WORKSPACE_SYNC_ENDPOINT = `${WORKSPACE_SYNC_BASE_URL}/event`
+
+  function normalizeSyncRequestUrl(input: string): string {
+    const requestUrl = new URL(input, WORKSPACE_SYNC_BASE_URL)
+    if (requestUrl.origin !== WORKSPACE_SYNC_BASE_URL) {
+      throw new Error(`Invalid workspace sync URL: ${input}`)
+    }
+    return `${requestUrl.pathname}${requestUrl.search}`
+  }
 
   export const Info = z.object({
     id: WorkspaceID.zod,
@@ -116,7 +125,7 @@ export namespace Workspace {
         let backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
         while (!stop.signal.aborted) {
           try {
-            const response = await adaptor.fetch(item.extra, WORKSPACE_SYNC_ENDPOINT, {
+            const response = await adaptor.fetch(item.extra, normalizeSyncRequestUrl(WORKSPACE_SYNC_ENDPOINT), {
               signal: stop.signal,
             })
             if (!response.ok) {
@@ -126,7 +135,7 @@ export namespace Workspace {
             backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
             await parseSSE(response.body, stop.signal, (payload) => {
               GlobalBus.emit("event", {
-                directory: item.id,
+                directory: item.directory ?? item.id,
                 payload,
               })
             })
