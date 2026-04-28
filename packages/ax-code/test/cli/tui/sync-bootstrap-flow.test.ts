@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import { createStore } from "solid-js/store"
-import { createSyncBootstrapFlow } from "../../../src/cli/cmd/tui/context/sync-bootstrap-flow"
+import {
+  AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY,
+  AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS,
+  createLatestBootstrapBackgroundScheduler,
+  createSyncBootstrapFlow,
+  tuiDeferredBootstrapConcurrency,
+  tuiDeferredBootstrapDelayMs,
+} from "../../../src/cli/cmd/tui/context/sync-bootstrap-flow"
 import { createStoreBackedBootstrapTasks } from "../../../src/cli/cmd/tui/context/sync-bootstrap-assembly"
 import { createInitialSyncState } from "../../../src/cli/cmd/tui/context/sync-state"
+
+const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 function createClient() {
   return {
@@ -54,6 +63,52 @@ function createClient() {
 }
 
 describe("tui sync bootstrap flow", () => {
+  test("exposes bounded deferred bootstrap tuning for packaged startup support", () => {
+    expect(tuiDeferredBootstrapDelayMs({})).toBe(2_000)
+    expect(tuiDeferredBootstrapDelayMs({ [AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS]: "0" })).toBe(0)
+    expect(tuiDeferredBootstrapDelayMs({ [AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS]: "5000" })).toBe(5_000)
+    expect(tuiDeferredBootstrapDelayMs({ [AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS]: "bad" })).toBe(2_000)
+
+    expect(tuiDeferredBootstrapConcurrency({})).toBe(1)
+    expect(tuiDeferredBootstrapConcurrency({ [AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY]: "3" })).toBe(3)
+    expect(tuiDeferredBootstrapConcurrency({ [AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY]: "0" })).toBe(1)
+    expect(tuiDeferredBootstrapConcurrency({ [AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY]: "bad" })).toBe(1)
+  })
+
+  test("coalesces overlapping background bootstrap runs to the latest queued run", async () => {
+    const events: string[] = []
+    let releaseFirst = () => {}
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const schedule = createLatestBootstrapBackgroundScheduler({
+      onCoalesced() {
+        events.push("coalesced")
+      },
+    })
+
+    schedule(async () => {
+      events.push("first:start")
+      await firstGate
+      events.push("first:finish")
+    })
+    await Promise.resolve()
+
+    schedule(async () => {
+      events.push("second:start")
+    })
+    schedule(async () => {
+      events.push("third:start")
+    })
+
+    expect(events).toEqual(["first:start", "coalesced", "coalesced"])
+
+    releaseFirst()
+    await nextTick()
+
+    expect(events).toEqual(["first:start", "coalesced", "coalesced", "first:finish", "third:start"])
+  })
+
   test("runs the bootstrap orchestration and records startup markers", async () => {
     const [store, setStore] = createStore(createInitialSyncState())
     const startup: Array<{ name: string; data?: Record<string, unknown> }> = []
@@ -131,6 +186,8 @@ describe("tui sync bootstrap flow", () => {
       logWarn: () => undefined,
       logError: () => undefined,
       onFailure: () => undefined,
+      deferredDelayMs: 0,
+      deferredBackground: false,
       now: () => 1_000_000,
     })
 
@@ -187,6 +244,8 @@ describe("tui sync bootstrap flow", () => {
       async onFailure(error) {
         failures.push(String(error))
       },
+      deferredDelayMs: 0,
+      deferredBackground: false,
     })
 
     await expect(flow.run()).rejects.toThrow("bootstrap flow failed")

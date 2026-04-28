@@ -14,6 +14,75 @@ import {
 import type { BootstrapTask } from "./sync-bootstrap-task"
 
 const BOOTSTRAP_SESSION_LIST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
+// Keep non-critical runtime status probes off the first interactive turn.
+// Packaged installs run the TUI backend as a stdio child process, so eager
+// LSP/MCP/VCS/workspace probes can otherwise compete with the first prompt.
+export const DEFAULT_DEFERRED_BOOTSTRAP_DELAY_MS = 2_000
+export const DEFAULT_DEFERRED_BOOTSTRAP_CONCURRENCY = 1
+export const AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS = "AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS"
+export const AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY = "AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY"
+
+function parseIntegerEnv(input: {
+  env: Record<string, string | undefined>
+  name: string
+  fallback: number
+  min: number
+}) {
+  const value = input.env[input.name]
+  if (!value) return input.fallback
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= input.min ? parsed : input.fallback
+}
+
+export function tuiDeferredBootstrapDelayMs(env: Record<string, string | undefined> = process.env) {
+  return parseIntegerEnv({
+    env,
+    name: AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS,
+    fallback: DEFAULT_DEFERRED_BOOTSTRAP_DELAY_MS,
+    min: 0,
+  })
+}
+
+export function tuiDeferredBootstrapConcurrency(env: Record<string, string | undefined> = process.env) {
+  return parseIntegerEnv({
+    env,
+    name: AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY,
+    fallback: DEFAULT_DEFERRED_BOOTSTRAP_CONCURRENCY,
+    min: 1,
+  })
+}
+
+export type BootstrapBackgroundRun = () => Promise<unknown>
+
+export function createLatestBootstrapBackgroundScheduler(input: { onCoalesced?: () => void } = {}) {
+  let inFlight = false
+  let queued: BootstrapBackgroundRun | undefined
+
+  const execute = (run: BootstrapBackgroundRun) => {
+    inFlight = true
+    void Promise.resolve()
+      .then(run)
+      .catch(() => undefined)
+      .finally(() => {
+        const next = queued
+        queued = undefined
+        if (next) {
+          execute(next)
+          return
+        }
+        inFlight = false
+      })
+  }
+
+  return (run: BootstrapBackgroundRun) => {
+    if (inFlight) {
+      queued = run
+      input.onCoalesced?.()
+      return
+    }
+    execute(run)
+  }
+}
 
 export interface SyncBootstrapFlowTaskGroups {
   blockingTasks: BootstrapTask[]
@@ -46,11 +115,17 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   logWarn: (label: string, data: { error: string }) => void
   logError: (label: string, data: { error: string }) => void
   onFailure: (error: unknown) => Promise<void> | void
+  deferredDelayMs?: number
+  deferredConcurrency?: number
+  deferredBackground?: boolean
   now?: () => number
   createPhaseSequence?: (input: {
     blockingTasks: BootstrapTask[]
     coreTasks: BootstrapTask[]
     deferredTasks: BootstrapTask[]
+    deferredDelayMs?: number
+    deferredConcurrency?: number
+    deferredBackground?: boolean
     getStatus: () => SyncBootstrapStatus
     setStatus: (status: SyncBootstrapStatus) => void
     finishCoreSpan?: BootstrapSpan
@@ -63,11 +138,17 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
 }) {
   const now = input.now ?? Date.now
   const createPhaseSequence = input.createPhaseSequence ?? createSyncBootstrapPhaseSequence
+  const scheduleBackground = createLatestBootstrapBackgroundScheduler({
+    onCoalesced() {
+      input.recordStartup("tui.startup.bootstrapDeferredCoalesced")
+    },
+  })
 
   return {
     async run() {
+      const isStartupBootstrap = input.store.status === "loading"
       const bootstrapLifecycle = createBootstrapLifecycle({
-        isStartupBootstrap: input.store.status === "loading",
+        isStartupBootstrap,
         createSpan: input.createSpan,
         onFailure: input.onFailure,
       })
@@ -97,11 +178,15 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
           input.recordStartup("tui.startup.providersReady", { failed })
         })
 
-        await runBootstrapPhaseSequence(
-          createPhaseSequence({
+        const sequence = createPhaseSequence({
             blockingTasks,
             coreTasks,
             deferredTasks,
+            deferredDelayMs: isStartupBootstrap
+              ? (input.deferredDelayMs ?? tuiDeferredBootstrapDelayMs())
+              : 0,
+            deferredConcurrency: input.deferredConcurrency ?? tuiDeferredBootstrapConcurrency(),
+            deferredBackground: input.deferredBackground ?? true,
             getStatus: () => input.store.status,
             setStatus: input.setStatus,
             finishCoreSpan: finishCoreBootstrap,
@@ -110,8 +195,8 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
             logWarn: input.logWarn,
             logError: input.logError,
             recordStartup: input.recordStartup,
-          }),
-        )
+        })
+        await runBootstrapPhaseSequence(sequence, { scheduleBackground })
       } catch (error) {
         await bootstrapLifecycle.fail(error, finishDeferredBootstrap, finishCoreBootstrap)
       }

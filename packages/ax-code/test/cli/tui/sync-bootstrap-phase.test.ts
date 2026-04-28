@@ -49,4 +49,35 @@ describe("tui sync bootstrap phase", () => {
 
     expect(logged).toEqual(["Error: sync first"])
   })
+
+  test("limits non-critical bootstrap task concurrency when requested", async () => {
+    const events: string[] = []
+    let active = 0
+    let maxActive = 0
+
+    const task = (name: string) => async () => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      events.push(`${name}:start`)
+      await Promise.resolve()
+      events.push(`${name}:finish`)
+      active--
+    }
+
+    await expect(
+      settleBootstrapPhase([task("first"), task("second"), task("third")], {
+        concurrency: 1,
+      }),
+    ).resolves.toEqual({ rejected: [] })
+
+    expect(maxActive).toBe(1)
+    expect(events).toEqual([
+      "first:start",
+      "first:finish",
+      "second:start",
+      "second:finish",
+      "third:start",
+      "third:finish",
+    ])
+  })
 })

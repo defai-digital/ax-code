@@ -16,6 +16,7 @@ describe("tui sync bootstrap phase plan", () => {
         blockingTasks: [() => Promise.reject(new Error("blocking failed"))],
         coreTasks: [() => Promise.reject(new Error("core failed"))],
         deferredTasks: [() => Promise.reject(new Error("deferred failed"))],
+        deferredBackground: false,
         getStatus: () => status,
         setStatus(next) {
           status = next
@@ -69,6 +70,7 @@ describe("tui sync bootstrap phase plan", () => {
         blockingTasks: [() => Promise.resolve()],
         coreTasks: [],
         deferredTasks: [],
+        deferredBackground: false,
         getStatus: () => status,
         setStatus(next) {
           status = next
@@ -96,6 +98,7 @@ describe("tui sync bootstrap phase plan", () => {
         blockingTasks: [],
         coreTasks: [() => Promise.resolve()],
         deferredTasks: [],
+        deferredBackground: false,
         getStatus: () => status,
         setStatus(next) {
           status = next

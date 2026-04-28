@@ -52,6 +52,7 @@ export interface DispatchStoreBackedSyncEventInput<
   syncMcpStatus: RuntimeSyncEventHandlers["syncMcpStatus"]
   syncLspStatus: RuntimeSyncEventHandlers["syncLspStatus"]
   syncDebugEngine: RuntimeSyncEventHandlers["syncDebugEngine"]
+  scheduleRuntimeProbe?: RuntimeSyncEventHandlers["scheduleProbe"]
   bootstrap: () => Promise<void> | void
   onWarn: (label: string, error: unknown) => void
   maxSessionMessages: number
@@ -165,6 +166,7 @@ export function dispatchStoreBackedSyncEvent<
       syncMcpStatus: input.syncMcpStatus,
       syncLspStatus: input.syncLspStatus,
       syncDebugEngine: input.syncDebugEngine,
+      scheduleProbe: input.scheduleRuntimeProbe,
       setVcsBranch(branch) {
         setStore("vcs", { branch })
       },

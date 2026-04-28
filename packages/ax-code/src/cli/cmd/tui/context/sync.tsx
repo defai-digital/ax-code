@@ -41,6 +41,8 @@ import { createSyncContextValue } from "./sync-result"
 import { subscribeStoreBackedSyncEvents } from "./sync-subscription"
 import { registerSyncLifecycle } from "./sync-lifecycle"
 import { parseSyncedSessionRisk } from "./sync-session-risk"
+import { createRuntimeSyncProbeScheduler } from "./sync-runtime-event"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
 
 const BOOTSTRAP_REQUEST_TIMEOUT_MS = 10_000
 const SESSION_SYNC_REQUEST_TIMEOUT_MS = 10_000
@@ -82,6 +84,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       debugEngineEnabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       setStore,
     })
+    const runtimeProbeScheduler = createRuntimeSyncProbeScheduler({
+      onCoalesced(key) {
+        DiagnosticLog.recordProcess("tui.runtimeProbeCoalesced", { key })
+      },
+    })
+    onCleanup(() => runtimeProbeScheduler.dispose())
 
     const sessionSync = createStoreBackedSessionSyncController({
       timeoutMs: SESSION_SYNC_REQUEST_TIMEOUT_MS,
@@ -179,6 +187,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncMcpStatus,
       syncLspStatus,
       syncDebugEngine,
+      scheduleRuntimeProbe: runtimeProbeScheduler.schedule,
       bootstrap,
       onWarn(label, error) {
         Log.Default.warn(label, { error })

@@ -270,7 +270,12 @@ function isWorkerEntrypoint() {
   return typeof entry === "string" && /(?:^|[/\\])worker\.(?:ts|js)$/.test(entry)
 }
 
-if (import.meta.main || isWorkerEntrypoint()) {
+// Do not use `import.meta.main` here. In Bun's single-file compiled
+// runtime, importing this module from the `tui-backend` command can still
+// make the module look like the main entrypoint. That binds the Worker RPC
+// transport before the command can bind stdio, and the packaged TUI backend
+// never completes its readiness handshake.
+if (isWorkerEntrypoint()) {
   await startTuiBackend("worker")
 }
 
