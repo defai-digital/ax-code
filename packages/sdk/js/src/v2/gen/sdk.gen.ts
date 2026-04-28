@@ -1557,6 +1557,7 @@ export class Session2 extends HeyApiClient {
       quality?: boolean
       findings?: boolean
       envelopes?: boolean
+      debug?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1570,6 +1571,7 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "quality" },
             { in: "query", key: "findings" },
             { in: "query", key: "envelopes" },
+            { in: "query", key: "debug" },
           ],
         },
       ],

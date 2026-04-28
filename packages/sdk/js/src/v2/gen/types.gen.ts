@@ -1106,7 +1106,7 @@ export type AgentConfig = {
    */
   hidden?: boolean
   /**
-   * Agent visibility tier: core (always shown in picker), specialist (expandable/auto-routed), internal (hidden)
+   * Agent visibility tier: core (always shown in picker), specialist (expandable, accessed via @-mention), internal (hidden)
    */
   tier?: "core" | "specialist" | "internal"
   options?: {
@@ -1532,19 +1532,23 @@ export type Config = {
     max_continuations?: number
   }
   /**
-   * Agent routing configuration
+   * Message-complexity routing for fast-model selection
    */
   routing?: {
     /**
-     * How specialist routing behaves: off disables auto-routing, delegate creates a specialist subtask, switch changes the primary agent (default: switch)
+     * @deprecated Agent auto-routing was removed; specialists are invoked via @-mention. Field accepted for backwards compatibility but ignored.
+     */
+    disable?: boolean
+    /**
+     * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
      */
     mode?: "off" | "delegate" | "switch"
     /**
-     * @deprecated Legacy alias for routing.mode='switch' when true
+     * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
      */
     auto_switch?: boolean
     /**
-     * Enable LLM-based agent classification as fallback when keyword routing has low confidence (default: false)
+     * Enable LLM-based message-complexity classification so simple queries use a small/fast model. Default: true.
      */
     llm?: boolean
   }
@@ -1600,6 +1604,12 @@ export type Config = {
       files?: number
       lines?: number
       blockedPaths?: Array<string>
+      /**
+       * Per-tool call-count caps. 0 or negative disables the cap for that tool. Tools not listed are unrestricted at the per-tool layer.
+       */
+      perTool?: {
+        [key: string]: number
+      }
     }
     /**
      * Provider/model id used for plan generation and replanning when set; defaults to the executor model.
@@ -2251,6 +2261,52 @@ export type SessionRiskDetail = {
       runId: string
     }
   }>
+  debug?: {
+    cases: Array<{
+      schemaVersion: 1
+      caseId: string
+      problem: string
+      status: "open" | "investigating" | "resolved" | "unresolved"
+      createdAt: string
+      source: {
+        tool: string
+        version: string
+        runId: string
+      }
+    }>
+    evidence: Array<{
+      schemaVersion: 1
+      evidenceId: string
+      caseId: string
+      kind: "log_capture" | "instrumentation_result" | "stack_trace" | "graph_query"
+      capturedAt: string
+      content: string
+      source: {
+        tool: string
+        version: string
+        runId: string
+      }
+    }>
+    hypotheses: Array<{
+      schemaVersion: 1
+      hypothesisId: string
+      caseId: string
+      claim: string
+      confidence: number
+      staticAnalysis?: {
+        sourceCallId: string
+        chainLength: number
+        chainConfidence: number
+      }
+      evidenceRefs?: Array<string>
+      status: "active" | "refuted" | "confirmed" | "unresolved"
+      source: {
+        tool: string
+        version: string
+        runId: string
+      }
+    }>
+  }
 }
 
 export type SessionCompareSummary = {
@@ -3790,6 +3846,10 @@ export type SessionRiskData = {
      * Include the validated VerificationEnvelope[] emitted by tool calls that record verification runs (e.g. refactor_apply)
      */
     envelopes?: boolean
+    /**
+     * Include the validated DebugCase / DebugEvidence / DebugHypothesis bundles emitted by Phase 3 runtime debug tools
+     */
+    debug?: boolean
   }
   url: "/session/{sessionID}/risk"
 }
@@ -4225,6 +4285,9 @@ export type SessionPromptData = {
       modelID: string
     }
     agent?: string
+    /**
+     * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
+     */
     userSelectedAgent?: boolean
     noReply?: boolean
     /**
@@ -4421,6 +4484,9 @@ export type SessionPromptAsyncData = {
       modelID: string
     }
     agent?: string
+    /**
+     * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
+     */
     userSelectedAgent?: boolean
     noReply?: boolean
     /**
