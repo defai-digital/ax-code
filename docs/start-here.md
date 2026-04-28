@@ -45,6 +45,9 @@ The rest of the documentation maps onto those layers.
 ### I want to try it quickly
 
 - Start with the [root README](../README.md) for install and first launch.
+- Source-channel install is the only supported user install path:
+  - `brew install defai-digital/ax-code/ax-code-source`
+  - `npm i -g @defai.digital/ax-code-source`
 - Use `/connect` or `ax-code providers login` to set a model.
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
 - If you want tighter safety boundaries, enable [Sandbox Mode](sandbox.md) before broader edits.

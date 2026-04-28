@@ -30,24 +30,11 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ```bash
 # Homebrew (macOS / Linux)
-brew install defai-digital/ax-code/ax-code
+brew install defai-digital/ax-code/ax-code-source
 
 # npm (any platform)
-npm i -g @defai.digital/ax-code
-
-# curl (Linux / macOS — installs the same compiled binary as brew/npm above)
-curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/ax-code-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/').tar.gz | tar -xz -C /usr/local/bin
+npm i -g @defai.digital/ax-code-source
 ```
-
-> **Hitting a TUI hang on first launch?** Some terminals trigger known bun-compile-binary bugs ([oven-sh/bun#26762](https://github.com/oven-sh/bun/issues/26762), [#27766](https://github.com/oven-sh/bun/issues/27766)). Install the **source-bundle channel** instead — it ships pre-bundled JavaScript plus the bun runtime and avoids the bug class entirely:
->
-> ```bash
-> brew install defai-digital/ax-code/ax-code-source
-> # or
-> npm i -g @defai.digital/ax-code-source
-> ```
->
-> Trade-off: ~80 MB install vs ~50 MB for the compiled binary. See [Channel comparison](#channel-comparison) below.
 
 ### Verify
 
@@ -59,11 +46,8 @@ Look for the `Runtime` line:
 
 | Output                             | Meaning                                   |
 | ---------------------------------- | ----------------------------------------- |
-| `Runtime: Bun X.Y.Z (compiled)`    | Default channel — single binary           |
 | `Runtime: Bun X.Y.Z (bun-bundled)` | Source channel — bundled JS + bun runtime |
 | `Runtime: Bun X.Y.Z (source)`      | Local checkout via `pnpm setup:cli`       |
-
-If the TUI hangs and your runtime is `compiled`, switch to the source-bundle channel using the install hint above.
 
 ### Run
 
@@ -82,32 +66,17 @@ That's it. No project setup or config file is required. Run `ax-code`, then use 
 
 ### Update
 
-`ax-code upgrade` and the package-manager update commands stay on whichever channel you installed from. To switch channels, install the new channel directly.
+`ax-code upgrade` and package-manager update commands apply to the `ax-code-source` channel.
 
 ```bash
-# Stay on current channel
 ax-code upgrade
-brew upgrade ax-code            # or: brew upgrade ax-code-source
-npm update -g @defai.digital/ax-code   # follows your installed dist-tag
-
-# Switch to source-bundle channel (if hitting hangs on the default)
-brew install defai-digital/ax-code/ax-code-source
-# or:
-npm i -g @defai.digital/ax-code-source
+brew upgrade ax-code-source
+npm update -g @defai.digital/ax-code-source   # follows your installed dist-tag
 ```
 
-### Channel comparison
+### Distribution note
 
-|                                                         | Default (`ax-code`)                                             | Source-bundle (`ax-code-source`)                                              |
-| ------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| What ships                                              | `bun build --compile` single binary                             | Pre-bundled JS + bun runtime                                                  |
-| Install size                                            | ~50 MB                                                          | ~80 MB                                                                        |
-| TUI stability on common terminals                       | stable                                                          | stable                                                                        |
-| TUI stability on terminals that trigger Bun-Worker bugs | may hang on first launch                                        | stable                                                                        |
-| Updates via                                             | `brew upgrade ax-code` / `npm update -g @defai.digital/ax-code` | `brew upgrade ax-code-source` / `npm update -g @defai.digital/ax-code-source` |
-| Verify with                                             | `ax-code doctor` shows `(compiled)`                             | `ax-code doctor` shows `(bun-bundled)`                                        |
-
-Both channels publish from the same release tag and ship identical features. The only difference is how the runtime is packaged.
+The supported user install path is now `ax-code-source`, which ships pre-bundled JS plus the Bun runtime.
 
 ### From Source (contributors)
 
