@@ -513,6 +513,7 @@ export const MemoryEvalCommand = cmd({
     prompts.intro("Memory Eval")
     prompts.log.info(`Cases: ${report.passed}/${report.total}`)
     prompts.log.info(`Recall@${report.limit}: ${Math.round(report.recallAtK * 100)}%`)
+    prompts.log.info(`MRR: ${report.meanReciprocalRank.toFixed(2)}`)
     if (report.minRecall !== undefined) {
       prompts.log[report.passedThreshold ? "success" : "warn"](
         `Threshold: ${Math.round(report.minRecall * 100)}% (${report.passedThreshold ? "passed" : "failed"})`,
@@ -521,6 +522,7 @@ export const MemoryEvalCommand = cmd({
     for (const item of report.cases) {
       const status = item.hit ? "pass" : "fail"
       prompts.log[item.hit ? "success" : "warn"](`[${status}] ${item.name}`)
+      if (item.firstHitRank !== null) prompts.log.info(`  first hit rank: ${item.firstHitRank}`)
       if (!item.hit) prompts.log.info(`  missing: ${item.missing.join(", ")}`)
       prompts.log.info(`  returned: ${item.returned.join(", ") || "(none)"}`)
     }

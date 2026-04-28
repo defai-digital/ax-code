@@ -153,7 +153,9 @@ describe("memory command", () => {
     expect(parsed.total).toBe(1)
     expect(parsed.passed).toBe(1)
     expect(parsed.recallAtK).toBe(1)
+    expect(parsed.meanReciprocalRank).toBe(1)
     expect(parsed.passedThreshold).toBe(true)
+    expect(parsed.cases[0].firstHitRank).toBe(1)
   })
 
   test("eval threshold helper marks failing runs with exit code", () => {
