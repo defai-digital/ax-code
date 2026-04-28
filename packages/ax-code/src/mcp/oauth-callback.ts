@@ -70,6 +70,33 @@ export namespace McpOAuthCallback {
   const pendingStates = new Map<string, string>()
 
   const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+  // Defense-in-depth cap. The 5-minute timeout is the primary cleanup path
+  // — every entry self-evicts after that — but a script that rapid-fires
+  // `startAuth` for hundreds of servers would otherwise grow this Map
+  // unboundedly within the timeout window. When the cap is reached we
+  // reject the oldest pending wait so the caller sees a deterministic
+  // error instead of a silent stall.
+  const PENDING_AUTHS_MAX = 100
+
+  function evictOldestPendingAuth() {
+    const oldest = pendingAuths.keys().next().value
+    if (oldest === undefined) return
+    const entry = pendingAuths.get(oldest)
+    if (!entry) return
+    clearTimeout(entry.timeout)
+    pendingAuths.delete(oldest)
+    for (const [name, value] of pendingStates) {
+      if (value === oldest) {
+        pendingStates.delete(name)
+        break
+      }
+    }
+    log.warn("evicting oldest pending oauth callback — pendingAuths cap reached", {
+      cap: PENDING_AUTHS_MAX,
+      evictedState: oldest,
+    })
+    entry.reject(new Error("OAuth callback evicted: too many concurrent in-flight flows"))
+  }
 
   export async function ensureRunning(): Promise<void> {
     if (server) return
@@ -165,6 +192,14 @@ export namespace McpOAuthCallback {
       if (previous) {
         clearTimeout(previous.timeout)
         previous.reject(new Error("OAuth callback request superseded"))
+      }
+
+      // Bound the in-flight set so a runaway caller can't leak memory
+      // for a full 5-minute timeout window. We only evict if we're
+      // about to grow past the cap — re-registering an existing state
+      // (the `previous` branch above) doesn't increase Map size.
+      if (!pendingAuths.has(oauthState) && pendingAuths.size >= PENDING_AUTHS_MAX) {
+        evictOldestPendingAuth()
       }
 
       if (mcpName) pendingStates.set(mcpName, oauthState)
