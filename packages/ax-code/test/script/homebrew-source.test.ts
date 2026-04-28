@@ -4,6 +4,7 @@ import fs from "fs"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const homebrewSourceScript = path.join(repoRoot, ".github/scripts/update-homebrew-source.sh")
+const homebrewDefaultScript = path.join(repoRoot, ".github/scripts/update-homebrew.sh")
 const releaseWorkflow = path.join(repoRoot, ".github/workflows/release.yml")
 const installMatrixWorkflow = path.join(repoRoot, ".github/workflows/install-matrix-smoke.yml")
 
@@ -60,24 +61,29 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain('Formula["bun"].opt_bin')
   })
 
-  test("formula filename and class name are ax-code-source / AxCodeSource (not ax-code)", async () => {
-    // Phase 2 is additive — the existing ax-code formula stays compiled.
-    // The new formula MUST be a separate file so brew users opt in
-    // via `brew install defai-digital/ax-code/ax-code-source`.
+  test("formula filename and class name are ax-code-source / AxCodeSource (compatibility alias)", async () => {
     const text = await Bun.file(homebrewSourceScript).text()
     expect(text).toContain("ax-code-source.rb")
     expect(text).not.toContain("> /tmp/ax-code.rb")
   })
 
-  test("homebrew-source job exists in release.yml gated on publish-source", async () => {
-    // The job must run AFTER publish-source uploads to npm, otherwise
-    // the formula's npm tarball URL 404s.
+  test("default formula now points at source npm tarball and depends on bun", async () => {
+    const text = await Bun.file(homebrewDefaultScript).text()
+    expect(text).toContain('SOURCE_PACKAGE_PATH="@defai.digital/ax-code"')
+    expect(text).toContain('SOURCE_TARBALL_NAME="ax-code"')
+    expect(text).toContain('depends_on "bun"')
+    expect(text).toContain("bundle/index.js")
+    expect(text).not.toContain("github.com/defai-digital/ax-code/releases/download")
+  })
+
+  test("homebrew-source job exists in release.yml gated after default homebrew", async () => {
+    // The compatibility alias should run after the default formula update so
+    // tap pushes are serialized.
     const text = await Bun.file(releaseWorkflow).text()
     expect(text).toContain("homebrew-source:")
-    // Find the job block and verify its `needs:` references publish-source
     const jobMatch = text.match(/homebrew-source:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
     expect(jobMatch).not.toBeNull()
-    expect(jobMatch![0]).toContain("needs: publish-source")
+    expect(jobMatch![0]).toContain("needs: homebrew")
   })
 
   test("homebrew-source job skipped on prerelease tags (matches existing homebrew job)", async () => {
@@ -94,15 +100,18 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain('npm install -g "${PACKAGE}@${VERSION}"')
     expect(text).toContain('OUTPUT="$(ax-code --version)"')
     expect(text).toContain("expected ax-code --version to be ${VERSION}")
+    expect(text).toContain("Smoke — installed backend stdio handshake")
+    expect(text).toContain("tui-backend --stdio")
+    expect(text).toContain('"runtimeMode":"(bun-bundled|source)"')
     expect(text).not.toContain("@defai.digital/ax-code@$CHANNEL")
   })
 
-  test("existing ax-code (compiled) homebrew formula generator is untouched", async () => {
-    // ADR-002 Phase 2 must not change the compiled formula. Phase 3
-    // will flip the default later; this commit is additive only.
-    const compiledScript = path.join(repoRoot, ".github/scripts/update-homebrew.sh")
-    const text = await Bun.file(compiledScript).text()
-    expect(text).toContain("class AxCode < Formula")
-    expect(text).not.toContain('depends_on "bun"')
+  test("release build matrix smokes compiled backend stdio handshake", async () => {
+    const text = await Bun.file(releaseWorkflow).text()
+    const buildJob = text.match(/build:[\s\S]*?(?=\n  publish:|\n  publish-source:|$)/)
+    expect(buildJob).not.toBeNull()
+    expect(buildJob![0]).toContain("Smoke — compiled backend stdio handshake")
+    expect(buildJob![0]).toContain("tui-backend --stdio")
+    expect(buildJob![0]).toContain('"runtimeMode":"compiled"')
   })
 })

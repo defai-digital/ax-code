@@ -30,10 +30,10 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ```bash
 # Homebrew (macOS / Linux)
-brew install defai-digital/ax-code/ax-code-source
+brew install defai-digital/ax-code/ax-code
 
 # npm (any platform)
-npm i -g @defai.digital/ax-code-source
+npm i -g @defai.digital/ax-code
 ```
 
 ### Verify
@@ -66,17 +66,17 @@ That's it. No project setup or config file is required. Run `ax-code`, then use 
 
 ### Update
 
-`ax-code upgrade` and package-manager update commands apply to the `ax-code-source` channel.
+`ax-code upgrade` and package-manager update commands apply to the source+bun runtime shipped by the default package.
 
 ```bash
 ax-code upgrade
-brew upgrade ax-code-source
-npm update -g @defai.digital/ax-code-source   # follows your installed dist-tag
+brew upgrade ax-code
+npm update -g @defai.digital/ax-code   # follows your installed dist-tag
 ```
 
 ### Distribution note
 
-The supported user install path is now `ax-code-source`, which ships pre-bundled JS plus the Bun runtime.
+The supported user install path now ships pre-bundled JS plus the Bun runtime under the normal `ax-code` package/formula. Compiled binaries are fallback release assets, not the default install channel.
 
 ### From Source (contributors)
 
@@ -87,7 +87,7 @@ cd ax-code && pnpm install && pnpm run setup:cli
 
 Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+. `setup:cli` installs a source launcher that runs ax-code directly via `bun run` from your checkout. `ax-code doctor` will report `Runtime: Bun X.Y.Z (source)`.
 
-Build the same bundle that ships under the source channel:
+Build the same bundle that ships through the default package-manager channel:
 
 ```bash
 pnpm --filter ax-code run bundle:source        # build only

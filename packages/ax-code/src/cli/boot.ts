@@ -36,6 +36,7 @@ import { RunCommand } from "./cmd/run"
 import { ServeCommand } from "./cmd/serve"
 import { SessionCommand } from "./cmd/session"
 import { StatsCommand } from "./cmd/stats"
+import { TuiBackendCommand } from "./cmd/tui/backend"
 import { TuiThreadCommand } from "./cmd/tui/thread"
 import { UninstallCommand } from "./cmd/uninstall"
 import { UpgradeCommand } from "./cmd/upgrade"
@@ -54,6 +55,7 @@ const cmds = [
   AuditCommand,
   ReplayCommand,
   McpCommand,
+  TuiBackendCommand,
   TuiThreadCommand,
   AttachCommand,
   RunCommand,

@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # Update the Homebrew tap with the source-distribution formula.
 #
-# Generates `ax-code-source.rb` alongside the existing `ax-code.rb`
-# (compiled binary) so brew users can opt into the source channel via
-# `brew install defai-digital/ax-code/ax-code-source`. Per ADR-002 Phase 2
-# this is additive — the default `ax-code` formula stays on compiled
-# until Phase 3 flips defaults.
+# Generates `ax-code-source.rb` as a compatibility alias for users who
+# installed the transitional source-channel formula before `ax-code` itself
+# moved to the source+bun runtime.
 #
 # Inputs (env):
 #   GITHUB_REF_NAME — release tag (e.g. v4.0.16)
@@ -52,9 +50,8 @@ cat > /tmp/ax-code-source.rb << HEADER
 # bun build --compile × Worker bug class that affects the compiled
 # binary on some terminals (oven-sh/bun#26762, #27766, #29124).
 #
-# This is the additive opt-in formula introduced by ADR-002 Phase 2.
-# The default \`ax-code\` formula continues to ship the compiled binary
-# until ADR-002 Phase 3 flips the default.
+# Compatibility alias for the transitional source-channel formula.
+# The default \`ax-code\` formula now uses the same source+bun runtime.
 class AxCodeSource < Formula
   desc "Sovereign AI coding agent (source distribution)"
   homepage "https://github.com/defai-digital/ax-code"

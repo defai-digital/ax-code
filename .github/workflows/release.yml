@@ -103,6 +103,27 @@ jobs:
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
 
+      - name: Smoke — compiled backend stdio handshake
+        working-directory: packages/ax-code
+        shell: bash
+        run: |
+          set -e
+          BIN="$(find dist -path '*/bin/ax-code*' -type f | head -n 1)"
+          if [ -z "$BIN" ]; then
+            echo "FAIL: compiled ax-code binary not found under dist/"
+            exit 1
+          fi
+          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | "$BIN" tui-backend --stdio)"
+          echo "$OUTPUT"
+          if ! echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' >/dev/null; then
+            echo "FAIL: compiled tui-backend did not return an RPC health result"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -E '"runtimeMode":"compiled"' >/dev/null; then
+            echo "FAIL: compiled tui-backend did not report compiled runtimeMode"
+            exit 1
+          fi
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -111,48 +132,22 @@ jobs:
           retention-days: 1
 
   publish:
-    needs: build
+    needs:
+      - build
+      - publish-source
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 9.15.9
-          run_install: false
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-          registry-url: https://registry.npmjs.org
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.12
-
-      - run: pnpm install --frozen-lockfile
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v8
         with:
           path: packages/ax-code/dist/
           merge-multiple: true
-
-      - name: Publish to npm
-        run: cd packages/ax-code && bun run script/publish.ts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AX_CODE_VERSION: ${{ github.ref_name }}
-          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
-          AX_CODE_RELEASE: "true"
 
       - name: Create GitHub release
         env:
@@ -185,11 +180,10 @@ jobs:
             [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
           done
 
-  # Source distribution publish — bundled JS + bun runtime, published under
-  # the `source` npm dist-tag. Runs in parallel to the compiled-binary
-  # publish job; both ship from the same release tag. ADR-002 Phase 1
-  # keeps the `source` tag on dual-publish until install-matrix smoke
-  # confirms parity, at which point Phase 3 flips `latest` to source.
+  # Source distribution publish — bundled JS + bun runtime. This is the
+  # default npm artifact for @defai.digital/ax-code. The legacy
+  # @defai.digital/ax-code-source alias is published from the same tarball
+  # layout for users who adopted the transitional source package name.
   publish-source:
     needs: typecheck
     runs-on: ubuntu-latest
@@ -224,14 +218,12 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           AX_CODE_VERSION: ${{ github.ref_name }}
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
-          # Phase 1 always publishes under the `source` tag, regardless of
-          # whether the release is `latest` or `beta`. Compiled artifacts
-          # continue to occupy `latest`/`beta` per the existing publish job.
-          AX_CODE_SOURCE_TAG: source
+          AX_CODE_SOURCE_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+          AX_CODE_SOURCE_PACKAGE_NAMES: "@defai.digital/ax-code,@defai.digital/ax-code-source"
           AX_CODE_RELEASE: "true"
 
   homebrew:
-    needs: publish
+    needs: publish-source
     # Homebrew tracks stable releases only. Prerelease tags still publish to
     # npm/GitHub, but they must not move brew users off the stable line.
     if: ${{ !contains(github.ref_name, '-') }}
@@ -246,11 +238,11 @@ jobs:
           GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
 
-  # Source-distribution Homebrew formula (ax-code-source) — opt-in
-  # alongside the default compiled formula. ADR-002 Phase 2: additive.
-  # Phase 3 will swap which one is the default `ax-code` formula.
+  # Compatibility Homebrew formula for users who installed ax-code-source
+  # during the transitional source-channel rollout. The primary ax-code
+  # formula above now uses the same source+bun runtime.
   homebrew-source:
-    needs: publish-source
+    needs: homebrew
     if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:

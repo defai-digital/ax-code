@@ -871,12 +871,21 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(thread).toContain("DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000")
     expect(thread).toContain("AX_CODE_TUI_WORKER_READY_TIMEOUT_MS")
+    expect(thread).toContain("AX_CODE_TUI_BACKEND_TRANSPORT")
+    expect(thread).toContain('runtimeMode() === "compiled" ? "process" : "worker"')
+    expect(thread).toContain('args: ["tui-backend", "--stdio"]')
+    expect(thread).toContain("spawn(command.command, command.args")
     expect(thread).toContain('client.call("health", undefined)')
     expect(thread).toContain("TUI worker did not become ready")
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.backendTargetResolved"')
+    expect(thread).toContain('DiagnosticLog.recordProcess("tui.backendSpawned"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.workerHandshakeFailed"')
     expect(thread).toContain("worker.terminate()")
     expect(worker).toContain("health()")
     expect(worker).toContain("runtimeMode()")
+    expect(worker).toContain("startTuiBackend")
+    expect(worker).toContain("isWorkerEntrypoint")
+    expect(worker).toContain('Rpc.listenStdio(rpc)')
   })
 
   test("surfaces workspace sync failures instead of leaving rejected RPC calls detached", async () => {

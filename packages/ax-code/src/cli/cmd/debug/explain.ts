@@ -567,6 +567,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         if (threadStartedAt === undefined && Number.isFinite(timeMs)) threadStartedAt = timeMs
         break
       case "tui.workerSpawned":
+      case "tui.backendSpawned":
         if (workerSpawnedAt === undefined && Number.isFinite(timeMs)) workerSpawnedAt = timeMs
         break
       case "tui.startup.begin":
@@ -634,6 +635,8 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         httpFailures.push(record)
         break
       case "tui.threadError":
+      case "tui.backendProcessError":
+      case "tui.backendProcessExited":
       case "tui.workerError":
       case "tui.workerHandshakeFailed":
       case "tui.workerMessageError":
@@ -702,11 +705,11 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
     issues.push({
       severity: "critical",
       category: "TUI",
-      title: "TUI thread or worker reported runtime errors",
+      title: "TUI thread or backend reported runtime errors",
       rootCause: `Structured process diagnostics recorded ${summarizeCounts([...counts.entries()].map(([label, count]) => ({ label, count })))}.`,
-      impact: "The renderer, worker bridge, or event stream may have stopped processing input and updates reliably.",
+      impact: "The renderer, backend bridge, or event stream may have stopped processing input and updates reliably.",
       suggestedFix:
-        "Inspect the matching worker/thread events in `process.jsonl`. Start with `tui.workerHandshakeFailed`, `worker.eventStreamError`, `tui.threadError`, or `tui.workerError`, then trace backward to the last successful startup marker.",
+        "Inspect the matching backend/thread events in `process.jsonl`. Start with `tui.workerHandshakeFailed`, `tui.backendProcessError`, `tui.backendProcessExited`, `worker.eventStreamError`, `tui.threadError`, or `tui.workerError`, then trace backward to the last successful startup marker.",
       riskLevel: "high",
       occurrences: runtimeErrors.length,
     })
@@ -772,9 +775,9 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         title: "TUI never reached renderer startup",
         rootCause: `The thread started, but no matching \`tui.native.started\` event arrived within ${formatDuration(TUI_STARTUP_STALL_THRESHOLD_MS)}.`,
         impact:
-          "The process likely stalled before the renderer booted, often in worker startup, transport setup, or renderer dispatch.",
+          "The process likely stalled before the renderer booted, often in backend startup, transport setup, or renderer dispatch.",
         suggestedFix:
-          "Inspect the gap between `tui.threadStarted`, `tui.workerTargetResolved`, `tui.workerSpawned`, `tui.workerReady`, `tui.threadTransportSelected`, `tui.appImportStarted`, `tui.appImportReady`, and any `tui.startup.*` events. The first missing transition marks the failing startup boundary.",
+          "Inspect the gap between `tui.threadStarted`, `tui.backendTargetResolved`, `tui.backendSpawned`, `tui.workerReady`, `tui.threadTransportSelected`, `tui.appImportStarted`, `tui.appImportReady`, and any `tui.startup.*` events. The first missing transition marks the failing startup boundary.",
         riskLevel: "medium",
         occurrences: 1,
       })
@@ -822,9 +825,9 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         title: "TUI never reached renderer dispatch",
         rootCause: `Startup began, but no matching \`tui.startup.renderDispatched\` event arrived within ${formatDuration(TUI_STARTUP_STALL_THRESHOLD_MS)}.`,
         impact:
-          "The process likely stalled before the Solid/OpenTUI render tree was handed to the renderer, often in worker startup, config resolution, or renderer setup.",
+          "The process likely stalled before the Solid/OpenTUI render tree was handed to the renderer, often in backend startup, config resolution, or renderer setup.",
         suggestedFix:
-          "Inspect the gap between `tui.workerSpawned`, `tui.startup.begin`, and `tui.startup.renderDispatched`. The first missing transition marks the failing startup boundary.",
+          "Inspect the gap between `tui.backendSpawned`, `tui.startup.begin`, and `tui.startup.renderDispatched`. The first missing transition marks the failing startup boundary.",
         riskLevel: "medium",
         occurrences: 1,
       })

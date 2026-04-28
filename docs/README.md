@@ -12,8 +12,9 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | Need                                            | Go here                                                         | What you get                                                           |
 | ----------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Understand what AX Code is and why teams use it | [Start Here](start-here.md)                                     | Product overview, value proposition, mental model, and next paths      |
-| Install and launch quickly                      | [Root README](../README.md)                                     | 60-second setup, source-channel install, and main entrypoints          |
+| Install and launch quickly                      | [Root README](../README.md)                                     | 60-second setup, source+bun install, and main entrypoints              |
 | Embed AX Code in TypeScript or JavaScript       | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  | `createAgent()`, streaming, custom tools, testing, and migration notes |
+| Use AX Code from Python, Go, Java, or services  | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    | `ax-code serve`, OpenAPI generation, and cross-language guardrails      |
 | Use AX Code from VS Code                        | [VS Code integration](../packages/integration-vscode/README.md) | Editor commands, settings, and extension workflow                      |
 
 ## Guides
@@ -38,6 +39,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | Document                                        | Summary                                                       |
 | ----------------------------------------------- | ------------------------------------------------------------- |
 | [Project API Spec](specs/project.md)            | Current project and session API shape                         |
+| [HTTP and OpenAPI SDKs](sdk-http-openapi.md)    | Cross-language HTTP integration and generated-client guidance  |
 | [Migration Review](ax-code-migration-review.md) | Migration framing for OpenCode plus ax-cli to AX Code         |
 | [Security Policy](../SECURITY.md)               | Threat model, credential storage, and server security posture |
 

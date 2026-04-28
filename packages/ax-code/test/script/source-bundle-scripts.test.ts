@@ -73,6 +73,15 @@ describe("PR CI bundle-source job", () => {
     expect(jobMatch![0]).toMatch(/bun-bundled\|source|source\|bun-bundled/)
   })
 
+  test("bundle-source job smokes the bundled tui-backend stdio handshake", async () => {
+    const text = await Bun.file(ciWorkflowPath).text()
+    const jobMatch = text.match(/bundle-source:[\s\S]*?(?=\n  \w+:|$)/)
+    expect(jobMatch).not.toBeNull()
+    expect(jobMatch![0]).toContain("tui-backend --stdio")
+    expect(jobMatch![0]).toContain('"type":"rpc.request"')
+    expect(jobMatch![0]).toContain('"type":"rpc.result"')
+  })
+
   test("bundle-source job uses AX_CODE_DRY_RUN=1 for the pack step (no accidental publish)", async () => {
     const text = await Bun.file(ciWorkflowPath).text()
     const jobMatch = text.match(/bundle-source:[\s\S]*?(?=\n  \w+:|$)/)

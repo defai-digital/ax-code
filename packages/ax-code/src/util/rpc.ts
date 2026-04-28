@@ -9,6 +9,13 @@ export namespace Rpc {
     [method: string]: (input: any) => any
   }
 
+  type MessageTarget = {
+    postMessage: (data: string) => void | null
+    onmessage: ((ev: MessageEvent<any>) => any) | null
+  }
+
+  let emitMessage: ((data: string) => void) | undefined
+
   function serializeError(error: unknown): SerializedError {
     if (error instanceof Error) {
       return {
@@ -30,6 +37,7 @@ export namespace Rpc {
   }
 
   export function listen(rpc: Definition) {
+    emitMessage = (data) => postMessage(data)
     onmessage = async (evt) => {
       // Malformed messages must not crash the worker: onmessage is a raw
       // assignment (not addEventListener), so any throw here kills it and
@@ -54,7 +62,61 @@ export namespace Rpc {
   }
 
   export function emit(event: string, data: unknown) {
-    postMessage(JSON.stringify({ type: "rpc.event", event, data }))
+    emitMessage?.(JSON.stringify({ type: "rpc.event", event, data }))
+  }
+
+  export async function listenStdio(
+    rpc: Definition,
+    io: {
+      stdin?: Pick<NodeJS.ReadStream, "on" | "setEncoding">
+      stdout?: Pick<NodeJS.WriteStream, "write">
+    } = {},
+  ) {
+    const stdin = io.stdin ?? process.stdin
+    const stdout = io.stdout ?? process.stdout
+    emitMessage = (data) => {
+      stdout.write(data + "\n")
+    }
+
+    stdin.setEncoding("utf8")
+    let buffer = ""
+    const handleLine = async (line: string) => {
+      if (!line.trim()) return
+      let parsed: any
+      try {
+        parsed = JSON.parse(line)
+      } catch {
+        return
+      }
+      if (parsed.type !== "rpc.request") return
+      const handler = rpc[parsed.method]
+      if (typeof handler !== "function") return
+      try {
+        const result = await handler(parsed.input)
+        stdout.write(JSON.stringify({ type: "rpc.result", result, id: parsed.id }) + "\n")
+      } catch (error) {
+        stdout.write(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }) + "\n")
+      }
+    }
+
+    await new Promise<void>((resolve) => {
+      stdin.on("data", (chunk) => {
+        buffer += String(chunk)
+        while (true) {
+          const index = buffer.indexOf("\n")
+          if (index < 0) break
+          const line = buffer.slice(0, index)
+          buffer = buffer.slice(index + 1)
+          void handleLine(line)
+        }
+      })
+      stdin.on("end", () => {
+        const line = buffer
+        buffer = ""
+        void handleLine(line).finally(resolve)
+      })
+      stdin.on("close", () => resolve())
+    })
   }
 
   // Timeout for a single RPC call. If the worker crashes, drops the
@@ -70,10 +132,7 @@ export namespace Rpc {
     timer: ReturnType<typeof setTimeout>
   }
 
-  export function client<T extends Definition>(target: {
-    postMessage: (data: string) => void | null
-    onmessage: ((this: Worker, ev: MessageEvent<any>) => any) | null
-  }) {
+  export function client<T extends Definition>(target: MessageTarget) {
     const pending = new Map<number, PendingEntry>()
     const listeners = new Map<string, Set<(data: any) => void>>()
     let id = 0

@@ -199,8 +199,25 @@ export const rpc = {
   },
 }
 
-Rpc.listen(rpc)
-startEventStream({ directory: process.cwd() })
+export async function startTuiBackend(transport: "worker" | "stdio" = "worker") {
+  if (transport === "stdio") {
+    const done = Rpc.listenStdio(rpc)
+    startEventStream({ directory: process.cwd() })
+    await done
+    return
+  }
+  Rpc.listen(rpc)
+  startEventStream({ directory: process.cwd() })
+}
+
+function isWorkerEntrypoint() {
+  const entry = process.argv[1]
+  return typeof entry === "string" && /(?:^|[/\\])worker\.(?:ts|js)$/.test(entry)
+}
+
+if (import.meta.main || isWorkerEntrypoint()) {
+  await startTuiBackend("worker")
+}
 
 function getAuthorizationHeader(): string | undefined {
   const password = Flag.AX_CODE_SERVER_PASSWORD

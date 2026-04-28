@@ -217,6 +217,21 @@ jobs:
             exit 1
           fi
 
+      - name: Smoke — bundle backend stdio handshake
+        working-directory: packages/ax-code
+        run: |
+          set -e
+          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | bun dist-source/bundle/index.js tui-backend --stdio)"
+          echo "$OUTPUT"
+          if ! echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' >/dev/null; then
+            echo "FAIL: bundled tui-backend did not return an RPC health result"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -E '"runtimeMode":"(bun-bundled|source)"' >/dev/null; then
+            echo "FAIL: bundled tui-backend did not report bun-bundled or source runtimeMode"
+            exit 1
+          fi
+
       - name: Pack — verify publish-source assembles a valid tarball
         working-directory: packages/ax-code
         env:

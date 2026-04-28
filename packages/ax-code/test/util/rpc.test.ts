@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { EventEmitter } from "node:events"
 import { Rpc } from "../../src/util/rpc"
 
 type Endpoint = {
@@ -69,5 +70,36 @@ describe("Rpc", () => {
     } finally {
       pair.restore()
     }
+  })
+
+  test("supports newline-framed stdio requests and event emission", async () => {
+    const stdin = new EventEmitter() as EventEmitter & { setEncoding: (encoding: BufferEncoding) => typeof stdin }
+    stdin.setEncoding = () => stdin
+    const writes: string[] = []
+    const stdout = {
+      write(line: string) {
+        writes.push(line)
+        return true
+      },
+    }
+
+    const done = Rpc.listenStdio(
+      {
+        async plusOne(value: number) {
+          Rpc.emit("seen", value)
+          return value + 1
+        },
+      },
+      { stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">, stdout },
+    )
+
+    stdin.emit("data", JSON.stringify({ type: "rpc.request", method: "plusOne", input: 1, id: 7 }) + "\n")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    stdin.emit("close")
+    await done
+
+    const parsed = writes.map((line) => JSON.parse(line))
+    expect(parsed).toContainEqual({ type: "rpc.event", event: "seen", data: 1 })
+    expect(parsed).toContainEqual({ type: "rpc.result", result: 2, id: 7 })
   })
 })

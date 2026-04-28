@@ -45,9 +45,9 @@ The rest of the documentation maps onto those layers.
 ### I want to try it quickly
 
 - Start with the [root README](../README.md) for install and first launch.
-- Source-channel install is the only supported user install path:
-  - `brew install defai-digital/ax-code/ax-code-source`
-  - `npm i -g @defai.digital/ax-code-source`
+- The default package-manager install path uses the source+bun runtime:
+  - `brew install defai-digital/ax-code/ax-code`
+  - `npm i -g @defai.digital/ax-code`
 - Use `/connect` or `ax-code providers login` to set a model.
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
 - If you want tighter safety boundaries, enable [Sandbox Mode](sandbox.md) before broader edits.
@@ -62,7 +62,7 @@ The rest of the documentation maps onto those layers.
 ### I want to embed or automate it
 
 - Use [`@ax-code/sdk`](../packages/sdk/js/README.md) for in-process TypeScript integration.
-- Use `ax-code serve` if you want a service boundary and HTTP-based integration.
+- Use [HTTP and OpenAPI SDKs](sdk-http-openapi.md) if you want a service boundary, generated clients, or non-JavaScript integration.
 - Use [Project API Spec](specs/project.md) for the current project and session API shape.
 - Use `ax-code mcp add` when the agent needs external tools or services.
 
@@ -93,5 +93,6 @@ ax-code doctor
 | Unattended execution    | [Autonomous Mode](autonomous.md)                                |
 | Smarter routing         | [Auto-Route](auto-route.md)                                     |
 | SDK embedding           | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  |
+| HTTP/OpenAPI clients    | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    |
 | VS Code integration     | [VS Code integration](../packages/integration-vscode/README.md) |
 | Architecture            | [Semantic Layer](architecture/semantic-layer.md)                |

@@ -18,6 +18,8 @@ import { writeHeapSnapshot } from "v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { internalBaseUrl } from "@/util/internal-url"
 import type { StreamConnectionStatus } from "./util/resilient-stream"
+import { runtimeMode } from "@/installation/runtime-mode"
+import { spawn } from "node:child_process"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -28,11 +30,126 @@ const log = Log.create({ service: "tui.thread" })
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
 
+type BackendTransport = "worker" | "process"
+type RpcWireTarget = {
+  postMessage: (data: string) => void | null
+  onmessage: ((ev: MessageEvent<any>) => any) | null
+}
+
+type BackendRuntime = {
+  mode: BackendTransport
+  target: string
+  wire: RpcWireTarget
+  terminate: () => void
+}
+
 export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> = process.env) {
   const value = env.AX_CODE_TUI_WORKER_READY_TIMEOUT_MS
   if (!value) return DEFAULT_TUI_WORKER_READY_TIMEOUT_MS
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_TUI_WORKER_READY_TIMEOUT_MS
+}
+
+function tuiBackendTransport(env: Record<string, string | undefined> = process.env): BackendTransport {
+  const requested = env.AX_CODE_TUI_BACKEND_TRANSPORT
+  if (requested === "worker" || requested === "process") return requested
+  return runtimeMode() === "compiled" ? "process" : "worker"
+}
+
+function backendProcessCommand() {
+  if (runtimeMode() === "compiled") {
+    return {
+      command: process.execPath,
+      args: ["tui-backend", "--stdio"],
+      label: `${process.execPath} tui-backend --stdio`,
+    }
+  }
+
+  const entry = process.argv[1]
+  if (!entry) throw new Error("Cannot start TUI backend process: missing CLI entrypoint")
+  const resolvedEntry = path.isAbsolute(entry) ? entry : path.resolve(process.cwd(), entry)
+  return {
+    command: process.execPath,
+    args: ["--conditions=browser", resolvedEntry, "tui-backend", "--stdio"],
+    label: `${process.execPath} --conditions=browser ${resolvedEntry} tui-backend --stdio`,
+  }
+}
+
+function createProcessWire(child: any): RpcWireTarget {
+  const wire: RpcWireTarget = {
+    onmessage: null,
+    postMessage(data) {
+      child.stdin?.write(data + "\n")
+    },
+  }
+  let buffer = ""
+  child.stdout?.setEncoding("utf8")
+  child.stdout?.on("data", (chunk: unknown) => {
+    buffer += String(chunk)
+    while (true) {
+      const index = buffer.indexOf("\n")
+      if (index < 0) break
+      const line = buffer.slice(0, index)
+      buffer = buffer.slice(index + 1)
+      if (line.trim()) wire.onmessage?.({ data: line } as MessageEvent<any>)
+    }
+  })
+  child.stderr?.setEncoding("utf8")
+  child.stderr?.on("data", (chunk: unknown) => {
+    const text = String(chunk).trim()
+    if (!text) return
+    DiagnosticLog.recordProcess("tui.backendProcessStderr", { text })
+    Log.Default.warn("TUI backend process stderr", { text })
+  })
+  return wire
+}
+
+async function createBackendRuntime(input: {
+  mode: BackendTransport
+  workerTarget?: URL | string
+  processCommand?: ReturnType<typeof backendProcessCommand>
+  env: Record<string, string>
+  cwd: string
+}): Promise<BackendRuntime> {
+  if (input.mode === "worker") {
+    if (!input.workerTarget) throw new Error("Worker backend selected without a worker target")
+    const worker = new Worker(input.workerTarget, { env: input.env })
+    return {
+      mode: "worker",
+      target: String(input.workerTarget),
+      wire: worker as unknown as RpcWireTarget,
+      terminate: () => worker.terminate(),
+    }
+  }
+
+  const command = input.processCommand ?? backendProcessCommand()
+  const child = spawn(command.command, command.args, {
+    cwd: input.cwd,
+    env: input.env,
+    stdio: ["pipe", "pipe", "pipe"],
+  }) as any
+  let terminating = false
+  child.on("error", (error: unknown) => {
+    DiagnosticLog.recordProcess("tui.backendProcessError", { error, target: command.label })
+    Log.Default.error("TUI backend process failed", {
+      error: error instanceof Error ? error.message : String(error),
+      target: command.label,
+    })
+  })
+  child.on("exit", (code: number | null, signal: string | null) => {
+    if (terminating) return
+    DiagnosticLog.recordProcess("tui.backendProcessExited", { code, signal, target: command.label })
+    Log.Default.warn("TUI backend process exited", { code, signal, target: command.label })
+  })
+  return {
+    mode: "process",
+    target: command.label,
+    wire: createProcessWire(child),
+    terminate: () => {
+      terminating = true
+      child.kill()
+    },
+  }
 }
 
 function createWorkerFetch(client: RpcClient): typeof fetch {
@@ -174,8 +291,19 @@ export const TuiThreadCommand = cmd({
       const next = args.project
         ? Filesystem.resolve(path.isAbsolute(args.project) ? args.project : path.join(root, args.project))
         : root
-      const file = await target()
-      DiagnosticLog.recordProcess("tui.workerTargetResolved", { target: String(file) })
+      const backendTransport = tuiBackendTransport()
+      const file = backendTransport === "worker" ? await target() : undefined
+      const processCommand = backendTransport === "process" ? backendProcessCommand() : undefined
+      DiagnosticLog.recordProcess("tui.backendTargetResolved", {
+        mode: backendTransport,
+        target: file ? String(file) : processCommand?.label,
+        runtimeMode: runtimeMode(),
+      })
+      DiagnosticLog.recordProcess("tui.workerTargetResolved", {
+        mode: backendTransport,
+        target: file ? String(file) : processCommand?.label,
+        runtimeMode: runtimeMode(),
+      })
       try {
         process.chdir(next)
       } catch {
@@ -186,22 +314,30 @@ export const TuiThreadCommand = cmd({
 
       const sanitized = Env.sanitize()
       if (process.argv.includes("--print-logs")) sanitized.AX_CODE_PRINT_LOGS = "1"
-      const worker = new Worker(file, {
+      const backend = await createBackendRuntime({
+        mode: backendTransport,
+        workerTarget: file,
+        processCommand,
+        cwd,
         env: Object.fromEntries(Object.entries(sanitized).filter((e): e is [string, string] => e[1] !== undefined)),
       })
-      DiagnosticLog.recordProcess("tui.workerSpawned", { target: String(file) })
-      worker.onerror = (e) => {
-        DiagnosticLog.recordProcess("tui.workerError", { error: e, target: String(file) })
-        Log.Default.error(e)
-        UI.error(`Worker failed to load (${String(file)}): ${e instanceof ErrorEvent ? e.message : String(e)}`)
-        process.exit(1)
-      }
-      worker.onmessageerror = (e) => {
-        DiagnosticLog.recordProcess("tui.workerMessageError", { error: e })
-        Log.Default.error(e)
+      DiagnosticLog.recordProcess("tui.backendSpawned", { mode: backend.mode, target: backend.target })
+      DiagnosticLog.recordProcess("tui.workerSpawned", { mode: backend.mode, target: backend.target })
+      if (backend.mode === "worker") {
+        const worker = backend.wire as unknown as Worker
+        worker.onerror = (e) => {
+          DiagnosticLog.recordProcess("tui.workerError", { error: e, target: backend.target })
+          Log.Default.error(e)
+          UI.error(`Worker failed to load (${backend.target}): ${e instanceof ErrorEvent ? e.message : String(e)}`)
+          process.exit(1)
+        }
+        worker.onmessageerror = (e) => {
+          DiagnosticLog.recordProcess("tui.workerMessageError", { error: e })
+          Log.Default.error(e)
+        }
       }
 
-      const client = Rpc.client<typeof rpc>(worker)
+      const client = Rpc.client<typeof rpc>(backend.wire)
       const workerReadyTimeoutMs = tuiWorkerReadyTimeoutMs()
       const workerReady = await withTimeout(
         client.call("health", undefined),
@@ -210,12 +346,14 @@ export const TuiThreadCommand = cmd({
       ).catch((error) => {
         DiagnosticLog.recordProcess("tui.workerHandshakeFailed", {
           error,
-          target: String(file),
+          mode: backend.mode,
+          target: backend.target,
           timeoutMs: workerReadyTimeoutMs,
         })
         Log.Default.error("TUI worker failed readiness handshake", {
           error: error instanceof Error ? error.message : String(error),
-          target: String(file),
+          mode: backend.mode,
+          target: backend.target,
           timeoutMs: workerReadyTimeoutMs,
         })
         UI.error(
@@ -225,14 +363,15 @@ export const TuiThreadCommand = cmd({
             "Run with --debug --print-logs and inspect process.jsonl around tui.workerHandshakeFailed.",
           ].join("\n"),
         )
-        worker.terminate()
+        backend.terminate()
         process.exitCode = 1
         return undefined
       })
       if (!workerReady) return
       DiagnosticLog.recordProcess("tui.workerReady", {
         ...workerReady,
-        target: String(file),
+        mode: backend.mode,
+        target: backend.target,
         timeoutMs: workerReadyTimeoutMs,
       })
       const internalEvents = createEventSource(client)
@@ -263,7 +402,7 @@ export const TuiThreadCommand = cmd({
             error: error instanceof Error ? error.message : String(error),
           })
         })
-        worker.terminate()
+        backend.terminate()
       }
 
       const prompt = await input(args.prompt)

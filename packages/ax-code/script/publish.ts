@@ -34,6 +34,14 @@ if (versions.size > 1) {
   throw new Error(`Platform binary package versions do not match: ${Array.from(versions).join(", ")}`)
 }
 const version = [...versions][0]!
+const compiledNpmTag = process.env.AX_CODE_COMPILED_TAG ?? "compiled"
+if (["latest", "beta"].includes(compiledNpmTag) && process.env.AX_CODE_ALLOW_COMPILED_DEFAULT !== "1") {
+  throw new Error(
+    `Refusing to publish compiled binary packages to npm tag '${compiledNpmTag}'. ` +
+      "The default npm channel must use the source+bun distribution. " +
+      "Set AX_CODE_ALLOW_COMPILED_DEFAULT=1 only for an intentional rollback.",
+  )
+}
 
 const npmName = META_PACKAGE_NAME
 const distDir = `./dist/${pkg.name}`
@@ -75,7 +83,7 @@ const tasks = binaryTargets.map(async (target) => {
   // from the monorepo workspace graph. Otherwise npm/pnpm can walk the parent
   // workspace and fail if an unrelated package shares a name.
   await $`npm pack --workspaces=false`.cwd(packageDir)
-  await $`npm publish *.tgz --workspaces=false --access public --tag ${Script.channel}`.cwd(packageDir).catch((err) => {
+  await $`npm publish *.tgz --workspaces=false --access public --tag ${compiledNpmTag}`.cwd(packageDir).catch((err) => {
     const msg = String(err?.stderr ?? err)
     if (msg.includes("previously published") || msg.includes("cannot publish over")) {
       console.warn(`${target.packageName}@${version} already published, skipping`)
@@ -86,8 +94,9 @@ const tasks = binaryTargets.map(async (target) => {
 })
 await Promise.all(tasks)
 
-// Publish @defai.digital/ax-code (skip if already published)
-await $`cd ${distDir} && npm pack --workspaces=false && npm publish *.tgz --workspaces=false --access public --tag ${Script.channel}`.catch(
+// Publish the compiled meta package only to the explicit compiled tag
+// (skip if already published). The default package is source+bun.
+await $`cd ${distDir} && npm pack --workspaces=false && npm publish *.tgz --workspaces=false --access public --tag ${compiledNpmTag}`.catch(
   (err) => {
     const msg = String(err?.stderr ?? err)
     if (msg.includes("previously published") || msg.includes("cannot publish over")) {
