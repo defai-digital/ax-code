@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Global } from "../../src/global"
 import { Installation } from "../../src/installation"
+import { Flag } from "../../src/flag/flag"
 import { Database } from "../../src/storage/db"
 
 describe("Database.Path", () => {
@@ -11,7 +12,7 @@ describe("Database.Path", () => {
       ? path.isAbsolute(db)
         ? db
         : path.join(Global.Path.data, db)
-      : ["latest", "beta"].includes(Installation.CHANNEL)
+      : ["latest", "beta"].includes(Installation.CHANNEL) || Flag.AX_CODE_DISABLE_CHANNEL_DB
         ? path.join(Global.Path.data, "ax-code.db")
         : path.join(Global.Path.data, `ax-code-${Installation.CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`)
     expect(Database.Path).toBe(expected)

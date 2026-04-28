@@ -25,6 +25,38 @@ export namespace JsonMigration {
     progress?: (event: Progress) => void
   }
 
+  export type OrphanStats = {
+    sessions: number
+    messages: number
+    parts: number
+    todos: number
+    permissions: number
+    shares: number
+  }
+
+  export type Stats = {
+    projects: number
+    sessions: number
+    messages: number
+    parts: number
+    todos: number
+    permissions: number
+    shares: number
+    errors: string[]
+    orphans: OrphanStats
+  }
+
+  function emptyOrphans(): OrphanStats {
+    return {
+      sessions: 0,
+      messages: 0,
+      parts: 0,
+      todos: 0,
+      permissions: 0,
+      shares: 0,
+    }
+  }
+
   type ProjectInsert = typeof ProjectTable.$inferInsert
   type SessionInsert = typeof SessionTable.$inferInsert
   type MessageInsert = typeof MessageTable.$inferInsert
@@ -47,6 +79,7 @@ export namespace JsonMigration {
         permissions: 0,
         shares: 0,
         errors: [] as string[],
+        orphans: emptyOrphans(),
       }
     }
 
@@ -69,13 +102,9 @@ export namespace JsonMigration {
       permissions: 0,
       shares: 0,
       errors: [] as string[],
-    }
-    const orphans = {
-      sessions: 0,
-      todos: 0,
-      permissions: 0,
-      shares: 0,
-    }
+      orphans: emptyOrphans(),
+    } satisfies Stats
+    const orphans = stats.orphans
     const errs = stats.errors
 
     const batchSize = 1000
@@ -279,7 +308,10 @@ export namespace JsonMigration {
       const messageSessions = new Map<MessageID, SessionID>()
       for (const file of messageFiles) {
         const sessionID = SessionID.make(path.basename(path.dirname(file)))
-        if (!sessionIds.has(sessionID)) continue
+        if (!sessionIds.has(sessionID)) {
+          orphans.messages++
+          continue
+        }
         allMessageFiles.push(file)
         allMessageSessions.push(sessionID)
       }
@@ -316,6 +348,9 @@ export namespace JsonMigration {
         step("messages", end - i)
       }
       log.info("migrated messages", { count: stats.messages })
+      if (orphans.messages > 0) {
+        log.warn("skipped orphaned messages", { count: orphans.messages })
+      }
 
       // Migrate parts using pre-scanned file map
       for (let i = 0; i < partFiles.length; i += batchSize) {
@@ -331,10 +366,14 @@ export namespace JsonMigration {
           const messageID = MessageID.make(path.basename(path.dirname(file)))
           const sessionID = messageSessions.get(messageID)
           if (!sessionID) {
+            orphans.parts++
             errs.push(`part missing message session: ${file}`)
             continue
           }
-          if (!sessionIds.has(sessionID)) continue
+          if (!sessionIds.has(sessionID)) {
+            orphans.parts++
+            continue
+          }
           const rest = data
           delete rest.id
           delete rest.messageID
@@ -353,6 +392,9 @@ export namespace JsonMigration {
         step("parts", end - i)
       }
       log.info("migrated parts", { count: stats.parts })
+      if (orphans.parts > 0) {
+        log.warn("skipped orphaned parts", { count: orphans.parts })
+      }
 
       // Migrate todos
       const todoSessions = todoFiles.map((file) => SessionID.make(path.basename(file, ".json")))
@@ -470,6 +512,7 @@ export namespace JsonMigration {
       todos: stats.todos,
       permissions: stats.permissions,
       shares: stats.shares,
+      orphans: stats.orphans,
       errorCount: stats.errors.length,
       duration: Math.round(performance.now() - start),
     })

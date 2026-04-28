@@ -7,6 +7,13 @@ import { cmd } from "../cmd"
 import { JsonMigration } from "../../../storage/json-migration"
 import { EOL } from "os"
 
+function formatOrphanSummary(orphans: JsonMigration.OrphanStats) {
+  return Object.entries(orphans)
+    .filter(([, count]) => count > 0)
+    .map(([name, count]) => `${count} ${name}`)
+    .join(", ")
+}
+
 const QueryCommand = cmd({
   command: "$0 [query]",
   describe: "open an interactive sqlite3 shell or run a query",
@@ -101,6 +108,10 @@ const MigrateCommand = cmd({
       UI.println(
         `Migration complete: ${stats.projects} projects, ${stats.sessions} sessions, ${stats.messages} messages`,
       )
+      const orphanSummary = formatOrphanSummary(stats.orphans)
+      if (orphanSummary) {
+        UI.println(`Skipped orphaned records: ${orphanSummary}`)
+      }
       if (stats.errors.length > 0) {
         UI.println(`${stats.errors.length} errors occurred during migration`)
       }

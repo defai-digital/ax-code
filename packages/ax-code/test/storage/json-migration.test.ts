@@ -395,6 +395,7 @@ describe("JSON to SQLite migration", () => {
     const stats = await JsonMigration.run(sqlite)
 
     expect(stats?.sessions).toBe(0)
+    expect(stats?.orphans.sessions).toBe(1)
   })
 
   test("uses directory path for projectID when JSON has stale value", async () => {
@@ -626,6 +627,14 @@ describe("JSON to SQLite migration", () => {
     expect(stats.permissions).toBe(0)
     expect(stats.shares).toBe(0)
     expect(stats.errors).toEqual([])
+    expect(stats.orphans).toEqual({
+      sessions: 0,
+      messages: 0,
+      parts: 0,
+      todos: 0,
+      permissions: 0,
+      shares: 0,
+    })
   })
 
   test("continues when a JSON file is unreadable and records an error", async () => {
@@ -719,6 +728,9 @@ describe("JSON to SQLite migration", () => {
     expect(stats.todos).toBe(1)
     expect(stats.permissions).toBe(1)
     expect(stats.shares).toBe(1)
+    expect(stats.orphans.todos).toBe(1)
+    expect(stats.orphans.permissions).toBe(1)
+    expect(stats.orphans.shares).toBe(1)
 
     const db = drizzle({ client: sqlite })
     expect(db.select().from(TodoTable).all().length).toBe(1)
@@ -835,6 +847,11 @@ describe("JSON to SQLite migration", () => {
     expect(stats.todos).toBe(1)
     expect(stats.permissions).toBe(1)
     expect(stats.shares).toBe(1)
+    expect(stats.orphans.messages).toBe(1)
+    expect(stats.orphans.parts).toBe(1)
+    expect(stats.orphans.todos).toBe(1)
+    expect(stats.orphans.permissions).toBe(1)
+    expect(stats.orphans.shares).toBe(1)
     expect(stats.errors.length).toBeGreaterThanOrEqual(6)
 
     const db = drizzle({ client: sqlite })
