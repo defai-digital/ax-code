@@ -13,6 +13,7 @@ import type { Adaptor } from "../../src/control-plane/types"
 afterEach(async () => {
   mock.restore()
   await resetDatabase()
+  adaptors.removeAdaptor("testing")
 })
 
 Log.init({ print: false })

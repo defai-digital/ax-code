@@ -16,6 +16,7 @@ import { eq } from "drizzle-orm"
 afterEach(async () => {
   mock.restore()
   await resetDatabase()
+  adaptors.removeAdaptor("testing")
 })
 
 const original = Flag.AX_CODE_EXPERIMENTAL_WORKSPACES
@@ -172,6 +173,28 @@ describe("control-plane/session-proxy-middleware", () => {
     expect(response.status).toBe(202)
     expect(await response.text()).toBe("proxied")
     expect(state.configs).toEqual([undefined])
+  })
+
+  test("forwards request URL without trusting the request host", async () => {
+    const state: State = {
+      workspace: "first",
+      calls: [],
+    }
+
+    const ctx = await setup(state)
+
+    await ctx.request("http://workspace.attacker/session/steal", {
+      method: "POST",
+      body: "poisoned",
+    })
+
+    expect(state.calls).toEqual([
+      {
+        method: "POST",
+        url: "/session/steal",
+        body: "poisoned",
+      },
+    ])
   })
 
   // It will behave this way when we have syncing

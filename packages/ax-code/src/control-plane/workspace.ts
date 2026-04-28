@@ -119,6 +119,9 @@ export namespace Workspace {
             const response = await adaptor.fetch(item.extra, WORKSPACE_SYNC_ENDPOINT, {
               signal: stop.signal,
             })
+            if (!response.ok) {
+              throw new Error(`workspace sync endpoint returned ${response.status}`)
+            }
             if (!response.body) return
             backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
             await parseSSE(response.body, stop.signal, (payload) => {

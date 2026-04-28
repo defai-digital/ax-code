@@ -9,3 +9,7 @@ export function installAdaptor(type: string, adaptor: Adaptor) {
 export function getAdaptor(type: string) {
   return items.get(type)
 }
+
+export function removeAdaptor(type: string) {
+  return items.delete(type)
+}

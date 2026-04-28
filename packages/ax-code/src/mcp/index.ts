@@ -128,7 +128,7 @@ export namespace MCP {
       ...(inputSchema as JSONSchema7),
       type: "object",
       properties: (inputSchema.properties ?? {}) as JSONSchema7["properties"],
-      additionalProperties: false,
+      additionalProperties: (inputSchema as JSONSchema7).additionalProperties ?? false,
     }
 
     return dynamicTool({
@@ -472,7 +472,7 @@ export namespace MCP {
               })
             } else {
               // Store transport for later finishAuth call
-              pendingOAuthTransportCleanup()
+              await closePendingOAuthTransport(key)
               pendingOAuthTransports.set(key, transport)
               status = { status: "needs_auth" as const }
               // Show toast for needs_auth
@@ -895,7 +895,7 @@ export namespace MCP {
     const client = clientsSnapshot[clientName]
 
     if (!client) {
-      log.warn("client not found for prompt", {
+      log.warn("client not found for resource", {
         clientName: clientName,
       })
       return undefined
@@ -987,7 +987,7 @@ export namespace MCP {
     } catch (error) {
       if (error instanceof UnauthorizedError && capturedUrl) {
         // Store transport for finishAuth
-        pendingOAuthTransportCleanup()
+        await closePendingOAuthTransport(mcpName)
         pendingOAuthTransports.set(mcpName, transport)
         return { authorizationUrl: capturedUrl.toString() }
       }

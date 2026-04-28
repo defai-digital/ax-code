@@ -25,7 +25,8 @@ export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
 
   const adaptor = getAdaptor(row.type)
   if (!adaptor) return next()
-  return adaptor.fetch(row.extra, c.req.url, {
+  const requestUrl = new URL(c.req.url)
+  return adaptor.fetch(row.extra, `${requestUrl.pathname}${requestUrl.search}`, {
     method: c.req.method,
     headers: c.req.raw.headers,
     body: c.req.raw.body,

@@ -316,6 +316,43 @@ test("startAuth reuses an existing saved oauth state", async () => {
   })
 })
 
+test("startAuth closes prior pending OAuth transport before creating a new one", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {
+            "test-oauth-rotate": {
+              type: "remote",
+              url: "https://example.com/mcp",
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.startAuth("test-oauth-rotate")
+      const firstTransport = transportInstances[0]
+      expect(firstTransport?.closeCalls).toBe(0)
+
+      await MCP.startAuth("test-oauth-rotate")
+      expect(firstTransport?.closeCalls).toBe(1)
+      expect(transportInstances).toHaveLength(2)
+
+      const secondTransport = transportInstances[1]
+      expect(secondTransport?.closeCalls).toBe(0)
+      await MCP.removeAuth("test-oauth-rotate")
+      expect(secondTransport?.closeCalls).toBe(1)
+    },
+  })
+})
+
 test("finishAuth closes the pending OAuth transport after reconnecting", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
