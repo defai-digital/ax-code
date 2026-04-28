@@ -8,6 +8,7 @@ import { recordEntry, removeEntry, listEntries } from "../../memory/recorder"
 import { recall } from "../../memory/recall"
 import { doctor as doctorMemory } from "../../memory/doctor"
 import { evaluate as evaluateMemory } from "../../memory/evaluation"
+import type { MemoryEvaluationReport } from "../../memory/evaluation"
 import type { MemoryEntryKind } from "../../memory/types"
 
 const KIND_BY_FLAG: Record<string, MemoryEntryKind> = {
@@ -23,6 +24,13 @@ function parseCommaList(value: string | undefined): string[] | undefined {
     .map((item) => item.trim())
     .filter(Boolean)
   return parsed && parsed.length > 0 ? parsed : undefined
+}
+
+export function applyMemoryEvalExitCode(
+  report: Pick<MemoryEvaluationReport, "passedThreshold">,
+  target: { exitCode?: number | string | undefined } = process,
+) {
+  if (!report.passedThreshold) target.exitCode = 1
 }
 
 export const MemoryCommand = cmd({
@@ -477,6 +485,10 @@ export const MemoryEvalCommand = cmd({
         choices: ["project", "global", "all"] as const,
         default: "project" as const,
       })
+      .option("min-recall", {
+        describe: "minimum recall@k required for a successful run (0 to 1)",
+        type: "number",
+      })
       .option("json", {
         describe: "emit machine-readable JSON",
         type: "boolean",
@@ -487,7 +499,10 @@ export const MemoryEvalCommand = cmd({
       casesPath: args.cases,
       limit: args.limit,
       scope: args.scope,
+      minRecall: args.minRecall,
     })
+
+    applyMemoryEvalExitCode(report)
 
     if (args.json) {
       console.log(JSON.stringify(report, null, 2))
@@ -498,6 +513,11 @@ export const MemoryEvalCommand = cmd({
     prompts.intro("Memory Eval")
     prompts.log.info(`Cases: ${report.passed}/${report.total}`)
     prompts.log.info(`Recall@${report.limit}: ${Math.round(report.recallAtK * 100)}%`)
+    if (report.minRecall !== undefined) {
+      prompts.log[report.passedThreshold ? "success" : "warn"](
+        `Threshold: ${Math.round(report.minRecall * 100)}% (${report.passedThreshold ? "passed" : "failed"})`,
+      )
+    }
     for (const item of report.cases) {
       const status = item.hit ? "pass" : "fail"
       prompts.log[item.hit ? "success" : "warn"](`[${status}] ${item.name}`)

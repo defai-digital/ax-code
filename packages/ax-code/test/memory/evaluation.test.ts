@@ -44,6 +44,7 @@ describe("memory.evaluation", () => {
     expect(report.total).toBe(2)
     expect(report.passed).toBe(1)
     expect(report.recallAtK).toBe(0.5)
+    expect(report.passedThreshold).toBe(true)
     expect(report.cases[0]?.hit).toBe(true)
     expect(report.cases[1]?.missing).toEqual(["docs-rule"])
   })
@@ -77,5 +78,37 @@ describe("memory.evaluation", () => {
     expect(report.cases[0]?.limit).toBe(1)
     expect(report.cases[0]?.scope).toBe("project")
     expect(report.cases[0]?.hit).toBe(true)
+  })
+
+  test("reports threshold failure without hiding case details", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", {
+      name: "available-rule",
+      body: "available recall rule",
+    })
+
+    const casesPath = path.join(tmp.path, "memory-cases.json")
+    await Bun.write(
+      casesPath,
+      JSON.stringify({
+        cases: [
+          {
+            query: "available",
+            expected: ["available-rule"],
+          },
+          {
+            query: "missing",
+            expected: ["missing-rule"],
+          },
+        ],
+      }),
+    )
+
+    const report = await evaluate(tmp.path, { casesPath, limit: 3, minRecall: 0.75 })
+
+    expect(report.recallAtK).toBe(0.5)
+    expect(report.minRecall).toBe(0.75)
+    expect(report.passedThreshold).toBe(false)
+    expect(report.cases[1]?.missing).toEqual(["missing-rule"])
   })
 })

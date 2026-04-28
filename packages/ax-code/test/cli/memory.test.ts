@@ -7,12 +7,14 @@ import {
   MemoryEvalCommand,
   MemoryRecallCommand,
   MemoryRememberCommand,
+  applyMemoryEvalExitCode,
 } from "../../src/cli/cmd/memory"
 
 const originalCwd = process.cwd()
 
 afterEach(() => {
   process.chdir(originalCwd)
+  process.exitCode = undefined
   mock.restore()
 })
 
@@ -151,5 +153,14 @@ describe("memory command", () => {
     expect(parsed.total).toBe(1)
     expect(parsed.passed).toBe(1)
     expect(parsed.recallAtK).toBe(1)
+    expect(parsed.passedThreshold).toBe(true)
+  })
+
+  test("eval threshold helper marks failing runs with exit code", () => {
+    const target: { exitCode?: number | string | undefined } = {}
+
+    applyMemoryEvalExitCode({ passedThreshold: false }, target)
+
+    expect(target.exitCode).toBe(1)
   })
 })

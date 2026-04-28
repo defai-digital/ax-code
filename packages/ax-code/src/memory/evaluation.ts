@@ -30,6 +30,7 @@ export interface MemoryEvaluationOptions {
   casesPath: string
   limit?: number
   scope?: RecallQuery["scope"]
+  minRecall?: number
 }
 
 export interface MemoryEvaluationCaseResult {
@@ -48,6 +49,8 @@ export interface MemoryEvaluationReport {
   total: number
   passed: number
   recallAtK: number
+  minRecall?: number
+  passedThreshold: boolean
   limit: number
   scope: RecallQuery["scope"]
   cases: MemoryEvaluationCaseResult[]
@@ -56,6 +59,10 @@ export interface MemoryEvaluationReport {
 const DEFAULT_LIMIT = 5
 
 export async function evaluate(projectRoot: string, opts: MemoryEvaluationOptions): Promise<MemoryEvaluationReport> {
+  if (opts.minRecall !== undefined && (!Number.isFinite(opts.minRecall) || opts.minRecall < 0 || opts.minRecall > 1)) {
+    throw new Error("minRecall must be a finite number between 0 and 1")
+  }
+
   const text = await fs.readFile(opts.casesPath, "utf-8")
   const file = EvaluationFileSchema.parse(JSON.parse(text))
   const defaultLimit = opts.limit ?? DEFAULT_LIMIT
@@ -92,11 +99,14 @@ export async function evaluate(projectRoot: string, opts: MemoryEvaluationOption
   }
 
   const passed = cases.filter((item) => item.hit).length
+  const recallAtK = cases.length === 0 ? 0 : passed / cases.length
   return {
     casesPath: opts.casesPath,
     total: cases.length,
     passed,
-    recallAtK: cases.length === 0 ? 0 : passed / cases.length,
+    recallAtK,
+    minRecall: opts.minRecall,
+    passedThreshold: opts.minRecall === undefined || recallAtK >= opts.minRecall,
     limit: defaultLimit,
     scope: defaultScope,
     cases,
