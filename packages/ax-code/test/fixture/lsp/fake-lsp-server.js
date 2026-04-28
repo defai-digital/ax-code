@@ -21,6 +21,32 @@ const unsupportedMethods = new Set(
 )
 const workspaceSymbolName = process.env.FAKE_LSP_WORKSPACE_SYMBOL ?? "DemoSymbol"
 const initializeDelayMs = Math.max(0, Number(process.env.FAKE_LSP_INITIALIZE_DELAY_MS ?? "0") || 0)
+function parseJsonEnv(name, fallback) {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return fallback
+  }
+}
+const fakePrepareCallHierarchy = parseJsonEnv("FAKE_LSP_PREPARE_CALL_HIERARCHY", [])
+const fakeIncomingCalls = parseJsonEnv("FAKE_LSP_INCOMING_CALLS", [{ from: "default" }])
+const fakeOutgoingCalls = parseJsonEnv("FAKE_LSP_OUTGOING_CALLS", [{ to: "default" }])
+
+function mapCallsByName(spec, fallback) {
+  if (Array.isArray(spec)) return () => spec
+  if (spec && typeof spec === "object") {
+    return (item) => {
+      const key = item?.name
+      return key && Array.isArray(spec[key]) ? spec[key] : spec.default ?? fallback
+    }
+  }
+  return () => fallback
+}
+
+const incomingCallsByItem = mapCallsByName(fakeIncomingCalls, fakeIncomingCalls)
+const outgoingCallsByItem = mapCallsByName(fakeOutgoingCalls, fakeOutgoingCalls)
 
 function encode(message) {
   const json = JSON.stringify(message)
@@ -121,6 +147,32 @@ function handle(raw) {
             },
           },
         ],
+      })
+      return
+    }
+    if (data.method === "textDocument/prepareCallHierarchy") {
+      send({
+        jsonrpc: "2.0",
+        id: data.id,
+        result: fakePrepareCallHierarchy,
+      })
+      return
+    }
+    if (data.method === "callHierarchy/incomingCalls") {
+      const item = data.params && data.params.item
+      send({
+        jsonrpc: "2.0",
+        id: data.id,
+        result: incomingCallsByItem(item),
+      })
+      return
+    }
+    if (data.method === "callHierarchy/outgoingCalls") {
+      const item = data.params && data.params.item
+      send({
+        jsonrpc: "2.0",
+        id: data.id,
+        result: outgoingCallsByItem(item),
       })
       return
     }

@@ -47,6 +47,7 @@ import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
 import { GlobalRoutes } from "./routes/global"
+import { ToolRegistry } from "../tool/registry"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "@/util/filesystem"
@@ -1224,11 +1225,7 @@ export namespace Server {
           }
           const projectID = Instance.project.id
           const plans = DebugEngine.listPlans(projectID, { status: "pending", limit: 25 })
-          // DRE ships exactly six tools today. Hard-coding matches the
-          // registry wiring at tool/registry.ts — if a tool is added
-          // or removed, update this count alongside the registry
-          // change so the sidebar stays accurate.
-          const DRE_TOOL_COUNT = 6
+          const DRE_TOOL_COUNT = ToolRegistry.debugEngineToolCount()
           const graph = CodeIntelligence.status(projectID)
           const indexState = AutoIndex.getState(projectID)
           return c.json({

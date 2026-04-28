@@ -606,15 +606,10 @@ export namespace CodeGraphQuery {
 
   // Probabilistic TTL sweep. Called by the cache write path with 1%
   // probability to amortize cleanup without a background worker.
-  // Returns the number of rows deleted, for observability. Counts via
-  // an explicit SELECT first because the bun-sqlite drizzle binding
-  // does not expose a changes/affectedRows field on .run().
+  // Returns the number of rows deleted, for observability.
   export function pruneExpiredLspCache(now: number): number {
     return Database.use((db) => {
-      const ids = db.select({ id: LspCacheTable.id }).from(LspCacheTable).where(lt(LspCacheTable.expires_at, now)).all()
-      if (ids.length === 0) return 0
-      db.delete(LspCacheTable).where(lt(LspCacheTable.expires_at, now)).run()
-      return ids.length
+      return db.delete(LspCacheTable).where(lt(LspCacheTable.expires_at, now)).returning({ id: LspCacheTable.id }).all().length
     })
   }
 
@@ -623,14 +618,12 @@ export namespace CodeGraphQuery {
   // whatever payload a previous run left behind in the persistent cache.
   export function clearLspCache(projectID: ProjectID): number {
     return Database.use((db) => {
-      const ids = db
-        .select({ id: LspCacheTable.id })
-        .from(LspCacheTable)
+      return db
+        .delete(LspCacheTable)
         .where(eq(LspCacheTable.project_id, projectID))
+        .returning({ id: LspCacheTable.id })
         .all()
-      if (ids.length === 0) return 0
-      db.delete(LspCacheTable).where(eq(LspCacheTable.project_id, projectID)).run()
-      return ids.length
+        .length
     })
   }
 }

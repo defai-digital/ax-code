@@ -71,9 +71,7 @@ export function nativeScanFiles(input: {
     )
     return JSON.parse(json) as ScanResult
   } catch (e: any) {
-    if (!(e instanceof SyntaxError)) {
-      log.warn("native scan_files failed, falling back to JS", { error: e })
-    }
+    log.warn("native scan_files failed, falling back to JS", { error: e })
     return undefined
   }
 }
@@ -93,9 +91,7 @@ export function nativeReadFilesBatch(files: string[]): Map<string, string> | und
     const pairs: [string, string][] = JSON.parse(json)
     return new Map(pairs)
   } catch (e: any) {
-    if (!(e instanceof SyntaxError)) {
-      log.warn("native read_files_batch failed, falling back to JS", { error: e })
-    }
+    log.warn("native read_files_batch failed, falling back to JS", { error: e })
     return undefined
   }
 }
@@ -149,9 +145,7 @@ function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult
     )
     return JSON.parse(json) as DetectResult<F>
   } catch (e: any) {
-    if (!(e instanceof SyntaxError)) {
-      log.warn(`native ${fnName} failed, falling back to JS`, { error: e })
-    }
+    log.warn(`native ${fnName} failed, falling back to JS`, { error: e })
     return undefined
   }
 }

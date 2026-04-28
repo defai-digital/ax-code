@@ -51,6 +51,30 @@ describe("LSPClient interop", () => {
     await client.shutdown()
   })
 
+  test("notify.open does not mutate caller input", async () => {
+    await using tmp = await tmpdir()
+    const file = "file.ts"
+    const input = { path: file }
+    await Bun.write(path.join(tmp.path, file), "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        await client.notify.open(input)
+        expect(input.path).toBe(file)
+
+        await client.shutdown()
+      },
+    })
+  })
+
   test("handles client/registerCapability request", async () => {
     const handle = spawnFakeServer() as any
 

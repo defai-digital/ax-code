@@ -278,4 +278,57 @@ describe("CodeGraphQuery LSP cache", () => {
       },
     })
   })
+
+  test("clearLspCache returns exact deleted row count", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id as ProjectID
+
+        // Guard this assertion against existing rows from prior tests that
+        // reuse the same project-level DB fixture.
+        CodeGraphQuery.clearLspCache(projectID)
+
+        CodeGraphQuery.upsertLspCache({
+          projectID,
+          operation: "references",
+          filePath: "/tmp/clear-a.ts",
+          contentHash: "a",
+          line: 0,
+          character: 0,
+          payload: [],
+          serverIDs: [],
+          completeness: "full",
+          expiresAt: Date.now() + 60_000,
+        })
+        CodeGraphQuery.upsertLspCache({
+          projectID,
+          operation: "references",
+          filePath: "/tmp/clear-b.ts",
+          contentHash: "b",
+          line: 0,
+          character: 0,
+          payload: [],
+          serverIDs: [],
+          completeness: "full",
+          expiresAt: Date.now() + 60_000,
+        })
+
+        const removed = CodeGraphQuery.clearLspCache(projectID)
+        expect(removed).toBe(2)
+
+        const stale = CodeGraphQuery.getLspCache({
+          projectID,
+          operation: "references",
+          filePath: "/tmp/clear-a.ts",
+          contentHash: "a",
+          line: 0,
+          character: 0,
+          now: Date.now(),
+        })
+        expect(stale).toBeUndefined()
+      },
+    })
+  })
 })

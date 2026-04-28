@@ -50,6 +50,21 @@ import { makeRunPromise } from "@/effect/run-service"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
+  const DEBUG_ENGINE_TOOLS = [
+    DebugAnalyzeTool,
+    RefactorPlanTool,
+    DedupScanTool,
+    ImpactAnalyzeTool,
+    HardcodeScanTool,
+    RefactorApplyTool,
+    RaceScanTool,
+    LifecycleScanTool,
+    SecurityScanTool,
+  ]
+
+  export function debugEngineToolCount(): number {
+    return DEBUG_ENGINE_TOOLS.length
+  }
 
   type State = {
     custom: Tool.Info[]
@@ -167,15 +182,7 @@ export namespace ToolRegistry {
           ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE
             ? [
-                DebugAnalyzeTool,
-                RefactorPlanTool,
-                DedupScanTool,
-                ImpactAnalyzeTool,
-                HardcodeScanTool,
-                RefactorApplyTool,
-                RaceScanTool,
-                LifecycleScanTool,
-                SecurityScanTool,
+                ...DEBUG_ENGINE_TOOLS,
               ]
             : []),
           ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),

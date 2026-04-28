@@ -49,7 +49,7 @@ function stepActivity(graph: ExecutionGraph.Graph, stepId: string): string {
 function sanitize(label: string): string {
   return label
     .replace(/"/g, "'")
-    .replace(/[<>{}|[\]()]/g, "_")
+    .replace(/[<>{}|[\]()#]/g, "_")
     .replace(/\n/g, " ")
 }
 

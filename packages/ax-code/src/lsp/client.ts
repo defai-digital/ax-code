@@ -475,56 +475,56 @@ export namespace LSPClient {
       },
       notify: {
         async open(input: { path: string; waitForDiagnostics?: boolean }) {
-          input.path = path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path)
+          const normalized = path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path)
           // Serialize per-path. Concurrent opens for the same file would
           // otherwise race on the `files[path]` read-modify-write and
           // send duplicate didChange notifications with the same version
           // number. Unrelated paths still run in parallel.
-          return withPathLock(input.path, async () => {
+          return withPathLock(normalized, async () => {
             // If a previously-tracked file has disappeared from disk, treat
             // the touch as a close so we don't leak stale entries in files,
             // diagnostics, and lastContent. Caller gets false ("nothing sent
             // to server").
-            if (files[input.path] !== undefined) {
-              const exists = await Bun.file(input.path)
+            if (files[normalized] !== undefined) {
+              const exists = await Bun.file(normalized)
                 .exists()
                 .catch(() => false)
               if (!exists) {
                 // closeUnlocked — we already hold the lock for this path.
-                await closeUnlocked({ path: input.path, deleted: true })
+                await closeUnlocked({ path: normalized, deleted: true })
                 return false
               }
             }
-            const text = await Filesystem.readText(input.path)
-            const extension = path.extname(input.path)
+            const text = await Filesystem.readText(normalized)
+            const extension = path.extname(normalized)
             const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
 
-            const version = files[input.path]
+            const version = files[normalized]
             if (version !== undefined) {
               // File previously opened — this would be a didChange. Skip
               // the round-trip entirely if the content is byte-identical to
               // what we already sent; the server's state is already correct.
-              if (contentUnchanged(input.path, text)) {
+              if (contentUnchanged(normalized, text)) {
                 log.info("textDocument/didChange skipped (unchanged)", {
-                  path: input.path,
+                  path: normalized,
                   version,
                 })
                 return false
               }
 
-              log.info("workspace/didChangeWatchedFiles", input)
-              const wait = input.waitForDiagnostics ? diagnosticsWait({ path: input.path }) : undefined
+              log.info("workspace/didChangeWatchedFiles", { ...input, path: normalized })
+              const wait = input.waitForDiagnostics ? diagnosticsWait({ path: normalized }) : undefined
               await connection.sendNotification("workspace/didChangeWatchedFiles", {
                 changes: [
                   {
-                    uri: pathToFileURL(input.path).href,
+                    uri: pathToFileURL(normalized).href,
                     type: 2, // Changed
                   },
                 ],
               })
 
               const next = version + 1
-              files[input.path] = next
+              files[normalized] = next
 
               // Try incremental sync first. If we have the previously-sent
               // text cached and computeIncrementalChanges produces a reasonable
@@ -544,52 +544,52 @@ export namespace LSPClient {
               if (incremental && incremental.length > 0) {
                 contentChanges = incremental
                 log.info("textDocument/didChange (incremental)", {
-                  path: input.path,
+                  path: normalized,
                   version: next,
                   hunks: incremental.length,
                 })
               } else {
                 contentChanges = [{ text }]
                 log.info("textDocument/didChange (full)", {
-                  path: input.path,
+                  path: normalized,
                   version: next,
                 })
               }
               await connection.sendNotification("textDocument/didChange", {
                 textDocument: {
-                  uri: pathToFileURL(input.path).href,
+                  uri: pathToFileURL(normalized).href,
                   version: next,
                 },
                 contentChanges,
               })
-              setLastContent(input.path, text)
+              setLastContent(normalized, text)
               await wait
               return true
             }
 
-            log.info("workspace/didChangeWatchedFiles", input)
-            const wait = input.waitForDiagnostics ? diagnosticsWait({ path: input.path }) : undefined
+            log.info("workspace/didChangeWatchedFiles", { ...input, path: normalized })
+            const wait = input.waitForDiagnostics ? diagnosticsWait({ path: normalized }) : undefined
             await connection.sendNotification("workspace/didChangeWatchedFiles", {
               changes: [
                 {
-                  uri: pathToFileURL(input.path).href,
+                  uri: pathToFileURL(normalized).href,
                   type: 1, // Created
                 },
               ],
             })
 
-            log.info("textDocument/didOpen", input)
-            diagnostics.delete(input.path)
+            log.info("textDocument/didOpen", { ...input, path: normalized })
+            diagnostics.delete(normalized)
             await connection.sendNotification("textDocument/didOpen", {
               textDocument: {
-                uri: pathToFileURL(input.path).href,
+                uri: pathToFileURL(normalized).href,
                 languageId,
                 version: 0,
                 text,
               },
             })
-            files[input.path] = 0
-            setLastContent(input.path, text)
+            files[normalized] = 0
+            setLastContent(normalized, text)
             await wait
             return true
           })

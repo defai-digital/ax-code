@@ -2,6 +2,19 @@
 
 ## Status (2026-04-27, BUG-301..306 triage)
 
+### Fixed in this pass (BUG-307..314)
+
+| ID | Severity | Component | What changed |
+|----|----------|-----------|--------------|
+| BUG-307 | Medium | `packages/ax-code/src/lsp/client.ts` | `LSPClient.notify.open()` now normalizes path via local variable and no longer mutates caller input. |
+| BUG-308 | Low | `packages/ax-code/src/tool/registry.ts`, `packages/ax-code/src/server/server.ts` | `toolCount` for DRE pending-plans now derived from registry. |
+| BUG-309 | Low | `packages/ax-code/src/graph/format.ts` | Mermaid sanitizer now escapes `#` to avoid label truncation. |
+| BUG-310 | Low | `packages/ax-code/src/server/routes/dre-graph.ts` | Rechecked: shared polling interval and `EventSource` are cleaned on `beforeunload`; no code change needed for this report. |
+| BUG-311 | Medium | `packages/ax-code/src/lsp/index.ts` | `incomingCalls` / `outgoingCalls` now aggregate results from all prepared call hierarchy items. |
+| BUG-312 | Low | `packages/ax-code/src/debug-engine/native-scan.ts` | `SyntaxError` is now logged like other native parse/bridge errors. |
+| BUG-313 | Low | `packages/ax-code/src/code-intelligence/query.ts` | `pruneExpiredLspCache` and `clearLspCache` now return exact deleted row counts. |
+| BUG-314 | Info | `packages/ax-code/src/code-intelligence/builder.ts` | Reviewed as non-blocking: type guard behavior is correct; kept as accepted-risk/clarity-only report. |
+
 ### Fixed in this pass
 
 | ID | Severity | Component | What changed |

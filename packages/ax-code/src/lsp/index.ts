@@ -1832,10 +1832,15 @@ export namespace LSP {
             RPC_TIMEOUT_MS,
           )) as unknown[]
           if (!items?.length) return []
-          return withTimeout(
-            client.connection.sendRequest("callHierarchy/incomingCalls", { item: items[0] }),
-            RPC_TIMEOUT_MS,
+          const calls = await Promise.all(
+            items.map((item) =>
+              withTimeout(
+                client.connection.sendRequest("callHierarchy/incomingCalls", { item }),
+                RPC_TIMEOUT_MS,
+              ).catch(() => [] as unknown[]),
+            ),
           )
+          return calls.flat()
         },
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
@@ -1868,10 +1873,15 @@ export namespace LSP {
             RPC_TIMEOUT_MS,
           )) as unknown[]
           if (!items?.length) return []
-          return withTimeout(
-            client.connection.sendRequest("callHierarchy/outgoingCalls", { item: items[0] }),
-            RPC_TIMEOUT_MS,
+          const calls = await Promise.all(
+            items.map((item) =>
+              withTimeout(
+                client.connection.sendRequest("callHierarchy/outgoingCalls", { item }),
+                RPC_TIMEOUT_MS,
+              ).catch(() => [] as unknown[]),
+            ),
           )
+          return calls.flat()
         },
         (results) => (results as unknown[]).flat().filter(Boolean),
         [] as unknown[],
