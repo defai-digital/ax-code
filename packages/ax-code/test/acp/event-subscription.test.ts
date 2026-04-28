@@ -118,6 +118,7 @@ function createEventStream() {
 }
 
 function createFakeAgent() {
+  const connectionAbort = new AbortController()
   const updates = new Map<string, string[]>()
   const chunks = new Map<string, string>()
   const sessionUpdates: SessionUpdateParams[] = []
@@ -143,6 +144,7 @@ function createFakeAgent() {
     async requestPermission(_params: RequestPermissionParams): Promise<RequestPermissionResult> {
       return { outcome: { outcome: "selected", optionId: "once" } } as RequestPermissionResult
     },
+    signal: connectionAbort.signal,
   } as unknown as AgentSideConnection
 
   const { controller, stream } = createEventStream()
@@ -254,7 +256,7 @@ function createFakeAgent() {
     ;(agent as any).eventAbort.abort()
   }
 
-  return { agent, controller, calls, updates, chunks, sessionUpdates, stop, sdk, connection }
+  return { agent, controller, calls, updates, chunks, sessionUpdates, stop, sdk, connection, connectionAbort }
 }
 
 describe("acp.agent event subscription", () => {
@@ -365,6 +367,25 @@ describe("acp.agent event subscription", () => {
         stop()
       },
     })
+  })
+
+  test("disposes when the ACP connection aborts", async () => {
+    const { agent, connectionAbort } = createFakeAgent()
+
+    ;(agent as any).bashSnapshots.set("bash", "snapshot")
+    ;(agent as any).toolStarts.add("tool")
+    ;(agent as any).permissionQueues.set("perm", Promise.resolve())
+    ;(agent as any).replaying.add("session")
+    ;(agent as any).replayQueue.set("session", [])
+
+    connectionAbort.abort()
+
+    expect((agent as any).eventAbort.signal.aborted).toBe(true)
+    expect((agent as any).bashSnapshots.size).toBe(0)
+    expect((agent as any).toolStarts.size).toBe(0)
+    expect((agent as any).permissionQueues.size).toBe(0)
+    expect((agent as any).replaying.size).toBe(0)
+    expect((agent as any).replayQueue.size).toBe(0)
   })
 
   test("permission.asked events are handled and replied", async () => {

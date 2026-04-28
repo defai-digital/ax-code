@@ -165,6 +165,7 @@ export namespace LSP {
 
   // Exported for unit tests. Deterministic pure function — no side effects.
   export function computeBackoff(failures: number): number {
+    if (failures <= 0) return 0
     const raw = BROKEN_BACKOFF_BASE_MS * Math.pow(4, failures - 1)
     return Math.min(raw, BROKEN_BACKOFF_MAX_MS)
   }
@@ -587,7 +588,6 @@ export namespace LSP {
       return undefined
     }
 
-    if (!handle) return undefined
     log.info("spawned lsp server", { serverID: server.id })
 
     let client: LSPClient.Info | undefined

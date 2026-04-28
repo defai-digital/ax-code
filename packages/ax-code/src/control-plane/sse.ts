@@ -1,3 +1,8 @@
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "control-plane.sse" })
+const MAX_SSE_BUFFER_CHARS = 1024 * 1024
+
 export async function parseSSE(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
@@ -82,6 +87,10 @@ export async function parseSSE(
         break
       }
       buf += decoder.decode(next.value, { stream: true })
+      if (buf.length > MAX_SSE_BUFFER_CHARS) {
+        log.warn("SSE buffer exceeded limit", { size: buf.length, max: MAX_SSE_BUFFER_CHARS })
+        throw new Error(`SSE buffer exceeded maximum size (${MAX_SSE_BUFFER_CHARS} chars)`)
+      }
 
       while (true) {
         let idx = buf.indexOf("\n\n")

@@ -969,7 +969,7 @@ export namespace MCP {
    * Start OAuth authentication flow for an MCP server.
    * Returns the authorization URL that should be opened in a browser.
    */
-  export async function startAuth(mcpName: string): Promise<{ authorizationUrl: string }> {
+  export async function startAuth(mcpName: string): Promise<{ authorizationUrl: string; oauthState?: string }> {
     const cfg = await Config.get()
     const mcpConfig = cfg.mcp?.[mcpName]
 
@@ -1019,6 +1019,7 @@ export namespace MCP {
           capturedUrl = url
         },
       },
+      oauthState,
     )
 
     // Create transport with auth provider
@@ -1033,7 +1034,7 @@ export namespace MCP {
       // If we get here, we're already authenticated.
       await transport.close?.().catch(() => {})
       await closeIfPossible(client, mcpName, "startAuth authenticated")
-      return { authorizationUrl: "" }
+      return { authorizationUrl: "", oauthState }
     } catch (error) {
       if (!error) {
         throw new Error("Unknown OAuth error")
@@ -1043,7 +1044,7 @@ export namespace MCP {
         // Store transport for finishAuth
         await closePendingOAuthTransport(mcpName)
         pendingOAuthTransports.set(mcpName, transport)
-        return { authorizationUrl: capturedUrl.toString() }
+        return { authorizationUrl: capturedUrl.toString(), oauthState }
       }
       await transport.close?.().catch(() => {})
       await closeIfPossible(client, mcpName, "startAuth error recovery")
@@ -1056,7 +1057,7 @@ export namespace MCP {
    * Opens the browser and waits for callback.
    */
   export async function authenticate(mcpName: string): Promise<Status> {
-    const { authorizationUrl } = await startAuth(mcpName)
+    const { authorizationUrl, oauthState } = await startAuth(mcpName)
 
     if (!authorizationUrl) {
       // Already authenticated
@@ -1064,8 +1065,6 @@ export namespace MCP {
       return s.status[mcpName] ?? { status: "connected" }
     }
 
-    // Get the state that was already generated and stored in startAuth()
-    const oauthState = await McpAuth.getOAuthState(mcpName)
     if (!oauthState) {
       throw new Error("OAuth state not found - this should not happen")
     }
@@ -1112,14 +1111,10 @@ export namespace MCP {
     // Wait for callback using the already-registered promise
     const code = await callbackPromise
 
-    // Validate and clear the state
-    const storedState = await McpAuth.getOAuthState(mcpName)
-    if (storedState !== oauthState) {
-      await McpAuth.clearOAuthState(mcpName)
-      throw new Error("OAuth state mismatch - potential CSRF attack")
-    }
-
-    await McpAuth.clearOAuthState(mcpName)
+    // The callback waiter already validated the state against the request that
+    // initiated this flow. Only clear the persisted state if it still matches
+    // this flow so a concurrent replacement flow does not get torn down here.
+    await McpAuth.clearOAuthStateIfMatches(mcpName, oauthState)
 
     // Finish auth
     return finishAuth(mcpName, code)

@@ -1,5 +1,59 @@
 # Bug Reports
 
+## Status (2026-04-28, BUGS folder re-sweep)
+
+### Open
+
+No open items remain in this batch.
+
+### Fixed in this pass
+
+| ID | Severity | Component | What changed |
+|----|----------|-----------|--------------|
+| `mcp-auth-expires-in-zero-immediate-expiry.md` | Medium | `packages/ax-code/src/mcp/oauth-provider.ts` | `saveTokens()` now treats `expires_in: 0` as non-expiring instead of storing an immediate-expiry timestamp. |
+
+### Cleared as false positive / accepted-risk
+
+- `control-plane-abort-stale-listener.md`: false positive. `waitForAbortOrTimeout()` registers the abort listener synchronously inside the promise constructor; there is no actual yield between the early guard and listener registration.
+- `control-plane-headers-map-unbounded-growth.md`: false positive. `sanitizeForwardedHeaders()` allocates a request-local `Headers` object that is naturally reclaimed after the request finishes.
+- `control-plane-sse-non-atomic-buf-idx.md`: false positive. The flagged variables are function-local per invocation, not shared mutable state across calls.
+- `dre-graph-signal-handler-leak.md`: accepted risk. This command is still a CLI-owned long-lived foreground process, not a supported reusable in-process API surface.
+- `lsp-jdtls-tempdir-leak-on-spawn-failure.md`: accepted risk. Current temp-dir cleanup already covers spawn failure and normal/forced process exit paths.
+- `lsp-launch-exit-listener-ordering.md`: false positive. The child-close listener is attached in the same synchronous spawn path; the reported ordering gap is not reachable.
+- `lsp-non-atomic-oxlint-support-cache.md`: completed by the current implementation. `oxlintSupportsLsp()` already stores and reuses an in-flight promise plus a bounded cache.
+- `lsp-oxlint-child-process-no-cleanup.md`: false positive. The `spawn()` helper used here already installs parent-exit cleanup and child-close listener removal.
+- `mcp-oauth-callback-race-after-stop.md`: accepted risk. Current call ordering does not use `stop()` and `ensureRunning()` concurrently in production flow, and the reported race is theoretical in present usage.
+- `mcp-oauth-provider-redirect-url-mutable-global.md`: accepted risk. Current `ensureRunning()` ordering guarantees the bound callback port is established before provider metadata is consumed.
+
+## Status (2026-04-28, BUGS folder refresh)
+
+### Open
+
+No open items remain in this batch.
+
+### Fixed in this pass
+
+| ID | Severity | Component | What changed |
+|----|----------|-----------|--------------|
+| `lsp-oxlint-cache-toctou-duplicate-spawn.md` | High | `packages/ax-code/src/lsp/server-defs.ts` | `oxlintSupportsLsp()` now stores and reuses an in-flight promise per binary path, then replaces it with the settled boolean result. The cache also has a small bounded size instead of growing forever. |
+| `mcp-oauth-state-race.md` | Medium | `packages/ax-code/src/mcp/index.ts`, `packages/ax-code/src/mcp/oauth-provider.ts`, `packages/ax-code/src/mcp/auth.ts` | `startAuth()` now returns the exact OAuth state for the current flow, `McpOAuthProvider` can pin that state instead of re-reading shared storage, and `authenticate()` clears persisted state only when it still matches the current flow. |
+| `acp-missing-dispose-on-disconnect.md` | Medium | `packages/ax-code/src/acp/agent.ts` | `ACP.Agent` now listens to `connection.signal` and calls `dispose()` automatically when the ACP connection closes. |
+| `acp-sse-parser-unbounded-buffer-growth.md` | Medium | `packages/ax-code/src/control-plane/sse.ts` | Added a 1 MiB SSE buffer cap with an explicit error path so delimiter-free streams cannot grow unbounded. |
+| `acp-sse-queue-silent-drops-no-observability.md` | High | `packages/ax-code/src/control-plane/workspace-server/server.ts` | Queue drops are now logged with counters when the per-connection SSE queue overflows. |
+| `acp-workspace-delete-dangling-remote.md` | Medium | `packages/ax-code/src/control-plane/workspace.ts` | `Workspace.remove()` now keeps the DB row when adaptor cleanup fails and surfaces the error instead of silently orphaning the remote resource. |
+| `acp-workspace-header-no-validation-broadcast.md` | High | `packages/ax-code/src/control-plane/workspace-server/server.ts`, `packages/ax-code/src/control-plane/workspace.ts` | `/event` now requires a valid `x-opencode-workspace` header, filters strictly by workspace id, and `startSyncing()` sends that header on remote sync connections. |
+| `acp-workspace-router-headers-forwarded.md` | Low | `packages/ax-code/src/control-plane/workspace-router-middleware.ts` | Remote adaptor proxying now strips `Authorization`, `Cookie`, and internal `x-opencode-*` headers before forwarding. |
+| `lsp-computeBackoff-edge-case.md` | Low | `packages/ax-code/src/lsp/index.ts` | `computeBackoff(0)` and negative values now return `0` instead of a confusing non-zero delay. |
+| `lsp-scheduleClient-dead-code-null-check.md` | Low | `packages/ax-code/src/lsp/index.ts` | Removed the unreachable post-spawn `!handle` check. |
+
+### Cleared as false positive / accepted-risk
+
+- `dre-graph-signal-handler-leak.md`: accepted risk. The command is a long-lived foreground process; repeated in-process invocations are not a meaningful production path, and changing the shutdown contract here is lower value than the fixes above.
+- `lsp-config-env-bypasses-sanitize.md`: accepted risk. Explicit `lsp.<server>.env` is a user-authored override contract, not an accidental secret leak path.
+- `lsp-env-xauthority-allowlist.md`: accepted risk for now. `Env.sanitize()` is shared across multiple child-process surfaces, and removing `XAUTHORITY` needs a broader Linux behavior audit instead of a narrow BUGS sweep.
+- `lsp-nearestroot-fallback-incorrect-root.md`: accepted risk. Falling back to `Instance.directory` is an intentional single-workspace bias that keeps loose files and repo-root tooling usable.
+- `lsp-process-kill-on-exit-not-removed.md`: false positive / negligible edge case. The close listener is attached immediately after spawn in the same function, and the reported leak path has no practical repro in current control flow.
+
 ## Status (2026-04-28, ACP / MCP / control-plane / LSP triage)
 
 Triage pass over 13 reports covering ACP agent lifecycle, MCP OAuth flow,
@@ -78,7 +132,39 @@ expected for LSP module design (all are read-only file paths, no shell exec).
 - **ACP workspace-router-middleware SSRF (3 findings):** `Adaptor.fetch()` interface accepts `RequestInfo | URL` — SSRF depends on adaptor implementations, not the middleware. The `normalizeWorkspacePath` function already strips absolute URLs and protocol-relative paths.
 - **ACP types.ts SSRF (1 finding):** This is the `Adaptor` interface definition itself, not a call site. Validation is the adaptor implementation's responsibility.
 
-### Historical status
+### Status (2026-04-28, Supplementary scan — race / lifecycle / non-atomic)
+
+Supplementary automated scan pass using race_scan, lifecycle_scan, and
+security_scan on the four focus areas, plus manual code review for logic
+errors and edge cases not caught by heuristics. 10 new reports filed.
+
+### New reports (this pass)
+
+| File | Severity | Component | Summary |
+|------|----------|-----------|---------|
+| `control-plane-sse-non-atomic-buf-idx.md` | MEDIUM | ACP | `parseSSE` local vars modified after `await` — false positive, function-scoped locals prevent concurrent access |
+| `control-plane-abort-stale-listener.md` | MEDIUM | ACP | `waitForAbortOrTimeout` abort listener registered after await — false positive, synchronous Promise constructor prevents gap |
+| `control-plane-headers-map-unbounded-growth.md` | MEDIUM | ACP | `sanitizeForwardedHeaders` creates Headers per-request with no size cap — false positive, request-scoped and GC'd |
+| `lsp-oxlint-child-process-no-cleanup.md` | HIGH | LSP | `oxlintSupportsLsp` and `spawnJdtls` child processes may be orphaned on unexpected exit — partially mitigated by `launch.ts` exit handler |
+| `lsp-non-atomic-oxlint-support-cache.md` | MEDIUM | LSP | `oxlintSupportsLsp` cache read/write across await allows duplicate subprocess spawns — mitigated by `scheduleClient` serialization |
+| `lsp-jdtls-tempdir-leak-on-spawn-failure.md` | MEDIUM | LSP | JDTLS temp directory cleanup gap on hard crash — cleanup adequate for all normal paths |
+| `mcp-oauth-callback-race-after-stop.md` | LOW | MCP | `stop()` doesn't clear `initPromise`, allowing EADDRINUSE race after stop |
+| `mcp-oauth-provider-redirect-url-mutable-global.md` | LOW | MCP | `redirectUrl` reads mutable global `_actualCallbackPort` — call ordering is correct in all current sites |
+| `mcp-auth-expires-in-zero-immediate-expiry.md` | MEDIUM | MCP | `expires_in: 0` from OAuth server causes immediate token expiry, triggering unnecessary re-auth |
+| `dre-graph-signal-handler-leak.md` | LOW | DRE | SIGINT/SIGTERM handlers never removed — acceptable for CLI-only command |
+
+### Disposition
+
+- 3 **false positives** (sse buf/idx, abort listener, headers map) — marked as such in reports
+- 2 **accepted risk / low priority** (redirect URL mutable global, signal handler leak)
+- 5 **real issues worth fixing** when next touching the relevant files:
+  - `mcp-oauth-callback-race-after-stop` — easy one-line fix
+  - `mcp-auth-expires-in-zero-immediate-expiry` — small logic fix
+  - `lsp-non-atomic-oxlint-support-cache` — minor dedup improvement
+  - `lsp-oxlint-child-process-no-cleanup` — mostly mitigated, consider zombie scan
+  - `lsp-jdtls-tempdir-leak-on-spawn-failure` — startup sweep if accumulation observed
+
+## Historical status
 
 Earlier triage passes (BUG-200..213, BUG-301..327, etc.) are documented in
 git history.

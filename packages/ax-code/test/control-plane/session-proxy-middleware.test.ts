@@ -37,6 +37,7 @@ type State = {
   workspace?: "first" | "second"
   calls: Array<{ method: string; url: string; body?: string }>
   configs?: unknown[]
+  headers?: Array<Record<string, string>>
 }
 
 const remote = { type: "testing", name: "remote-a" } as unknown as typeof WorkspaceTable.$inferInsert
@@ -58,6 +59,7 @@ async function setup(state: State) {
           ? input.toString()
           : new URL(input, "http://workspace.test").toString()
       const request = new Request(url, init)
+      state.headers?.push(Object.fromEntries(request.headers.entries()))
       const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text()
       state.calls.push({
         method: request.method,
@@ -215,6 +217,36 @@ describe("control-plane/session-proxy-middleware", () => {
       error: "Invalid workspace proxy path: /session/%68%74%74%70%3A%2F%2Fevil.com/authorize",
     })
     expect(state.calls).toEqual([])
+  })
+
+  test("strips sensitive headers before forwarding to the remote adaptor", async () => {
+    const state: State = {
+      workspace: "first",
+      calls: [],
+      headers: [],
+    }
+
+    const ctx = await setup(state)
+
+    await ctx.request("http://workspace.test/session/foo", {
+      method: "POST",
+      body: "payload",
+      headers: {
+        authorization: "Bearer secret",
+        cookie: "sid=abc",
+        "x-opencode-directory": "/repo",
+        "x-opencode-workspace": "workspace_attacker",
+        "content-type": "text/plain",
+        accept: "application/json",
+      },
+    })
+
+    expect(state.headers).toEqual([
+      {
+        accept: "application/json",
+        "content-type": "text/plain",
+      },
+    ])
   })
 
   // It will behave this way when we have syncing

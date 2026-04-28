@@ -89,4 +89,13 @@ describe("control-plane/sse", () => {
       },
     ])
   })
+
+  test("rejects pathological streams that never delimit an SSE frame", async () => {
+    const stop = new AbortController()
+    const payload = "x".repeat(1024 * 1024 + 64)
+
+    await expect(parseSSE(stream([payload]), stop.signal, () => undefined)).rejects.toThrow(
+      "SSE buffer exceeded maximum size",
+    )
+  })
 })

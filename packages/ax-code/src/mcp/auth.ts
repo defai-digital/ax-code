@@ -201,6 +201,16 @@ export namespace McpAuth {
     })
   }
 
+  export async function clearOAuthStateIfMatches(mcpName: string, oauthState: string): Promise<boolean> {
+    let cleared = false
+    await withFileEntryLock(mcpName, (entry) => {
+      if (entry.oauthState !== oauthState) return
+      delete entry.oauthState
+      cleared = true
+    })
+    return cleared
+  }
+
   // Atomic field clears used by `oauth-provider.invalidateCredentials`.
   // They exist as their own helpers so callers don't have to do a manual
   // `get → mutate → set` sequence under a separate lock —

@@ -40,6 +40,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
     private serverUrl: string,
     private config: McpOAuthConfig,
     private callbacks: McpOAuthCallbacks,
+    private fixedState?: string,
   ) {}
 
   get redirectUrl(): string {
@@ -124,7 +125,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
       {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
-        expiresAt: tokens.expires_in ? Date.now() / 1000 + tokens.expires_in : undefined,
+        expiresAt: typeof tokens.expires_in === "number" && tokens.expires_in > 0 ? Date.now() / 1000 + tokens.expires_in : undefined,
         scope: tokens.scope,
       },
       this.serverUrl,
@@ -154,6 +155,11 @@ export class McpOAuthProvider implements OAuthClientProvider {
   }
 
   async state(): Promise<string> {
+    if (this.fixedState) {
+      await McpAuth.updateOAuthState(this.mcpName, this.fixedState)
+      return this.fixedState
+    }
+
     const entry = await McpAuth.get(this.mcpName)
     if (entry?.oauthState) {
       return entry.oauthState

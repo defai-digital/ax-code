@@ -12,6 +12,8 @@ test("Oxlint LSP detection caches --lsp support check", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
 
   expect(src).toContain("oxlintLspSupportCache")
+  expect(src).toContain("setOxlintSupportCache")
+  expect(src).toContain("OXLINT_LSP_SUPPORT_CACHE_MAX")
   expect(src).toContain("oxlintSupportsLsp")
   expect(src).toContain('spawn(lintBin, ["--help"])')
   expect(src).not.toContain('spawn(lintBin, ["--help"],')

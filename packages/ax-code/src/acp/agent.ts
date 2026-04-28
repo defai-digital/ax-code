@@ -174,6 +174,7 @@ export namespace ACP {
       this.config = config
       this.sdk = config.sdk
       this.sessionManager = new ACPSessionManager(this.sdk)
+      this.connection.signal.addEventListener("abort", () => this.dispose(), { once: true })
       this.startEventSubscription()
     }
 

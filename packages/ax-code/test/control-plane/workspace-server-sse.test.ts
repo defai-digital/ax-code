@@ -13,6 +13,16 @@ afterEach(async () => {
 Log.init({ print: false })
 
 describe("control-plane/workspace-server SSE", () => {
+  test("rejects missing workspace header", async () => {
+    const app = WorkspaceServer.App()
+    const response = await app.request("/event")
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: "Missing or invalid x-opencode-workspace header",
+    })
+  })
+
   test("streams GlobalBus events and parseSSE reads them", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = WorkspaceServer.App()
@@ -40,6 +50,7 @@ describe("control-plane/workspace-server SSE", () => {
           const next = event as { type?: string }
           if (next.type === "server.connected") {
             GlobalBus.emit("event", {
+              directory: "wrk_test_workspace",
               payload: {
                 type: "workspace.test",
                 properties: { ok: true },

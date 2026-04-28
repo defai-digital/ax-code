@@ -348,6 +348,43 @@ test("state() returns existing state when one is saved", async () => {
   })
 })
 
+test("saveTokens treats expires_in=0 as non-expiring", async () => {
+  const { McpOAuthProvider } = await import("../../src/mcp/oauth-provider")
+  const { McpAuth } = await import("../../src/mcp/auth")
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {},
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const provider = new McpOAuthProvider(
+        "test-expires-zero",
+        "https://example.com/mcp",
+        {},
+        { onRedirect: async () => {} },
+      )
+
+      await provider.saveTokens({
+        access_token: "token",
+        token_type: "Bearer",
+        expires_in: 0,
+      })
+
+      expect(await McpAuth.isTokenExpired("test-expires-zero")).toBe(false)
+    },
+  })
+})
+
 test("startAuth reuses an existing saved oauth state", async () => {
   const { McpAuth } = await import("../../src/mcp/auth")
 
@@ -374,9 +411,40 @@ test("startAuth reuses an existing saved oauth state", async () => {
       const state = "existing-oauth-state"
       await McpAuth.updateOAuthState("test-oauth", state)
 
-      await MCP.startAuth("test-oauth")
+      const result = await MCP.startAuth("test-oauth")
 
+      expect(result.oauthState).toBe(state)
       expect(await McpAuth.getOAuthState("test-oauth")).toBe(state)
+    },
+  })
+})
+
+test("startAuth returns the oauth state used for the flow", async () => {
+  const { McpAuth } = await import("../../src/mcp/auth")
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {
+            "test-oauth-state": {
+              type: "remote",
+              url: "https://example.com/mcp",
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const result = await MCP.startAuth("test-oauth-state")
+      expect(typeof result.oauthState).toBe("string")
+      expect(result.oauthState).toBe(await McpAuth.getOAuthState("test-oauth-state"))
     },
   })
 })

@@ -62,25 +62,45 @@ import {
 
 type Info = ServerInfo
 
-const oxlintLspSupportCache = new Map<string, boolean>()
+const OXLINT_LSP_SUPPORT_CACHE_MAX = 64
+const oxlintLspSupportCache = new Map<string, boolean | Promise<boolean>>()
+
+function setOxlintSupportCache(lintBin: string, value: boolean | Promise<boolean>) {
+  if (oxlintLspSupportCache.has(lintBin)) {
+    oxlintLspSupportCache.delete(lintBin)
+  }
+  oxlintLspSupportCache.set(lintBin, value)
+  while (oxlintLspSupportCache.size > OXLINT_LSP_SUPPORT_CACHE_MAX) {
+    const oldest = oxlintLspSupportCache.keys().next().value
+    if (!oldest) break
+    oxlintLspSupportCache.delete(oldest)
+  }
+}
 
 async function oxlintSupportsLsp(lintBin: string): Promise<boolean> {
-  if (oxlintLspSupportCache.has(lintBin)) return oxlintLspSupportCache.get(lintBin) ?? false
+  const cached = oxlintLspSupportCache.get(lintBin)
+  if (typeof cached === "boolean") return cached
+  if (cached) return cached
 
-  let help = ""
-  try {
-    const proc = spawn(lintBin, ["--help"])
-    const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
-    ;[help] = await Promise.all([helpPromise, proc.exited])
-  } catch (error) {
-    log.warn("oxlint --help check failed", { lintBin, error })
-    oxlintLspSupportCache.set(lintBin, false)
-    return false
-  }
+  const pending = (async () => {
+    let help = ""
+    try {
+      const proc = spawn(lintBin, ["--help"])
+      const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
+      ;[help] = await Promise.all([helpPromise, proc.exited])
+    } catch (error) {
+      log.warn("oxlint --help check failed", { lintBin, error })
+      setOxlintSupportCache(lintBin, false)
+      return false
+    }
 
-  const supports = help.includes("--lsp")
-  oxlintLspSupportCache.set(lintBin, supports)
-  return supports
+    const supports = help.includes("--lsp")
+    setOxlintSupportCache(lintBin, supports)
+    return supports
+  })()
+
+  setOxlintSupportCache(lintBin, pending)
+  return pending
 }
 
 export const Deno: Info = {

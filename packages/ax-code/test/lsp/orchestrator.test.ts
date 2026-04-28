@@ -22,6 +22,11 @@ describe("LSP.computeBackoff", () => {
     expect(LSP.computeBackoff(100)).toBe(cap)
   })
 
+  test("returns zero when failures is zero or negative", () => {
+    expect(LSP.computeBackoff(0)).toBe(0)
+    expect(LSP.computeBackoff(-1)).toBe(0)
+  })
+
   test("is monotonically non-decreasing", () => {
     let prev = 0
     for (let i = 1; i <= 20; i++) {

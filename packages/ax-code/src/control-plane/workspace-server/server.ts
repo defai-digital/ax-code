@@ -5,6 +5,10 @@ import { streamSSE } from "hono/streaming"
 import { GlobalBus } from "@/bus/global"
 import { AsyncQueue } from "@/util/queue"
 import { Flag } from "@/flag/flag"
+import { WorkspaceID } from "../schema"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "workspace-server" })
 
 export namespace WorkspaceServer {
   export function App() {
@@ -16,12 +20,18 @@ export namespace WorkspaceServer {
         return basicAuth({ username, password })(c, next)
       })
       .get("/event", async (c) => {
-        const workspaceID = c.req.header("x-opencode-workspace")
+        const rawWorkspaceID = c.req.header("x-opencode-workspace")
+        const parsedWorkspaceID = WorkspaceID.zod.safeParse(rawWorkspaceID)
+        if (!parsedWorkspaceID.success) {
+          return c.json({ error: "Missing or invalid x-opencode-workspace header" }, 400)
+        }
+        const workspaceID = parsedWorkspaceID.data
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
           const q = new AsyncQueue<string | null>()
           let done = false
+          let dropped = 0
 
           q.push(
             JSON.stringify({
@@ -32,8 +42,18 @@ export namespace WorkspaceServer {
 
           const SSE_MAX_QUEUE = 1024
           const listener = (event: { directory?: string; payload: unknown }) => {
-            if (workspaceID && event.directory && event.directory !== workspaceID) return
-            if (q.size >= SSE_MAX_QUEUE) return // backpressure: drop events when queue is full
+            if (event.directory !== workspaceID) return
+            if (q.size >= SSE_MAX_QUEUE) {
+              dropped++
+              if (dropped === 1 || dropped % 100 === 0) {
+                log.warn("workspace SSE queue full; dropping events", {
+                  workspaceID,
+                  queueSize: q.size,
+                  dropped,
+                })
+              }
+              return
+            }
             q.push(JSON.stringify(event.payload))
           }
 

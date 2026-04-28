@@ -11,6 +11,20 @@ import { Log } from "@/util/log"
 const log = Log.create({ service: "workspace-router-middleware" })
 const WORKSPACE_PROXY_BASE_URL = "http://workspace.test"
 
+function sanitizeForwardedHeaders(input: Headers): Headers {
+  const headers = new Headers()
+  for (const [name, value] of input.entries()) {
+    const lower = name.toLowerCase()
+    if (lower === "authorization" || lower === "cookie") continue
+    if (lower === "host" || lower === "connection" || lower === "content-length" || lower === "transfer-encoding") {
+      continue
+    }
+    if (lower.startsWith("x-opencode-")) continue
+    headers.set(name, value)
+  }
+  return headers
+}
+
 function normalizeWorkspacePath(rawPath: string): string {
   const rawPathLower = rawPath.toLowerCase()
   let decodedPath = rawPath
@@ -73,7 +87,7 @@ export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
 
   return adaptor.fetch(row.extra, requestPath, {
     method: c.req.method,
-    headers: c.req.raw.headers,
+    headers: sanitizeForwardedHeaders(c.req.raw.headers),
     body: c.req.raw.body,
   })
 }

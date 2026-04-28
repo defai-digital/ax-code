@@ -107,9 +107,12 @@ export namespace Workspace {
     if (!row) return
     const adaptor = getAdaptor(row.type)
     if (adaptor) {
-      await adaptor
-        .remove(row.extra)
-        .catch((err) => log.warn("adaptor cleanup failed during workspace removal", { id, type: row.type, err }))
+      try {
+        await adaptor.remove(row.extra)
+      } catch (err) {
+        log.error("adaptor cleanup failed during workspace removal", { id, type: row.type, err })
+        throw err
+      }
     }
     Database.use((db) => db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, id)).run())
     return row
@@ -127,6 +130,9 @@ export namespace Workspace {
           try {
             const response = await adaptor.fetch(item.extra, normalizeSyncRequestUrl(WORKSPACE_SYNC_ENDPOINT), {
               signal: stop.signal,
+              headers: {
+                "x-opencode-workspace": item.id,
+              },
             })
             if (!response.ok) {
               throw new Error(`workspace sync endpoint returned ${response.status}`)

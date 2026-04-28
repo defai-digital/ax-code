@@ -29,6 +29,10 @@ const TestAdaptor: Adaptor = {
   },
   async remove() {},
   async fetch(_config: unknown, _input: RequestInfo | URL, _init?: RequestInit) {
+    const url =
+      _input instanceof Request || _input instanceof URL ? _input.toString() : new URL(_input, "http://workspace.test").toString()
+    const request = new Request(url, _init)
+    const workspaceHeader = request.headers.get("x-opencode-workspace")
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         const encoder = new TextEncoder()
@@ -79,6 +83,16 @@ describe("control-plane/workspace.startSyncing", () => {
         .run(),
     )
 
+    const seenHeaders: string[] = []
+    const originalFetch = TestAdaptor.fetch
+    TestAdaptor.fetch = async (config, input, init) => {
+      const url =
+        input instanceof Request || input instanceof URL ? input.toString() : new URL(input, "http://workspace.test").toString()
+      const request = new Request(url, init)
+      seenHeaders.push(request.headers.get("x-opencode-workspace") ?? "")
+      return originalFetch(config, input, init)
+    }
+
     const done = new Promise<void>((resolve) => {
       const listener = (event: { directory?: string; payload: { type: string } }) => {
         if (event.directory !== id1) return
@@ -96,5 +110,7 @@ describe("control-plane/workspace.startSyncing", () => {
     ])
 
     await sync.stop()
+    expect(seenHeaders).toContain(id1)
+    TestAdaptor.fetch = originalFetch
   })
 })
