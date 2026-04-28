@@ -61,3 +61,9 @@ jobs:
 
       - name: Check repo structure
         run: pnpm run check:structure
+
+      # ax-code intentionally does not track or display monetary cost for
+      # LLM calls. This guard prevents schema fields, identifiers, or slash
+      # commands from quietly reintroducing a cost meter.
+      - name: Check no cost meter
+        run: pnpm run check:no-cost

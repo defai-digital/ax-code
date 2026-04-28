@@ -14,7 +14,7 @@ AX Code exposes semantic answers through two explicit sources:
 - `lsp`: live language-server queries
 - `graph`: persistent code-intelligence queries
 
-The system does not silently route one into the other. Callers choose the surface based on freshness, cost, and determinism requirements.
+The system does not silently route one into the other. Callers choose the surface based on freshness, latency, and determinism requirements.
 
 ## Current Semantic Surfaces
 

@@ -32,7 +32,7 @@ Every user message is matched against keyword and regex patterns for each specia
 When keyword routing returns low confidence or no match on a substantial message (>30 characters), auto-route sends the message to a fast/cheap model via `analyzeMessage()`. This single LLM call returns **both** the agent classification and a complexity estimate (`low` / `medium` / `high`) in one pass.
 
 - **Agent routing** — classifies into a specialist agent or "none" (stay on current)
-- **Complexity routing** — `low`-complexity messages automatically use a fast/small model, reducing cost and latency for simple questions without manual intervention
+- **Complexity routing** — `low`-complexity messages automatically use a fast/small model, reducing latency for simple questions without manual intervention
 - Requires a small/flash model from your configured provider — skipped if none is available
 - Structured output with constrained enum and confidence score — low-confidence classifications (below 0.3) are discarded automatically
 - 3-second timeout — falls back to keyword result if LLM is slow or unavailable
@@ -49,7 +49,7 @@ When keyword routing returns low confidence or no match on a substantial message
 | "what does this variable do?"                   | Full model used                  | `low` complexity → fast model |
 | "scan for vulnerabilities"                      | Routes to **security** (keyword) | Same — keyword handles it     |
 
-Auto-route is most valuable when users describe problems in natural language rather than using technical keywords, and for routing simple questions to a cheaper model automatically.
+Auto-route is most valuable when users describe problems in natural language rather than using technical keywords, and for routing simple questions to a fast/small model automatically.
 
 ## Drawbacks and Considerations
 
@@ -59,11 +59,11 @@ Auto-route adds **200-500ms** to messages that trigger the fallback path. High-c
 
 ### Requires a Small Model
 
-Auto-route requires a small/flash model from your configured provider (e.g., Gemini Flash, GLM Flash, Grok Fast). If your provider has no small model available, or the provider is unreachable (offline, API key expired), the LLM fallback silently degrades to keyword-only routing. The full model is never used for classification to avoid unexpected costs.
+Auto-route requires a small/flash model from your configured provider (e.g., Gemini Flash, GLM Flash, Grok Fast). If your provider has no small model available, or the provider is unreachable (offline, API key expired), the LLM fallback silently degrades to keyword-only routing. The full model is never used for classification — we keep the classifier path on the smallest model available.
 
 ### Token Usage
 
-Each classification call consumes approximately **100-200 input tokens** and **10-20 output tokens**. With typical flash/mini model pricing, this costs roughly **$0.00002 per classification** — negligible compared to the main LLM call that follows. However, users on strict token budgets should be aware that auto-route adds a small per-message overhead on the fallback path.
+Each classification call consumes approximately **100-200 input tokens** and **10-20 output tokens** — negligible compared to the main LLM call that follows. Users on strict token budgets should be aware that auto-route adds a small per-message overhead on the fallback path.
 
 ### Not a Replacement for Explicit Selection
 
