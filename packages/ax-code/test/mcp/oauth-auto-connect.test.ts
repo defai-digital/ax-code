@@ -277,7 +277,14 @@ test("connect path closes unused SSE transport when StreamableHTTP path is selec
       const firstClient = clientInstances[0]
       expect(streamable?.closeCalls).toBe(0)
       expect(sse?.closeCalls).toBe(1)
-      expect(firstClient?.closeCalls).toBe(1)
+      // The first client is intentionally NOT closed in the needs_auth
+      // path. In the real MCP SDK `client.close()` chains down to
+      // `transport.close()`, so closing the client would also close the
+      // transport we just stored in `pendingOAuthTransports` for
+      // `finishAuth` to reuse. The mock here decouples client and
+      // transport close, so previously this assertion was `1` and silently
+      // masked the production bug where finishAuth got a dead transport.
+      expect(firstClient?.closeCalls).toBe(0)
     },
   })
 })
