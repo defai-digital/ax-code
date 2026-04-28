@@ -154,7 +154,7 @@ describe("debug explain replay hang analysis", () => {
       JSON.stringify({
         kind: "process.event",
         time: "2026-04-18T12:00:00.000Z",
-        eventType: "tui.workerSpawned",
+        eventType: "tui.backendSpawned",
         data: {},
       }),
       JSON.stringify({
@@ -198,7 +198,7 @@ describe("debug explain replay hang analysis", () => {
       JSON.stringify({
         kind: "process.event",
         time: "2026-04-18T12:00:00.000Z",
-        eventType: "tui.workerSpawned",
+        eventType: "tui.backendSpawned",
         data: {},
       }),
       JSON.stringify({
@@ -222,7 +222,7 @@ describe("debug explain replay hang analysis", () => {
       JSON.stringify({
         kind: "process.event",
         time: "2026-04-18T12:00:00.000Z",
-        eventType: "tui.workerSpawned",
+        eventType: "tui.backendSpawned",
         data: {},
       }),
       JSON.stringify({

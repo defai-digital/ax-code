@@ -537,6 +537,8 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
 
   let threadStartedAt: number | undefined
   let workerSpawnedAt: number | undefined
+  let backendHandshakeStartedAt: number | undefined
+  let backendReadyAt: number | undefined
   let startupBeginAt: number | undefined
   let renderDispatchedAt: number | undefined
   let appMountedAt: number | undefined
@@ -569,6 +571,13 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       case "tui.workerSpawned":
       case "tui.backendSpawned":
         if (workerSpawnedAt === undefined && Number.isFinite(timeMs)) workerSpawnedAt = timeMs
+        break
+      case "tui.backendHandshakeStarted":
+        if (backendHandshakeStartedAt === undefined && Number.isFinite(timeMs)) backendHandshakeStartedAt = timeMs
+        break
+      case "tui.backendReady":
+      case "tui.workerReady":
+        if (backendReadyAt === undefined && Number.isFinite(timeMs)) backendReadyAt = timeMs
         break
       case "tui.startup.begin":
         if (startupBeginAt === undefined && Number.isFinite(timeMs)) startupBeginAt = timeMs
@@ -611,6 +620,10 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         break
       case "tui.native.startupFailed":
         startupFailures.push(record)
+        break
+      case "tui.backendHandshakeFailed":
+      case "tui.backendProtocolNoise":
+        runtimeErrors.push(record)
         break
       case "tui.native.promptSubmitted":
         if (Number.isFinite(timeMs)) lastPromptSubmittedAt = timeMs
@@ -709,7 +722,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       rootCause: `Structured process diagnostics recorded ${summarizeCounts([...counts.entries()].map(([label, count]) => ({ label, count })))}.`,
       impact: "The renderer, backend bridge, or event stream may have stopped processing input and updates reliably.",
       suggestedFix:
-        "Inspect the matching backend/thread events in `process.jsonl`. Start with `tui.workerHandshakeFailed`, `tui.backendProcessError`, `tui.backendProcessExited`, `worker.eventStreamError`, `tui.threadError`, or `tui.workerError`, then trace backward to the last successful startup marker.",
+        "Inspect the matching backend/thread events in `process.jsonl`. Start with `tui.backendHandshakeFailed`, `tui.backendProtocolNoise`, `tui.backendProcessError`, `tui.backendProcessExited`, `worker.eventStreamError`, `tui.threadError`, or `tui.workerError`, then trace backward to the last successful startup marker.",
       riskLevel: "high",
       occurrences: runtimeErrors.length,
     })
@@ -763,7 +776,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   }
 
   if (!startupFailures.length && !stoppedAt) {
-    const startupAnchorAt = threadStartedAt ?? workerSpawnedAt ?? startupBeginAt
+    const startupAnchorAt = threadStartedAt ?? workerSpawnedAt ?? backendHandshakeStartedAt ?? backendReadyAt ?? startupBeginAt
     if (
       threadStartedAt !== undefined &&
       nativeStartedAt === undefined &&
@@ -777,7 +790,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         impact:
           "The process likely stalled before the renderer booted, often in backend startup, transport setup, or renderer dispatch.",
         suggestedFix:
-          "Inspect the gap between `tui.threadStarted`, `tui.backendTargetResolved`, `tui.backendSpawned`, `tui.workerReady`, `tui.threadTransportSelected`, `tui.appImportStarted`, `tui.appImportReady`, and any `tui.startup.*` events. The first missing transition marks the failing startup boundary.",
+          "Inspect the gap between `tui.threadStarted`, `tui.backendTargetResolved`, `tui.backendSpawned`, `tui.backendHandshakeStarted`, `tui.backendReady`, `tui.threadTransportSelected`, `tui.appImportStarted`, `tui.appImportReady`, and any `tui.startup.*` events. The first missing transition marks the failing startup boundary.",
         riskLevel: "medium",
         occurrences: 1,
       })

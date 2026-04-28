@@ -39,6 +39,7 @@ type RpcWireTarget = {
 type BackendRuntime = {
   mode: BackendTransport
   target: string
+  pid?: number
   wire: RpcWireTarget
   terminate: () => void
 }
@@ -75,7 +76,19 @@ function backendProcessCommand() {
   }
 }
 
-function createProcessWire(child: any): RpcWireTarget {
+function isBackendProtocolMessage(line: string) {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(line)
+  } catch {
+    return false
+  }
+  if (!parsed || typeof parsed !== "object") return false
+  const type = (parsed as { type?: unknown }).type
+  return type === "rpc.result" || type === "rpc.error" || type === "rpc.event"
+}
+
+function createProcessWire(child: any, target: string): RpcWireTarget {
   const wire: RpcWireTarget = {
     onmessage: null,
     postMessage(data) {
@@ -91,7 +104,19 @@ function createProcessWire(child: any): RpcWireTarget {
       if (index < 0) break
       const line = buffer.slice(0, index)
       buffer = buffer.slice(index + 1)
-      if (line.trim()) wire.onmessage?.({ data: line } as MessageEvent<any>)
+      if (!line.trim()) continue
+      if (!isBackendProtocolMessage(line)) {
+        DiagnosticLog.recordProcess("tui.backendProtocolNoise", {
+          target,
+          length: line.length,
+        })
+        Log.Default.warn("TUI backend process wrote non-protocol stdout", {
+          target,
+          length: line.length,
+        })
+        continue
+      }
+      wire.onmessage?.({ data: line } as MessageEvent<any>)
     }
   })
   child.stderr?.setEncoding("utf8")
@@ -144,7 +169,8 @@ async function createBackendRuntime(input: {
   return {
     mode: "process",
     target: command.label,
-    wire: createProcessWire(child),
+    pid: child.pid,
+    wire: createProcessWire(child, command.label),
     terminate: () => {
       terminating = true
       child.kill()
@@ -321,8 +347,8 @@ export const TuiThreadCommand = cmd({
         cwd,
         env: Object.fromEntries(Object.entries(sanitized).filter((e): e is [string, string] => e[1] !== undefined)),
       })
-      DiagnosticLog.recordProcess("tui.backendSpawned", { mode: backend.mode, target: backend.target })
-      DiagnosticLog.recordProcess("tui.workerSpawned", { mode: backend.mode, target: backend.target })
+      DiagnosticLog.recordProcess("tui.backendSpawned", { mode: backend.mode, target: backend.target, pid: backend.pid })
+      DiagnosticLog.recordProcess("tui.workerSpawned", { mode: backend.mode, target: backend.target, pid: backend.pid })
       if (backend.mode === "worker") {
         const worker = backend.wire as unknown as Worker
         worker.onerror = (e) => {
@@ -339,28 +365,43 @@ export const TuiThreadCommand = cmd({
 
       const client = Rpc.client<typeof rpc>(backend.wire)
       const workerReadyTimeoutMs = tuiWorkerReadyTimeoutMs()
+      DiagnosticLog.recordProcess("tui.backendHandshakeStarted", {
+        mode: backend.mode,
+        target: backend.target,
+        pid: backend.pid,
+        timeoutMs: workerReadyTimeoutMs,
+      })
       const workerReady = await withTimeout(
         client.call("health", undefined),
         workerReadyTimeoutMs,
-        `TUI worker did not become ready after ${workerReadyTimeoutMs}ms`,
+        `TUI backend did not become ready after ${workerReadyTimeoutMs}ms`,
       ).catch((error) => {
+        DiagnosticLog.recordProcess("tui.backendHandshakeFailed", {
+          error,
+          mode: backend.mode,
+          target: backend.target,
+          pid: backend.pid,
+          timeoutMs: workerReadyTimeoutMs,
+        })
         DiagnosticLog.recordProcess("tui.workerHandshakeFailed", {
           error,
           mode: backend.mode,
           target: backend.target,
+          pid: backend.pid,
           timeoutMs: workerReadyTimeoutMs,
         })
-        Log.Default.error("TUI worker failed readiness handshake", {
+        Log.Default.error("TUI backend failed readiness handshake", {
           error: error instanceof Error ? error.message : String(error),
           mode: backend.mode,
           target: backend.target,
+          pid: backend.pid,
           timeoutMs: workerReadyTimeoutMs,
         })
         UI.error(
           [
-            "TUI worker did not become ready.",
-            "This usually points to Bun Worker startup, OpenTUI preload, or runtime packaging.",
-            "Run with --debug --print-logs and inspect process.jsonl around tui.workerHandshakeFailed.",
+            "TUI backend did not become ready.",
+            "This usually points to backend transport startup, OpenTUI preload, or runtime packaging.",
+            "Run with --debug --print-logs and inspect process.jsonl around tui.backendHandshakeFailed.",
           ].join("\n"),
         )
         backend.terminate()
@@ -368,10 +409,18 @@ export const TuiThreadCommand = cmd({
         return undefined
       })
       if (!workerReady) return
+      DiagnosticLog.recordProcess("tui.backendReady", {
+        ...workerReady,
+        mode: backend.mode,
+        target: backend.target,
+        pid: backend.pid,
+        timeoutMs: workerReadyTimeoutMs,
+      })
       DiagnosticLog.recordProcess("tui.workerReady", {
         ...workerReady,
         mode: backend.mode,
         target: backend.target,
+        pid: backend.pid,
         timeoutMs: workerReadyTimeoutMs,
       })
       const internalEvents = createEventSource(client)
@@ -381,7 +430,7 @@ export const TuiThreadCommand = cmd({
       }
       const reload = () => {
         client.call("reload", undefined).catch((err) => {
-          Log.Default.warn("worker reload failed", {
+          Log.Default.warn("backend reload failed", {
             error: err instanceof Error ? err.message : String(err),
           })
         })
@@ -398,7 +447,7 @@ export const TuiThreadCommand = cmd({
         process.off("unhandledRejection", error)
         process.off("SIGUSR2", reload)
         await withTimeout(client.call("shutdown", undefined), 5000).catch((error) => {
-          Log.Default.warn("worker shutdown failed", {
+          Log.Default.warn("backend shutdown failed", {
             error: error instanceof Error ? error.message : String(error),
           })
         })
