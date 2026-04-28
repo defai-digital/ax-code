@@ -7,7 +7,15 @@ export async function parseSSE(
   const decoder = new TextDecoder()
   let buf = ""
   let flushTrailing = false
+  // Guard against double-cancel: the abort listener and the `finally`
+  // block below would both call `reader.cancel()` on a typical aborted
+  // exit, and while the `.catch(() => {})` swallows the second-cancel
+  // rejection, calling cancel twice on a stream is wasteful and confuses
+  // implementations that don't expect it.
+  let canceled = false
   const cancel = () => {
+    if (canceled) return
+    canceled = true
     void reader.cancel().catch(() => {})
   }
 
@@ -103,7 +111,9 @@ export async function parseSSE(
     } finally {
       buf = ""
       signal.removeEventListener("abort", cancel)
-      await reader.cancel().catch(() => {})
+      // Funnel through the same guarded `cancel()` so an abort-driven
+      // exit doesn't double-cancel.
+      cancel()
     }
   }
 }
