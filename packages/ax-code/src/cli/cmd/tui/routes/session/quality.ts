@@ -306,59 +306,34 @@ export function renderSessionQualityInlineSummary(action: SessionQualityAction) 
 }
 
 // Decides whether a workflow's quality entry should appear in the sidebar.
-// Replay-readiness gates (label-coverage, benchmark-readiness) are an internal
-// QA training-pipeline metric — for ordinary coding sessions, no labels are
-// ever recorded, so these gates are perpetually `warn` and surface as noisy
-// "N warnings" / "N issues" rows that the user can't act on. We only want
-// the sidebar row when there's a user-actionable signal:
-//   - severity-graded findings exist for this workflow, or
-//   - the workflow is blocked (overallStatus === fail), or
-//   - the user has begun labeling artifacts (so they care about readiness).
-// The /quality dialog still shows every workflow with a summary regardless,
-// since opening it is an explicit opt-in.
-export function hasSidebarSignal(action: Pick<SessionQualityAction, "summary">, findingCount?: number): boolean {
-  if ((findingCount ?? 0) > 0) return true
-  if (action.summary.overallStatus === "fail") return true
-  return (action.summary.labeledItems ?? 0) > 0
+// The sidebar only surfaces file-anchored severity-graded findings — those
+// are directly actionable. Replay-readiness gates (exportable-session-shape,
+// workflow-evidence-present, label-coverage, benchmark-readiness) are an
+// internal QA training-pipeline metric: for ordinary coding sessions, anchor
+// items and labels are never produced, so these gates are structurally
+// failing/warning and would otherwise surface as a perpetual "N issues" row
+// the user can't act on. The /quality dialog still shows every workflow with
+// a summary regardless, since opening it is an explicit opt-in.
+export function hasSidebarSignal(_action: Pick<SessionQualityAction, "summary">, findingCount?: number): boolean {
+  return (findingCount ?? 0) > 0
 }
 
-// User-facing one-liner for the sidebar Quality section. The verbose internal
-// vocabulary (replay readiness, label coverage, capture evidence) stays inside
-// the /quality dialog via renderSessionQualityInlineSummary; the sidebar gets
-// just status + the most actionable problem detail.
-//
-// When `counts.total > 0`, finding counts dominate the line — they are
-// file-anchored, severity-graded, and directly actionable, so they outrank
-// quality-readiness gates which are session-level training-pipeline state.
+// User-facing one-liner for the sidebar Quality section. Renders only the
+// finding-count breakdown — the row is gated by hasSidebarSignal so this is
+// only called when counts.total > 0.
 export function renderSessionQualitySidebarLine(
-  action: Pick<SessionQualityAction, "workflow" | "summary">,
-  opts?: { counts?: SeverityCounts },
+  action: Pick<SessionQualityAction, "workflow">,
+  opts: { counts: SeverityCounts },
 ): string {
   const label = sessionQualityWorkflowLabel(action.workflow)
-  const counts = opts?.counts
-
-  if (counts && counts.total > 0) {
-    const parts: string[] = []
-    if (counts.CRITICAL > 0) parts.push(`${counts.CRITICAL} CRITICAL`)
-    if (counts.HIGH > 0) parts.push(`${counts.HIGH} HIGH`)
-    if (counts.MEDIUM > 0) parts.push(`${counts.MEDIUM} MED`)
-    if (counts.LOW > 0) parts.push(`${counts.LOW} LOW`)
-    if (counts.INFO > 0) parts.push(`${counts.INFO} INFO`)
-    return `${label} · ${parts.join(" · ")}`
-  }
-
-  const status = action.summary.overallStatus
-  if (status === "pass") return `${label} · ok`
-
-  const problemGates = (action.summary.gates ?? []).filter((g) => g.status !== "pass")
-  if (problemGates.length === 0) {
-    return `${label} · ${status === "warn" ? "warning" : "needs attention"}`
-  }
-  if (problemGates.length === 1) {
-    return `${label} · ${problemGates[0].detail}`
-  }
-  const noun = status === "fail" ? "issues" : "warnings"
-  return `${label} · ${problemGates.length} ${noun}`
+  const { counts } = opts
+  const parts: string[] = []
+  if (counts.CRITICAL > 0) parts.push(`${counts.CRITICAL} CRITICAL`)
+  if (counts.HIGH > 0) parts.push(`${counts.HIGH} HIGH`)
+  if (counts.MEDIUM > 0) parts.push(`${counts.MEDIUM} MED`)
+  if (counts.LOW > 0) parts.push(`${counts.LOW} LOW`)
+  if (counts.INFO > 0) parts.push(`${counts.INFO} INFO`)
+  return `${label} · ${parts.join(" · ")}`
 }
 
 // One-line summary for the sidebar Checks section. Aggregates a session's
