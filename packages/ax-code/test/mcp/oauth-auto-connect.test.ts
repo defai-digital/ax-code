@@ -105,11 +105,17 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
 
 mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
+    // `transportInstances` is typed `{ url: string; closeCalls: number }[]`,
+    // so MockSSE must surface a `url` field on the instance — mirrors the
+    // streamable mock above. Without this the `transportInstances.push(this)`
+    // call below fails typecheck (Property 'url' missing in MockSSE).
+    url: string
     closeCalls = 0
     constructor(url: URL, options?: { authProvider?: unknown }) {
+      this.url = url.toString()
       transportCalls.push({
         type: "sse",
-        url: url.toString(),
+        url: this.url,
         options: options ?? {},
       })
       transportInstances.push(this)
