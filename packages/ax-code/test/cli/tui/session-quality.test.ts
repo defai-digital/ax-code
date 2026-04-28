@@ -873,177 +873,7 @@ describe("tui session quality actions", () => {
   })
 
   describe("renderSessionQualitySidebarLine", () => {
-    test("returns 'ok' for a passing workflow with no problem gates", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_pass",
-        quality: {
-          review: null,
-          debug: {
-            workflow: "debug",
-            overallStatus: "pass",
-            readyForBenchmark: true,
-            labeledItems: 2,
-            resolvedLabeledItems: 2,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 2,
-            nextAction: null,
-            gates: [{ name: "benchmark-readiness", status: "pass", detail: "ready" }],
-          },
-        },
-      })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe("Debug · ok")
-    })
-
-    test("renders the gate detail when there is exactly one warning gate", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_one_warn",
-        quality: {
-          review: {
-            workflow: "review",
-            overallStatus: "warn",
-            readyForBenchmark: false,
-            labeledItems: 1,
-            resolvedLabeledItems: 1,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 1,
-            nextAction: null,
-            gates: [{ name: "refresh-required", status: "warn", detail: "refresh after recent activity" }],
-          },
-          debug: null,
-        },
-      })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe("Review · refresh after recent activity")
-    })
-
-    test("renders the gate detail when there is exactly one fail gate", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_one_fail",
-        quality: {
-          review: {
-            workflow: "review",
-            overallStatus: "fail",
-            readyForBenchmark: false,
-            labeledItems: 0,
-            resolvedLabeledItems: 0,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 0,
-            nextAction: null,
-            gates: [
-              {
-                name: "exportable-session-shape",
-                status: "fail",
-                detail: "no anchor items exported for workflow review",
-              },
-            ],
-          },
-          debug: null,
-        },
-      })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe("Review · no anchor items exported for workflow review")
-    })
-
-    test("collapses to a count when there are multiple problem gates", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_many_warn",
-        quality: {
-          review: {
-            workflow: "review",
-            overallStatus: "warn",
-            readyForBenchmark: false,
-            labeledItems: 1,
-            resolvedLabeledItems: 1,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 1,
-            nextAction: null,
-            gates: [
-              { name: "g1", status: "warn", detail: "first issue" },
-              { name: "g2", status: "warn", detail: "second issue" },
-              { name: "g3", status: "pass", detail: "fine" },
-            ],
-          },
-          debug: null,
-        },
-      })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe("Review · 2 warnings")
-    })
-
-    test("uses the 'issues' noun for fail status with multiple problem gates", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_many_fail",
-        quality: {
-          review: null,
-          debug: null,
-          qa: {
-            workflow: "qa",
-            overallStatus: "fail",
-            readyForBenchmark: false,
-            labeledItems: 0,
-            resolvedLabeledItems: 0,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 0,
-            nextAction: null,
-            gates: [
-              { name: "g1", status: "fail", detail: "broken" },
-              { name: "g2", status: "fail", detail: "also broken" },
-              { name: "g3", status: "warn", detail: "minor" },
-            ],
-          },
-        },
-      })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe("QA · 3 issues")
-    })
-
-    test("falls back to a generic word when status is non-pass but no problem gate detail exists", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_warn_no_gate",
-        quality: {
-          review: {
-            workflow: "review",
-            overallStatus: "warn",
-            readyForBenchmark: false,
-            labeledItems: 0,
-            resolvedLabeledItems: 0,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 0,
-            nextAction: null,
-            gates: [],
-          },
-          debug: null,
-        },
-      })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe("Review · warning")
-    })
-
-    test("uses the 'QA' label not 'Qa' for the qa workflow", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_qa_label",
-        quality: {
-          review: null,
-          debug: null,
-          qa: {
-            workflow: "qa",
-            overallStatus: "pass",
-            readyForBenchmark: true,
-            labeledItems: 1,
-            resolvedLabeledItems: 1,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 1,
-            nextAction: null,
-            gates: [],
-          },
-        },
-      })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe("QA · ok")
-    })
-
-    test("appends finding-count parts when counts.total > 0 and overrides quality status", () => {
+    test("renders the dominant severity buckets", () => {
       const action = sessionQualityActions({
         sessionID: "ses_with_findings",
         quality: {
@@ -1093,30 +923,7 @@ describe("tui session quality actions", () => {
       )
     })
 
-    test("falls through to quality status when counts.total === 0", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_zero_findings",
-        quality: {
-          review: null,
-          debug: {
-            workflow: "debug",
-            overallStatus: "pass",
-            readyForBenchmark: true,
-            labeledItems: 1,
-            resolvedLabeledItems: 1,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 1,
-            nextAction: null,
-            gates: [],
-          },
-        },
-      })[0]!
-      const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0, total: 0 }
-      expect(renderSessionQualitySidebarLine(action, { counts })).toBe("Debug · ok")
-    })
-
-    test("uses 'QA' label not 'Qa' when findings dominate", () => {
+    test("uses 'QA' label not 'Qa' for the qa workflow", () => {
       const action = sessionQualityActions({
         sessionID: "ses_qa_findings",
         quality: {
@@ -1140,28 +947,6 @@ describe("tui session quality actions", () => {
       expect(renderSessionQualitySidebarLine(action, { counts })).toBe("QA · 1 HIGH")
     })
 
-    test("opts is optional — calling without it preserves previous behaviour", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_no_opts",
-        quality: {
-          review: null,
-          debug: {
-            workflow: "debug",
-            overallStatus: "pass",
-            readyForBenchmark: true,
-            labeledItems: 1,
-            resolvedLabeledItems: 1,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 1,
-            nextAction: null,
-            gates: [],
-          },
-        },
-      })[0]!
-      expect(renderSessionQualitySidebarLine(action)).toBe("Debug · ok")
-    })
-
     test("never includes internal training vocabulary (label coverage / replay readiness / capture evidence)", () => {
       const action = sessionQualityActions({
         sessionID: "ses_no_jargon",
@@ -1181,35 +966,38 @@ describe("tui session quality actions", () => {
           debug: null,
         },
       })[0]!
-      const line = renderSessionQualitySidebarLine(action)
+      const counts = { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 0, INFO: 0, total: 1 }
+      const line = renderSessionQualitySidebarLine(action, { counts })
       expect(line).not.toContain("label coverage")
       expect(line).not.toContain("replay readiness")
       expect(line).not.toContain("capture evidence")
       expect(line).not.toContain("benchmark")
+      expect(line).not.toContain("issues")
+      expect(line).not.toContain("warning")
     })
   })
 
   describe("hasSidebarSignal", () => {
-    test("hides workflows with only baseline warns and no labels or findings", () => {
-      // Typical ax-code coding session: anchor + evidence pass, but
-      // label-coverage and benchmark-readiness perpetually warn because no
-      // one labels artifacts during ordinary use. Should not surface.
+    test("hides workflows that only carry replay-readiness gates (no findings)", () => {
+      // Typical ax-code coding session: readiness gates fail/warn structurally
+      // because no replay export ever happens. The sidebar should not surface
+      // that — only file-anchored findings warrant a row.
       const action = sessionQualityActions({
-        sessionID: "ses_baseline",
+        sessionID: "ses_readiness_only",
         quality: {
           review: {
             workflow: "review",
-            overallStatus: "warn",
+            overallStatus: "fail",
             readyForBenchmark: false,
             labeledItems: 0,
             resolvedLabeledItems: 0,
             unresolvedLabeledItems: 0,
-            missingLabels: 3,
-            totalItems: 3,
+            missingLabels: 0,
+            totalItems: 0,
             nextAction: null,
             gates: [
-              { name: "exportable-session-shape", status: "pass", detail: "ok" },
-              { name: "workflow-evidence-present", status: "pass", detail: "ok" },
+              { name: "exportable-session-shape", status: "fail", detail: "no anchor items exported" },
+              { name: "workflow-evidence-present", status: "fail", detail: "no workflow evidence exported" },
               { name: "label-coverage", status: "warn", detail: "no labels recorded" },
               { name: "benchmark-readiness", status: "warn", detail: "no resolved labels yet" },
             ],
@@ -1221,7 +1009,9 @@ describe("tui session quality actions", () => {
       expect(hasSidebarSignal(action, 0)).toBe(false)
     })
 
-    test("shows workflow when the user has begun labeling artifacts", () => {
+    test("hides workflows where the user has only labeled artifacts (no findings)", () => {
+      // Labels alone are an internal training-pipeline metric — without
+      // file-anchored findings, the sidebar should still hide the row.
       const action = sessionQualityActions({
         sessionID: "ses_labels",
         quality: {
@@ -1240,7 +1030,8 @@ describe("tui session quality actions", () => {
           debug: null,
         },
       })[0]!
-      expect(hasSidebarSignal(action)).toBe(true)
+      expect(hasSidebarSignal(action)).toBe(false)
+      expect(hasSidebarSignal(action, 0)).toBe(false)
     })
 
     test("shows workflow when severity-graded findings exist for it", () => {
@@ -1264,35 +1055,6 @@ describe("tui session quality actions", () => {
       })[0]!
       expect(hasSidebarSignal(action, 2)).toBe(true)
       expect(hasSidebarSignal(action, 0)).toBe(false)
-    })
-
-    test("shows workflow when overall status is fail even without labels or findings", () => {
-      const action = sessionQualityActions({
-        sessionID: "ses_failed_gate",
-        quality: {
-          review: {
-            workflow: "review",
-            overallStatus: "fail",
-            readyForBenchmark: false,
-            labeledItems: 0,
-            resolvedLabeledItems: 0,
-            unresolvedLabeledItems: 0,
-            missingLabels: 0,
-            totalItems: 0,
-            nextAction: "Check review replay readiness gates before benchmarking.",
-            gates: [
-              {
-                name: "exportable-session-shape",
-                status: "fail",
-                detail: "no anchor items exported for workflow review",
-              },
-            ],
-          },
-          debug: null,
-        },
-      })[0]!
-      expect(hasSidebarSignal(action)).toBe(true)
-      expect(hasSidebarSignal(action, 0)).toBe(true)
     })
   })
 })
