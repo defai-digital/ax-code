@@ -23,11 +23,48 @@ import { getDoctorDatabaseCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import path from "path"
 
+async function exists(file: string) {
+  return Bun.file(file).exists()
+}
+
+async function findAncestor(start: string, predicate: (dir: string) => Promise<boolean>) {
+  let current = path.resolve(start)
+  while (true) {
+    if (await predicate(current)) return current
+    const parent = path.dirname(current)
+    if (parent === current) return undefined
+    current = parent
+  }
+}
+
+export async function doctorProjectContext(callerCwd = Filesystem.callerCwd()) {
+  const projectRoot =
+    (await findAncestor(
+      callerCwd,
+      async (dir) => (await exists(path.join(dir, ".git", "HEAD"))) || (await exists(path.join(dir, ".git"))),
+    )) ?? callerCwd
+  const agentsPath = await findAncestor(callerCwd, (dir) => exists(path.join(dir, "AGENTS.md")))
+  const legacyAxPath = await findAncestor(callerCwd, (dir) => exists(path.join(dir, "AX.md")))
+  const configPath = await findAncestor(
+    callerCwd,
+    async (dir) => (await exists(path.join(dir, ".ax-code", "ax-code.json"))) || (await exists(path.join(dir, "ax-code.json"))),
+  )
+
+  return {
+    callerCwd,
+    projectRoot,
+    agentsPath,
+    legacyAxPath,
+    configPath,
+  }
+}
+
 export const DoctorCommand: CommandModule = {
   command: "doctor",
   describe: "check system health and diagnose issues",
   handler: async () => {
     const checks: { name: string; status: "ok" | "warn" | "fail"; detail: string }[] = []
+    const project = await doctorProjectContext()
 
     // 1. Version
     checks.push({
@@ -65,13 +102,10 @@ export const DoctorCommand: CommandModule = {
     } catch {
       // Config.get() requires project instance which isn't available in standalone CLI mode
       // Check if config file exists instead
-      const configExists =
-        (await Bun.file(path.join(process.cwd(), ".ax-code", "ax-code.json")).exists()) ||
-        (await Bun.file(path.join(process.cwd(), "ax-code.json")).exists())
       checks.push({
         name: "Configuration",
-        status: configExists ? "ok" : "warn",
-        detail: configExists ? "Config file found" : "No config file — using defaults (this is fine)",
+        status: project.configPath ? "ok" : "warn",
+        detail: project.configPath ? "Config file found" : "No config file — using defaults (this is fine)",
       })
     }
 
@@ -138,23 +172,20 @@ export const DoctorCommand: CommandModule = {
     }
 
     // 7. AGENTS.md (checked in the caller's cwd, not the bin shim's --cwd)
-    const callerCwd = Filesystem.callerCwd()
-    const agentsMdExists = await Bun.file(path.join(callerCwd, "AGENTS.md")).exists()
-    const legacyAxMdExists = await Bun.file(path.join(callerCwd, "AX.md")).exists()
     checks.push({
       name: "AGENTS.md context",
-      status: agentsMdExists ? "ok" : "warn",
-      detail: agentsMdExists
-        ? legacyAxMdExists
+      status: project.agentsPath ? "ok" : "warn",
+      detail: project.agentsPath
+        ? project.legacyAxPath
           ? "Found — project context will be injected (legacy AX.md also present; safe to delete)"
           : "Found — project context will be injected"
-        : legacyAxMdExists
+        : project.legacyAxPath
           ? 'Legacy AX.md found — run "ax-code init --force" to migrate to AGENTS.md'
           : 'Not found — run "ax-code init" to generate',
     })
 
     // 8. Git
-    const gitExists = await Bun.file(".git/HEAD").exists()
+    const gitExists = project.projectRoot !== project.callerCwd || (await Bun.file(path.join(project.callerCwd, ".git", "HEAD")).exists())
     checks.push({
       name: "Git repository",
       status: gitExists ? "ok" : "warn",
