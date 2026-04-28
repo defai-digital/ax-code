@@ -81,6 +81,9 @@ describe("Rpc", () => {
         writes.push(line)
         return true
       },
+      on() {
+        return stdout
+      },
     }
 
     const done = Rpc.listenStdio(
@@ -90,7 +93,10 @@ describe("Rpc", () => {
           return value + 1
         },
       },
-      { stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">, stdout },
+      {
+        stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">,
+        stdout: stdout as unknown as Pick<NodeJS.WriteStream, "write" | "on">,
+      },
     )
 
     stdin.emit("data", JSON.stringify({ type: "rpc.request", method: "plusOne", input: 1, id: 7 }) + "\n")

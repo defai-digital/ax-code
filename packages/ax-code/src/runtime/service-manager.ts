@@ -73,7 +73,12 @@ function updateTask(
 ) {
   const current = state.tasks.get(id)
   if (!current) {
-    throw new Error(`Unknown runtime task: ${id}`)
+    // Status updates are observability, not load-bearing: the actual
+    // task result is returned to the `track()` caller from the
+    // user-supplied promise. If the entry was evicted while the task
+    // was in-flight, dropping the status update is preferable to
+    // throwing a synthetic error that masks the real outcome.
+    return undefined
   }
   const next = ServiceManager.createBackgroundTaskStatus(mutate(cloneTask(current)))
   state.tasks.set(id, next)
@@ -144,26 +149,19 @@ function createManager(state: ManagerState): ServiceManager.Manager {
       const id = `${input.service}:${++state.nextTaskID}`
 
       if (state.tasks.size > 1000) {
-        // Pass 1: drop terminal entries first. They're free to evict
-        // and usually cover the burst.
+        // Drop terminal entries. We deliberately do NOT evict
+        // running/queued entries even when the cap is breached: those
+        // tasks have an in-flight `track()` callback that will call
+        // `updateTask` after settling, and removing the Map entry
+        // beforehand caused a "Unknown runtime task" throw that
+        // cascaded over the real result. If the cap is breached with
+        // every task still running, the Map size becomes a useful
+        // diagnostic signal of a caller leak — silently capping it
+        // would hide that. `updateTask` is also tolerant of missing
+        // entries as a defense-in-depth.
         for (const [taskId, task] of state.tasks) {
           if (task.state === "completed" || task.state === "failed" || task.state === "aborted") {
             state.tasks.delete(taskId)
-          }
-        }
-        // Pass 2: if the cap is still breached (every entry still
-        // running / queued — e.g. a stuck task that never settles, or a
-        // genuine flood of long-lived background work), evict the
-        // oldest entries until we drop below a soft watermark of 900.
-        // Map preserves insertion order, so iterating gives us
-        // queuedAt-ascending without a sort. Without this fallback the
-        // cap was a no-op and the Map grew unbounded.
-        if (state.tasks.size > 1000) {
-          const oldest = state.tasks.keys()
-          while (state.tasks.size > 900) {
-            const next = oldest.next()
-            if (next.done) break
-            state.tasks.delete(next.value)
           }
         }
       }

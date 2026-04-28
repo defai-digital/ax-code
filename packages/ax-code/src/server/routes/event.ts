@@ -60,13 +60,18 @@ export const EventRoutes = lazy(() =>
         }
 
         // Control frames (`server.connected`, `server.heartbeat`)
-        // bypass the soft/hard backpressure caps. They are tiny, never
-        // burst, and dropping them is worse than letting them sit
-        // alongside the queue: a heartbeat lost during a near-cap burst
-        // can mask a stalled proxy until the next 10s tick, and an
-        // overflow trip on a heartbeat would tear down a connection
-        // that data frames could still reach.
+        // bypass the data-frame backpressure ladder so a near-cap burst
+        // of real events can't trigger a teardown on an otherwise-fine
+        // heartbeat — but they are still bounded. Without an upper
+        // bound a stalled consumer would let heartbeats accumulate
+        // forever (one every 10s, ~80 bytes each, but unbounded across
+        // hours of stall). When the queue is already congested past
+        // the soft watermark we drop the control frame: heartbeats
+        // resume once the consumer drains data frames, and the proxy
+        // will see a stalled connection and reset it normally.
+        const CONTROL_FRAME_QUEUE_LIMIT = 256
         const pushControl = (payload: unknown) => {
+          if (q.size >= CONTROL_FRAME_QUEUE_LIMIT) return
           q.push(JSON.stringify(payload))
         }
 

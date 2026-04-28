@@ -92,9 +92,55 @@ function createProcessWire(child: any, target: string): RpcWireTarget {
   const wire: RpcWireTarget = {
     onmessage: null,
     postMessage(data) {
-      child.stdin?.write(data + "\n")
+      const stdin = child.stdin
+      if (!stdin || stdin.destroyed) {
+        // Pipe is gone (child exited / stdin closed). Mark the wire dead
+        // so the RPC client's pending-call timeout fires immediately
+        // instead of waiting 60s for a response that will never arrive.
+        wire.onmessage = null
+        DiagnosticLog.recordProcess("tui.backendStdinUnavailable", { target })
+        return
+      }
+      try {
+        stdin.write(data + "\n")
+      } catch (error) {
+        wire.onmessage = null
+        DiagnosticLog.recordProcess("tui.backendStdinWriteFailed", { target, error })
+        Log.Default.warn("TUI backend stdin write failed", {
+          target,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     },
   }
+  // Stream-level "error" events (EPIPE, broken pipe on SIGKILL, etc.)
+  // crash the parent process if no listener is attached. These pipes
+  // exist only in process transport — the worker transport's
+  // MessageChannel cannot emit such errors. Swallow + log here so a
+  // backend crash is reported as a graceful "backend exited" rather
+  // than tearing down the thread.
+  child.stdin?.on("error", (error: unknown) => {
+    DiagnosticLog.recordProcess("tui.backendStdinStreamError", { target, error })
+    Log.Default.warn("TUI backend stdin stream error", {
+      target,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    wire.onmessage = null
+  })
+  child.stdout?.on("error", (error: unknown) => {
+    DiagnosticLog.recordProcess("tui.backendStdoutStreamError", { target, error })
+    Log.Default.warn("TUI backend stdout stream error", {
+      target,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+  child.stderr?.on("error", (error: unknown) => {
+    DiagnosticLog.recordProcess("tui.backendStderrStreamError", { target, error })
+    Log.Default.warn("TUI backend stderr stream error", {
+      target,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
   let buffer = ""
   child.stdout?.setEncoding("utf8")
   child.stdout?.on("data", (chunk: unknown) => {
@@ -321,11 +367,6 @@ export const TuiThreadCommand = cmd({
       const file = backendTransport === "worker" ? await target() : undefined
       const processCommand = backendTransport === "process" ? backendProcessCommand() : undefined
       DiagnosticLog.recordProcess("tui.backendTargetResolved", {
-        mode: backendTransport,
-        target: file ? String(file) : processCommand?.label,
-        runtimeMode: runtimeMode(),
-      })
-      DiagnosticLog.recordProcess("tui.workerTargetResolved", {
         mode: backendTransport,
         target: file ? String(file) : processCommand?.label,
         runtimeMode: runtimeMode(),

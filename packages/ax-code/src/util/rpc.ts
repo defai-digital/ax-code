@@ -51,11 +51,17 @@ export namespace Rpc {
       if (parsed.type === "rpc.request") {
         const handler = rpc[parsed.method]
         if (typeof handler !== "function") return
+        // Route responses through `emitMessage` so the same indirection
+        // applies to both rpc.result/rpc.error and rpc.event frames.
+        // Calling postMessage directly here was the same as
+        // emitMessage today (it's set on the line above) but diverged
+        // from `emit()` and `listenStdio`'s `safeWrite`-based path,
+        // which made future wrapping (logging, buffering) fragile.
         try {
           const result = await handler(parsed.input)
-          postMessage(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
+          emitMessage?.(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
         } catch (error) {
-          postMessage(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }))
+          emitMessage?.(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }))
         }
       }
     }
@@ -69,13 +75,39 @@ export namespace Rpc {
     rpc: Definition,
     io: {
       stdin?: Pick<NodeJS.ReadStream, "on" | "setEncoding">
-      stdout?: Pick<NodeJS.WriteStream, "write">
+      stdout?: Pick<NodeJS.WriteStream, "write" | "on">
     } = {},
   ) {
     const stdin = io.stdin ?? process.stdin
     const stdout = io.stdout ?? process.stdout
+    let stdoutBroken = false
+    // Without an "error" handler, an EPIPE on stdout (parent closed our
+    // stdin pipe during shutdown) crashes the backend. Mark the pipe
+    // dead and skip subsequent writes so handleLine doesn't keep
+    // throwing on each request.
+    stdout.on?.("error", (error: unknown) => {
+      stdoutBroken = true
+      // eslint-disable-next-line no-console
+      console.error(
+        "rpc listenStdio stdout error",
+        error instanceof Error ? error.message : String(error),
+      )
+    })
+    const safeWrite = (data: string) => {
+      if (stdoutBroken) return
+      try {
+        stdout.write(data)
+      } catch (error) {
+        stdoutBroken = true
+        // eslint-disable-next-line no-console
+        console.error(
+          "rpc listenStdio stdout write threw",
+          error instanceof Error ? error.message : String(error),
+        )
+      }
+    }
     emitMessage = (data) => {
-      stdout.write(data + "\n")
+      safeWrite(data + "\n")
     }
 
     stdin.setEncoding("utf8")
@@ -93,13 +125,32 @@ export namespace Rpc {
       if (typeof handler !== "function") return
       try {
         const result = await handler(parsed.input)
-        stdout.write(JSON.stringify({ type: "rpc.result", result, id: parsed.id }) + "\n")
+        safeWrite(JSON.stringify({ type: "rpc.result", result, id: parsed.id }) + "\n")
       } catch (error) {
-        stdout.write(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }) + "\n")
+        safeWrite(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }) + "\n")
       }
     }
 
+    // Wrap `void handleLine(...)` paths so a thrown handler doesn't
+    // become a silently-lost rejection. Any unexpected throw here is
+    // surfaced via console; the protocol-level errors are already
+    // converted to `rpc.error` frames inside handleLine itself.
+    const dispatch = (line: string) =>
+      handleLine(line).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error(
+          "rpc listenStdio handler threw",
+          error instanceof Error ? error.message : String(error),
+        )
+      })
+
     await new Promise<void>((resolve) => {
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        resolve()
+      }
       stdin.on("data", (chunk) => {
         buffer += String(chunk)
         while (true) {
@@ -107,15 +158,15 @@ export namespace Rpc {
           if (index < 0) break
           const line = buffer.slice(0, index)
           buffer = buffer.slice(index + 1)
-          void handleLine(line)
+          void dispatch(line)
         }
       })
       stdin.on("end", () => {
         const line = buffer
         buffer = ""
-        void handleLine(line).finally(resolve)
+        void dispatch(line).finally(finish)
       })
-      stdin.on("close", () => resolve())
+      stdin.on("close", () => finish())
     })
   }
 
@@ -135,6 +186,11 @@ export namespace Rpc {
   export function client<T extends Definition>(target: MessageTarget) {
     const pending = new Map<number, PendingEntry>()
     const listeners = new Map<string, Set<(data: any) => void>>()
+    // Wrap before Number.MAX_SAFE_INTEGER. Past that point `id++` loses
+    // precision and can collide, dropping a response and stranding the
+    // caller until the 60s timeout. Long-lived TUI sessions can route
+    // a lot of RPC traffic through here; the bound is defensive.
+    const ID_WRAP = Number.MAX_SAFE_INTEGER - 1
     let id = 0
     target.onmessage = async (evt) => {
       // See Rpc.listen — drop malformed messages instead of crashing.
@@ -167,7 +223,8 @@ export namespace Rpc {
     }
     return {
       call<Method extends keyof T>(method: Method, input: Parameters<T[Method]>[0]): Promise<ReturnType<T[Method]>> {
-        const requestId = id++
+        const requestId = id
+        id = id >= ID_WRAP ? 0 : id + 1
         return new Promise((resolve, reject) => {
           const timer = setTimeout(() => {
             pending.delete(requestId)

@@ -71,6 +71,7 @@ const handleGlobalEvent = (event: GlobalEvent) => {
 GlobalBus.on("event", handleGlobalEvent)
 
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
+let shutdownPromise: Promise<void> | undefined
 
 const eventStream = {
   abort: undefined as AbortController | undefined,
@@ -188,11 +189,24 @@ export const rpc = {
     startEventStream({ directory: input.workspaceID ?? process.cwd() })
   },
   async shutdown() {
-    Log.Default.info("worker shutting down")
-    if (eventStream.abort) eventStream.abort.abort()
-    GlobalBus.off("event", handleGlobalEvent)
-    await Instance.disposeAll()
-    if (server) await server.stop(true)
+    // shutdown is invoked from multiple paths: the thread's explicit
+    // RPC, the SIGTERM/SIGINT handlers, and the stdin-close fallback.
+    // Cache the in-flight promise so concurrent calls converge instead
+    // of running double-tear-down (which can throw on an already-
+    // stopped server).
+    if (shutdownPromise) return shutdownPromise
+    shutdownPromise = (async () => {
+      Log.Default.info("worker shutting down")
+      if (eventStream.abort) eventStream.abort.abort()
+      GlobalBus.off("event", handleGlobalEvent)
+      await Instance.disposeAll()
+      if (server) {
+        const current = server
+        server = undefined
+        await current.stop(true)
+      }
+    })()
+    return shutdownPromise
   },
   eventStatus() {
     return eventStream.status
@@ -203,11 +217,45 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
   if (transport === "stdio") {
     const done = Rpc.listenStdio(rpc)
     startEventStream({ directory: process.cwd() })
+    // Process transport: signal-driven cleanup. The thread's
+    // `child.kill()` lands as SIGTERM here; without these handlers the
+    // process would die before draining `Instance.disposeAll()` /
+    // `server.stop()`, leaking MCP child processes and the GlobalBus
+    // listener.
+    const onSignal = (signal: NodeJS.Signals) => {
+      DiagnosticLog.recordProcess("backend.signalShutdown", { signal })
+      void rpc.shutdown().catch((error) => {
+        DiagnosticLog.recordProcess("backend.signalShutdownFailed", { signal, error })
+      })
+    }
+    process.once("SIGTERM", onSignal)
+    process.once("SIGINT", onSignal)
     await done
+    // Awaited shutdown after stdin closes. Covers the parent-crash
+    // path where the OS closes our stdin pipe but never delivers a
+    // SIGTERM (e.g. `kill -9` on the thread): without this, the
+    // backend would orphan, holding MCP servers, LSP children, the
+    // HTTP server, and the event stream reconnect timer alive.
+    // shutdown() is idempotent — a second call after a SIGTERM-driven
+    // fire-and-forget shutdown is a no-op.
+    await rpc.shutdown().catch((error) => {
+      DiagnosticLog.recordProcess("backend.exitShutdownFailed", { error })
+    })
     return
   }
   Rpc.listen(rpc)
   startEventStream({ directory: process.cwd() })
+  // Worker transport: same intent, in case the runtime forwards a
+  // signal before `worker.terminate()` lands. Idempotent against the
+  // explicit `shutdown` RPC the thread normally invokes first.
+  const onSignal = (signal: NodeJS.Signals) => {
+    DiagnosticLog.recordProcess("worker.signalShutdown", { signal })
+    void rpc.shutdown().catch((error) => {
+      DiagnosticLog.recordProcess("worker.signalShutdownFailed", { signal, error })
+    })
+  }
+  process.once("SIGTERM", onSignal)
+  process.once("SIGINT", onSignal)
 }
 
 function isWorkerEntrypoint() {
