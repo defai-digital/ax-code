@@ -57,6 +57,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container || '' }}
     steps:
+      # MUST run before any `shell: bash` step. Alpine 3.20's base image
+      # ships only BusyBox `ash`; the very first action-step that declares
+      # `shell: bash` would otherwise fail with `bash: executable file not
+      # found in $PATH` before this step can install it. Default shell here
+      # is `sh` (POSIX), which Alpine has.
+      - name: Alpine prereqs
+        if: ${{ matrix.container == 'alpine:3.20' }}
+        run: |
+          apk add --no-cache bash nodejs npm curl
+
       - name: Resolve version under test
         id: version
         shell: bash
@@ -74,12 +84,6 @@ jobs:
         run: |
           echo "Skipping ${{ matrix.channel }} (workflow_dispatch requested ${{ inputs.channel }} only)"
           exit 0
-
-      # Alpine container needs a few prereqs before npm/bash work.
-      - name: Alpine prereqs
-        if: ${{ matrix.container == 'alpine:3.20' }}
-        run: |
-          apk add --no-cache bash nodejs npm curl
 
       - name: Install Node (host runner)
         if: ${{ matrix.container == '' }}
