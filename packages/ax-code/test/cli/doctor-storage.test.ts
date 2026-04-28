@@ -39,4 +39,47 @@ describe("getDoctorDatabaseCheck", () => {
       detail: "/tmp/ax-code/ax-code-local.db (source/dev state, not created yet)",
     })
   })
+
+  test("warns when SQLite sidecars exist without the main database", async () => {
+    const check = await getDoctorDatabaseCheck({
+      databasePath: "/tmp/ax-code/ax-code.db",
+      inspect: async (target) => ({
+        exists: target.endsWith("-wal") || target.endsWith("-shm"),
+        size: target.endsWith("-wal") ? 4096 : target.endsWith("-shm") ? 32768 : undefined,
+      }),
+    })
+
+    expect(check.status).toBe("warn")
+    expect(check.detail).toContain("not created yet")
+    expect(check.detail).toContain("SQLite sidecar exists without the main database")
+    expect(check.detail).toContain("WAL 4 KiB")
+    expect(check.detail).toContain("SHM 32 KiB")
+  })
+
+  test("warns when the active WAL is unusually large", async () => {
+    const check = await getDoctorDatabaseCheck({
+      databasePath: "/tmp/ax-code/ax-code.db",
+      inspect: async (target) => ({
+        exists: target === "/tmp/ax-code/ax-code.db" || target.endsWith("-wal"),
+        size: target.endsWith("-wal") ? 129 * 1024 * 1024 : 8192,
+      }),
+    })
+
+    expect(check.status).toBe("warn")
+    expect(check.detail).toContain("large WAL file: 129 MiB")
+  })
+
+  test("fails when database file inspection returns an access error", async () => {
+    const check = await getDoctorDatabaseCheck({
+      databasePath: "/tmp/ax-code/ax-code.db",
+      inspect: async (target) => ({
+        exists: false,
+        error: target.endsWith("-wal") ? undefined : "permission denied",
+      }),
+    })
+
+    expect(check.status).toBe("fail")
+    expect(check.detail).toContain("cannot inspect database files")
+    expect(check.detail).toContain("ax-code.db: permission denied")
+  })
 })
