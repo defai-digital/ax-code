@@ -32,6 +32,12 @@ describe("source-bundle package.json scripts", () => {
     expect(pkg.scripts["bundle:source:pack"]).toContain("publish-source.ts")
   })
 
+  test("bundle:source:install-smoke verifies the installed package path", async () => {
+    const pkg = JSON.parse(await Bun.file(packageJsonPath).text())
+    expect(pkg.scripts["bundle:source:install-smoke"]).toBeDefined()
+    expect(pkg.scripts["bundle:source:install-smoke"]).toContain("script/source-install-smoke.ts")
+  })
+
   test("script files referenced by package.json all exist", async () => {
     // Catches typos in script paths before they hit CI.
     const pkg = JSON.parse(await Bun.file(packageJsonPath).text())

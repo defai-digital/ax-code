@@ -24,6 +24,7 @@
     "bundle:source": "bun run script/build-source.ts",
     "bundle:source:smoke": "bun run script/build-source.ts && bun dist-source/bundle/index.js --version",
     "bundle:source:pack": "AX_CODE_DRY_RUN=1 bun run script/publish-source.ts",
+    "bundle:source:install-smoke": "bun run script/source-install-smoke.ts",
     "dev": "bun run --conditions=browser ./src/index.ts",
     "db": "bun drizzle-kit"
   },
