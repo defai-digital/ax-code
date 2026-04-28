@@ -82,9 +82,24 @@ export function installResizeInputGuard(
     })
   const schedule = input.schedule ?? ((listener: () => void) => void setImmediate(listener))
 
+  // Coalesce rapid resize events so a user dragging the terminal edge
+  // (#176) doesn't queue up dozens of redundant `restore()` calls per
+  // second across the SIGWINCH + stdout-resize sources combined. Each
+  // restore() does an `setRawMode` syscall; without coalescing, fast
+  // drags backlog the event loop and the TUI appears to freeze. We
+  // still run the immediate restore on the FIRST event of a burst so
+  // input mode is recovered as soon as a resize starts; the trailing
+  // schedule()'d restore catches the post-drag final dimensions. Any
+  // additional events while a restore is already pending are dropped.
+  let pendingRestore = false
   const handleResize = () => {
+    if (pendingRestore) return
+    pendingRestore = true
     restore()
-    schedule(restore)
+    schedule(() => {
+      pendingRestore = false
+      restore()
+    })
   }
 
   if (proc.platform !== "win32") proc.on("SIGWINCH", handleResize)

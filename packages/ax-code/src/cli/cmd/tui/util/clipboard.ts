@@ -188,6 +188,21 @@ export namespace Clipboard {
           await waitForExit(proc)
         }
       }
+      // Linux without any clipboard helper. Falling through to `clipboardy`
+      // surfaces a useless "couldn't find the xsel module" error to the
+      // user (#178) — clipboardy's own internal probe failing, with no
+      // actionable signal. Throw a clean, install-instruction error
+      // instead. OSC52 was already attempted in `copy()` above, so users
+      // on a modern terminal still get clipboard support; this branch
+      // only fires when both system tools and the terminal escape are
+      // unavailable.
+      return async () => {
+        throw new Error(
+          "Clipboard unavailable on this Linux session. " +
+            "Install one of: `xclip` (X11), `wl-clipboard` (Wayland), or `xsel`. " +
+            "If your terminal supports OSC52 (most modern terminals do), the copy may already have succeeded.",
+        )
+      }
     }
 
     if (os === "win32") {

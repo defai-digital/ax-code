@@ -1,7 +1,11 @@
 export const PRUNE_MINIMUM = 20_000
 export const PRUNE_PROTECT = 40_000
 export const MAX_CONSECUTIVE_ERRORS = 3
-export const GLOBAL_STEP_LIMIT = 200
+// Global step ceiling now mirrors the autonomous-mode default so the two
+// caps move together. A user-supplied ~20-task batch typically generates
+// 5-10 tool calls each (read + grep + edit + write + bash), which used
+// to bump the previous 200 default after the first dozen tasks (#179).
+export const GLOBAL_STEP_LIMIT = 500
 export const DOOM_LOOP_THRESHOLD = 3
 
 // Autonomous mode hardening (ADR-004 / PRD v4.2.0).
@@ -9,7 +13,15 @@ export const DOOM_LOOP_THRESHOLD = 3
 // ordinary use does not trip them; narrow enough that a runaway loop
 // fails loudly with a specific error class. Override per-session via
 // `experimental.autonomous_caps` in ax-code.json.
-export const AUTONOMOUS_MAX_STEPS = 200
+//
+// AUTONOMOUS_MAX_STEPS was 200 prior to this change; raised to 500 after
+// #179 ("Maximum step reached error when processing large task lists").
+// A ~20-task batch routinely uses 5-10 tool calls per task (read, grep,
+// edit, write, bash, etc.), so 200 was tripping at task ~12-15 and
+// abandoning the rest. 500 covers ~50 tasks at the same density, which
+// matches the largest realistic batch size we see; runaway loops still
+// fail loudly via the per-tool perTool caps below well before 500.
+export const AUTONOMOUS_MAX_STEPS = 500
 export const AUTONOMOUS_MAX_FILES_CHANGED = 50
 export const AUTONOMOUS_MAX_LINES_CHANGED = 5_000
 
