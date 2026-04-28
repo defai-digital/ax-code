@@ -31,6 +31,7 @@ export interface MemoryEvaluationOptions {
   limit?: number
   scope?: RecallQuery["scope"]
   minRecall?: number
+  minMrr?: number
 }
 
 export interface MemoryEvaluationCaseResult {
@@ -54,6 +55,7 @@ export interface MemoryEvaluationReport {
   recallAtK: number
   meanReciprocalRank: number
   minRecall?: number
+  minMrr?: number
   passedThreshold: boolean
   limit: number
   scope: RecallQuery["scope"]
@@ -63,9 +65,8 @@ export interface MemoryEvaluationReport {
 const DEFAULT_LIMIT = 5
 
 export async function evaluate(projectRoot: string, opts: MemoryEvaluationOptions): Promise<MemoryEvaluationReport> {
-  if (opts.minRecall !== undefined && (!Number.isFinite(opts.minRecall) || opts.minRecall < 0 || opts.minRecall > 1)) {
-    throw new Error("minRecall must be a finite number between 0 and 1")
-  }
+  validateThreshold("minRecall", opts.minRecall)
+  validateThreshold("minMrr", opts.minMrr)
 
   const text = await fs.readFile(opts.casesPath, "utf-8")
   const file = EvaluationFileSchema.parse(JSON.parse(text))
@@ -124,9 +125,18 @@ export async function evaluate(projectRoot: string, opts: MemoryEvaluationOption
     recallAtK,
     meanReciprocalRank,
     minRecall: opts.minRecall,
-    passedThreshold: opts.minRecall === undefined || recallAtK >= opts.minRecall,
+    minMrr: opts.minMrr,
+    passedThreshold:
+      (opts.minRecall === undefined || recallAtK >= opts.minRecall) &&
+      (opts.minMrr === undefined || meanReciprocalRank >= opts.minMrr),
     limit: defaultLimit,
     scope: defaultScope,
     cases,
   }
+}
+
+function validateThreshold(name: string, value: number | undefined) {
+  if (value === undefined) return
+  if (Number.isFinite(value) && value >= 0 && value <= 1) return
+  throw new Error(`${name} must be a finite number between 0 and 1`)
 }

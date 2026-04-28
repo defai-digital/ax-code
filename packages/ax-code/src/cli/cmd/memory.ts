@@ -489,6 +489,10 @@ export const MemoryEvalCommand = cmd({
         describe: "minimum recall@k required for a successful run (0 to 1)",
         type: "number",
       })
+      .option("min-mrr", {
+        describe: "minimum mean reciprocal rank required for a successful run (0 to 1)",
+        type: "number",
+      })
       .option("json", {
         describe: "emit machine-readable JSON",
         type: "boolean",
@@ -500,6 +504,7 @@ export const MemoryEvalCommand = cmd({
       limit: args.limit,
       scope: args.scope,
       minRecall: args.minRecall,
+      minMrr: args.minMrr,
     })
 
     applyMemoryEvalExitCode(report)
@@ -515,8 +520,15 @@ export const MemoryEvalCommand = cmd({
     prompts.log.info(`Recall@${report.limit}: ${Math.round(report.recallAtK * 100)}%`)
     prompts.log.info(`MRR: ${report.meanReciprocalRank.toFixed(2)}`)
     if (report.minRecall !== undefined) {
-      prompts.log[report.passedThreshold ? "success" : "warn"](
-        `Threshold: ${Math.round(report.minRecall * 100)}% (${report.passedThreshold ? "passed" : "failed"})`,
+      const passed = report.recallAtK >= report.minRecall
+      prompts.log[passed ? "success" : "warn"](
+        `Recall threshold: ${Math.round(report.minRecall * 100)}% (${passed ? "passed" : "failed"})`,
+      )
+    }
+    if (report.minMrr !== undefined) {
+      const passed = report.meanReciprocalRank >= report.minMrr
+      prompts.log[passed ? "success" : "warn"](
+        `MRR threshold: ${report.minMrr.toFixed(2)} (${passed ? "passed" : "failed"})`,
       )
     }
     for (const item of report.cases) {

@@ -151,4 +151,38 @@ describe("memory.evaluation", () => {
     expect(report.cases[0]?.firstHitRank).toBe(2)
     expect(report.cases[0]?.reciprocalRank).toBe(0.5)
   })
+
+  test("can fail threshold on ranking quality even when recall passes", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "feedback", {
+      name: "high-rank",
+      body: "threshold ranking phrase",
+      confidence: 1,
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "low-rank-target",
+      body: "threshold ranking phrase",
+      confidence: 0.5,
+    })
+
+    const casesPath = path.join(tmp.path, "memory-cases.json")
+    await Bun.write(
+      casesPath,
+      JSON.stringify({
+        cases: [
+          {
+            query: "threshold ranking phrase",
+            expected: ["low-rank-target"],
+          },
+        ],
+      }),
+    )
+
+    const report = await evaluate(tmp.path, { casesPath, limit: 5, minRecall: 1, minMrr: 0.75 })
+
+    expect(report.recallAtK).toBe(1)
+    expect(report.meanReciprocalRank).toBe(0.5)
+    expect(report.minMrr).toBe(0.75)
+    expect(report.passedThreshold).toBe(false)
+  })
 })

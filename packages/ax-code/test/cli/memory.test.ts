@@ -146,6 +146,7 @@ describe("memory command", () => {
       cases: casesPath,
       limit: 3,
       scope: "project",
+      minMrr: 1,
       json: true,
     } as any)
 
@@ -154,6 +155,7 @@ describe("memory command", () => {
     expect(parsed.passed).toBe(1)
     expect(parsed.recallAtK).toBe(1)
     expect(parsed.meanReciprocalRank).toBe(1)
+    expect(parsed.minMrr).toBe(1)
     expect(parsed.passedThreshold).toBe(true)
     expect(parsed.cases[0].firstHitRank).toBe(1)
   })
