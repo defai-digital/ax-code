@@ -67,3 +67,6 @@ jobs:
       # commands from quietly reintroducing a cost meter.
       - name: Check no cost meter
         run: pnpm run check:no-cost
+
+      - name: Check OpenAPI snapshot
+        run: pnpm run check:openapi

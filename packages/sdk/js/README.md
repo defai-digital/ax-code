@@ -1,5 +1,10 @@
 # @ax-code/sdk
 
+Status: Active
+Scope: current-state
+Last reviewed: 2026-04-28
+Owner: ax-code sdk
+
 TypeScript SDK for embedding the [ax-code](https://github.com/defai-digital/ax-code) AI coding agent into your own applications.
 
 ## Install
@@ -153,6 +158,12 @@ import { createAxCode } from "@ax-code/sdk/http"
 const { client, server } = await createAxCode()
 const sessions = await client.session.list()
 ```
+
+## Cross-language integrations
+
+Use this package for first-party TypeScript and JavaScript integrations. For Python, Go, Java, Rust, or other non-JavaScript runtimes, run `ax-code serve` and generate a client from the OpenAPI snapshot at [`../openapi.json`](../openapi.json).
+
+See [HTTP and OpenAPI SDKs](../../../docs/sdk-http-openapi.md) for the supported cross-language integration path and the criteria for promoting a generated client into a first-party package.
 
 ## Migration from 1.4.0
 

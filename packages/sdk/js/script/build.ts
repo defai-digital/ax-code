@@ -18,7 +18,9 @@ try {
   await fs.mkdir(path.join(tmp, "cache"), { recursive: true })
   await fs.mkdir(path.join(tmp, "state"), { recursive: true })
 
-  await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../ax-code")).env({
+  await $`bun --env-file=../../.env --conditions=browser ./src/index.ts generate > ${dir}/openapi.json`
+    .cwd(path.resolve(dir, "../../ax-code"))
+    .env({
     ...process.env,
     XDG_DATA_HOME: path.join(tmp, "data"),
     XDG_CONFIG_HOME: path.join(tmp, "config"),
