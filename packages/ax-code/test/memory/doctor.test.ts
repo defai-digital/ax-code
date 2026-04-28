@@ -39,6 +39,30 @@ describe("memory.doctor", () => {
     expect(report.issues.map((issue) => issue.code).sort()).toEqual(["expired_entry", "low_confidence"])
   })
 
+  test("detects duplicate content across differently named entries", async () => {
+    await using tmp = await tmpdir()
+
+    await recordEntry(tmp.path, "feedback", {
+      name: "db-tests",
+      body: "Prefer real database integration tests",
+    })
+    await recordEntry(tmp.path, "feedback", {
+      name: "integration-tests",
+      body: " prefer   real database integration tests ",
+    })
+
+    const report = await doctor(tmp.path, { scope: "project" })
+
+    expect(report.status).toBe("warn")
+    expect(report.issues).toMatchObject([
+      {
+        code: "duplicate_content",
+        kind: "feedback",
+        entryName: "integration-tests",
+      },
+    ])
+  })
+
   test("detects manually corrupted metadata without rewriting the file", async () => {
     await using tmp = await tmpdir()
     const memory = minimalMemory(tmp.path)

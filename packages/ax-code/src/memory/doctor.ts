@@ -9,6 +9,7 @@ export interface MemoryDoctorIssue {
   code:
     | "load_failed"
     | "duplicate_entry"
+    | "duplicate_content"
     | "expired_entry"
     | "invalid_expires_at"
     | "invalid_confidence"
@@ -85,6 +86,7 @@ function inspectMemory(memory: ProjectMemory, source: MemoryDoctorSource, now: D
   for (const kind of ENTRY_KINDS) {
     const entries = memory.sections[kind]?.entries ?? []
     issues.push(...inspectDuplicates(entries, source, kind))
+    issues.push(...inspectDuplicateContent(entries, source, kind))
     for (const entry of entries) issues.push(...inspectEntry(entry, source, kind, now))
   }
   if (source === "project") issues.push(...inspectScannedSections(memory.sections, now))
@@ -112,6 +114,34 @@ function inspectDuplicates(
       kind,
       entryName: entry.name,
       message: `duplicate ${kind} memory entry: ${entry.name}`,
+    })
+  }
+  return issues
+}
+
+function inspectDuplicateContent(
+  entries: MemoryEntry[],
+  source: MemoryDoctorSource,
+  kind: MemoryEntryKind,
+): MemoryDoctorIssue[] {
+  const seen = new Map<string, string>()
+  const issues: MemoryDoctorIssue[] = []
+  for (const entry of entries) {
+    const key = normalizeContent(entry.body)
+    if (!key) continue
+    const first = seen.get(key)
+    if (!first) {
+      seen.set(key, entry.name)
+      continue
+    }
+    if (first.trim().toLowerCase() === entry.name.trim().toLowerCase()) continue
+    issues.push({
+      status: "warn",
+      code: "duplicate_content",
+      source,
+      kind,
+      entryName: entry.name,
+      message: `duplicate ${kind} memory content: ${entry.name} duplicates ${first}`,
     })
   }
   return issues
@@ -175,6 +205,10 @@ function inspectEntry(
   }
 
   return issues
+}
+
+function normalizeContent(value: string | undefined) {
+  return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? ""
 }
 
 function inspectScannedSections(sections: ProjectMemory["sections"], now: Date): MemoryDoctorIssue[] {
