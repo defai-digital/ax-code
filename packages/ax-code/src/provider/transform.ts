@@ -147,26 +147,16 @@ export namespace ProviderTransform {
   }
 
   export function temperature(model: Provider.Model) {
-    const id = model.id.toLowerCase()
     if (hasFamily(model, "qwen")) return 0.55
     if (hasFamily(model, "gemini")) return 1.0
     if (hasFamily(model, "glm")) return 1.0
     if (hasFamily(model, "minimax-m2")) return 1.0
-    if (hasFamily(model, "kimi-k2")) {
-      // kimi-k2-thinking & kimi-k2.5 && kimi-k2p5 && kimi-k2-5
-      if (["thinking", "k2.", "k2p", "k2-5"].some((s) => id.includes(s))) {
-        return 1.0
-      }
-      return 0.6
-    }
     return undefined
   }
 
   export function topP(model: Provider.Model) {
     if (hasFamily(model, "qwen")) return 1
-    if (hasAnyFamily(model, ["minimax-m2", "gemini", "kimi-k2.5", "kimi-k2p5", "kimi-k2-5"])) {
-      return 0.95
-    }
+    if (hasAnyFamily(model, ["minimax-m2", "gemini"])) return 0.95
     return undefined
   }
 
@@ -211,10 +201,7 @@ export namespace ProviderTransform {
       hasFamily(model, "deepseek") ||
       hasFamily(model, "minimax") ||
       hasFamily(model, "glm") ||
-      hasFamily(model, "mistral") ||
-      hasFamily(model, "kimi") ||
-      // TODO: Remove this after models.dev data is fixed to use "kimi-k2.5" instead of "k2p5"
-      hasFamily(model, "k2p5")
+      hasFamily(model, "mistral")
     )
       return {}
 

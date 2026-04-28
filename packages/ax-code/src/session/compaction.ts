@@ -13,14 +13,9 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
-import {
-  COMPACTION_BUFFER as _COMPACTION_BUFFER,
-  PRUNE_MINIMUM as _PRUNE_MINIMUM,
-  PRUNE_PROTECT as _PRUNE_PROTECT,
-} from "@/constants/session"
+import { PRUNE_MINIMUM as _PRUNE_MINIMUM, PRUNE_PROTECT as _PRUNE_PROTECT } from "@/constants/session"
 import { Database } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
-import { ProviderTransform } from "@/provider/transform"
 import { ModelID, ProviderID } from "@/provider/schema"
 
 export namespace SessionCompaction {
@@ -36,7 +31,14 @@ export namespace SessionCompaction {
     ),
   }
 
-  const COMPACTION_BUFFER = _COMPACTION_BUFFER
+  // Default headroom reserved for the next response: 10% of the input
+  // budget. Keeps compaction firing at ~90% of capacity across every model
+  // — small (8k) or large (1M / 2M) — without coupling to model.output,
+  // which is unreliable: some snapshot entries report output == context,
+  // which would zero out usable under any `context - output` formula.
+  // Users can override with an explicit `compaction.reserved` token count
+  // in ax-code.json.
+  const DEFAULT_RESERVED_FRACTION = 0.1
 
   export async function isOverflow(input: { tokens: MessageV2.Assistant["tokens"]; model: Provider.Model }) {
     const config = await Config.get()
@@ -48,17 +50,16 @@ export namespace SessionCompaction {
       input.tokens.total ||
       input.tokens.input + input.tokens.output + input.tokens.cache.read + input.tokens.cache.write
 
-    const reserved =
-      config.compaction?.reserved ?? Math.min(COMPACTION_BUFFER, ProviderTransform.maxOutputTokens(input.model))
-    // Clamp to 0: if limit.input < reserved (small-input models), the raw
-    // subtraction goes negative and `count >= usable` fires on every step,
-    // causing an infinite compaction loop.
-    const usable = Math.max(
-      0,
-      input.model.limit.input
-        ? input.model.limit.input - reserved
-        : context - ProviderTransform.maxOutputTokens(input.model),
-    )
+    // For prompt-cached providers (Claude) limit.input is the input cap and
+    // is smaller than limit.context; otherwise context is the cap. Use `||`
+    // so a stray `limit.input: 0` falls through to context — `??` would
+    // treat 0 as a valid cap and never compact.
+    const cap = input.model.limit.input || context
+    const reserved = config.compaction?.reserved ?? Math.ceil(cap * DEFAULT_RESERVED_FRACTION)
+    // Clamp to 0: if reserved >= cap (config misuse on tiny models),
+    // the raw subtraction goes negative and `count >= usable` fires on
+    // every step, causing an infinite compaction loop.
+    const usable = Math.max(0, cap - reserved)
     if (usable === 0) return false
     return count >= usable
   }

@@ -788,10 +788,10 @@ describe("ProviderTransform.variants", () => {
 
   test("glm returns empty object", () => {
     const model = createMockModel({
-      id: "glm/glm-4",
+      id: "glm/glm-5",
       providerID: "glm",
       api: {
-        id: "glm-4",
+        id: "glm-5",
         url: "https://api.glm.com",
         npm: "@ai-sdk/openai-compatible",
       },
@@ -974,11 +974,6 @@ describe("ProviderTransform family matching", () => {
       family: "qwen",
       capabilities: { reasoning: false },
     })
-    const kimi = createModel({
-      id: "accounts/fireworks/models/kimi-k2p5",
-      family: "kimi",
-      capabilities: { reasoning: false },
-    })
     const gemini = createModel({
       id: "google/gemini-3-flash",
       family: "gemini-flash",
@@ -986,7 +981,7 @@ describe("ProviderTransform family matching", () => {
     })
 
     expect(ProviderTransform.temperature(qwen)).toBe(0.55)
-    expect(ProviderTransform.topP(kimi)).toBe(0.95)
+    expect(ProviderTransform.topP(qwen)).toBe(1)
     expect(ProviderTransform.topK(gemini)).toBe(64)
   })
 })

@@ -9,7 +9,7 @@ import { Session } from "../../src/session"
 import { Storage } from "../../src/storage/storage"
 import { promises as fsp } from "fs"
 import path from "path"
-    import { tmpdir } from "../fixture/fixture"
+import { tmpdir } from "../fixture/fixture"
 
 describe("dre graph quality readiness", () => {
   async function clearSessionLabels(sessionID: string) {
@@ -30,7 +30,7 @@ describe("dre graph quality readiness", () => {
         const projectID = Instance.project.id
         const app = Server.Default()
 
-      try {
+        try {
           Recorder.begin(sid)
           Recorder.emit({
             type: "session.start",

@@ -22,23 +22,23 @@ export namespace ModelsDev {
   function grok4(id: string) {
     const lower = id.toLowerCase()
     if (!lower.includes("grok")) return true
-    // Support only after Grok 4.0 (grok-4 and newer)
-    return lower.includes("grok-4") || lower.includes("grok-code")
+    // Grok-code is xAI's coding line, contemporaneous with Grok 4.
+    if (lower.includes("grok-code")) return true
+    // Allow Grok 4 and any future Grok N≥4. Parsing the version digit
+    // (rather than substring matching "grok-4") so a future grok-5
+    // doesn't get accidentally filtered out.
+    const m = lower.match(/grok-(\d+)/)
+    if (!m) return false // grok-beta, grok-vision-beta — no version, drop
+    return parseInt(m[1], 10) >= 4
   }
 
-  function glm46(id: string) {
+  function glm5(id: string) {
     const lower = id.toLowerCase()
     if (!lower.includes("glm")) return true
-    // Support only GLM 4.7+ (exclude glm-4, glm-4.5, glm-4.6, etc.)
-    if (
-      lower.includes("glm-4") &&
-      !lower.match(/glm-4\.[7-9]/) &&
-      !lower.includes("glm-4-flash") &&
-      !lower.includes("glm-4-air")
-    ) {
-      return false
-    }
-    return true
+    // Allow GLM 5 and any future GLM N≥5. Drops glm-3.x / glm-4.x.
+    const m = lower.match(/glm-(\d+)/)
+    if (!m) return false
+    return parseInt(m[1], 10) >= 5
   }
 
   function supported(providerID: string, modelID: string) {
@@ -57,7 +57,7 @@ export namespace ModelsDev {
       providerID === "zai" ||
       providerID === "zai-coding-plan"
     )
-      return glm46(modelID)
+      return glm5(modelID)
     return true
   }
 

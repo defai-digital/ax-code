@@ -1084,11 +1084,7 @@ export namespace SessionPrompt {
     if (!_schemaCache) _schemaCache = new Map()
     const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
 
-    const context = (
-      args: any,
-      options: ToolCallOptions,
-      isolationOverride?: Isolation.State,
-    ): Tool.Context => ({
+    const context = (args: any, options: ToolCallOptions, isolationOverride?: Isolation.State): Tool.Context => ({
       sessionID: input.session.id,
       abort: options.abortSignal!,
       messageID: input.processor.message.id,

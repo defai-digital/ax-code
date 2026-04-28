@@ -609,7 +609,8 @@ export namespace CodeGraphQuery {
   // Returns the number of rows deleted, for observability.
   export function pruneExpiredLspCache(now: number): number {
     return Database.use((db) => {
-      return db.delete(LspCacheTable).where(lt(LspCacheTable.expires_at, now)).returning({ id: LspCacheTable.id }).all().length
+      return db.delete(LspCacheTable).where(lt(LspCacheTable.expires_at, now)).returning({ id: LspCacheTable.id }).all()
+        .length
     })
   }
 
@@ -622,8 +623,7 @@ export namespace CodeGraphQuery {
         .delete(LspCacheTable)
         .where(eq(LspCacheTable.project_id, projectID))
         .returning({ id: LspCacheTable.id })
-        .all()
-        .length
+        .all().length
     })
   }
 }

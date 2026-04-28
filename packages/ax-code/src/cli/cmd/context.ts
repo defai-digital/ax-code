@@ -4,6 +4,8 @@ import * as prompts from "@clack/prompts"
 import { bootstrap } from "../bootstrap"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
+import { Provider } from "../../provider/provider"
+import { ProviderID, ModelID } from "../../provider/schema"
 import { calculateBreakdown, formatBreakdown } from "../../stats"
 
 export const ContextCommand = cmd({
@@ -72,9 +74,22 @@ export const ContextCommand = cmd({
         }
       }
 
-      // Build breakdown
+      // Resolve the provider model so the breakdown reflects the real
+      // context window from the snapshot rather than a stale local table.
+      // When provider/model can't be resolved (e.g. session was created
+      // against a model that has since been removed), fall back to the
+      // unknown-limit branch in formatBreakdown.
+      let model: Provider.Model | undefined
+      if (providerID && modelID) {
+        try {
+          model = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        } catch {
+          model = undefined
+        }
+      }
+
       const breakdown = calculateBreakdown({
-        modelID,
+        model,
         systemPromptLength: 0,
         toolCount: toolCalls,
         memoryTokens: 0,

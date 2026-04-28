@@ -40,8 +40,45 @@ for (const id of localProviderIDs) {
 }
 
 // Remove providers we don't support
-for (const id of ["groq", "azure", "azure-cognitive-services"]) {
+for (const id of ["groq", "azure", "azure-cognitive-services", "moonshotai", "moonshotai-cn", "kimi-for-coding"]) {
   delete fetched[id]
+}
+
+// Strip unsupported models from every remaining provider — multi-host
+// resellers (openrouter, novita, vercel, baseten, chutes, nano-gpt, …)
+// surface the same upstream models, so a single filter catches all
+// hosting variants. Probes match against family, id, and name because
+// models.dev tags inconsistently across providers.
+//
+//   - Kimi (Moonshot): unsupported entirely.
+//   - Grok: only v4+ and grok-code-* (Grok 2/3 and unversioned betas
+//     drop). The grok-code line is xAI's coding model and is treated
+//     as v4-era for our purposes (transform.ts already groups them).
+//   - GLM (Z.AI): only v5+ (every glm-4.x / glm-3.x drops).
+//
+// To extend: add another entry to UNSUPPORTED_PROBES.
+type RawModel = { family?: string; id?: string; name?: string }
+function probesOf(m: RawModel): string[] {
+  return [m.family, m.id, m.name].filter((s): s is string => typeof s === "string").map((s) => s.toLowerCase())
+}
+function isUnsupportedModel(m: RawModel): boolean {
+  const probes = probesOf(m)
+  // Kimi: anything tagged kimi.
+  if (probes.some((p) => p.includes("kimi"))) return true
+  // Grok: drop if any probe mentions grok and none mentions grok-4*/grok-code*.
+  if (probes.some((p) => /\bgrok\b|grok-/.test(p))) {
+    const supported = probes.some((p) => /grok-4|grok-code/.test(p))
+    if (!supported) return true
+  }
+  // GLM: drop if any probe mentions glm-N where N < 5.
+  if (probes.some((p) => /\bglm-[0-4]\b/.test(p))) return true
+  return false
+}
+for (const provider of Object.values(fetched) as Array<{ models?: Record<string, RawModel> }>) {
+  if (!provider.models) continue
+  for (const [mid, model] of Object.entries(provider.models)) {
+    if (isUnsupportedModel(model)) delete provider.models[mid]
+  }
 }
 
 // Trim alibaba providers to supported models only
@@ -101,6 +138,37 @@ if (fetched["ax-studio"]) {
   entry.name = "AX Serving"
   entry.env = ["AX_SERVING_HOST"]
   fetched["ax-serving"] = entry
+}
+
+// Inject the 1M-context beta header on Claude models that declare
+// limit.context: 1_000_000. models.dev publishes the limit but not the
+// header that opts the request into the long-context beta — without the
+// header, Anthropic caps the conversation at 200k tokens regardless of
+// the snapshot. Re-applied on every regeneration so it survives upstream
+// updates. Update the beta name when Anthropic ships a new revision.
+const ANTHROPIC_1M_BETA = "context-1m-2025-08-07"
+type AnthropicModel = {
+  limit?: { context?: number }
+  headers?: Record<string, string>
+}
+const anthropic = fetched["anthropic"] as { models?: Record<string, AnthropicModel> } | undefined
+if (anthropic?.models) {
+  for (const model of Object.values(anthropic.models)) {
+    if (model.limit?.context !== 1_000_000) continue
+    const existingBeta = model.headers?.["anthropic-beta"]
+    // Trim guards against an empty / whitespace-only upstream value, which
+    // would otherwise be preserved verbatim and silently disable the beta.
+    const trimmed = existingBeta?.trim()
+    const merged = trimmed
+      ? trimmed
+          .split(",")
+          .map((s) => s.trim())
+          .includes(ANTHROPIC_1M_BETA)
+        ? trimmed
+        : `${trimmed},${ANTHROPIC_1M_BETA}`
+      : ANTHROPIC_1M_BETA
+    model.headers = { ...(model.headers ?? {}), "anthropic-beta": merged }
+  }
 }
 
 const prev = JSON.stringify(existing)

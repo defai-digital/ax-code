@@ -904,7 +904,7 @@ test("getSmallModel respects config small_model override", async () => {
   })
 })
 
-test("config-defined zai models keep glm-4-plus but filter glm-4.5-flash", async () => {
+test("config-defined zai models filter GLM <5 and keep GLM 5+", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -916,18 +916,16 @@ test("config-defined zai models keep glm-4-plus but filter glm-4.5-flash", async
             zai: {
               models: {
                 "glm-4-plus": {
-                  provider: {
-                    npm: "@ai-sdk/openai-compatible",
-                    api: "https://example.com",
-                  },
+                  provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
                   limit: { context: 128000, output: 4096 },
                 },
                 "glm-4.5-flash": {
-                  provider: {
-                    npm: "@ai-sdk/openai-compatible",
-                    api: "https://example.com",
-                  },
+                  provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
                   limit: { context: 128000, output: 4096 },
+                },
+                "glm-5-turbo": {
+                  provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
+                  limit: { context: 200000, output: 131072 },
                 },
               },
             },
@@ -941,8 +939,11 @@ test("config-defined zai models keep glm-4-plus but filter glm-4.5-flash", async
     fn: async () => {
       const providers = await Provider.list()
       const zai = providers[ProviderID.make("zai")]
-      expect(zai.models["glm-4-plus"]).toBeDefined()
+      // Pre-5 SKUs are filtered.
+      expect(zai.models["glm-4-plus"]).toBeUndefined()
       expect(zai.models["glm-4.5-flash"]).toBeUndefined()
+      // GLM 5+ is kept.
+      expect(zai.models["glm-5-turbo"]).toBeDefined()
     },
   })
 })

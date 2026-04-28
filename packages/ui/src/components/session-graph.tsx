@@ -53,17 +53,12 @@ function edge(type: ExecutionGraph["edges"][number]["type"]) {
   return "var(--border-primary)"
 }
 
-function sessionEdgePath(item: {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-}) {
+function sessionEdgePath(item: { x1: number; y1: number; x2: number; y2: number }) {
   const span = Math.max(0, item.x2 - item.x1)
   const curveX = Math.max(28, Math.min(72, Math.round(span / 4)))
   const laneColumn = Math.floor(item.x1 / 88)
   const isWide = span > 176
-  const curveY = isWide ? ((laneColumn % 2 === 0 ? -1 : 1) * 36) : 0
+  const curveY = isWide ? (laneColumn % 2 === 0 ? -1 : 1) * 36 : 0
 
   return `M ${item.x1} ${item.y1} C ${item.x1 + curveX} ${item.y1 + curveY}, ${item.x2 - curveX} ${item.y2 + curveY}, ${item.x2} ${item.y2}`
 }

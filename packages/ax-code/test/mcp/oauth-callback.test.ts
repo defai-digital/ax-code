@@ -45,7 +45,7 @@ test("isPortInUse reflects callback server state", async () => {
   const McpOAuthCallback = await getCallbackModule()
   const isPortInUse = "isPortInUse" in McpOAuthCallback ? McpOAuthCallback.isPortInUse : null
   const isRunning = "isRunning" in McpOAuthCallback ? McpOAuthCallback.isRunning : null
-  const getState = async () => (isPortInUse ? await isPortInUse() : isRunning?.() ?? false)
+  const getState = async () => (isPortInUse ? await isPortInUse() : (isRunning?.() ?? false))
 
   expect(await getState()).toBe(false)
 

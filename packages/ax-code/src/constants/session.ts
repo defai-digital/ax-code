@@ -1,4 +1,3 @@
-export const COMPACTION_BUFFER = 20_000
 export const PRUNE_MINIMUM = 20_000
 export const PRUNE_PROTECT = 40_000
 export const MAX_CONSECUTIVE_ERRORS = 3

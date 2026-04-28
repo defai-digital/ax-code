@@ -325,10 +325,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                                 <Match when={item.status === "connected"}>Connected</Match>
                                 <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
                                 <Match when={item.status === "disabled"}>Disabled</Match>
-                              <Match when={item.status === "needs_auth"}>Needs auth</Match>
-                              <Match when={item.status === "needs_client_registration"}>
-                                Needs client ID
-                              </Match>
+                                <Match when={item.status === "needs_auth"}>Needs auth</Match>
+                                <Match when={item.status === "needs_client_registration"}>Needs client ID</Match>
                               </Switch>
                             </span>
                           </text>

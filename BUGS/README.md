@@ -1,74 +1,84 @@
 # Bug Reports
 
-## Status (2026-04-27, BUG-319..327 MCP & ACP scan)
+## Status (2026-04-28, ACP / MCP / control-plane / LSP triage)
 
-### Open
-
-No open items remain in this batch.
+Triage pass over 13 reports covering ACP agent lifecycle, MCP OAuth flow,
+control-plane SSE handling, and LSP client memory bounds. 8 fixed in this
+pass, 3 deferred (real but require larger investigation), 2 false positives
+self-acknowledged in their own reports.
 
 ### Fixed in this pass
 
 | ID | Severity | Component | What changed |
 |----|----------|-----------|--------------|
-| BUG-319 | High | `packages/ax-code/src/mcp/index.ts` | Close untried transports after successful `StreamableHTTP` connect so no Streamable/SSE leak remains. |
-| BUG-320 | High | `packages/ax-code/src/mcp/index.ts` | Close temporary OAuth clients/transports on non-accepted `startAuth()` paths and guard client close calls for mock/test compatibility. |
-| BUG-321 | High | `packages/ax-code/src/mcp/oauth-callback.ts` | Cancel superseded `waitForCallback()` waiters and ensure timeout only affects the current waiter. |
-| BUG-322 | Medium | `packages/ax-code/src/mcp/auth.ts` | Serialize file read-modify-write under file lock to prevent auth entry resurrection races. |
-| BUG-323 | High | `packages/ax-code/src/control-plane/workspace.ts`, `packages/ax-code/src/control-plane/workspace-router-middleware.ts` | Restrict proxy/sync request paths to local path+query and block URL-like inputs before adaptor calls. |
-| BUG-324 | Medium | `packages/ax-code/src/mcp/oauth-callback.ts` | Return callback server running state in `isPortInUse()` so checks match random port binding. |
-| BUG-325 | Medium | `packages/ax-code/src/mcp/index.ts`, `packages/ax-code/src/mcp/oauth-provider.ts`, `packages/ax-code/src/mcp/oauth-callback.ts` | Ensure callback listener is started before provider creation in `create()`/`startAuth()` so redirect URI uses active callback port. |
-| BUG-326 | Low | `packages/ax-code/src/mcp/index.ts` | Add pending OAuth transport cleanup in `disconnect()`. |
-| BUG-327 | Low | `packages/ax-code/src/control-plane/workspace.ts` | Emit workspace directory when available in `startSyncing()` events, with fallback to workspace id. |
+| acp-permission-writeTextFile-not-awaited | Low | `acp/agent.ts` | The `connection.writeTextFile(...)` call after a granted edit-permission is now awaited. Previously the promise was discarded, swallowing write errors and letting `permission.reply` race ahead of the file change. |
+| mcp-remote-auth-error-does-not-close-first-transport | High | `mcp/index.ts` | In the `needs_auth` path the failing transport is now stored in `pendingOAuthTransports` **without** first calling `closeIfPossible(client, ...)`. In the real MCP SDK `client.close()` chains down to `transport.close()`, so the previous order would close the transport we needed `finishAuth` to reuse — every OAuth-required server failed silently with a dead transport. `closeIfPossible(client, ...)` is now only called on the registration-failure and non-auth-error branches where the client is genuinely no longer needed. |
+| mcp-auth-lock-key-vs-filepath-lock-key-mismatch | Medium | `mcp/auth.ts`, `mcp/oauth-provider.ts` | `invalidateCredentials` was acquiring `withLock(this.mcpName, ...)` and then calling `set()` / `remove()` which acquire `withLock(filepath, ...)` — two different lock instances, so a parallel `updateTokens` for the same server could resurrect a token between our `get` and `set`. Added `McpAuth.clearClientInfo` / `McpAuth.clearTokens` that go through `withFileEntryLock` (the same `filepath` key as every other mutation), and `invalidateCredentials` now dispatches to `remove` / `clearClientInfo` / `clearTokens` so the entire read-modify-write happens under one consistent lock. |
+| acp-replay-queue-memory-growth | Medium | `acp/agent.ts` | `replayQueue` per-session buffer now caps at 500 events with drop-oldest semantics. Previously a long replay (thousands of historical messages) would accumulate every concurrently-arriving live event for the entire replay duration and then dump them all into `sessionUpdate` calls when replay finished. |
+| acp-session-memory-never-cleaned | Medium | `acp/session.ts`, `acp/agent.ts` | `ACPSessionManager` now caps `sessions` at 1024 entries with insertion-order LRU eviction in a new `track()` helper, and exposes `remove(sessionId)` / `clear()`. `Agent.dispose()` calls `sessionManager.clear()` so a disposed agent doesn't keep one `ACPSessionState` (with `mcpServers` lists) per session it ever saw. The cap is a backstop; explicit clear on dispose remains the canonical lifecycle release. |
+| control-plane-sse-double-cancel | Low | `control-plane/sse.ts` | `parseSSE` now uses a `canceled` flag inside `cancel()` so the abort listener and the `finally` cleanup don't both call `reader.cancel()`. The `finally` path now also funnels through the same guarded `cancel()` rather than calling `reader.cancel()` directly. |
+| mcp-connect-serialization-memory-leak | Low | `mcp/index.ts` | The `Instance.state` cleanup now calls `connectLocks.clear()` alongside closing all clients, so a graceful shutdown doesn't leave entries pointing at promises that still resolve and write to torn-down state. The self-cleaning `finally` would still run, but explicit clear keeps shutdown deterministic. |
+| mcp-oauth-callback-state-map-unbounded | Low | `mcp/oauth-callback.ts` | `pendingAuths` now has a 100-entry cap; `waitForCallback` evicts the oldest pending wait (rejecting it deterministically) before adding a new entry. The 5-minute per-entry timeout remains the primary cleanup; the cap is defense-in-depth against a runaway caller that fires `startAuth` for hundreds of servers within the timeout window. |
+
+### Deferred (real bugs, not fixed in this pass)
+
+These reports stay in the folder.
+
+- **`acp-missing-dispose-on-disconnect`** — `Agent.dispose()` exists and is correctly written, but nothing automatically invokes it when the ACP `AgentSideConnection` closes. Wiring requires checking what lifecycle hooks `@agentclientprotocol/sdk` provides (`onClose`, `onDisconnect`, or none at all). The existing `eventAbort` already short-circuits the event loop on the next iteration when the SDK call rejects, so the practical leak is limited to the in-process Maps until the next `runEventSubscription` retry hits a connection error and naturally terminates. Defer until we can read the ACP SDK contract.
+- **`mcp-oauth-state-race`** — Partially false positive: `McpOAuthProvider.state()` already checks for an existing stored state before generating a new one, so the SDK doesn't overwrite `startAuth`'s pre-saved state on the happy path. The remaining real concern is two parallel `startAuth()` invocations for the same `mcpName` — both call `getOAuthState`, both find none, both generate different states, and one loses the IdP exchange. Fix requires returning the generated state from `startAuth()` and threading it through `authenticate()` instead of doing the round-trip via storage. API refactor; out of scope for triage pass.
+- **`lsp-process-kill-on-exit-not-removed`** — Edge race in `lsp/launch.ts`. The current code is mostly correct (close handler removes the exit listener); the report flags the case where `proc.on("close", ...)` registration could be skipped if the calling code throws between spawn and the listener attach. The window is on a single sync line in the same function; no real-world repro. Worth a follow-up wrap-in-try when we touch this file next.
 
 ### Cleared as false positive / accepted-risk
 
-- BUG-328 (`packages/ax-code/src/control-plane/workspace-server/server.ts`) remained validly classified as false-positive after re-check; heartbeat stop logic is correct.
+- **`lsp-scheduler-budget-settled-flag-edge-case`** — The report self-concludes "No action needed. The `settled` flag pattern correctly prevents the race." Kept the flag, no code change.
+- **`lsp-diagnostics-map-eviction-key-order`** — Report self-concludes "mostly benign since both maps serve different purposes and independent eviction is acceptable." `diagnostics` and `lastContent` Map LRUs are intentionally decoupled; `closeUnlocked` already drops both for explicit closes. No code change.
+
+### Verification
+
+- `pnpm typecheck` clean across all 14 workspace packages.
+- `bun test test/acp/ test/mcp/ test/control-plane/` — 47 / 47 pass across 13 test files. One test (`oauth-auto-connect.test.ts:280`) was previously asserting `firstClient.closeCalls === 1`, which enforced the buggy behavior that closed the OAuth client (and chained-closed its transport) before `finishAuth` could reuse it. The mock decouples client and transport close, so the test silently masked the production bug. Updated to expect `0` with a comment documenting why.
 
 ---
 
-## Status (2026-04-28, BUG-315..318 LSP & DRE scan)
+## Status (2026-04-28, Deep audit — MCP / ACP / LSP / DRE)
 
-### Open
+Focused audit pass over MCP, Agent Control Plane, LSP, and DRE-related modules
+using automated static analysis (race_scan, lifecycle_scan, security_scan,
+hardcode_scan) and manual code review. 12 new reports filed, 0 already-known
+issues duplicated, 41 security_scan path-traversal findings assessed as
+expected for LSP module design (all are read-only file paths, no shell exec).
 
-No open items remain in this batch.
+### New reports (this pass)
 
-### Fixed in this pass (BUG-315..318)
+| File | Severity | Component | Summary |
+|------|----------|-----------|---------|
+| `lsp-oxlint-cache-toctou-duplicate-spawn.md` | HIGH | LSP | TOCTOU race in `oxlintSupportsLsp` allows duplicate child process spawns; orphaned process on error path; unbounded Map growth |
+| `lsp-config-env-bypasses-sanitize.md` | MEDIUM | LSP | User-configured `env` in LSP config spreads after `Env.sanitize()`, bypassing secret stripping |
+| `lsp-nearestroot-fallback-incorrect-root.md` | MEDIUM | LSP | `NearestRoot` falls back to `Instance.directory` instead of `undefined`, causing servers to init with wrong roots |
+| `lsp-env-xauthority-allowlist.md` | MEDIUM | LSP | `XAUTHORITY` in `Env.sanitize()` allowlist exposes X11 auth to all LSP child processes |
+| `lsp-scheduleClient-dead-code-null-check.md` | LOW | LSP | Unreachable `!handle` check after try/catch in `scheduleClient` |
+| `lsp-computeBackoff-edge-case.md` | LOW | LSP | `computeBackoff(0)` returns 7500ms instead of 0 |
+| `acp-sse-queue-silent-drops-no-observability.md` | HIGH | ACP | SSE event queue silently drops events at 1024 cap with no logging or gap detection |
+| `acp-workspace-header-no-validation-broadcast.md` | HIGH | ACP | Missing `x-opencode-workspace` header broadcasts all events from all workspaces; no schema validation |
+| `acp-workspace-delete-dangling-remote.md` | MEDIUM | ACP | `Workspace.remove()` deletes DB record even when remote adaptor cleanup fails |
+| `acp-sse-parser-unbounded-buffer-growth.md` | MEDIUM | ACP | `parseSSE` buffer grows without bound on pathological input (no size cap) |
+| `acp-workspace-router-headers-forwarded.md` | LOW | ACP | Raw request headers (including `Authorization`, `Cookie`) forwarded to remote adaptors |
+| `dre-graph-signal-handler-leak.md` | LOW | DRE | `DreGraphCommand` leaks `SIGINT`/`SIGTERM` handlers on repeated invocations |
 
-| ID | Severity | Component | What changed |
-|----|----------|-----------|--------------|
-| BUG-315 | High | `src/lsp/client.ts` | Use normalized path key for incremental reopen diff lookup in `LSPClient.notify.open()`. |
-| BUG-316 | Medium | `src/lsp/client.ts`, `src/lsp/language.ts` | Add basename fallback and language map entry for extensionless files (`Dockerfile`, `Makefile`) when resolving `languageId`. |
-| BUG-317 | Low | `src/server/routes/dre-graph.ts` | Escape U+2028 and U+2029 in embedded JSON script payloads. |
-| BUG-318 | Low | `src/lsp/server-defs.ts` | Cache Oxlint `--lsp` capability detection to avoid repeated `--help` probes.
+### Already-known (not re-filed)
 
-### Fixed in this pass (BUG-307..314)
+- `acp-missing-dispose-on-disconnect.md` — deferred from previous pass
+- `lsp-process-kill-on-exit-not-removed.md` — deferred from previous pass
+- `mcp-oauth-state-race.md` — deferred from previous pass
 
-| ID | Severity | Component | What changed |
-|----|----------|-----------|--------------|
-| BUG-307 | Medium | `packages/ax-code/src/lsp/client.ts` | `LSPClient.notify.open()` now normalizes path via local variable and no longer mutates caller input. |
-| BUG-308 | Low | `packages/ax-code/src/tool/registry.ts`, `packages/ax-code/src/server/server.ts` | `toolCount` for DRE pending-plans now derived from registry. |
-| BUG-309 | Low | `packages/ax-code/src/graph/format.ts` | Mermaid sanitizer now escapes `#` to avoid label truncation. |
-| BUG-310 | Low | `packages/ax-code/src/server/routes/dre-graph.ts` | Rechecked: shared polling interval and `EventSource` are cleaned on `beforeunload`; no code change needed for this report. |
-| BUG-311 | Medium | `packages/ax-code/src/lsp/index.ts` | `incomingCalls` / `outgoingCalls` now aggregate results from all prepared call hierarchy items. |
-| BUG-312 | Low | `packages/ax-code/src/debug-engine/native-scan.ts` | `SyntaxError` is now logged like other native parse/bridge errors. |
-| BUG-313 | Low | `packages/ax-code/src/code-intelligence/query.ts` | `pruneExpiredLspCache` and `clearLspCache` now return exact deleted row counts. |
-| BUG-314 | Info | `packages/ax-code/src/code-intelligence/builder.ts` | Reviewed as non-blocking: type guard behavior is correct; kept as accepted-risk/clarity-only report. |
+### Excluded as expected-pattern / accepted-risk
 
-### Fixed in this pass
-
-| ID | Severity | Component | What changed |
-|----|----------|-----------|--------------|
-| BUG-301 | Medium | `packages/ax-code/src/mcp/index.ts` | Close and replace pending OAuth transports in `create()` and `startAuth()` before overwriting existing entries, preventing leaked stream transports on repeated auth flow retries. |
-| BUG-302 | Low | `packages/ax-code/src/mcp/index.ts` | Fixed `readResource` client-miss warning to report `resource` instead of `prompt`. |
-| BUG-303 | Medium | `packages/ax-code/src/control-plane/workspace-router-middleware.ts` | Stop forwarding untrusted request host/path as a full URL and proxy only path+query to the adaptor, preventing host-controlled URL forwarding in the middleware path. |
-| BUG-304 | Low | `packages/ax-code/src/mcp/index.ts` | Preserve MCP tool `additionalProperties` from the source schema while keeping default `false` when omitted. |
-| BUG-305 | Low-Medium | `packages/ax-code/src/control-plane/workspace.ts` | Validate `response.ok` in `startSyncing()` before `parseSSE()` so non-2xx responses are treated as sync failures and retried. |
-| BUG-306 | Low | `packages/ax-code/src/control-plane/adaptors.ts` | Added `removeAdaptor(type)` API for explicit registry cleanup and used it in control-plane tests to avoid map-growth side-effects in dynamic lifecycle cases. |
-
-### Cleared as false positive / accepted-risk
-
-- No pending items remain in this batch.
+- **LSP path_traversal (41 security_scan findings):** All LSP `path.join`/`path.resolve` calls construct file paths for reading (not writing to sensitive locations). The paths are used for workspace root resolution, `pathToFileURL()` construction, and file content reading. `child_process.spawn` (not `exec`) is used everywhere, preventing shell injection. This is inherent to LSP's design of operating on user-specified files.
+- **MCP auth.ts path_traversal (1 finding):** `mcp-auth.json` path uses `Global.Path.data` which is a controlled internal path, not user input.
+- **ACP workspace-router-middleware SSRF (3 findings):** `Adaptor.fetch()` interface accepts `RequestInfo | URL` — SSRF depends on adaptor implementations, not the middleware. The `normalizeWorkspacePath` function already strips absolute URLs and protocol-relative paths.
+- **ACP types.ts SSRF (1 finding):** This is the `Adaptor` interface definition itself, not a call site. Validation is the adaptor implementation's responsibility.
 
 ### Historical status
 
-Earlier triage passes (BUG-200..213 and prior) are documented in git history.
+Earlier triage passes (BUG-200..213, BUG-301..327, etc.) are documented in
+git history.

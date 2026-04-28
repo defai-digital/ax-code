@@ -85,11 +85,7 @@ async function readFresh(filePath: string): Promise<string | null> {
     if (err?.code === "ENOENT") return null
     throw err
   })
-  if (
-    finalStat &&
-    finalStat.mtimeMs === initialStat.mtimeMs &&
-    finalStat.size === initialStat.size
-  ) {
+  if (finalStat && finalStat.mtimeMs === initialStat.mtimeMs && finalStat.size === initialStat.size) {
     cacheSet(filePath, { mtimeMs: finalStat.mtimeMs, size: finalStat.size, text })
   } else {
     readCache.delete(filePath)

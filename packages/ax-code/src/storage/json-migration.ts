@@ -122,7 +122,10 @@ export namespace JsonMigration {
         execute(values)
         return values.length
       } catch (e) {
-        log.warn(`batch insert failed for ${label}, falling back to per-row`, { error: String(e), count: values.length })
+        log.warn(`batch insert failed for ${label}, falling back to per-row`, {
+          error: String(e),
+          count: values.length,
+        })
       }
       let count = 0
       for (const value of values) {

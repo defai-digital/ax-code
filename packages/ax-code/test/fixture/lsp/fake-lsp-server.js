@@ -39,7 +39,7 @@ function mapCallsByName(spec, fallback) {
   if (spec && typeof spec === "object") {
     return (item) => {
       const key = item?.name
-      return key && Array.isArray(spec[key]) ? spec[key] : spec.default ?? fallback
+      return key && Array.isArray(spec[key]) ? spec[key] : (spec.default ?? fallback)
     }
   }
   return () => fallback

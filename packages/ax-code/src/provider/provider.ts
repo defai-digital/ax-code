@@ -52,7 +52,12 @@ export namespace Provider {
     }
     if (providerID === "xai") {
       if (!lower.includes("grok")) return true
-      return lower.includes("grok-4") || lower.includes("grok-code")
+      if (lower.includes("grok-code")) return true
+      // Allow Grok 4+ (parse version so future grok-5+ pass; substring
+      // matching "grok-4" would block them).
+      const m = lower.match(/grok-(\d+)/)
+      if (!m) return false
+      return parseInt(m[1], 10) >= 4
     }
     if (
       providerID === "zhipuai" ||
@@ -61,9 +66,10 @@ export namespace Provider {
       providerID === "zai-coding-plan"
     ) {
       if (!lower.includes("glm")) return true
-      // Block known-problematic 4.5 SKUs, but keep newer GLM 4/5
-      // variants, including hyphenated names like glm-4-plus.
-      return !lower.includes("glm-4.5")
+      // Allow GLM 5+ only — drops glm-3.x / glm-4.x SKUs.
+      const m = lower.match(/glm-(\d+)/)
+      if (!m) return false
+      return parseInt(m[1], 10) >= 5
     }
     return true
   }
@@ -944,7 +950,7 @@ export namespace Provider {
     if (provider) {
       let priority = ["gemini-3-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
       if (providerID.startsWith("zai")) {
-        priority = ["glm-4.7-flash", "glm-5-turbo"]
+        priority = ["glm-5-turbo", "glm-5"]
       }
       if (providerID === ProviderID.xai) {
         priority = ["grok-4-fast", "grok-4"]

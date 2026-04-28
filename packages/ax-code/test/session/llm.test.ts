@@ -507,8 +507,8 @@ describe("session.llm.stream", () => {
   test.skipIf(!!process.env.CI)(
     "normalizes interleaved reasoning into provider request payload",
     async () => {
-      const providerID = "moonshotai-cn"
-      const modelID = "kimi-k2-thinking"
+      const providerID = "zai"
+      const modelID = "glm-5"
       const fixture = await loadFixture(providerID, modelID)
       const model = fixture.model
 

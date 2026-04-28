@@ -1834,10 +1834,9 @@ export namespace LSP {
           if (!items?.length) return []
           const calls = await Promise.all(
             items.map((item) =>
-              withTimeout(
-                client.connection.sendRequest("callHierarchy/incomingCalls", { item }),
-                RPC_TIMEOUT_MS,
-              ).catch(() => [] as unknown[]),
+              withTimeout(client.connection.sendRequest("callHierarchy/incomingCalls", { item }), RPC_TIMEOUT_MS).catch(
+                () => [] as unknown[],
+              ),
             ),
           )
           return calls.flat()
@@ -1875,10 +1874,9 @@ export namespace LSP {
           if (!items?.length) return []
           const calls = await Promise.all(
             items.map((item) =>
-              withTimeout(
-                client.connection.sendRequest("callHierarchy/outgoingCalls", { item }),
-                RPC_TIMEOUT_MS,
-              ).catch(() => [] as unknown[]),
+              withTimeout(client.connection.sendRequest("callHierarchy/outgoingCalls", { item }), RPC_TIMEOUT_MS).catch(
+                () => [] as unknown[],
+              ),
             ),
           )
           return calls.flat()

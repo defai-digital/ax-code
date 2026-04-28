@@ -173,7 +173,7 @@ mock.module("../../src/mcp/oauth-callback", () => ({
         pendingOauthStates.set(oauthState, { reject })
         if (mcpName) pendingOauthNames.set(mcpName, oauthState)
       }),
-  cancelPending: (mcpName: string) => {
+    cancelPending: (mcpName: string) => {
       const oauthState = pendingOauthNames.get(mcpName)
       if (!oauthState) return
       const pending = pendingOauthStates.get(oauthState)
@@ -182,7 +182,7 @@ mock.module("../../src/mcp/oauth-callback", () => ({
       pendingOauthNames.delete(mcpName)
       pending.reject(new Error("Authorization cancelled"))
     },
-  stop: async () => {
+    stop: async () => {
       callbackRunning = false
       for (const oauthState of [...pendingOauthStates.keys()]) {
         pendingOauthStates.delete(oauthState)

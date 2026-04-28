@@ -18,7 +18,7 @@ export namespace ProviderError {
     /exceeds the available context size/i, // llama.cpp server
     /greater than the context length/i, // LM Studio
     /context window exceeds limit/i, // MiniMax
-    /exceeded model token limit/i, // Kimi For Coding, Moonshot
+    /exceeded model token limit/i, // OpenAI-compatible generic
     /context[_ ]length[_ ]exceeded/i, // Generic fallback
     /request entity too large/i, // HTTP 413
     /context length is only \d+ tokens/i, // vLLM
