@@ -65,8 +65,16 @@ export function Header() {
   // Returns undefined when no assistant message has been received yet,
   // which keeps the header clean on a brand-new session.
   const context = createMemo(() => {
-    const last = Usage.last(messages()) as AssistantMessage | undefined
-    if (!last) return
+    // `Usage.last` selects on the presence of a `tokens` field. The SDK
+    // schema only puts `tokens` on assistant messages, but a corrupt
+    // session payload (replay artifact, custom provider stuffing tokens
+    // into the wrong place, etc.) would otherwise pass the `as
+    // AssistantMessage` cast and feed garbage into `last.time.completed`
+    // / `last.tokens.output`. Defensive role check keeps the read-out
+    // honest under malformed data.
+    const candidate = Usage.last(messages()) as AssistantMessage | undefined
+    if (!candidate || candidate.role !== "assistant") return
+    const last = candidate
     const total = Usage.total(last)
     const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
     let result = total.toLocaleString()

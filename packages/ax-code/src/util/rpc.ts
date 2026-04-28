@@ -16,6 +16,36 @@ export namespace Rpc {
 
   let emitMessage: ((data: string) => void) | undefined
 
+  // Defensive double-init guard. The current architecture calls exactly
+  // one of `listen()` or `listenStdio()` per process (the TUI backend
+  // picks worker vs stdio at startup and they're mutually exclusive
+  // branches), so `emitMessage` is naturally a singleton. If a future
+  // change ever called both — e.g. a debug mode that mirrors RPC to
+  // both stdout and a worker — the second call would silently hijack
+  // the first transport's outbound channel and the first transport's
+  // results would land in the wrong place. Throw loudly here so the
+  // mistake is caught at startup rather than as a phantom delivery
+  // failure later.
+  function bindEmitMessage(next: (data: string) => void, source: "listen" | "listenStdio") {
+    if (emitMessage) {
+      throw new Error(
+        `Rpc.${source} called but an emit channel is already bound — listen() and listenStdio() are mutually exclusive in the same process`,
+      )
+    }
+    emitMessage = next
+  }
+
+  /**
+   * Test-only reset for the bound emit channel. Tests legitimately
+   * exercise `listen()` and `listenStdio()` in sequence within the same
+   * process; production code calls exactly one and never resets. Do not
+   * call this from non-test code — the guard above exists to catch
+   * exactly that mistake.
+   */
+  export function _resetEmitMessageForTest(): void {
+    emitMessage = undefined
+  }
+
   function serializeError(error: unknown): SerializedError {
     if (error instanceof Error) {
       return {
@@ -37,7 +67,7 @@ export namespace Rpc {
   }
 
   export function listen(rpc: Definition) {
-    emitMessage = (data) => postMessage(data)
+    bindEmitMessage((data) => postMessage(data), "listen")
     onmessage = async (evt) => {
       // Malformed messages must not crash the worker: onmessage is a raw
       // assignment (not addEventListener), so any throw here kills it and
@@ -106,9 +136,9 @@ export namespace Rpc {
         )
       }
     }
-    emitMessage = (data) => {
+    bindEmitMessage((data) => {
       safeWrite(data + "\n")
-    }
+    }, "listenStdio")
 
     stdin.setEncoding("utf8")
     let buffer = ""

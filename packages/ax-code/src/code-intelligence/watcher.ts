@@ -21,6 +21,17 @@ const DEBOUNCE_MS = 1_000
 // operations.
 const MAX_CONCURRENT_REINDEX = 4
 
+// Backpressure cap for the per-project reindex queue. The per-file
+// debounce in `pending` already ensures at most one queued job per
+// distinct file, but a `git checkout` switching branches across a
+// large monorepo can fire events on hundreds of files at once, and
+// each closure captures the project id + file path. Without a cap the
+// queue grows proportional to the change set. When the cap is reached
+// we drop the oldest queued job so the most recent file changes still
+// get indexed promptly; the dropped file will be picked up on its next
+// modification or by a full reindex.
+const MAX_QUEUE_DEPTH = 256
+
 export namespace CodeGraphWatcher {
   type Pending = {
     timer: ReturnType<typeof setTimeout>
@@ -67,6 +78,17 @@ export namespace CodeGraphWatcher {
 
   function enqueueReindex(state: State, file: string, event: "add" | "change" | "unlink") {
     if (state.disposed) return
+    if (state.queue.length >= MAX_QUEUE_DEPTH) {
+      // Drop oldest queued job so we keep up with the most recent file
+      // events. Each entry is one file's reindex; the dropped file will
+      // be picked up on its next change or by a future full reindex.
+      state.queue.shift()
+      log.warn("reindex queue at cap, dropping oldest job", {
+        cap: MAX_QUEUE_DEPTH,
+        droppedFor: file,
+        droppedEvent: event,
+      })
+    }
     state.queue.push(async () => {
       if (state.disposed) return
       if (event === "unlink") {

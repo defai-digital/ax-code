@@ -37,6 +37,11 @@ function createRpcPair() {
 
 afterEach(() => {
   globalThis.onmessage = null
+  // The Rpc namespace's `emitMessage` channel is a singleton with a
+  // double-init guard (production code calls listen() OR listenStdio()
+  // exactly once). Tests legitimately swap between them, so reset
+  // between cases.
+  Rpc._resetEmitMessageForTest()
 })
 
 describe("Rpc", () => {
