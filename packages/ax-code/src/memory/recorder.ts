@@ -158,6 +158,10 @@ function normalizeExpiresAt(value: string | undefined): string | undefined {
   return new Date(time).toISOString()
 }
 
+function nameKey(value: string) {
+  return value.trim().toLowerCase()
+}
+
 /**
  * Add or replace an entry within the given kind. Returns the persisted memory.
  *
@@ -183,7 +187,7 @@ export async function recordEntry(
     )
     const memory = isGlobal ? await loadOrInitGlobal() : await loadOrInit(projectRoot)
     const existing = memory.sections[kind]?.entries ?? []
-    const filtered = existing.filter((e) => e.name !== name)
+    const filtered = existing.filter((e) => nameKey(e.name) !== nameKey(name))
     const agents = normalizeList(input.agents)
     const tags = normalizeTags(input.tags)
     const pathGlobs = normalizePathGlobs(input.pathGlobs)
@@ -238,7 +242,8 @@ export async function removeEntry(
     const section = memory.sections[kind]
     if (!section) return false
     const before = section.entries.length
-    const filtered = section.entries.filter((e) => e.name !== name)
+    const targetName = nameKey(name)
+    const filtered = section.entries.filter((e) => nameKey(e.name) !== targetName)
     if (filtered.length === before) return false
     if (filtered.length === 0) memory.sections[kind] = undefined
     else memory.sections[kind] = rebuildSection(filtered)

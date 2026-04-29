@@ -64,6 +64,22 @@ describe("memory.recorder", () => {
     expect(entries[0]?.body).toBe("second")
   })
 
+  test("dedupes and removes entries by case-insensitive name", async () => {
+    await using tmp = await tmpdir()
+
+    await recordEntry(tmp.path, "feedback", { name: "Real-DB-Tests", body: "first" })
+    await recordEntry(tmp.path, "feedback", { name: "real-db-tests", body: "second" })
+
+    let entries = await listEntries(tmp.path, "feedback")
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.name).toBe("real-db-tests")
+    expect(entries[0]?.body).toBe("second")
+
+    expect(await removeEntry(tmp.path, "feedback", "REAL-DB-TESTS")).toBe(true)
+    entries = await listEntries(tmp.path, "feedback")
+    expect(entries).toHaveLength(0)
+  })
+
   test("removeEntry deletes by name", async () => {
     await using tmp = await tmpdir()
 
