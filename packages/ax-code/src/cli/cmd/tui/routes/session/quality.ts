@@ -2,6 +2,7 @@ import type { PromptInfo } from "../../component/prompt/history"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import type { SeverityCounts } from "@/quality/finding-counts"
 import type { VerificationEnvelope } from "@/quality/verification-envelope"
+import type { ReviewResult } from "@/quality/review-result"
 import type { DebugCase, DebugHypothesis } from "@/debug-engine/runtime-debug"
 import { ProbabilisticRollout } from "@/quality/probabilistic-rollout"
 import { SessionDebug } from "@/session/debug"
@@ -385,6 +386,16 @@ export function renderSessionChecksSummary(envelopes: readonly VerificationEnvel
 
   if (parts.length === 0) return ""
   return parts.join(" · ")
+}
+
+export function renderSessionReviewResultsSummary(results: readonly ReviewResult[]): string {
+  if (results.length === 0) return ""
+  const latest = results[results.length - 1]!
+  const decision = latest.decision.replaceAll("_", " ")
+  const findings = latest.counts.total
+  const blocking = latest.blockingFindingIds.length
+  const checks = latest.missingVerification ? "verification missing" : "verified"
+  return `Review ${decision} · ${findings} finding${findings === 1 ? "" : "s"} · ${blocking} blocking · ${checks}`
 }
 
 // One-line summary for the sidebar Debug Cases section. Renders a count of

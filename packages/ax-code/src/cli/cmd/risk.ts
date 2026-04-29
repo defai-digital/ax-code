@@ -7,6 +7,7 @@ import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
 export namespace RiskView {
   type ReplayReadinessSummary = NonNullable<SessionRisk.QualityReadiness["review"]>
   type DecisionHintSummary = NonNullable<SessionRisk.Detail["decisionHints"]>
+  type ReviewResult = NonNullable<SessionRisk.Detail["reviewResults"]>[number]
 
   function validation(input: SessionRisk.Detail["assessment"]["signals"]) {
     if (input.validationState === "passed") return "validation passed"
@@ -29,6 +30,23 @@ export namespace RiskView {
     if (summary.readiness === "blocked") return "blocked by failed validation"
     if (summary.readiness === "needs_validation") return "needs validation"
     return "clear"
+  }
+
+  function reviewDecisionLabel(decision: ReviewResult["decision"]) {
+    return decision.replaceAll("_", " ")
+  }
+
+  function reviewResultLine(result: ReviewResult) {
+    const blocking = result.blockingFindingIds.length
+    const findings = result.counts.total
+    const checks = result.missingVerification
+      ? "verification missing"
+      : `${result.verificationEnvelopeIds.length} verification envelope${result.verificationEnvelopeIds.length === 1 ? "" : "s"}`
+    const recommendation =
+      result.decision === result.recommendedDecision
+        ? ""
+        : ` · recommended: ${reviewDecisionLabel(result.recommendedDecision)}`
+    return `  ${reviewDecisionLabel(result.decision)} · ${findings} finding${findings === 1 ? "" : "s"} · ${blocking} blocking · ${checks}${recommendation}`
   }
 
   export function lines(input: SessionRisk.Detail, explain = false) {
@@ -72,6 +90,13 @@ export namespace RiskView {
       out.push("  Quality Readiness")
       out.push("  " + "-".repeat(40))
       out.push(...readinessLines)
+    }
+
+    if (input.reviewResults && input.reviewResults.length > 0) {
+      out.push("")
+      out.push("  Review Result")
+      out.push("  " + "-".repeat(40))
+      out.push(reviewResultLine(input.reviewResults.at(-1)!))
     }
 
     if (input.decisionHints) {
@@ -150,6 +175,11 @@ export const RiskCommand = cmd({
         type: "boolean",
         default: true,
       })
+      .option("review-results", {
+        describe: "Include structured review completion results when present",
+        type: "boolean",
+        default: true,
+      })
       .option("json", { describe: "Output as JSON", type: "boolean", default: false }),
   async handler(args) {
     await Instance.provide({
@@ -159,6 +189,7 @@ export const RiskCommand = cmd({
         const detail = await SessionRisk.load(sessionID, {
           includeQuality: Boolean(args.quality),
           includeDecisionHints: Boolean(args.hints),
+          includeReviewResults: Boolean(args.reviewResults),
         })
 
         if (args.json) {

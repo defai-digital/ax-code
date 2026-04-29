@@ -28,6 +28,7 @@ import {
   renderSessionChecksSummary,
   renderSessionDebugCasesSummary,
   renderSessionQualitySidebarLine,
+  renderSessionReviewResultsSummary,
   sessionQualityActions,
   sessionQualityActionValue,
   sessionQualityWorkflowIcon,
@@ -257,6 +258,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     qualityActions().filter((action) => hasSidebarSignal(action, findingCounts()[action.workflow]?.total)),
   )
   const checksSummary = createMemo(() => renderSessionChecksSummary(risk()?.envelopes ?? []))
+  const reviewResultsSummary = createMemo(() => renderSessionReviewResultsSummary(risk()?.reviewResults ?? []))
   const debugCasesSummary = createMemo(() =>
     renderSessionDebugCasesSummary({
       cases: risk()?.debug?.cases ?? [],
@@ -649,6 +651,19 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <box border={["top"]} borderColor={theme.borderSubtle} />
                   <text fg={theme.textMuted} wrapMode="word">
                     {checksSummary()}
+                  </text>
+                </box>
+              </Show>
+              <Show when={reviewResultsSummary().length > 0}>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+                  <box flexDirection="row" justifyContent="space-between">
+                    <text fg={theme.text}>
+                      <b>Review</b>
+                    </text>
+                  </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
+                  <text fg={theme.textMuted} wrapMode="word">
+                    {reviewResultsSummary()}
                   </text>
                 </box>
               </Show>

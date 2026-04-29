@@ -121,6 +121,52 @@ describe("RiskView.lines", () => {
     )
   })
 
+  test("renders latest structured review result when available", () => {
+    const lines = RiskView.lines({
+      id: "ses_review_result",
+      title: "Review result session",
+      assessment: {
+        level: "MEDIUM",
+        score: 45,
+        readiness: "needs_review",
+        confidence: 0.7,
+        summary: "review needs changes",
+        signals: {
+          filesChanged: 2,
+          linesChanged: 32,
+          totalTools: 4,
+          apiEndpointsAffected: 0,
+          crossModule: false,
+          securityRelated: false,
+          validationState: "partial",
+          diffState: "recorded",
+        },
+      },
+      semantic: null,
+      drivers: [],
+      reviewResults: [
+        {
+          schemaVersion: 1,
+          reviewId: "1111111111111111",
+          workflow: "review",
+          decision: "request_changes",
+          recommendedDecision: "request_changes",
+          summary: "Blocking review finding remains.",
+          findingIds: ["2222222222222222"],
+          verificationEnvelopeIds: ["3333333333333333"],
+          counts: { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 0, INFO: 0, total: 1 },
+          blockingFindingIds: ["2222222222222222"],
+          missingVerification: false,
+          createdAt: "2026-04-29T00:00:00.000Z",
+          source: { tool: "review_complete", version: "4.x.x", runId: "ses_review_result" },
+        },
+      ],
+    } as any)
+
+    expect(lines).toContain("  Review Result")
+    expect(lines).toContain("  request changes · 1 finding · 1 blocking · 1 verification envelope")
+  })
+
   test("normalizes stale next-action wording for replay-readiness states", () => {
     const lines = RiskView.lines({
       id: "ses_789",

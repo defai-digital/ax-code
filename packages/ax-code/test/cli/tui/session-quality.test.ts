@@ -9,11 +9,13 @@ import {
   renderSessionQualityInlineSummary,
   renderSessionQualityPrompt,
   renderSessionQualitySidebarLine,
+  renderSessionReviewResultsSummary,
   sessionQualityActions,
   sessionQualityActionValue,
   sessionQualityDetailItems,
 } from "../../../src/cli/cmd/tui/routes/session/quality"
 import type { VerificationEnvelope } from "../../../src/quality/verification-envelope"
+import type { ReviewResult } from "../../../src/quality/review-result"
 
 const SESSION_ROUTE_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/index.tsx")
 
@@ -869,6 +871,44 @@ describe("tui session quality actions", () => {
         command: { runner: "format", argv: [], cwd: "/tmp" },
       })
       expect(renderSessionChecksSummary([unknown])).toBe("")
+    })
+  })
+
+  describe("renderSessionReviewResultsSummary", () => {
+    function reviewResult(overrides: Partial<ReviewResult> = {}): ReviewResult {
+      return {
+        schemaVersion: 1,
+        reviewId: "1111111111111111",
+        workflow: "review",
+        decision: "approve",
+        recommendedDecision: "approve",
+        summary: "Review completed.",
+        findingIds: [],
+        verificationEnvelopeIds: ["2222222222222222"],
+        counts: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0, total: 0 },
+        blockingFindingIds: [],
+        missingVerification: false,
+        createdAt: "2026-04-29T00:00:00.000Z",
+        source: { tool: "review_complete", version: "4.x.x", runId: "ses_test" },
+        ...overrides,
+      }
+    }
+
+    test("returns empty string when no review result exists", () => {
+      expect(renderSessionReviewResultsSummary([])).toBe("")
+    })
+
+    test("renders latest review decision and verification state", () => {
+      const line = renderSessionReviewResultsSummary([
+        reviewResult({ decision: "needs_verification", missingVerification: true }),
+        reviewResult({
+          decision: "request_changes",
+          recommendedDecision: "request_changes",
+          counts: { CRITICAL: 0, HIGH: 1, MEDIUM: 1, LOW: 0, INFO: 0, total: 2 },
+          blockingFindingIds: ["3333333333333333"],
+        }),
+      ])
+      expect(line).toBe("Review request changes · 2 findings · 1 blocking · verified")
     })
   })
 
