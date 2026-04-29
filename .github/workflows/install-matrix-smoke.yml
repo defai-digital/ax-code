@@ -184,3 +184,90 @@ jobs:
           # without needing provider credentials. `debug config` reads
           # config and exits.
           ax-code debug config || true
+
+  homebrew:
+    name: macos-latest / homebrew
+    runs-on: macos-latest
+    steps:
+      - name: Resolve version under test
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Filter dispatch channel
+        id: channel
+        shell: bash
+        run: |
+          REQUESTED="${{ inputs.channel }}"
+          if [ -z "$REQUESTED" ] || [ "$REQUESTED" = "both" ] || [ "$REQUESTED" = "latest" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping homebrew smoke (workflow_dispatch requested ${REQUESTED})"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install ax-code from Homebrew tap
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Waiting for Homebrew tap formula ax-code ${VERSION}..."
+          brew update
+          for attempt in $(seq 1 60); do
+            brew tap defai-digital/ax-code >/dev/null
+            if brew info defai-digital/ax-code/ax-code | grep -q "${VERSION}"; then
+              echo "Homebrew formula ${VERSION} is available (attempt ${attempt})"
+              break
+            fi
+            if [ "$attempt" = "60" ]; then
+              echo "FAIL: Homebrew formula did not converge to ${VERSION} after 10 minutes"
+              brew info defai-digital/ax-code/ax-code || true
+              exit 1
+            fi
+            brew update
+            sleep 10
+          done
+          brew install defai-digital/ax-code/ax-code
+
+      - name: ax-code --version
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          OUTPUT="$(ax-code --version)"
+          echo "$OUTPUT"
+          if [ "$OUTPUT" != "$VERSION" ] && [ "$OUTPUT" != "v$VERSION" ]; then
+            echo "FAIL: expected ax-code --version to be ${VERSION}, got ${OUTPUT}"
+            exit 1
+          fi
+
+      - name: ax-code doctor — assert Homebrew runtime is compiled
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          OUTPUT="$(ax-code doctor 2>&1)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -E "Runtime: Bun .* \(compiled\)" \
+            || (echo "FAIL: Homebrew formula did not report compiled runtimeMode" && exit 1)
+
+      - name: Smoke — installed backend stdio handshake
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          set -e
+          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | ax-code tui-backend --stdio 2>&1)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
+            || (echo "FAIL: Homebrew installed backend did not return rpc health result" && exit 1)
+          echo "$OUTPUT" | grep -E '"runtimeMode":"compiled"' \
+            || (echo "FAIL: Homebrew installed backend did not report compiled runtimeMode" && exit 1)
