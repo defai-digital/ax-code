@@ -95,12 +95,19 @@ export function hasPassingVerification(envelopes: readonly VerificationEnvelopeW
   return envelopes.some((item) => item.envelope.result.status === "passed")
 }
 
+export function hasSuccessfulVerificationSet(envelopes: readonly VerificationEnvelopeWithId[]): boolean {
+  return (
+    hasPassingVerification(envelopes) &&
+    envelopes.every((item) => item.envelope.result.status === "passed" || item.envelope.result.status === "skipped")
+  )
+}
+
 export function recommendReviewDecision(
   findings: readonly Finding[],
   verificationEnvelopes: readonly VerificationEnvelopeWithId[],
 ): ReviewDecision {
   if (blockingFindingIds(findings).length > 0) return "request_changes"
-  if (!hasPassingVerification(verificationEnvelopes)) return "needs_verification"
+  if (!hasSuccessfulVerificationSet(verificationEnvelopes)) return "needs_verification"
   return "approve"
 }
 
@@ -128,7 +135,7 @@ export function createReviewResult(input: CreateReviewResultInput): ReviewResult
     verificationEnvelopeIds,
     counts: countSeverities(input.findings),
     blockingFindingIds: blockingFindingIds(input.findings),
-    missingVerification: !hasPassingVerification(input.verificationEnvelopes),
+    missingVerification: !hasSuccessfulVerificationSet(input.verificationEnvelopes),
     overrideReason: input.overrideReason,
     createdAt: input.createdAt ?? new Date().toISOString(),
     source: input.source,

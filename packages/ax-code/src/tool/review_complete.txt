@@ -11,8 +11,8 @@ Input:
 
 Decision guardrails:
 - HIGH or CRITICAL review findings force request_changes.
-- approve requires at least one passed verification envelope.
-- If there are no blocking findings but no passed verification, the recommended decision is needs_verification.
+- approve requires a successful verification set: at least one passed envelope and no failed, error, or timeout envelopes in the selected set.
+- If there are no blocking findings but the selected verification set is missing or not fully passing, the recommended decision is needs_verification.
 
 Output:
 - reviewId: deterministic id for the review result

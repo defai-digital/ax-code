@@ -394,7 +394,7 @@ export function renderSessionReviewResultsSummary(results: readonly ReviewResult
   const decision = latest.decision.replaceAll("_", " ")
   const findings = latest.counts.total
   const blocking = latest.blockingFindingIds.length
-  const checks = latest.missingVerification ? "verification missing" : "verified"
+  const checks = latest.missingVerification ? "verification needed" : "verified"
   return `Review ${decision} · ${findings} finding${findings === 1 ? "" : "s"} · ${blocking} blocking · ${checks}`
 }
 

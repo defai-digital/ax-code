@@ -85,7 +85,7 @@ function emitEnvelope(sessionID: string, item: VerificationEnvelope) {
     type: "tool.result",
     sessionID: sessionID as any,
     tool: "verify_project",
-    callID: "call-verify",
+    callID: `call-verify-${computeEnvelopeId(item)}`,
     status: "completed",
     output: "verified",
     metadata: { verificationEnvelopes: [item] },
@@ -178,7 +178,41 @@ describe("ReviewCompleteTool", () => {
         expect(result.metadata.reviewResult.missingVerification).toBe(true)
         await expect(
           tool.execute({ summary: "Should not approve.", decision: "approve" }, ctx(session.id)),
-        ).rejects.toThrow(/without at least one passed verification/)
+        ).rejects.toThrow(/without a successful verification set/)
+      },
+    })
+  })
+
+  test("does not approve when selected verification has both passed and failed envelopes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const low = finding(session.id)
+        const passed = envelope(session.id, "passed")
+        const failed = envelope(session.id, "failed")
+
+        Recorder.begin(session.id)
+        emitFinding(session.id, low)
+        emitEnvelope(session.id, passed)
+        emitEnvelope(session.id, failed)
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const tool = await ReviewCompleteTool.init()
+        const result = await tool.execute({ summary: "Review still needs a clean verification set." }, ctx(session.id))
+
+        expect(result.title).toBe("review_complete needs_verification")
+        expect(result.metadata.reviewResult).toMatchObject({
+          decision: "needs_verification",
+          recommendedDecision: "needs_verification",
+          missingVerification: true,
+        })
+        expect(result.output).toContain("verification not fully passing")
+        await expect(
+          tool.execute({ summary: "Should not approve.", decision: "approve" }, ctx(session.id)),
+        ).rejects.toThrow(/without a successful verification set/)
       },
     })
   })

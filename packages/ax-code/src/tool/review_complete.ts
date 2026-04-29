@@ -56,7 +56,9 @@ function validateDecision(input: {
     )
   }
   if (input.decision === "approve" && input.missingVerification) {
-    throw new Error("Cannot approve review without at least one passed verification envelope.")
+    throw new Error(
+      "Cannot approve review without a successful verification set: cite at least one passed envelope and no failed, error, or timeout envelopes.",
+    )
   }
   if (!input.overrideReason) {
     throw new Error(
@@ -105,7 +107,7 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       `Recommended: ${draft.recommendedDecision}`,
       `Findings: ${draft.counts.total} (${draft.blockingFindingIds.length} blocking)`,
       `Verification envelopes: ${draft.verificationEnvelopeIds.length}${
-        draft.missingVerification ? " (no passed verification)" : ""
+        draft.missingVerification ? " (verification not fully passing)" : ""
       }`,
       `Review id: ${draft.reviewId}`,
     ]

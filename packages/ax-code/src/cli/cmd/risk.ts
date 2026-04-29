@@ -40,7 +40,7 @@ export namespace RiskView {
     const blocking = result.blockingFindingIds.length
     const findings = result.counts.total
     const checks = result.missingVerification
-      ? "verification missing"
+      ? "verification needed"
       : `${result.verificationEnvelopeIds.length} verification envelope${result.verificationEnvelopeIds.length === 1 ? "" : "s"}`
     const recommendation =
       result.decision === result.recommendedDecision

@@ -910,6 +910,13 @@ describe("tui session quality actions", () => {
       ])
       expect(line).toBe("Review request changes · 2 findings · 1 blocking · verified")
     })
+
+    test("renders verification-needed state when review lacks a clean verification set", () => {
+      const line = renderSessionReviewResultsSummary([
+        reviewResult({ decision: "needs_verification", missingVerification: true }),
+      ])
+      expect(line).toBe("Review needs verification · 0 findings · 0 blocking · verification needed")
+    })
   })
 
   describe("renderSessionQualitySidebarLine", () => {
