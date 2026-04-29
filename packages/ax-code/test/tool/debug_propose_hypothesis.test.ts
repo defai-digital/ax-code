@@ -247,6 +247,91 @@ describe("DebugProposeHypothesisTool", () => {
     })
   })
 
+  test("status confirmed requires a passed VerificationEnvelope evidenceRef", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "log content")
+
+        const failedEnvelope: VerificationEnvelope = {
+          schemaVersion: 1,
+          workflow: "qa",
+          scope: { kind: "file", paths: ["src/foo.ts"] },
+          command: { runner: "typecheck", argv: [], cwd: "/tmp" },
+          result: {
+            name: "typecheck",
+            type: "typecheck",
+            passed: false,
+            status: "failed",
+            issues: [],
+            duration: 0,
+          },
+          structuredFailures: [],
+          artifactRefs: [],
+          source: { tool: "verify_project", version: "4.x.x", runId: session.id },
+        }
+        const passedEnvelope: VerificationEnvelope = {
+          ...failedEnvelope,
+          result: {
+            ...failedEnvelope.result,
+            passed: true,
+            status: "passed",
+          },
+        }
+        const failedEnvelopeId = computeEnvelopeId(failedEnvelope)
+        const passedEnvelopeId = computeEnvelopeId(passedEnvelope)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "verify_project",
+          callID: "call-verify",
+          status: "completed",
+          metadata: { verificationEnvelopes: [failedEnvelope, passedEnvelope] },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const tool = await DebugProposeHypothesisTool.init()
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "log evidence alone should not confirm",
+              evidenceRefs: [evidenceId],
+              status: "confirmed",
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/without a passed VerificationEnvelope/)
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "failed verification should not confirm",
+              evidenceRefs: [failedEnvelopeId],
+              status: "confirmed",
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/without a passed VerificationEnvelope/)
+
+        const result = await tool.execute(
+          {
+            caseId,
+            claim: "passed verification confirms the fix",
+            evidenceRefs: [failedEnvelopeId, passedEnvelopeId],
+            status: "confirmed",
+          },
+          fakeCtx(session.id),
+        )
+        expect(result.metadata.debugHypothesis.status).toBe("confirmed")
+        expect(result.metadata.debugHypothesis.evidenceRefs).toContain(passedEnvelopeId)
+      },
+    })
+  })
+
   test("rejects evidenceRefs id that exists in neither DebugEvidence nor VerificationEnvelope", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

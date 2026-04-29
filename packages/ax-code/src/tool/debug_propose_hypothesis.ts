@@ -38,6 +38,20 @@ function computeConfidence(input: {
   return Math.min(base + staticBoost + runtimeBoost, 0.95)
 }
 
+function validateConfirmedStatus(input: {
+  status: z.infer<typeof DebugHypothesisStatus> | undefined
+  evidenceRefs: readonly string[]
+  verificationEnvelopes: ReturnType<typeof SessionVerifications.loadWithIds>
+}) {
+  if (input.status !== "confirmed") return
+  const envelopeById = new Map(input.verificationEnvelopes.map((item) => [item.envelopeId, item.envelope]))
+  const passingEnvelopeId = input.evidenceRefs.find((id) => envelopeById.get(id)?.result.status === "passed")
+  if (passingEnvelopeId) return
+  throw new Error(
+    'Cannot mark hypothesis as confirmed without a passed VerificationEnvelope evidenceRef from this session. Run verify_project after the fix and cite its passed envelope id.',
+  )
+}
+
 export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -62,8 +76,9 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
         `caseId references an unknown debug case: ${args.caseId} (no DebugCase with this id was opened in session ${ctx.sessionID})`,
       )
     }
+    const verificationEnvelopes = SessionVerifications.loadWithIds(sessionID)
     if (evidenceRefs.length > 0) {
-      const envelopeIds = SessionVerifications.envelopeIdSet(sessionID)
+      const envelopeIds = new Set(verificationEnvelopes.map((item) => item.envelopeId))
       for (const id of evidenceRefs) {
         if (!evidenceIds.has(id) && !envelopeIds.has(id)) {
           throw new Error(
@@ -72,6 +87,11 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
         }
       }
     }
+    validateConfirmedStatus({
+      status: args.status,
+      evidenceRefs,
+      verificationEnvelopes,
+    })
 
     const hypothesisId = computeDebugHypothesisId({ caseId: args.caseId, claim: args.claim })
     const confidence = computeConfidence({
