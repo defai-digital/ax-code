@@ -219,7 +219,11 @@ export namespace FileWatcher {
       }
 
       const subscribe = async (dir: string, ignore: string[]) => {
-        if (Flag.AX_CODE_NATIVE_FS) {
+        // Native filesystem acceleration remains enabled for scan/glob/grep
+        // paths, but the long-lived watcher is more sensitive to platform
+        // event delivery differences. Keep it opt-in until the native watcher
+        // has parity coverage; the poll watcher is slower but deterministic.
+        if (Flag.AX_CODE_NATIVE_FS && flagBoolean("AX_CODE_NATIVE_WATCHER", false)) {
           try {
             await withTimeout(
               subscribeNative(dir, ignore),

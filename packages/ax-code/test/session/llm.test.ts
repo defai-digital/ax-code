@@ -192,15 +192,19 @@ function createChatStream(text: string) {
 async function loadFixture(providerID: string, modelID: string) {
   const fixturePath = path.join(import.meta.dir, "../tool/fixtures/models-api.json")
   const data = await Filesystem.readJson<Record<string, ModelsDev.Provider>>(fixturePath)
+  const fallback = await Filesystem.readJson<Record<string, ModelsDev.Provider>>(
+    path.join(import.meta.dir, "../../src/provider/models-snapshot.json"),
+  )
   const provider = data[providerID]
-  if (!provider) {
+  const fallbackProvider = fallback[providerID]
+  if (!provider && !fallbackProvider) {
     throw new Error(`Missing provider in fixture: ${providerID}`)
   }
-  const model = provider.models[modelID]
+  const model = provider?.models[modelID] ?? fallbackProvider?.models[modelID]
   if (!model) {
     throw new Error(`Missing model in fixture: ${modelID}`)
   }
-  return { provider, model }
+  return { provider: provider ?? fallbackProvider!, model }
 }
 
 function createEventStream(chunks: unknown[], includeDone = false) {
@@ -228,7 +232,7 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 describe("session.llm.stream", () => {
   test("sends temperature, tokens, and reasoning options for openai-compatible models", async () => {
     const providerID = "alibaba"
-    const modelID = "qwen-plus"
+    const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
     const provider = fixture.provider
     const model = fixture.model
@@ -325,7 +329,7 @@ describe("session.llm.stream", () => {
 
   test("keeps tools enabled by prompt permissions", async () => {
     const providerID = "alibaba"
-    const modelID = "qwen-plus"
+    const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
 
@@ -409,7 +413,7 @@ describe("session.llm.stream", () => {
 
   test("sends required StructuredOutput tool schema for json_schema output", async () => {
     const providerID = "alibaba"
-    const modelID = "qwen-plus"
+    const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
     const provider = fixture.provider
     const model = fixture.model
@@ -612,7 +616,7 @@ describe("session.llm.stream", () => {
     "adds noop tool for LiteLLM-compatible histories with prior tool calls",
     async () => {
       const providerID = "alibaba"
-      const modelID = "qwen-plus"
+      const modelID = "qwen3.6-plus"
       const fixture = await loadFixture(providerID, modelID)
       const model = fixture.model
 

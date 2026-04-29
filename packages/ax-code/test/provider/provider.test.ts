@@ -1124,7 +1124,7 @@ test("multiple providers can be configured simultaneously", async () => {
             xai: {
               options: { timeout: 30000 },
             },
-            groq: {
+            alibaba: {
               options: { timeout: 60000 },
             },
           },
@@ -1136,14 +1136,14 @@ test("multiple providers can be configured simultaneously", async () => {
     directory: tmp.path,
     init: async () => {
       Env.set("XAI_API_KEY", "test-openai-key")
-      Env.set("GROQ_API_KEY", "test-openrouter-key")
+      Env.set("DASHSCOPE_API_KEY", "test-dashscope-key")
     },
     fn: async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.xai]).toBeDefined()
-      expect(providers[ProviderID.make("groq")]).toBeDefined()
+      expect(providers[ProviderID.make("alibaba")]).toBeDefined()
       expect(providers[ProviderID.xai].options.timeout).toBe(30000)
-      expect(providers[ProviderID.make("groq")].options.timeout).toBe(60000)
+      expect(providers[ProviderID.make("alibaba")].options.timeout).toBe(60000)
     },
   })
 })
