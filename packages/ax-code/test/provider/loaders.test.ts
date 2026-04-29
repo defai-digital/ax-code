@@ -15,88 +15,68 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
+async function expectMissingCliProvider(input: {
+  providerID: string
+  binary: string
+  baseModelID: string
+  discoveredModelIDs: string[]
+}) {
+  if (which(input.binary)) return
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          provider: { [input.providerID]: {} },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      const provider = providers[ProviderID.make(input.providerID)]
+      expect(provider).toBeDefined()
+      expect(Object.keys(provider.models)).toEqual([input.baseModelID])
+      for (const modelID of input.discoveredModelIDs) {
+        expect(provider.models[ModelID.make(modelID)]).toBeUndefined()
+      }
+
+      const model = provider.models[ModelID.make(input.baseModelID)]!
+      await expect(Provider.getLanguage(model)).rejects.toThrow(`${input.binary} CLI not found in PATH`)
+    },
+  })
+}
+
 describe("CLI provider loaders", () => {
-  test("claude-code provider not discovered when binary missing", async () => {
-    // This test verifies behavior when the claude binary is not in PATH.
-    // If claude IS installed on this machine, the provider may be found.
-    const hasClaude = !!which("claude")
-    if (hasClaude) return // skip — can't test "binary missing" when it's installed
-
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({
-            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-            provider: { "claude-code": {} },
-          }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const providers = await Provider.list()
-        const claude = providers[ProviderID.make("claude-code")]
-        // If the binary doesn't exist, models should be empty
-        if (claude) {
-          expect(Object.keys(claude.models).length).toBe(0)
-        }
-      },
+  test("claude-code configured provider keeps install error path when binary missing", async () => {
+    await expectMissingCliProvider({
+      providerID: "claude-code",
+      binary: "claude",
+      baseModelID: "claude-code",
+      discoveredModelIDs: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
     })
   })
 
-  test("gemini-cli provider not discovered when binary missing", async () => {
-    const hasGemini = !!which("gemini")
-    if (hasGemini) return
-
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({
-            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-            provider: { "gemini-cli": {} },
-          }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const providers = await Provider.list()
-        const gemini = providers[ProviderID.make("gemini-cli")]
-        if (gemini) {
-          expect(Object.keys(gemini.models).length).toBe(0)
-        }
-      },
+  test("gemini-cli configured provider keeps install error path when binary missing", async () => {
+    await expectMissingCliProvider({
+      providerID: "gemini-cli",
+      binary: "gemini",
+      baseModelID: "gemini-cli",
+      discoveredModelIDs: ["gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
     })
   })
 
-  test("codex-cli provider not discovered when binary missing", async () => {
-    const hasCodex = !!which("codex")
-    if (hasCodex) return
-
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({
-            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-            provider: { "codex-cli": {} },
-          }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const providers = await Provider.list()
-        const codex = providers[ProviderID.make("codex-cli")]
-        if (codex) {
-          expect(Object.keys(codex.models).length).toBe(0)
-        }
-      },
+  test("codex-cli configured provider keeps install error path when binary missing", async () => {
+    await expectMissingCliProvider({
+      providerID: "codex-cli",
+      binary: "codex",
+      baseModelID: "codex-cli",
+      discoveredModelIDs: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark"],
     })
   })
 })
