@@ -468,7 +468,8 @@ describe("tui OpenTUI stability guardrails", () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
     const footerViewModel = await fs.readFile(FOOTER_VIEW_MODEL_SRC, "utf8")
 
-    expect(sidebar).toContain("sidebarSessionStatusView")
+    expect(sidebar).toContain("sidebarStatusText")
+    expect(sidebar).toContain("footerSessionStatusView")
     expect(sidebar).toContain("titleStatus().label")
     expect(footerViewModel).toContain('"Thinking..."')
     expect(footerViewModel).toContain('"Processing..."')
