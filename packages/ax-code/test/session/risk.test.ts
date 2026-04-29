@@ -280,7 +280,60 @@ describe("session.risk", () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
 
-  test("default load omits all opt-in fields (quality/findings/envelopes)", async () => {
+  async function emitEditAndFailedValidation(sessionID: SessionID, directory: string) {
+    Recorder.begin(sessionID)
+    Recorder.emit({
+      type: "session.start",
+      sessionID,
+      agent: "build",
+      model: "test/model",
+      directory,
+    })
+    Recorder.emit({
+      type: "tool.call",
+      sessionID,
+      tool: "edit",
+      callID: "call-edit",
+      input: { filePath: "src/foo.ts" },
+    })
+    Recorder.emit({
+      type: "tool.result",
+      sessionID,
+      tool: "edit",
+      callID: "call-edit",
+      status: "completed",
+      output: "edited",
+      metadata: {},
+      durationMs: 1,
+    })
+    Recorder.emit({
+      type: "tool.call",
+      sessionID,
+      tool: "bash",
+      callID: "call-test",
+      input: { command: "bun test test/foo.test.ts", description: "Run focused test" },
+    })
+    Recorder.emit({
+      type: "tool.result",
+      sessionID,
+      tool: "bash",
+      callID: "call-test",
+      status: "completed",
+      output: "1 failed",
+      metadata: { exit: 1 },
+      durationMs: 1,
+    })
+    Recorder.emit({
+      type: "session.end",
+      sessionID,
+      reason: "completed",
+      totalSteps: 0,
+    })
+    Recorder.end(sessionID)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+
+  test("default load omits all opt-in fields (quality/findings/envelopes/decisionHints)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -292,6 +345,35 @@ describe("session.risk", () => {
           expect(detail.quality).toBeUndefined()
           expect(detail.findings).toBeUndefined()
           expect(detail.envelopes).toBeUndefined()
+          expect(detail.decisionHints).toBeUndefined()
+        } finally {
+          EventQuery.deleteBySession(session.id)
+        }
+      },
+    })
+  })
+
+  test("includeDecisionHints: true summarizes replay evidence without changing base risk", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await emitEditAndFailedValidation(session.id, tmp.path)
+        try {
+          const detail = await SessionRisk.load(session.id, { includeDecisionHints: true })
+          expect(detail.decisionHints).toMatchObject({
+            source: "replay",
+            readiness: "blocked",
+            actionCount: 2,
+            hintCount: 1,
+          })
+          expect(detail.decisionHints?.hints[0]).toMatchObject({
+            id: "failed-validation-after-edit",
+            category: "failed_validation",
+          })
+          expect(detail.decisionHints?.hints[0]?.evidence.join("\n")).toContain("src/foo.ts")
+          expect(detail.assessment).toBeDefined()
         } finally {
           EventQuery.deleteBySession(session.id)
         }

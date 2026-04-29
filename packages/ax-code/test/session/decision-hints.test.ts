@@ -66,6 +66,16 @@ describe("DecisionHints", () => {
     expect(DecisionHints.render(hints)).toBeUndefined()
   })
 
+  test("summarizes empty history as clear with no source", () => {
+    expect(DecisionHints.summarizeSources({})).toMatchObject({
+      source: "none",
+      readiness: "clear",
+      actionCount: 0,
+      hintCount: 0,
+      hints: [],
+    })
+  })
+
   test("suggests targeted validation after a completed file change", () => {
     const hints = DecisionHints.fromMessages([
       toolMessage("m1", "edit", completed("edit", { filePath: "/repo/src/app.ts" })),
@@ -77,6 +87,17 @@ describe("DecisionHints", () => {
       category: "missing_verification",
     })
     expect(hints[0]!.evidence.join("\n")).toContain("/repo/src/app.ts")
+  })
+
+  test("summarizes missing validation as a needs-validation advisory", () => {
+    expect(
+      DecisionHints.summarizeMessages([toolMessage("m1", "edit", completed("edit", { filePath: "/repo/src/app.ts" }))]),
+    ).toMatchObject({
+      source: "messages",
+      readiness: "needs_validation",
+      actionCount: 1,
+      hintCount: 1,
+    })
   })
 
   test("suppresses missing-validation hints after a successful validation command", () => {
@@ -107,6 +128,21 @@ describe("DecisionHints", () => {
       id: "failed-validation-after-edit",
       category: "failed_validation",
       confidence: 0.9,
+    })
+    expect(
+      DecisionHints.summarizeMessages([
+        toolMessage("m1", "write", completed("write", { filePath: "/repo/src/app.ts" })),
+        toolMessage(
+          "m2",
+          "bash",
+          completed("bash", { command: "bun test test/app.test.ts", description: "Run focused test" }, { exit: 1 }),
+        ),
+      ]),
+    ).toMatchObject({
+      source: "messages",
+      readiness: "blocked",
+      actionCount: 2,
+      hintCount: 1,
     })
 
     const recovered = DecisionHints.fromMessages([

@@ -10,9 +10,11 @@ import { Log } from "../util/log"
 import { Session } from "."
 import { SessionBranchRank } from "./branch"
 import { SessionDebug } from "./debug"
+import { DecisionHints } from "./decision-hints"
 import { SessionFindings } from "./findings"
 import { SessionSemanticDiff } from "./semantic-diff"
 import { SessionVerifications } from "./verifications"
+import { EventQuery } from "../replay/query"
 import type { SessionID } from "./schema"
 
 export namespace SessionRisk {
@@ -43,6 +45,7 @@ export namespace SessionRisk {
       findings: FindingSchema.array().optional(),
       envelopes: VerificationEnvelopeSchema.array().optional(),
       debug: DebugBundle.optional(),
+      decisionHints: DecisionHints.SummarySchema.optional(),
     })
     .meta({
       ref: "SessionRiskDetail",
@@ -58,6 +61,7 @@ export namespace SessionRisk {
     findings?: Detail["findings"]
     envelopes?: Detail["envelopes"]
     debug?: Detail["debug"]
+    decisionHints?: Detail["decisionHints"]
   }) {
     return {
       id: input.id,
@@ -69,6 +73,7 @@ export namespace SessionRisk {
       findings: input.findings,
       envelopes: input.envelopes,
       debug: input.debug,
+      decisionHints: input.decisionHints,
     } satisfies Detail
   }
 
@@ -97,6 +102,7 @@ export namespace SessionRisk {
       includeFindings?: boolean
       includeEnvelopes?: boolean
       includeDebug?: boolean
+      includeDecisionHints?: boolean
     },
   ) {
     const [session, semantic] = await Promise.all([Session.get(sessionID), SessionSemanticDiff.load(sessionID)])
@@ -108,6 +114,9 @@ export namespace SessionRisk {
     const findings = options?.includeFindings ? SessionFindings.load(sessionID) : undefined
     const envelopes = options?.includeEnvelopes ? SessionVerifications.load(sessionID) : undefined
     const debug = options?.includeDebug ? SessionDebug.load(sessionID) : undefined
+    const decisionHints = options?.includeDecisionHints
+      ? DecisionHints.summarizeEvents(EventQuery.recentBySession(sessionID))
+      : undefined
     return detail({
       id: sessionID,
       title: session.title,
@@ -117,6 +126,7 @@ export namespace SessionRisk {
       findings,
       envelopes,
       debug,
+      decisionHints,
     })
   }
 }

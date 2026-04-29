@@ -149,6 +149,24 @@ describe("session risk endpoint", () => {
           expect(base.status).toBe(200)
           const baseBody = (await base.json()) as Record<string, unknown>
           expect(baseBody["quality"]).toBeUndefined()
+          expect(baseBody["decisionHints"]).toBeUndefined()
+
+          const hints = await app.request(`/session/${sid}/risk?hints=true`)
+          expect(hints.status).toBe(200)
+          const hintsBody = (await hints.json()) as {
+            decisionHints?: {
+              source: string
+              readiness: string
+              actionCount: number
+              hintCount: number
+            }
+          }
+          expect(hintsBody.decisionHints).toMatchObject({
+            source: "replay",
+            readiness: "clear",
+            actionCount: 2,
+            hintCount: 0,
+          })
 
           const enriched = await app.request(`/session/${sid}/risk?quality=true`)
           expect(enriched.status).toBe(200)

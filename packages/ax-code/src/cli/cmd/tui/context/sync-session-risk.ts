@@ -2,6 +2,7 @@ import z from "zod"
 import { FindingSchema } from "../../../../quality/finding"
 import { VerificationEnvelopeSchema } from "../../../../quality/verification-envelope"
 import { DebugCaseSchema, DebugEvidenceSchema, DebugHypothesisSchema } from "../../../../debug-engine/runtime-debug"
+import { DecisionHints } from "../../../../session/decision-hints"
 
 export const SyncedSessionQualityReadiness = z.object({
   workflow: z.enum(["review", "debug", "qa"]),
@@ -42,6 +43,7 @@ export const SyncedSessionRisk = z.object({
       hypotheses: z.array(DebugHypothesisSchema),
     })
     .optional(),
+  decisionHints: DecisionHints.SummarySchema.optional(),
 })
 export type SyncedSessionRisk = z.output<typeof SyncedSessionRisk>
 

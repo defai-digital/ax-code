@@ -1,17 +1,29 @@
 import type { MessageV2 } from "./message-v2"
 import type { ReplayEvent } from "@/replay/event"
+import z from "zod"
 
 export namespace DecisionHints {
-  export type Category = "missing_verification" | "failed_validation"
+  export const CategorySchema = z.enum(["missing_verification", "failed_validation"])
+  export type Category = z.output<typeof CategorySchema>
 
-  export interface Hint {
-    id: string
-    category: Category
-    confidence: number
-    title: string
-    body: string
-    evidence: string[]
-  }
+  export const HintSchema = z.object({
+    id: z.string(),
+    category: CategorySchema,
+    confidence: z.number().min(0).max(1),
+    title: z.string(),
+    body: z.string(),
+    evidence: z.string().array(),
+  })
+  export type Hint = z.output<typeof HintSchema>
+
+  export const SummarySchema = z.object({
+    source: z.enum(["replay", "messages", "none"]),
+    readiness: z.enum(["clear", "needs_validation", "blocked"]),
+    actionCount: z.number().int().nonnegative(),
+    hintCount: z.number().int().nonnegative(),
+    hints: HintSchema.array(),
+  })
+  export type Summary = z.output<typeof SummarySchema>
 
   interface ToolAction {
     index: number
@@ -42,6 +54,10 @@ export namespace DecisionHints {
     return analyzeMessages(messages).hints
   }
 
+  export function summarizeMessages(messages?: MessageV2.WithParts[]): Summary {
+    return summarizeAnalysis("messages", analyzeMessages(messages))
+  }
+
   export function analyzeEvents(events?: ReplayEvent[]): Analysis {
     const actions = collectReplayActions(events ?? [])
     return { hints: fromActions(actions), actionCount: actions.length }
@@ -51,10 +67,30 @@ export namespace DecisionHints {
     return analyzeEvents(events).hints
   }
 
+  export function summarizeEvents(events?: ReplayEvent[]): Summary {
+    return summarizeAnalysis("replay", analyzeEvents(events))
+  }
+
   export function fromSources(input: { messages?: MessageV2.WithParts[]; events?: ReplayEvent[] }): Hint[] {
+    return summarizeSources(input).hints
+  }
+
+  export function summarizeSources(input: { messages?: MessageV2.WithParts[]; events?: ReplayEvent[] }): Summary {
     const replay = analyzeEvents(input.events)
-    if (replay.actionCount > 0) return replay.hints
-    return analyzeMessages(input.messages).hints
+    if (replay.actionCount > 0) return summarizeAnalysis("replay", replay)
+    const messages = analyzeMessages(input.messages)
+    if (messages.actionCount > 0) return summarizeAnalysis("messages", messages)
+    return summarizeAnalysis("none", { hints: [], actionCount: 0 })
+  }
+
+  export function summarizeAnalysis(source: Summary["source"], analysis: Analysis): Summary {
+    return SummarySchema.parse({
+      source: analysis.actionCount > 0 ? source : "none",
+      readiness: readinessFor(analysis.hints),
+      actionCount: analysis.actionCount,
+      hintCount: analysis.hints.length,
+      hints: analysis.hints,
+    })
   }
 
   export function render(hints: Hint[]): string | undefined {
@@ -109,6 +145,12 @@ export namespace DecisionHints {
     }
 
     return []
+  }
+
+  function readinessFor(hints: Hint[]): Summary["readiness"] {
+    if (hints.some((hint) => hint.category === "failed_validation")) return "blocked"
+    if (hints.some((hint) => hint.category === "missing_verification")) return "needs_validation"
+    return "clear"
   }
 
   function collectMessageActions(messages: MessageV2.WithParts[]): ToolAction[] {
@@ -197,6 +239,10 @@ export namespace DecisionHints {
     const escaped = text.replace(DECISION_HINT_TAG, (match) =>
       match.startsWith("</") ? "[/decision-hints]" : "[decision-hints]",
     )
-    return escaped.replace(/[<>]/g, (char) => (char === "<" ? "[" : "]")).replace(/\s+/g, " ").trim().slice(0, 240)
+    return escaped
+      .replace(/[<>]/g, (char) => (char === "<" ? "[" : "]"))
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240)
   }
 }

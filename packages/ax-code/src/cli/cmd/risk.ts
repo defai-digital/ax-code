@@ -6,6 +6,7 @@ import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
 
 export namespace RiskView {
   type ReplayReadinessSummary = NonNullable<SessionRisk.QualityReadiness["review"]>
+  type DecisionHintSummary = NonNullable<SessionRisk.Detail["decisionHints"]>
 
   function validation(input: SessionRisk.Detail["assessment"]["signals"]) {
     if (input.validationState === "passed") return "validation passed"
@@ -22,6 +23,12 @@ export namespace RiskView {
     const nextAction = ProbabilisticRollout.readinessNextActionLabel(summary)
     const next = nextAction ? ` · next: ${nextAction}` : ""
     return `  ${workflow}: ${readiness} · ${detail}${first}${next}`
+  }
+
+  function decisionHintReadiness(summary: DecisionHintSummary) {
+    if (summary.readiness === "blocked") return "blocked by failed validation"
+    if (summary.readiness === "needs_validation") return "needs validation"
+    return "clear"
   }
 
   export function lines(input: SessionRisk.Detail, explain = false) {
@@ -65,6 +72,18 @@ export namespace RiskView {
       out.push("  Quality Readiness")
       out.push("  " + "-".repeat(40))
       out.push(...readinessLines)
+    }
+
+    if (input.decisionHints) {
+      out.push("")
+      out.push("  Decision Hints")
+      out.push("  " + "-".repeat(40))
+      out.push(
+        `  ${decisionHintReadiness(input.decisionHints)} · ${input.decisionHints.hintCount} hints · ${input.decisionHints.actionCount} recent tool results · ${input.decisionHints.source}`,
+      )
+      for (const hint of input.decisionHints.hints) {
+        out.push(`  - ${hint.title} (${Math.round(hint.confidence * 100)}%): ${hint.body}`)
+      }
     }
 
     if (input.drivers.length > 0) {
@@ -126,13 +145,21 @@ export const RiskCommand = cmd({
         type: "boolean",
         default: true,
       })
+      .option("hints", {
+        describe: "Include advisory decision hints from recent replay evidence",
+        type: "boolean",
+        default: true,
+      })
       .option("json", { describe: "Output as JSON", type: "boolean", default: false }),
   async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {
         const sessionID = SessionID.make(args.sessionID as string)
-        const detail = await SessionRisk.load(sessionID, { includeQuality: Boolean(args.quality) })
+        const detail = await SessionRisk.load(sessionID, {
+          includeQuality: Boolean(args.quality),
+          includeDecisionHints: Boolean(args.hints),
+        })
 
         if (args.json) {
           console.log(JSON.stringify(detail, null, 2))

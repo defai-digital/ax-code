@@ -381,6 +381,9 @@ export const SessionRoutes = lazy(() =>
             description:
               "Include the validated DebugCase / DebugEvidence / DebugHypothesis bundles emitted by Phase 3 runtime debug tools",
           }),
+          hints: z.coerce.boolean().optional().default(false).meta({
+            description: "Include advisory decision-hint readiness derived from recent replay tool evidence",
+          }),
         }),
       ),
       async (c) => {
@@ -392,6 +395,7 @@ export const SessionRoutes = lazy(() =>
             includeFindings: query.findings,
             includeEnvelopes: query.envelopes,
             includeDebug: query.debug,
+            includeDecisionHints: query.hints,
           }),
         )
       },
