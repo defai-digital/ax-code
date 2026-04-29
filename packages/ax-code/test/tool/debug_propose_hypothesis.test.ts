@@ -304,7 +304,7 @@ describe("DebugProposeHypothesisTool", () => {
             },
             fakeCtx(session.id),
           ),
-        ).rejects.toThrow(/without a passed VerificationEnvelope/)
+        ).rejects.toThrow(/without a successful VerificationEnvelope evidence set/)
         await expect(
           tool.execute(
             {
@@ -315,13 +315,25 @@ describe("DebugProposeHypothesisTool", () => {
             },
             fakeCtx(session.id),
           ),
-        ).rejects.toThrow(/without a passed VerificationEnvelope/)
+        ).rejects.toThrow(/without a successful VerificationEnvelope evidence set/)
+
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "mixed verification should not confirm",
+              evidenceRefs: [failedEnvelopeId, passedEnvelopeId],
+              status: "confirmed",
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/without a successful VerificationEnvelope evidence set/)
 
         const result = await tool.execute(
           {
             caseId,
             claim: "passed verification confirms the fix",
-            evidenceRefs: [failedEnvelopeId, passedEnvelopeId],
+            evidenceRefs: [passedEnvelopeId],
             status: "confirmed",
           },
           fakeCtx(session.id),

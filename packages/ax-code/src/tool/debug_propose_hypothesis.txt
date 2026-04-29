@@ -25,4 +25,4 @@ Output:
 Hard rules:
 - Do NOT propose a hypothesis without at least one piece of evidence (refs or static analysis). The schema allows it but it's a smell.
 - Do NOT invent evidenceRefs or sourceCallId — only cite ids you've actually observed.
-- Do NOT claim status: "confirmed" until verification has actually passed. The tool rejects confirmed hypotheses unless evidenceRefs includes a passed VerificationEnvelope id from this session.
+- Do NOT claim status: "confirmed" until verification has actually passed. The tool rejects confirmed hypotheses unless evidenceRefs includes a successful VerificationEnvelope set from this session: at least one passed envelope and no failed, error, or timeout envelope refs.

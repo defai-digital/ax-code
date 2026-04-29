@@ -45,10 +45,15 @@ function validateConfirmedStatus(input: {
 }) {
   if (input.status !== "confirmed") return
   const envelopeById = new Map(input.verificationEnvelopes.map((item) => [item.envelopeId, item.envelope]))
-  const passingEnvelopeId = input.evidenceRefs.find((id) => envelopeById.get(id)?.result.status === "passed")
-  if (passingEnvelopeId) return
+  const referencedEnvelopes = input.evidenceRefs.map((id) => envelopeById.get(id)).filter((item) => item !== undefined)
+  const hasPassingEnvelope = referencedEnvelopes.some((envelope) => envelope.result.status === "passed")
+  const hasFailingEnvelope = referencedEnvelopes.some(
+    (envelope) =>
+      envelope.result.status === "failed" || envelope.result.status === "error" || envelope.result.status === "timeout",
+  )
+  if (hasPassingEnvelope && !hasFailingEnvelope) return
   throw new Error(
-    'Cannot mark hypothesis as confirmed without a passed VerificationEnvelope evidenceRef from this session. Run verify_project after the fix and cite its passed envelope id.',
+    'Cannot mark hypothesis as confirmed without a successful VerificationEnvelope evidence set from this session. Run verify_project after the fix and cite at least one passed envelope and no failed, error, or timeout envelopes.',
   )
 }
 
