@@ -289,6 +289,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     return sidebarSessionStatusView({
       status: status(),
       hasMessages: messages().length > 0,
+      pendingTodos: todoRemaining(),
       now: Date.now(),
     })
   })
