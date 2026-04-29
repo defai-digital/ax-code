@@ -39,6 +39,7 @@ import { Truncate } from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
 import { RegisterFindingTool } from "./register_finding"
 import { VerifyProjectTool } from "./verify_project"
+import { ReviewCompleteTool } from "./review_complete"
 import { MemorySaveTool } from "./memory"
 import { DebugOpenCaseTool } from "./debug_open_case"
 import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
@@ -177,6 +178,7 @@ export namespace ToolRegistry {
           ApplyPatchTool,
           RegisterFindingTool,
           VerifyProjectTool,
+          ReviewCompleteTool,
           DebugOpenCaseTool,
           DebugCaptureEvidenceTool,
           DebugProposeHypothesisTool,

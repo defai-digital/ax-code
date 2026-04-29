@@ -1,0 +1,28 @@
+Finalize the current code review as a structured review result. Use this after review findings have been registered and verification has been run with verify_project or another tool that emits VerificationEnvelope metadata.
+
+This tool does not inspect code by itself. It closes the review loop by loading current-session register_finding artifacts and verification envelopes, validating references, and emitting metadata.reviewResult.
+
+Input:
+- summary: required one-paragraph review conclusion
+- decision: optional "approve" | "request_changes" | "needs_verification"; omit to use the recommended decision
+- findingIds: optional subset of current-session review finding ids. Omit to include all review findings in the session.
+- verificationEnvelopeIds: optional subset of current-session verification envelope ids. Omit to include all verification envelopes in the session.
+- overrideReason: required when decision differs from the recommendation, except that approve can never override blocking HIGH/CRITICAL findings.
+
+Decision guardrails:
+- HIGH or CRITICAL review findings force request_changes.
+- approve requires at least one passed verification envelope.
+- If there are no blocking findings but no passed verification, the recommended decision is needs_verification.
+
+Output:
+- reviewId: deterministic id for the review result
+- reviewResult: structured result with finding ids, verification envelope ids, severity counts, and decision
+
+When to use:
+- At the end of a code review after recording findings
+- After verify_project has produced evidence ids that the review result should cite
+
+When NOT to use:
+- Before reading code or registering findings
+- To record individual findings; use register_finding
+- To fabricate verification ids; only cite ids observed in this session
