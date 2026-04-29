@@ -311,6 +311,13 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(displayCommands).toContain("dialog.clear()")
   })
 
+  test("renderDialogLoading returns a thunk so dialog.replace defers construction into the DialogProvider scope (gh#193)", async () => {
+    const dialogLoading = await fs.readFile(path.join(TUI_ROOT, "ui/dialog-loading.tsx"), "utf8")
+
+    expect(dialogLoading).toContain("export function renderDialogLoading(props: DialogLoadingProps): () => JSX.Element")
+    expect(dialogLoading).toContain("return () => <DialogLoading {...props} />")
+  })
+
   test("handles session share, DRE web, and unshare command failures without leaving stale dialogs behind", async () => {
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
@@ -667,7 +674,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(profile).toContain('runtimeMode()) !== "compiled"')
     expect(spinner).toContain("shouldUseTuiAnimations")
     expect(prompt).toContain("shouldUseTuiAnimations")
-    expect(prompt).toContain('fallback={<text fg={theme.textMuted}>[⋯]</text>}')
+    expect(prompt).toContain("fallback={<text fg={theme.textMuted}>[⋯]</text>}")
   })
 
   test("keeps session route view namespaces distinct from core session namespaces", async () => {
@@ -974,7 +981,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(worker).toContain("runtimeMode()")
     expect(worker).toContain("startTuiBackend")
     expect(worker).toContain("isWorkerEntrypoint")
-    expect(worker).toContain('Rpc.listenStdio(rpc)')
+    expect(worker).toContain("Rpc.listenStdio(rpc)")
     expect(worker).toContain('DiagnosticLog.recordProcess("backend.signalExit"')
   })
 
