@@ -466,16 +466,15 @@ describe("tui OpenTUI stability guardrails", () => {
 
   test("surfaces concise session status in the sidebar title", async () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
-    const footerViewModel = await fs.readFile(FOOTER_VIEW_MODEL_SRC, "utf8")
 
     expect(sidebar).toContain("sidebarStatusText")
     expect(sidebar).toContain("footerSessionStatusView")
     expect(sidebar).toContain("titleStatus().label")
-    expect(footerViewModel).toContain('"Thinking..."')
-    expect(footerViewModel).toContain('"Processing..."')
-    expect(footerViewModel).toContain('"Finished"')
-    expect(footerViewModel).toContain('"Thinking stalled"')
-    expect(footerViewModel).toContain('"Processing stalled"')
+    expect(sidebar).toContain('"Thinking..."')
+    expect(sidebar).toContain('"Processing..."')
+    expect(sidebar).toContain('"Finished"')
+    expect(sidebar).toContain('"Thinking stalled"')
+    expect(sidebar).toContain('"Processing stalled"')
   })
 
   test("keeps the theme dialog reactive while custom themes hydrate", async () => {
