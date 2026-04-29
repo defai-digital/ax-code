@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { DebugEngine } from "../../src/debug-engine"
-import { fromRefactorApplyResult } from "../../src/quality/verification-envelope-builder"
+import { fromRefactorApplyResult, fromVerificationCommandResult } from "../../src/quality/verification-envelope-builder"
 import { VerificationEnvelopeSchema } from "../../src/quality/verification-envelope"
 import { Installation } from "../../src/installation"
 
@@ -340,5 +340,94 @@ describe("fromRefactorApplyResult", () => {
     const tests = envs.find((e) => e.command.runner === "test")!
     expect(tests.result.output).toContain("test/foo")
     expect(tests.result.output).toContain("test/bar")
+  })
+})
+
+describe("fromVerificationCommandResult", () => {
+  test("returns citable envelopes for a general verification run", () => {
+    const envs = fromVerificationCommandResult({
+      workflow: "review",
+      sessionID: "ses_verify",
+      cwd: "/tmp/work",
+      sourceTool: "verify_project",
+      scope: { kind: "file", paths: ["src/foo.ts"] },
+      commands: {
+        typecheck: "bun run typecheck",
+        lint: null,
+        test: null,
+      },
+      checks: {
+        typecheck: {
+          ok: false,
+          skipped: false,
+          errors: ["src/foo.ts(10,4): error TS2322: Type 'string' is not assignable to type 'number'."],
+          duration: 25,
+        },
+        lint: { ok: true, skipped: true, errors: [], duration: 0 },
+        tests: {
+          ok: true,
+          skipped: true,
+          errors: [],
+          ran: 0,
+          failed: 0,
+          failures: [],
+          selection: "skipped",
+          duration: 0,
+        },
+      },
+    })
+
+    expect(envs).toHaveLength(3)
+    for (const env of envs) expect(() => VerificationEnvelopeSchema.parse(env)).not.toThrow()
+
+    const typecheck = envs.find((env) => env.result.name === "typecheck")!
+    expect(typecheck.workflow).toBe("review")
+    expect(typecheck.command).toEqual({
+      runner: "typecheck",
+      argv: ["sh", "-c", "bun run typecheck"],
+      cwd: "/tmp/work",
+    })
+    expect(typecheck.result.status).toBe("failed")
+    expect(typecheck.result.duration).toBe(25)
+    expect(typecheck.source.tool).toBe("verify_project")
+    expect(typecheck.source.version).toBe(Installation.VERSION)
+    expect(typecheck.source.runId).toBe("ses_verify")
+    expect(typecheck.structuredFailures).toHaveLength(1)
+
+    const lint = envs.find((env) => env.result.name === "lint")!
+    expect(lint.result.status).toBe("skipped")
+    expect(lint.command.argv).toEqual([])
+  })
+
+  test("uses timeout status when the runner reports a timed-out command", () => {
+    const envs = fromVerificationCommandResult({
+      workflow: "qa",
+      sessionID: "ses_timeout",
+      cwd: "/tmp/work",
+      sourceTool: "verify_project",
+      scope: { kind: "workspace" },
+      commands: { typecheck: "bun run typecheck", lint: null, test: null },
+      checks: {
+        typecheck: {
+          ok: false,
+          skipped: false,
+          timedOut: true,
+          errors: ["typecheck command timed out after 300000ms"],
+        },
+        lint: { ok: true, skipped: true, errors: [] },
+        tests: {
+          ok: true,
+          skipped: true,
+          errors: [],
+          ran: 0,
+          failed: 0,
+          failures: [],
+          selection: "skipped",
+        },
+      },
+    })
+
+    expect(envs[0].result.status).toBe("timeout")
+    expect(envs[0].result.passed).toBe(false)
   })
 })

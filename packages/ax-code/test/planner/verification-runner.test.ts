@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "fs/promises"
 import path from "path"
-import { resolveCommands } from "../../src/planner/verification/runner"
+import { resolveCommands, runCommand } from "../../src/planner/verification/runner"
 import { tmpdir } from "../fixture/fixture"
 
 async function writePackageJson(dir: string, scripts: Record<string, string>) {
@@ -76,5 +76,22 @@ describe("resolveCommands", () => {
     await fs.writeFile(path.join(tmp.path, "package.json"), "{ not json", "utf8")
     const cmds = await resolveCommands(tmp.path)
     expect(cmds).toEqual({ typecheck: null, lint: null, test: null })
+  })
+
+  test("runCommand sanitizes secret-like parent environment variables", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.OPENAI_API_KEY
+    process.env.OPENAI_API_KEY = "secret-from-parent"
+    try {
+      const result = await runCommand(`bun -e "console.log(process.env.OPENAI_API_KEY ?? 'missing')"`, tmp.path)
+      expect(result.ok).toBe(true)
+      expect(result.stdout.trim()).toBe("missing")
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OPENAI_API_KEY
+      } else {
+        process.env.OPENAI_API_KEY = previous
+      }
+    }
   })
 })

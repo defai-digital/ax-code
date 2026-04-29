@@ -4,6 +4,7 @@ import { CodeIntelligence } from "../../code-intelligence"
 import type { ProjectID } from "../../project/schema"
 import type { DebugEngine } from "../../debug-engine"
 import { Log } from "../../util/log"
+import { Env } from "../../util/env"
 
 // Phase 2 P2.1: extracted from src/debug-engine/apply-safe-refactor.ts so
 // review/debug/qa workflows (not just refactor_apply) can run typecheck /
@@ -26,6 +27,18 @@ export type CommandSet = {
   typecheck: string | null
   lint: string | null
   test: string | null
+}
+
+export type TimedCheckResult = DebugEngine.CheckResult & {
+  skipped: boolean
+  timedOut?: boolean
+  exitCode?: number
+}
+
+export type TimedTestResult = DebugEngine.TestResult & {
+  skipped: boolean
+  timedOut?: boolean
+  exitCode?: number
 }
 
 // Resolve the typecheck/lint/test commands for a project. Defaults pick up
@@ -64,6 +77,7 @@ export async function runCommand(
   const proc = Bun.spawn({
     cmd: ["sh", "-c", cmd],
     cwd,
+    env: Env.sanitize(),
     stdout: "pipe",
     stderr: "pipe",
   })
@@ -81,22 +95,19 @@ export async function runCommand(
   }
 }
 
-export async function runCheck(
-  label: string,
-  cmd: string | null,
-  cwd: string,
-): Promise<DebugEngine.CheckResult & { skipped: boolean }> {
+export async function runCheck(label: string, cmd: string | null, cwd: string): Promise<TimedCheckResult> {
   if (!cmd) {
     log.info(`${label}: skipped (no command configured)`)
     return { ok: true, errors: [], skipped: true }
   }
   const result = await runCommand(cmd, cwd)
   log.info(`${label}: ${result.ok ? "ok" : "failed"}`, { code: result.code })
-  if (result.ok) return { ok: true, errors: [], skipped: false }
+  if (result.ok) return { ok: true, errors: [], skipped: false, timedOut: false, exitCode: result.code }
   // Surface the first ~20 lines of the error stream. Full output is captured
   // in the log; the returned `errors` array is what callers show to the user.
   const lines = (result.stderr || result.stdout).split("\n").filter(Boolean).slice(0, 20)
-  return { ok: false, errors: lines, skipped: false }
+  if (result.timedOut) lines.unshift(`${label} command timed out after ${RUN_COMMAND_TIMEOUT_MS}ms`)
+  return { ok: false, errors: lines, skipped: false, timedOut: result.timedOut, exitCode: result.code }
 }
 
 export async function runTests(
@@ -105,7 +116,7 @@ export async function runTests(
   affectedFiles: string[],
   projectID: ProjectID,
   scope: "worktree" | "none",
-): Promise<DebugEngine.TestResult & { skipped: boolean }> {
+): Promise<TimedTestResult> {
   if (!cmd) return { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped", skipped: true }
 
   let selection: DebugEngine.TestResult["selection"] = "full-fallback"
@@ -131,9 +142,12 @@ export async function runTests(
       failures: [],
       selection,
       skipped: false,
+      timedOut: false,
+      exitCode: result.code,
     }
   }
   const lines = (result.stderr || result.stdout).split("\n").filter(Boolean).slice(0, 30)
+  if (result.timedOut) lines.unshift(`test command timed out after ${RUN_COMMAND_TIMEOUT_MS}ms`)
   return {
     ok: false,
     errors: lines,
@@ -142,5 +156,7 @@ export async function runTests(
     failures: lines.slice(0, 5),
     selection,
     skipped: false,
+    timedOut: result.timedOut,
+    exitCode: result.code,
   }
 }

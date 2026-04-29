@@ -1,17 +1,16 @@
 import type { DebugEngine } from "../debug-engine"
 import { Installation } from "../installation"
 import { type StructuredFailure, type VerificationEnvelope, VerificationEnvelopeSchema } from "./verification-envelope"
+import type { Workflow } from "./finding-registry"
 
 // Pure converter: legacy refactor_apply check shape → VerificationEnvelope[].
 //
 // refactor_apply currently returns DebugEngine.ApplyResult.checks =
 // { typecheck: CheckResult, lint: CheckResult, tests: TestResult }. CheckResult
-// flattens errors to string[] which loses file/line/code structure. This
-// converter produces one envelope per check kind with what we have today;
-// structuredFailures is intentionally [] in v1 because the source data
-// doesn't carry the per-failure fields the schema requires. A later slice
-// can parse the error strings (mirroring planner/verification's
-// parseTypeScriptErrors) to populate them.
+// flattens errors to string[] which loses some runner-native structure. These
+// converters produce one envelope per check kind, preserve raw output, and
+// parse the failure formats we can recognize without making unsupported
+// formatter assumptions.
 
 export type FromRefactorApplyInput = {
   applyResult: DebugEngine.ApplyResult
@@ -19,7 +18,42 @@ export type FromRefactorApplyInput = {
   cwd: string
 }
 
-function checkStatus(ok: boolean): "passed" | "failed" {
+export type VerificationCommandCheck = {
+  ok: boolean
+  errors: string[]
+  skipped?: boolean
+  timedOut?: boolean
+  duration?: number
+}
+
+export type VerificationCommandTest = VerificationCommandCheck & {
+  ran: number
+  failed: number
+  failures: string[]
+  selection: DebugEngine.TestResult["selection"]
+}
+
+export type FromVerificationCommandsInput = {
+  workflow: Workflow
+  sessionID: string
+  cwd: string
+  sourceTool: string
+  scope: VerificationEnvelope["scope"]
+  commands: {
+    typecheck: string | null
+    lint: string | null
+    test: string | null
+  }
+  checks: {
+    typecheck: VerificationCommandCheck
+    lint: VerificationCommandCheck
+    tests: VerificationCommandTest
+  }
+}
+
+function checkStatus(ok: boolean, skipped?: boolean, timedOut?: boolean): "passed" | "failed" | "skipped" | "timeout" {
+  if (skipped) return "skipped"
+  if (timedOut) return "timeout"
   return ok ? "passed" : "failed"
 }
 
@@ -101,12 +135,16 @@ function parseTestFailures(text: string | undefined): StructuredFailure[] {
   return failures
 }
 
-function source(sessionID: string) {
+function source(sessionID: string, tool: string) {
   return {
-    tool: "refactor_apply",
+    tool,
     version: Installation.VERSION,
     runId: sessionID,
   }
+}
+
+function command(runner: "typecheck" | "lint" | "test", commandText: string | null, cwd: string) {
+  return { runner, argv: commandText ? ["sh", "-c", commandText] : [], cwd }
 }
 
 function commonScope(applyResult: DebugEngine.ApplyResult) {
@@ -135,7 +173,7 @@ function envelopeForTypecheck(input: FromRefactorApplyInput): VerificationEnvelo
     },
     structuredFailures: parseTypecheckFailures(output),
     artifactRefs: [],
-    source: source(input.sessionID),
+    source: source(input.sessionID, "refactor_apply"),
   })
 }
 
@@ -158,7 +196,7 @@ function envelopeForLint(input: FromRefactorApplyInput): VerificationEnvelope {
     },
     structuredFailures: parseLintFailures(output),
     artifactRefs: [],
-    source: source(input.sessionID),
+    source: source(input.sessionID, "refactor_apply"),
   })
 }
 
@@ -182,10 +220,83 @@ function envelopeForTests(input: FromRefactorApplyInput): VerificationEnvelope {
     },
     structuredFailures: parseTestFailures(output),
     artifactRefs: [],
-    source: source(input.sessionID),
+    source: source(input.sessionID, "refactor_apply"),
   })
 }
 
 export function fromRefactorApplyResult(input: FromRefactorApplyInput): VerificationEnvelope[] {
   return [envelopeForTypecheck(input), envelopeForLint(input), envelopeForTests(input)]
+}
+
+function envelopeForCommandTypecheck(input: FromVerificationCommandsInput): VerificationEnvelope {
+  const check = input.checks.typecheck
+  const output = joinErrors(check.errors)
+  return VerificationEnvelopeSchema.parse({
+    schemaVersion: 1,
+    workflow: input.workflow,
+    scope: input.scope,
+    command: command("typecheck", input.commands.typecheck, input.cwd),
+    result: {
+      name: "typecheck",
+      type: "typecheck",
+      passed: check.ok,
+      status: checkStatus(check.ok, check.skipped, check.timedOut),
+      issues: [],
+      duration: check.duration ?? 0,
+      output,
+    },
+    structuredFailures: parseTypecheckFailures(output),
+    artifactRefs: [],
+    source: source(input.sessionID, input.sourceTool),
+  })
+}
+
+function envelopeForCommandLint(input: FromVerificationCommandsInput): VerificationEnvelope {
+  const check = input.checks.lint
+  const output = joinErrors(check.errors)
+  return VerificationEnvelopeSchema.parse({
+    schemaVersion: 1,
+    workflow: input.workflow,
+    scope: input.scope,
+    command: command("lint", input.commands.lint, input.cwd),
+    result: {
+      name: "lint",
+      type: "lint",
+      passed: check.ok,
+      status: checkStatus(check.ok, check.skipped, check.timedOut),
+      issues: [],
+      duration: check.duration ?? 0,
+      output,
+    },
+    structuredFailures: parseLintFailures(output),
+    artifactRefs: [],
+    source: source(input.sessionID, input.sourceTool),
+  })
+}
+
+function envelopeForCommandTests(input: FromVerificationCommandsInput): VerificationEnvelope {
+  const tests = input.checks.tests
+  const output = joinErrors(tests.failures.length > 0 ? tests.failures : tests.errors)
+  return VerificationEnvelopeSchema.parse({
+    schemaVersion: 1,
+    workflow: input.workflow,
+    scope: input.scope,
+    command: command("test", input.commands.test, input.cwd),
+    result: {
+      name: "tests",
+      type: "test",
+      passed: tests.ok,
+      status: checkStatus(tests.ok, tests.skipped || tests.selection === "skipped", tests.timedOut),
+      issues: [],
+      duration: tests.duration ?? 0,
+      output,
+    },
+    structuredFailures: parseTestFailures(output),
+    artifactRefs: [],
+    source: source(input.sessionID, input.sourceTool),
+  })
+}
+
+export function fromVerificationCommandResult(input: FromVerificationCommandsInput): VerificationEnvelope[] {
+  return [envelopeForCommandTypecheck(input), envelopeForCommandLint(input), envelopeForCommandTests(input)]
 }

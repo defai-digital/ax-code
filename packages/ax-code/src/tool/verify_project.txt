@@ -1,0 +1,24 @@
+Run project verification and record the result as structured evidence. Use this after edits, during code review, or while debugging when you need typecheck/lint/test output that can be cited by register_finding or debug_propose_hypothesis.
+
+This tool runs configured project commands, so it requires bash permission for each non-skipped command.
+
+Input:
+- workflow: optional "review" | "debug" | "qa"; defaults to "qa"
+- paths: optional repo-relative files that define the verification scope and help test selection
+- scopeDescription: optional human-readable scope when paths alone are not enough
+- commands: optional overrides for typecheck/lint/test. Omit a field to infer from package.json; set a field to null to skip that check; set it to a string to run exactly that command.
+
+Output:
+- passed: true when every configured check passed or was skipped
+- envelopeIds: derived ids for the emitted VerificationEnvelopes
+- verificationEnvelopes: one envelope each for typecheck, lint, and tests
+
+When to use:
+- After a code edit to produce citable verification evidence
+- During review when you need to prove a finding is backed by a failing check
+- During debugging after a candidate fix, before marking a hypothesis confirmed
+
+When NOT to use:
+- To make edits; use edit/write/apply_patch for changes
+- To run arbitrary exploratory shell commands; use bash
+- To fabricate evidence ids; only cite envelopeIds returned by this tool or present in session verification history
