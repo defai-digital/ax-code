@@ -281,7 +281,7 @@ describe("session.prompt helpers", () => {
     expect(second).toEqual(["env", "rules"])
   })
 
-  test("includes project memory between environment and skills when present", async () => {
+  test("includes project memory and decision hints between environment and skills when present", async () => {
     const cache = {}
     const result = await systemPrompt({
       agent: { name: "build" } as any,
@@ -292,8 +292,15 @@ describe("session.prompt helpers", () => {
       environment: async () => ["env"],
       instructions: async () => ["rules"],
       memory: async () => "<project-memory>...</project-memory>",
+      decisionHints: async () => "<decision-hints>...</decision-hints>",
     })
-    expect(result).toEqual(["env", "<project-memory>...</project-memory>", "skills", "rules"])
+    expect(result).toEqual([
+      "env",
+      "<project-memory>...</project-memory>",
+      "<decision-hints>...</decision-hints>",
+      "skills",
+      "rules",
+    ])
   })
 
   test("skills cache survives non-file-tool messages and re-runs on a new file-tool call", async () => {
@@ -497,6 +504,38 @@ describe("session.prompt helpers", () => {
 
     expect(result).toContain("memory")
     expect(received).toBe(messages)
+  })
+
+  test("passes session id and messages into decision hint loader", async () => {
+    const cache = {}
+    let received: Parameters<NonNullable<Parameters<typeof systemPrompt>[0]["decisionHints"]>>[0] | undefined
+    const messages = [
+      {
+        info: { id: "m1", sessionID: "s1", role: "user" as const },
+        parts: [{ type: "text" as const, text: "hi" }],
+      },
+    ] as any as MessageV2.WithParts[]
+
+    const result = await systemPrompt({
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache,
+      skills: async () => undefined,
+      environment: async () => ["env"],
+      instructions: async () => ["rules"],
+      memory: async () => undefined,
+      decisionHints: async (input) => {
+        received = input
+        return "decision hints"
+      },
+      messages,
+      sessionID: "s1" as any,
+    })
+
+    expect(result).toContain("decision hints")
+    expect(received?.messages).toBe(messages)
+    expect(String(received?.sessionID)).toBe("s1")
   })
 
   test("formats missing agent errors with available names", async () => {

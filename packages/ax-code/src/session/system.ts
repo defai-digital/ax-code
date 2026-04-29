@@ -15,8 +15,14 @@ import { Permission } from "@/permission"
 import { Skill } from "@/skill"
 import { getContext as getMemoryContext } from "../memory/injector"
 import type { MessageV2 } from "./message-v2"
+import { DecisionHints } from "./decision-hints"
+import { EventQuery } from "@/replay/query"
+import type { SessionID } from "./schema"
+import { Log } from "@/util/log"
 
 export namespace SystemPrompt {
+  const log = Log.create({ service: "session.system-prompt" })
+
   export function provider(model: Provider.Model) {
     if (
       model.api.id.includes("gpt-4") ||
@@ -86,6 +92,22 @@ export namespace SystemPrompt {
     return ctx ? ctx : undefined
   }
 
+  export async function decisionHints(input: {
+    messages?: MessageV2.WithParts[]
+    sessionID?: SessionID
+  }): Promise<string | undefined> {
+    const sessionID = input.sessionID ?? inferSessionID(input.messages)
+    if (sessionID) {
+      try {
+        const replay = DecisionHints.analyzeEvents(EventQuery.recentBySession(sessionID))
+        if (replay.actionCount > 0) return DecisionHints.render(replay.hints)
+      } catch (error) {
+        log.warn("decision hint replay load failed", { sessionID, error })
+      }
+    }
+    return DecisionHints.render(DecisionHints.fromMessages(input.messages))
+  }
+
   export async function skills(agent: Agent.Info, messages?: MessageV2.WithParts[]) {
     if (Permission.disabled(["skill"], agent.permission).has("skill")) return
 
@@ -120,6 +142,14 @@ export namespace SystemPrompt {
       }
     }
     return false
+  }
+
+  export function inferSessionID(messages?: MessageV2.WithParts[]): SessionID | undefined {
+    for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
+      const sessionID = messages?.[i]?.info.sessionID
+      if (sessionID) return sessionID
+    }
+    return undefined
   }
 
   export function extractFilePaths(messages: MessageV2.WithParts[]): string[] {

@@ -450,6 +450,8 @@ export async function systemPrompt(input: {
   environment?: typeof SystemPrompt.environment
   instructions?: typeof InstructionPrompt.system
   memory?: typeof SystemPrompt.memory
+  decisionHints?: typeof SystemPrompt.decisionHints
+  sessionID?: SessionID
   structuredPrompt?: string
 }) {
   // Skills caching:
@@ -495,6 +497,8 @@ export async function systemPrompt(input: {
   // the user-curated entry contract. Always load fresh.
   const memoryFn = input.memory ?? SystemPrompt.memory
   const memory = await memoryFn(input.agent, input.messages)
+  const decisionHintsFn = input.decisionHints ?? SystemPrompt.decisionHints
+  const decisionHints = await decisionHintsFn({ messages: input.messages, sessionID: input.sessionID })
 
   const modelKey = `${input.model.providerID}/${input.model.api.id}`
   if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
@@ -506,6 +510,7 @@ export async function systemPrompt(input: {
   const system = [
     ...input.cache.environment,
     ...(memory ? [memory] : []),
+    ...(decisionHints ? [decisionHints] : []),
     ...(skills ? [skills] : []),
     ...input.cache.instructions,
   ]

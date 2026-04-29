@@ -51,6 +51,19 @@ export namespace EventQuery {
     return rows.map((row) => row.event_data)
   }
 
+  export function recentBySession(sessionID: SessionID, limit = 500): ReplayEvent[] {
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(EventLogTable)
+        .where(eq(EventLogTable.session_id, sessionID))
+        .orderBy(desc(EventLogTable.sequence))
+        .limit(Math.max(0, Math.min(limit, BY_SESSION_LIMIT)))
+        .all(),
+    )
+    return rows.reverse().map((row) => row.event_data)
+  }
+
   export function bySessionWithTimestamp(sessionID: SessionID): { event_data: ReplayEvent; time_created: number }[] {
     const rows = Database.use((db) =>
       db

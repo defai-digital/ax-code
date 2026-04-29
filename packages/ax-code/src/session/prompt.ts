@@ -911,6 +911,7 @@ export namespace SessionPrompt {
           format,
           cache: cachedSystemPrompt,
           messages: msgs,
+          sessionID,
           structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
         }),
         MessageV2.toModelMessages(msgs, model),

@@ -71,4 +71,28 @@ describe("Recorder.emit batching", () => {
       },
     })
   })
+
+  test("loads recent events in chronological order with a bounded limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+
+        for (let i = 0; i < 5; i++) {
+          Recorder.emit({ type: "step.start", sessionID: session.id, stepIndex: i } as any)
+        }
+
+        Recorder.end(session.id)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const events = EventQuery.recentBySession(session.id, 2)
+        expect(events.map((event) => (event as any).stepIndex)).toEqual([3, 4])
+
+        EventQuery.deleteBySession(session.id)
+        await Session.remove(session.id)
+      },
+    })
+  })
 })
