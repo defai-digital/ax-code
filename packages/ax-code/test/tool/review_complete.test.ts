@@ -47,10 +47,14 @@ function finding(sessionID: string, overrides: Partial<Finding> = {}): Finding {
   } as Finding
 }
 
-function envelope(sessionID: string, status: "passed" | "failed" | "skipped" = "passed"): VerificationEnvelope {
+function envelope(
+  sessionID: string,
+  status: "passed" | "failed" | "skipped" = "passed",
+  workflow: VerificationEnvelope["workflow"] = "review",
+): VerificationEnvelope {
   return {
     schemaVersion: 1,
-    workflow: "review",
+    workflow,
     scope: { kind: "workspace" },
     command: { runner: "typecheck", argv: ["sh", "-c", "bun run typecheck"], cwd: "/tmp/work" },
     result: {
@@ -213,6 +217,42 @@ describe("ReviewCompleteTool", () => {
         await expect(
           tool.execute({ summary: "Should not approve.", decision: "approve" }, ctx(session.id)),
         ).rejects.toThrow(/without a successful verification set/)
+      },
+    })
+  })
+
+  test("does not use non-review verification envelopes as review approval evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const low = finding(session.id)
+        const qaPassed = envelope(session.id, "passed", "qa")
+
+        Recorder.begin(session.id)
+        emitFinding(session.id, low)
+        emitEnvelope(session.id, qaPassed)
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const tool = await ReviewCompleteTool.init()
+        const result = await tool.execute({ summary: "Review still needs review-scoped verification." }, ctx(session.id))
+
+        expect(result.metadata.reviewResult).toMatchObject({
+          decision: "needs_verification",
+          verificationEnvelopeIds: [],
+          missingVerification: true,
+        })
+        await expect(
+          tool.execute(
+            {
+              summary: "Should not cite QA evidence.",
+              verificationEnvelopeIds: [computeEnvelopeId(qaPassed)],
+            },
+            ctx(session.id),
+          ),
+        ).rejects.toThrow(/only accepts review workflow envelopes/)
       },
     })
   })

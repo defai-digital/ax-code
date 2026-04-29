@@ -30,12 +30,19 @@ function selectEnvelopes(sessionID: SessionID, ids: string[] | undefined): Verif
   const envelopes = SessionVerifications.loadWithIds(sessionID)
   const byId = new Map(envelopes.map((item) => [item.envelopeId, item]))
   if (!ids) {
-    return envelopes.map((item) => ({ envelopeId: item.envelopeId, envelope: item.envelope }))
+    return envelopes
+      .filter((item) => item.envelope.workflow === "review")
+      .map((item) => ({ envelopeId: item.envelopeId, envelope: item.envelope }))
   }
   return ids.map((id) => {
     const item = byId.get(id)
     if (!item) {
       throw new Error(`verificationEnvelopeIds references an unknown verification envelope id: ${id}`)
+    }
+    if (item.envelope.workflow !== "review") {
+      throw new Error(
+        `verificationEnvelopeIds references a ${item.envelope.workflow} envelope id: ${id}. review_complete only accepts review workflow envelopes; run verify_project with workflow: "review".`,
+      )
     }
     return { envelopeId: item.envelopeId, envelope: item.envelope }
   })

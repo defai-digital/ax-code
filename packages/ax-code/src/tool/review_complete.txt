@@ -6,7 +6,7 @@ Input:
 - summary: required one-paragraph review conclusion
 - decision: optional "approve" | "request_changes" | "needs_verification"; omit to use the recommended decision
 - findingIds: optional subset of current-session review finding ids. Omit to include all review findings in the session.
-- verificationEnvelopeIds: optional subset of current-session verification envelope ids. Omit to include all verification envelopes in the session.
+- verificationEnvelopeIds: optional subset of current-session review workflow verification envelope ids. Omit to include all review workflow verification envelopes in the session.
 - overrideReason: required when decision differs from the recommendation, except that approve can never override blocking HIGH/CRITICAL findings.
 
 Decision guardrails:
@@ -21,6 +21,7 @@ Output:
 When to use:
 - At the end of a code review after recording findings
 - After verify_project has produced evidence ids that the review result should cite
+- When citing verification, use envelopes whose workflow is "review"; debug or qa envelopes are not valid review approval evidence
 
 When NOT to use:
 - Before reading code or registering findings
