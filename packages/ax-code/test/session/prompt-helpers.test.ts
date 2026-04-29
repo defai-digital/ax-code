@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { Permission } from "../../src/permission"
 import { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -301,6 +302,43 @@ describe("session.prompt helpers", () => {
       "skills",
       "rules",
     ])
+  })
+
+  test("injects the assurance workflow when structured review tools are enabled", async () => {
+    const result = await systemPrompt({
+      agent: { name: "build", permission: Permission.fromConfig({ "*": "allow" }) } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache: {},
+      skills: async () => undefined,
+      environment: async () => ["env"],
+      instructions: async () => ["rules"],
+      memory: async () => undefined,
+      decisionHints: async () => undefined,
+    })
+
+    expect(result[0]).toBe("env")
+    expect(result[1]).toContain("<assurance_workflow>")
+    expect(result[1]).toContain("register_finding")
+    expect(result[1]).toContain("verify_project")
+    expect(result[1]).toContain("review_complete")
+    expect(result[2]).toBe("rules")
+  })
+
+  test("omits the assurance workflow when structured review tools are denied", async () => {
+    const result = await systemPrompt({
+      agent: { name: "summary", permission: Permission.fromConfig({ "*": "deny" }) } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" },
+      cache: {},
+      skills: async () => undefined,
+      environment: async () => ["env"],
+      instructions: async () => ["rules"],
+      memory: async () => undefined,
+      decisionHints: async () => undefined,
+    })
+
+    expect(result).toEqual(["env", "rules"])
   })
 
   test("skills cache survives non-file-tool messages and re-runs on a new file-tool call", async () => {

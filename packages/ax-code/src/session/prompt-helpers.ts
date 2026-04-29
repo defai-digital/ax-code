@@ -499,6 +499,7 @@ export async function systemPrompt(input: {
   const memory = await memoryFn(input.agent, input.messages)
   const decisionHintsFn = input.decisionHints ?? SystemPrompt.decisionHints
   const decisionHints = await decisionHintsFn({ messages: input.messages, sessionID: input.sessionID })
+  const assuranceWorkflow = SystemPrompt.assuranceWorkflow(input.agent)
 
   const modelKey = `${input.model.providerID}/${input.model.api.id}`
   if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
@@ -509,6 +510,7 @@ export async function systemPrompt(input: {
 
   const system = [
     ...input.cache.environment,
+    ...(assuranceWorkflow ? [assuranceWorkflow] : []),
     ...(memory ? [memory] : []),
     ...(decisionHints ? [decisionHints] : []),
     ...(skills ? [skills] : []),

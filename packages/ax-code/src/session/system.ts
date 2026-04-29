@@ -78,6 +78,23 @@ export namespace SystemPrompt {
     ]
   }
 
+  export function assuranceWorkflow(agent: Pick<Agent.Info, "permission">): string | undefined {
+    if (!agent.permission) return undefined
+    const reviewTools = ["register_finding", "verify_project", "review_complete"]
+    const disabled = Permission.disabled(reviewTools, agent.permission)
+    if (reviewTools.some((tool) => disabled.has(tool))) return undefined
+
+    return [
+      `<assurance_workflow>`,
+      `  For explicit code review, QA, or audit tasks, prefer structured evidence over prose-only conclusions.`,
+      `  Record actionable review findings with register_finding; do not duplicate those findings as separate prose blocks.`,
+      `  Before approving or closing a review, run or cite verify_project with the relevant workflow and scope so the session has VerificationEnvelope evidence.`,
+      `  Finish code reviews with review_complete, citing the relevant finding ids and verification envelope ids.`,
+      `  Do not approve a review unless the selected verification set has at least one passed envelope and no failed, error, or timeout envelopes.`,
+      `</assurance_workflow>`,
+    ].join("\n")
+  }
+
   /**
    * Project memory for the active agent.
    *
