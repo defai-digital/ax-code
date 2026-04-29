@@ -605,6 +605,12 @@ describe("tool.apply_patch freeform", () => {
           if (p === second) throw new Error("disk full")
           await originalWrite(p, c, m)
         })
+        const { Bus } = await import("../../src/bus")
+        const { File } = await import("../../src/file")
+        const editedEvents: string[] = []
+        const unsubscribe = Bus.subscribe(File.Event.Edited, (event) => {
+          editedEvents.push(event.properties.file)
+        })
 
         try {
           const patchText =
@@ -613,7 +619,9 @@ describe("tool.apply_patch freeform", () => {
           await expect(execute({ patchText }, ctx)).rejects.toThrow("disk full")
           expect(await fs.readFile(first, "utf-8")).toBe("one\n")
           expect(await fs.readFile(second, "utf-8")).toBe("two\n")
+          expect(editedEvents).toEqual([])
         } finally {
+          unsubscribe()
           writeSpy.mockRestore()
         }
       },

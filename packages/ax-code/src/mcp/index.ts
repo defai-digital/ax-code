@@ -1,4 +1,4 @@
-import { dynamicTool, type Tool, jsonSchema, type JSONSchema7 } from "ai"
+import { dynamicTool, type Tool, type ToolCallOptions, jsonSchema, type JSONSchema7 } from "ai"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
@@ -30,6 +30,14 @@ import open from "open"
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
   const DEFAULT_TIMEOUT = 30_000
+
+  function pinnedMcpFetch(label: string) {
+    return (url: string | URL, init?: RequestInit) => Ssrf.pinnedFetch(url.toString(), { ...init, label })
+  }
+
+  function remoteRequestInit(headers?: Record<string, string>): RequestInit | undefined {
+    return headers ? { headers } : undefined
+  }
 
   export const Resource = z
     .object({
@@ -134,7 +142,7 @@ export namespace MCP {
     return dynamicTool({
       description: mcpTool.description ?? "",
       inputSchema: jsonSchema(schema),
-      execute: async (args: unknown) => {
+      execute: async (args: unknown, opts: ToolCallOptions) => {
         try {
           return await client.callTool(
             {
@@ -144,6 +152,7 @@ export namespace MCP {
             CallToolResultSchema,
             {
               resetTimeoutOnProgress: true,
+              signal: opts.abortSignal,
               timeout,
             },
           )
@@ -438,20 +447,24 @@ export namespace MCP {
       }
 
       await Ssrf.assertPublicUrl(mcp.url, "mcp")
+      const requestInit = remoteRequestInit(mcp.headers)
+      const fetch = pinnedMcpFetch("mcp")
 
       const transports: Array<{ name: string; transport: TransportWithAuth }> = [
         {
           name: "StreamableHTTP",
           transport: new StreamableHTTPClientTransport(new URL(mcp.url), {
             authProvider,
-            requestInit: mcp.headers ? { headers: mcp.headers } : undefined,
+            requestInit,
+            fetch,
           }),
         },
         {
           name: "SSE",
           transport: new SSEClientTransport(new URL(mcp.url), {
             authProvider,
-            requestInit: mcp.headers ? { headers: mcp.headers } : undefined,
+            requestInit,
+            fetch,
           }),
         },
       ]
@@ -1025,6 +1038,8 @@ export namespace MCP {
     // Create transport with auth provider
     const transport = new StreamableHTTPClientTransport(new URL(mcpConfig.url), {
       authProvider,
+      requestInit: remoteRequestInit(mcpConfig.headers),
+      fetch: pinnedMcpFetch("mcp-auth"),
     })
     const client = createClient()
 

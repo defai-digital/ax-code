@@ -41,7 +41,7 @@ export namespace ShareNext {
   function fetchShare(req: { baseUrl: string; headers: Record<string, string> }, endpoint: string, init?: RequestInit) {
     return Ssrf.pinnedFetch(shareEndpoint(req, endpoint), {
       ...init,
-      headers: init?.headers,
+      headers: { ...req.headers, ...init?.headers },
       label: "share",
     })
   }
@@ -181,7 +181,7 @@ export namespace ShareNext {
     const req = await request()
     const response = await fetchShare(req, req.api.create, {
       method: "POST",
-      headers: { ...req.headers, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionID: sessionID }),
     })
 
@@ -310,7 +310,7 @@ export namespace ShareNext {
           const req = await request()
           const response = await fetchShare(req, req.api.sync(share.id), {
             method: "POST",
-            headers: { ...req.headers, "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               secret: share.secret,
               data: Array.from(queued.data.values()),
@@ -372,7 +372,7 @@ export namespace ShareNext {
     const req = await request()
     const response = await fetchShare(req, req.api.remove(share.id), {
       method: "DELETE",
-      headers: { ...req.headers, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         secret: share.secret,
       }),

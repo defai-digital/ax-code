@@ -107,7 +107,6 @@ export const EditTool = Tool.define("edit", {
 
     const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     await assertExternalDirectory(ctx, filePath)
-    await assertSymlinkInsideProject(filePath)
     Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
     BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filePath))
 
@@ -115,6 +114,10 @@ export const EditTool = Tool.define("edit", {
     let contentOld = ""
     let contentNew = ""
     await FileTime.withLock(filePath, async () => {
+      // Keep symlink validation inside the same per-path lock as the
+      // read/permission/write flow, matching write.ts.
+      await assertSymlinkInsideProject(filePath)
+
       if (params.oldString === "") {
         const existed = await Filesystem.exists(filePath)
         // When overwriting an existing file, enforce the "must read

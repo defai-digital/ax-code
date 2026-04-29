@@ -743,4 +743,15 @@ describe("tool.edit", () => {
       })
     })
   })
+
+  test("keeps symlink validation inside the FileTime lock", async () => {
+    const source = await Bun.file(path.join(__dirname, "../../src/tool/edit.ts")).text()
+    const lockStart = source.indexOf("await FileTime.withLock(filePath, async () => {")
+    expect(lockStart).toBeGreaterThan(-1)
+    const preLock = source.slice(0, lockStart)
+    const lockBody = source.slice(lockStart, source.indexOf('if (params.oldString === "")', lockStart))
+
+    expect(preLock).not.toContain("await assertSymlinkInsideProject(filePath)")
+    expect(lockBody).toContain("await assertSymlinkInsideProject(filePath)")
+  })
 })

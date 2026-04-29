@@ -48,6 +48,19 @@ function testLayer(
 }
 
 describe("installation", () => {
+  describe("release type", () => {
+    test("classifies semver changes", () => {
+      expect(Installation.getReleaseType("1.2.3", "1.2.4")).toBe("patch")
+      expect(Installation.getReleaseType("1.2.3", "1.3.0")).toBe("minor")
+      expect(Installation.getReleaseType("1.2.3", "2.0.0")).toBe("major")
+    })
+
+    test("returns unknown when versions cannot be compared", () => {
+      expect(Installation.compareVersions("1.2.3", "unknown")).toBeUndefined()
+      expect(Installation.getReleaseType("1.2.3", "unknown")).toBe("unknown")
+    })
+  })
+
   describe("latest", () => {
     test("reads release version from GitHub releases", async () => {
       const layer = testLayer(() => jsonResponse({ tag_name: "v1.2.3" }))

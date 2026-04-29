@@ -235,9 +235,7 @@ export async function removeEntry(
     using _crossProcess = await FileLock.acquire(
       isGlobal ? store.getGlobalMemoryPath() : store.getMemoryPath(projectRoot),
     )
-    const memory = isGlobal
-      ? await store.loadGlobal().catch(() => null)
-      : await store.load(projectRoot).catch(() => null)
+    const memory = isGlobal ? await store.loadGlobal() : await store.load(projectRoot)
     if (!memory) return false
     const section = memory.sections[kind]
     if (!section) return false
@@ -263,7 +261,7 @@ export async function listEntries(
   scope: "project" | "global" = "project",
 ): Promise<MemoryEntry[]> {
   const isGlobal = scope === "global"
-  const memory = isGlobal ? await store.loadGlobal().catch(() => null) : await store.load(projectRoot).catch(() => null)
+  const memory = isGlobal ? await store.loadGlobal() : await store.load(projectRoot)
   if (!memory) return []
   if (kind) return memory.sections[kind]?.entries ?? []
   const kinds: MemoryEntryKind[] = ["userPrefs", "feedback", "decisions", "reference"]

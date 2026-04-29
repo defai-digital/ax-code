@@ -732,9 +732,10 @@ export const McpDebugCommand = cmd({
 
         // Test basic HTTP connectivity first
         try {
-          const response = await fetch(serverConfig.url, {
+          const response = await Ssrf.pinnedFetch(serverConfig.url, {
             method: "POST",
             headers: {
+              ...serverConfig.headers,
               "Content-Type": "application/json",
               Accept: "application/json, text/event-stream",
             },
@@ -748,6 +749,7 @@ export const McpDebugCommand = cmd({
               },
               id: 1,
             }),
+            label: "mcp-debug",
           })
 
           spinner.stop(`HTTP response: ${response.status} ${response.statusText}`)
@@ -781,6 +783,8 @@ export const McpDebugCommand = cmd({
             // Try creating transport with auth provider to trigger discovery
             const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
               authProvider,
+              requestInit: serverConfig.headers ? { headers: serverConfig.headers } : undefined,
+              fetch: (url, init) => Ssrf.pinnedFetch(url.toString(), { ...init, label: "mcp-debug" }),
             })
 
             try {

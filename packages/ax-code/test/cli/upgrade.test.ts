@@ -31,4 +31,17 @@ describe("cli upgrade", () => {
     expect(installSpy).not.toHaveBeenCalled()
     expect(publishSpy).not.toHaveBeenCalled()
   })
+
+  test("does not notify or upgrade when discovered version is not semver", async () => {
+    configSpy = spyOn(Config, "global").mockResolvedValue({} as any)
+    methodSpy = spyOn(Installation, "method").mockResolvedValue("brew")
+    latestSpy = spyOn(Installation, "latest").mockResolvedValue("unknown")
+    installSpy = spyOn(Installation, "upgrade").mockResolvedValue(undefined as any)
+    publishSpy = spyOn(Bus, "publish").mockResolvedValue(undefined as any)
+
+    await upgrade()
+
+    expect(installSpy).not.toHaveBeenCalled()
+    expect(publishSpy).not.toHaveBeenCalled()
+  })
 })

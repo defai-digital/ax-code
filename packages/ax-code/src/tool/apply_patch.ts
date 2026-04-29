@@ -297,6 +297,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     // Apply the changes
     const updates: Array<{ file: string; event: "add" | "change" | "unlink" }> = []
     const appliedChanges: typeof fileChanges = []
+    const editedFiles = new Set<string>()
     let activeChange: (typeof fileChanges)[number] | undefined
     let activeDirty = false
     // Rollback errors used to be `.catch()`d and silently logged, leaving
@@ -347,6 +348,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             await fs.mkdir(path.dirname(change.filePath), { recursive: true })
             await fs.writeFile(change.filePath, change.oldContent, "utf-8")
           })
+          if (change.type === "delete") {
+            await FileTime.read(ctx.sessionID, change.filePath)
+          }
         } catch (err) {
           rollbackErrors.push({ file: target, error: err })
           log.warn("apply_patch rollback failed for file", { file: target, error: err })
@@ -359,7 +363,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         if (ctx.abort.aborted) throw new DOMException("Patch application aborted", "AbortError")
         activeChange = change
         activeDirty = false
-        const edited = change.type === "delete" ? undefined : (change.movePath ?? change.filePath)
+        const edited = change.movePath ?? change.filePath
         switch (change.type) {
           case "add":
             await fs.mkdir(path.dirname(change.filePath), { recursive: true })
@@ -448,9 +452,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         activeChange = undefined
         activeDirty = false
         if (edited) {
-          await Bus.publish(File.Event.Edited, {
-            file: edited,
-          })
+          editedFiles.add(edited)
         }
       }
     } catch (error) {
@@ -469,6 +471,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         throw wrapped
       }
       throw error
+    }
+
+    for (const file of editedFiles) {
+      await Bus.publish(File.Event.Edited, { file })
     }
 
     // Publish file change events

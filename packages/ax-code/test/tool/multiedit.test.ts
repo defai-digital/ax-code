@@ -6,6 +6,9 @@ import { FileTime } from "../../src/file/time"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { MultiEditTool } from "../../src/tool/multiedit"
 import { tmpdir } from "../fixture/fixture"
+import { Bus } from "../../src/bus"
+import { File } from "../../src/file"
+import { FileWatcher } from "../../src/file/watcher"
 
 const ctx = {
   sessionID: SessionID.make("ses_test-multiedit"),
@@ -33,21 +36,31 @@ describe("tool.multiedit", () => {
       fn: async () => {
         await FileTime.read(ctx.sessionID, file)
         const tool = await MultiEditTool.init()
+        const events: string[] = []
+        const unsubEdited = Bus.subscribe(File.Event.Edited, () => events.push("edited"))
+        const unsubUpdated = Bus.subscribe(FileWatcher.Event.Updated, () => events.push("updated"))
 
-        await expect(
-          tool.execute(
-            {
-              filePath: file,
-              edits: [
-                { filePath: file, oldString: "one", newString: "ONE" },
-                { filePath: file, oldString: "missing", newString: "MISS" },
-              ],
-            },
-            ctx as any,
-          ),
-        ).rejects.toThrow()
+        try {
+          await expect(
+            tool.execute(
+              {
+                filePath: file,
+                edits: [
+                  { filePath: file, oldString: "one", newString: "ONE" },
+                  { filePath: file, oldString: "missing", newString: "MISS" },
+                ],
+              },
+              ctx as any,
+            ),
+          ).rejects.toThrow()
+        } finally {
+          unsubEdited()
+          unsubUpdated()
+        }
 
         expect(await fs.readFile(file, "utf-8")).toBe("one\ntwo\n")
+        expect(events).toContain("edited")
+        expect(events).toContain("updated")
       },
     })
   })

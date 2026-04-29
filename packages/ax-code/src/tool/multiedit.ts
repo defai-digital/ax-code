@@ -63,6 +63,7 @@ export const MultiEditTool = Tool.define("multiedit", {
 
     await lock(0, async () => {
       for (const file of files) {
+        await assertSymlinkInsideProject(file)
         await FileTime.assert(ctx.sessionID, file)
         const text = await Filesystem.readText(file)
         original.set(file, text)
@@ -136,16 +137,30 @@ export const MultiEditTool = Tool.define("multiedit", {
         }
       } catch (error) {
         const rollbackErrors: { file: string; error: unknown }[] = []
+        const restoredFiles: string[] = []
         await Promise.all(
           files.map((file) => {
             const text = original.get(file)
             if (text === undefined) return Promise.resolve()
-            return Filesystem.write(file, text).catch((rollbackError) => {
-              rollbackErrors.push({ file, error: rollbackError })
-              log.error("failed to roll back multiedit file", { file, error: rollbackError })
-            })
+            return Filesystem.write(file, text)
+              .then(() => {
+                restoredFiles.push(file)
+              })
+              .catch((rollbackError) => {
+                rollbackErrors.push({ file, error: rollbackError })
+                log.error("failed to roll back multiedit file", { file, error: rollbackError })
+              })
           }),
         )
+        for (const file of restoredFiles) {
+          try {
+            await FileTime.read(ctx.sessionID, file)
+            await notifyFileEdited(file, "change")
+          } catch (rollbackError) {
+            rollbackErrors.push({ file, error: rollbackError })
+            log.error("failed to notify multiedit rollback", { file, error: rollbackError })
+          }
+        }
         if (rollbackErrors.length > 0) {
           const message = rollbackErrors.map((item) => item.file).join(", ")
           throw new Error(`Multiedit failed and rollback also failed for: ${message}`, { cause: error })

@@ -9,6 +9,7 @@ import { Database } from "../../src/storage/db"
 import { SessionShareTable } from "../../src/share/share.sql"
 import path from "path"
 import dns from "dns/promises"
+import { Ssrf } from "../../src/util/ssrf"
 
 const projectRoot = path.join(__dirname, "../..")
 
@@ -65,6 +66,68 @@ test("ShareNext.request uses org share API with auth headers when account is act
   } finally {
     Account.active = originalActive
     Account.token = originalToken
+  }
+})
+
+test("ShareNext.remove applies request auth headers as fetch defaults", async () => {
+  const originalActive = Account.active
+  const originalToken = Account.token
+  const originalPinnedFetch = Ssrf.pinnedFetch
+  const calls: Array<{ url: string; init?: RequestInit }> = []
+
+  Account.active = mock(async () => ({
+    id: AccountID.make("account-1"),
+    email: "user@example.com",
+    url: "https://control.example.com",
+    active_org_id: OrgID.make("org-1"),
+  }))
+  Account.token = mock(async () => AccessToken.make("st_test_token"))
+  Ssrf.pinnedFetch = mock(async (url: string | URL, init?: RequestInit) => {
+    calls.push({ url: url.toString(), init })
+    return new Response(
+      JSON.stringify({ id: "shr_auth", url: "https://control.example.com/s/shr_auth", secret: "sec" }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    )
+  }) as typeof Ssrf.pinnedFetch
+
+  try {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({})
+        try {
+          Database.use((db) =>
+            db
+              .insert(SessionShareTable)
+              .values({
+                session_id: session.id,
+                id: "shr_auth",
+                secret: "sec_auth",
+                url: "https://control.example.com/s/shr_auth",
+              })
+              .run(),
+          )
+          await ShareNext.remove(session.id)
+
+          const headers = new Headers(calls[0]?.init?.headers)
+          expect(calls[0]?.url).toBe("https://control.example.com/api/shares/shr_auth")
+          expect(calls[0]?.init?.method).toBe("DELETE")
+          expect(headers.get("authorization")).toBe("Bearer st_test_token")
+          expect(headers.get("x-org-id")).toBe("org-1")
+          expect(headers.get("content-type")).toBe("application/json")
+        } finally {
+          await Session.remove(session.id).catch(() => {})
+        }
+      },
+    })
+  } finally {
+    Account.active = originalActive
+    Account.token = originalToken
+    Ssrf.pinnedFetch = originalPinnedFetch
+    ShareNext.dispose()
   }
 })
 

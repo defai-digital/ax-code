@@ -190,6 +190,22 @@ PATCH`
       expect(content).toBe("line 1\nline 2 updated\nline 3\n")
     })
 
+    test("should insert pure additions after their change context", async () => {
+      const filePath = path.join(tempDir, "context-add.txt")
+      await fs.writeFile(filePath, "alpha\nbeta\ngamma\n")
+
+      const patchText = `*** Begin Patch
+*** Update File: ${filePath}
+@@ beta
++inserted
+*** End Patch`
+
+      await Patch.applyPatch(patchText)
+
+      const content = await fs.readFile(filePath, "utf-8")
+      expect(content).toBe("alpha\nbeta\ninserted\ngamma\n")
+    })
+
     test("should move and update a file", async () => {
       const oldPath = path.join(tempDir, "old-name.txt")
       const newPath = path.join(tempDir, "new-name.txt")

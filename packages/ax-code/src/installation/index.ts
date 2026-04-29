@@ -27,7 +27,7 @@ export namespace Installation {
 
   export type Method = "curl" | "npm" | "yarn" | "pnpm" | "bun" | "brew" | "scoop" | "choco" | "unknown"
 
-  export type ReleaseType = "patch" | "minor" | "major"
+  export type ReleaseType = "patch" | "minor" | "major" | "unknown"
 
   export const Event = {
     Updated: BusEvent.define(
@@ -51,7 +51,8 @@ export namespace Installation {
 
   export function getReleaseType(current: string, latest: string): ReleaseType {
     const compare = compareVersions(current, latest)
-    if (compare === undefined || compare <= 0) return "patch"
+    if (compare === undefined) return "unknown"
+    if (compare <= 0) return "patch"
 
     const currMajor = semver.major(current)
     const currMinor = semver.minor(current)
