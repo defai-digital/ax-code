@@ -20,12 +20,22 @@ export namespace Env {
     // COMPOSER_AUTH removed — contains credentials that match SECRET_PATTERN
     "GPG_AGENT_INFO",
     "DBUS_SESSION_BUS_ADDRESS",
-    // CLI providers need their well-known provider env vars forwarded to
-    // the subprocess they spawn. These names look secret-like by design,
-    // so keep the allowlist explicit and narrowly scoped.
-    "GEMINI_API_KEY",
-    "OPENAI_API_KEY",
   ])
+
+  // Provider API keys CLI subprocesses (claude-code, gemini-cli, etc.) need
+  // forwarded. Kept out of SAFE_ALLOWLIST so pty user env and untrusted
+  // {env:} config substitution still strip them — only the CLI provider
+  // spawn path opts into forwarding via `withCliProviderKeys`.
+  const CLI_PROVIDER_KEYS = ["OPENAI_API_KEY", "GEMINI_API_KEY"] as const
+
+  export function withCliProviderKeys(env: Record<string, string | undefined>): Record<string, string | undefined> {
+    const out = { ...env }
+    for (const key of CLI_PROVIDER_KEYS) {
+      const value = process.env[key]
+      if (value !== undefined) out[key] = value
+    }
+    return out
+  }
 
   export function sanitize(env: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
     const out: Record<string, string | undefined> = {}

@@ -28,7 +28,7 @@ function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
 }
 
 export function cliEnv() {
-  return { ...Env.sanitize(), TERM: "dumb", NO_COLOR: "1" }
+  return { ...Env.withCliProviderKeys(Env.sanitize()), TERM: "dumb", NO_COLOR: "1" }
 }
 
 function autonomousCliArgs(providerID: string): string[] {
