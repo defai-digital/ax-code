@@ -70,6 +70,30 @@ describe("memory.doctor", () => {
     ])
   })
 
+  test("detects redundant scope values from legacy memory files", async () => {
+    await using tmp = await tmpdir()
+    const memory = minimalMemory(tmp.path)
+    memory.sections.feedback = {
+      tokens: 1,
+      entries: [
+        {
+          name: "scoped",
+          body: "scope hygiene",
+          savedAt: "2026-01-01T00:00:00.000Z",
+          tags: ["Memory", "memory"],
+          pathGlobs: ["src\\**\\*.ts", "src/**/*.ts"],
+          agents: ["build", "build"],
+        },
+      ],
+    }
+    await store.save(tmp.path, memory)
+
+    const report = await doctor(tmp.path, { scope: "project" })
+
+    expect(report.status).toBe("warn")
+    expect(report.summary.byCode.redundant_scope_value).toBe(3)
+  })
+
   test("detects manually corrupted metadata without rewriting the file", async () => {
     await using tmp = await tmpdir()
     const memory = minimalMemory(tmp.path)

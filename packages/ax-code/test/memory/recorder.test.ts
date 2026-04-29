@@ -38,7 +38,7 @@ describe("memory.recorder", () => {
     await recordEntry(tmp.path, "feedback", {
       name: "scoped-rule",
       body: "Use focused recall",
-      tags: ["memory", "memory", "ranking"],
+      tags: ["Memory", "memory", "ranking"],
       pathGlobs: ["src\\**\\*.ts"],
       confidence: 0.75,
       expiresAt: "2030-01-02T03:04:05Z",

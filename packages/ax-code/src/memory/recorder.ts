@@ -132,6 +132,11 @@ function normalizeList(values: string[] | undefined): string[] | undefined {
   return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
 }
 
+function normalizeTags(values: string[] | undefined): string[] | undefined {
+  const normalized = values?.map((value) => value.trim().toLowerCase()).filter(Boolean)
+  return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
+}
+
 function normalizePathGlobs(values: string[] | undefined): string[] | undefined {
   const normalized = normalizeList(values)?.map((value) => value.replace(/\\/g, "/"))
   return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
@@ -180,7 +185,7 @@ export async function recordEntry(
     const existing = memory.sections[kind]?.entries ?? []
     const filtered = existing.filter((e) => e.name !== name)
     const agents = normalizeList(input.agents)
-    const tags = normalizeList(input.tags)
+    const tags = normalizeTags(input.tags)
     const pathGlobs = normalizePathGlobs(input.pathGlobs)
     const confidence = normalizeConfidence(input.confidence)
     const expiresAt = normalizeExpiresAt(input.expiresAt)

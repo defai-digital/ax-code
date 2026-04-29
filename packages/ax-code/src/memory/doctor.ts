@@ -15,6 +15,7 @@ export interface MemoryDoctorIssue {
     | "invalid_confidence"
     | "low_confidence"
     | "blank_scope_value"
+    | "redundant_scope_value"
     | "stale_scan"
   source: MemoryDoctorSource
   message: string
@@ -213,22 +214,61 @@ function inspectEntry(
     }
   }
 
-  for (const value of [...(entry.tags ?? []), ...(entry.pathGlobs ?? []), ...(entry.agents ?? [])]) {
-    if (value.trim()) continue
-    issues.push({
-      ...context,
-      status: "warn",
-      code: "blank_scope_value",
-      message: `blank scope value on memory entry: ${entry.name}`,
-    })
-    break
-  }
+  issues.push(...inspectScopeValues(entry, source, kind))
 
   return issues
 }
 
 function normalizeContent(value: string | undefined) {
   return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? ""
+}
+
+function inspectScopeValues(
+  entry: MemoryEntry,
+  source: MemoryDoctorSource,
+  kind: MemoryEntryKind,
+): MemoryDoctorIssue[] {
+  const issues: MemoryDoctorIssue[] = []
+  const context = { source, kind, entryName: entry.name }
+  const groups: Array<[string, string[] | undefined, (value: string) => string]> = [
+    ["tag", entry.tags, (value) => value.trim().toLowerCase()],
+    ["path glob", entry.pathGlobs, (value) => value.trim().replace(/\\/g, "/")],
+    ["agent", entry.agents, (value) => value.trim()],
+  ]
+
+  for (const [label, values, normalize] of groups) {
+    if (!values?.length) continue
+    const seen = new Set<string>()
+    let blank = false
+    let duplicate = false
+    for (const value of values) {
+      const normalized = normalize(value)
+      if (!normalized) {
+        blank = true
+        continue
+      }
+      if (seen.has(normalized)) duplicate = true
+      seen.add(normalized)
+    }
+    if (blank) {
+      issues.push({
+        ...context,
+        status: "warn",
+        code: "blank_scope_value",
+        message: `blank ${label} value on memory entry: ${entry.name}`,
+      })
+    }
+    if (duplicate) {
+      issues.push({
+        ...context,
+        status: "warn",
+        code: "redundant_scope_value",
+        message: `redundant ${label} value on memory entry: ${entry.name}`,
+      })
+    }
+  }
+
+  return issues
 }
 
 function inspectScannedSections(sections: ProjectMemory["sections"], now: Date): MemoryDoctorIssue[] {
