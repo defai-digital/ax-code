@@ -63554,6 +63554,35 @@
           "context": 202752,
           "output": 131072
         }
+      },
+      "DeepSeek-V4-Pro": {
+        "id": "DeepSeek-V4-Pro",
+        "name": "DeepSeek V4 Pro",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        }
       }
     }
   },
@@ -77354,30 +77383,6 @@
         "limit": {
           "context": 128000,
           "output": 128000
-        }
-      },
-      "inception/mercury-coder-small": {
-        "id": "inception/mercury-coder-small",
-        "name": "Mercury Coder Small Beta",
-        "family": "mercury",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-02-26",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 32000,
-          "output": 16384
         }
       },
       "openai/gpt-5.1-codex-max": {
