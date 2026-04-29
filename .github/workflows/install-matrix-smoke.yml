@@ -81,19 +81,25 @@ jobs:
           fi
 
       - name: Filter dispatch channel
-        if: ${{ inputs.channel != '' && inputs.channel != 'both' && inputs.channel != matrix.channel }}
+        id: channel
         shell: bash
         run: |
-          echo "Skipping ${{ matrix.channel }} (workflow_dispatch requested ${{ inputs.channel }} only)"
-          exit 0
+          REQUESTED="${{ inputs.channel }}"
+          if [ -z "$REQUESTED" ] || [ "$REQUESTED" = "both" ] || [ "$REQUESTED" = "${{ matrix.channel }}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping ${{ matrix.channel }} (workflow_dispatch requested ${REQUESTED} only)"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install Node (host runner)
-        if: ${{ matrix.container == '' }}
+        if: ${{ steps.channel.outputs.enabled == 'true' && matrix.container == '' }}
         uses: actions/setup-node@v6
         with:
           node-version: 22
 
       - name: Install ax-code
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -e
@@ -108,6 +114,7 @@ jobs:
           npm install -g "${PACKAGE}@${VERSION}"
 
       - name: ax-code --version
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -e
@@ -120,6 +127,7 @@ jobs:
           fi
 
       - name: ax-code doctor — assert runtimeMode matches channel
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -e
@@ -134,6 +142,7 @@ jobs:
             || (echo "FAIL: ${{ matrix.channel }} channel did not report ${RUNTIME_RE} runtimeMode" && exit 1)
 
       - name: Smoke — installed backend stdio handshake
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: bash
         timeout-minutes: 1
         run: |
@@ -151,6 +160,7 @@ jobs:
             || (echo "FAIL: installed backend did not report ${RUNTIME_RE} runtimeMode" && exit 1)
 
       - name: Smoke — non-interactive command
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: bash
         timeout-minutes: 1
         run: |

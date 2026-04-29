@@ -64,6 +64,8 @@ describe("homebrew source formula generator", () => {
   test("formula filename and class name are ax-code-source / AxCodeSource (compatibility alias)", async () => {
     const text = await Bun.file(homebrewSourceScript).text()
     expect(text).toContain("ax-code-source.rb")
+    expect(text).toContain("tracks compiled release assets")
+    expect(text).not.toContain("The default \\`ax-code\\` formula now uses the same source+bun runtime.")
     expect(text).not.toContain("> /tmp/ax-code.rb")
   })
 
@@ -106,6 +108,9 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain("expected ax-code --version to be ${VERSION}")
     expect(text).toContain("Smoke — installed backend stdio handshake")
     expect(text).toContain("tui-backend --stdio")
+    expect(text).toContain("id: channel")
+    expect(text).toContain("enabled=false")
+    expect(text).toContain("steps.channel.outputs.enabled == 'true'")
     expect(text).toContain("RUNTIME_RE='(bun-bundled|source)'")
     expect(text).toContain('\\"runtimeMode\\":\\"${RUNTIME_RE}\\"')
     expect(text).toContain("RUNTIME_RE='compiled'")
