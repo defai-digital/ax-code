@@ -45,7 +45,7 @@ afterEach(async () => {
 })
 
 test("Telemetry.init deduplicates concurrent initialization", async () => {
-  process.env.AX_CODE_OTLP_ENDPOINT = "https://otel.example.com/v1/traces"
+  process.env.AX_CODE_OTLP_ENDPOINT = "https://1.1.1.1/v1/traces"
 
   const { Telemetry } = await import("../../src/telemetry")
   await Promise.all([Telemetry.init(), Telemetry.init(), Telemetry.init()])
@@ -54,4 +54,13 @@ test("Telemetry.init deduplicates concurrent initialization", async () => {
 
   await Telemetry.shutdown()
   expect(shutdowns).toBe(1)
+})
+
+test("Telemetry.init rejects private OTLP endpoints before exporter setup", async () => {
+  process.env.AX_CODE_OTLP_ENDPOINT = "http://127.0.0.1:4318/v1/traces"
+
+  const { Telemetry } = await import("../../src/telemetry")
+  await Telemetry.init()
+
+  expect(registers).toBe(0)
 })

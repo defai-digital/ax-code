@@ -3,6 +3,8 @@ import z from "zod"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "../util/filesystem"
 import { Ssrf } from "../util/ssrf"
+import { Global } from "../global"
+import { Instance } from "../project/instance"
 import bundledSnapshot from "./models-snapshot.json"
 
 export namespace ModelsDev {
@@ -137,6 +139,20 @@ export namespace ModelsDev {
     return result.data
   }
 
+  function isAllowedModelPath(file: string) {
+    const resolved = Filesystem.resolve(file)
+    const allowedDirs: string[] = [Global.Path.config, Global.Path.data, Global.Path.home]
+    try {
+      if (Instance.worktree && Instance.worktree !== "/") allowedDirs.push(Instance.worktree)
+      allowedDirs.push(Instance.directory)
+    } catch {
+      // Instance context is not guaranteed to be active when this data loader
+      // runs in some test/bootstrap paths.
+    }
+
+    return allowedDirs.some((root) => Filesystem.contains(root, resolved))
+  }
+
   export const Data = lazy(async () => {
     const read = async (file: string, source: string) => {
       try {
@@ -149,9 +165,16 @@ export namespace ModelsDev {
 
     const file = process.env["AX_CODE_MODELS_PATH"]
     if (file) {
-      log.info("loading model data from file", { file })
-      const data = parse(await read(file, "file"), "file")
-      if (data) return data
+      if (!isAllowedModelPath(file)) {
+        log.warn("AX_CODE_MODELS_PATH outside allowed directories; ignoring", {
+          file,
+        })
+      } else {
+        const resolved = Filesystem.resolve(file)
+        log.info("loading model data from file", { file: resolved })
+        const data = parse(await read(resolved, "file"), "file")
+        if (data) return data
+      }
     }
 
     const url = process.env["AX_CODE_MODELS_URL"]

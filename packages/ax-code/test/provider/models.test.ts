@@ -1,6 +1,7 @@
 import path from "path"
 import { afterEach, expect, test } from "bun:test"
 import { ModelsDev } from "../../src/provider/models"
+import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
 const originalFile = process.env["AX_CODE_MODELS_PATH"]
@@ -47,6 +48,48 @@ test("falls back to bundled snapshot when custom models file has invalid schema"
   const data = await ModelsDev.get()
   expect(Object.keys(data).length).toBeGreaterThan(0)
   expect(data["broken"]).toBeUndefined()
+})
+
+test("loads custom models file from the active project directory", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const file = path.join(tmp.path, "models.json")
+  await Bun.write(
+    file,
+    JSON.stringify({
+      custom: {
+        id: "custom",
+        name: "Custom",
+        env: [],
+        npm: "@custom/provider",
+        models: {
+          "custom-model": {
+            id: "custom-model",
+            name: "Custom Model",
+            release_date: "2026-01-01",
+            attachment: false,
+            reasoning: false,
+            tool_call: true,
+            limit: {
+              context: 1000,
+              output: 100,
+            },
+          },
+        },
+      },
+    }),
+  )
+
+  process.env["AX_CODE_MODELS_PATH"] = file
+  delete process.env["AX_CODE_MODELS_URL"]
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      ModelsDev.Data.reset()
+      const data = await ModelsDev.get()
+      expect(data["custom"]?.models["custom-model"]?.name).toBe("Custom Model")
+    },
+  })
 })
 
 test("filters Google Gemini models below version 3", async () => {

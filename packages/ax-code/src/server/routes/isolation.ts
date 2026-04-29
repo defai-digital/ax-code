@@ -65,16 +65,16 @@ export const IsolationRoutes = lazy(() =>
       validator("json", z.object({ mode: IsolationMode })),
       async (c) => {
         const { mode } = c.req.valid("json")
-        process.env["AX_CODE_ISOLATION_MODE"] = mode
         const network = mode === "full-access"
-        let persisted = true
-        await updateProjectConfig((config) => {
-          config.isolation = { mode, network }
-        }).catch((err) => {
-          persisted = false
+        try {
+          await updateProjectConfig((config) => {
+            config.isolation = { mode, network }
+          })
+        } catch (err) {
           log.warn("failed to persist isolation config", { error: err instanceof Error ? err.message : String(err) })
-        })
-        if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
+          return c.json({ error: "Failed to persist configuration" }, 500)
+        }
+        process.env["AX_CODE_ISOLATION_MODE"] = mode
         const state = Isolation.resolve({ mode, network }, Instance.directory, Instance.worktree)
         return c.json({ mode: state.mode, network: state.network })
       },

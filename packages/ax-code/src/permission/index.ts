@@ -129,6 +129,7 @@ export namespace Permission {
 
   interface PendingEntry {
     info: Request
+    ruleset: Ruleset
     deferred: PromiseDeferred<void>
   }
 
@@ -250,7 +251,7 @@ export namespace Permission {
     log.info("asking", { id, permission: info.permission, patterns: info.patterns })
 
     const deferred = createDeferred<void>()
-    pending.set(id, { info, deferred })
+    pending.set(id, { info, ruleset, deferred })
 
     const onAbort = () => {
       if (!pending.delete(id)) return
@@ -354,9 +355,10 @@ export namespace Permission {
 
     for (const [id, item] of pending.entries()) {
       if (item.info.sessionID !== existing.info.sessionID) continue
-      const ok = item.info.patterns.every(
-        (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
-      )
+      const ok = item.info.patterns.every((pattern) => {
+        if (INTERACTIVE_ONLY.has(item.info.permission)) return false
+        return evaluate(item.info.permission, pattern, item.ruleset, approved).action === "allow"
+      })
       if (!ok) continue
       pending.delete(id)
       Bus.publishDetached(Event.Replied, {

@@ -104,6 +104,7 @@ export namespace Discovery {
           if (cached && verifyCachedFile(cached, expectedSha256, dest)) {
             return true
           }
+          if (cached) yield* fs.remove(dest).pipe(Effect.catch(() => Effect.void))
         }
 
         return yield* fetchArrayBuffer(url).pipe(

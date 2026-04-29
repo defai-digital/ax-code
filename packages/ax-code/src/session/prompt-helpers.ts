@@ -537,7 +537,8 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
       const filepath = name.startsWith("~/")
         ? path.resolve(os.homedir(), name.slice(2))
         : path.resolve(Instance.worktree, name)
-      const checkedPath = await fs.realpath(filepath).catch(() => filepath)
+      const checkedPath = await fs.realpath(filepath).catch(() => undefined)
+      if (!checkedPath) return
 
       if (name.startsWith("~/") && !Filesystem.contains(os.homedir(), checkedPath)) {
         return

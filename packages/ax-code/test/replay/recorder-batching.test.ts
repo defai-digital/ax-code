@@ -72,6 +72,29 @@ describe("Recorder.emit batching", () => {
     })
   })
 
+  test("keeps a restarted session active after a stale end microtask", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        Recorder.end(session.id)
+        Recorder.begin(session.id)
+
+        await Promise.resolve()
+
+        expect(Recorder.active(session.id)).toBe(true)
+
+        Recorder.end(session.id)
+        await Promise.resolve()
+        expect(Recorder.active(session.id)).toBe(false)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("loads recent events in chronological order with a bounded limit", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

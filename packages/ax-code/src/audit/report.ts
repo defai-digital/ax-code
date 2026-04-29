@@ -210,7 +210,7 @@ export namespace AuditReport {
             from: event.fromAgent,
             to: event.toAgent,
             mode: event.routeMode ?? "switch",
-            conf: event.confidence,
+            conf: event.confidence ?? 0,
             matched: event.matched ?? [],
           })
           break

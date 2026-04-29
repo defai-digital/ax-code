@@ -262,7 +262,18 @@ export namespace Snapshot {
       log.error("failed to validate snapshot tree hash", { hash })
       return current.prevHash
     }
-    await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], { cwd: current.directory })
+    const updateRef = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
+      cwd: current.directory,
+    })
+    if (updateRef.code !== 0) {
+      log.error("failed to update snapshot ref", {
+        hash,
+        gitdir: current.gitdir,
+        exitCode: updateRef.code,
+        stderr: updateRef.stderr,
+      })
+      return current.prevHash
+    }
     current.prevHash = hash
     log.info("tracking", { hash, cwd: current.directory, git: current.gitdir })
     return hash

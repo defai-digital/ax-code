@@ -4,6 +4,7 @@ export const BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl
 
 export namespace Identifier {
   const LENGTH = 26
+  const COUNTER_MODULO = 0x1000
 
   // State for monotonic ID generation
   let lastTimestamp = 0
@@ -27,13 +28,20 @@ export namespace Identifier {
   }
 
   export function create(descending: boolean, timestamp?: number): string {
-    const currentTimestamp = timestamp ?? Date.now()
+    let currentTimestamp = timestamp ?? Date.now()
+    if (currentTimestamp < lastTimestamp) currentTimestamp = lastTimestamp
 
     if (currentTimestamp !== lastTimestamp) {
       lastTimestamp = currentTimestamp
       counter = 0
+    } else if (counter === COUNTER_MODULO - 1) {
+      // Preserve sort order when the 12-bit counter wraps by
+      // bumping the timestamp into the next millisecond slot.
+      lastTimestamp += 1
+      counter = 0
+      currentTimestamp = lastTimestamp
     }
-    counter = (counter + 1) & 0xfff
+    counter = (counter + 1) & (COUNTER_MODULO - 1)
 
     let now = BigInt(currentTimestamp) * BigInt(0x1000) + BigInt(counter)
 

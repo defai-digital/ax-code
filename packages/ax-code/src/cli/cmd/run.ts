@@ -337,6 +337,9 @@ export const RunCommand = cmd({
         if (!(await Filesystem.exists(resolvedPath))) {
           exitEarly(`File not found: ${filePath}`)
         }
+        if (!Filesystem.contains(fileBaseDir, resolvedPath)) {
+          exitEarly(`File outside the current project directory: ${filePath}`)
+        }
 
         const mime = (await Filesystem.isDir(resolvedPath)) ? "application/x-directory" : "text/plain"
 

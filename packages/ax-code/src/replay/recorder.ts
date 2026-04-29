@@ -18,7 +18,7 @@ export namespace Recorder {
   // Logging on eviction surfaces the case if it ever happens in practice
   // (BUG-010).
   const MAX_SESSIONS = 10_000
-  const sessions = new Map<string, { sequence: number }>()
+  const sessions = new Map<string, { sequence: number; token: number }>()
 
   // Pending events buffered between microtask flushes. Long sessions emit
   // thousands of events (one per tool call, llm output, step, etc); the
@@ -63,7 +63,8 @@ export namespace Recorder {
   }
 
   export function begin(sessionID: SessionID) {
-    sessions.set(sessionID, { sequence: 0 })
+    const token = (sessions.get(sessionID)?.token ?? 0) + 1
+    sessions.set(sessionID, { sequence: 0, token })
     while (sessions.size > MAX_SESSIONS) {
       const oldest = sessions.keys().next().value
       if (oldest === undefined || oldest === sessionID) break
@@ -77,8 +78,13 @@ export namespace Recorder {
   }
 
   export function end(sessionID: SessionID) {
+    const state = sessions.get(sessionID)
+    if (!state) return
+    const endToken = state.token
     // Defer deletion so pending microtask-queued emits flush first
-    queueMicrotask(() => sessions.delete(sessionID))
+    queueMicrotask(() => {
+      if (sessions.get(sessionID)?.token === endToken) sessions.delete(sessionID)
+    })
   }
 
   export function active(sessionID: SessionID): boolean {

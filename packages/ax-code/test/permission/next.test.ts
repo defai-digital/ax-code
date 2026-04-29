@@ -868,6 +868,50 @@ test("reply - always resolves matching pending requests in same session", async 
   })
 })
 
+test("reply - always does not resolve interactive-only pending requests", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const normal = Permission.ask({
+        id: PermissionID.make("per_always_normal"),
+        sessionID: SessionID.make("session_interactive_only"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: ["*"],
+        ruleset: [],
+      })
+
+      const interactive = Permission.ask({
+        id: PermissionID.make("per_always_interactive"),
+        sessionID: SessionID.make("session_interactive_only"),
+        permission: "isolation_escalation",
+        patterns: ["full-access"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      })
+
+      await waitForPending(2)
+
+      await Permission.reply({
+        requestID: PermissionID.make("per_always_normal"),
+        reply: "always",
+      })
+
+      await expect(normal).resolves.toBeUndefined()
+      expect((await Permission.list()).map((item) => item.id)).toEqual([PermissionID.make("per_always_interactive")])
+
+      await Permission.reply({
+        requestID: PermissionID.make("per_always_interactive"),
+        reply: "reject",
+      })
+      await expect(interactive).rejects.toBeInstanceOf(Permission.RejectedError)
+    },
+  })
+})
+
 test("reply - always keeps other session pending", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

@@ -466,7 +466,21 @@ export namespace Server {
       }
     })()
     if (!stat?.isDirectory()) return c.json({ error: "directory does not exist or is not a directory" }, 400)
-    const DANGEROUS_ROOTS = new Set(["/", "/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/private/etc"])
+    const DANGEROUS_ROOTS = new Set([
+      "/",
+      "/etc",
+      "/proc",
+      "/sys",
+      "/dev",
+      "/boot",
+      "/root",
+      "/private/etc",
+      "/private/var",
+      "/private/tmp",
+      "/tmp",
+      "/Library",
+      "/Users/Shared",
+    ])
     if (DANGEROUS_ROOTS.has(directory)) return c.json({ error: "directory is not allowed" }, 400)
     return directory
   }

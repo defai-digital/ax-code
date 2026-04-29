@@ -128,8 +128,11 @@ export namespace Plugin {
 
       for (const hook of hooks) {
         try {
-          await (hook as any).config?.(cfg)
+          const config = (hook as any).config
+          await config?.(cfg)
         } catch (err) {
+          const index = hooks.indexOf(hook)
+          if (index !== -1) hooks.splice(index, 1)
           log.error("plugin config hook failed", { error: err })
         }
       }

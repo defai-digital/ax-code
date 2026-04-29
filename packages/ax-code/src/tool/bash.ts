@@ -428,7 +428,9 @@ export const BashTool = Tool.define("bash", async () => {
             const text = chunk.toString()
             output += text
           } else {
-            output += chunk.subarray(0, remaining).toString() + "\n\n[output truncated at 10MB]"
+            let safeRemaining = remaining
+            while (safeRemaining > 0 && (chunk[safeRemaining]! & 0xc0) === 0x80) safeRemaining--
+            output += chunk.subarray(0, safeRemaining).toString() + "\n\n[output truncated at 10MB]"
             truncated = true
           }
         }

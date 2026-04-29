@@ -904,12 +904,12 @@ export namespace Provider {
   export async function getLanguage(model: Model): Promise<Lang> {
     const s = await state()
     const key = `${model.providerID}/${model.id}`
-    if (s.models.has(key)) return s.models.get(key)!
 
-    // Deduplicate concurrent loads — without this, parallel calls
-    // both pass the cache-miss check and load the same SDK twice.
+    // Deduplicate concurrent loads before returning cached values to avoid TOCTOU
+    // gaps between a cache miss and concurrent promise creation.
     const pending = s.modelPending.get(key)
     if (pending) return pending
+    if (s.models.has(key)) return s.models.get(key)!
 
     const provider = s.providers[model.providerID]
     if (!provider) {

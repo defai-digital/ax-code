@@ -108,14 +108,17 @@ export namespace EventQuery {
   }
 
   export function bySessionAndType(sessionID: SessionID, type: string): ReplayEvent[] {
-    return Database.use((db) =>
+    const rows = Database.use((db) =>
       db
         .select()
         .from(EventLogTable)
         .where(and(eq(EventLogTable.session_id, sessionID), eq(EventLogTable.event_type, type)))
         .orderBy(EventLogTable.sequence)
+        .limit(BY_SESSION_LIMIT)
         .all(),
-    ).map((row) => row.event_data)
+    )
+    warnIfTruncated(sessionID, rows.length)
+    return rows.map((row) => row.event_data)
   }
 
   export function count(sessionID: SessionID): number {

@@ -492,6 +492,7 @@ export namespace Session {
         summary_additions: input.summary?.additions,
         summary_deletions: input.summary?.deletions,
         summary_files: input.summary?.files,
+        summary_diffs: input.summary?.diffs,
         time_updated: Date.now(),
       }),
   )
@@ -505,6 +506,7 @@ export namespace Session {
       summary_additions: input.summary?.additions,
       summary_deletions: input.summary?.deletions,
       summary_files: input.summary?.files,
+      summary_diffs: input.summary?.diffs,
       time_updated: Date.now(),
     }),
   )

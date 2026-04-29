@@ -2,6 +2,7 @@ import { Log } from "@/util/log"
 import { EventQuery } from "@/replay/query"
 import type { ReplayEvent } from "@/replay/event"
 import type { SessionID } from "@/session/schema"
+import { Ssrf } from "@/util/ssrf"
 
 const log = Log.create({ service: "telemetry" })
 
@@ -32,12 +33,17 @@ export namespace Telemetry {
     if (initPromise) return initPromise
     initPromise = (async () => {
       try {
+        const endpointUrl = endpoint()
+        if (endpointUrl) {
+          await Ssrf.assertPublicUrl(endpointUrl, "AX_CODE_OTLP_ENDPOINT")
+        }
         const { NodeTracerProvider, SimpleSpanProcessor } = await import("@opentelemetry/sdk-trace-node")
         const { OTLPTraceExporter } = await import("@opentelemetry/exporter-trace-otlp-http")
         const { resourceFromAttributes } = await import("@opentelemetry/resources")
         const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = await import("@opentelemetry/semantic-conventions")
 
-        exporter = new OTLPTraceExporter({ url: endpoint() })
+        if (!endpointUrl) return
+        exporter = new OTLPTraceExporter({ url: endpointUrl })
         provider = new NodeTracerProvider({
           resource: resourceFromAttributes({
             [ATTR_SERVICE_NAME]: "ax-code",
@@ -47,7 +53,7 @@ export namespace Telemetry {
         })
         provider.register()
         initialized = true
-        log.info("OTLP telemetry initialized", { endpoint: endpoint() })
+        log.info("OTLP telemetry initialized", { endpoint: endpointUrl })
       } catch (e) {
         log.warn("failed to initialize OTLP telemetry", { error: e })
       } finally {
@@ -67,6 +73,17 @@ export namespace Telemetry {
     const events = EventQuery.bySession(sessionID)
     if (events.length === 0) return
 
+    const stepFinishes = new Map<number, Extract<ReplayEvent, { type: "step.finish" }>>()
+    const toolResults = new Map<string, Extract<ReplayEvent, { type: "tool.result" }>>()
+    for (const event of events) {
+      if (event.type === "step.finish" && !stepFinishes.has(event.stepIndex)) {
+        stepFinishes.set(event.stepIndex, event)
+      }
+      if (event.type === "tool.result" && !toolResults.has(event.callID)) {
+        toolResults.set(event.callID, event)
+      }
+    }
+
     const sessionSpan = tracer.startSpan("session", {
       attributes: { "session.id": sessionID },
     })
@@ -82,8 +99,7 @@ export namespace Telemetry {
           const stepSpan = tracer.startSpan(`step.${event.stepIndex}`, {
             attributes: { "step.index": event.stepIndex },
           })
-          // Find matching finish
-          const finish = events.find((e) => e.type === "step.finish" && e.stepIndex === event.stepIndex)
+          const finish = stepFinishes.get(event.stepIndex)
           if (finish && finish.type === "step.finish") {
             stepSpan.setAttribute("step.finish_reason", finish.finishReason)
             stepSpan.setAttribute("step.tokens.input", finish.tokens.input)
@@ -99,7 +115,7 @@ export namespace Telemetry {
               "tool.call_id": event.callID,
             },
           })
-          const result = events.find((e) => e.type === "tool.result" && e.callID === event.callID)
+          const result = toolResults.get(event.callID)
           if (result && result.type === "tool.result") {
             toolSpan.setAttribute("tool.status", result.status)
             toolSpan.setAttribute("tool.duration_ms", result.durationMs)
