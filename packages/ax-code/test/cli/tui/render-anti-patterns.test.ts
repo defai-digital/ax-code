@@ -22,6 +22,8 @@ const FOOTER_VIEW_MODEL_SRC = path.join(TUI_ROOT, "routes/session/footer-view-mo
 const SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-list.tsx")
 const WORKSPACE_SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/workspace/dialog-session-list.tsx")
 const SESSION_RENAME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-rename.tsx")
+const SPINNER_SRC = path.join(TUI_ROOT, "component/spinner.tsx")
+const SPINNER_PROFILE_SRC = path.join(TUI_ROOT, "component/spinner-profile.ts")
 const WORKSPACE_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-workspace-list.tsx")
 const DIALOG_COMMAND_SRC = path.join(TUI_ROOT, "component/dialog-command.tsx")
 const THEME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-theme-list.tsx")
@@ -617,6 +619,17 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain('setSubmitStage("dispatching")')
     expect(prompt).toContain("setDraftSessionID(sessionID)")
     expect(prompt).toContain("pendingSubmitStatusText(submitStage())")
+  })
+
+  test("keeps animated spinners out of the compiled runtime render path", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const spinner = await fs.readFile(SPINNER_SRC, "utf8")
+    const profile = await fs.readFile(SPINNER_PROFILE_SRC, "utf8")
+
+    expect(profile).toContain('runtimeMode()) !== "compiled"')
+    expect(spinner).toContain("shouldUseTuiAnimations")
+    expect(prompt).toContain("shouldUseTuiAnimations")
+    expect(prompt).toContain('fallback={<text fg={theme.textMuted}>[⋯]</text>}')
   })
 
   test("handles pasted SVG and image read failures without silently falling back to raw paths", async () => {

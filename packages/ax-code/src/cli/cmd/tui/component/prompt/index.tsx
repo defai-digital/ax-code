@@ -66,6 +66,7 @@ import {
   pendingSubmitStatusText,
   type SubmitStage,
 } from "./submit-state"
+import { shouldUseTuiAnimations } from "../spinner-profile"
 
 const log = Log.create({ service: "tui.prompt" })
 
@@ -1655,7 +1656,10 @@ export function Prompt(props: PromptProps) {
                   <Show
                     when={status().type === "busy" && busyStatus()?.stale}
                     fallback={
-                      <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
+                      <Show
+                        when={shouldUseTuiAnimations({ userEnabled: kv.get("animations_enabled", true) })}
+                        fallback={<text fg={theme.textMuted}>[⋯]</text>}
+                      >
                         <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
                       </Show>
                     }
