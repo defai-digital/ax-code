@@ -110,6 +110,22 @@ jobs:
           else
             PACKAGE="@defai.digital/ax-code"
           fi
+          # release_published can fire before publish-npm/publish-source
+          # finish (or before the npm registry has propagated the new
+          # version). Poll npm until the version is visible, then install.
+          # Cap at ~10 minutes so a genuinely missing publish still fails.
+          echo "Waiting for ${PACKAGE}@${VERSION} to be available on npm..."
+          for attempt in $(seq 1 60); do
+            if npm view "${PACKAGE}@${VERSION}" version >/dev/null 2>&1; then
+              echo "${PACKAGE}@${VERSION} is available (attempt ${attempt})"
+              break
+            fi
+            if [ "$attempt" = "60" ]; then
+              echo "FAIL: ${PACKAGE}@${VERSION} not visible on npm after 10 minutes"
+              exit 1
+            fi
+            sleep 10
+          done
           echo "Installing ${PACKAGE}@${VERSION} for channel ${CHANNEL}..."
           npm install -g "${PACKAGE}@${VERSION}"
 
