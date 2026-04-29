@@ -1,6 +1,6 @@
 import path from "path"
 import { stat } from "node:fs/promises"
-import { DurableStoragePolicy } from "../../storage/policy"
+import { describeDurableStoragePolicy, DurableStoragePolicy } from "../../storage/policy"
 
 export type DoctorCheck = {
   name: string
@@ -35,7 +35,10 @@ export async function getDoctorDatabaseCheck(input: {
   const markWarn = () => {
     if (status !== "fail") status = "warn"
   }
-  const details = [`${databasePath} (${databaseModeLabel(databaseName)}${current.exists ? "" : ", not created yet"})`]
+  const details = [
+    `${databasePath} (${databaseModeLabel(databaseName)}${current.exists ? "" : ", not created yet"})`,
+    describeDurableStoragePolicy(),
+  ]
 
   const readErrors = [
     current.error ? `${databaseName}: ${current.error}` : undefined,
@@ -55,7 +58,7 @@ export async function getDoctorDatabaseCheck(input: {
 
   if (wal.exists && (wal.size ?? 0) >= LARGE_WAL_BYTES) {
     markWarn()
-    details.push(`large WAL file: ${formatBytes(wal.size ?? 0)}`)
+    details.push(`large WAL file: ${formatBytes(wal.size ?? 0)} (policy limit ${formatBytes(LARGE_WAL_BYTES)})`)
   } else if (wal.exists && wal.size !== undefined) {
     details.push(`WAL ${formatBytes(wal.size)}`)
   }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { getDoctorDatabaseCheck } from "../../src/cli/cmd/doctor-storage"
-import { DurableStoragePolicy } from "../../src/storage/policy"
+import { describeDurableStoragePolicy, DurableStoragePolicy } from "../../src/storage/policy"
 
 describe("getDoctorDatabaseCheck", () => {
   test("reports the active bundled database path", async () => {
@@ -12,7 +12,7 @@ describe("getDoctorDatabaseCheck", () => {
     expect(check).toEqual({
       name: "Data directory",
       status: "ok",
-      detail: "/tmp/ax-code/ax-code.db (bundled state)",
+      detail: `/tmp/ax-code/ax-code.db (bundled state); ${describeDurableStoragePolicy()}`,
     })
   })
 
@@ -37,7 +37,7 @@ describe("getDoctorDatabaseCheck", () => {
     expect(check).toEqual({
       name: "Data directory",
       status: "ok",
-      detail: "/tmp/ax-code/ax-code-local.db (source/dev state, not created yet)",
+      detail: `/tmp/ax-code/ax-code-local.db (source/dev state, not created yet); ${describeDurableStoragePolicy()}`,
     })
   })
 
@@ -68,7 +68,7 @@ describe("getDoctorDatabaseCheck", () => {
     })
 
     expect(check.status).toBe("warn")
-    expect(check.detail).toContain("large WAL file: 64 MiB")
+    expect(check.detail).toContain("large WAL file: 64 MiB (policy limit 64 MiB)")
   })
 
   test("fails when database file inspection returns an access error", async () => {

@@ -12,3 +12,19 @@ export const DurableStoragePolicy = {
   journalSizeLimitBytes: 64 * 1024 * 1024,
   shutdownCheckpointMode: "TRUNCATE",
 } as const
+
+export function describeDurableStoragePolicy() {
+  return [
+    `SQLite policy: journal ${DurableStoragePolicy.journalMode}`,
+    `synchronous ${DurableStoragePolicy.synchronous}`,
+    `busy timeout ${DurableStoragePolicy.busyTimeoutMs}ms`,
+    `WAL autocheckpoint ${DurableStoragePolicy.walAutoCheckpointPages} pages`,
+    `journal limit ${formatPolicyBytes(DurableStoragePolicy.journalSizeLimitBytes)}`,
+  ].join(", ")
+}
+
+function formatPolicyBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`
+  return `${Math.round(bytes / 1024 / 1024)} MiB`
+}
