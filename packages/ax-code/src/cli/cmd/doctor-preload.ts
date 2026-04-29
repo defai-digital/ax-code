@@ -19,7 +19,7 @@ export function getTuiPreloadCheck(input: TuiPreloadCheckInput = {}): DoctorChec
     return {
       name: "TUI preload",
       status: "ok",
-      detail: "Bundled runtime — OpenTUI preload is compiled into the standalone binary",
+      detail: "Bundled runtime — OpenTUI JSX is transformed at build time",
     }
   }
 

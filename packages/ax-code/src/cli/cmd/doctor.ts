@@ -258,8 +258,8 @@ export const DoctorCommand: CommandModule = {
       checks.push({ name: "TUI server", status: "ok", detail: "Port 4096 available" })
     }
 
-    // 11b. Bun preload — required for source/dev TUI runs, but embedded in
-    // standalone binaries published via npm/Homebrew/GitHub Releases.
+    // 11b. Bun preload — required for source/dev TUI runs. Bundled runtimes
+    // transform TUI JSX during build and do not resolve the preload from disk.
     checks.push(getTuiPreloadCheck())
 
     // 12. Recent logs analysis — scan last 5 log files for TUI crashes / errors

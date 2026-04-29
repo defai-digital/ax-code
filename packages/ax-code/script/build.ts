@@ -347,7 +347,11 @@ for (const item of targets) {
         execArgv: [`--user-agent=ax-code/${buildVersion}`, "--use-system-ca", "--"],
         windows: {},
       },
-      entrypoints: ["./src/index.ts", parserWorker, workerPath],
+      // The compiled binary receives already-transformed JSX from the build
+      // plugin. Use an entrypoint without the source/dev OpenTUI preload so
+      // Bun compile does not bundle Babel's transform-time dependency graph
+      // into standalone binaries.
+      entrypoints: ["./src/index-compiled.ts", parserWorker, workerPath],
       define: {
         AX_CODE_VERSION: `'${buildVersion}'`,
         AX_CODE_MIGRATIONS: JSON.stringify(migrations),
