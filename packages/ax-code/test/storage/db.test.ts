@@ -4,6 +4,7 @@ import { Global } from "../../src/global"
 import { Installation } from "../../src/installation"
 import { Flag } from "../../src/flag/flag"
 import { Database } from "../../src/storage/db"
+import { DurableStoragePolicy } from "../../src/storage/policy"
 
 describe("Database.Path", () => {
   test("returns database path for the current channel", () => {
@@ -38,10 +39,13 @@ describe("Database.applyStartupPragmas", () => {
     ).not.toThrow()
 
     expect(statements).toEqual([
-      "PRAGMA busy_timeout = 15000",
-      "PRAGMA journal_mode = WAL",
-      "PRAGMA synchronous = NORMAL",
-      "PRAGMA cache_size = -64000",
+      `PRAGMA busy_timeout = ${DurableStoragePolicy.busyTimeoutMs}`,
+      `PRAGMA journal_mode = ${DurableStoragePolicy.journalMode}`,
+      `PRAGMA synchronous = ${DurableStoragePolicy.synchronous}`,
+      `PRAGMA cache_size = -${DurableStoragePolicy.cacheSizeKiB}`,
+      `PRAGMA temp_store = ${DurableStoragePolicy.tempStore}`,
+      `PRAGMA wal_autocheckpoint = ${DurableStoragePolicy.walAutoCheckpointPages}`,
+      `PRAGMA journal_size_limit = ${DurableStoragePolicy.journalSizeLimitBytes}`,
       "PRAGMA foreign_keys = ON",
       "PRAGMA wal_checkpoint(PASSIVE)",
     ])

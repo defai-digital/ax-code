@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { getDoctorDatabaseCheck } from "../../src/cli/cmd/doctor-storage"
+import { DurableStoragePolicy } from "../../src/storage/policy"
 
 describe("getDoctorDatabaseCheck", () => {
   test("reports the active bundled database path", async () => {
@@ -57,16 +58,17 @@ describe("getDoctorDatabaseCheck", () => {
   })
 
   test("warns when the active WAL is unusually large", async () => {
+    const largeWalBytes = DurableStoragePolicy.journalSizeLimitBytes
     const check = await getDoctorDatabaseCheck({
       databasePath: "/tmp/ax-code/ax-code.db",
       inspect: async (target) => ({
         exists: target === "/tmp/ax-code/ax-code.db" || target.endsWith("-wal"),
-        size: target.endsWith("-wal") ? 129 * 1024 * 1024 : 8192,
+        size: target.endsWith("-wal") ? largeWalBytes : 8192,
       }),
     })
 
     expect(check.status).toBe("warn")
-    expect(check.detail).toContain("large WAL file: 129 MiB")
+    expect(check.detail).toContain("large WAL file: 64 MiB")
   })
 
   test("fails when database file inspection returns an access error", async () => {

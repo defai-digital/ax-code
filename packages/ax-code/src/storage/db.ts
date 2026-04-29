@@ -16,6 +16,7 @@ import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { init } from "#db"
 import { NativeStore } from "@/code-intelligence/native-store"
+import { DurableStoragePolicy } from "./policy"
 
 declare const AX_CODE_MIGRATIONS: { sql: string; timestamp: number; name: string }[] | undefined
 
@@ -85,15 +86,18 @@ export namespace Database {
     warn?: (message: string, extra: Record<string, unknown>) => void
     path?: string
   }) {
-    input.run("PRAGMA busy_timeout = 15000")
-    input.run("PRAGMA journal_mode = WAL")
+    input.run(`PRAGMA busy_timeout = ${DurableStoragePolicy.busyTimeoutMs}`)
+    input.run(`PRAGMA journal_mode = ${DurableStoragePolicy.journalMode}`)
     // NORMAL (not FULL): ~10-20% faster writes. Trade-off: on an OS crash or
     // power loss (not app crash), the most recently committed transaction may
     // be silently rolled back. Acceptable for a local dev tool where the
     // database remains consistent (no corruption) and only the last action
     // is lost. Use FULL if write durability becomes critical.
-    input.run("PRAGMA synchronous = NORMAL")
-    input.run("PRAGMA cache_size = -64000")
+    input.run(`PRAGMA synchronous = ${DurableStoragePolicy.synchronous}`)
+    input.run(`PRAGMA cache_size = -${DurableStoragePolicy.cacheSizeKiB}`)
+    input.run(`PRAGMA temp_store = ${DurableStoragePolicy.tempStore}`)
+    input.run(`PRAGMA wal_autocheckpoint = ${DurableStoragePolicy.walAutoCheckpointPages}`)
+    input.run(`PRAGMA journal_size_limit = ${DurableStoragePolicy.journalSizeLimitBytes}`)
     input.run("PRAGMA foreign_keys = ON")
     try {
       input.run("PRAGMA wal_checkpoint(PASSIVE)")
@@ -138,7 +142,21 @@ export namespace Database {
   })
 
   export function close() {
-    Client().$client.close()
+    const client = Client()
+    try {
+      // Keep the file-backed SQLite database as the durable source of truth,
+      // but opportunistically shrink the WAL during graceful shutdown. This
+      // addresses the "disk sidecar keeps growing" class of problems without
+      // introducing a separate in-memory source of truth or async sync window
+      // where acknowledged writes can be lost.
+      client.run(`PRAGMA wal_checkpoint(${DurableStoragePolicy.shutdownCheckpointMode})`)
+    } catch (error) {
+      log.warn("failed to truncate wal during shutdown", {
+        path: Path,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    client.$client.close()
     Client.reset()
     // Release the native code-intelligence index store's SQLite handle
     // alongside the main DB. Without this, `ax-code-index.db` and its WAL

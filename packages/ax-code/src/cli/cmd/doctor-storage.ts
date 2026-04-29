@@ -1,5 +1,6 @@
 import path from "path"
 import { stat } from "node:fs/promises"
+import { DurableStoragePolicy } from "../../storage/policy"
 
 export type DoctorCheck = {
   name: string
@@ -13,7 +14,7 @@ type DatabaseFileInfo = {
   error?: string
 }
 
-const LARGE_WAL_BYTES = 128 * 1024 * 1024
+const LARGE_WAL_BYTES = DurableStoragePolicy.journalSizeLimitBytes
 
 export async function getDoctorDatabaseCheck(input: {
   databasePath: string
