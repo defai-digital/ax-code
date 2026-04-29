@@ -34,14 +34,12 @@ if (versions.size > 1) {
   throw new Error(`Platform binary package versions do not match: ${Array.from(versions).join(", ")}`)
 }
 const version = [...versions][0]!
-const compiledNpmTag = process.env.AX_CODE_COMPILED_TAG ?? "compiled"
-if (["latest", "beta"].includes(compiledNpmTag) && process.env.AX_CODE_ALLOW_COMPILED_DEFAULT !== "1") {
-  throw new Error(
-    `Refusing to publish compiled binary packages to npm tag '${compiledNpmTag}'. ` +
-      "The default npm channel must use the source+bun distribution. " +
-      "Set AX_CODE_ALLOW_COMPILED_DEFAULT=1 only for an intentional rollback.",
-  )
+function buildChannelForVersion(version: string) {
+  const prerelease = version.split("-", 2)[1]
+  if (!prerelease) return "latest"
+  return prerelease.split(".", 1)[0] || "beta"
 }
+const compiledNpmTag = process.env.AX_CODE_COMPILED_TAG ?? buildChannelForVersion(version)
 
 const npmName = META_PACKAGE_NAME
 const distDir = `./dist/${pkg.name}`
@@ -94,8 +92,8 @@ const tasks = binaryTargets.map(async (target) => {
 })
 await Promise.all(tasks)
 
-// Publish the compiled meta package only to the explicit compiled tag
-// (skip if already published). The default package is source+bun.
+// Publish the compiled meta package to the release channel. The source+bun
+// package remains available through @defai.digital/ax-code-source.
 await $`cd ${distDir} && npm pack --workspaces=false && npm publish *.tgz --workspaces=false --access public --tag ${compiledNpmTag}`.catch(
   (err) => {
     const msg = String(err?.stderr ?? err)

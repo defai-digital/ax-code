@@ -45,9 +45,10 @@ The rest of the documentation maps onto those layers.
 ### I want to try it quickly
 
 - Start with the [root README](../README.md) for install and first launch.
-- The default package-manager install path uses the source+bun runtime:
+- The default package-manager install path uses the compiled runtime:
   - `brew install defai-digital/ax-code/ax-code`
   - `npm i -g @defai.digital/ax-code`
+- Use `ax-code-source` only when you intentionally need the source+bun compatibility launcher.
 - Use `/connect` or `ax-code providers login` to set a model.
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
 - If you want tighter safety boundaries, enable [Sandbox Mode](sandbox.md) before broader edits.

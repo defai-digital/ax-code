@@ -2,8 +2,8 @@ name: Install Matrix Smoke
 
 # Validates that ax-code installs and runs end-to-end on every supported
 # platform × distribution channel after a release tag publishes. Both the
-# default package and the compatibility source alias must report the source
-# runtime mode; compiled binaries are no longer the default install path.
+# default package and the compatibility source alias must report the expected
+# runtime mode. The default package is compiled; ax-code-source is source+bun.
 #
 # Triggers:
 #   - `release_published`: each tag-driven release runs the matrix
@@ -44,8 +44,8 @@ jobs:
           - source
           - latest
         include:
-          # Linux musl coverage via Alpine container; Windows arm64 stays
-          # on the source runtime because compiled-binary builds are flaky.
+          # Linux musl coverage via Alpine container. Windows arm64 keeps a
+          # source alias smoke in addition to the default compiled channel.
           - os: ubuntu-latest
             channel: source
             container: alpine:3.20
@@ -53,6 +53,9 @@ jobs:
           - os: windows-11-arm
             channel: source
             label: win32-arm64-source-only
+          - os: windows-11-arm
+            channel: latest
+            label: win32-arm64-compiled
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container || '' }}
     steps:
@@ -122,8 +125,13 @@ jobs:
           set -e
           OUTPUT="$(ax-code doctor 2>&1)"
           echo "$OUTPUT"
-          echo "$OUTPUT" | grep -E "Runtime: Bun .* \((bun-bundled|source)\)" \
-            || (echo "FAIL: ${{ matrix.channel }} channel did not report bun-bundled/source runtimeMode" && exit 1)
+          if [ "${{ matrix.channel }}" = "source" ]; then
+            RUNTIME_RE='(bun-bundled|source)'
+          else
+            RUNTIME_RE='compiled'
+          fi
+          echo "$OUTPUT" | grep -E "Runtime: Bun .* \(${RUNTIME_RE}\)" \
+            || (echo "FAIL: ${{ matrix.channel }} channel did not report ${RUNTIME_RE} runtimeMode" && exit 1)
 
       - name: Smoke — installed backend stdio handshake
         shell: bash
@@ -134,8 +142,13 @@ jobs:
           echo "$OUTPUT"
           echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
             || (echo "FAIL: installed backend did not return rpc health result" && exit 1)
-          echo "$OUTPUT" | grep -E '"runtimeMode":"(bun-bundled|source)"' \
-            || (echo "FAIL: installed backend did not report bun-bundled/source runtimeMode" && exit 1)
+          if [ "${{ matrix.channel }}" = "source" ]; then
+            RUNTIME_RE='(bun-bundled|source)'
+          else
+            RUNTIME_RE='compiled'
+          fi
+          echo "$OUTPUT" | grep -E "\"runtimeMode\":\"${RUNTIME_RE}\"" \
+            || (echo "FAIL: installed backend did not report ${RUNTIME_RE} runtimeMode" && exit 1)
 
       - name: Smoke — non-interactive command
         shell: bash

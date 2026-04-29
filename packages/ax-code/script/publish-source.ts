@@ -12,9 +12,9 @@
  *   - `bin/postinstall.mjs`  detects bun on PATH or in node_modules
  *   - `package.json`   declares `bun` as a regular dependency
  *
- * The primary package (`@defai.digital/ax-code`) is the default user
- * distribution. `@defai.digital/ax-code-source` is kept as a compatibility
- * alias for users who installed the earlier source-channel package name.
+ * `@defai.digital/ax-code-source` is kept as a compatibility package for
+ * users who intentionally need the source+bun launcher. The primary
+ * `@defai.digital/ax-code` package is the compiled-binary distribution.
  *
  * See: automatosx/adr/ADR-002-distribution-source-plus-bun.md
  */

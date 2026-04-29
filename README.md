@@ -44,10 +44,11 @@ ax-code doctor
 
 Look for the `Runtime` line:
 
-| Output                             | Meaning                                   |
-| ---------------------------------- | ----------------------------------------- |
-| `Runtime: Bun X.Y.Z (bun-bundled)` | Source channel — bundled JS + bun runtime |
-| `Runtime: Bun X.Y.Z (source)`      | Local checkout via `pnpm setup:cli`       |
+| Output                              | Meaning                                        |
+| ----------------------------------- | ---------------------------------------------- |
+| `Runtime: Bun X.Y.Z (compiled)`     | Default Homebrew/npm install — compiled binary |
+| `Runtime: Bun X.Y.Z (bun-bundled)`  | `ax-code-source` compatibility package         |
+| `Runtime: Bun X.Y.Z (source)`       | Local checkout via `pnpm setup:cli`            |
 
 ### Run
 
@@ -66,7 +67,7 @@ That's it. No project setup or config file is required. Run `ax-code`, then use 
 
 ### Update
 
-`ax-code upgrade` and package-manager update commands apply to the source+bun runtime shipped by the default package.
+`ax-code upgrade` and package-manager update commands apply to the compiled runtime shipped by the default package.
 
 ```bash
 ax-code upgrade
@@ -76,7 +77,7 @@ npm update -g @defai.digital/ax-code   # follows your installed dist-tag
 
 ### Distribution note
 
-The supported user install path now ships pre-bundled JS plus the Bun runtime under the normal `ax-code` package/formula. Compiled binaries are fallback release assets, not the default install channel.
+The supported user install path now ships the compiled binary under the normal `ax-code` package/formula. The source+bun launcher remains available as the `ax-code-source` compatibility channel for diagnosis or fallback.
 
 ### From Source (contributors)
 
@@ -87,12 +88,12 @@ cd ax-code && pnpm install && pnpm run setup:cli
 
 Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+. `setup:cli` installs a source launcher that runs ax-code directly via `bun run` from your checkout. `ax-code doctor` will report `Runtime: Bun X.Y.Z (source)`.
 
-Build the same bundle that ships through the default package-manager channel:
+Build the same compiled runtime that ships through the default package-manager channel:
 
 ```bash
-pnpm --filter ax-code run bundle:source        # build only
-pnpm --filter ax-code run bundle:source:smoke  # build + run --version
-pnpm --filter ax-code run bundle:source:pack   # build + npm pack (dry-run)
+pnpm --dir packages/ax-code run build -- --single
+pnpm run setup:cli -- --bundled
+ax-code doctor
 ```
 
 ---

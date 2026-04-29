@@ -67,13 +67,16 @@ describe("homebrew source formula generator", () => {
     expect(text).not.toContain("> /tmp/ax-code.rb")
   })
 
-  test("default formula now points at source npm tarball and depends on bun", async () => {
+  test("default formula points at compiled GitHub release assets", async () => {
     const text = await Bun.file(homebrewDefaultScript).text()
-    expect(text).toContain('SOURCE_PACKAGE_PATH="@defai.digital/ax-code"')
-    expect(text).toContain('SOURCE_TARBALL_NAME="ax-code"')
-    expect(text).toContain('depends_on "bun"')
-    expect(text).toContain("bundle/index.js")
-    expect(text).not.toContain("github.com/defai-digital/ax-code/releases/download")
+    expect(text).toContain("github.com/defai-digital/ax-code/releases/download")
+    expect(text).toContain('DARWIN_ARM64_ASSET="ax-code-darwin-arm64.zip"')
+    expect(text).toContain('LINUX_ARM64_ASSET="ax-code-linux-arm64.tar.gz"')
+    expect(text).toContain('LINUX_X64_ASSET="ax-code-linux-x64-baseline.tar.gz"')
+    expect(text).toContain("depends_on arch: :arm64")
+    expect(text).toContain('bin.install "ax-code"')
+    expect(text).not.toContain('depends_on "bun"')
+    expect(text).not.toContain("bundle/index.js")
   })
 
   test("homebrew-source job exists in release.yml gated after default homebrew", async () => {
@@ -83,7 +86,8 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain("homebrew-source:")
     const jobMatch = text.match(/homebrew-source:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
     expect(jobMatch).not.toBeNull()
-    expect(jobMatch![0]).toContain("needs: homebrew")
+    expect(jobMatch![0]).toContain("- homebrew")
+    expect(jobMatch![0]).toContain("- publish-source")
   })
 
   test("homebrew-source job skipped on prerelease tags (matches existing homebrew job)", async () => {
@@ -102,7 +106,9 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain("expected ax-code --version to be ${VERSION}")
     expect(text).toContain("Smoke — installed backend stdio handshake")
     expect(text).toContain("tui-backend --stdio")
-    expect(text).toContain('"runtimeMode":"(bun-bundled|source)"')
+    expect(text).toContain("RUNTIME_RE='(bun-bundled|source)'")
+    expect(text).toContain('\\"runtimeMode\\":\\"${RUNTIME_RE}\\"')
+    expect(text).toContain("RUNTIME_RE='compiled'")
     expect(text).not.toContain("@defai.digital/ax-code@$CHANNEL")
   })
 
@@ -116,5 +122,14 @@ describe("homebrew source formula generator", () => {
     expect(buildJob![0]).not.toContain("find dist -path")
     expect(buildJob![0]).toContain("tui-backend --stdio")
     expect(buildJob![0]).toContain('"runtimeMode":"compiled"')
+  })
+
+  test("release workflow publishes compiled npm package as default and source as alias only", async () => {
+    const text = await Bun.file(releaseWorkflow).text()
+    expect(text).toContain("publish-npm:")
+    expect(text).toContain("bun run script/publish.ts")
+    expect(text).toContain("AX_CODE_COMPILED_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}")
+    expect(text).toContain('AX_CODE_SOURCE_PACKAGE_NAMES: "@defai.digital/ax-code-source"')
+    expect(text).not.toContain('AX_CODE_SOURCE_PACKAGE_NAMES: "@defai.digital/ax-code,@defai.digital/ax-code-source"')
   })
 })
