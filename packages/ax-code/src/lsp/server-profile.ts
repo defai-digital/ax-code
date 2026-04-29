@@ -9,6 +9,7 @@ export type LspProfileMethod =
 
 export type BuiltinServerProfile = {
   semantic?: boolean
+  prewarm?: boolean
   priority?: number
   concurrency?: number
   capabilityHints?: Partial<Record<LspProfileMethod, boolean>>
@@ -41,6 +42,12 @@ const SECONDARY_SEMANTIC_PROFILE: BuiltinServerProfile = Object.freeze({
   concurrency: 1,
 })
 
+const STARTUP_DEFERRED_SEMANTIC_PROFILE: BuiltinServerProfile = Object.freeze({
+  priority: 80,
+  concurrency: 1,
+  prewarm: false,
+})
+
 const HEAVY_SEMANTIC_PROFILE: BuiltinServerProfile = Object.freeze({
   priority: 100,
   concurrency: 1,
@@ -50,6 +57,8 @@ const HEAVY_SEMANTIC_PROFILE: BuiltinServerProfile = Object.freeze({
 //
 // These values should be conservative:
 // - `semantic: false` is only used for clearly auxiliary lint servers.
+// - `prewarm: false` keeps fragile or low-value servers available on demand
+//   without letting startup hydration launch them speculatively.
 // - `priority` only matters when multiple matching servers survive the
 //   semantic/method filter.
 // - `concurrency` is intentionally low for heavyweight servers that tend to
@@ -84,7 +93,7 @@ export const BuiltinServerProfiles: Record<string, BuiltinServerProfile> = {
   prisma: SECONDARY_SEMANTIC_PROFILE,
   dart: SECONDARY_SEMANTIC_PROFILE,
   "ocaml-lsp": SECONDARY_SEMANTIC_PROFILE,
-  bash: SECONDARY_SEMANTIC_PROFILE,
+  bash: STARTUP_DEFERRED_SEMANTIC_PROFILE,
   terraform: SECONDARY_SEMANTIC_PROFILE,
   texlab: SECONDARY_SEMANTIC_PROFILE,
   dockerfile: SECONDARY_SEMANTIC_PROFILE,

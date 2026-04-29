@@ -9,6 +9,7 @@ import { Lock } from "../util/lock"
 import { PackageRegistry } from "./registry"
 import { proxied } from "@/util/proxied"
 import { Process } from "../util/process"
+import { runtimeMode, type RuntimeMode } from "../installation/runtime-mode"
 
 export namespace BunProc {
   const log = Log.create({ service: "bun" })
@@ -39,8 +40,24 @@ export namespace BunProc {
     return result
   }
 
+  export function resolveExecutable(input: {
+    execPath?: string
+    runtimeMode?: RuntimeMode
+    which?: (command: string) => string | null | undefined
+  } = {}) {
+    const execPath = input.execPath ?? process.execPath
+    const mode = input.runtimeMode ?? runtimeMode()
+    if (mode !== "compiled") return execPath
+
+    const external = (input.which ?? Bun.which)("bun")
+    if (external && path.resolve(external) !== path.resolve(execPath)) return external
+
+    log.warn("external bun runtime not found; refusing to use compiled ax-code as bun")
+    return "bun"
+  }
+
   export function which() {
-    return process.execPath
+    return resolveExecutable()
   }
 
   /**

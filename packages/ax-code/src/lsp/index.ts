@@ -277,6 +277,10 @@ export namespace LSP {
     return mode === "all" || semantic !== false
   }
 
+  function clientPrewarmMatchesServer(server: LSPServer.Info) {
+    return BuiltinServerProfiles[server.id]?.prewarm !== false
+  }
+
   function requestedMethods(opts: ClientOptions): LSPServer.Method[] {
     const seen = new Set<LSPServer.Method>()
     const methods: LSPServer.Method[] = []
@@ -769,7 +773,11 @@ export namespace LSP {
     }
   }
 
-  export async function hasClients(file: string, opts: ClientOptions = {}) {
+  async function hasMatchingClients(
+    file: string,
+    opts: ClientOptions = {},
+    matchesServer?: (server: LSPServer.Info) => boolean,
+  ) {
     const s = await state()
     const extension = path.parse(file).ext || file
     const mode = opts.mode ?? "all"
@@ -777,6 +785,7 @@ export namespace LSP {
     for (const server of Object.values(s.servers)) {
       if (!clientModeMatchesServer(mode, server.semantic)) continue
       if (!clientMethodMatchesServer(methods, server.capabilityHints)) continue
+      if (matchesServer && !matchesServer(server)) continue
       if (server.extensions.length && !server.extensions.includes(extension)) continue
       const root = await resolveRoot(s, server, file)
       if (!root) continue
@@ -784,6 +793,14 @@ export namespace LSP {
       return true
     }
     return false
+  }
+
+  export async function hasClients(file: string, opts: ClientOptions = {}) {
+    return hasMatchingClients(file, opts)
+  }
+
+  function hasPrewarmClients(file: string, opts: ClientOptions = {}) {
+    return hasMatchingClients(file, opts, clientPrewarmMatchesServer)
   }
 
   export type PrewarmResult = {
@@ -855,6 +872,7 @@ export namespace LSP {
           for (const server of Object.values(s.servers)) {
             if (!clientModeMatchesServer(mode, server.semantic)) continue
             if (!clientMethodMatchesServer(methods, server.capabilityHints)) continue
+            if (!clientPrewarmMatchesServer(server)) continue
             if (server.extensions.length && !server.extensions.includes(extension)) continue
 
             const root = await resolveRoot(s, server, file)
@@ -947,7 +965,7 @@ export namespace LSP {
       const language = detectPrewarmLanguage(probe)
       if (language === "unknown" || language === "plaintext") continue
       if (seenLanguages.has(language)) continue
-      if (!(await hasClients(probe, opts))) continue
+      if (!(await hasPrewarmClients(probe, opts))) continue
 
       selected.push(probe)
       seenLanguages.add(language)

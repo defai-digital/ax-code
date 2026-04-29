@@ -38,9 +38,9 @@ describe("Database.applyStartupPragmas", () => {
     ).not.toThrow()
 
     expect(statements).toEqual([
+      "PRAGMA busy_timeout = 15000",
       "PRAGMA journal_mode = WAL",
       "PRAGMA synchronous = NORMAL",
-      "PRAGMA busy_timeout = 15000",
       "PRAGMA cache_size = -64000",
       "PRAGMA foreign_keys = ON",
       "PRAGMA wal_checkpoint(PASSIVE)",

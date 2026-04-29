@@ -136,6 +136,38 @@ describe("LSP.prewarmFiles", () => {
     })
   })
 
+  test("skips built-in servers that are deferred from startup prewarm", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const sh = path.join(tmp.path, "script.sh")
+    const serverPath = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
+    await Bun.write(sh, "#!/usr/bin/env bash\necho ok\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        configSpy = spyOn(Config, "get").mockResolvedValue({
+          lsp: {
+            bash: {
+              command: [process.execPath, serverPath],
+              extensions: [".sh"],
+            },
+          },
+        } as never)
+
+        const result = await LSP.prewarmFiles([sh], {
+          mode: "semantic",
+          methods: ["documentSymbol", "references"],
+        })
+
+        expect(result).toEqual({
+          readyCount: 0,
+          freshSpawnCount: 0,
+        })
+        expect((await LSP.status()).map((item) => item.id)).toEqual([])
+      },
+    })
+  })
+
   test("prewarmWorkspace scans only representative files for eligible languages", async () => {
     await using tmp = await tmpdir({ git: true })
     const a = path.join(tmp.path, "a.ts")

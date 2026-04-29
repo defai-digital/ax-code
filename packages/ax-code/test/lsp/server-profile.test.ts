@@ -33,4 +33,12 @@ describe("BuiltinServerProfiles", () => {
       expect(profile?.concurrency).toBe(1)
     }
   })
+
+  test("defers fragile semantic servers from startup prewarm without disabling on-demand use", () => {
+    const profile = BuiltinServerProfiles.bash
+    expect(profile?.semantic).not.toBe(false)
+    expect(profile?.prewarm).toBe(false)
+    expect(profile?.priority).toBeGreaterThan(0)
+    expect(profile?.concurrency).toBe(1)
+  })
 })

@@ -85,6 +85,7 @@ export namespace Database {
     warn?: (message: string, extra: Record<string, unknown>) => void
     path?: string
   }) {
+    input.run("PRAGMA busy_timeout = 15000")
     input.run("PRAGMA journal_mode = WAL")
     // NORMAL (not FULL): ~10-20% faster writes. Trade-off: on an OS crash or
     // power loss (not app crash), the most recently committed transaction may
@@ -92,7 +93,6 @@ export namespace Database {
     // database remains consistent (no corruption) and only the last action
     // is lost. Use FULL if write durability becomes critical.
     input.run("PRAGMA synchronous = NORMAL")
-    input.run("PRAGMA busy_timeout = 15000")
     input.run("PRAGMA cache_size = -64000")
     input.run("PRAGMA foreign_keys = ON")
     try {
