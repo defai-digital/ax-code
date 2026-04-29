@@ -6,6 +6,8 @@ import {
   runBootstrapPhaseTasks,
 } from "../../../src/cli/cmd/tui/context/sync-bootstrap-runner"
 
+const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 describe("tui sync bootstrap runner", () => {
   test("runs a bootstrap phase and forwards rejected summaries to the hooks", async () => {
     const rejected: string[] = []
@@ -126,6 +128,46 @@ describe("tui sync bootstrap runner", () => {
     ])
 
     expect(events).toEqual(["blocking-start", "blocking-after", "deferred-start"])
+  })
+
+  test("starts background phases without holding the bootstrap sequence open", async () => {
+    const events: string[] = []
+    let releaseBackground = () => {}
+    const backgroundGate = new Promise<void>((resolve) => {
+      releaseBackground = resolve
+    })
+
+    const summaries = await runBootstrapPhaseSequence([
+      {
+        tasks: [
+          () => {
+            events.push("core-task")
+            return Promise.resolve()
+          },
+        ],
+      },
+      {
+        background: true,
+        tasks: [
+          async () => {
+            events.push("background-start")
+            await backgroundGate
+            events.push("background-finish")
+          },
+        ],
+        after() {
+          events.push("background-after")
+        },
+      },
+    ])
+
+    expect(summaries).toEqual([{ rejected: [] }, { rejected: [] }])
+    await nextTick()
+    expect(events).toEqual(["core-task", "background-start"])
+
+    releaseBackground()
+    await nextTick()
+    expect(events).toEqual(["core-task", "background-start", "background-finish", "background-after"])
   })
 
   test("creates startup lifecycle spans and routes failures through a single helper", async () => {

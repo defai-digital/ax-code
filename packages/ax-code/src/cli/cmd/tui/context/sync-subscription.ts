@@ -82,6 +82,15 @@ export function subscribeStoreBackedSyncEvents<
     TPart,
     TStore
   >["syncDebugEngine"]
+  scheduleRuntimeProbe?: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["scheduleRuntimeProbe"]
   bootstrap: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["bootstrap"]
   onWarn: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["onWarn"]
   maxSessionMessages: DispatchStoreBackedSyncEventInput<
@@ -112,6 +121,7 @@ export function subscribeStoreBackedSyncEvents<
         syncMcpStatus: input.syncMcpStatus,
         syncLspStatus: input.syncLspStatus,
         syncDebugEngine: input.syncDebugEngine,
+        scheduleRuntimeProbe: input.scheduleRuntimeProbe,
         bootstrap: input.bootstrap,
         onWarn: input.onWarn,
         maxSessionMessages: input.maxSessionMessages,

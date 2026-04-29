@@ -3,9 +3,9 @@
  *
  * Usage: pnpm run setup:cli
  *
- * By default this installs a launcher that targets the locally built bundled
- * CLI so the linked command matches npm/Homebrew runtime behavior. Pass
- * `--source` to install the old source/dev launcher that forwards to Bun.
+ * By default this installs the source/dev launcher that forwards to Bun.
+ * Pass `--bundled` to install a launcher that targets the locally built
+ * bundled CLI for npm/Homebrew-like runtime checks.
  */
 
 import childProcess from "child_process"
@@ -111,6 +111,7 @@ export function ensureBundledBinary(input: {
   avx2?: boolean
   musl?: boolean
   version?: string
+  rebuild?: boolean
   exists?: (target: string) => boolean
   spawnSync?: typeof childProcess.spawnSync
   log?: (msg: string) => void
@@ -135,6 +136,10 @@ export function ensureBundledBinary(input: {
     avx2: input.avx2,
     musl: input.musl,
   })
+  if (!input.rebuild && exists(binary)) {
+    log(`Using existing bundled ax-code CLI for ${preferred.legacyName}: ${binary}`)
+    return binary
+  }
 
   const version =
     input.version ??
@@ -192,8 +197,9 @@ export function setupCli(input: SetupCliOptions = {}) {
   // Worker-based architectures. Use --bundled to opt into the compiled
   // binary if needed for distribution.
   const bundledMode = args.includes("--bundled")
+  const rebuildBundled = args.includes("--rebuild")
   const bundledBinary = bundledMode
-    ? ensureBundledBinary({ root, env, platform, arch, avx2, musl, version, exists, spawnSync, log })
+    ? ensureBundledBinary({ root, env, platform, arch, avx2, musl, version, rebuild: rebuildBundled, exists, spawnSync, log })
     : undefined
   const launcher = bundledMode
     ? {
@@ -238,6 +244,10 @@ export function setupCli(input: SetupCliOptions = {}) {
     log("")
     log("Need a compiled binary launcher instead?")
     log("  pnpm run setup:cli -- --bundled")
+  } else {
+    log("")
+    log("Need to refresh the bundled binary first?")
+    log("  pnpm run setup:cli -- --bundled --rebuild")
   }
   log("")
   log(`If "ax-code" is not found, ensure ${binDir} is in your PATH.`)

@@ -48,11 +48,12 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { isPromptExitCommand, promptSubmissionView } from "./view-model"
 import { applySessionUpsertEvent } from "../../context/sync-event-dispatch"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
-import { footerSessionStatusView } from "../../routes/session/footer-view-model"
+import { footerSessionStatusView, type FooterSessionStatusTone } from "../../routes/session/footer-view-model"
 import { selectedForeground } from "@tui/context/theme"
 import { footerToggleLabel } from "./footer-toggle"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
@@ -205,6 +206,10 @@ export function Prompt(props: PromptProps) {
         </text>
       </box>
     )
+  }
+
+  function promptStatusColor(tone?: FooterSessionStatusTone) {
+    return tone === "warning" ? theme.warning : theme.textMuted
   }
 
   function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean } = {}) {
@@ -909,6 +914,12 @@ export function Prompt(props: PromptProps) {
     action: string
     signal: AbortSignal
   }) {
+    const startedAt = performance.now()
+    DiagnosticLog.recordProcess("tui.promptSubmitAcceptStarted", {
+      sessionID: input.sessionID,
+      path: input.path,
+      action: input.action,
+    })
     const response = await withTimeout(
       sdk.fetch(`${sdk.url}/session/${encodeURIComponent(input.sessionID)}/${input.path}`, {
         method: "POST",
@@ -918,10 +929,37 @@ export function Prompt(props: PromptProps) {
       }),
       SUBMIT_ACCEPT_TIMEOUT_MS,
       `${input.action} acceptance timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
-    )
+    ).catch((error) => {
+      DiagnosticLog.recordProcess("tui.promptSubmitAcceptFailed", {
+        sessionID: input.sessionID,
+        path: input.path,
+        action: input.action,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        error,
+      })
+      throw error
+    })
 
-    if (response.status === 202 || response.ok) return
-    throw new Error(await rejectionMessage(response))
+    if (response.status === 202 || response.ok) {
+      DiagnosticLog.recordProcess("tui.promptSubmitAccepted", {
+        sessionID: input.sessionID,
+        path: input.path,
+        action: input.action,
+        status: response.status,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      })
+      return
+    }
+    const message = await rejectionMessage(response)
+    DiagnosticLog.recordProcess("tui.promptSubmitRejected", {
+      sessionID: input.sessionID,
+      path: input.path,
+      action: input.action,
+      status: response.status,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      message,
+    })
+    throw new Error(message)
   }
 
   async function submit() {
@@ -1614,13 +1652,22 @@ export function Prompt(props: PromptProps) {
             >
               <box flexShrink={0} flexDirection="row" gap={1}>
                 <box marginLeft={1}>
-                  <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
-                    <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                  <Show
+                    when={status().type === "busy" && busyStatus()?.stale}
+                    fallback={
+                      <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
+                        <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                      </Show>
+                    }
+                  >
+                    <text fg={theme.warning}>!</text>
                   </Show>
                 </box>
                 <box flexDirection="row" gap={1} flexShrink={0}>
                   <Show when={busyStatus()?.label}>
-                    <text fg={busyStatus()?.stale ? theme.warning : theme.textMuted}>{busyStatus()?.label}</text>
+                    <text fg={promptStatusColor(busyStatus()?.tone)}>
+                      {busyStatus()?.shortLabel ?? busyStatus()?.label}
+                    </text>
                   </Show>
                   {(() => {
                     const retry = createMemo(() => {
@@ -1683,7 +1730,7 @@ export function Prompt(props: PromptProps) {
               <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
                 esc{" "}
                 <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
-                  {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
+                  {store.interrupt > 0 ? "again to force stop" : "to stop"}
                 </span>
               </text>
             </box>
@@ -1700,7 +1747,7 @@ export function Prompt(props: PromptProps) {
                   active: sync.data.autonomous,
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,
-                  background: theme.warning,
+                  background: theme.secondary,
                   onMouseUp: () => command.trigger("app.toggle.autonomous"),
                 })}
                 {footerToggleChip({

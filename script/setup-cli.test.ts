@@ -46,19 +46,20 @@ describe("setup-cli helpers", () => {
     )
   })
 
-  test("creates source launchers only for explicit source mode", () => {
+  test("creates source launchers for source mode", () => {
     const unix = sourceLauncherScript({ root: "/repo", windows: false })
     const windows = sourceLauncherScript({ root: "/repo", windows: true })
     expect(unix).toContain('exec bun run --cwd "/repo/packages/ax-code"')
     expect(unix).toContain('"/repo/packages/ax-code/src/index.ts"')
-    expect(windows).toContain('bun run --cwd "/repo/packages/ax-code"')
-    expect(windows).toContain('"/repo/packages/ax-code/src/index.ts" %*')
+    expect(windows).toContain("bun run --cwd")
+    expect(windows).toContain("packages\\ax-code")
+    expect(windows).toContain("src\\index.ts")
+    expect(windows).toContain("%*")
   })
 
-  test("setupCli installs the source launcher only when --source is explicit", () => {
+  test("setupCli installs the source launcher by default", () => {
     const writes: Array<[string, string]> = []
     setupCli({
-      args: ["--source"],
       root: "/repo",
       env: { BUN_INSTALL: "/tmp/ax-code-test-source" },
       platform: "darwin",
@@ -77,11 +78,12 @@ describe("setup-cli helpers", () => {
     expect(writes[0][1]).toContain('exec bun run --cwd "/repo/packages/ax-code"')
   })
 
-  test("setupCli installs the bundled launcher by default", () => {
+  test("setupCli installs the bundled launcher when --bundled is explicit and reuses an existing binary", () => {
     const writes: Array<[string, string]> = []
     const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
     const spawns: Array<{ cmd: string; args: string[]; env?: NodeJS.ProcessEnv }> = []
     setupCli({
+      args: ["--bundled"],
       root: "/repo",
       env: { BUN_INSTALL: "/tmp/ax-code-test-bundled" },
       platform: "darwin",
@@ -104,16 +106,7 @@ describe("setup-cli helpers", () => {
       log: () => undefined,
     })
 
-    expect(spawns).toEqual([
-      {
-        cmd: "pnpm",
-        args: ["--dir", "packages/ax-code", "run", "build", "--", "--single"],
-        env: expect.objectContaining({
-          AX_CODE_VERSION: "v4.0.12",
-          AX_CODE_CHANNEL: "latest",
-        }),
-      },
-    ])
+    expect(spawns).toEqual([])
     expect(writes).toHaveLength(1)
     expect(writes[0][0]).toBe("/tmp/ax-code-test-bundled/bin/ax-code")
     expect(writes[0][1]).toContain(`exec "${binary}" "$@"`)
@@ -124,7 +117,9 @@ describe("setup-cli helpers", () => {
     const writes: Array<[string, string]> = []
     const binary = bundledBinaryPath({ root: "/repo", platform: "linux", arch: "x64", avx2: false, musl: true })
     const spawns: Array<{ cmd: string; args: string[]; env?: NodeJS.ProcessEnv }> = []
+    let built = false
     setupCli({
+      args: ["--bundled"],
       root: "/repo",
       env: { BUN_INSTALL: "/tmp/ax-code-test-linux" },
       platform: "linux",
@@ -132,12 +127,13 @@ describe("setup-cli helpers", () => {
       avx2: false,
       musl: true,
       version: "4.0.12",
-      exists: (target) => target === "/tmp/ax-code-test-linux/bin" || target === binary,
+      exists: (target) => target === "/tmp/ax-code-test-linux/bin" || (target === binary && built),
       mkdirSync: () => undefined,
       writeFileSync: (target, content) => {
         writes.push([target, String(content)])
       },
       spawnSync: (cmd, args, options) => {
+        built = true
         spawns.push({
           cmd: String(cmd),
           args: (args ?? []).map(String),

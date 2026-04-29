@@ -29,6 +29,8 @@ type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
 const log = Log.create({ service: "tui.thread" })
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
+export const DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS = 30_000
+export const DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS = 5_000
 
 type BackendTransport = "worker" | "process"
 type RpcWireTarget = {
@@ -60,6 +62,13 @@ function tuiBackendTransport(env: Record<string, string | undefined> = process.e
   const requested = env.AX_CODE_TUI_BACKEND_TRANSPORT
   if (requested === "worker" || requested === "process") return requested
   return runtimeMode() === "compiled" ? "process" : "worker"
+}
+
+export function tuiUpgradeCheckDelayMs(env: Record<string, string | undefined> = process.env) {
+  const value = env.AX_CODE_TUI_UPGRADE_CHECK_DELAY_MS
+  if (!value) return DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS
 }
 
 function backendProcessCommand() {
@@ -510,7 +519,7 @@ export const TuiThreadCommand = cmd({
         process.off("uncaughtException", error)
         process.off("unhandledRejection", error)
         process.off("SIGUSR2", reload)
-        await withTimeout(client.call("shutdown", undefined), 5000).catch((error) => {
+        await withTimeout(client.call("shutdown", undefined), DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS).catch((error) => {
           Log.Default.warn("backend shutdown failed", {
             error: error instanceof Error ? error.message : String(error),
           })
@@ -549,10 +558,18 @@ export const TuiThreadCommand = cmd({
         url: transport.url,
       })
 
-      const upgradeTimer = setTimeout(() => {
-        client.call("checkUpgrade", { directory: cwd }).catch(() => {})
-      }, 1000)
-      upgradeTimer.unref?.()
+      const upgradeDelayMs = tuiUpgradeCheckDelayMs()
+      // Upgrade checks are non-critical and can touch installation/network
+      // surfaces. Keep them away from the first interactive turn, especially
+      // in packaged installs where the TUI shares a stdio backend with prompt
+      // submission.
+      const upgradeTimer =
+        upgradeDelayMs === 0
+          ? undefined
+          : setTimeout(() => {
+              client.call("checkUpgrade", { directory: cwd }).catch(() => {})
+            }, upgradeDelayMs)
+      upgradeTimer?.unref?.()
 
       try {
         const appImportStartedAt = performance.now()
@@ -603,7 +620,7 @@ export const TuiThreadCommand = cmd({
           },
         })
       } finally {
-        clearTimeout(upgradeTimer)
+        if (upgradeTimer) clearTimeout(upgradeTimer)
         await stop()
       }
     } finally {

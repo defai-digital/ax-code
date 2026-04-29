@@ -7,6 +7,9 @@ export function createSyncBootstrapPhaseSequence(input: {
   blockingTasks: BootstrapTask[]
   coreTasks: BootstrapTask[]
   deferredTasks: BootstrapTask[]
+  deferredDelayMs?: number
+  deferredConcurrency?: number
+  deferredBackground?: boolean
   getStatus: () => SyncBootstrapStatus
   setStatus: (status: SyncBootstrapStatus) => void
   finishCoreSpan?: BootstrapSpan
@@ -42,10 +45,17 @@ export function createSyncBootstrapPhaseSequence(input: {
       finishSpan: input.finishCoreSpan,
       after() {
         input.setStatus("complete")
+        // Startup is interactive once core state is ready. Deferred runtime
+        // probes continue as background work so they cannot hold the first
+        // prompt hostage on packaged stdio backends.
+        input.finishStartup()
       },
     },
     {
       tasks: input.deferredTasks,
+      delayMs: input.deferredDelayMs,
+      concurrency: input.deferredConcurrency,
+      background: input.deferredBackground ?? true,
       onRejected(error) {
         input.logError("deferred bootstrap item failed", { error })
       },
@@ -53,9 +63,6 @@ export function createSyncBootstrapPhaseSequence(input: {
         input.recordStartup("tui.startup.bootstrapDeferredReady", { rejected: summary.rejected.length })
       },
       finishSpan: input.finishDeferredSpan,
-      after() {
-        input.finishStartup()
-      },
     },
   ]
 }
