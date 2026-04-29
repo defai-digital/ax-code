@@ -1,13 +1,13 @@
 import { createMemo, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { type DialogContext, useDialog } from "../../ui/dialog"
-import { SessionRollback } from "./rollback"
+import { SessionRollbackView } from "./rollback"
 import { useToast } from "../../ui/toast"
 
 export function DialogRollback(props: {
   sessionID: string
-  messages: Parameters<typeof SessionRollback.load>[1]
-  onSelect?: (point: SessionRollback.Point) => Promise<void> | void
+  messages: Parameters<typeof SessionRollbackView.load>[1]
+  onSelect?: (point: SessionRollbackView.Point) => Promise<void> | void
 }) {
   const dialog = useDialog()
   const toast = useToast()
@@ -17,7 +17,10 @@ export function DialogRollback(props: {
   })
 
   const options = createMemo((): DialogSelectOption<string>[] => {
-    const detail = SessionRollback.load(props.sessionID as Parameters<typeof SessionRollback.load>[0], props.messages)
+    const detail = SessionRollbackView.load(
+      props.sessionID as Parameters<typeof SessionRollbackView.load>[0],
+      props.messages,
+    )
     if (detail.length === 0) {
       return [
         {
@@ -29,14 +32,14 @@ export function DialogRollback(props: {
       ]
     }
 
-    return SessionRollback.entries(detail).map((item) => ({
+    return SessionRollbackView.entries(detail).map((item) => ({
       title: item.title,
       value: item.id,
       description: item.description,
       footer: item.footer,
       category: item.category,
       onSelect: (() => {
-        const point = SessionRollback.find(detail, item.id)
+        const point = SessionRollbackView.find(detail, item.id)
         if (!point || !props.onSelect) return
         return async (dialog: DialogContext) => {
           try {

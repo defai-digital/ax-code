@@ -58,16 +58,23 @@ function mapTextareaKeybindings(
   }))
 }
 
-export function useTextareaKeybindings() {
+export function useTextareaKeybindings(input: { submit?: boolean; interceptEnter?: boolean } = {}) {
   const keybind = useKeybind()
+  const submit = input.submit ?? true
+  const interceptEnter = input.interceptEnter ?? false
 
   return createMemo(() => {
     const keybinds = keybind.all
 
     return [
-      { name: "return", action: "submit" },
+      ...(submit || interceptEnter
+        ? ([
+            { name: "return", action: "submit" },
+            { name: "linefeed", action: "submit" },
+          ] as const)
+        : []),
       { name: "return", meta: true, action: "newline" },
-      ...TEXTAREA_ACTIONS.flatMap((action) => mapTextareaKeybindings(keybinds, action)),
+      ...TEXTAREA_ACTIONS.flatMap((action) => (submit || action !== "submit" ? mapTextareaKeybindings(keybinds, action) : [])),
     ] satisfies KeyBinding[]
   })
 }

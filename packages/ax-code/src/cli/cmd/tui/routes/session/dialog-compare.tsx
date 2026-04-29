@@ -2,10 +2,10 @@ import { createMemo, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useSync } from "@tui/context/sync"
 import { useDialog } from "../../ui/dialog"
-import { SessionCompare } from "./compare"
+import { SessionCompareView } from "./compare"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 
-export function DialogCompare(props: { currentID: string; sessions: SessionCompare.Session[] }) {
+export function DialogCompare(props: { currentID: string; sessions: SessionCompareView.Session[] }) {
   const dialog = useDialog()
   const sync = useSync()
 
@@ -20,7 +20,7 @@ export function DialogCompare(props: { currentID: string; sessions: SessionCompa
         SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null,
       ]),
     )
-    const items = SessionCompare.targets({
+    const items = SessionCompareView.targets({
       currentID: props.currentID,
       sessions: props.sessions,
       semantic,
@@ -54,7 +54,11 @@ export function DialogCompare(props: { currentID: string; sessions: SessionCompa
   return <DialogSelect title="Compare Sessions" options={options()} skipFilter={false} />
 }
 
-export function DialogCompareDetail(props: { currentID: string; otherID: string; sessions: SessionCompare.Session[] }) {
+export function DialogCompareDetail(props: {
+  currentID: string
+  otherID: string
+  sessions: SessionCompareView.Session[]
+}) {
   const dialog = useDialog()
   const sync = useSync()
 
@@ -69,7 +73,7 @@ export function DialogCompareDetail(props: { currentID: string; otherID: string;
         SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null,
       ]),
     )
-    const detail = SessionCompare.detail({
+    const detail = SessionCompareView.detail({
       currentID: props.currentID,
       otherID: props.otherID,
       sessions: props.sessions,
@@ -87,7 +91,7 @@ export function DialogCompareDetail(props: { currentID: string; otherID: string;
       ]
     }
 
-    return SessionCompare.entries(detail).map((item) => ({
+    return SessionCompareView.entries(detail).map((item) => ({
       title: item.title,
       value: item.id,
       description: item.description,

@@ -1,7 +1,7 @@
 import { SessionDre as SessionDreCore } from "@/session/dre"
 import { duration as formatDuration } from "./format"
 
-export namespace SessionDre {
+export namespace SessionDreView {
   export type Summary = SessionDreCore.Summary
   export type Detail = SessionDreCore.Detail
 

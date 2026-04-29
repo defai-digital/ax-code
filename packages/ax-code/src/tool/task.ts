@@ -110,6 +110,17 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
 
       const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
+      let subagentSessionID: SessionID | undefined
+
+      function cancelSubagent() {
+        if (!subagentSessionID) return
+        void SessionPrompt.cancel(subagentSessionID).catch((error) => {
+          log.warn("failed to cancel aborted subagent session", {
+            sessionID: subagentSessionID,
+            error,
+          })
+        })
+      }
 
       const session = await iife(async () => {
         if (params.task_id) {
@@ -152,6 +163,10 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           ],
         })
       })
+      subagentSessionID = session.id
+      ctx.abort.addEventListener("abort", cancelSubagent, { once: true })
+      using _cancelSubagent = defer(() => ctx.abort.removeEventListener("abort", cancelSubagent))
+      if (ctx.abort.aborted || aborted) cancelSubagent()
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
       ensureNotAborted()
       if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
@@ -173,12 +188,6 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         })
 
         const messageID = MessageID.ascending()
-
-        function cancel() {
-          SessionPrompt.cancel(session.id)
-        }
-        ctx.abort.addEventListener("abort", cancel, { once: true })
-        using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
         ensureNotAborted()
         const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
 

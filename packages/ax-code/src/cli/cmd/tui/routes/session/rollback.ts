@@ -3,7 +3,7 @@ import { EventQuery } from "@/replay/query"
 import { SessionRollback as SessionRollbackCore } from "@/session/rollback"
 import { duration as formatDuration } from "./format"
 
-export namespace SessionRollback {
+export namespace SessionRollbackView {
   export type Point = SessionRollbackCore.Point
   export type Message = SessionRollbackCore.Message
 

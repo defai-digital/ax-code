@@ -3,12 +3,11 @@ import { useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
-import type { AssistantMessage, Session } from "@ax-code/sdk/v2"
+import type { Session } from "@ax-code/sdk/v2"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { Flag } from "@/flag/flag"
 import { useTerminalDimensions } from "@opentui/solid"
-import { Usage } from "./usage"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
 
@@ -39,70 +38,10 @@ const WorkspaceInfo = (props: { workspace: Accessor<string | undefined> }) => {
   )
 }
 
-// Token / context utilization read-out shown on the right side of the
-// header (#180 — was inadvertently removed during a header polish pass
-// in ca1fceb). Strictly token usage; ax-code does not track or display
-// monetary cost (see script/check-no-cost.ts CI guard).
-const ContextInfo = (props: { context: Accessor<string | undefined> }) => {
-  const { theme } = useTheme()
-  return (
-    <Show when={props.context()}>
-      <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
-        {props.context()}
-      </text>
-    </Show>
-  )
-}
-
 export function Header() {
   const route = useRouteData("session")
   const sync = useSync()
   const session = createMemo(() => sync.session.get(route.sessionID))
-  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
-
-  // Build the right-side read-out: total tokens + context-window bar +
-  // tokens/sec for the most recent assistant turn that has usage data.
-  // Returns undefined when no assistant message has been received yet,
-  // which keeps the header clean on a brand-new session.
-  //
-  // Two-stage memo so the formatting work below only re-runs when the
-  // *identity* of the last assistant message changes — not on every
-  // tool-call or tool-result message that gets appended during a turn.
-  // `messages()` returns a fresh array reference on every append, so a
-  // single-stage memo would re-scan and re-format on every event during
-  // an active response. SolidJS tracks `lastAssistantWithUsage()`
-  // separately; the formatter only re-runs when the upstream value
-  // actually changes.
-  const lastAssistantWithUsage = createMemo(
-    () => Usage.last(messages()) as AssistantMessage | undefined,
-  )
-
-  const context = createMemo(() => {
-    // `Usage.last` already filters by `role === "assistant"`, but the
-    // explicit guard below is defense-in-depth against future helper
-    // changes plus protects callers from a corrupt payload that ever
-    // managed to slip a non-assistant message through.
-    const candidate = lastAssistantWithUsage()
-    if (!candidate || candidate.role !== "assistant") return
-    const last = candidate
-    const total = Usage.total(last)
-    const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
-    let result = total.toLocaleString()
-    if (model?.limit?.context) {
-      const pct = Math.min(100, Math.round((total / model.limit.context) * 100))
-      const filled = Math.round(pct / 10)
-      const bar = "█".repeat(filled) + "░".repeat(10 - filled)
-      result += "  " + bar + " " + pct + "%"
-    }
-    if (last.time.completed && last.time.created && (last.tokens?.output ?? 0) > 0) {
-      const durationSecs = (last.time.completed - last.time.created) / 1000
-      if (durationSecs > 0) {
-        const tps = Math.round((last.tokens?.output ?? 0) / durationSecs)
-        result += "  " + tps + " tok/s"
-      }
-    }
-    return result
-  })
 
   const workspace = createMemo(() => {
     const id = session()?.directory
@@ -174,7 +113,6 @@ export function Header() {
                     <WorkspaceInfo workspace={workspace} />
                   </Show>
                 </box>
-                <ContextInfo context={context} />
               </box>
               <box flexDirection="row" gap={2}>
                 <box flexDirection="row" gap={1}>
@@ -221,7 +159,6 @@ export function Header() {
                   <WorkspaceInfo workspace={workspace} />
                 </Show>
               </box>
-              <ContextInfo context={context} />
             </box>
           </Match>
         </Switch>

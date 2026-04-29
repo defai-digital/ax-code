@@ -137,22 +137,25 @@ describe("session.prompt_async error handling", () => {
 
   test("prompt_async route has error handler for detached prompt call", async () => {
     const route = await extractRoute('"/:sessionID/prompt_async"', '"/:sessionID/command_async"')
-    expect(route).toContain("startDetachedSessionTask(async () => {")
-    expect(route).toContain(".catch(")
+    expect(route).toContain("startObservedAsyncSessionTask({")
+    expect(route).toContain('kind: "prompt"')
+    expect(route).toContain("onError(error) {")
     expect(route).toContain("Bus.publishDetached(Session.Event.Error")
   })
 
   test("command_async route has error handler for detached command call", async () => {
     const route = await extractRoute('"/:sessionID/command_async"', '"/:sessionID/command"')
-    expect(route).toContain("startDetachedSessionTask(async () => {")
-    expect(route).toContain(".catch(")
+    expect(route).toContain("startObservedAsyncSessionTask({")
+    expect(route).toContain('kind: "command"')
+    expect(route).toContain("onError(error) {")
     expect(route).toContain("Bus.publishDetached(Session.Event.Error")
   })
 
   test("shell_async route has error handler for detached shell call", async () => {
     const route = await extractRoute('"/:sessionID/shell_async"', '"/:sessionID/shell"')
-    expect(route).toContain("startDetachedSessionTask(async () => {")
-    expect(route).toContain(".catch(")
+    expect(route).toContain("startObservedAsyncSessionTask({")
+    expect(route).toContain('kind: "shell"')
+    expect(route).toContain("onError(error) {")
     expect(route).toContain("Bus.publishDetached(Session.Event.Error")
   })
 })

@@ -251,6 +251,7 @@ export namespace Session {
   export const create = fn(
     z
       .object({
+        id: SessionID.zod.optional(),
         parentID: SessionID.zod.optional(),
         title: z.string().optional(),
         permission: Info.shape.permission,
@@ -258,6 +259,7 @@ export namespace Session {
       .optional(),
     async (input) => {
       return createNext({
+        id: input?.id,
         parentID: input?.parentID,
         directory: Instance.directory,
         title: input?.title,

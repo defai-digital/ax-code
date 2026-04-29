@@ -106,7 +106,26 @@ describe("cli smoke", () => {
 
     const text = out.stdout.toString().trim()
     expect(out.code).toBe(0)
-    expect(text).toBe(path.join(Global.Path.data, "ax-code-local.db"))
+    expect(text).toBe(path.join(Global.Path.data, "ax-code.db"))
+  }, 20000)
+
+  test("run --file resolves relative paths from AX_CODE_ORIGINAL_CWD", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(path.join(tmp.path, "testfile.txt"), "hello")
+
+    const out = await Process.run(cmd("run", "--file", "testfile.txt", "--", ""), {
+      cwd: ROOT,
+      env: {
+        ...process.env,
+        AX_CODE_ORIGINAL_CWD: tmp.path,
+      },
+      nothrow: true,
+    })
+
+    const text = stripAnsi(out.stdout.toString() + out.stderr.toString())
+    expect(out.code).toBe(1)
+    expect(text).not.toContain("File not found: testfile.txt")
+    expect(text).toContain("You must provide a message or a command")
   }, 20000)
 
   test("isolates global data paths under AX_CODE_TEST_HOME in fresh processes", async () => {

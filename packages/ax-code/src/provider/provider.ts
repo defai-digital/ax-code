@@ -80,19 +80,39 @@ export namespace Provider {
     chat?: (modelID: string) => unknown
   }
 
-  function wrapSSE(res: Response, ms: number, ctl: AbortController) {
+  export function wrapSSEForTest(res: Response, ms: number, ctl: AbortController, signal?: AbortSignal) {
     if (typeof ms !== "number" || ms <= 0) return res
     if (!res.body) return res
     if (!res.headers.get("content-type")?.includes("text/event-stream")) return res
 
     const reader = res.body.getReader()
+    let settled = false
+    const cleanup = () => {
+      if (signal) signal.removeEventListener("abort", onAbort)
+    }
+    const abortReader = (reason?: unknown) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      ctl.abort(reason)
+      void reader.cancel(reason).catch(() => {})
+    }
+    const onAbort = () => abortReader(signal?.reason)
+
+    if (signal) {
+      if (signal.aborted) {
+        abortReader(signal.reason)
+      } else {
+        signal.addEventListener("abort", onAbort, { once: true })
+      }
+    }
+
     const body = new ReadableStream<Uint8Array>({
       async pull(ctrl) {
         const part = await new Promise<Awaited<ReturnType<typeof reader.read>>>((resolve, reject) => {
           const id = setTimeout(() => {
             const err = new Error("SSE read timed out")
-            ctl.abort(err)
-            void reader.cancel(err)
+            abortReader(err)
             reject(err)
           }, ms)
 
@@ -109,6 +129,8 @@ export namespace Provider {
         })
 
         if (part.done) {
+          settled = true
+          cleanup()
           ctrl.close()
           return
         }
@@ -116,8 +138,8 @@ export namespace Provider {
         ctrl.enqueue(part.value)
       },
       async cancel(reason) {
-        ctl.abort(reason)
-        await reader.cancel(reason)
+        cleanup()
+        abortReader(reason)
       },
     })
 
@@ -126,6 +148,10 @@ export namespace Provider {
       status: res.status,
       statusText: res.statusText,
     })
+  }
+
+  function wrapSSE(res: Response, ms: number, ctl: AbortController, signal?: AbortSignal) {
+    return wrapSSEForTest(res, ms, ctl, signal)
   }
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
@@ -532,7 +558,7 @@ export namespace Provider {
         }
       }
 
-      if (Object.keys(provider.models).length === 0) {
+      if (Object.keys(provider.models).length === 0 && !discoveryLoaders[providerID]) {
         delete providers[providerID]
         continue
       }
@@ -555,6 +581,13 @@ export namespace Provider {
         })
       }),
     )
+
+    for (const [id, provider] of Object.entries(providers)) {
+      const providerID = ProviderID.make(id)
+      if (Object.keys(provider.models).length === 0) {
+        delete providers[providerID]
+      }
+    }
 
     const providerCount = Object.keys(providers).length
     if (initFailures.length > 0) {
@@ -743,7 +776,7 @@ export namespace Provider {
           })
 
           if (!chunkAbortCtl) return res
-          return wrapSSE(res, chunkTimeout, chunkAbortCtl)
+          return wrapSSE(res, chunkTimeout, chunkAbortCtl, opts.signal ?? undefined)
         }
 
         const bundledFn = BUNDLED_PROVIDERS[model.api.npm]

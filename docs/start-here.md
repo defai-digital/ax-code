@@ -91,7 +91,7 @@ ax-code doctor
 | Product overview        | [Start Here](start-here.md)                                     |
 | Sandbox and permissions | [Sandbox Mode](sandbox.md)                                      |
 | Unattended execution    | [Autonomous Mode](autonomous.md)                                |
-| Smarter routing         | [Auto-Route](auto-route.md)                                     |
+| Routing and model tier  | [Auto-Route](auto-route.md)                                     |
 | SDK embedding           | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  |
 | HTTP/OpenAPI clients    | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    |
 | VS Code integration     | [VS Code integration](../packages/integration-vscode/README.md) |

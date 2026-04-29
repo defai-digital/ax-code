@@ -28,7 +28,7 @@ const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "alibaba"])
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
-  "ax-serving": { envVar: "AX_SERVING_HOST", defaultHost: "http://localhost:11434" },
+  "ax-serving": { envVar: "AX_SERVING_HOST", defaultHost: "http://localhost:18080" },
   ollama: { envVar: "OLLAMA_HOST", defaultHost: "http://localhost:11434" },
   lmstudio: { envVar: "LMSTUDIO_HOST", defaultHost: "http://localhost:1234" },
 }

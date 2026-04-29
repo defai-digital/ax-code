@@ -1,5 +1,10 @@
 # Autonomous Mode
 
+Status: Active
+Scope: current-state
+Last reviewed: 2026-04-28
+Owner: ax-code runtime
+
 Autonomous mode lets ax-code complete tasks without waiting for human confirmation at each low-risk step. When enabled, permission prompts are auto-approved unless they are explicitly blocked, and question dialogs are auto-answered with a best-practice heuristic that favors recommended, default, common, simple, and minimal choices while avoiding risky or over-engineered options.
 
 By default, autonomous mode is **on**. If you've previously toggled it off, that preference is saved and restored on next launch.

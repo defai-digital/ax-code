@@ -1,5 +1,10 @@
 # Sandbox Mode
 
+Status: Active
+Scope: current-state
+Last reviewed: 2026-04-28
+Owner: ax-code runtime
+
 AX Code includes a built-in execution sandbox that restricts what the AI agent can do on your system. By default, AX Code starts in **full-access**. Turn the sandbox on when you want workspace-only or read-only boundaries.
 
 ## Quick Start

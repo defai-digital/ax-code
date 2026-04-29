@@ -436,12 +436,15 @@ export function Autocomplete(props: {
   function moveTo(next: number) {
     setStore("selected", next)
     if (!scroll) return
-    const viewportHeight = Math.min(height(), options().length)
-    const scrollBottom = scroll.scrollTop + viewportHeight
-    if (next < scroll.scrollTop) {
-      scroll.scrollBy(next - scroll.scrollTop)
-    } else if (next + 1 > scrollBottom) {
-      scroll.scrollBy(next + 1 - scrollBottom)
+    const target = scroll.getChildren().find((child) => child.id === `autocomplete-option-${next}`)
+    if (!target) return
+    const y = target.y - scroll.y
+    if (y >= scroll.height) {
+      scroll.scrollBy(y - scroll.height + 1)
+    }
+    if (y < 0) {
+      scroll.scrollBy(y)
+      if (next === 0) scroll.scrollTo(0)
     }
   }
 
@@ -664,6 +667,7 @@ export function Autocomplete(props: {
         >
           {(option, index) => (
             <box
+              id={`autocomplete-option-${index}`}
               paddingLeft={1}
               paddingRight={1}
               backgroundColor={index === store.selected ? theme.primary : undefined}

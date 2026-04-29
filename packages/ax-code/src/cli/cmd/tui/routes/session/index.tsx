@@ -69,7 +69,7 @@ import { DialogDreGraph } from "./dialog-dre-graph"
 import { DialogBranch } from "./dialog-branch"
 import { DialogCompare } from "./dialog-compare"
 import { DialogRollback } from "./dialog-rollback"
-import { SessionRollback } from "./rollback"
+import { SessionRollbackView } from "./rollback"
 import { Sidebar } from "./sidebar"
 import { sessionQualityActions, sessionQualityActionValue } from "./quality"
 import { computeSidebarWidth, computeSessionMainPaneWidth } from "./layout"
@@ -317,7 +317,7 @@ export function Session() {
       .sync(sessionID, { missing: "throw" })
       .then(() => {
         if (generation !== sessionSyncGeneration) return
-        if (scroll) scroll.scrollBy(100_000)
+        toBottom()
       })
       .catch((error) => {
         if (generation !== sessionSyncGeneration) return
@@ -553,7 +553,7 @@ export function Session() {
                   partID: point.partID,
                 })
                 .then(() => {
-                  const messageID = SessionRollback.promptID(messagesWithParts(), point)
+                  const messageID = SessionRollbackView.promptID(messagesWithParts(), point)
                   if (messageID) prompt.set(promptState(sync.data.part[messageID] ?? []))
                   toBottom()
                 })

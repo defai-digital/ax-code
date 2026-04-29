@@ -1,11 +1,19 @@
-import { test, expect, describe } from "bun:test"
+import { afterEach, test, expect, describe } from "bun:test"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
-import { ProviderID } from "../../src/provider/schema"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { which } from "../../src/util/which"
+
+const originalFetch = globalThis.fetch
+
+afterEach(async () => {
+  globalThis.fetch = originalFetch
+  delete process.env.AX_SERVING_HOST
+  await Instance.disposeAll()
+})
 
 describe("CLI provider loaders", () => {
   test("claude-code provider not discovered when binary missing", async () => {
@@ -169,6 +177,121 @@ describe("online provider loaders", () => {
 })
 
 describe("offline provider loaders", () => {
+  test("ollama provider survives deferred discovery and loads discovered models", async () => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:11434/api/tags") {
+        return new Response(JSON.stringify({ models: [{ name: "qwen3.5:9b" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        const ollama = providers[ProviderID.make("ollama")]
+        expect(ollama).toBeDefined()
+        expect(Object.keys(ollama.models)).toContain("qwen3.5:9b")
+      },
+    })
+  })
+
+  test("ax-serving uses OpenAI-compatible /v1/models discovery", async () => {
+    process.env.AX_SERVING_HOST = "http://localhost:18080"
+    let modelFetches = 0
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:18080/v1/models") {
+        modelFetches += 1
+        const id = modelFetches === 1 ? "initial" : "default"
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id,
+                capabilities: { input: { image: true } },
+                max_context_length: 8192,
+                max_output_tokens: 2048,
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        )
+      }
+      if (url === "http://localhost:18080/api/tags") {
+        return new Response("not found", { status: 404 })
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        const axServing = providers[ProviderID.make("ax-serving")]
+        const model = axServing.models[ModelID.make("default")]
+        expect(axServing).toBeDefined()
+        expect(Object.keys(axServing.models)).toContain("default")
+        expect(axServing.options?.baseURL).toBe("http://localhost:18080/v1")
+        expect(model.capabilities.input.image).toBe(true)
+        expect(model.limit).toEqual({ context: 8192, output: 2048 })
+        expect(modelFetches).toBe(2)
+        expect(Object.keys(axServing.models)).not.toContain("initial")
+      },
+    })
+  })
+
+  test("ax-serving is not discovered when /v1/models is unavailable", async () => {
+    process.env.AX_SERVING_HOST = "http://localhost:18080"
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:18080/v1/models") {
+        return new Response("not found", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      if (url === "http://localhost:18080/api/tags") {
+        return new Response("not found", { status: 404 })
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        const axServing = providers[ProviderID.make("ax-serving")]
+        expect(axServing).toBeUndefined()
+      },
+    })
+  })
+
   test("ollama provider autoloads when server reachable", async () => {
     // Test ollama discovery — this only passes when ollama is running locally
     const reachable = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(1000) })

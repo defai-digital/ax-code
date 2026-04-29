@@ -241,4 +241,83 @@ describe("tool.task", () => {
       },
     })
   })
+
+  test("cancels the subagent session if abort fires after session creation but before prompt setup", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const controller = new AbortController()
+        const originalGet = MessageV2.get
+        const getSpy = spyOn(MessageV2, "get").mockImplementation((async (...args: Parameters<typeof originalGet>) => {
+          setTimeout(() => controller.abort(), 0)
+          await new Promise((resolve) => setTimeout(resolve, 10))
+          return originalGet(...args)
+        }) as any)
+
+        const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+        const promptSpy = spyOn(SessionPrompt, "prompt")
+        try {
+          await expect(
+            (await TaskTool.init()).execute(
+              {
+                description: "aborted task",
+                prompt: "do work",
+                subagent_type: "general",
+              },
+              {
+                sessionID: parent.id,
+                messageID: assistant.id,
+                callID: "",
+                agent: "build",
+                abort: controller.signal,
+                messages: [],
+                metadata: () => {},
+                ask: async () => {},
+                extra: {},
+              } as any,
+            ),
+          ).rejects.toThrow(/AbortError|Aborted/)
+          expect(cancelSpy).toHaveBeenCalledTimes(1)
+          expect(String(cancelSpy.mock.calls[0]?.[0] ?? "")).toMatch(/^ses_/)
+          expect(promptSpy).not.toHaveBeenCalled()
+        } finally {
+          getSpy.mockRestore()
+          cancelSpy.mockRestore()
+          promptSpy.mockRestore()
+        }
+      },
+    })
+  })
 })

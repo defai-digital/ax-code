@@ -11,6 +11,8 @@ import { useRoute } from "../../context/route"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
 
+const RECONNECT_DEBOUNCE_MS = 3_000
+
 export function Footer() {
   const { theme } = useTheme()
   const sync = useSync()
@@ -48,8 +50,11 @@ export function Footer() {
   // terminals so critical signals (permissions, reconnecting, sandbox-off,
   // version) always survive.
   const showHints = createMemo(() => dimensions().width >= 100)
-  const showLspChip = createMemo(() => dimensions().width >= 90)
+  const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
   const showDreChip = createMemo(() => dimensions().width >= 80)
+  const showDreStatus = createMemo(() => dreChipVisible() && showDreChip())
+  const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints())
+  const showStatusSeparator = createMemo(() => (permissions().length > 0 || showDreStatus()) && showSecondaryStatus())
 
   // Show "reconnecting" badge only after the first successful connection —
   // avoids a false-alarm flash during initial startup. A 3-second debounce
@@ -73,7 +78,7 @@ export function Footer() {
     reconnectDebounce = setTimeout(() => {
       reconnectDebounce = undefined
       if (!sdk.sseConnected) setShowReconnecting(true)
-    }, 3000)
+    }, RECONNECT_DEBOUNCE_MS)
   })
   onCleanup(() => {
     if (reconnectDebounce) clearTimeout(reconnectDebounce)
@@ -118,7 +123,7 @@ export function Footer() {
                 {permissions().length > 1 ? "s" : ""}
               </text>
             </Show>
-            <Show when={dreChipVisible() && showDreChip()}>
+            <Show when={showDreStatus()}>
               <text fg={theme.text}>
                 <Switch>
                   <Match when={drePending() > 0}>
@@ -139,7 +144,9 @@ export function Footer() {
                 </Switch>
               </text>
             </Show>
-            <text fg={theme.borderSubtle}>·</text>
+            <Show when={showStatusSeparator()}>
+              <text fg={theme.borderSubtle}>·</text>
+            </Show>
             <Show when={mcp()}>
               <text fg={theme.text}>
                 <Switch>

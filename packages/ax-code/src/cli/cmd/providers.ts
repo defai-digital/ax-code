@@ -3,6 +3,8 @@ import { cmd } from "./cmd"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
 import { ModelsDev } from "../../provider/models"
+import { getCliProviderDefinition } from "../../provider/cli/config"
+import { probeCliProvider } from "../../provider/cli/connect"
 import { map, pipe, sortBy, values } from "remeda"
 import path from "path"
 import os from "os"
@@ -200,6 +202,17 @@ export function resolvePluginProviders(input: {
   return result
 }
 
+export const DEFAULT_LOGIN_PROVIDER_IDS = new Set([
+  "ax-code",
+  "xai",
+  "zai",
+  "zai-coding-plan",
+  "alibaba-coding-plan",
+  "claude-code",
+  "gemini-cli",
+  "codex-cli",
+])
+
 export const ProvidersCommand = cmd({
   command: "providers",
   aliases: ["auth"],
@@ -371,14 +384,13 @@ export const ProvidersLoginCommand = cmd({
         const config = await Config.get()
 
         // Only show providers with bundled SDK support (+ any user-enabled via config)
-        const SUPPORTED_PROVIDERS = new Set(["ax-code", "xai", "zai", "zai-coding-plan", "alibaba-coding-plan"])
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
         const providers = await ModelsDev.get().then((x) => {
           const filtered: Record<string, (typeof x)[string]> = {}
           for (const [key, value] of Object.entries(x)) {
-            const allowed = enabled ? enabled.has(key) : SUPPORTED_PROVIDERS.has(key)
+            const allowed = enabled ? enabled.has(key) : DEFAULT_LOGIN_PROVIDER_IDS.has(key)
             if (allowed && !disabled.has(key)) {
               filtered[key] = value
             }
@@ -478,6 +490,18 @@ export const ProvidersLoginCommand = cmd({
           prompts.log.warn(
             `This only stores a credential for ${provider} - you will need to configure it in ax-code.json, check the docs for examples.`,
           )
+        }
+
+        const cliProvider = getCliProviderDefinition(provider)
+        if (cliProvider) {
+          await probeCliProvider(provider)
+          await Auth.set(provider, {
+            type: "api",
+            key: "cli",
+          })
+          prompts.log.success("Login successful")
+          prompts.outro("Done")
+          return
         }
 
         if (provider === "ax-code") {

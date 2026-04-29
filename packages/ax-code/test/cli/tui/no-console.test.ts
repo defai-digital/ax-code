@@ -7,6 +7,7 @@ const APP_SRC = path.join(TUI_SRC, "app.tsx")
 const RENDERER_SRC = path.join(TUI_SRC, "renderer.ts")
 const PROMPT_SRC = path.join(TUI_SRC, "component/prompt/index.tsx")
 const SESSION_HEADER_SRC = path.join(TUI_SRC, "routes/session/header.tsx")
+const SESSION_FOOTER_SRC = path.join(TUI_SRC, "routes/session/footer.tsx")
 const SESSION_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-message.tsx")
 const TIMELINE_FORK_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-fork-from-timeline.tsx")
 const PROVIDER_DIALOG_SRC = path.join(TUI_SRC, "component/dialog-provider.tsx")
@@ -77,6 +78,29 @@ describe("tui console hygiene", () => {
     expect(text).not.toContain("sync.session.get(route.sessionID)!")
   })
 
+  test("keeps the session header free of token and throughput counters", async () => {
+    const text = await fs.readFile(SESSION_HEADER_SRC, "utf8")
+
+    expect(text).not.toContain("ContextInfo")
+    expect(text).not.toContain("tok/s")
+    expect(text).not.toContain("Usage.last(")
+  })
+
+  test("keeps empty footer signals hidden instead of showing zero-value chips", async () => {
+    const footer = await fs.readFile(SESSION_FOOTER_SRC, "utf8")
+
+    expect(footer).toContain("dimensions().width >= 90 && lsp().length > 0")
+    expect(footer).toContain("showStatusSeparator")
+  })
+
+  test("keeps stalled prompt status static and stop copy direct", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+
+    expect(prompt).toContain('when={status().type === "busy" && busyStatus()?.stale}')
+    expect(prompt).toContain("again to force stop")
+    expect(prompt).toContain("to stop")
+  })
+
   test("does not assume fork responses contain session data", async () => {
     const messageDialog = await fs.readFile(SESSION_DIALOG_SRC, "utf8")
     const timelineDialog = await fs.readFile(TIMELINE_FORK_DIALOG_SRC, "utf8")
@@ -122,5 +146,13 @@ describe("tui console hygiene", () => {
     expect(sidebar).toMatch(
       /onMouseUp=\{\(e: any\) => \{\s+e\.stopPropagation\(\)\s+command\.trigger\("session\.undo"\)/,
     )
+  })
+
+  test("autocomplete scroll follows child positions instead of a stale raw scrollTop snapshot", async () => {
+    const autocomplete = await fs.readFile(path.join(TUI_SRC, "component/prompt/autocomplete.tsx"), "utf8")
+
+    expect(autocomplete).toContain("scroll.getChildren()")
+    expect(autocomplete).toContain("scroll.y")
+    expect(autocomplete).not.toContain("scroll.scrollTop")
   })
 })

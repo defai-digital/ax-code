@@ -36,11 +36,6 @@ export const claudeCodeParser: CliOutputParser = {
     const event = tryParse(line)
     if (!event) return null
     if (event.type === "content_block_delta" && event.delta?.text) return event.delta.text
-    if (event.type === "assistant" && event.message?.content) {
-      for (const block of event.message.content) {
-        if (block.type === "text") return block.text
-      }
-    }
     if (event.type === "result" && typeof event.result === "string") return event.result
     return null
   },

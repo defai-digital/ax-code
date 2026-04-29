@@ -23,7 +23,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | -------------------------------- | ------------------------------------------------------------------------- |
 | [Sandbox Mode](sandbox.md)       | Execution isolation, protected paths, network behavior, and configuration |
 | [Autonomous Mode](autonomous.md) | Unattended execution, approval behavior, headless usage, and safeguards   |
-| [Auto-Route](auto-route.md)      | LLM-assisted agent routing and complexity-based model selection           |
+| [Auto-Route](auto-route.md)      | Keyword-based agent routing (always on) and optional complexity-based model selection |
 
 ## Architecture
 

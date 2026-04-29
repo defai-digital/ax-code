@@ -310,6 +310,7 @@ export const RunCommand = cmd({
       process.exitCode = 1
       throw new UI.CancelledError()
     }
+    const callerCwd = Filesystem.callerCwd()
 
     let message = [...args.message, ...(args["--"] || [])]
       .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
@@ -319,7 +320,7 @@ export const RunCommand = cmd({
       if (!args.dir) return undefined
       if (args.attach) return args.dir
       try {
-        process.chdir(args.dir)
+        process.chdir(path.resolve(callerCwd, args.dir))
         return process.cwd()
       } catch {
         exitEarly("Failed to change directory to " + args.dir)
@@ -329,9 +330,10 @@ export const RunCommand = cmd({
     const files: { type: "file"; url: string; filename: string; mime: string }[] = []
     if (args.file) {
       const list = Array.isArray(args.file) ? args.file : [args.file]
+      const fileBaseDir = directory ?? callerCwd
 
       for (const filePath of list) {
-        const resolvedPath = path.resolve(process.cwd(), filePath)
+        const resolvedPath = path.resolve(fileBaseDir, filePath)
         if (!(await Filesystem.exists(resolvedPath))) {
           exitEarly(`File not found: ${filePath}`)
         }

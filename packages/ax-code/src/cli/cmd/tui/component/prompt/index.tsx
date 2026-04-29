@@ -1,4 +1,4 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes, t, dim, fg } from "@opentui/core"
+import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, KeyEvent, decodePasteBytes, t, dim, fg } from "@opentui/core"
 import {
   createEffect,
   createMemo,
@@ -22,7 +22,7 @@ import { EmptyBorder } from "@tui/component/border"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { MessageID, PartID } from "@/session/schema"
+import { MessageID, PartID, SessionID } from "@/session/schema"
 import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
@@ -30,7 +30,7 @@ import { assign } from "./part"
 import { usePromptStash } from "./stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { useExit } from "../../context/exit"
@@ -163,6 +163,8 @@ export function Prompt(props: PromptProps) {
   })
   let submitAbort: AbortController | undefined
   let submitRunID = 0
+  let submitInFlight = false
+  let routeHandoffTimer: ReturnType<typeof setTimeout> | undefined
 
   function upsertSessionInStore(session: (typeof sync.data.session)[number]) {
     sync.set(
@@ -296,7 +298,21 @@ export function Prompt(props: PromptProps) {
     })
   }
 
-  const textareaKeybindings = useTextareaKeybindings()
+  const textareaKeybindings = useTextareaKeybindings({ submit: false, interceptEnter: true })
+
+  function isPromptSubmitKey(event: KeyEvent) {
+    if (keybind.match("input_submit", event)) return true
+    if (event.ctrl || event.meta || event.shift || event.super || event.hyper) return false
+    return event.name === "return" || event.name === "linefeed"
+  }
+
+  useKeyboard((evt) => {
+    if (!input || input.isDestroyed || !input.focused) return
+    if (!isPromptSubmitKey(evt)) return
+    evt.preventDefault()
+    evt.stopPropagation()
+    void submit()
+  })
 
   const fileStyleId = syntax().getStyleId("extmark.file")!
   const agentStyleId = syntax().getStyleId("extmark.agent")!
@@ -359,9 +375,10 @@ export function Prompt(props: PromptProps) {
   )
 
   function cancelPendingSubmit(message = "Prompt submission cancelled") {
-    if (!submitPending()) return false
+    if (!submitPending() && !submitInFlight) return false
     const abort = submitAbort
     submitAbort = undefined
+    submitInFlight = false
     setSubmitPending(false)
     setSubmitStage(undefined)
     abort?.abort(createSubmitAbortError(message))
@@ -964,7 +981,7 @@ export function Prompt(props: PromptProps) {
   }
 
   async function submit() {
-    if (inputBlocked()) return
+    if (inputBlocked() || submitInFlight) return
     if (autocomplete?.visible) return
     if (!store.prompt.input) return
     if (isPromptExitCommand(store.prompt.input)) {
@@ -993,30 +1010,115 @@ export function Prompt(props: PromptProps) {
     }
 
     const runID = ++submitRunID
-    setSubmitPending(true)
     let sessionID = props.sessionID ?? draftSessionID()
+    const startingNewSession = sessionID == null
+    if (startingNewSession) sessionID = SessionID.descending()
+    submitInFlight = true
+    setSubmitPending(true)
     const messageID = MessageID.ascending()
     const variant = local.model.variant.current()
     let submitAction = "Prompt submission"
     const nextSubmitAbort = new AbortController()
     submitAbort = nextSubmitAbort
+    let promptSettledLocally = false
+    let routedToSession = false
+
+    function finishPendingSubmit() {
+      if (submitRunID !== runID) return
+      DiagnosticLog.recordProcess("tui.promptSubmitFinishPendingStarted", {
+        sessionID,
+        startingNewSession,
+      })
+      if (submitAbort === nextSubmitAbort) submitAbort = undefined
+      submitInFlight = false
+      setSubmitPending(false)
+      setSubmitStage(undefined)
+      DiagnosticLog.recordProcess("tui.promptSubmitFinishPendingFinished", {
+        sessionID,
+        startingNewSession,
+      })
+    }
+
+    function settlePromptLocally(options: { clearPrompt: boolean }) {
+      if (promptSettledLocally) return
+      promptSettledLocally = true
+      DiagnosticLog.recordProcess("tui.promptSubmitLocalSettleStarted", {
+        sessionID,
+        startingNewSession,
+        clearPrompt: options.clearPrompt,
+      })
+      history.append({
+        ...store.prompt,
+        mode: currentMode,
+      })
+      if (!options.clearPrompt) {
+        props.onSubmit?.()
+        DiagnosticLog.recordProcess("tui.promptSubmitLocalSettleFinished", {
+          sessionID,
+          startingNewSession,
+          clearPrompt: options.clearPrompt,
+        })
+        return
+      }
+      input.extmarks.clear()
+      setStore("prompt", {
+        input: "",
+        parts: [],
+      })
+      setStore("extmarkToPartIndex", new Map())
+      setExpandedPastes(new Set<number>())
+      props.onSubmit?.()
+      input.clear()
+      DiagnosticLog.recordProcess("tui.promptSubmitLocalSettleFinished", {
+        sessionID,
+        startingNewSession,
+        clearPrompt: options.clearPrompt,
+      })
+    }
+
+    function routeToSession(nextSessionID: string) {
+      if (props.sessionID || routedToSession) return
+      routedToSession = true
+      DiagnosticLog.recordProcess("tui.promptSubmitRouteHandoffStarted", {
+        sessionID: nextSessionID,
+      })
+      setDraftSessionID(undefined)
+      if (input && !input.isDestroyed) input.blur()
+      if (routeHandoffTimer) clearTimeout(routeHandoffTimer)
+      routeHandoffTimer = setTimeout(() => {
+        routeHandoffTimer = undefined
+        if (submitRunID !== runID) return
+        DiagnosticLog.recordProcess("tui.promptSubmitRouteNavigateStarted", {
+          sessionID: nextSessionID,
+        })
+        route.navigate({
+          type: "session",
+          sessionID: nextSessionID,
+        })
+        DiagnosticLog.recordProcess("tui.promptSubmitRouteNavigateDispatched", {
+          sessionID: nextSessionID,
+        })
+      }, 0)
+    }
 
     try {
-      if (sessionID == null) {
+      if (startingNewSession) {
+        if (!sessionID) throw new Error("Session id allocation failed")
         submitAction = "Session creation"
-        setSubmitStage("creating-session")
+
         const res = await withTimeout(
-          sdk.client.session.create({}, { signal: nextSubmitAbort.signal }),
+          sdk.client.session.create({ id: sessionID }, { signal: nextSubmitAbort.signal }),
           SUBMIT_ACCEPT_TIMEOUT_MS,
           `Session creation timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
         )
         if (res.error) throw new Error(errorMessage(res.error))
 
-        upsertSessionInStore(res.data as (typeof sync.data.session)[number])
+        const createdSession = res.data as (typeof sync.data.session)[number]
         sessionID = res.data.id
-        setDraftSessionID(sessionID)
         if (nextSubmitAbort.signal.aborted) return
+        upsertSessionInStore(createdSession)
       }
+      if (!sessionID) throw new Error("Session id allocation failed")
 
       setSubmitStage("dispatching")
       if (currentMode === "shell") {
@@ -1100,42 +1202,18 @@ export function Prompt(props: PromptProps) {
       reportSubmitFailure(submitAction, error)
       return
     } finally {
-      if (submitRunID === runID) {
-        if (submitAbort === nextSubmitAbort) submitAbort = undefined
-        setSubmitPending(false)
-        setSubmitStage(undefined)
-      }
+      finishPendingSubmit()
     }
 
     if (nextSubmitAbort.signal.aborted) return
 
-    history.append({
-      ...store.prompt,
-      mode: currentMode,
-    })
-    input.extmarks.clear()
-    setStore("prompt", {
-      input: "",
-      parts: [],
-    })
-    setStore("extmarkToPartIndex", new Map())
-    setExpandedPastes(new Set<number>())
-    props.onSubmit?.()
-
-    if (!props.sessionID) {
-      setDraftSessionID(undefined)
-      scheduleMicrotaskTask(() => {
-        route.navigate({
-          type: "session",
-          sessionID,
-        })
-      })
-    }
-    input.clear()
+    settlePromptLocally({ clearPrompt: !startingNewSession })
+    routeToSession(sessionID)
   }
   const exit = useExit()
   onCleanup(() => {
     if (interruptTimer) clearTimeout(interruptTimer)
+    if (routeHandoffTimer) clearTimeout(routeHandoffTimer)
     submitAbort?.abort(createSubmitAbortError())
   })
 
@@ -1337,7 +1415,7 @@ export function Prompt(props: PromptProps) {
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e) => {
                 const pendingIntent = pendingSubmitKeyIntent({
-                  pending: submitPending(),
+                  pending: submitPending() || submitInFlight,
                   appExit: keybind.match("app_exit", e),
                   sessionInterrupt: keybind.match("session_interrupt", e),
                 })
@@ -1348,6 +1426,11 @@ export function Prompt(props: PromptProps) {
                 }
                 if (pendingIntent === "block" || props.disabled) {
                   e.preventDefault()
+                  return
+                }
+                if (isPromptSubmitKey(e)) {
+                  e.preventDefault()
+                  void submit()
                   return
                 }
                 // Handle clipboard paste (Ctrl+V) - check for images first on Windows
@@ -1424,7 +1507,6 @@ export function Prompt(props: PromptProps) {
                     input.cursorOffset = Bun.stringWidth(input.plainText)
                 }
               }}
-              onSubmit={submit}
               onPaste={async (event: PasteEvent) => {
                 if (inputBlocked()) {
                   event.preventDefault()

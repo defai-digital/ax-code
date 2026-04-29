@@ -20,6 +20,11 @@ export namespace Env {
     // COMPOSER_AUTH removed — contains credentials that match SECRET_PATTERN
     "GPG_AGENT_INFO",
     "DBUS_SESSION_BUS_ADDRESS",
+    // CLI providers need their well-known provider env vars forwarded to
+    // the subprocess they spawn. These names look secret-like by design,
+    // so keep the allowlist explicit and narrowly scoped.
+    "GEMINI_API_KEY",
+    "OPENAI_API_KEY",
   ])
 
   export function sanitize(env: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {

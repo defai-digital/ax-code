@@ -3,6 +3,7 @@ import {
   footerTrustChip,
   footerSessionStatusLabel,
   footerSessionStatusView,
+  sidebarSessionStatusView,
   SESSION_STATUS_STALE_AFTER_MS,
   SESSION_STATUS_TOOL_STALE_AFTER_MS,
 } from "../../src/cli/cmd/tui/routes/session/footer-view-model"
@@ -22,6 +23,8 @@ describe("footerSessionStatusView", () => {
 
     expect(view.stale).toBe(false)
     expect(view.label).toContain("Waiting for response")
+    expect(view.shortLabel).toBe("Thinking...")
+    expect(view.tone).toBe("working")
     expect(view.label).not.toContain("no activity")
   })
 
@@ -39,6 +42,8 @@ describe("footerSessionStatusView", () => {
 
     expect(view.stale).toBe(true)
     expect(view.label).toContain("Waiting for response")
+    expect(view.shortLabel).toBe("Thinking stalled")
+    expect(view.tone).toBe("warning")
     // Production now uses context-aware stale messaging (see
     // footer-view-model.ts:94-99 "Give context-aware stale messages
     // instead of generic 'no activity'") — llm wait state surfaces
@@ -75,6 +80,51 @@ describe("footerSessionStatusView", () => {
     // Tool wait state surfaces "tool may be stalled" (per
     // footer-view-model.ts:97 context-aware stale messaging).
     expect(staleTool.label).toContain("tool may be stalled")
+  })
+})
+
+describe("sidebarSessionStatusView", () => {
+  test("uses short status labels for the sidebar title", () => {
+    const now = 5_000_000
+
+    expect(
+      sidebarSessionStatusView({
+        now,
+        hasMessages: true,
+        status: {
+          type: "busy",
+          startedAt: now - 20_000,
+          lastActivityAt: now - 10_000,
+          waitState: "llm",
+        },
+      }),
+    ).toMatchObject({
+      label: "Thinking...",
+      stale: false,
+      tone: "working",
+    })
+  })
+
+  test("marks completed sessions as success and empty sessions as muted", () => {
+    expect(
+      sidebarSessionStatusView({
+        hasMessages: true,
+        status: { type: "idle" },
+      }),
+    ).toMatchObject({
+      label: "Finished",
+      tone: "success",
+    })
+
+    expect(
+      sidebarSessionStatusView({
+        hasMessages: false,
+        status: { type: "idle" },
+      }),
+    ).toMatchObject({
+      label: "Ready",
+      tone: "muted",
+    })
   })
 })
 

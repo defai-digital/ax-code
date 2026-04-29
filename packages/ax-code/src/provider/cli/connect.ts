@@ -9,7 +9,7 @@ const CLI_CONNECT_PROMPT = "Reply with exactly OK."
 
 async function checkClaudeAuth(binary: string): Promise<string | undefined> {
   try {
-    const out = await Process.run([binary, "--print", "--output-format", "stream-json", "ping"], {
+    const out = await Process.run([binary, "--print", "--verbose", "--output-format", "stream-json", "ping"], {
       stdin: "ignore",
       env: cliEnv(),
       timeout: 5_000,

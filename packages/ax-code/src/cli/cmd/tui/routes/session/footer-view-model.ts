@@ -23,6 +23,15 @@ export type FooterSessionStatus =
       waitState?: "llm" | "tool"
     }
 
+export type FooterSessionStatusTone = "muted" | "working" | "success" | "warning"
+
+export type FooterSessionStatusView = {
+  label?: string
+  shortLabel?: string
+  stale: boolean
+  tone: FooterSessionStatusTone
+}
+
 export type FooterTrustChip =
   | {
       type: "plans"
@@ -37,6 +46,7 @@ export type FooterTrustChip =
 
 export const SESSION_STATUS_STALE_AFTER_MS = 60_000
 export const SESSION_STATUS_TOOL_STALE_AFTER_MS = 90_000
+const MS_PER_SECOND = 1_000
 
 export function footerPermissionLabel(count: number): string | undefined {
   if (count <= 0) return
@@ -52,33 +62,35 @@ export function footerSessionStatusView(input: {
   status?: FooterSessionStatus
   now?: number
   stalledAfterMs?: number
-}): {
-  label?: string
-  stale: boolean
-} {
+}): FooterSessionStatusView {
   const status = input.status
-  if (!status || status.type === "idle") return { stale: false }
+  if (!status || status.type === "idle") return { stale: false, tone: "muted" }
 
   const now = input.now ?? Date.now()
 
   if (status.type === "retry") {
-    const remaining = Math.max(0, Math.round((status.next - now) / 1000))
+    const remaining = Math.max(0, Math.round((status.next - now) / MS_PER_SECOND))
     const duration = formatDuration(remaining)
     return {
       label: duration ? `Retrying in ${duration}` : "Retrying",
+      shortLabel: duration ? `Retrying in ${duration}` : "Retrying",
       stale: false,
+      tone: "warning",
     }
   }
 
   const elapsedSeconds =
-    status.startedAt !== undefined ? Math.max(1, Math.floor((now - status.startedAt) / 1000)) : undefined
+    status.startedAt !== undefined ? Math.max(1, Math.floor((now - status.startedAt) / MS_PER_SECOND)) : undefined
   const elapsed = elapsedSeconds !== undefined ? formatDuration(elapsedSeconds) : ""
 
   let label = "Working"
+  let shortLabel = "Processing..."
   if (status.waitState === "tool") {
     label = status.activeTool ? `Running ${footerToolLabel(status.activeTool)}` : "Running tool"
+    shortLabel = status.activeTool ? `Running ${footerToolLabel(status.activeTool)}` : "Running tool"
   } else if (status.waitState === "llm") {
     label = "Waiting for response"
+    shortLabel = "Thinking..."
   }
 
   const staleAfterMs =
@@ -86,10 +98,10 @@ export function footerSessionStatusView(input: {
     (status.waitState === "tool" ? SESSION_STATUS_TOOL_STALE_AFTER_MS : SESSION_STATUS_STALE_AFTER_MS)
   const idleMs = status.lastActivityAt !== undefined ? Math.max(0, now - status.lastActivityAt) : 0
   const stale = idleMs >= staleAfterMs
-  const inactive = stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / 1000))) : undefined
+  const inactive = stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / MS_PER_SECOND))) : undefined
   const text = elapsed ? `${label} · ${elapsed}` : label
 
-  if (!inactive) return { label: text, stale }
+  if (!inactive) return { label: text, shortLabel, stale, tone: stale ? "warning" : "working" }
 
   // Give context-aware stale messages instead of generic "no activity"
   const staleHint =
@@ -101,7 +113,34 @@ export function footerSessionStatusView(input: {
 
   return {
     label: `${text} · ${staleHint}`,
+    shortLabel: status.waitState === "llm" ? "Thinking stalled" : "Processing stalled",
     stale,
+    tone: "warning",
+  }
+}
+
+export function sidebarSessionStatusView(input: {
+  status?: FooterSessionStatus
+  hasMessages: boolean
+  now?: number
+}): FooterSessionStatusView & { label: string } {
+  if (!input.status || input.status.type === "idle") {
+    return {
+      label: input.hasMessages ? "Finished" : "Ready",
+      shortLabel: input.hasMessages ? "Finished" : "Ready",
+      stale: false,
+      tone: input.hasMessages ? "success" : "muted",
+    }
+  }
+
+  const view = footerSessionStatusView({
+    status: input.status,
+    now: input.now,
+  })
+
+  return {
+    ...view,
+    label: view.shortLabel ?? view.label ?? "Working",
   }
 }
 

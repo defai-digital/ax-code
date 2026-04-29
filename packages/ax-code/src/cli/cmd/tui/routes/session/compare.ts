@@ -2,7 +2,7 @@ import { SessionID } from "@/session/schema"
 import { SessionCompare as SessionCompareCore } from "@/session/compare"
 import { SessionBranch } from "./branch"
 
-export namespace SessionCompare {
+export namespace SessionCompareView {
   export type Session = SessionBranch.Session
   export type Result = SessionCompareCore.Result
 

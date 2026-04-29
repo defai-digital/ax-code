@@ -20,6 +20,57 @@ export type CustomLoader = (provider: Provider.Info) => Promise<{
   discoverModels?: CustomDiscoverModels
 }>
 
+type OpenAICompatibleModelItem = {
+  id?: string
+  capabilities?: Partial<Provider.Model["capabilities"]>
+  limit?: Partial<Provider.Model["limit"]>
+  context_length?: number
+  max_context_length?: number
+  max_output_tokens?: number
+}
+
+type ModelListFetcher = (input: string, init?: { signal?: AbortSignal }) => Promise<Response>
+
+function openAICompatibleCapabilities(item: OpenAICompatibleModelItem): Provider.Model["capabilities"] {
+  return {
+    temperature: item.capabilities?.temperature ?? true,
+    reasoning: item.capabilities?.reasoning ?? false,
+    attachment: item.capabilities?.attachment ?? false,
+    toolcall: item.capabilities?.toolcall ?? true,
+    input: {
+      text: item.capabilities?.input?.text ?? true,
+      audio: item.capabilities?.input?.audio ?? false,
+      image: item.capabilities?.input?.image ?? false,
+      video: item.capabilities?.input?.video ?? false,
+      pdf: item.capabilities?.input?.pdf ?? false,
+    },
+    output: {
+      text: item.capabilities?.output?.text ?? true,
+      audio: item.capabilities?.output?.audio ?? false,
+      image: item.capabilities?.output?.image ?? false,
+      video: item.capabilities?.output?.video ?? false,
+      pdf: item.capabilities?.output?.pdf ?? false,
+    },
+    interleaved: item.capabilities?.interleaved ?? false,
+  }
+}
+
+function openAICompatibleLimit(item: OpenAICompatibleModelItem): Provider.Model["limit"] {
+  return {
+    context: item.limit?.context ?? item.context_length ?? item.max_context_length ?? 128000,
+    output: item.limit?.output ?? item.max_output_tokens ?? 4096,
+  }
+}
+
+async function fetchOpenAICompatibleModels(fetcher: ModelListFetcher, host: string) {
+  return fetcher(`${host}/v1/models`, { signal: AbortSignal.timeout(5000) })
+    .then(async (r) => {
+      if (!r.ok) return null
+      return (await r.json()) as { data?: OpenAICompatibleModelItem[] }
+    })
+    .catch(() => null)
+}
+
 function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
   return async () => {
     const host = process.env[envKey] || defaultHost
@@ -55,6 +106,45 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
               interleaved: false,
             },
             limit: { context: 128000, output: 4096 },
+            status: "active",
+            options: {},
+            headers: {},
+            release_date: "",
+            variants: {},
+          }
+        }
+        return models
+      },
+    }
+  }
+}
+
+function openAICompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
+  return async () => {
+    const host = process.env[envKey] || defaultHost
+    const url = new URL(host)
+    const local = ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
+    const fetcher = local ? fetch : Ssrf.pinnedFetch
+    const initial = await fetchOpenAICompatibleModels(fetcher, host)
+    const reachable = !!initial
+
+    return {
+      autoload: reachable,
+      options: reachable ? { baseURL: `${host}/v1` } : {},
+      async discoverModels() {
+        const discovered = await fetchOpenAICompatibleModels(fetcher, host)
+        if (!discovered) return {}
+        const models: Record<string, Provider.Model> = {}
+        for (const item of discovered.data ?? []) {
+          if (!item.id) continue
+          const id = ModelID.make(item.id)
+          models[id] = {
+            id,
+            providerID: ProviderID.make(providerID),
+            name: item.id,
+            api: { id: item.id, url: `${host}/v1`, npm: "@ai-sdk/openai-compatible" },
+            capabilities: openAICompatibleCapabilities(item),
+            limit: openAICompatibleLimit(item),
             status: "active",
             options: {},
             headers: {},
@@ -159,7 +249,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     }
   },
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
-  "ax-serving": ollamaCompatibleLoader("ax-serving", "AX_SERVING_HOST", "http://localhost:11434"),
+  "ax-serving": openAICompatibleLoader("ax-serving", "AX_SERVING_HOST", "http://localhost:18080"),
   "claude-code": cliLoader({
     providerID: "claude-code",
     binary: claudeCode.binary,

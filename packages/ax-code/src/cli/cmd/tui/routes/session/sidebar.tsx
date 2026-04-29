@@ -14,11 +14,11 @@ import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { EventQuery } from "@/replay/query"
 import { activityItems as items } from "./activity"
-import { SessionDre } from "./dre"
+import { SessionDreView } from "./dre"
 import { SessionBranch } from "./branch"
-import { SessionRollback } from "./rollback"
+import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
-import { footerSessionStatusView, type FooterSessionStatus } from "./footer-view-model"
+import { sidebarSessionStatusView, type FooterSessionStatus, type FooterSessionStatusTone } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
@@ -86,44 +86,10 @@ function qualityColor(
   return theme.textMuted
 }
 
-function sidebarStatusText(input: { status: FooterSessionStatus; hasMessages: boolean; now: number }) {
-  const view = footerSessionStatusView({
-    status: input.status,
-    now: input.now,
-  })
-
-  if (input.status.type === "retry") {
-    return {
-      label: view.label ?? "Retrying",
-      stale: false,
-    }
-  }
-
-  if (input.status.type === "busy") {
-    if (view.stale) {
-      return {
-        label: input.status.waitState === "llm" ? "Thinking stalled" : "Processing stalled",
-        stale: true,
-      }
-    }
-
-    if (input.status.waitState === "llm") {
-      return {
-        label: "Thinking...",
-        stale: false,
-      }
-    }
-
-    return {
-      label: "Processing...",
-      stale: false,
-    }
-  }
-
-  return {
-    label: input.hasMessages ? "Finished" : "Ready",
-    stale: false,
-  }
+function sidebarStatusColor(theme: ReturnType<typeof useTheme>["theme"], tone: FooterSessionStatusTone) {
+  if (tone === "success") return theme.success
+  if (tone === "warning" || tone === "working") return theme.warning
+  return theme.textMuted
 }
 
 function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
@@ -145,6 +111,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const toast = useToast()
   const { theme } = useTheme()
   const command = useCommandDialog()
+
   const session = createMemo(() => sync.session.get(props.sessionID))
   const risk = createMemo(() => sync.session.risk(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
@@ -243,8 +210,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     messages()
     diff()
     status()
-    const sid = props.sessionID as Parameters<typeof SessionDre.load>[0]
-    return SessionDre.load(sid)
+    const sid = props.sessionID as Parameters<typeof SessionDreView.load>[0]
+    return SessionDreView.load(sid)
   })
 
   const branch = createMemo(() => {
@@ -267,8 +234,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
 
   const rollback = createMemo(() => {
     messages()
-    return SessionRollback.load(
-      props.sessionID as Parameters<typeof SessionRollback.load>[0],
+    return SessionRollbackView.load(
+      props.sessionID as Parameters<typeof SessionRollbackView.load>[0],
       messages().map((item) => ({
         info: item,
         parts: sync.data.part[item.id] ?? [],
@@ -319,7 +286,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
   const titleStatus = createMemo(() => {
     statusTick()
-    return sidebarStatusText({
+    return sidebarSessionStatusView({
       status: status(),
       hasMessages: messages().length > 0,
       now: Date.now(),
@@ -354,7 +321,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <b>{session().title}</b>
                 </text>
                 <text fg={theme.textMuted}>{session().id}</text>
-                <text fg={titleStatus().stale ? theme.warning : theme.textMuted}>{titleStatus().label}</text>
+                <text fg={sidebarStatusColor(theme, titleStatus().tone)}>{titleStatus().label}</text>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
               </box>
               <Show when={mcpEntries().length > 0}>
@@ -803,7 +770,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                             command.trigger("session.rollback")
                           }}
                         >
-                          {SessionRollback.summary(rollback()) ?? ""}
+                          {SessionRollbackView.summary(rollback()) ?? ""}
                         </text>
                       </box>
                     </Show>

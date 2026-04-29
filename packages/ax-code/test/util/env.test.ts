@@ -27,4 +27,16 @@ describe("Env.sanitize", () => {
     expect(sanitized.GIT_ASKPASS).toBe("/usr/bin/askpass")
     expect(sanitized.GIT_CREDENTIAL_HELPER).toBeUndefined()
   })
+
+  test("preserves CLI provider API key env vars required by subprocess providers", () => {
+    const sanitized = Env.sanitize({
+      GEMINI_API_KEY: "gemini-key",
+      OPENAI_API_KEY: "openai-key",
+      ANTHROPIC_API_KEY: "anthropic-key",
+    })
+
+    expect(sanitized.GEMINI_API_KEY).toBe("gemini-key")
+    expect(sanitized.OPENAI_API_KEY).toBe("openai-key")
+    expect(sanitized.ANTHROPIC_API_KEY).toBeUndefined()
+  })
 })

@@ -63,18 +63,23 @@ jobs:
           - os: ubuntu-latest
             targets: linux-x64
             build-args: --single --baseline --include-abi --skip-install
+            smoke-bin: dist/ax-code-linux-x64/bin/ax-code
           - os: ubuntu-24.04-arm
             targets: linux-arm64
             build-args: --single --include-abi --skip-install
+            smoke-bin: dist/ax-code-linux-arm64/bin/ax-code
           - os: macos-latest
             targets: darwin-arm64
             build-args: --single --skip-install
+            smoke-bin: dist/ax-code-darwin-arm64/bin/ax-code
           - os: windows-latest
             targets: win32-x64
             build-args: --single --skip-install
+            smoke-bin: dist/ax-code-windows-x64/bin/ax-code.exe
           - os: windows-11-arm
             targets: win32-arm64
             build-args: --single --skip-install
+            smoke-bin: dist/ax-code-windows-arm64/bin/ax-code.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -108,9 +113,13 @@ jobs:
         shell: bash
         run: |
           set -e
-          BIN="$(find dist -path '*/bin/ax-code*' -type f | head -n 1)"
+          BIN="${{ matrix.smoke-bin }}"
           if [ -z "$BIN" ]; then
-            echo "FAIL: compiled ax-code binary not found under dist/"
+            echo "FAIL: release matrix did not provide a compiled ax-code smoke binary"
+            exit 1
+          fi
+          if [ ! -f "$BIN" ]; then
+            echo "FAIL: compiled ax-code smoke binary not found: $BIN"
             exit 1
           fi
           OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | "$BIN" tui-backend --stdio)"

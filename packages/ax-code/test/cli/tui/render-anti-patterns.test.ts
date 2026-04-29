@@ -18,6 +18,9 @@ const DISPLAY_COMMANDS_SRC = path.join(TUI_ROOT, "routes/session/display-command
 const TIMELINE_FORK_DIALOG_SRC = path.join(TUI_ROOT, "routes/session/dialog-fork-from-timeline.tsx")
 const TIMELINE_DIALOG_SRC = path.join(TUI_ROOT, "routes/session/dialog-timeline.tsx")
 const SIDEBAR_SRC = path.join(TUI_ROOT, "routes/session/sidebar.tsx")
+const SESSION_COMPARE_SRC = path.join(TUI_ROOT, "routes/session/compare.ts")
+const SESSION_DRE_SRC = path.join(TUI_ROOT, "routes/session/dre.ts")
+const SESSION_ROLLBACK_SRC = path.join(TUI_ROOT, "routes/session/rollback.ts")
 const FOOTER_VIEW_MODEL_SRC = path.join(TUI_ROOT, "routes/session/footer-view-model.ts")
 const SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-list.tsx")
 const WORKSPACE_SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/workspace/dialog-session-list.tsx")
@@ -158,6 +161,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(session).toContain('sync(sessionID, { missing: "throw" })')
     expect(session).toContain("createSessionEntrySyncRetryState")
     expect(session).toContain("nextSessionEntrySyncRetry")
+    expect(session).toContain("toBottom()")
+    expect(session).not.toContain("scroll.scrollBy(100_000)")
     expect(session).not.toContain("MAX_SESSION_ENTRY_SYNC_ATTEMPTS")
   })
 
@@ -615,10 +620,43 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("pendingSubmitKeyIntent")
     expect(prompt).toContain("cancelPendingSubmit")
     expect(prompt).toContain("new AbortController()")
-    expect(prompt).toContain('setSubmitStage("creating-session")')
+    expect(prompt).toContain("let submitInFlight = false")
+    expect(prompt).toContain("if (startingNewSession) sessionID = SessionID.descending()")
+    expect(prompt).toContain("setSubmitPending(true)")
     expect(prompt).toContain('setSubmitStage("dispatching")')
-    expect(prompt).toContain("setDraftSessionID(sessionID)")
+    expect(prompt).toContain("pending: submitPending() || submitInFlight")
+    expect(prompt).toContain("useTextareaKeybindings({ submit: false, interceptEnter: true })")
+    expect(prompt).toContain("function isPromptSubmitKey(event: KeyEvent)")
+    expect(prompt).toContain('event.name === "return" || event.name === "linefeed"')
+    expect(prompt).toContain("useKeyboard((evt) => {")
+    expect(prompt).toContain("evt.stopPropagation()")
+    expect(prompt).toContain("isPromptSubmitKey(e)")
+    expect(prompt).toContain("void submit()")
+    expect(prompt).not.toContain("onSubmit={submit}")
     expect(prompt).toContain("pendingSubmitStatusText(submitStage())")
+  })
+
+  test("keeps newly-created prompt sessions durable before the route handoff", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+
+    expect(prompt).toContain("const startingNewSession = sessionID == null")
+    expect(prompt).toContain("settlePromptLocally({ clearPrompt: !startingNewSession })")
+    expect(prompt).toContain("function settlePromptLocally(options: { clearPrompt: boolean })")
+    expect(prompt).toContain("finishPendingSubmit()")
+    expect(prompt).toContain("routeToSession(sessionID)")
+    expect(prompt).toContain("let routeHandoffTimer: ReturnType<typeof setTimeout> | undefined")
+    expect(prompt).toContain("if (input && !input.isDestroyed) input.blur()")
+    expect(prompt).toContain("routeHandoffTimer = setTimeout(() => {")
+    expect(prompt).toContain("if (submitRunID !== runID) return")
+    expect(prompt).toContain("sdk.client.session.create({ id: sessionID }")
+    expect(prompt).toContain("upsertSessionInStore(createdSession)")
+    expect(prompt).toContain('setSubmitStage("dispatching")')
+    expect(prompt.indexOf("upsertSessionInStore(createdSession)")).toBeLessThan(
+      prompt.lastIndexOf("routeToSession(sessionID)"),
+    )
+    expect(prompt.indexOf('path: "prompt_async"')).toBeLessThan(prompt.lastIndexOf("routeToSession(sessionID)"))
+    expect(prompt).not.toContain("releaseSubmitAbort()")
+    expect(prompt).not.toContain("await Promise.resolve()")
   })
 
   test("keeps animated spinners out of the compiled runtime render path", async () => {
@@ -630,6 +668,26 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(spinner).toContain("shouldUseTuiAnimations")
     expect(prompt).toContain("shouldUseTuiAnimations")
     expect(prompt).toContain('fallback={<text fg={theme.textMuted}>[⋯]</text>}')
+  })
+
+  test("keeps session route view namespaces distinct from core session namespaces", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+    const wrappers = [
+      { src: SESSION_COMPARE_SRC, core: "SessionCompare", view: "SessionCompareView" },
+      { src: SESSION_DRE_SRC, core: "SessionDre", view: "SessionDreView" },
+      { src: SESSION_ROLLBACK_SRC, core: "SessionRollback", view: "SessionRollbackView" },
+    ]
+
+    expect(session).not.toContain("shouldRenderSessionSidebar")
+    expect(session).not.toContain("sidebarRenderEnabled")
+
+    for (const wrapper of wrappers) {
+      const text = await fs.readFile(wrapper.src, "utf8")
+
+      expect(text).toContain(`import { ${wrapper.core} as ${wrapper.core}Core }`)
+      expect(text).toContain(`export namespace ${wrapper.view}`)
+      expect(text).not.toContain(`export namespace ${wrapper.core} {`)
+    }
   })
 
   test("handles pasted SVG and image read failures without silently falling back to raw paths", async () => {
@@ -825,11 +883,12 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(stash).toContain("if (writeWarningShown) return")
   })
 
-  test("navigates new prompt sessions without a timer-based route handoff hack", async () => {
+  test("navigates new prompt sessions with a bounded route handoff", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
     expect(prompt).toContain("upsertSessionInStore")
-    expect(prompt).toContain("scheduleMicrotaskTask(() => {")
+    expect(prompt).toContain("routeHandoffTimer = setTimeout(() => {")
+    expect(prompt).toContain("if (routeHandoffTimer) clearTimeout(routeHandoffTimer)")
     expect(prompt).toContain('type: "session"')
     expect(prompt).not.toContain("temporary hack to make sure the message is sent")
     expect(prompt).not.toContain("navigationTimer = setTimeout")

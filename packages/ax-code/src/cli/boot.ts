@@ -92,6 +92,24 @@ const cmds = [
   ContextCommand,
 ]
 
+let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
+
+export function clearForcedExitTimer() {
+  if (!forcedExitTimer) return
+  clearTimeout(forcedExitTimer)
+  forcedExitTimer = undefined
+}
+
+export function scheduleForcedExit(exit: () => void = () => process.exit()) {
+  clearForcedExitTimer()
+  forcedExitTimer = setTimeout(() => {
+    forcedExitTimer = undefined
+    exit()
+  }, 500)
+  forcedExitTimer.unref?.()
+  return forcedExitTimer
+}
+
 export function hooks() {
   process.on("unhandledRejection", (err) => {
     if (isHarmlessEffectInterrupt(err)) return
@@ -176,6 +194,7 @@ export function cli(argv = hideBin(process.argv)) {
 }
 
 export async function run() {
+  clearForcedExitTimer()
   const argv = hideBin(process.argv)
   if (argv.includes("--uninstall") || argv.includes("-uninstall")) {
     const cmd = cli(["uninstall"])
@@ -209,6 +228,6 @@ export async function run() {
     // run using `docker run --init`.
     // Allow a brief window for async cleanup (DB WAL flush, MCP disconnect)
     // before forcing exit to avoid hanging subprocesses.
-    setTimeout(() => process.exit(), 500).unref()
+    scheduleForcedExit()
   }
 }
