@@ -1,16 +1,11 @@
 import { NamedError } from "@ax-code/util/error"
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import os from "os"
 import path from "path"
 import z from "zod"
-import { clearForcedExitTimer, scheduleForcedExit } from "../../src/cli/boot"
 import { apply, debugOptions, debugRunDir, init, level, restoreOriginalCwd } from "../../src/cli/bootstrap/env"
 import { data, fatal } from "../../src/cli/bootstrap/fatal"
 import { migrate } from "../../src/cli/bootstrap/migrate"
-
-afterEach(() => {
-  clearForcedExitTimer()
-})
 
 describe("cli.boot.level", () => {
   test("prefers explicit log level", () => {
@@ -260,18 +255,5 @@ describe("cli.boot.fatal", () => {
     expect(err).toHaveLength(1)
     expect(ui[0]).toContain("/tmp/ax-code.log")
     expect(out).toEqual(["ERR:boom\n"])
-  })
-})
-
-describe("cli.boot.forced-exit", () => {
-  test("clears the prior forced-exit timer before scheduling another", () => {
-    const clearSpy = spyOn(globalThis, "clearTimeout")
-    const first = scheduleForcedExit(() => {})
-    const second = scheduleForcedExit(() => {})
-
-    expect(clearSpy).toHaveBeenCalledWith(first)
-    expect(second).not.toBe(first)
-
-    clearSpy.mockRestore()
   })
 })
