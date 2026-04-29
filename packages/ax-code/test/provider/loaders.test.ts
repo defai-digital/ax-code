@@ -46,14 +46,13 @@ async function expectMissingCliProvider(input: {
         expect(provider.models[ModelID.make(modelID)]).toBeUndefined()
       }
 
-      const model = provider.models[ModelID.make(input.baseModelID)]!
-      await expect(Provider.getLanguage(model)).rejects.toThrow(`${input.binary} CLI not found in PATH`)
+      expect(provider.models[ModelID.make(input.baseModelID)]?.api.npm).toBe("cli")
     },
   })
 }
 
 describe("CLI provider loaders", () => {
-  test("claude-code configured provider keeps install error path when binary missing", async () => {
+  test("claude-code configured provider does not discover runnable variants when binary missing", async () => {
     await expectMissingCliProvider({
       providerID: "claude-code",
       binary: "claude",
@@ -62,7 +61,7 @@ describe("CLI provider loaders", () => {
     })
   })
 
-  test("gemini-cli configured provider keeps install error path when binary missing", async () => {
+  test("gemini-cli configured provider does not discover runnable variants when binary missing", async () => {
     await expectMissingCliProvider({
       providerID: "gemini-cli",
       binary: "gemini",
@@ -71,7 +70,7 @@ describe("CLI provider loaders", () => {
     })
   })
 
-  test("codex-cli configured provider keeps install error path when binary missing", async () => {
+  test("codex-cli configured provider does not discover runnable variants when binary missing", async () => {
     await expectMissingCliProvider({
       providerID: "codex-cli",
       binary: "codex",
