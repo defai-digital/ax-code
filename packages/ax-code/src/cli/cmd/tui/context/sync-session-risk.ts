@@ -1,6 +1,7 @@
 import z from "zod"
 import { FindingSchema } from "../../../../quality/finding"
 import { VerificationEnvelopeSchema } from "../../../../quality/verification-envelope"
+import { ReviewResultSchema } from "../../../../quality/review-result"
 import { DebugCaseSchema, DebugEvidenceSchema, DebugHypothesisSchema } from "../../../../debug-engine/runtime-debug"
 import { DecisionHints } from "../../../../session/decision-hints"
 
@@ -36,6 +37,7 @@ export const SyncedSessionRisk = z.object({
     .optional(),
   findings: z.array(FindingSchema).optional(),
   envelopes: z.array(VerificationEnvelopeSchema).optional(),
+  reviewResults: z.array(ReviewResultSchema).optional(),
   debug: z
     .object({
       cases: z.array(DebugCaseSchema),

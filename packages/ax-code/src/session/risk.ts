@@ -2,6 +2,7 @@ import { QualityLabelStore } from "../quality/label-store"
 import { ProbabilisticRollout } from "../quality/probabilistic-rollout"
 import { FindingSchema } from "../quality/finding"
 import { VerificationEnvelopeSchema } from "../quality/verification-envelope"
+import { ReviewResultSchema } from "../quality/review-result"
 import { DebugCaseSchema, DebugEvidenceSchema, DebugHypothesisSchema } from "../debug-engine/runtime-debug"
 import z from "zod"
 import { Risk } from "../risk/score"
@@ -12,6 +13,7 @@ import { SessionBranchRank } from "./branch"
 import { SessionDebug } from "./debug"
 import { DecisionHints } from "./decision-hints"
 import { SessionFindings } from "./findings"
+import { SessionReviewResults } from "./review-results"
 import { SessionSemanticDiff } from "./semantic-diff"
 import { SessionVerifications } from "./verifications"
 import { EventQuery } from "../replay/query"
@@ -44,6 +46,7 @@ export namespace SessionRisk {
       quality: QualityReadiness.optional(),
       findings: FindingSchema.array().optional(),
       envelopes: VerificationEnvelopeSchema.array().optional(),
+      reviewResults: ReviewResultSchema.array().optional(),
       debug: DebugBundle.optional(),
       decisionHints: DecisionHints.SummarySchema.optional(),
     })
@@ -60,6 +63,7 @@ export namespace SessionRisk {
     quality?: QualityReadiness
     findings?: Detail["findings"]
     envelopes?: Detail["envelopes"]
+    reviewResults?: Detail["reviewResults"]
     debug?: Detail["debug"]
     decisionHints?: Detail["decisionHints"]
   }) {
@@ -72,6 +76,7 @@ export namespace SessionRisk {
       quality: input.quality,
       findings: input.findings,
       envelopes: input.envelopes,
+      reviewResults: input.reviewResults,
       debug: input.debug,
       decisionHints: input.decisionHints,
     } satisfies Detail
@@ -101,6 +106,7 @@ export namespace SessionRisk {
       includeQuality?: boolean
       includeFindings?: boolean
       includeEnvelopes?: boolean
+      includeReviewResults?: boolean
       includeDebug?: boolean
       includeDecisionHints?: boolean
     },
@@ -113,6 +119,7 @@ export namespace SessionRisk {
     const quality = options?.includeQuality ? await loadQualityReadiness(sessionID) : undefined
     const findings = options?.includeFindings ? SessionFindings.load(sessionID) : undefined
     const envelopes = options?.includeEnvelopes ? SessionVerifications.load(sessionID) : undefined
+    const reviewResults = options?.includeReviewResults ? SessionReviewResults.load(sessionID) : undefined
     const debug = options?.includeDebug ? SessionDebug.load(sessionID) : undefined
     const decisionHints = options?.includeDecisionHints
       ? DecisionHints.summarizeEvents(EventQuery.recentBySession(sessionID))
@@ -125,6 +132,7 @@ export namespace SessionRisk {
       quality,
       findings,
       envelopes,
+      reviewResults,
       debug,
       decisionHints,
     })

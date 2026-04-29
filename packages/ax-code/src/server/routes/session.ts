@@ -349,7 +349,7 @@ export const SessionRoutes = lazy(() =>
         summary: "Get session risk detail",
         tags: ["Session"],
         description:
-          "Return the explainable risk assessment, breakdown, and semantic change summary for a session. Optionally include replay readiness for review/debug/qa workflows.",
+          "Return the explainable risk assessment, breakdown, and semantic change summary for a session. Optionally include replay readiness and structured assurance artifacts for review/debug/qa workflows.",
         operationId: "session.risk",
         responses: {
           200: {
@@ -377,6 +377,9 @@ export const SessionRoutes = lazy(() =>
             description:
               "Include the validated VerificationEnvelope[] emitted by tool calls that record verification runs (e.g. refactor_apply)",
           }),
+          reviewResults: z.coerce.boolean().optional().default(false).meta({
+            description: "Include the validated ReviewResult[] emitted by review_complete tool calls in this session",
+          }),
           debug: z.coerce.boolean().optional().default(false).meta({
             description:
               "Include the validated DebugCase / DebugEvidence / DebugHypothesis bundles emitted by Phase 3 runtime debug tools",
@@ -394,6 +397,7 @@ export const SessionRoutes = lazy(() =>
             includeQuality: query.quality,
             includeFindings: query.findings,
             includeEnvelopes: query.envelopes,
+            includeReviewResults: query.reviewResults,
             includeDebug: query.debug,
             includeDecisionHints: query.hints,
           }),

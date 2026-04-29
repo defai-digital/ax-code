@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
 import { QualityLabelStore } from "../../src/quality/label-store"
+import { createReviewResult } from "../../src/quality/review-result"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
 import { Server } from "../../src/server/server"
@@ -95,6 +96,25 @@ describe("session risk endpoint", () => {
             durationMs: 10,
           })
           Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "review_complete",
+            callID: "call-review-complete",
+            status: "completed",
+            output: "reviewed",
+            metadata: {
+              reviewResult: createReviewResult({
+                sessionID: sid,
+                summary: "Endpoint review result.",
+                findings: [],
+                verificationEnvelopes: [],
+                source: { tool: "review_complete", version: "4.x.x", runId: sid },
+                createdAt: "2026-04-29T00:00:00.000Z",
+              }),
+            },
+            durationMs: 1,
+          })
+          Recorder.emit({
             type: "session.end",
             sessionID: sid,
             reason: "completed",
@@ -149,6 +169,7 @@ describe("session risk endpoint", () => {
           expect(base.status).toBe(200)
           const baseBody = (await base.json()) as Record<string, unknown>
           expect(baseBody["quality"]).toBeUndefined()
+          expect(baseBody["reviewResults"]).toBeUndefined()
           expect(baseBody["decisionHints"]).toBeUndefined()
 
           const hints = await app.request(`/session/${sid}/risk?hints=true`)
@@ -164,8 +185,19 @@ describe("session risk endpoint", () => {
           expect(hintsBody.decisionHints).toMatchObject({
             source: "replay",
             readiness: "clear",
-            actionCount: 2,
+            actionCount: 3,
             hintCount: 0,
+          })
+
+          const reviewResults = await app.request(`/session/${sid}/risk?reviewResults=true`)
+          expect(reviewResults.status).toBe(200)
+          const reviewResultsBody = (await reviewResults.json()) as {
+            reviewResults?: Array<{ decision: string; summary: string }>
+          }
+          expect(reviewResultsBody.reviewResults).toHaveLength(1)
+          expect(reviewResultsBody.reviewResults?.[0]).toMatchObject({
+            decision: "needs_verification",
+            summary: "Endpoint review result.",
           })
 
           const enriched = await app.request(`/session/${sid}/risk?quality=true`)

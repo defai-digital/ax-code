@@ -4,7 +4,8 @@ import { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
 import { QualityLabelStore } from "../../src/quality/label-store"
 import { computeFindingId } from "../../src/quality/finding"
 import type { Finding } from "../../src/quality/finding"
-import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { createReviewResult } from "../../src/quality/review-result"
 import {
   computeDebugCaseId,
   computeDebugEvidenceId,
@@ -241,6 +242,19 @@ describe("session.risk", () => {
     }
   }
 
+  function buildReviewResult(sessionID: string) {
+    const finding = buildFinding(sessionID)
+    const envelope = buildEnvelope(sessionID)
+    return createReviewResult({
+      sessionID,
+      summary: "Review completed with blocking findings.",
+      findings: [finding],
+      verificationEnvelopes: [{ envelopeId: computeEnvelopeId(envelope), envelope }],
+      source: { tool: "review_complete", version: "4.x.x", runId: sessionID },
+      createdAt: "2026-04-29T00:00:00.000Z",
+    })
+  }
+
   async function emitFindingAndEnvelope(sessionID: SessionID, directory: string) {
     Recorder.begin(sessionID)
     Recorder.emit({
@@ -269,6 +283,16 @@ describe("session.risk", () => {
       output: "applied",
       metadata: { verificationEnvelopes: [buildEnvelope(sessionID)] },
       durationMs: 5,
+    })
+    Recorder.emit({
+      type: "tool.result",
+      sessionID,
+      tool: "review_complete",
+      callID: "call-review-complete",
+      status: "completed",
+      output: "reviewed",
+      metadata: { reviewResult: buildReviewResult(sessionID) },
+      durationMs: 1,
     })
     Recorder.emit({
       type: "session.end",
@@ -333,7 +357,7 @@ describe("session.risk", () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
 
-  test("default load omits all opt-in fields (quality/findings/envelopes/decisionHints)", async () => {
+  test("default load omits all opt-in fields (quality/findings/envelopes/reviewResults/decisionHints)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -345,6 +369,7 @@ describe("session.risk", () => {
           expect(detail.quality).toBeUndefined()
           expect(detail.findings).toBeUndefined()
           expect(detail.envelopes).toBeUndefined()
+          expect(detail.reviewResults).toBeUndefined()
           expect(detail.decisionHints).toBeUndefined()
         } finally {
           EventQuery.deleteBySession(session.id)
@@ -421,6 +446,27 @@ describe("session.risk", () => {
     })
   })
 
+  test("includeReviewResults: true populates review results without affecting findings or envelopes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await emitFindingAndEnvelope(session.id, tmp.path)
+        try {
+          const detail = await SessionRisk.load(session.id, { includeReviewResults: true })
+          expect(detail.reviewResults).toHaveLength(1)
+          expect(detail.reviewResults?.[0].decision).toBe("request_changes")
+          expect(detail.reviewResults?.[0].findingIds).toEqual([buildFinding(session.id).findingId])
+          expect(detail.findings).toBeUndefined()
+          expect(detail.envelopes).toBeUndefined()
+        } finally {
+          EventQuery.deleteBySession(session.id)
+        }
+      },
+    })
+  })
+
   test("matches the client sync request shape (quality + findings + envelopes simultaneously)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -433,6 +479,7 @@ describe("session.risk", () => {
             includeQuality: true,
             includeFindings: true,
             includeEnvelopes: true,
+            includeReviewResults: true,
           })
           // quality is allowed to be empty (no replay evidence yet) but the
           // field must be present (parsed object) — the client sync schema
@@ -440,6 +487,7 @@ describe("session.risk", () => {
           expect(detail.quality).toBeDefined()
           expect(detail.findings).toHaveLength(1)
           expect(detail.envelopes).toHaveLength(1)
+          expect(detail.reviewResults).toHaveLength(1)
         } finally {
           EventQuery.deleteBySession(session.id)
         }
@@ -447,9 +495,9 @@ describe("session.risk", () => {
     })
   })
 
-  test("matches the full client sync shape with all four opt-ins (quality + findings + envelopes + debug)", async () => {
+  test("matches the full client sync shape with all five opt-ins (quality + findings + envelopes + reviewResults + debug)", async () => {
     // This is the path the production client actually walks — sessionRiskURL
-    // sets quality=true&findings=true&envelopes=true&debug=true on every
+    // sets quality=true&findings=true&envelopes=true&reviewResults=true&debug=true on every
     // poll. Catches drift between server Detail schema and client
     // SyncedSessionRisk for the entire assurance-lane surface in one shot.
     await using tmp = await tmpdir({ git: true })
@@ -491,6 +539,7 @@ describe("session.risk", () => {
           durationMs: 1,
         })
         // VerificationEnvelope from refactor_apply
+        const envelope = buildEnvelope(session.id)
         Recorder.emit({
           type: "tool.result",
           sessionID: session.id,
@@ -498,8 +547,19 @@ describe("session.risk", () => {
           callID: "call-apply",
           status: "completed",
           output: "applied",
-          metadata: { verificationEnvelopes: [buildEnvelope(session.id)] },
+          metadata: { verificationEnvelopes: [envelope] },
           durationMs: 5,
+        })
+        // ReviewResult from review_complete
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "review_complete",
+          callID: "call-review-complete",
+          status: "completed",
+          output: "reviewed",
+          metadata: { reviewResult: buildReviewResult(session.id) },
+          durationMs: 1,
         })
         // DebugCase / DebugEvidence / DebugHypothesis
         Recorder.emit({
@@ -576,12 +636,14 @@ describe("session.risk", () => {
             includeQuality: true,
             includeFindings: true,
             includeEnvelopes: true,
+            includeReviewResults: true,
             includeDebug: true,
           })
 
           expect(detail.quality).toBeDefined()
           expect(detail.findings).toHaveLength(1)
           expect(detail.envelopes).toHaveLength(1)
+          expect(detail.reviewResults).toHaveLength(1)
           expect(detail.debug).toBeDefined()
           expect(detail.debug?.cases).toHaveLength(1)
           expect(detail.debug?.evidence).toHaveLength(1)
