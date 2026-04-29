@@ -28,15 +28,41 @@ describe("Env.sanitize", () => {
     expect(sanitized.GIT_CREDENTIAL_HELPER).toBeUndefined()
   })
 
-  test("preserves CLI provider API key env vars required by subprocess providers", () => {
+  test("strips provider API key env vars from general sanitized environments", () => {
     const sanitized = Env.sanitize({
       GEMINI_API_KEY: "gemini-key",
       OPENAI_API_KEY: "openai-key",
       ANTHROPIC_API_KEY: "anthropic-key",
     })
 
-    expect(sanitized.GEMINI_API_KEY).toBe("gemini-key")
-    expect(sanitized.OPENAI_API_KEY).toBe("openai-key")
+    expect(sanitized.GEMINI_API_KEY).toBeUndefined()
+    expect(sanitized.OPENAI_API_KEY).toBeUndefined()
     expect(sanitized.ANTHROPIC_API_KEY).toBeUndefined()
+  })
+
+  test("forwards CLI provider API keys only through explicit CLI provider overlay", () => {
+    const originalGemini = process.env.GEMINI_API_KEY
+    const originalOpenAI = process.env.OPENAI_API_KEY
+    const originalAnthropic = process.env.ANTHROPIC_API_KEY
+
+    try {
+      process.env.GEMINI_API_KEY = "gemini-key"
+      process.env.OPENAI_API_KEY = "openai-key"
+      process.env.ANTHROPIC_API_KEY = "anthropic-key"
+
+      const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }))
+
+      expect(env.PATH).toBe("/bin")
+      expect(env.GEMINI_API_KEY).toBe("gemini-key")
+      expect(env.OPENAI_API_KEY).toBe("openai-key")
+      expect(env.ANTHROPIC_API_KEY).toBeUndefined()
+    } finally {
+      if (originalGemini === undefined) delete process.env.GEMINI_API_KEY
+      else process.env.GEMINI_API_KEY = originalGemini
+      if (originalOpenAI === undefined) delete process.env.OPENAI_API_KEY
+      else process.env.OPENAI_API_KEY = originalOpenAI
+      if (originalAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = originalAnthropic
+    }
   })
 })
