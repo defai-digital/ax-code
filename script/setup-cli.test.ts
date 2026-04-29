@@ -57,9 +57,39 @@ describe("setup-cli helpers", () => {
     expect(windows).toContain("%*")
   })
 
-  test("setupCli installs the source launcher by default", () => {
+  test("setupCli installs the bundled launcher by default and reuses an existing binary", () => {
+    const writes: Array<[string, string]> = []
+    const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
+    const spawns: Array<{ cmd: string; args: string[] }> = []
+    setupCli({
+      root: "/repo",
+      env: { BUN_INSTALL: "/tmp/ax-code-test-bundled-default" },
+      platform: "darwin",
+      arch: "arm64",
+      exists: (target) => target === "/tmp/ax-code-test-bundled-default/bin" || target === binary,
+      mkdirSync: () => undefined,
+      writeFileSync: (target, content) => {
+        writes.push([target, String(content)])
+      },
+      spawnSync: (cmd, args) => {
+        spawns.push({ cmd: String(cmd), args: (args ?? []).map(String) })
+        return { status: 0, stdout: null, stderr: null, pid: 1, output: null, signal: null } as any
+      },
+      which: () => undefined,
+      log: () => undefined,
+    })
+
+    expect(spawns).toEqual([])
+    expect(writes).toHaveLength(1)
+    expect(writes[0][0]).toBe("/tmp/ax-code-test-bundled-default/bin/ax-code")
+    expect(writes[0][1]).toContain(`exec "${binary}" "$@"`)
+    expect(writes[0][1]).not.toContain("bun run --cwd")
+  })
+
+  test("setupCli installs the source launcher when --source is explicit", () => {
     const writes: Array<[string, string]> = []
     setupCli({
+      args: ["--source"],
       root: "/repo",
       env: { BUN_INSTALL: "/tmp/ax-code-test-source" },
       platform: "darwin",

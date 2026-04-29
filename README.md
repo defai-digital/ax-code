@@ -86,14 +86,20 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+. `setup:cli` installs a source launcher that runs ax-code directly via `bun run` from your checkout. `ax-code doctor` will report `Runtime: Bun X.Y.Z (source)`.
+Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+. `setup:cli` installs a launcher for the same bundled runtime used by npm and Homebrew. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
 
-Build the same compiled runtime that ships through the default package-manager channel:
+Refresh the local bundled runtime after code changes:
 
 ```bash
 pnpm --dir packages/ax-code run build -- --single
-pnpm run setup:cli -- --bundled
+pnpm run setup:cli -- --rebuild
 ax-code doctor
+```
+
+For contributor-only source debugging, install the checkout-bound launcher explicitly:
+
+```bash
+pnpm run setup:cli -- --source
 ```
 
 ---

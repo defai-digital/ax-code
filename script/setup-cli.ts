@@ -3,9 +3,9 @@
  *
  * Usage: pnpm run setup:cli
  *
- * By default this installs the source/dev launcher that forwards to Bun.
- * Pass `--bundled` to install a launcher that targets the locally built
- * bundled CLI for npm/Homebrew-like runtime checks.
+ * By default this installs a launcher that targets the locally built bundled
+ * CLI, matching the npm/Homebrew runtime. Pass `--source` to install a
+ * contributor-only launcher that forwards to Bun from this checkout.
  */
 
 import childProcess from "child_process"
@@ -192,11 +192,8 @@ export function setupCli(input: SetupCliOptions = {}) {
     mkdirSync(binDir, { recursive: true })
   }
 
-  // Default to source launcher to avoid Bun compiled-binary bugs
-  // (oven-sh/bun#26762, #29124, #27766) that cause TUI hangs in
-  // Worker-based architectures. Use --bundled to opt into the compiled
-  // binary if needed for distribution.
-  const bundledMode = args.includes("--bundled")
+  const sourceMode = args.includes("--source")
+  const bundledMode = !sourceMode
   const rebuildBundled = args.includes("--rebuild")
   const bundledBinary = bundledMode
     ? ensureBundledBinary({
@@ -254,12 +251,15 @@ export function setupCli(input: SetupCliOptions = {}) {
   log("  ax-code mcp add")
   if (!bundledMode) {
     log("")
-    log("Need a compiled binary launcher instead?")
-    log("  pnpm run setup:cli -- --bundled")
+    log("Need the packaged-runtime launcher instead?")
+    log("  pnpm run setup:cli")
   } else {
     log("")
     log("Need to refresh the bundled binary first?")
-    log("  pnpm run setup:cli -- --bundled --rebuild")
+    log("  pnpm run setup:cli -- --rebuild")
+    log("")
+    log("Need a source checkout launcher for development?")
+    log("  pnpm run setup:cli -- --source")
   }
   log("")
   log(`If "ax-code" is not found, ensure ${binDir} is in your PATH.`)
