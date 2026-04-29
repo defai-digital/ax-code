@@ -1272,6 +1272,7 @@ export class Session2 extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      id?: string
       parentID?: string
       title?: string
       permission?: PermissionRuleset
@@ -1284,6 +1285,7 @@ export class Session2 extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
+            { in: "body", key: "id" },
             { in: "body", key: "parentID" },
             { in: "body", key: "title" },
             { in: "body", key: "permission" },
