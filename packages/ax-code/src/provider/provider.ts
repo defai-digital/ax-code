@@ -490,6 +490,7 @@ export namespace Provider {
         try {
           const providerID = ProviderID.make(id)
           if (disabled.has(providerID)) return
+          const configured = Object.prototype.hasOwnProperty.call(config.provider ?? {}, providerID)
           const data = database[providerID] ?? {
             id: ProviderID.make(id),
             name: id,
@@ -500,7 +501,7 @@ export namespace Provider {
           }
           if (!database[providerID]) database[providerID] = data
           const result = await withTimeout(fn(data), 15_000, `custom loader '${id}' timed out`)
-          if (result && (result.autoload || providers[providerID])) {
+          if (result && (result.autoload || providers[providerID] || configured)) {
             if (result.getModel) modelLoaders[providerID] = result.getModel
             if (result.vars) varsLoaders[providerID] = result.vars
             if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels
