@@ -74,7 +74,9 @@ export function useTextareaKeybindings(input: { submit?: boolean; interceptEnter
           ] as const)
         : []),
       { name: "return", meta: true, action: "newline" },
-      ...TEXTAREA_ACTIONS.flatMap((action) => (submit || action !== "submit" ? mapTextareaKeybindings(keybinds, action) : [])),
+      ...TEXTAREA_ACTIONS.flatMap((action) =>
+        submit || action !== "submit" ? mapTextareaKeybindings(keybinds, action) : [],
+      ),
     ] satisfies KeyBinding[]
   })
 }

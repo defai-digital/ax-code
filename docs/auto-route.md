@@ -48,13 +48,13 @@ Complexity routing is independent of agent routing. It does not classify which s
 
 ## What Auto-Route Helps With
 
-| Scenario                                     | Without Auto-Route              | With Auto-Route               |
-| -------------------------------------------- | ------------------------------- | ----------------------------- |
-| "what does this variable do?"                | Full model used                 | `low` complexity → fast model |
-| "list all exports in this file"              | Full model used                 | `low` complexity → fast model |
-| "scan for vulnerabilities"                   | Keyword routes to **security**  | Same — keyword routing always fires |
-| "refactor the auth module across 8 files"    | Default model                   | `high` complexity → default model |
-| "this function is sluggish"                  | No keyword match, no route      | `low`/`medium` → correct model tier |
+| Scenario                                  | Without Auto-Route             | With Auto-Route                     |
+| ----------------------------------------- | ------------------------------ | ----------------------------------- |
+| "what does this variable do?"             | Full model used                | `low` complexity → fast model       |
+| "list all exports in this file"           | Full model used                | `low` complexity → fast model       |
+| "scan for vulnerabilities"                | Keyword routes to **security** | Same — keyword routing always fires |
+| "refactor the auth module across 8 files" | Default model                  | `high` complexity → default model   |
+| "this function is sluggish"               | No keyword match, no route     | `low`/`medium` → correct model tier |
 
 Keyword routing handles specialist agent selection for technical keywords. Complexity routing selects the appropriate model tier based on how much reasoning the answer needs.
 
@@ -102,11 +102,11 @@ The environment variable overrides the config file setting.
 
 ## Auto-Route + Other Settings
 
-| Setting             | Interaction                                                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Autonomous Mode** | Auto-route works independently. Agent routing and complexity classification happen before permission checks.                   |
-| **Sandbox Mode**    | No interaction. Auto-route only affects which agent and model tier is selected, not what the agent can do.                     |
-| **Model Selection** | `low`-complexity messages use the provider's small model automatically when auto-route is on and no model is explicitly pinned.|
+| Setting             | Interaction                                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Autonomous Mode** | Auto-route works independently. Agent routing and complexity classification happen before permission checks.                    |
+| **Sandbox Mode**    | No interaction. Auto-route only affects which agent and model tier is selected, not what the agent can do.                      |
+| **Model Selection** | `low`-complexity messages use the provider's small model automatically when auto-route is on and no model is explicitly pinned. |
 
 ## When to Enable Auto-Route
 

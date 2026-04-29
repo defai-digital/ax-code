@@ -65,11 +65,18 @@ export namespace Policy {
     return loadRulesByName({ ...input, name: "qa.rules.json" })
   }
 
+  function assertSafePolicyName(name: string) {
+    if (path.basename(name) !== name || name.includes("/") || name.includes("\\")) {
+      throw new Error(`Invalid policy name: "${name}"`)
+    }
+  }
+
   async function loadRulesByName(input: {
     worktree: string
     cwd?: string
     name: string
   }): Promise<PolicyRules | undefined> {
+    assertSafePolicyName(input.name)
     const cwd = input.cwd ?? input.worktree
     for await (const dir of policyDirs({ worktree: input.worktree, cwd })) {
       const candidate = path.join(dir, input.name)
@@ -117,6 +124,7 @@ export namespace Policy {
   }
 
   async function loadByName(input: { worktree: string; cwd?: string; name: string }): Promise<string | undefined> {
+    assertSafePolicyName(input.name)
     const cwd = input.cwd ?? input.worktree
     for await (const dir of policyDirs({ worktree: input.worktree, cwd })) {
       const candidate = path.join(dir, input.name)

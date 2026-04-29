@@ -14,12 +14,12 @@ The HTTP/OpenAPI path is the recommended cross-language integration surface toda
 
 ## Choose a Path
 
-| Need | Recommended path | Why |
-| --- | --- | --- |
-| TypeScript or JavaScript in the same process | `@ax-code/sdk` with `createAgent()` | Lowest startup overhead and access to programmatic helpers, custom tools, and testing utilities |
-| TypeScript or JavaScript with a service boundary | `@ax-code/sdk/http` or `createAxCodeClient()` | Keeps typed client ergonomics while using `ax-code serve` |
-| Python, Go, Java, Rust, or another runtime | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language |
-| CI, automation, or one-off scripts | HTTP calls against `ax-code serve` | Simple deployment model and easy process isolation |
+| Need                                             | Recommended path                                   | Why                                                                                             |
+| ------------------------------------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| TypeScript or JavaScript in the same process     | `@ax-code/sdk` with `createAgent()`                | Lowest startup overhead and access to programmatic helpers, custom tools, and testing utilities |
+| TypeScript or JavaScript with a service boundary | `@ax-code/sdk/http` or `createAxCodeClient()`      | Keeps typed client ergonomics while using `ax-code serve`                                       |
+| Python, Go, Java, Rust, or another runtime       | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language      |
+| CI, automation, or one-off scripts               | HTTP calls against `ax-code serve`                 | Simple deployment model and easy process isolation                                              |
 
 ## What Is Official Today
 

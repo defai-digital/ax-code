@@ -39,10 +39,7 @@ function decodeOutput(value: string | Uint8Array | undefined) {
   return decoder.decode(value)
 }
 
-async function collectAndMirror(
-  stream: ReadableStream<Uint8Array> | null | undefined,
-  write: (chunk: string) => void,
-) {
+async function collectAndMirror(stream: ReadableStream<Uint8Array> | null | undefined, write: (chunk: string) => void) {
   if (!stream) return ""
 
   const streamDecoder = new TextDecoder()
@@ -159,10 +156,11 @@ try {
     await fail("installed ax-code doctor did not report bun-bundled/source runtime")
   }
 
-  const handshake = await $`printf '{"type":"rpc.request","method":"health","id":1}\n' | ${axCodeBin} tui-backend --stdio`
-    .cwd(repoRoot)
-    .quiet()
-    .nothrow()
+  const handshake =
+    await $`printf '{"type":"rpc.request","method":"health","id":1}\n' | ${axCodeBin} tui-backend --stdio`
+      .cwd(repoRoot)
+      .quiet()
+      .nothrow()
   const handshakeOutput = decodeOutput(handshake.stdout) + decodeOutput(handshake.stderr)
   process.stdout.write(handshakeOutput)
   if (handshake.exitCode !== 0) {

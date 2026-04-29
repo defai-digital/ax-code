@@ -5,9 +5,7 @@ describe("claudeCodeParser", () => {
   test("streams delta events without duplicating final assistant output", () => {
     expect(claudeCodeParser.parseStreamLine('{"type":"content_block_delta","delta":{"text":"OK"}}')).toBe("OK")
     expect(
-      claudeCodeParser.parseStreamLine(
-        '{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}',
-      ),
+      claudeCodeParser.parseStreamLine('{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}'),
     ).toBeNull()
     expect(claudeCodeParser.parseStreamLine('{"type":"result","result":"OK"}')).toBe("OK")
   })

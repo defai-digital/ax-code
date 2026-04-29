@@ -9,10 +9,10 @@ This directory owns the SDK and OpenAPI integration surfaces for AX Code.
 
 ## Surfaces
 
-| Path | Role |
-| --- | --- |
-| [`js/`](js/README.md) | First-party TypeScript and JavaScript SDK, including in-process `createAgent()` and HTTP client helpers |
-| [`openapi.json`](openapi.json) | OpenAPI snapshot for HTTP clients and generated cross-language integrations |
+| Path                           | Role                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| [`js/`](js/README.md)          | First-party TypeScript and JavaScript SDK, including in-process `createAgent()` and HTTP client helpers |
+| [`openapi.json`](openapi.json) | OpenAPI snapshot for HTTP clients and generated cross-language integrations                             |
 
 The first-party package today is `@ax-code/sdk`. Other languages should integrate through `ax-code serve` and generated clients based on `openapi.json` until a language has an owner, tests, and a release workflow.
 

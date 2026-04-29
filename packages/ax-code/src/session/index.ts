@@ -415,7 +415,14 @@ export namespace Session {
     const base = Instance.project.vcs
       ? path.join(Instance.worktree, ".ax-code", "plans")
       : path.join(Global.Path.data, "plans")
-    return path.join(base, [input.time.created, input.slug].join("-") + ".md")
+    const filename = [input.time.created, input.slug].join("-") + ".md"
+    const result = path.join(base, filename)
+    const resolved = path.resolve(result)
+    const resolvedBase = path.resolve(base)
+    if (resolved !== resolvedBase && !resolved.startsWith(resolvedBase + path.sep)) {
+      throw new Error(`Invalid plan slug: "${input.slug}" escapes plans directory`)
+    }
+    return result
   }
 
   export const get = fn(SessionID.zod, async (id) => {

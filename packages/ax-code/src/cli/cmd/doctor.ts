@@ -47,7 +47,8 @@ export async function doctorProjectContext(callerCwd = Filesystem.callerCwd()) {
   const legacyAxPath = await findAncestor(callerCwd, (dir) => exists(path.join(dir, "AX.md")))
   const configPath = await findAncestor(
     callerCwd,
-    async (dir) => (await exists(path.join(dir, ".ax-code", "ax-code.json"))) || (await exists(path.join(dir, "ax-code.json"))),
+    async (dir) =>
+      (await exists(path.join(dir, ".ax-code", "ax-code.json"))) || (await exists(path.join(dir, "ax-code.json"))),
   )
 
   return {
@@ -185,7 +186,9 @@ export const DoctorCommand: CommandModule = {
     })
 
     // 8. Git
-    const gitExists = project.projectRoot !== project.callerCwd || (await Bun.file(path.join(project.callerCwd, ".git", "HEAD")).exists())
+    const gitExists =
+      project.projectRoot !== project.callerCwd ||
+      (await Bun.file(path.join(project.callerCwd, ".git", "HEAD")).exists())
     checks.push({
       name: "Git repository",
       status: gitExists ? "ok" : "warn",

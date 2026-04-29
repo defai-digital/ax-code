@@ -179,22 +179,20 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
         })
 
         const sequence = createPhaseSequence({
-            blockingTasks,
-            coreTasks,
-            deferredTasks,
-            deferredDelayMs: isStartupBootstrap
-              ? (input.deferredDelayMs ?? tuiDeferredBootstrapDelayMs())
-              : 0,
-            deferredConcurrency: input.deferredConcurrency ?? tuiDeferredBootstrapConcurrency(),
-            deferredBackground: input.deferredBackground ?? true,
-            getStatus: () => input.store.status,
-            setStatus: input.setStatus,
-            finishCoreSpan: finishCoreBootstrap,
-            finishDeferredSpan: finishDeferredBootstrap,
-            finishStartup: () => bootstrapLifecycle.finishStartup(),
-            logWarn: input.logWarn,
-            logError: input.logError,
-            recordStartup: input.recordStartup,
+          blockingTasks,
+          coreTasks,
+          deferredTasks,
+          deferredDelayMs: isStartupBootstrap ? (input.deferredDelayMs ?? tuiDeferredBootstrapDelayMs()) : 0,
+          deferredConcurrency: input.deferredConcurrency ?? tuiDeferredBootstrapConcurrency(),
+          deferredBackground: input.deferredBackground ?? true,
+          getStatus: () => input.store.status,
+          setStatus: input.setStatus,
+          finishCoreSpan: finishCoreBootstrap,
+          finishDeferredSpan: finishDeferredBootstrap,
+          finishStartup: () => bootstrapLifecycle.finishStartup(),
+          logWarn: input.logWarn,
+          logError: input.logError,
+          recordStartup: input.recordStartup,
         })
         await runBootstrapPhaseSequence(sequence, { scheduleBackground })
       } catch (error) {

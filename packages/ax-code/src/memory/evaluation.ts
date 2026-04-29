@@ -94,9 +94,7 @@ export async function evaluate(projectRoot: string, opts: MemoryEvaluationOption
       name: expected,
       rank: returnedRanks.get(expected) ?? null,
     }))
-    const foundRanks = expectedRanks
-      .map((expected) => expected.rank)
-      .filter((rank): rank is number => rank !== null)
+    const foundRanks = expectedRanks.map((expected) => expected.rank).filter((rank): rank is number => rank !== null)
     const firstHitRank = foundRanks.length > 0 ? Math.min(...foundRanks) : null
     const missing = expectedRanks.filter((expected) => expected.rank === null).map((expected) => expected.name)
     cases.push({

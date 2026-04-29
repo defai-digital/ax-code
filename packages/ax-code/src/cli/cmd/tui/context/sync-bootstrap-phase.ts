@@ -12,10 +12,9 @@ export async function settleBootstrapPhase(
   },
 ): Promise<BootstrapPhaseSummary> {
   const concurrency = normalizeBootstrapPhaseConcurrency(input?.concurrency, tasks.length)
-  const rejected =
-    !concurrency
-      ? await settleBootstrapPhaseConcurrent(tasks)
-      : await settleBootstrapPhaseLimited(tasks, concurrency)
+  const rejected = !concurrency
+    ? await settleBootstrapPhaseConcurrent(tasks)
+    : await settleBootstrapPhaseLimited(tasks, concurrency)
 
   for (const error of rejected) {
     input?.onRejected?.(error)

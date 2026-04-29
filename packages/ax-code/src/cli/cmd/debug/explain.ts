@@ -776,7 +776,8 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
   }
 
   if (!startupFailures.length && !stoppedAt) {
-    const startupAnchorAt = threadStartedAt ?? workerSpawnedAt ?? backendHandshakeStartedAt ?? backendReadyAt ?? startupBeginAt
+    const startupAnchorAt =
+      threadStartedAt ?? workerSpawnedAt ?? backendHandshakeStartedAt ?? backendReadyAt ?? startupBeginAt
     if (
       threadStartedAt !== undefined &&
       nativeStartedAt === undefined &&

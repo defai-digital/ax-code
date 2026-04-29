@@ -489,7 +489,11 @@ export const TuiThreadCommand = cmd({
         cwd,
         env: Object.fromEntries(Object.entries(sanitized).filter((e): e is [string, string] => e[1] !== undefined)),
       })
-      DiagnosticLog.recordProcess("tui.backendSpawned", { mode: backend.mode, target: backend.target, pid: backend.pid })
+      DiagnosticLog.recordProcess("tui.backendSpawned", {
+        mode: backend.mode,
+        target: backend.target,
+        pid: backend.pid,
+      })
       DiagnosticLog.recordProcess("tui.workerSpawned", { mode: backend.mode, target: backend.target, pid: backend.pid })
       if (backend.mode === "worker") {
         const worker = backend.wire as unknown as Worker
@@ -588,11 +592,13 @@ export const TuiThreadCommand = cmd({
         process.off("uncaughtException", error)
         process.off("unhandledRejection", error)
         process.off("SIGUSR2", reload)
-        await withTimeout(client.call("shutdown", undefined), DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS).catch((error) => {
-          Log.Default.warn("backend shutdown failed", {
-            error: error instanceof Error ? error.message : String(error),
-          })
-        })
+        await withTimeout(client.call("shutdown", undefined), DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS).catch(
+          (error) => {
+            Log.Default.warn("backend shutdown failed", {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          },
+        )
         await backend.terminate()
       }
 

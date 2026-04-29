@@ -199,7 +199,19 @@ export function setupCli(input: SetupCliOptions = {}) {
   const bundledMode = args.includes("--bundled")
   const rebuildBundled = args.includes("--rebuild")
   const bundledBinary = bundledMode
-    ? ensureBundledBinary({ root, env, platform, arch, avx2, musl, version, rebuild: rebuildBundled, exists, spawnSync, log })
+    ? ensureBundledBinary({
+        root,
+        env,
+        platform,
+        arch,
+        avx2,
+        musl,
+        version,
+        rebuild: rebuildBundled,
+        exists,
+        spawnSync,
+        log,
+      })
     : undefined
   const launcher = bundledMode
     ? {

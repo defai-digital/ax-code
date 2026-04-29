@@ -38,13 +38,15 @@ export interface RuntimeSyncProbeScheduler {
   dispose: () => void
 }
 
-export function createRuntimeSyncProbeScheduler(input: {
-  delayMs?: number
-  env?: Record<string, string | undefined>
-  onCoalesced?: (key: RuntimeSyncProbeKey) => void
-  setTimeoutFn?: (handler: () => void, timeout: number) => ReturnType<typeof setTimeout>
-  clearTimeoutFn?: (handle: ReturnType<typeof setTimeout>) => void
-} = {}): RuntimeSyncProbeScheduler {
+export function createRuntimeSyncProbeScheduler(
+  input: {
+    delayMs?: number
+    env?: Record<string, string | undefined>
+    onCoalesced?: (key: RuntimeSyncProbeKey) => void
+    setTimeoutFn?: (handler: () => void, timeout: number) => ReturnType<typeof setTimeout>
+    clearTimeoutFn?: (handle: ReturnType<typeof setTimeout>) => void
+  } = {},
+): RuntimeSyncProbeScheduler {
   const delayMs = input.delayMs ?? parseRuntimeSyncProbeDelayMs(input.env ?? process.env)
   const setTimeoutFn = input.setTimeoutFn ?? setTimeout
   const clearTimeoutFn = input.clearTimeoutFn ?? clearTimeout

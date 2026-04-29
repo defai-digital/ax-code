@@ -40,11 +40,13 @@ export namespace BunProc {
     return result
   }
 
-  export function resolveExecutable(input: {
-    execPath?: string
-    runtimeMode?: RuntimeMode
-    which?: (command: string) => string | null | undefined
-  } = {}) {
+  export function resolveExecutable(
+    input: {
+      execPath?: string
+      runtimeMode?: RuntimeMode
+      which?: (command: string) => string | null | undefined
+    } = {},
+  ) {
     const execPath = input.execPath ?? process.execPath
     const mode = input.runtimeMode ?? runtimeMode()
     if (mode !== "compiled") return execPath

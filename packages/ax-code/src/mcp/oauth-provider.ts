@@ -125,7 +125,10 @@ export class McpOAuthProvider implements OAuthClientProvider {
       {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
-        expiresAt: typeof tokens.expires_in === "number" && tokens.expires_in > 0 ? Date.now() / 1000 + tokens.expires_in : undefined,
+        expiresAt:
+          typeof tokens.expires_in === "number" && tokens.expires_in > 0
+            ? Date.now() / 1000 + tokens.expires_in
+            : undefined,
         scope: tokens.scope,
       },
       this.serverUrl,

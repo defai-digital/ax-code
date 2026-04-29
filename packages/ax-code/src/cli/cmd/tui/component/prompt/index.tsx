@@ -1,4 +1,14 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, KeyEvent, decodePasteBytes, t, dim, fg } from "@opentui/core"
+import {
+  BoxRenderable,
+  TextareaRenderable,
+  MouseEvent,
+  PasteEvent,
+  KeyEvent,
+  decodePasteBytes,
+  t,
+  dim,
+  fg,
+} from "@opentui/core"
 import {
   createEffect,
   createMemo,
