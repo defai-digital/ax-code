@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "path"
 import {
@@ -23,6 +23,10 @@ const manifest = () =>
     license: "MIT",
     sourceDistTag: "latest",
   })
+
+function shQuote(value: string) {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
 
 describe("script.publish-source", () => {
   test("uses --workspaces=false for npm pack and publish (matches other publish scripts)", async () => {
@@ -73,6 +77,63 @@ describe("script.publish-source", () => {
     const text = sourceDistributionUnixShim()
     expect(text).toContain('while [ -L "$script" ]')
     expect(text).toContain("readlink")
+  })
+
+  test("unix shim follows npm .bin symlink and preserves the original cwd", async () => {
+    if (process.platform === "win32") return
+
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "ax-code-source-shim-"))
+    try {
+      const packageDir = path.join(tempRoot, "package")
+      const realBinDir = path.join(packageDir, "bin")
+      const bundleDir = path.join(packageDir, "bundle")
+      const npmBinDir = path.join(tempRoot, "node_modules", ".bin")
+      const pathDir = path.join(tempRoot, "path-bin")
+      const workDir = path.join(tempRoot, "work")
+      await mkdir(realBinDir, { recursive: true })
+      await mkdir(bundleDir, { recursive: true })
+      await mkdir(npmBinDir, { recursive: true })
+      await mkdir(pathDir, { recursive: true })
+      await mkdir(workDir, { recursive: true })
+      await writeFile(path.join(bundleDir, "index.js"), "")
+
+      const outputFile = path.join(tempRoot, "fake-bun-output.txt")
+      const fakeBun = path.join(pathDir, "bun")
+      await writeFile(
+        fakeBun,
+        `#!/bin/sh
+OUT=${shQuote(outputFile)}
+printf '%s\\n' "$AX_CODE_ORIGINAL_CWD" > "$OUT"
+printf '%s\\n' "$1" >> "$OUT"
+printf '%s\\n' "$2" >> "$OUT"
+`,
+      )
+      await chmod(fakeBun, 0o755)
+
+      const realShim = path.join(realBinDir, "ax-code")
+      const linkedShim = path.join(npmBinDir, "ax-code")
+      await writeFile(realShim, sourceDistributionUnixShim())
+      await chmod(realShim, 0o755)
+      await symlink(path.relative(npmBinDir, realShim), linkedShim)
+
+      const result = Bun.spawnSync({
+        cmd: [linkedShim, "--version"],
+        cwd: workDir,
+        env: {
+          ...process.env,
+          PATH: `${pathDir}${path.delimiter}${process.env.PATH ?? ""}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0)
+      const lines = (await readFile(outputFile, "utf8")).trim().split("\n")
+      expect(await realpath(lines[0]!)).toBe(await realpath(workDir))
+      expect(lines.slice(1)).toEqual([path.join(packageDir, "bundle", "index.js"), "--version"])
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
   })
 
   test("unix shim refuses to launch without a usable bun", () => {
