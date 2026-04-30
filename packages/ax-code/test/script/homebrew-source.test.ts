@@ -75,6 +75,7 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain('gh release download "${TAG}"')
     expect(text).toContain('--repo "${SOURCE_REPO}"')
     expect(text).toContain('gh repo clone defai-digital/homebrew-ax-code')
+    expect(text).toContain("gh auth setup-git")
     expect(text).toContain("mktemp -d")
     expect(text).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
     expect(text).toContain('DARWIN_ARM64_ASSET="ax-code-darwin-arm64.zip"')
@@ -90,6 +91,7 @@ describe("homebrew source formula generator", () => {
     const text = await Bun.file(releaseWorkflow).text()
     const sourceScript = await Bun.file(homebrewSourceScript).text()
     expect(sourceScript).toContain('gh repo clone defai-digital/homebrew-ax-code')
+    expect(sourceScript).toContain("gh auth setup-git")
     expect(sourceScript).toContain("mktemp -d")
     expect(sourceScript).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
 

@@ -89,6 +89,7 @@ cat /tmp/ax-code-source.rb
 
 TAP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TAP_DIR}"' EXIT
+GH_TOKEN="${TAP_AUTH_TOKEN}" gh auth setup-git
 GH_TOKEN="${TAP_AUTH_TOKEN}" gh repo clone defai-digital/homebrew-ax-code "${TAP_DIR}" -- --depth 1
 cp /tmp/ax-code-source.rb "${TAP_DIR}/ax-code-source.rb"
 cd "${TAP_DIR}"
