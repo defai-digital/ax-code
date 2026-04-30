@@ -4,6 +4,7 @@ import {
   computeDebugCaseId,
   computeDebugEvidenceId,
   computeDebugHypothesisId,
+  computeDebugInstrumentationPlanId,
 } from "../../src/debug-engine/runtime-debug"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
@@ -76,6 +77,31 @@ function buildHypothesis(
   }
 }
 
+function buildInstrumentationPlan(sessionID: string, caseId: string, purpose: string) {
+  const targets = [
+    {
+      file: "src/worker-pool.ts",
+      anchor: { symbol: "acquireWorker" },
+      probe: "Log queue depth and active worker count before waiting for a slot",
+      removeInstruction: "Remove the temporary log after debug_capture_evidence records the queue-depth output",
+    },
+  ]
+  const planId = computeDebugInstrumentationPlanId({ caseId, purpose, targets })
+  return {
+    planId,
+    debugInstrumentationPlan: {
+      schemaVersion: 1 as const,
+      planId,
+      caseId,
+      purpose,
+      targets,
+      status: "planned" as const,
+      createdAt: "2026-04-26T18:02:00.000Z",
+      source: { tool: "debug_plan_instrumentation", version: "4.x.x", runId: sessionID },
+    },
+  }
+}
+
 describe("SessionDebug.load", () => {
   test("returns empty arrays for a session with no debug events", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -96,12 +122,13 @@ describe("SessionDebug.load", () => {
         const loaded = SessionDebug.load(session.id)
         expect(loaded.cases).toEqual([])
         expect(loaded.evidence).toEqual([])
+        expect(loaded.instrumentationPlans).toEqual([])
         expect(loaded.hypotheses).toEqual([])
       },
     })
   })
 
-  test("rebuilds cases / evidence / hypotheses from tool.result metadata", async () => {
+  test("rebuilds cases / evidence / instrumentation plans / hypotheses from tool.result metadata", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -109,6 +136,7 @@ describe("SessionDebug.load", () => {
         const session = await Session.create({})
         const c = buildCase(session.id, "tests time out")
         const e = buildEvidence(session.id, c.caseId, "log line")
+        const p = buildInstrumentationPlan(session.id, c.caseId, "measure worker queue depth")
         const h = buildHypothesis(session.id, c.caseId, "pool exhaustion")
 
         Recorder.begin(session.id)
@@ -128,6 +156,10 @@ describe("SessionDebug.load", () => {
           metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence },
         })
         await emit(session.id, tmp.path, {
+          kind: "debug_plan_instrumentation",
+          metadata: { planId: p.planId, debugInstrumentationPlan: p.debugInstrumentationPlan },
+        })
+        await emit(session.id, tmp.path, {
           kind: "debug_propose_hypothesis",
           metadata: { hypothesisId: h.hypothesisId, debugHypothesis: h.debugHypothesis },
         })
@@ -136,9 +168,11 @@ describe("SessionDebug.load", () => {
         const loaded = SessionDebug.load(session.id)
         expect(loaded.cases).toHaveLength(1)
         expect(loaded.evidence).toHaveLength(1)
+        expect(loaded.instrumentationPlans).toHaveLength(1)
         expect(loaded.hypotheses).toHaveLength(1)
         expect(loaded.cases[0].caseId).toBe(c.caseId)
         expect(loaded.evidence[0].caseId).toBe(c.caseId)
+        expect(loaded.instrumentationPlans[0].caseId).toBe(c.caseId)
         expect(loaded.hypotheses[0].caseId).toBe(c.caseId)
       },
     })

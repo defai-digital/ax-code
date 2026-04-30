@@ -1,0 +1,135 @@
+import { describe, expect, test } from "bun:test"
+import { Instance } from "../../src/project/instance"
+import { computeDebugCaseId, DebugInstrumentationPlanSchema, DEBUG_ID_PATTERN } from "../../src/debug-engine/runtime-debug"
+import { Installation } from "../../src/installation"
+import { Recorder } from "../../src/replay/recorder"
+import { Session } from "../../src/session"
+import type { SessionID } from "../../src/session/schema"
+import { DebugPlanInstrumentationTool } from "../../src/tool/debug_plan_instrumentation"
+import { tmpdir } from "../fixture/fixture"
+
+function fakeCtx(sessionID: string) {
+  return {
+    sessionID,
+    messageID: "" as any,
+    agent: "build",
+    abort: new AbortController().signal,
+    callID: "test",
+    messages: [],
+    metadata() {},
+    ask: async () => {},
+  } as any
+}
+
+async function emitOpenedCase(sessionID: SessionID, directory: string, problem: string) {
+  const caseId = computeDebugCaseId({ problem, runId: sessionID })
+  Recorder.begin(sessionID)
+  Recorder.emit({
+    type: "session.start",
+    sessionID: sessionID as any,
+    agent: "build",
+    model: "test/model",
+    directory,
+  })
+  Recorder.emit({
+    type: "tool.result",
+    sessionID: sessionID as any,
+    tool: "debug_open_case",
+    callID: "call-open",
+    status: "completed",
+    metadata: {
+      caseId,
+      debugCase: {
+        schemaVersion: 1,
+        caseId,
+        problem,
+        status: "open",
+        createdAt: "2026-04-26T18:00:00.000Z",
+        source: { tool: "debug_open_case", version: Installation.VERSION, runId: sessionID },
+      },
+    },
+    durationMs: 1,
+  })
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  return caseId
+}
+
+describe("DebugPlanInstrumentationTool", () => {
+  const targets = [
+    {
+      file: "src/worker-pool.ts",
+      anchor: { symbol: "acquireWorker" },
+      probe: "Log queue depth and active worker count before waiting for a slot",
+      removeInstruction: "Remove the temporary log after debug_capture_evidence records the queue-depth output",
+    },
+  ]
+
+  test("rejects unknown caseId", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const tool = await DebugPlanInstrumentationTool.init()
+        await expect(
+          tool.execute(
+            { caseId: "0000aaaa1111bbbb", purpose: "measure queue depth", targets },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/unknown debug case/)
+      },
+    })
+  })
+
+  test("records a schema-valid removable instrumentation plan", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const caseId = await emitOpenedCase(session.id, tmp.path, "tests time out")
+
+        const tool = await DebugPlanInstrumentationTool.init()
+        const result = await tool.execute(
+          { caseId, purpose: "measure queue depth before worker acquisition", targets },
+          fakeCtx(session.id),
+        )
+
+        expect(result.metadata.planId).toMatch(DEBUG_ID_PATTERN)
+        const parsed = DebugInstrumentationPlanSchema.parse(result.metadata.debugInstrumentationPlan)
+        expect(parsed.caseId).toBe(caseId)
+        expect(parsed.status).toBe("planned")
+        expect(parsed.targets[0].removeInstruction).toContain("Remove")
+        expect(parsed.source.tool).toBe("debug_plan_instrumentation")
+      },
+    })
+  })
+
+  test("same case + purpose + targets deduplicates to the same planId", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const caseId = await emitOpenedCase(session.id, tmp.path, "tests time out")
+
+        const tool = await DebugPlanInstrumentationTool.init()
+        const input = { caseId, purpose: "measure queue depth before worker acquisition", targets }
+        const first = await tool.execute(input, fakeCtx(session.id))
+        const second = await tool.execute(input, fakeCtx(session.id))
+
+        expect(first.metadata.planId).toBe(second.metadata.planId)
+      },
+    })
+  })
+})

@@ -2,6 +2,7 @@ import {
   computeDebugCaseId,
   computeDebugEvidenceId,
   computeDebugHypothesisId,
+  computeDebugInstrumentationPlanId,
   type DebugCase,
   type DebugCaseRollup,
   DebugCaseSchema,
@@ -9,6 +10,8 @@ import {
   DebugEvidenceSchema,
   type DebugHypothesis,
   DebugHypothesisSchema,
+  type DebugInstrumentationPlan,
+  DebugInstrumentationPlanSchema,
 } from "../debug-engine/runtime-debug"
 import { resolveCaseStatus } from "../debug-engine/verify-after-fix"
 import { EventQuery } from "../replay/query"
@@ -19,19 +22,22 @@ export namespace SessionDebug {
   const log = Log.create({ service: "session-debug" })
 
   // Walks the session event log and rebuilds Phase 3 runtime debug
-  // artefacts (cases, evidence, hypotheses) from tool.result metadata.
+  // artefacts (cases, evidence, instrumentation plans, hypotheses) from
+  // tool.result metadata.
   // Each artefact is re-validated against its schema; entries that fail
   // validation are skipped (with a warning) so a single corrupted record
   // cannot block the rest. Mirrors SessionFindings.load.
   //
   // The tools that emit these artefacts are debug_open_case,
-  // debug_capture_evidence, debug_propose_hypothesis, and
-  // debug_apply_verification. Loaders here are tool-name agnostic; any
-  // tool.result that carries a metadata entry of the right shape is included.
+  // debug_capture_evidence, debug_plan_instrumentation,
+  // debug_propose_hypothesis, and debug_apply_verification. Loaders here
+  // are tool-name agnostic; any tool.result that carries a metadata entry of
+  // the right shape is included.
 
   export type Loaded = {
     cases: DebugCase[]
     evidence: DebugEvidence[]
+    instrumentationPlans: DebugInstrumentationPlan[]
     hypotheses: DebugHypothesis[]
   }
 
@@ -49,6 +55,7 @@ export namespace SessionDebug {
     const seenEvidence = new Set<string>()
     const cases: DebugCase[] = []
     const evidence: DebugEvidence[] = []
+    const instrumentationPlansById = new Map<string, DebugInstrumentationPlan>()
     const hypothesesById = new Map<string, DebugHypothesis>()
     for (const event of events) {
       if (event.type !== "tool.result") continue
@@ -74,6 +81,12 @@ export namespace SessionDebug {
           }
         } else logSkip(sessionID, event.callID, "debugEvidence", parsed.error.issues.length)
       }
+      if (meta.debugInstrumentationPlan) {
+        const parsed = DebugInstrumentationPlanSchema.safeParse(meta.debugInstrumentationPlan)
+        if (parsed.success) {
+          instrumentationPlansById.set(parsed.data.planId, parsed.data)
+        } else logSkip(sessionID, event.callID, "debugInstrumentationPlan", parsed.error.issues.length)
+      }
       if (meta.debugHypothesis) {
         const parsed = DebugHypothesisSchema.safeParse(meta.debugHypothesis)
         if (parsed.success) {
@@ -84,7 +97,12 @@ export namespace SessionDebug {
         } else logSkip(sessionID, event.callID, "debugHypothesis", parsed.error.issues.length)
       }
     }
-    return { cases, evidence, hypotheses: [...hypothesesById.values()] }
+    return {
+      cases,
+      evidence,
+      instrumentationPlans: [...instrumentationPlansById.values()],
+      hypotheses: [...hypothesesById.values()],
+    }
   }
 
   function logSkip(sessionID: SessionID, callID: string, kind: string, issues: number): void {
@@ -128,8 +146,9 @@ export namespace SessionDebug {
   // - "investigating" if at least one hypothesis is "active"
   // - "open" otherwise (no hypotheses yet)
   export type CaseRollup = DebugCaseRollup
+  type RollupInput = Pick<Loaded, "cases" | "hypotheses"> & Partial<Pick<Loaded, "evidence" | "instrumentationPlans">>
 
-  export function rollup(loaded: Loaded): CaseRollup[] {
+  export function rollup(loaded: RollupInput): CaseRollup[] {
     return loaded.cases.map((c) => {
       const own = loaded.hypotheses.filter((h) => h.caseId === c.caseId)
       const effective = resolveCaseStatus(c.status, own)
@@ -142,4 +161,5 @@ export const _internal = {
   computeDebugCaseId,
   computeDebugEvidenceId,
   computeDebugHypothesisId,
+  computeDebugInstrumentationPlanId,
 }

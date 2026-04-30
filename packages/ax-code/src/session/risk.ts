@@ -8,6 +8,7 @@ import {
   DebugCaseSchema,
   DebugEvidenceSchema,
   DebugHypothesisSchema,
+  DebugInstrumentationPlanSchema,
 } from "../debug-engine/runtime-debug"
 import z from "zod"
 import { Risk } from "../risk/score"
@@ -37,6 +38,7 @@ export namespace SessionRisk {
   export const DebugBundle = z.object({
     cases: DebugCaseSchema.array(),
     evidence: DebugEvidenceSchema.array(),
+    instrumentationPlans: DebugInstrumentationPlanSchema.array(),
     hypotheses: DebugHypothesisSchema.array(),
     rollups: DebugCaseRollupSchema.array(),
   })

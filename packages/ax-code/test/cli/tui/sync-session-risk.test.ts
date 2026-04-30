@@ -17,6 +17,7 @@ describe("tui synced session risk parser", () => {
       debug: {
         cases: [debugCase],
         evidence: [],
+        instrumentationPlans: [],
         hypotheses: [],
         rollups: [{ ...debugCase, effectiveStatus: "unresolved" }],
       },
@@ -36,5 +37,6 @@ describe("tui synced session risk parser", () => {
     })
 
     expect(parsed.debug?.rollups).toEqual([])
+    expect(parsed.debug?.instrumentationPlans).toEqual([])
   })
 })

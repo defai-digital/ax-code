@@ -43,6 +43,7 @@ import { ReviewCompleteTool } from "./review_complete"
 import { MemorySaveTool } from "./memory"
 import { DebugOpenCaseTool } from "./debug_open_case"
 import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
+import { DebugPlanInstrumentationTool } from "./debug_plan_instrumentation"
 import { DebugProposeHypothesisTool } from "./debug_propose_hypothesis"
 import { DebugApplyVerificationTool } from "./debug_apply_verification"
 import { Glob } from "../util/glob"
@@ -182,6 +183,7 @@ export namespace ToolRegistry {
           ReviewCompleteTool,
           DebugOpenCaseTool,
           DebugCaptureEvidenceTool,
+          DebugPlanInstrumentationTool,
           DebugProposeHypothesisTool,
           DebugApplyVerificationTool,
           ...(Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),

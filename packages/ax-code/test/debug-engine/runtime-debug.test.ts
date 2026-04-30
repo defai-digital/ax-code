@@ -3,12 +3,19 @@ import {
   computeDebugCaseId,
   computeDebugEvidenceId,
   computeDebugHypothesisId,
+  computeDebugInstrumentationPlanId,
   DEBUG_ID_PATTERN,
   DebugCaseSchema,
   DebugEvidenceSchema,
   DebugHypothesisSchema,
+  DebugInstrumentationPlanSchema,
 } from "../../src/debug-engine/runtime-debug"
-import type { DebugCase, DebugEvidence, DebugHypothesis } from "../../src/debug-engine/runtime-debug"
+import type {
+  DebugCase,
+  DebugEvidence,
+  DebugHypothesis,
+  DebugInstrumentationPlan,
+} from "../../src/debug-engine/runtime-debug"
 
 const validCase: DebugCase = {
   schemaVersion: 1,
@@ -43,6 +50,24 @@ const validHypothesis: DebugHypothesis = {
   evidenceRefs: ["fedcba9876543210"],
   status: "active",
   source: { tool: "debug", version: "4.x.x", runId: "ses_abc" },
+}
+
+const validInstrumentationPlan: DebugInstrumentationPlan = {
+  schemaVersion: 1,
+  planId: "0011223344556677",
+  caseId: "0123456789abcdef",
+  purpose: "Confirm whether the worker pool is saturated before request dispatch",
+  targets: [
+    {
+      file: "src/worker-pool.ts",
+      anchor: { symbol: "acquireWorker" },
+      probe: "Log queue depth and active worker count before waiting for a slot",
+      removeInstruction: "Remove the temporary log after debug_capture_evidence records the queue-depth output",
+    },
+  ],
+  status: "planned",
+  createdAt: "2026-04-26T18:02:00.000Z",
+  source: { tool: "debug_plan_instrumentation", version: "4.x.x", runId: "ses_abc" },
 }
 
 describe("DebugCaseSchema", () => {
@@ -132,6 +157,22 @@ describe("DebugHypothesisSchema", () => {
   })
 })
 
+describe("DebugInstrumentationPlanSchema", () => {
+  test("accepts an explicit removable temporary instrumentation plan", () => {
+    expect(() => DebugInstrumentationPlanSchema.parse(validInstrumentationPlan)).not.toThrow()
+  })
+
+  test("requires at least one target and a removal instruction per target", () => {
+    expect(() => DebugInstrumentationPlanSchema.parse({ ...validInstrumentationPlan, targets: [] })).toThrow()
+    expect(() =>
+      DebugInstrumentationPlanSchema.parse({
+        ...validInstrumentationPlan,
+        targets: [{ ...validInstrumentationPlan.targets[0], removeInstruction: "" }],
+      }),
+    ).toThrow()
+  })
+})
+
 describe("computeDebugCaseId", () => {
   test("returns 16-char hex matching DEBUG_ID_PATTERN", () => {
     const id = computeDebugCaseId({ problem: "x", runId: "ses_a" })
@@ -176,5 +217,17 @@ describe("computeDebugHypothesisId", () => {
     const a = computeDebugHypothesisId({ caseId: "case01234567890a", claim: "X" })
     const b = computeDebugHypothesisId({ caseId: "case01234567890b", claim: "X" })
     expect(a).not.toBe(b)
+  })
+})
+
+describe("computeDebugInstrumentationPlanId", () => {
+  test("same case + purpose + targets produces the same plan id", () => {
+    const input = {
+      caseId: validInstrumentationPlan.caseId,
+      purpose: validInstrumentationPlan.purpose,
+      targets: validInstrumentationPlan.targets,
+    }
+    expect(computeDebugInstrumentationPlanId(input)).toMatch(DEBUG_ID_PATTERN)
+    expect(computeDebugInstrumentationPlanId(input)).toBe(computeDebugInstrumentationPlanId(input))
   })
 })

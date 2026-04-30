@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import z from "zod"
 import { FindingSource } from "../quality/finding"
 
-// Phase 3 P3.1: contract for the runtime debug workflow. Three artifact
+// Phase 3 P3.1/P3.2: contract for the runtime debug workflow. Four artifact
 // shapes anchor every later phase 3 slice:
 //
 //   DebugCase       — one investigation. "this thing is broken; find out why."
@@ -10,6 +10,8 @@ import { FindingSource } from "../quality/finding"
 //                     (log capture, instrumentation result, stack trace,
 //                     graph query receipt). Mirrors Finding.evidence but
 //                     for runtime artefacts that exist outside the file.
+//   DebugInstrumentationPlan — an auditable, removable plan for temporary
+//                     runtime probes before any file is edited.
 //   DebugHypothesis — a candidate explanation. Carries (a) optional static
 //                     analysis from debug_analyze, (b) runtime evidence
 //                     refs, (c) a single combined confidence. Status moves
@@ -71,6 +73,34 @@ export const DebugEvidenceSchema = z.object({
 })
 export type DebugEvidence = z.infer<typeof DebugEvidenceSchema>
 
+export const DebugInstrumentationStatus = z.enum(["planned", "applied", "removed"])
+export type DebugInstrumentationStatus = z.infer<typeof DebugInstrumentationStatus>
+
+export const DebugInstrumentationTargetSchema = z.object({
+  file: z.string().min(1).max(500),
+  anchor: z
+    .object({
+      line: z.number().int().min(1).optional(),
+      symbol: z.string().min(1).max(200).optional(),
+    })
+    .optional(),
+  probe: z.string().min(1).max(500),
+  removeInstruction: z.string().min(1).max(500),
+})
+export type DebugInstrumentationTarget = z.infer<typeof DebugInstrumentationTargetSchema>
+
+export const DebugInstrumentationPlanSchema = z.object({
+  schemaVersion: z.literal(1),
+  planId: z.string().regex(DEBUG_ID_PATTERN),
+  caseId: z.string().regex(DEBUG_ID_PATTERN),
+  purpose: z.string().min(1).max(500),
+  targets: z.array(DebugInstrumentationTargetSchema).min(1).max(20),
+  status: DebugInstrumentationStatus,
+  createdAt: z.string().datetime(),
+  source: FindingSource,
+})
+export type DebugInstrumentationPlan = z.infer<typeof DebugInstrumentationPlanSchema>
+
 export const DebugHypothesisSchema = z.object({
   schemaVersion: z.literal(1),
   hypothesisId: z.string().regex(DEBUG_ID_PATTERN),
@@ -119,6 +149,17 @@ export type DebugEvidenceIdInput = {
 
 export function computeDebugEvidenceId(input: DebugEvidenceIdInput): string {
   const payload = [input.caseId, input.kind, input.content].join("\u0000")
+  return createHash("sha256").update(payload).digest("hex").slice(0, 16)
+}
+
+export type DebugInstrumentationPlanIdInput = {
+  caseId: string
+  purpose: string
+  targets: readonly DebugInstrumentationTarget[]
+}
+
+export function computeDebugInstrumentationPlanId(input: DebugInstrumentationPlanIdInput): string {
+  const payload = [input.caseId, input.purpose, JSON.stringify(input.targets)].join("\u0000")
   return createHash("sha256").update(payload).digest("hex").slice(0, 16)
 }
 

@@ -647,6 +647,7 @@ describe("session.risk", () => {
           expect(detail.debug).toBeDefined()
           expect(detail.debug?.cases).toHaveLength(1)
           expect(detail.debug?.evidence).toHaveLength(1)
+          expect(detail.debug?.instrumentationPlans).toHaveLength(0)
           expect(detail.debug?.hypotheses).toHaveLength(1)
           expect(detail.debug?.rollups).toHaveLength(1)
           expect(detail.debug?.cases[0].caseId).toBe(caseId)

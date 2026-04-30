@@ -7,6 +7,7 @@ import {
   DebugCaseSchema,
   DebugEvidenceSchema,
   DebugHypothesisSchema,
+  DebugInstrumentationPlanSchema,
 } from "../../../../debug-engine/runtime-debug"
 import { DecisionHints } from "../../../../session/decision-hints"
 
@@ -47,6 +48,7 @@ export const SyncedSessionRisk = z.object({
     .object({
       cases: z.array(DebugCaseSchema),
       evidence: z.array(DebugEvidenceSchema),
+      instrumentationPlans: z.array(DebugInstrumentationPlanSchema).optional().default([]),
       hypotheses: z.array(DebugHypothesisSchema),
       rollups: z.array(DebugCaseRollupSchema).optional().default([]),
     })
