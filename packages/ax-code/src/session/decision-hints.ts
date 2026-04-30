@@ -197,9 +197,7 @@ export namespace DecisionHints {
 
   function readinessFor(hints: Hint[]): Summary["readiness"] {
     if (hints.some((hint) => hint.category === "failed_validation")) return "blocked"
-    if (
-      hints.some((hint) => hint.category === "missing_verification" || hint.category === "missing_review_completion")
-    )
+    if (hints.some((hint) => hint.category === "missing_verification" || hint.category === "missing_review_completion"))
       return "needs_validation"
     return "clear"
   }
@@ -280,11 +278,18 @@ export namespace DecisionHints {
   }
 
   function reviewVerificationSuccessful(action: ToolAction): boolean {
+    if (reviewVerificationPolicyFailed(action)) return false
     const statuses = reviewEnvelopeStatuses(action)
     return (
       statuses.some((status) => status === "passed") &&
       statuses.every((status) => status === "passed" || status === "skipped")
     )
+  }
+
+  function reviewVerificationPolicyFailed(action: ToolAction): boolean {
+    const policy = action.metadata?.policy
+    if (!isRecord(policy)) return false
+    return policy.requiredChecksPassed === false
   }
 
   function reviewEnvelopeStatuses(action: ToolAction): string[] {
@@ -341,6 +346,7 @@ export namespace DecisionHints {
       evidence: [
         describeReviewSignal(action),
         `review verification statuses: ${reviewEnvelopeStatuses(action).join(", ")}`,
+        ...(reviewVerificationPolicyFailed(action) ? ["review verification policy: required checks failed"] : []),
       ],
     }
   }

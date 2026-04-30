@@ -343,6 +343,28 @@ describe("DecisionHints", () => {
     })
   })
 
+  test("keeps review blocked after policy-failed review verification", () => {
+    const summary = DecisionHints.summarizeEvents([
+      toolCall("c1", "register_finding", { workflow: "review" }),
+      toolResult("c1", "register_finding", "completed", reviewFindingMetadata()),
+      toolCall("c2", "verify_project", { workflow: "review" }),
+      toolResult("c2", "verify_project", "completed", {
+        verificationEnvelopes: [verificationEnvelope("review", "passed"), verificationEnvelope("review", "skipped")],
+        policy: {
+          requiredChecksPassed: false,
+          missingRequiredChecks: ["test"],
+        },
+      }),
+    ])
+
+    expect(summary).toMatchObject({
+      readiness: "blocked",
+      hintCount: 1,
+      hints: [{ id: "failed-review-verification", category: "failed_validation" }],
+    })
+    expect(summary.hints[0]?.evidence).toContain("review verification policy: required checks failed")
+  })
+
   test("keeps needs-verification review results actionable when earlier replay context is truncated", () => {
     const hints = DecisionHints.fromEvents([
       toolCall("c1", "review_complete", {}),
