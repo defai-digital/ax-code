@@ -1441,6 +1441,10 @@ export function Prompt(props: PromptProps) {
                 }
                 if (isPromptSubmitKey(e)) {
                   e.preventDefault()
+                  if (autocomplete?.visible) {
+                    autocomplete.onKeyDown(e)
+                    return
+                  }
                   void submit()
                   return
                 }
