@@ -209,12 +209,11 @@ interface CliLoaderOpts {
 function cliLoader(opts: CliLoaderOpts): CustomLoader {
   return async (provider) => {
     const path = which(opts.binary)
-    const info = await resolveCliModel(opts.providerID)
-    const authError = path ? await checkCliProviderAuth(opts.providerID, path) : undefined
     return {
       autoload: false,
       async getModel(_sdk: any, modelID: string) {
         if (!path) throw new Error(`${opts.binary} CLI not found in PATH`)
+        const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) throw new Error(authError)
         return new CliLanguageModel({
           providerID: opts.providerID,
@@ -227,7 +226,10 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         })
       },
       async discoverModels() {
-        if (!path || authError) return {}
+        if (!path) return {}
+        const authError = await checkCliProviderAuth(opts.providerID, path)
+        if (authError) return {}
+        const info = await resolveCliModel(opts.providerID)
         return cliModels(opts.providerID, provider, info.model)
       },
     }

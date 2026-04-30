@@ -41,6 +41,9 @@ const ProjectMemorySchema = z
         patterns: z
           .object({ content: z.string(), tokens: z.number(), scannedAt: z.string().optional() })
           .optional(),
+        // Store reads are structurally tolerant so `memory doctor` can
+        // diagnose recoverable semantic corruption. Recorder writes and
+        // doctor checks still enforce confidence in the documented 0..1 range.
         userPrefs: z
           .object({
             entries: z.array(
@@ -53,7 +56,7 @@ const ProjectMemorySchema = z
                 tags: z.array(z.string()).optional(),
                 pathGlobs: z.array(z.string()).optional(),
                 expiresAt: z.string().optional(),
-                confidence: z.number().min(0).max(1).optional(),
+                confidence: z.number().optional(),
                 sourceSessionId: z.string().optional(),
                 agents: z.array(z.string()).optional(),
               }),
@@ -73,7 +76,7 @@ const ProjectMemorySchema = z
                 tags: z.array(z.string()).optional(),
                 pathGlobs: z.array(z.string()).optional(),
                 expiresAt: z.string().optional(),
-                confidence: z.number().min(0).max(1).optional(),
+                confidence: z.number().optional(),
                 sourceSessionId: z.string().optional(),
                 agents: z.array(z.string()).optional(),
               }),
@@ -93,7 +96,7 @@ const ProjectMemorySchema = z
                 tags: z.array(z.string()).optional(),
                 pathGlobs: z.array(z.string()).optional(),
                 expiresAt: z.string().optional(),
-                confidence: z.number().min(0).max(1).optional(),
+                confidence: z.number().optional(),
                 sourceSessionId: z.string().optional(),
                 agents: z.array(z.string()).optional(),
               }),
@@ -113,7 +116,7 @@ const ProjectMemorySchema = z
                 tags: z.array(z.string()).optional(),
                 pathGlobs: z.array(z.string()).optional(),
                 expiresAt: z.string().optional(),
-                confidence: z.number().min(0).max(1).optional(),
+                confidence: z.number().optional(),
                 sourceSessionId: z.string().optional(),
                 agents: z.array(z.string()).optional(),
               }),
