@@ -141,14 +141,16 @@ describe("SessionFindings.load", () => {
     })
   })
 
-  test("ignores tool.result events from other tools", async () => {
+  test("rebuilds valid metadata.finding from any completed tool result", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
         const f1 = buildFinding({
-          source: { tool: "review", version: "4.x.x", runId: session.id },
+          workflow: "debug",
+          confidence: 0.82,
+          source: { tool: "debug_analyze", version: "4.x.x", runId: session.id },
         })
 
         Recorder.begin(session.id)
@@ -159,18 +161,15 @@ describe("SessionFindings.load", () => {
           model: "test/model",
           directory: tmp.path,
         })
-        // a non-register_finding tool with a metadata.finding payload
         Recorder.emit({
           type: "tool.result",
           sessionID: session.id,
-          tool: "security_scan",
-          callID: "call-other",
+          tool: "debug_analyze",
+          callID: "call-debug",
           status: "completed",
-          metadata: { finding: f1 },
+          metadata: { findingId: f1.findingId, finding: f1 },
           durationMs: 1,
         })
-        // a real register_finding event
-        await emitRegisterFinding(session.id, "call-good", f1)
         Recorder.emit({
           type: "session.end",
           sessionID: session.id,
@@ -183,6 +182,7 @@ describe("SessionFindings.load", () => {
         const findings = SessionFindings.load(session.id)
         expect(findings).toHaveLength(1)
         expect(findings[0].findingId).toBe(f1.findingId)
+        expect(findings[0].source.tool).toBe("debug_analyze")
       },
     })
   })

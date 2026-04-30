@@ -1,10 +1,13 @@
 import fs from "fs/promises"
 import path from "path"
+import type { DebugEngine } from "../debug-engine"
 import { Flag } from "../flag/flag"
+import { Installation } from "../installation"
 import type { Risk } from "../risk/score"
 import type { Session } from "../session"
 import { Log } from "../util/log"
 import { QualityCalibrationModel } from "./calibration-model"
+import { computeFindingId, FindingSchema, type Finding } from "./finding"
 import { QualityModelRegistry } from "./model-registry"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
 import { QualityShadowStore } from "./shadow-store"
@@ -39,6 +42,61 @@ export namespace QualityShadow {
 
   function touchedFiles(session: Session.Info) {
     return [...new Set(session.summary?.diffs?.map((diff) => diff.file) ?? [])]
+  }
+
+  function severityFromConfidence(confidence: number): Finding["severity"] {
+    if (confidence >= 0.8) return "HIGH"
+    if (confidence >= 0.5) return "MEDIUM"
+    return "LOW"
+  }
+
+  function primaryDebugFrame(result: DebugEngine.RootCauseResult): DebugEngine.StackFrame | undefined {
+    return result.chain.find((frame) => frame.role === "failure") ?? result.chain[0]
+  }
+
+  export function debugAnalyzeFinding(input: {
+    session: Session.Info
+    callID: string
+    error: string
+    stackTrace?: string
+    result: DebugEngine.RootCauseResult
+  }): Finding | undefined {
+    const frame = primaryDebugFrame(input.result)
+    if (!frame) return undefined
+
+    const anchor: Finding["anchor"] = frame.symbol
+      ? { kind: "symbol", symbolId: String(frame.symbol.id) }
+      : { kind: "line", line: frame.line }
+    const ruleId = "axcode:debug-analyze"
+    const findingId = computeFindingId({
+      workflow: "debug",
+      category: "bug",
+      file: frame.file,
+      anchor,
+      ruleId,
+    })
+    const graphQuery = input.result.explain.graphQueries[0]
+    return FindingSchema.parse({
+      schemaVersion: 1,
+      findingId,
+      workflow: "debug",
+      category: "bug",
+      severity: severityFromConfidence(input.result.confidence),
+      confidence: input.result.confidence,
+      summary: `Runtime failure candidate: ${input.error.slice(0, 171)}`,
+      file: frame.file,
+      anchor,
+      rationale: `debug_analyze mapped the runtime failure to a ${input.result.chain.length}-frame call chain with confidence ${input.result.confidence.toFixed(2)}${input.result.truncated ? " (truncated)" : ""}.`,
+      evidence: [
+        `debug_analyze call ${input.callID}`,
+        `primary frame: ${frame.file}:${frame.line}${frame.symbol ? ` (${frame.symbol.qualifiedName})` : ""}`,
+        input.stackTrace ? "stack trace was provided" : "no stack trace was provided",
+      ],
+      evidenceRefs: graphQuery ? [{ kind: "graph", id: graphQuery }] : undefined,
+      suggestedNextAction: "Capture runtime evidence for this candidate cause, then verify the fix before resolving it.",
+      ruleId,
+      source: { tool: "debug_analyze", version: Installation.VERSION, runId: input.session.id },
+    })
   }
 
   function replayItem(session: Session.Info, assessment: Risk.Assessment): ProbabilisticRollout.ReplayItem {

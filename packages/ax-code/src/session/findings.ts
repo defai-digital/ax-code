@@ -12,10 +12,11 @@ export namespace SessionFindings {
   const log = Log.create({ service: "session-findings" })
 
   // Walks the session event log and rebuilds the Finding[] emitted by
-  // register_finding tool calls. Each tool.result that carries a
-  // metadata.finding payload is re-validated against FindingSchema v1;
-  // entries that fail validation are skipped (with a warning) so a single
-  // corrupted record cannot block the whole list.
+  // tools. Each completed tool.result that carries a metadata.finding payload
+  // is re-validated against FindingSchema v1; entries that fail validation
+  // are skipped (with a warning) so a single corrupted record cannot block
+  // the whole list. register_finding is the manual producer; debug_analyze
+  // can also emit a graph-backed debug finding.
   export function load(sessionID: SessionID): Finding[] {
     const events = EventQuery.bySession(sessionID)
     // Dedup by findingId (deterministic hash). Multiple tool calls for the
@@ -26,13 +27,12 @@ export namespace SessionFindings {
     const findings: Finding[] = []
     for (const event of events) {
       if (event.type !== "tool.result") continue
-      if (event.tool !== "register_finding") continue
       if (event.status !== "completed") continue
       const candidate = event.metadata?.finding
       if (!candidate) continue
       const parsed = FindingSchema.safeParse(candidate)
       if (!parsed.success) {
-        log.warn("dropping malformed register_finding metadata", {
+        log.warn("dropping malformed finding metadata", {
           sessionID,
           callID: event.callID,
           issues: parsed.error.issues.length,

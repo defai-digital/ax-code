@@ -66,27 +66,41 @@ export const DebugAnalyzeTool = Tool.define("debug_analyze", {
     lines.push(`Heuristics: ${result.explain.heuristicsApplied.join(", ") || "(none)"}`)
     lines.push(`Graph queries consulted: ${result.explain.graphQueries.length}`)
 
+    const session = await Session.get(ctx.sessionID).catch((err) => {
+      log.warn("debug_analyze session lookup failed", { sessionID: ctx.sessionID, err })
+      return undefined
+    })
+    const finding = session
+      ? QualityShadow.debugAnalyzeFinding({
+          session,
+          callID: ctx.callID ?? "debug_analyze",
+          error: args.error,
+          stackTrace: args.stackTrace,
+          result,
+        })
+      : undefined
+
     const metadata = {
       chainLength: result.chain.length,
       resolvedCount: result.chain.filter((f) => f.symbol !== null).length,
       confidence: result.confidence,
       truncated: result.truncated,
       result,
+      findingId: finding?.findingId,
+      finding,
     }
 
-    void Session.get(ctx.sessionID)
-      .then((session) =>
-        QualityShadow.captureDebugAnalyze({
-          session,
-          callID: ctx.callID ?? "debug_analyze",
-          error: args.error,
-          stackTrace: args.stackTrace,
-          metadata,
-        }),
-      )
-      .catch((err) => {
+    if (session) {
+      void QualityShadow.captureDebugAnalyze({
+        session,
+        callID: ctx.callID ?? "debug_analyze",
+        error: args.error,
+        stackTrace: args.stackTrace,
+        metadata,
+      }).catch((err) => {
         log.warn("quality debug shadow capture failed", { sessionID: ctx.sessionID, err })
       })
+    }
 
     return {
       title: `debug_analyze ${args.error.slice(0, 60)}`,
