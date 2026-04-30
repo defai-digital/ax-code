@@ -108,6 +108,7 @@ describe("runtime debug workflow", () => {
             result: applied,
           })
 
+          const planId = planned.metadata.planId as string
           const captured = await (
             await DebugCaptureEvidenceTool.init()
           ).execute(
@@ -115,6 +116,7 @@ describe("runtime debug workflow", () => {
               caseId,
               kind: "instrumentation_result",
               content: "queueDepth=14 activeWorkers=4 timeoutMs=30000",
+              planId,
             },
             ctx(session.id),
           )
@@ -212,6 +214,7 @@ describe("runtime debug workflow", () => {
           const debug = SessionDebug.load(session.id)
           expect(debug.cases).toHaveLength(1)
           expect(debug.evidence).toHaveLength(1)
+          expect(debug.evidence[0].planId).toBe(planned.metadata.planId)
           expect(debug.instrumentationPlans).toHaveLength(1)
           expect(debug.instrumentationPlans[0]).toMatchObject({
             planId: planned.metadata.planId,

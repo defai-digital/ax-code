@@ -69,6 +69,10 @@ export const DebugEvidenceSchema = z.object({
   // Free-form text. Logs and stack traces are usually multi-line plaintext;
   // graph queries are JSON-serialized payloads. Consumers handle their kind.
   content: z.string().min(1).max(DEBUG_EVIDENCE_CONTENT_MAX),
+  // Optional back-reference to the DebugInstrumentationPlan whose probes
+  // produced this evidence. Not part of the evidenceId hash — provenance
+  // metadata only. Validated by debug_capture_evidence against known plan ids.
+  planId: z.string().regex(DEBUG_ID_PATTERN).optional(),
   source: FindingSource,
 })
 export type DebugEvidence = z.infer<typeof DebugEvidenceSchema>

@@ -4,6 +4,7 @@ When to use:
 - A user pasted log output or stack trace relevant to the case.
 - You ran a graph query (find_callers, find_dependents) and want to anchor the result to a hypothesis later.
 - The user added a temporary console.log and shared the output.
+- You captured output from probes in a debug_plan_instrumentation plan — pass planId to link the evidence back to the plan that produced it.
 
 When NOT to use:
 - The output is a generic build log unrelated to the case under investigation. Be specific.
@@ -18,11 +19,13 @@ Input:
   - "stack_trace" — a raw stack trace.
   - "graph_query" — JSON-serialized result from a code-intelligence query.
 - content: the actual evidence text. Should be the raw observation, not a paraphrase.
+- planId: (optional) 16-char hex returned by debug_plan_instrumentation. Provide this when the evidence was produced by probes from a specific instrumentation plan. Creates an auditable provenance link from evidence back to the probe that generated it. Calls with an unknown planId are rejected.
 
 Output:
 - evidenceId: 16-char hex id you'll cite in debug_propose_hypothesis.evidenceRefs.
-- A one-line confirmation.
+- A one-line confirmation (includes plan reference when planId is provided).
 
 Hard rules:
 - Do NOT invent log output or stack traces. Capture only what the user shared or what a tool produced.
 - Do NOT use this tool to capture review or qa findings — that's register_finding's job.
+- When capturing instrumentation_result evidence, always provide the planId from the plan that added the probe.

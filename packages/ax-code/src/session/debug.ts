@@ -121,6 +121,7 @@ export namespace SessionDebug {
   export type IndexedIds = {
     caseIds: Set<string>
     evidenceIds: Set<string>
+    planIds: Set<string>
   }
 
   export type DebugAnalyzeReference = {
@@ -133,9 +134,11 @@ export namespace SessionDebug {
     const loaded = load(sessionID)
     const caseIds = new Set<string>()
     const evidenceIds = new Set<string>()
+    const planIds = new Set<string>()
     for (const c of loaded.cases) caseIds.add(c.caseId)
     for (const e of loaded.evidence) evidenceIds.add(e.evidenceId)
-    return { caseIds, evidenceIds }
+    for (const p of loaded.instrumentationPlans) planIds.add(p.planId)
+    return { caseIds, evidenceIds, planIds }
   }
 
   export function caseIdSet(sessionID: SessionID): Set<string> {
@@ -144,6 +147,10 @@ export namespace SessionDebug {
 
   export function evidenceIdSet(sessionID: SessionID): Set<string> {
     return indexedIds(sessionID).evidenceIds
+  }
+
+  export function planIdSet(sessionID: SessionID): Set<string> {
+    return indexedIds(sessionID).planIds
   }
 
   export function debugAnalyzeReferences(sessionID: SessionID): Map<string, DebugAnalyzeReference> {
