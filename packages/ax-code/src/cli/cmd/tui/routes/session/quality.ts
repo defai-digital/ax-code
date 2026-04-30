@@ -4,7 +4,7 @@ import type { DecisionHints } from "@/session/decision-hints"
 import type { SeverityCounts } from "@/quality/finding-counts"
 import type { VerificationEnvelope } from "@/quality/verification-envelope"
 import type { ReviewResult } from "@/quality/review-result"
-import type { DebugCase, DebugHypothesis } from "@/debug-engine/runtime-debug"
+import type { DebugCase, DebugCaseRollup, DebugHypothesis } from "@/debug-engine/runtime-debug"
 import { ProbabilisticRollout } from "@/quality/probabilistic-rollout"
 import { SessionDebug } from "@/session/debug"
 
@@ -415,14 +415,18 @@ export function renderSessionDecisionHintsSummary(summary: DecisionHints.Summary
 export function renderSessionDebugCasesSummary(input: {
   cases: readonly DebugCase[]
   hypotheses: readonly DebugHypothesis[]
+  rollups?: readonly DebugCaseRollup[]
 }): string {
   if (input.cases.length === 0) return ""
 
-  const rolledUp = SessionDebug.rollup({
-    cases: [...input.cases],
-    evidence: [],
-    hypotheses: [...input.hypotheses],
-  })
+  const rolledUp =
+    input.rollups && input.rollups.length > 0
+      ? input.rollups
+      : SessionDebug.rollup({
+          cases: [...input.cases],
+          evidence: [],
+          hypotheses: [...input.hypotheses],
+        })
 
   let unresolved = 0
   let investigating = 0

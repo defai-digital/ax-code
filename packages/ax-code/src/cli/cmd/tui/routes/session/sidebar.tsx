@@ -265,6 +265,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     renderSessionDebugCasesSummary({
       cases: risk()?.debug?.cases ?? [],
       hypotheses: risk()?.debug?.hypotheses ?? [],
+      rollups: risk()?.debug?.rollups,
     }),
   )
 

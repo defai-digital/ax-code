@@ -3,7 +3,12 @@ import { ProbabilisticRollout } from "../quality/probabilistic-rollout"
 import { FindingSchema } from "../quality/finding"
 import { VerificationEnvelopeSchema } from "../quality/verification-envelope"
 import { ReviewResultSchema } from "../quality/review-result"
-import { DebugCaseSchema, DebugEvidenceSchema, DebugHypothesisSchema } from "../debug-engine/runtime-debug"
+import {
+  DebugCaseRollupSchema,
+  DebugCaseSchema,
+  DebugEvidenceSchema,
+  DebugHypothesisSchema,
+} from "../debug-engine/runtime-debug"
 import z from "zod"
 import { Risk } from "../risk/score"
 import { QualityShadow } from "../quality/shadow-runtime"
@@ -33,6 +38,7 @@ export namespace SessionRisk {
     cases: DebugCaseSchema.array(),
     evidence: DebugEvidenceSchema.array(),
     hypotheses: DebugHypothesisSchema.array(),
+    rollups: DebugCaseRollupSchema.array(),
   })
   export type DebugBundle = z.output<typeof DebugBundle>
 
@@ -120,7 +126,8 @@ export namespace SessionRisk {
     const findings = options?.includeFindings ? SessionFindings.load(sessionID) : undefined
     const envelopes = options?.includeEnvelopes ? SessionVerifications.load(sessionID) : undefined
     const reviewResults = options?.includeReviewResults ? SessionReviewResults.load(sessionID) : undefined
-    const debug = options?.includeDebug ? SessionDebug.load(sessionID) : undefined
+    const loadedDebug = options?.includeDebug ? SessionDebug.load(sessionID) : undefined
+    const debug = loadedDebug ? { ...loadedDebug, rollups: SessionDebug.rollup(loadedDebug) } : undefined
     const decisionHints = options?.includeDecisionHints
       ? DecisionHints.summarizeEvents(EventQuery.recentBySession(sessionID))
       : undefined

@@ -2,7 +2,12 @@ import z from "zod"
 import { FindingSchema } from "../../../../quality/finding"
 import { VerificationEnvelopeSchema } from "../../../../quality/verification-envelope"
 import { ReviewResultSchema } from "../../../../quality/review-result"
-import { DebugCaseSchema, DebugEvidenceSchema, DebugHypothesisSchema } from "../../../../debug-engine/runtime-debug"
+import {
+  DebugCaseRollupSchema,
+  DebugCaseSchema,
+  DebugEvidenceSchema,
+  DebugHypothesisSchema,
+} from "../../../../debug-engine/runtime-debug"
 import { DecisionHints } from "../../../../session/decision-hints"
 
 export const SyncedSessionQualityReadiness = z.object({
@@ -43,6 +48,7 @@ export const SyncedSessionRisk = z.object({
       cases: z.array(DebugCaseSchema),
       evidence: z.array(DebugEvidenceSchema),
       hypotheses: z.array(DebugHypothesisSchema),
+      rollups: z.array(DebugCaseRollupSchema).optional().default([]),
     })
     .optional(),
   decisionHints: DecisionHints.SummarySchema.optional(),

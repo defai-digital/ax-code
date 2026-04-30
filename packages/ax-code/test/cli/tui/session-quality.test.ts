@@ -6,6 +6,7 @@ import {
   hasSidebarSignal,
   renderSessionChecksSummary,
   renderSessionDecisionHintsSummary,
+  renderSessionDebugCasesSummary,
   renderSessionQualityBrief,
   renderSessionQualityInlineSummary,
   renderSessionQualityPrompt,
@@ -979,6 +980,27 @@ describe("tui session quality actions", () => {
         }),
       )
       expect(line).toBe("Blocked · Resolve failed review verification before closing review · +1 more")
+    })
+  })
+
+  describe("renderSessionDebugCasesSummary", () => {
+    const debugCase = {
+      schemaVersion: 1 as const,
+      caseId: "0123456789abcdef",
+      problem: "CLI hangs during startup",
+      status: "open" as const,
+      createdAt: "2026-04-26T18:00:00.000Z",
+      source: { tool: "debug_open_case", version: "4.x.x", runId: "ses_debug" },
+    }
+
+    test("renders debug case summaries from session risk rollups when available", () => {
+      expect(
+        renderSessionDebugCasesSummary({
+          cases: [debugCase],
+          hypotheses: [],
+          rollups: [{ ...debugCase, effectiveStatus: "unresolved" }],
+        }),
+      ).toBe("1 unresolved")
     })
   })
 

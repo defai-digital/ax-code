@@ -42,6 +42,14 @@ export const DebugCaseSchema = z.object({
 })
 export type DebugCase = z.infer<typeof DebugCaseSchema>
 
+// Derived read model used by session/risk and TUI sync consumers. It is not
+// emitted by tools; it makes unresolved/resolved case state explicit without
+// forcing every caller to re-run the hypothesis aggregation rules.
+export const DebugCaseRollupSchema = DebugCaseSchema.extend({
+  effectiveStatus: DebugCaseStatus,
+})
+export type DebugCaseRollup = z.infer<typeof DebugCaseRollupSchema>
+
 // Soft upper bound on a single evidence record. Logs, stack traces, and
 // graph-query payloads are usually well under this — but a pasted megabyte
 // of CI output would be recorded into the session event log on every call

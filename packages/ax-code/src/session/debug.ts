@@ -3,12 +3,14 @@ import {
   computeDebugEvidenceId,
   computeDebugHypothesisId,
   type DebugCase,
+  type DebugCaseRollup,
   DebugCaseSchema,
   type DebugEvidence,
   DebugEvidenceSchema,
   type DebugHypothesis,
   DebugHypothesisSchema,
 } from "../debug-engine/runtime-debug"
+import { resolveCaseStatus } from "../debug-engine/verify-after-fix"
 import { EventQuery } from "../replay/query"
 import { Log } from "../util/log"
 import type { SessionID } from "./schema"
@@ -125,27 +127,14 @@ export namespace SessionDebug {
   // - "unresolved" if all hypotheses are "refuted" (no path forward)
   // - "investigating" if at least one hypothesis is "active"
   // - "open" otherwise (no hypotheses yet)
-  export type CaseRollup = DebugCase & { effectiveStatus: DebugCase["status"] }
+  export type CaseRollup = DebugCaseRollup
 
   export function rollup(loaded: Loaded): CaseRollup[] {
     return loaded.cases.map((c) => {
       const own = loaded.hypotheses.filter((h) => h.caseId === c.caseId)
-      const effective = effectiveStatusFor(c.status, own)
+      const effective = resolveCaseStatus(c.status, own)
       return { ...c, effectiveStatus: effective }
     })
-  }
-
-  function effectiveStatusFor(
-    declared: DebugCase["status"],
-    hypotheses: readonly DebugHypothesis[],
-  ): DebugCase["status"] {
-    // Tool-declared status wins when it explicitly says resolved or
-    // unresolved — those are terminal, the model has signalled closure.
-    if (declared === "resolved" || declared === "unresolved") return declared
-    if (hypotheses.length === 0) return "open"
-    if (hypotheses.some((h) => h.status === "confirmed")) return "resolved"
-    if (hypotheses.every((h) => h.status === "refuted" || h.status === "unresolved")) return "unresolved"
-    return "investigating"
   }
 }
 

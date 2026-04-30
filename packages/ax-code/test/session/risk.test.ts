@@ -648,9 +648,14 @@ describe("session.risk", () => {
           expect(detail.debug?.cases).toHaveLength(1)
           expect(detail.debug?.evidence).toHaveLength(1)
           expect(detail.debug?.hypotheses).toHaveLength(1)
+          expect(detail.debug?.rollups).toHaveLength(1)
           expect(detail.debug?.cases[0].caseId).toBe(caseId)
           expect(detail.debug?.evidence[0].caseId).toBe(caseId)
           expect(detail.debug?.hypotheses[0].evidenceRefs).toContain(evidenceId)
+          expect(detail.debug?.rollups[0]).toMatchObject({
+            caseId,
+            effectiveStatus: "investigating",
+          })
         } finally {
           EventQuery.deleteBySession(session.id)
         }
