@@ -5,6 +5,7 @@ import {
   findSessionQualityAction,
   hasSidebarSignal,
   renderSessionChecksSummary,
+  renderSessionDecisionHintsSummary,
   renderSessionQualityBrief,
   renderSessionQualityInlineSummary,
   renderSessionQualityPrompt,
@@ -16,6 +17,7 @@ import {
 } from "../../../src/cli/cmd/tui/routes/session/quality"
 import type { VerificationEnvelope } from "../../../src/quality/verification-envelope"
 import type { ReviewResult } from "../../../src/quality/review-result"
+import type { DecisionHints } from "../../../src/session/decision-hints"
 
 const SESSION_ROUTE_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/index.tsx")
 
@@ -916,6 +918,67 @@ describe("tui session quality actions", () => {
         reviewResult({ decision: "needs_verification", missingVerification: true }),
       ])
       expect(line).toBe("Review needs verification · 0 findings · 0 blocking · verification needed")
+    })
+  })
+
+  describe("renderSessionDecisionHintsSummary", () => {
+    function summary(overrides: Partial<DecisionHints.Summary> = {}): DecisionHints.Summary {
+      return {
+        source: "replay",
+        readiness: "needs_validation",
+        actionCount: 3,
+        hintCount: 1,
+        hints: [
+          {
+            id: "missing-review-completion",
+            category: "missing_review_completion",
+            confidence: 0.82,
+            title: "Complete the structured review result",
+            body: "Run review_complete before finalizing the review.",
+            evidence: [],
+          },
+        ],
+        ...overrides,
+      }
+    }
+
+    test("returns empty string when no hints exist", () => {
+      expect(renderSessionDecisionHintsSummary(undefined)).toBe("")
+      expect(renderSessionDecisionHintsSummary(summary({ hintCount: 0, hints: [] }))).toBe("")
+    })
+
+    test("renders the first actionable hint for compact sidebar surfaces", () => {
+      expect(renderSessionDecisionHintsSummary(summary())).toBe(
+        "Needs validation · Complete the structured review result",
+      )
+    })
+
+    test("marks blocked hints and preserves overflow count", () => {
+      const line = renderSessionDecisionHintsSummary(
+        summary({
+          readiness: "blocked",
+          hintCount: 2,
+          hints: [
+            {
+              id: "failed-review-verification",
+              category: "failed_validation",
+              confidence: 0.9,
+              title: "Resolve failed review verification before closing review",
+              body: "Review verification failed.",
+              evidence: [],
+            },
+            {
+              id: "missing-review-completion",
+              category: "missing_review_completion",
+              confidence: 0.82,
+              title: "Complete the structured review result",
+              body: "Run review_complete.",
+              evidence: [],
+            },
+          ],
+        }),
+      )
+      expect(line).toBe("Blocked · Resolve failed review verification before closing review · +1 more")
     })
   })
 

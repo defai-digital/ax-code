@@ -1,5 +1,6 @@
 import type { PromptInfo } from "../../component/prompt/history"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
+import type { DecisionHints } from "@/session/decision-hints"
 import type { SeverityCounts } from "@/quality/finding-counts"
 import type { VerificationEnvelope } from "@/quality/verification-envelope"
 import type { ReviewResult } from "@/quality/review-result"
@@ -396,6 +397,14 @@ export function renderSessionReviewResultsSummary(results: readonly ReviewResult
   const blocking = latest.blockingFindingIds.length
   const checks = latest.missingVerification ? "verification needed" : "verified"
   return `Review ${decision} · ${findings} finding${findings === 1 ? "" : "s"} · ${blocking} blocking · ${checks}`
+}
+
+export function renderSessionDecisionHintsSummary(summary: DecisionHints.Summary | undefined): string {
+  if (!summary || summary.hintCount === 0) return ""
+  const status = summary.readiness === "blocked" ? "Blocked" : "Needs validation"
+  const hint = summary.hints[0]
+  const suffix = summary.hintCount > 1 ? ` · +${summary.hintCount - 1} more` : ""
+  return `${status} · ${hint.title}${suffix}`
 }
 
 // One-line summary for the sidebar Debug Cases section. Renders a count of
