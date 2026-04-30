@@ -44,6 +44,7 @@ import { MemorySaveTool } from "./memory"
 import { DebugOpenCaseTool } from "./debug_open_case"
 import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
 import { DebugProposeHypothesisTool } from "./debug_propose_hypothesis"
+import { DebugApplyVerificationTool } from "./debug_apply_verification"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { Effect, Layer, ServiceMap } from "effect"
@@ -182,6 +183,7 @@ export namespace ToolRegistry {
           DebugOpenCaseTool,
           DebugCaptureEvidenceTool,
           DebugProposeHypothesisTool,
+          DebugApplyVerificationTool,
           ...(Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE ? [...DEBUG_ENGINE_TOOLS] : []),

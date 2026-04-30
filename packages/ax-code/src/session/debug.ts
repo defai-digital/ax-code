@@ -24,10 +24,10 @@ export namespace SessionDebug {
   // validation are skipped (with a warning) so a single corrupted record
   // cannot block the rest. Mirrors SessionFindings.load.
   //
-  // The three tools that emit these artefacts are debug_open_case,
-  // debug_capture_evidence, and debug_propose_hypothesis. Loaders here
-  // are tool-name agnostic — any tool.result that carries a metadata
-  // entry of the right shape is included.
+  // The tools that emit these artefacts are debug_open_case,
+  // debug_capture_evidence, debug_propose_hypothesis, and
+  // debug_apply_verification. Loaders here are tool-name agnostic; any
+  // tool.result that carries a metadata entry of the right shape is included.
 
   export type Loaded = {
     cases: DebugCase[]
