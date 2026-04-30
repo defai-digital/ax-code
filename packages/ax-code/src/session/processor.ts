@@ -79,17 +79,35 @@ export namespace SessionProcessor {
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const toolInputCache: Record<string, string> = {}
+    const safeStringify = (value: unknown): string => {
+      try {
+        const serialized = JSON.stringify(value)
+        if (serialized === undefined) return String(value)
+        return serialized
+      } catch {
+        return String(value)
+      }
+    }
     const canonicalize = (obj: unknown): string => {
-      if (typeof obj !== "object" || obj === null) return JSON.stringify(obj)
-      if (Array.isArray(obj)) return "[" + obj.map(canonicalize).join(",") + "]"
-      return (
-        "{" +
-        Object.keys(obj as Record<string, unknown>)
-          .sort()
-          .map((k) => JSON.stringify(k) + ":" + canonicalize((obj as Record<string, unknown>)[k]))
-          .join(",") +
-        "}"
-      )
+      const seen = new WeakSet<object>()
+      const visit = (value: unknown, depth: number): string => {
+        if (depth > 50) return safeStringify(value)
+        if (value === null || typeof value !== "object") return safeStringify(value)
+        if (seen.has(value)) return '"[circular]"'
+        seen.add(value)
+        if (Array.isArray(value)) {
+          return "[" + value.map((entry) => visit(entry, depth + 1)).join(",") + "]"
+        }
+        return (
+          "{" +
+          Object.keys(value as Record<string, unknown>)
+            .sort()
+            .map((key) => JSON.stringify(key) + ":" + visit((value as Record<string, unknown>)[key], depth + 1))
+            .join(",") +
+          "}"
+        )
+      }
+      return visit(obj, 0)
     }
     const recentToolRing: { tool: string; input: string }[] = []
     // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
@@ -452,7 +470,9 @@ export namespace SessionProcessor {
 
                     recentToolRing.push({
                       tool: match.tool,
-                      input: toolInputCache[value.toolCallId] ?? JSON.stringify(value.input ?? match.state.input),
+                      input:
+                        toolInputCache[value.toolCallId] ??
+                        (value.input ? safeStringify(value.input) : safeStringify(match.state.input)),
                     })
                     // Window large enough to evaluate the longest cycle
                     // length (need 2*MAX_CYCLE_LEN entries) plus headroom.
@@ -537,7 +557,9 @@ export namespace SessionProcessor {
                     }
                     recentToolRing.push({
                       tool: match.tool,
-                      input: toolInputCache[value.toolCallId] ?? JSON.stringify(value.input ?? match.state.input),
+                      input:
+                        toolInputCache[value.toolCallId] ??
+                        (value.input ? safeStringify(value.input) : safeStringify(match.state.input)),
                     })
                     const RING_LIMIT = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
                     if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()

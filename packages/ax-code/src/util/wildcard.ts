@@ -8,7 +8,7 @@ export namespace Wildcard {
     let cached = regexCache.get(key)
     if (cached) return cached
     cached = new RegExp("^" + escaped + "$", flags)
-    if (regexCache.size > 500) {
+    if (regexCache.size >= 500) {
       const oldest = regexCache.keys().next().value
       if (oldest !== undefined) regexCache.delete(oldest)
     }

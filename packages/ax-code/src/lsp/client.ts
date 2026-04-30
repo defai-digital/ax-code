@@ -403,7 +403,9 @@ export namespace LSPClient {
         }),
         3000,
       )
-        .catch(() => {})
+        .catch((error) => {
+          log.debug("diagnostics wait timed out", { path: input.path, error })
+        })
         .finally(() => {
           if (t) clearTimeout(t)
           unsub?.()

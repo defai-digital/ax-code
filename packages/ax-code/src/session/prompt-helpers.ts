@@ -539,7 +539,13 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
       const filepath = name.startsWith("~/")
         ? path.resolve(os.homedir(), name.slice(2))
         : path.resolve(Instance.worktree, name)
-      const checkedPath = await fs.realpath(filepath).catch(() => undefined)
+      const checkedPath = await fs.realpath(filepath).catch((error) => {
+        const code = error instanceof Error ? error : error && typeof error === "object" ? error.code : undefined
+        if (code !== "ENOENT") {
+          log.warn("failed to resolve included file path", { filepath, error })
+        }
+        return undefined
+      })
       if (!checkedPath) return
 
       if (name.startsWith("~/") && !Filesystem.contains(os.homedir(), checkedPath)) {

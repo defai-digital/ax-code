@@ -219,7 +219,8 @@ function detectUnboundedMapGrowth(content: string, file: string, maxPerFile: num
     if (findings.length >= maxPerFile) break
     // Check if there's a corresponding .delete() or .size guard
     const hasDelete = content.includes(`${name}.delete(`)
-    const hasSizeCheck = new RegExp(`${name}\\.size\\s*[><=!]`).test(content)
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const hasSizeCheck = new RegExp(`${escapedName}\\.size\\s*[><=!]`).test(content)
     const hasClear = content.includes(`${name}.clear(`)
     if (hasDelete || hasSizeCheck || hasClear) continue
 

@@ -121,7 +121,13 @@ function explainErrorText(error: unknown) {
       asString(record.message) ??
       asString(asRecord(record.error)?.message) ??
       asString(record.reason) ??
-      JSON.stringify(error)
+      (() => {
+        try {
+          return JSON.stringify(error)
+        } catch {
+          return String(error)
+        }
+      })()
     )
   }
   return String(error)

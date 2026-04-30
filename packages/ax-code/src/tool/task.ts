@@ -62,7 +62,6 @@ export const TaskTool = Tool.define("task", async (ctx) => {
     description,
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
-      const config = await Config.get()
       let depth = 0
       let parent: SessionID | undefined = ctx.sessionID
       let aborted = false
@@ -77,6 +76,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       ctx.abort.addEventListener("abort", markAborted, { once: true })
       using _ = defer(() => ctx.abort.removeEventListener("abort", markAborted))
 
+      const config = await Config.get()
       ensureNotAborted()
       while (parent) {
         ensureNotAborted()

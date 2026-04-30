@@ -51,15 +51,21 @@ await Log.init({
 
 process.on("unhandledRejection", (e) => {
   DiagnosticLog.recordProcess("worker.unhandledRejection", { error: e })
+  const error = e as Error
   Log.Default.error("rejection", {
-    e: e instanceof Error ? e.message : e,
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
   })
 })
 
 process.on("uncaughtException", (e) => {
   DiagnosticLog.recordProcess("worker.uncaughtException", { error: e })
+  const error = e as Error
   Log.Default.error("exception", {
-    e: e instanceof Error ? e.message : e,
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
   })
 })
 

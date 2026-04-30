@@ -10,6 +10,7 @@ import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
+import z from "zod"
 
 export type PromptInfo = {
   input: string
@@ -27,6 +28,27 @@ export type PromptInfo = {
         }
       })
   )[]
+}
+
+const PromptInfoSchema = z
+  .object({
+    input: z.string(),
+    mode: z.enum(["normal", "shell"]).optional(),
+    parts: z.array(z.record(z.string(), z.unknown())).default([]),
+  })
+  .passthrough()
+
+const isPromptInfo = (value: unknown): value is PromptInfo => {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as { input?: unknown; mode?: unknown; parts?: unknown }
+  if (typeof candidate.input !== "string") return false
+  if (candidate.mode !== undefined && candidate.mode !== "normal" && candidate.mode !== "shell") return false
+  if (!Array.isArray(candidate.parts)) return false
+  for (const part of candidate.parts) {
+    if (!part || typeof part !== "object") return false
+    if (typeof (part as { type?: unknown }).type !== "string") return false
+  }
+  return true
 }
 
 const MAX_HISTORY_ENTRIES = 50
@@ -75,14 +97,16 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
           const lines = text
             .split("\n")
             .filter(Boolean)
-            .map((line) => {
+            .flatMap((line) => {
               try {
-                return JSON.parse(line)
+                const parsed = PromptInfoSchema.safeParse(JSON.parse(line))
+                if (!parsed.success) return []
+                if (!isPromptInfo(parsed.data)) return []
+                return [parsed.data]
               } catch {
-                return null
+                return []
               }
             })
-            .filter((line): line is PromptInfo => line !== null)
             .slice(-MAX_HISTORY_ENTRIES)
 
           const merged = [...lines, ...store.history].slice(-MAX_HISTORY_ENTRIES)

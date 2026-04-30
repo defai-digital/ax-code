@@ -8,6 +8,7 @@ import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
 import type { ProjectMemory } from "./types"
+import z from "zod"
 
 export function getMemoryPath(projectRoot: string): string {
   return path.join(projectRoot, ".ax-code", "memory.json")
@@ -15,6 +16,122 @@ export function getMemoryPath(projectRoot: string): string {
 
 export function getGlobalMemoryPath(): string {
   return path.join(process.env.AX_CODE_TEST_HOME || os.homedir(), ".ax-code", "memory.json")
+}
+
+const ProjectMemorySchema = z
+  .object({
+    version: z.number(),
+    created: z.string(),
+    updated: z.string(),
+    projectRoot: z.string(),
+    contentHash: z.string(),
+    maxTokens: z.number(),
+    totalTokens: z.number().default(0),
+    sections: z
+      .object({
+        structure: z
+          .object({ content: z.string(), tokens: z.number(), scannedAt: z.string().optional() })
+          .optional(),
+        readme: z
+          .object({ content: z.string(), tokens: z.number(), scannedAt: z.string().optional() })
+          .optional(),
+        config: z
+          .object({ content: z.string(), tokens: z.number(), scannedAt: z.string().optional() })
+          .optional(),
+        patterns: z
+          .object({ content: z.string(), tokens: z.number(), scannedAt: z.string().optional() })
+          .optional(),
+        userPrefs: z
+          .object({
+            entries: z.array(
+              z.object({
+                name: z.string(),
+                body: z.string(),
+                savedAt: z.string(),
+                why: z.string().optional(),
+                howToApply: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                pathGlobs: z.array(z.string()).optional(),
+                expiresAt: z.string().optional(),
+                confidence: z.number().min(0).max(1).optional(),
+                sourceSessionId: z.string().optional(),
+                agents: z.array(z.string()).optional(),
+              }),
+            ),
+            tokens: z.number(),
+          })
+          .optional(),
+        feedback: z
+          .object({
+            entries: z.array(
+              z.object({
+                name: z.string(),
+                body: z.string(),
+                savedAt: z.string(),
+                why: z.string().optional(),
+                howToApply: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                pathGlobs: z.array(z.string()).optional(),
+                expiresAt: z.string().optional(),
+                confidence: z.number().min(0).max(1).optional(),
+                sourceSessionId: z.string().optional(),
+                agents: z.array(z.string()).optional(),
+              }),
+            ),
+            tokens: z.number(),
+          })
+          .optional(),
+        decisions: z
+          .object({
+            entries: z.array(
+              z.object({
+                name: z.string(),
+                body: z.string(),
+                savedAt: z.string(),
+                why: z.string().optional(),
+                howToApply: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                pathGlobs: z.array(z.string()).optional(),
+                expiresAt: z.string().optional(),
+                confidence: z.number().min(0).max(1).optional(),
+                sourceSessionId: z.string().optional(),
+                agents: z.array(z.string()).optional(),
+              }),
+            ),
+            tokens: z.number(),
+          })
+          .optional(),
+        reference: z
+          .object({
+            entries: z.array(
+              z.object({
+                name: z.string(),
+                body: z.string(),
+                savedAt: z.string(),
+                why: z.string().optional(),
+                howToApply: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                pathGlobs: z.array(z.string()).optional(),
+                expiresAt: z.string().optional(),
+                confidence: z.number().min(0).max(1).optional(),
+                sourceSessionId: z.string().optional(),
+                agents: z.array(z.string()).optional(),
+              }),
+            ),
+            tokens: z.number(),
+          })
+          .optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough()
+
+const parseProjectMemory = (text: string) => {
+  const parsed = ProjectMemorySchema.safeParse(JSON.parse(text))
+  if (!parsed.success) {
+    throw new Error(`memory store: invalid memory schema (${parsed.error.message})`)
+  }
+  return parsed.data
 }
 
 // In-process mtime/size-keyed read cache. The injector calls `load` on every
@@ -148,7 +265,7 @@ export async function load(projectRoot: string): Promise<ProjectMemory | null> {
   const text = await readWithCache(memoryPath)
   if (text === null) return null
   try {
-    return JSON.parse(text) as ProjectMemory
+    return parseProjectMemory(text)
   } catch (err) {
     throw new Error(`memory store: corrupt JSON in ${memoryPath}`, { cause: err })
   }
@@ -208,7 +325,7 @@ export async function loadGlobal(): Promise<ProjectMemory | null> {
   const text = await readWithCache(memoryPath)
   if (text === null) return null
   try {
-    return JSON.parse(text) as ProjectMemory
+    return parseProjectMemory(text)
   } catch (err) {
     throw new Error(`memory store: corrupt JSON in ${memoryPath}`, { cause: err })
   }

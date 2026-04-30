@@ -269,6 +269,7 @@ export namespace QualityPromotionEligibility {
   }
 
   export function renderReport(summary: EligibilitySummary) {
+    const reentryContext = summary.reentryContext
     const lines: string[] = []
     lines.push("## ax-code quality promotion eligibility")
     lines.push("")
@@ -285,18 +286,24 @@ export namespace QualityPromotionEligibility {
     lines.push(`- reentry promotion id: ${summary.reentryContext?.promotionID ?? "n/a"}`)
     lines.push(`- reentry policy digest: ${summary.reentryContext?.watchReleasePolicyDigest ?? "n/a"}`)
     lines.push(`- same release policy as current: ${summary.reentryContext?.sameReleasePolicyAsCurrent ?? "n/a"}`)
-    lines.push(`- prior promotion approvers: ${summary.reentryContext?.priorPromotionApprovers.join(", ") || "n/a"}`)
+    lines.push(`- prior promotion approvers: ${(reentryContext?.priorPromotionApprovers ?? []).join(", ") || "n/a"}`)
     lines.push(
-      `- team carryover history: ${summary.reentryContext?.teamCarryoverHistory.map((entry) => `${entry.team}:${entry.weightedReuseScore.toFixed(2)}`).join(", ") || "n/a"}`,
+      `- team carryover history: ${(reentryContext?.teamCarryoverHistory ?? [])
+        .map((entry) => `${entry.team}:${entry.weightedReuseScore.toFixed(2)}`)
+        .join(", ") || "n/a"}`,
     )
     lines.push(
-      `- prior promotion reporting chains: ${summary.reentryContext?.priorPromotionReportingChains.join(", ") || "n/a"}`,
+      `- prior promotion reporting chains: ${(reentryContext?.priorPromotionReportingChains ?? []).join(", ") || "n/a"}`,
     )
     lines.push(
-      `- reviewer carryover history: ${summary.reentryContext?.reviewerCarryoverHistory.map((entry) => `${entry.approver}:${entry.weightedReuseScore.toFixed(2)}`).join(", ") || "n/a"}`,
+      `- reviewer carryover history: ${(reentryContext?.reviewerCarryoverHistory ?? [])
+        .map((entry) => `${entry.approver}:${entry.weightedReuseScore.toFixed(2)}`)
+        .join(", ") || "n/a"}`,
     )
     lines.push(
-      `- reporting chain carryover history: ${summary.reentryContext?.reportingChainCarryoverHistory.map((entry) => `${entry.reportingChain}:${entry.weightedReuseScore.toFixed(2)}`).join(", ") || "n/a"}`,
+      `- reporting chain carryover history: ${(reentryContext?.reportingChainCarryoverHistory ?? [])
+        .map((entry) => `${entry.reportingChain}:${entry.weightedReuseScore.toFixed(2)}`)
+        .join(", ") || "n/a"}`,
     )
     lines.push(`- remediation id: ${summary.remediation?.remediationID ?? "n/a"}`)
     lines.push(`- remediation author: ${summary.remediation?.author ?? "n/a"}`)

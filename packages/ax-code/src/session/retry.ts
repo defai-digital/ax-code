@@ -54,7 +54,9 @@ export namespace SessionRetry {
           }
         }
 
-        return jitter(Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY))
+        return jitter(
+          Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS),
+        )
       }
     }
 

@@ -920,7 +920,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         sync.set("autonomous", next)
         void putJsonWithTimeout("/autonomous", { enabled: next }).catch((error) => {
           Log.Default.warn("failed to update autonomous setting", { error, enabled: next })
-          sync.set("autonomous", !next)
+          if (sync.data.autonomous === next) sync.set("autonomous", !next)
           toast.show({
             message: error instanceof Error ? error.message : "Failed to save autonomous setting",
             variant: "error",

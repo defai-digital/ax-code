@@ -564,6 +564,30 @@ export namespace Worktree {
       await git(["fsmonitor--daemon", "stop"], { cwd: target })
     }
 
+    const cleanupInstanceAndSandbox = async () => {
+      if (Instance.list().includes(directory)) {
+        await Instance.provide({
+          directory,
+          fn: async () => {
+            await Instance.dispose()
+          },
+        }).catch((error) => {
+          log.warn("failed to dispose removed worktree instance", {
+            directory,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
+
+      await Project.removeSandbox(Instance.project.id, directory).catch((error) => {
+        log.warn("failed to remove worktree from project sandboxes", {
+          directory,
+          projectID: Instance.project.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }
+
     const list = await git(["worktree", "list", "--porcelain"], { cwd: Instance.worktree })
     if (list.exitCode !== 0) {
       throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
@@ -577,6 +601,7 @@ export namespace Worktree {
         await stop(directory)
         await clean(directory)
       }
+      await cleanupInstanceAndSandbox()
       return true
     }
 
@@ -607,6 +632,8 @@ export namespace Worktree {
         throw new RemoveFailedError({ message: errorText(deleted) || "Failed to delete worktree branch" })
       }
     }
+
+    await cleanupInstanceAndSandbox()
 
     return true
   })

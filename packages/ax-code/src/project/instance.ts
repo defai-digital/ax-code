@@ -342,6 +342,7 @@ export const Instance = {
     disposal.all = iife(async () => {
       Log.Default.info("disposing all instances")
       const entries = [...cache.entries()]
+      const errors: unknown[] = []
       for (const [key, value] of entries) {
         if (cache.get(key) !== value) continue
 
@@ -357,15 +358,21 @@ export const Instance = {
         }
 
         if (cache.get(key) !== value) continue
-
-        await context
-          .provide(ctx, async () => {
-            await Instance.dispose()
-          })
-          .catch((error) => {
-            if (isHarmlessEffectInterrupt(error)) return
-            throw error
-          })
+        try {
+          await context
+            .provide(ctx, async () => {
+              await Instance.dispose()
+            })
+            .catch((error) => {
+              if (isHarmlessEffectInterrupt(error)) return
+              throw error
+            })
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (errors.length > 0) {
+        throw errors[0]
       }
     })
       .catch((error) => {

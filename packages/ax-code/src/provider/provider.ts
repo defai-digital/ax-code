@@ -644,6 +644,9 @@ export namespace Provider {
   // store, and the tool registry, which is disproportionate for an
   // auth-only change.
   export async function invalidate() {
+    const currentState = await state()
+    currentState.modelPending.clear()
+    currentState.sdkPending.clear()
     await state.invalidate()
   }
 

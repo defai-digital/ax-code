@@ -66,6 +66,10 @@ export namespace FileIgnore {
       whitelist?: string[]
     },
   ) {
+    for (const pattern of opts?.whitelist || []) {
+      if (Glob.match(pattern, filepath)) return false
+    }
+
     // Native fast-path: in-process ignore check via Rust addon
     const native = NativeAddon.fs()
     if (native) {

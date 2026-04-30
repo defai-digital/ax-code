@@ -107,8 +107,13 @@ export namespace SessionCompaction {
     if (pruned > PRUNE_MINIMUM) {
       const timestamp = Date.now()
       const prevTimes = new Map<string, number | undefined>()
+      const hadStateTime = new Map<string, boolean>()
       for (const part of toPrune) {
         if (part.state.status !== "completed") continue
+        hadStateTime.set(part.id, !!part.state.time)
+        if (!part.state.time) {
+          part.state.time = { start: Date.now(), end: Date.now() }
+        }
         prevTimes.set(part.id, part.state.time.compacted)
         part.state.time.compacted = timestamp
       }
@@ -134,8 +139,13 @@ export namespace SessionCompaction {
         for (const part of toPrune) {
           if (part.state.status !== "completed") continue
           const prev = prevTimes.get(part.id)
-          if (prev === undefined) delete part.state.time.compacted
-          else part.state.time.compacted = prev
+          if (!hadStateTime.get(part.id)) {
+            delete (part.state as { time?: unknown }).time
+          } else if (prev === undefined) {
+            delete part.state.time.compacted
+          } else {
+            part.state.time.compacted = prev
+          }
         }
         log.warn("failed to compact parts", { count: toPrune.length, err: e })
       }
@@ -172,16 +182,15 @@ export namespace SessionCompaction {
       for (let i = idx - 1; i >= 0; i--) {
         const msg = input.messages[i]
         if (msg.info.role === "user" && !msg.parts.some((p) => p.type === "compaction")) {
-          replay = msg
-          messages = input.messages.slice(0, i + 1)
+          const parts = msg.parts.filter((part) => part.type !== "file")
+          if (parts.length === 0) continue
+          replay = {
+            ...msg,
+            parts,
+          }
+          messages = [...input.messages.slice(0, i), replay]
           break
         }
-      }
-      const hasContent =
-        replay && messages.some((m) => m.info.role === "user" && !m.parts.some((p) => p.type === "compaction"))
-      if (!hasContent) {
-        replay = undefined
-        messages = input.messages
       }
     }
 
