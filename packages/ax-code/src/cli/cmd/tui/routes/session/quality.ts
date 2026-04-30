@@ -10,7 +10,7 @@ import { SessionDebug } from "@/session/debug"
 
 export type SessionQualityWorkflow = "review" | "debug" | "qa"
 
-type SessionQualitySet =
+export type SessionQualitySet =
   | {
       review?: SyncedSessionQualityReadiness | null
       debug?: SyncedSessionQualityReadiness | null
@@ -55,6 +55,33 @@ export type SessionQualityDetailItem = {
   category: string
   action?: SessionQualityAction
 }
+
+export type SessionQualityOverviewItem =
+  | {
+      kind: "quality"
+      title: string
+      value: string
+      description: string
+      footer?: string
+      category: string
+      action: SessionQualityAction
+    }
+  | {
+      kind: "decision_hints" | "debug_cases"
+      title: string
+      value: string
+      description: string
+      footer: string
+      category: string
+    }
+  | {
+      kind: "empty"
+      title: string
+      value: string
+      description: string
+      category: string
+      disabled: true
+    }
 
 export function sessionQualityWorkflowLabel(workflow: SessionQualityWorkflow) {
   if (workflow === "review") return "Review"
@@ -450,6 +477,76 @@ export function renderSessionDebugCasesSummary(input: {
   if (resolved > 0) parts.push(`${resolved} resolved`)
 
   return parts.join(" · ")
+}
+
+export function sessionQualityOverviewItems(input: {
+  sessionID: string
+  quality: SessionQualitySet
+  decisionHints?: DecisionHints.Summary
+  debug?:
+    | {
+        cases: readonly DebugCase[]
+        hypotheses: readonly DebugHypothesis[]
+        rollups?: readonly DebugCaseRollup[]
+      }
+    | null
+    | undefined
+}): SessionQualityOverviewItem[] {
+  const items: SessionQualityOverviewItem[] = sessionQualityActions({
+    sessionID: input.sessionID,
+    quality: input.quality,
+  }).map((action) => ({
+    kind: "quality" as const,
+    title: action.title,
+    value: sessionQualityActionValue(action),
+    description: action.description,
+    footer: action.footer,
+    category: sessionQualityWorkflowLabel(action.workflow),
+    action,
+  }))
+
+  const hintsSummary = renderSessionDecisionHintsSummary(input.decisionHints)
+  if (hintsSummary.length > 0) {
+    items.push({
+      kind: "decision_hints",
+      title: "Decision Hints",
+      value: "session.quality.decision_hints",
+      description: hintsSummary,
+      footer: "Open activity history to inspect the replay events behind this hint.",
+      category: "Session",
+    })
+  }
+
+  const debugSummary = input.debug
+    ? renderSessionDebugCasesSummary({
+        cases: input.debug.cases,
+        hypotheses: input.debug.hypotheses,
+        rollups: input.debug.rollups,
+      })
+    : ""
+  if (debugSummary.length > 0) {
+    items.push({
+      kind: "debug_cases",
+      title: "Debug Cases",
+      value: "session.quality.debug_cases",
+      description: debugSummary,
+      footer: "Open activity history to inspect debug case, evidence, hypothesis, and verification events.",
+      category: "Debug",
+    })
+  }
+
+  if (items.length > 0) return items
+  return [
+    {
+      kind: "empty",
+      title: "No quality or debug readiness available",
+      value: "empty",
+      description:
+        "Replay readiness and debug workflow state appear after session risk sync finishes or after workflow evidence is recorded.",
+      category: "Overview",
+      disabled: true,
+    },
+  ]
 }
 
 export function renderSessionQualityPrompt(action: SessionQualityAction, sessionID: string) {

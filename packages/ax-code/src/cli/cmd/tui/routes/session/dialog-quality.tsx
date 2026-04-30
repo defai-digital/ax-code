@@ -9,11 +9,9 @@ import { DialogActivity } from "./dialog-activity"
 import {
   findSessionQualityAction,
   renderSessionQualityBrief,
-  sessionQualityActions,
-  sessionQualityActionValue,
   sessionQualityDetailItems,
+  sessionQualityOverviewItems,
   sessionQualityWorkflowLabel,
-  type SessionQualityAction,
   type SessionQualityActionKind,
   type SessionQualityWorkflow,
 } from "./quality"
@@ -27,40 +25,38 @@ export function DialogQuality(props: { sessionID: string; setPrompt: (prompt: Pr
   })
 
   const options = createMemo((): DialogSelectOption<string>[] => {
-    const actions = sessionQualityActions({
+    const risk = sync.session.risk(props.sessionID)
+    const items = sessionQualityOverviewItems({
       sessionID: props.sessionID,
-      quality: sync.session.risk(props.sessionID)?.quality,
+      quality: risk?.quality,
+      decisionHints: risk?.decisionHints,
+      debug: risk?.debug,
     })
 
-    if (actions.length === 0) {
-      return [
-        {
-          title: "No quality readiness available",
-          value: "empty",
-          description:
-            "Replay readiness appears after session risk sync finishes or after workflow evidence is recorded.",
-          category: "Overview",
-          disabled: true,
-        },
-      ]
-    }
-
-    return actions.map((action) => ({
-      title: action.title,
-      value: sessionQualityActionValue(action),
-      description: action.description,
-      footer: action.footer,
-      category: sessionQualityWorkflowLabel(action.workflow),
-      onSelect: (ctx) => {
-        ctx.replace(() => (
-          <DialogQualityDetail
-            sessionID={props.sessionID}
-            workflow={action.workflow}
-            kind={action.kind}
-            setPrompt={props.setPrompt}
-          />
-        ))
-      },
+    return items.map((item) => ({
+      title: item.title,
+      value: item.value,
+      description: item.description,
+      footer: "footer" in item ? item.footer : undefined,
+      category: item.category,
+      disabled: "disabled" in item ? item.disabled : undefined,
+      onSelect:
+        "action" in item
+          ? (ctx) => {
+              ctx.replace(() => (
+                <DialogQualityDetail
+                  sessionID={props.sessionID}
+                  workflow={item.action.workflow}
+                  kind={item.action.kind}
+                  setPrompt={props.setPrompt}
+                />
+              ))
+            }
+          : item.kind === "decision_hints" || item.kind === "debug_cases"
+            ? (ctx) => {
+                ctx.replace(() => <DialogActivity sessionID={props.sessionID} />)
+              }
+            : undefined,
     }))
   })
 

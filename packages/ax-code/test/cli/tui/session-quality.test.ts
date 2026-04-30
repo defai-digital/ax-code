@@ -15,12 +15,14 @@ import {
   sessionQualityActions,
   sessionQualityActionValue,
   sessionQualityDetailItems,
+  sessionQualityOverviewItems,
 } from "../../../src/cli/cmd/tui/routes/session/quality"
 import type { VerificationEnvelope } from "../../../src/quality/verification-envelope"
 import type { ReviewResult } from "../../../src/quality/review-result"
 import type { DecisionHints } from "../../../src/session/decision-hints"
 
 const SESSION_ROUTE_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/index.tsx")
+const DIALOG_QUALITY_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/dialog-quality.tsx")
 
 describe("tui session quality actions", () => {
   test("builds capture evidence actions when no replay items are exportable yet", () => {
@@ -785,6 +787,86 @@ describe("tui session quality actions", () => {
     const sessionRoute = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
 
     expect(sessionRoute).toContain("const hasQualityReadiness = createMemo(() => qualityActions().length > 0)")
+  })
+
+  test("builds quality overview items from decision hints and debug cases without replay readiness", () => {
+    const debugCase = {
+      schemaVersion: 1 as const,
+      caseId: "0123456789abcdef",
+      problem: "CLI hangs during startup",
+      status: "open" as const,
+      createdAt: "2026-04-26T18:00:00.000Z",
+      source: { tool: "debug_open_case", version: "4.x.x", runId: "ses_debug" },
+    }
+
+    const items = sessionQualityOverviewItems({
+      sessionID: "ses_debug_overview",
+      quality: undefined,
+      decisionHints: {
+        source: "replay",
+        readiness: "blocked",
+        actionCount: 3,
+        hintCount: 1,
+        hints: [
+          {
+            id: "failed-debug-verification",
+            category: "failed_validation",
+            confidence: 0.9,
+            title: "Resolve debug verification before finalizing",
+            body: "The latest debug verification did not confirm the hypothesis.",
+            evidence: [],
+          },
+        ],
+      },
+      debug: {
+        cases: [debugCase],
+        hypotheses: [],
+        rollups: [{ ...debugCase, effectiveStatus: "investigating" }],
+      },
+    })
+
+    expect(items).toHaveLength(2)
+    expect(items[0]).toMatchObject({
+      kind: "decision_hints",
+      title: "Decision Hints",
+      description: "Blocked · Resolve debug verification before finalizing",
+      category: "Session",
+    })
+    expect(items[1]).toMatchObject({
+      kind: "debug_cases",
+      title: "Debug Cases",
+      description: "1 investigating",
+      category: "Debug",
+    })
+  })
+
+  test("keeps the quality dialog overview wired to hints and debug case items", async () => {
+    const dialogQuality = await fs.readFile(DIALOG_QUALITY_SRC, "utf8")
+
+    expect(dialogQuality).toContain("sessionQualityOverviewItems")
+    expect(dialogQuality).toContain('item.kind === "decision_hints" || item.kind === "debug_cases"')
+    expect(dialogQuality).toContain("<DialogActivity sessionID={props.sessionID} />")
+  })
+
+  test("returns an empty overview item only when no quality, hint, or debug signal exists", () => {
+    const items = sessionQualityOverviewItems({
+      sessionID: "ses_empty",
+      quality: undefined,
+      decisionHints: undefined,
+      debug: undefined,
+    })
+
+    expect(items).toEqual([
+      {
+        kind: "empty",
+        title: "No quality or debug readiness available",
+        value: "empty",
+        description:
+          "Replay readiness and debug workflow state appear after session risk sync finishes or after workflow evidence is recorded.",
+        category: "Overview",
+        disabled: true,
+      },
+    ])
   })
 
   describe("renderSessionChecksSummary", () => {
