@@ -79,6 +79,36 @@ function verificationEnvelope(workflow: "review" | "debug" | "qa", status: "pass
   }
 }
 
+function debugHypothesisMetadata(
+  status: "active" | "refuted" | "confirmed" | "unresolved" = "active",
+  hypothesisId = "1111111111111111",
+) {
+  return {
+    debugHypothesis: {
+      hypothesisId,
+      status,
+      claim: "worker pool starvation caused the timeout",
+    },
+  }
+}
+
+function debugApplyMetadata(input: {
+  verificationOutcome: "confirmed" | "refuted" | "inconclusive"
+  verificationPolicyFailed?: boolean
+  hypothesisId?: string
+}) {
+  return {
+    verificationOutcome: input.verificationOutcome,
+    verificationPolicyFailed: input.verificationPolicyFailed,
+    effectiveCaseStatus: input.verificationOutcome === "confirmed" ? "resolved" : "investigating",
+    debugHypothesis: {
+      hypothesisId: input.hypothesisId ?? "1111111111111111",
+      status: input.verificationOutcome === "confirmed" ? "confirmed" : "active",
+      claim: "worker pool starvation caused the timeout",
+    },
+  }
+}
+
 describe("DecisionHints", () => {
   test("returns no hints when the session has no file-changing tools", () => {
     const hints = DecisionHints.fromMessages([
@@ -379,5 +409,82 @@ describe("DecisionHints", () => {
       category: "missing_verification",
     })
     expect(hints[0]?.evidence).toContain("review_complete result needs verification")
+  })
+
+  test("keeps active debug hypotheses actionable until debug verification is applied", () => {
+    const hints = DecisionHints.fromEvents([
+      toolCall("c1", "debug_propose_hypothesis", {}),
+      toolResult("c1", "debug_propose_hypothesis", "completed", debugHypothesisMetadata("active")),
+      toolCall("c2", "verify_project", { workflow: "debug" }),
+      toolResult("c2", "verify_project", "completed", {
+        verificationEnvelopes: [verificationEnvelope("debug", "passed")],
+      }),
+    ])
+
+    expect(hints).toHaveLength(1)
+    expect(hints[0]).toMatchObject({
+      id: "missing-debug-verification",
+      category: "missing_verification",
+    })
+    expect(hints[0]?.body).toContain('workflow: "debug"')
+    expect(hints[0]?.body).toContain("debug_apply_verification")
+    expect(hints[0]?.evidence.join("\n")).toContain("worker pool starvation")
+  })
+
+  test("clears debug workflow hints after confirmed debug verification is applied", () => {
+    const hints = DecisionHints.fromEvents([
+      toolCall("c1", "debug_propose_hypothesis", {}),
+      toolResult("c1", "debug_propose_hypothesis", "completed", debugHypothesisMetadata("active")),
+      toolCall("c2", "debug_apply_verification", {}),
+      toolResult(
+        "c2",
+        "debug_apply_verification",
+        "completed",
+        debugApplyMetadata({ verificationOutcome: "confirmed" }),
+      ),
+    ])
+
+    expect(hints).toEqual([])
+  })
+
+  test("does not let an apply result for another hypothesis close an active debug hypothesis", () => {
+    const hints = DecisionHints.fromEvents([
+      toolCall("c1", "debug_propose_hypothesis", {}),
+      toolResult("c1", "debug_propose_hypothesis", "completed", debugHypothesisMetadata("active", "aaaaaaaaaaaaaaaa")),
+      toolCall("c2", "debug_apply_verification", {}),
+      toolResult(
+        "c2",
+        "debug_apply_verification",
+        "completed",
+        debugApplyMetadata({ verificationOutcome: "confirmed", hypothesisId: "bbbbbbbbbbbbbbbb" }),
+      ),
+    ])
+
+    expect(hints).toHaveLength(1)
+    expect(hints[0]).toMatchObject({
+      id: "missing-debug-verification",
+      category: "missing_verification",
+    })
+  })
+
+  test("blocks finalization after inconclusive policy-failed debug verification", () => {
+    const summary = DecisionHints.summarizeEvents([
+      toolCall("c1", "debug_propose_hypothesis", {}),
+      toolResult("c1", "debug_propose_hypothesis", "completed", debugHypothesisMetadata("active")),
+      toolCall("c2", "debug_apply_verification", {}),
+      toolResult(
+        "c2",
+        "debug_apply_verification",
+        "completed",
+        debugApplyMetadata({ verificationOutcome: "inconclusive", verificationPolicyFailed: true }),
+      ),
+    ])
+
+    expect(summary).toMatchObject({
+      readiness: "blocked",
+      hintCount: 1,
+      hints: [{ id: "failed-debug-verification", category: "failed_validation" }],
+    })
+    expect(summary.hints[0]?.evidence).toContain("debug verification policy: required checks failed")
   })
 })

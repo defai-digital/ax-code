@@ -110,7 +110,7 @@ export namespace DecisionHints {
   }
 
   function fromActions(actions: ToolAction[]): Hint[] {
-    return [...editValidationHints(actions), ...reviewWorkflowHints(actions)]
+    return [...editValidationHints(actions), ...reviewWorkflowHints(actions), ...debugWorkflowHints(actions)]
   }
 
   function editValidationHints(actions: ToolAction[]): Hint[] {
@@ -195,6 +195,19 @@ export namespace DecisionHints {
     ]
   }
 
+  function debugWorkflowHints(actions: ToolAction[]): Hint[] {
+    const latestHypothesis = actions.filter(isDebugHypothesisAction).filter(debugHypothesisNeedsVerification).at(-1)
+    if (!latestHypothesis) return []
+
+    const latestApply = latestDebugApplyForHypothesis(actions, latestHypothesis)
+    if (!latestApply) {
+      return [missingDebugVerificationHint(latestHypothesis)]
+    }
+
+    if (debugApplyResolved(latestApply)) return []
+    return [failedDebugVerificationHint(latestApply)]
+  }
+
   function readinessFor(hints: Hint[]): Summary["readiness"] {
     if (hints.some((hint) => hint.category === "failed_validation")) return "blocked"
     if (hints.some((hint) => hint.category === "missing_verification" || hint.category === "missing_review_completion"))
@@ -272,6 +285,18 @@ export namespace DecisionHints {
     return action.tool === "review_complete" && action.status === "completed"
   }
 
+  function isDebugHypothesisAction(action: ToolAction): boolean {
+    return (
+      action.tool === "debug_propose_hypothesis" &&
+      action.status === "completed" &&
+      isRecord(action.metadata?.debugHypothesis)
+    )
+  }
+
+  function isDebugApplyVerificationAction(action: ToolAction): boolean {
+    return action.tool === "debug_apply_verification" && action.status === "completed"
+  }
+
   function reviewCompletionNeedsVerification(action: ToolAction): boolean {
     const reviewResult = action.metadata?.reviewResult
     return isRecord(reviewResult) && reviewResult.missingVerification === true
@@ -301,6 +326,56 @@ export namespace DecisionHints {
       if (!isRecord(result) || typeof result.status !== "string") return []
       return [result.status]
     })
+  }
+
+  function debugHypothesisNeedsVerification(action: ToolAction): boolean {
+    const hypothesis = action.metadata?.debugHypothesis
+    if (!isRecord(hypothesis)) return false
+    return hypothesis.status === "active" || hypothesis.status === "unresolved"
+  }
+
+  function debugApplyResolved(action: ToolAction): boolean {
+    if (action.metadata?.verificationPolicyFailed === true) return false
+    if (action.metadata?.verificationOutcome === "confirmed") return true
+    if (action.metadata?.effectiveCaseStatus === "resolved") return true
+    const hypothesis = action.metadata?.debugHypothesis
+    return isRecord(hypothesis) && hypothesis.status === "confirmed"
+  }
+
+  function debugVerificationOutcome(action: ToolAction): string {
+    const outcome = action.metadata?.verificationOutcome
+    return typeof outcome === "string" && outcome.length > 0 ? outcome : "unknown"
+  }
+
+  function debugHypothesisStatus(action: ToolAction): string {
+    const hypothesis = action.metadata?.debugHypothesis
+    if (!isRecord(hypothesis)) return "unknown"
+    return typeof hypothesis.status === "string" && hypothesis.status.length > 0 ? hypothesis.status : "unknown"
+  }
+
+  function debugHypothesisClaim(action: ToolAction): string | undefined {
+    const hypothesis = action.metadata?.debugHypothesis
+    if (!isRecord(hypothesis)) return undefined
+    return typeof hypothesis.claim === "string" && hypothesis.claim.length > 0 ? hypothesis.claim : undefined
+  }
+
+  function debugHypothesisId(action: ToolAction): string | undefined {
+    const hypothesis = action.metadata?.debugHypothesis
+    if (!isRecord(hypothesis)) return undefined
+    return typeof hypothesis.hypothesisId === "string" && hypothesis.hypothesisId.length > 0
+      ? hypothesis.hypothesisId
+      : undefined
+  }
+
+  function latestDebugApplyForHypothesis(actions: ToolAction[], hypothesisAction: ToolAction): ToolAction | undefined {
+    const hypothesisId = debugHypothesisId(hypothesisAction)
+    return actions
+      .filter((action) => action.index > hypothesisAction.index && isDebugApplyVerificationAction(action))
+      .filter((action) => {
+        const applyHypothesisId = debugHypothesisId(action)
+        return !hypothesisId || !applyHypothesisId || applyHypothesisId === hypothesisId
+      })
+      .at(-1)
   }
 
   function commandText(action: ToolAction): string {
@@ -351,6 +426,34 @@ export namespace DecisionHints {
     }
   }
 
+  function missingDebugVerificationHint(action: ToolAction): Hint {
+    return {
+      id: "missing-debug-verification",
+      category: "missing_verification",
+      confidence: 0.86,
+      title: "Apply debug verification before closing the case",
+      body: 'A debug hypothesis is still active. Run verify_project with workflow: "debug", then call debug_apply_verification with one envelope id from that run.',
+      evidence: [describeDebugHypothesis(action)],
+    }
+  }
+
+  function failedDebugVerificationHint(action: ToolAction): Hint {
+    return {
+      id: "failed-debug-verification",
+      category: "failed_validation",
+      confidence: 0.9,
+      title: "Resolve debug verification before finalizing",
+      body: "The latest debug verification did not confirm the hypothesis. Fix the cause, rerun debug-scoped verification, or leave the case explicitly unresolved.",
+      evidence: [
+        describeDebugApply(action),
+        `debug verification outcome: ${debugVerificationOutcome(action)}`,
+        ...(action.metadata?.verificationPolicyFailed === true
+          ? ["debug verification policy: required checks failed"]
+          : []),
+      ],
+    }
+  }
+
   function describeReviewSignal(action: ToolAction): string {
     if (action.tool === "review_complete") return "review_complete result needs verification"
     if (action.tool === "verify_project") return `review verification tool: ${action.tool}`
@@ -363,6 +466,17 @@ export namespace DecisionHints {
 
   function describeReviewVerificationCount(actions: ToolAction[]): string {
     return `review verification results: ${actions.length}`
+  }
+
+  function describeDebugHypothesis(action: ToolAction): string {
+    const claim = debugHypothesisClaim(action)
+    return claim
+      ? `debug hypothesis status: ${debugHypothesisStatus(action)}; claim: ${claim}`
+      : `debug hypothesis status: ${debugHypothesisStatus(action)}`
+  }
+
+  function describeDebugApply(action: ToolAction): string {
+    return `debug_apply_verification result: ${debugVerificationOutcome(action)}`
   }
 
   function describeChangedFiles(writes: ToolAction[]): string {
