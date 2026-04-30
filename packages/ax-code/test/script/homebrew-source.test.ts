@@ -74,6 +74,9 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain("github.com/defai-digital/ax-code/releases/download")
     expect(text).toContain('gh release download "${TAG}"')
     expect(text).toContain('--repo "${SOURCE_REPO}"')
+    expect(text).toContain('gh repo clone defai-digital/homebrew-ax-code')
+    expect(text).toContain("mktemp -d")
+    expect(text).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
     expect(text).toContain('DARWIN_ARM64_ASSET="ax-code-darwin-arm64.zip"')
     expect(text).toContain('LINUX_ARM64_ASSET="ax-code-linux-arm64.tar.gz"')
     expect(text).toContain('LINUX_X64_ASSET="ax-code-linux-x64-baseline.tar.gz"')
@@ -85,6 +88,11 @@ describe("homebrew source formula generator", () => {
 
   test("homebrew jobs separate source release and tap credentials", async () => {
     const text = await Bun.file(releaseWorkflow).text()
+    const sourceScript = await Bun.file(homebrewSourceScript).text()
+    expect(sourceScript).toContain('gh repo clone defai-digital/homebrew-ax-code')
+    expect(sourceScript).toContain("mktemp -d")
+    expect(sourceScript).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
+
     const defaultJob = text.match(/homebrew:[\s\S]*?(?=\n  finalize:|\n  homebrew-source:|$)/)
     expect(defaultJob).not.toBeNull()
     expect(defaultJob![0]).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}")

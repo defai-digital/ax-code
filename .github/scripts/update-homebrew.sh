@@ -105,9 +105,11 @@ HEADER
 echo "Generated formula:"
 cat /tmp/ax-code.rb
 
-git clone "https://x-access-token:${TAP_AUTH_TOKEN}@github.com/defai-digital/homebrew-ax-code.git" /tmp/tap
-cp /tmp/ax-code.rb /tmp/tap/ax-code.rb
-cd /tmp/tap
+TAP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TAP_DIR}"' EXIT
+GH_TOKEN="${TAP_AUTH_TOKEN}" gh repo clone defai-digital/homebrew-ax-code "${TAP_DIR}" -- --depth 1
+cp /tmp/ax-code.rb "${TAP_DIR}/ax-code.rb"
+cd "${TAP_DIR}"
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
 git add ax-code.rb

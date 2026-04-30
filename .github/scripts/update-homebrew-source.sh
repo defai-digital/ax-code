@@ -7,7 +7,8 @@
 #
 # Inputs (env):
 #   GITHUB_REF_NAME — release tag (e.g. v4.0.16)
-#   GH_TOKEN        — write access to the tap repo
+#   GH_TOKEN        — read access to the ax-code release
+#   TAP_TOKEN       — write access to the tap repo
 #
 # The npm source tarball must already be published before this runs;
 # fetch its sha256 from the registry rather than rebuilding here so the
@@ -86,9 +87,11 @@ HEADER
 echo "Generated ax-code-source.rb:"
 cat /tmp/ax-code-source.rb
 
-git clone "https://x-access-token:${TAP_AUTH_TOKEN}@github.com/defai-digital/homebrew-ax-code.git" /tmp/tap
-cp /tmp/ax-code-source.rb /tmp/tap/ax-code-source.rb
-cd /tmp/tap
+TAP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TAP_DIR}"' EXIT
+GH_TOKEN="${TAP_AUTH_TOKEN}" gh repo clone defai-digital/homebrew-ax-code "${TAP_DIR}" -- --depth 1
+cp /tmp/ax-code-source.rb "${TAP_DIR}/ax-code-source.rb"
+cd "${TAP_DIR}"
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
 git add ax-code-source.rb
