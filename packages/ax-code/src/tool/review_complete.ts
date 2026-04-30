@@ -1,6 +1,9 @@
 import z from "zod"
 import { Installation } from "../installation"
+import { Instance } from "../project/instance"
 import { FindingSchema } from "../quality/finding"
+import { applyPolicyFilter } from "../quality/policy-filter"
+import { Policy } from "../quality/policy"
 import {
   createReviewResult,
   ReviewDecisionEnum,
@@ -85,7 +88,10 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
   }),
   execute: async (args, ctx) => {
     const sessionID = ctx.sessionID as SessionID
-    const findings = selectFindings(sessionID, args.findingIds)
+    const selectedFindings = selectFindings(sessionID, args.findingIds)
+    const policyRules = await Policy.loadReviewRules({ worktree: Instance.worktree, cwd: Instance.directory })
+    const policyFilter = applyPolicyFilter(selectedFindings, policyRules)
+    const findings = policyFilter.kept
     const verificationEnvelopes = selectEnvelopes(sessionID, args.verificationEnvelopeIds)
     const draft = createReviewResult({
       sessionID,
@@ -116,6 +122,12 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       `Verification envelopes: ${draft.verificationEnvelopeIds.length}${
         draft.missingVerification ? " (verification not fully passing)" : ""
       }`,
+      ...(policyRules
+        ? [
+            `Policy findings: ${policyFilter.kept.length} kept, ${policyFilter.dropped.length} dropped`,
+            ...policyFilter.warnings.map((warning) => `Policy warning: ${warning}`),
+          ]
+        : []),
       ...(draft.missingVerification
         ? ['Next: run verify_project with workflow: "review", then cite the passed envelope ids in review_complete.']
         : []),
@@ -128,6 +140,17 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       metadata: {
         reviewId: draft.reviewId,
         reviewResult: draft,
+        policy: policyRules
+          ? {
+              rules: policyRules,
+              keptFindingIds: policyFilter.kept.map((finding) => finding.findingId),
+              droppedFindings: policyFilter.dropped.map((item) => ({
+                findingId: item.finding.findingId,
+                reasons: item.reasons,
+              })),
+              warnings: policyFilter.warnings,
+            }
+          : undefined,
       },
     }
   },

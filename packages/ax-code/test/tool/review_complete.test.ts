@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import * as fs from "fs/promises"
+import path from "path"
 import { Instance } from "../../src/project/instance"
 import { computeFindingId, type Finding } from "../../src/quality/finding"
 import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
@@ -101,6 +103,12 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
+async function writeFile(dir: string, relPath: string, contents: string) {
+  const full = path.join(dir, relPath)
+  await fs.mkdir(path.dirname(full), { recursive: true })
+  await fs.writeFile(full, contents, "utf8")
+}
+
 describe("ReviewCompleteTool", () => {
   test("approves when review findings are non-blocking and verification passed", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -159,6 +167,86 @@ describe("ReviewCompleteTool", () => {
         const result = await tool.execute({ summary: "Needs changes." }, ctx(session.id))
         expect(result.metadata.reviewResult.decision).toBe("request_changes")
         expect(result.metadata.reviewResult.blockingFindingIds).toEqual([high.findingId])
+      },
+    })
+  })
+
+  test("applies review policy filtering before recommending the decision", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ scope_glob: ["src/**"] }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const inScope = finding(session.id, {
+          severity: "LOW",
+          file: "src/foo.ts",
+          summary: "Minor in-scope cleanup",
+        })
+        const outOfScopeHigh = finding(session.id, {
+          severity: "HIGH",
+          file: "docs/readme.md",
+          summary: "Docs issue outside review scope",
+        })
+        const passed = envelope(session.id)
+
+        Recorder.begin(session.id)
+        emitFinding(session.id, inScope)
+        emitFinding(session.id, outOfScopeHigh)
+        emitEnvelope(session.id, passed)
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const tool = await ReviewCompleteTool.init()
+        const result = await tool.execute({ summary: "Review passed after applying project policy scope." }, ctx(session.id))
+
+        expect(result.title).toBe("review_complete approve")
+        expect(result.metadata.reviewResult).toMatchObject({
+          decision: "approve",
+          recommendedDecision: "approve",
+          findingIds: [inScope.findingId],
+          blockingFindingIds: [],
+        })
+        expect(result.metadata.policy).toMatchObject({
+          keptFindingIds: [inScope.findingId],
+          droppedFindings: [
+            {
+              findingId: outOfScopeHigh.findingId,
+              reasons: expect.arrayContaining([expect.stringContaining("not matched by scope_glob")]),
+            },
+          ],
+        })
+        expect(result.output).toContain("Policy findings: 1 kept, 1 dropped")
+      },
+    })
+  })
+
+  test("surfaces review policy warnings without blocking completion", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ required_categories: ["security"] }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const low = finding(session.id)
+        const passed = envelope(session.id)
+
+        Recorder.begin(session.id)
+        emitFinding(session.id, low)
+        emitEnvelope(session.id, passed)
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const tool = await ReviewCompleteTool.init()
+        const result = await tool.execute({ summary: "Review complete with a policy warning." }, ctx(session.id))
+
+        expect(result.metadata.reviewResult.decision).toBe("approve")
+        expect(result.metadata.policy).toBeDefined()
+        if (!result.metadata.policy) throw new Error("missing policy metadata")
+        expect(result.metadata.policy.warnings).toEqual(["required_categories missing from kept findings: security"])
+        expect(result.output).toContain("Policy warning: required_categories missing from kept findings: security")
       },
     })
   })
