@@ -257,13 +257,16 @@ jobs:
             # suppress output but allow it to fail (broken-pipe on CI runners
             # can exit non-zero without affecting the formula state).
             brew tap defai-digital/ax-code 2>&1 || true
-            if brew info defai-digital/ax-code/ax-code 2>&1 | grep -q "${VERSION}"; then
+            # Avoid `grep -q` under pipefail; Homebrew can continue writing
+            # after grep matches, turning a real match into a SIGPIPE failure.
+            BREW_INFO="$(brew info defai-digital/ax-code/ax-code 2>&1 || true)"
+            if [[ "$BREW_INFO" == *"stable ${VERSION}"* ]]; then
               echo "Homebrew formula ${VERSION} is available (attempt ${attempt})"
               break
             fi
             if [ "$attempt" = "60" ]; then
               echo "FAIL: Homebrew formula did not converge to ${VERSION} after 10 minutes"
-              brew info defai-digital/ax-code/ax-code || true
+              echo "$BREW_INFO"
               exit 1
             fi
             sleep 10

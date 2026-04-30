@@ -184,7 +184,9 @@ describe("homebrew source formula generator", () => {
     expect(homebrewStep).not.toBeNull()
     expect(homebrewStep![0]).toContain("brew update 2>&1 || true")
     expect(homebrewStep![0]).toContain("brew tap defai-digital/ax-code 2>&1 || true")
-    expect(homebrewStep![0]).toContain("brew info defai-digital/ax-code/ax-code 2>&1 | grep")
+    expect(homebrewStep![0]).toContain('BREW_INFO="$(brew info defai-digital/ax-code/ax-code 2>&1 || true)"')
+    expect(homebrewStep![0]).toContain('[[ "$BREW_INFO" == *"stable ${VERSION}"* ]]')
+    expect(homebrewStep![0]).not.toContain("brew info defai-digital/ax-code/ax-code 2>&1 | grep -q")
     expect(homebrewStep![0]).not.toContain("brew update\n")
   })
 
