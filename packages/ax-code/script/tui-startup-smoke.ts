@@ -27,6 +27,12 @@ type ProcessEvent = {
   data?: unknown
 }
 
+type SmokePty = {
+  readonly pid: number
+  write(data: string): void
+  kill(signal?: string): void
+}
+
 export type TuiStartupSmokeOptions = {
   bin: string
   cwd: string
@@ -60,6 +66,74 @@ function outputTail(output: string, limit = 4_000) {
     .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
     .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, "")
     .slice(-limit)
+}
+
+function processAlive(pid: number) {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function signalProcessTree(pid: number, signal: "SIGINT" | "SIGTERM" | "SIGKILL") {
+  if (!Number.isInteger(pid) || pid <= 0) return
+
+  if (process.platform === "win32") {
+    try {
+      Bun.spawn(["taskkill", "/pid", String(pid), signal === "SIGKILL" ? "/f" : "", "/t"].filter(Boolean), {
+        stdout: "ignore",
+        stderr: "ignore",
+      })
+    } catch {}
+    return
+  }
+
+  try {
+    process.kill(-pid, signal)
+    return
+  } catch {}
+
+  try {
+    process.kill(pid, signal)
+  } catch {}
+}
+
+async function terminatePtyProcessTree(
+  pty: SmokePty,
+  exitPromise: Promise<{ exitCode: number; signal?: string | number }>,
+  exited: () => boolean,
+) {
+  const pid = pty.pid
+
+  if (!exited()) {
+    try {
+      pty.write("\x03")
+    } catch {}
+    signalProcessTree(pid, "SIGINT")
+    await wait(250)
+  }
+
+  if (!exited() || processAlive(pid)) {
+    signalProcessTree(pid, "SIGTERM")
+    await wait(250)
+  }
+
+  if (!exited()) {
+    try {
+      pty.kill()
+    } catch {}
+    await Promise.race([exitPromise, wait(1_000)])
+  }
+
+  if (processAlive(pid)) {
+    signalProcessTree(pid, "SIGKILL")
+    await wait(250)
+  }
+
+  return !processAlive(pid)
 }
 
 function resolveCommand(command: string) {
@@ -195,6 +269,7 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
     resolveExit?.(event)
   })
 
+  let startupFailed = false
   try {
     const events = await waitForTuiStartup(input.debugBaseDir, timeoutMs, () => exit)
     const seen = new Set(eventNames(events))
@@ -208,6 +283,7 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
       )})`,
     )
   } catch (error) {
+    startupFailed = true
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(
       [
@@ -221,14 +297,15 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
     )
   } finally {
     if (!exit) {
-      try {
-        pty.write("\x03")
-      } catch {}
-      await wait(100)
-      try {
-        pty.kill()
-      } catch {}
-      await Promise.race([exitPromise, wait(1_000)])
+      const terminated = await terminatePtyProcessTree(pty, exitPromise, () => !!exit)
+      if (!terminated) {
+        const message = `installed TUI startup smoke cleanup failed: process tree rooted at pid ${pty.pid} survived`
+        if (startupFailed) {
+          console.error(message)
+        } else {
+          throw new Error(message)
+        }
+      }
     }
     onData.dispose()
     onExit.dispose()

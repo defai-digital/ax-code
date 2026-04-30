@@ -45,7 +45,9 @@ describe("source-bundle package.json scripts", () => {
     expect(pkg.scripts["bundle:source:tui-smoke"]).toContain("script/source-install-smoke.ts")
     expect(pkg.scripts["bundle:source:tui-smoke"]).toContain("--tui-startup-smoke")
 
-    const installSmokeScript = await Bun.file(path.resolve(import.meta.dir, "../../script/source-install-smoke.ts")).text()
+    const installSmokeScript = await Bun.file(
+      path.resolve(import.meta.dir, "../../script/source-install-smoke.ts"),
+    ).text()
     expect(installSmokeScript).toContain("runTuiStartupSmoke")
     expect(installSmokeScript).toContain('backendTransport: "worker"')
     expect(installSmokeScript).toContain("AX_CODE_INSTALL_SMOKE_TEMP_ROOT")
@@ -57,6 +59,8 @@ describe("source-bundle package.json scripts", () => {
     expect(tuiSmokeScript).toContain("AX_CODE_TUI_WORKER_READY_TIMEOUT_MS")
     expect(tuiSmokeScript).toContain("tui.startup.appMounted")
     expect(tuiSmokeScript).toContain("pty.kill()")
+    expect(tuiSmokeScript).toContain("terminatePtyProcessTree")
+    expect(tuiSmokeScript).toContain("process.kill(-pid")
   })
 
   test("tui:startup-smoke exposes a reusable installed-binary OpenTUI gate", async () => {
