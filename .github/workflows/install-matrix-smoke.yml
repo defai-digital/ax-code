@@ -257,7 +257,7 @@ jobs:
             # suppress output but allow it to fail (broken-pipe on CI runners
             # can exit non-zero without affecting the formula state).
             brew tap defai-digital/ax-code 2>&1 || true
-            if brew info defai-digital/ax-code/ax-code 2>/dev/null | grep -q "${VERSION}"; then
+            if brew info defai-digital/ax-code/ax-code 2>&1 | grep -q "${VERSION}"; then
               echo "Homebrew formula ${VERSION} is available (attempt ${attempt})"
               break
             fi
