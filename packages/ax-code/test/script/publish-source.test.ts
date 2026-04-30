@@ -1,8 +1,26 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
+import {
+  OPENTUI_NATIVE_PACKAGES,
+  buildChannelForVersion,
+  sourceDistributionCmdShim,
+  sourceDistributionPostinstall,
+  sourceDistributionUnixShim,
+  sourcePackageManifest,
+} from "../../script/source-package"
 
 const publishSourcePath = path.resolve(import.meta.dir, "../../script/publish-source.ts")
 const buildSourcePath = path.resolve(import.meta.dir, "../../script/build-source.ts")
+
+const manifest = () =>
+  sourcePackageManifest({
+    packageName: "@defai.digital/ax-code-source",
+    version: "4.5.5",
+    bunDependencyRange: "^1.3.12",
+    opentuiCoreVersion: "0.1.105",
+    license: "MIT",
+    sourceDistTag: "latest",
+  })
 
 describe("script.publish-source", () => {
   test("uses --workspaces=false for npm pack and publish (matches other publish scripts)", async () => {
@@ -19,8 +37,9 @@ describe("script.publish-source", () => {
     // hardcoded "source". The env override `AX_CODE_SOURCE_TAG` still
     // wins, and `npm publish` consumes the resolved tag verbatim.
     expect(text).toContain("AX_CODE_SOURCE_TAG ?? buildChannelForVersion(buildVersion)")
-    expect(text).toContain("function buildChannelForVersion(version: string)")
     expect(text).toContain("--tag ${SOURCE_DIST_TAG}")
+    expect(buildChannelForVersion("4.5.5")).toBe("latest")
+    expect(buildChannelForVersion("4.6.0-beta.2")).toBe("beta")
   })
 
   test("publishes a distinct source package to avoid npm name/version collisions", async () => {
@@ -33,80 +52,76 @@ describe("script.publish-source", () => {
     // Optional deps can be skipped with --no-optional, which would break
     // the source distribution at runtime. ADR-002 explicitly requires bun
     // to be a hard dep.
-    const text = await Bun.file(publishSourcePath).text()
-    const depsBlockMatch = text.match(/dependencies:\s*\{[\s\S]*?\}/)
-    expect(depsBlockMatch).not.toBeNull()
-    expect(depsBlockMatch![0]).toContain("bun:")
-    const optionalDepsBlockMatch = text.match(/optionalDependencies:\s*Object\.fromEntries/)
-    expect(optionalDepsBlockMatch).not.toBeNull()
-    expect(text).not.toMatch(/optionalDependencies:\s*\{[\s\S]*?bun:/)
+    const pkg = manifest()
+    expect(pkg.dependencies).toEqual({ bun: "^1.3.12" })
+    expect(pkg.optionalDependencies).not.toHaveProperty("bun")
   })
 
   test("declares OpenTUI native packages as optional runtime dependencies", async () => {
-    const text = await Bun.file(publishSourcePath).text()
-    expect(text).toContain('const OPENTUI_CORE_VERSION = pkg.dependencies["@opentui/core"]')
-    expect(text).toContain("OPENTUI_NATIVE_PACKAGES")
-    for (const pkgName of [
-      "@opentui/core-darwin-arm64",
-      "@opentui/core-darwin-x64",
-      "@opentui/core-linux-arm64",
-      "@opentui/core-linux-x64",
-      "@opentui/core-win32-arm64",
-      "@opentui/core-win32-x64",
-    ]) {
-      expect(text).toContain(pkgName)
+    const pkg = manifest()
+    for (const pkgName of OPENTUI_NATIVE_PACKAGES) {
+      expect(pkg.optionalDependencies[pkgName]).toBe("0.1.105")
     }
-    expect(text).toContain("optionalDependencies: Object.fromEntries")
   })
 
-  test("unix shim resolves $0 through symlinks", async () => {
+  test("unix shim resolves $0 through symlinks", () => {
     // npm puts a symlink at node_modules/.bin/ax-code -> the real script.
     // Without symlink resolution the shim looks for bundle/ in .bin/'s
     // parent dir (node_modules/) instead of the package root.
-    const text = await Bun.file(publishSourcePath).text()
+    const text = sourceDistributionUnixShim()
     expect(text).toContain('while [ -L "$script" ]')
     expect(text).toContain("readlink")
   })
 
-  test("unix shim refuses to launch without a usable bun", async () => {
-    const text = await Bun.file(publishSourcePath).text()
+  test("unix shim refuses to launch without a usable bun", () => {
+    const text = sourceDistributionUnixShim()
     expect(text).toContain("ax-code: bun runtime not found")
     expect(text).toContain("exit 127")
   })
 
-  test("postinstall honors AX_CODE_SKIP_POSTINSTALL", async () => {
+  test("postinstall honors AX_CODE_SKIP_POSTINSTALL", () => {
     // CI environments without bun should be able to skip the bun probe
     // and still install the package (the shim will fail at runtime if
     // bun never gets resolved, which is the user's choice).
-    const text = await Bun.file(publishSourcePath).text()
+    const text = sourceDistributionPostinstall()
     expect(text).toContain('AX_CODE_SKIP_POSTINSTALL === "1"')
   })
 
-  test("postinstall writes the resolved bun path to .ax-code-bun-path", async () => {
+  test("postinstall writes the resolved bun path to .ax-code-bun-path", () => {
     // The shim reads this file rather than doing a PATH lookup on every
     // invocation — keeps cold-start latency at one syscall.
-    const text = await Bun.file(publishSourcePath).text()
+    const text = sourceDistributionPostinstall()
     expect(text).toContain("BUN_PATH_FILE")
     expect(text).toContain(".ax-code-bun-path")
   })
 
-  test("source shims fall back to PATH when the cached bun path is stale", async () => {
-    const text = await Bun.file(publishSourcePath).text()
-    expect(text).toContain('if [ -z "$BUN_BIN" ] || [ ! -x "$BUN_BIN" ]; then')
-    expect(text).toContain('BUN_BIN="$(command -v bun || true)"')
-    expect(text).toContain('if not "%BUN_BIN%"=="" if exist "%BUN_BIN%" goto ax_code_have_bun')
-    expect(text).toContain("where bun")
-    expect(text).toContain(":ax_code_have_bun")
+  test("source shims fall back to PATH when the cached bun path is stale", () => {
+    const unix = sourceDistributionUnixShim()
+    const windows = sourceDistributionCmdShim()
+    expect(unix).toContain('if [ -z "$BUN_BIN" ] || [ ! -x "$BUN_BIN" ]; then')
+    expect(unix).toContain('BUN_BIN="$(command -v bun || true)"')
+    expect(windows).toContain('if not "%BUN_BIN%"=="" if exist "%BUN_BIN%" goto ax_code_have_bun')
+    expect(windows).toContain("where bun")
+    expect(windows).toContain(":ax_code_have_bun")
   })
 
-  test("source manifest shape pins required fields", async () => {
-    const text = await Bun.file(publishSourcePath).text()
+  test("source manifest shape pins required fields", () => {
+    const pkg = manifest()
     // type: module — required so postinstall can be ESM
-    expect(text).toMatch(/type:\s*"module"/)
+    expect(pkg.type).toBe("module")
     // bin entry maps the package to the shim
-    expect(text).toMatch(/"ax-code":\s*"\.\/bin\/ax-code"/)
+    expect(pkg.bin).toEqual({ "ax-code": "./bin/ax-code" })
     // engines.bun pins the runtime range
-    expect(text).toContain("BUN_DEPENDENCY_RANGE")
+    expect(pkg.engines).toEqual({ bun: "^1.3.12" })
+    expect(pkg.publishConfig.tag).toBe("latest")
+  })
+
+  test("publish script delegates source runtime artifacts to source-package helpers", async () => {
+    const text = await Bun.file(publishSourcePath).text()
+    expect(text).toContain("sourceDistributionUnixShim()")
+    expect(text).toContain("sourceDistributionCmdShim()")
+    expect(text).toContain("sourceDistributionPostinstall()")
+    expect(text).toContain("sourcePackageManifest({")
   })
 })
 
