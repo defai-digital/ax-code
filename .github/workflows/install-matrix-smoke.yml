@@ -64,11 +64,6 @@ jobs:
       AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
       AX_CODE_DISABLE_MODELS_FETCH: "1"
       AX_CODE_DISABLE_PROJECT_CONFIG: "1"
-      AX_CODE_TEST_HOME: ${{ runner.temp }}/ax-code-install-matrix-home
-      XDG_CONFIG_HOME: ${{ runner.temp }}/ax-code-install-matrix-home/.config
-      XDG_CACHE_HOME: ${{ runner.temp }}/ax-code-install-matrix-home/.cache
-      XDG_DATA_HOME: ${{ runner.temp }}/ax-code-install-matrix-home/.local/share
-      XDG_STATE_HOME: ${{ runner.temp }}/ax-code-install-matrix-home/.local/state
     steps:
       # MUST run before any `shell: bash` step. Alpine 3.20's base image
       # ships only BusyBox `ash`; the very first action-step that declares
@@ -79,6 +74,15 @@ jobs:
         if: ${{ matrix.container == 'alpine:3.20' }}
         run: |
           apk add --no-cache bash nodejs npm curl
+
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-install-matrix-home" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.cache" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.local/share" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.local/state" >> "$GITHUB_ENV"
 
       - name: Resolve version under test
         id: version
@@ -205,12 +209,16 @@ jobs:
       AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
       AX_CODE_DISABLE_MODELS_FETCH: "1"
       AX_CODE_DISABLE_PROJECT_CONFIG: "1"
-      AX_CODE_TEST_HOME: ${{ runner.temp }}/ax-code-homebrew-smoke-home
-      XDG_CONFIG_HOME: ${{ runner.temp }}/ax-code-homebrew-smoke-home/.config
-      XDG_CACHE_HOME: ${{ runner.temp }}/ax-code-homebrew-smoke-home/.cache
-      XDG_DATA_HOME: ${{ runner.temp }}/ax-code-homebrew-smoke-home/.local/share
-      XDG_STATE_HOME: ${{ runner.temp }}/ax-code-homebrew-smoke-home/.local/state
     steps:
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.cache" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.local/share" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.local/state" >> "$GITHUB_ENV"
+
       - name: Resolve version under test
         id: version
         shell: bash

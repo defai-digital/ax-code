@@ -87,12 +87,16 @@ jobs:
       AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
       AX_CODE_DISABLE_MODELS_FETCH: "1"
       AX_CODE_DISABLE_PROJECT_CONFIG: "1"
-      AX_CODE_TEST_HOME: ${{ runner.temp }}/ax-code-release-build-home
-      XDG_CONFIG_HOME: ${{ runner.temp }}/ax-code-release-build-home/.config
-      XDG_CACHE_HOME: ${{ runner.temp }}/ax-code-release-build-home/.cache
-      XDG_DATA_HOME: ${{ runner.temp }}/ax-code-release-build-home/.local/share
-      XDG_STATE_HOME: ${{ runner.temp }}/ax-code-release-build-home/.local/state
     steps:
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-release-build-home" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-release-build-home/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.cache" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/share" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/state" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v6
