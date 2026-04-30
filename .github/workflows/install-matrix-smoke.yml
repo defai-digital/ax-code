@@ -219,10 +219,15 @@ jobs:
           set -e
           VERSION="${{ steps.version.outputs.version }}"
           echo "Waiting for Homebrew tap formula ax-code ${VERSION}..."
-          brew update
+          # Initial update to bring local tap state up to date.
+          brew update 2>&1 || true
           for attempt in $(seq 1 60); do
-            brew tap defai-digital/ax-code >/dev/null
-            if brew info defai-digital/ax-code/ax-code | grep -q "${VERSION}"; then
+            # Re-fetch the tap on each attempt so brew info reflects the
+            # latest formula. brew tap on an already-tapped tap runs git pull;
+            # suppress output but allow it to fail (broken-pipe on CI runners
+            # can exit non-zero without affecting the formula state).
+            brew tap defai-digital/ax-code 2>&1 || true
+            if brew info defai-digital/ax-code/ax-code 2>/dev/null | grep -q "${VERSION}"; then
               echo "Homebrew formula ${VERSION} is available (attempt ${attempt})"
               break
             fi
@@ -231,7 +236,6 @@ jobs:
               brew info defai-digital/ax-code/ax-code || true
               exit 1
             fi
-            brew update
             sleep 10
           done
           brew install defai-digital/ax-code/ax-code

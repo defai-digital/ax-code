@@ -162,19 +162,21 @@ jobs:
           CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
         run: |
           TAG="${{ github.ref_name }}"
-          # Idempotent: if the release already exists (e.g. created manually
-          # from a release-notes file), skip creation and proceed to upload.
-          # Without this step the homebrew job's `gh release download` fails
-          # with "release not found" and silently skips the tap update.
           PRERELEASE_FLAG=""
           if [ "$CHANNEL" != "latest" ]; then
             PRERELEASE_FLAG="--prerelease"
           fi
+          # Create a draft release so the install-matrix-smoke workflow (which
+          # triggers on release: [published]) does not fire before npm and
+          # Homebrew artifacts are ready. The finalize job un-drafts it after
+          # all publish jobs complete.
+          # Idempotent: skip if any release (draft or published) already exists.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --title "$TAG" \
               --generate-notes \
               --verify-tag \
+              --draft \
               $PRERELEASE_FLAG
           fi
 
@@ -288,6 +290,34 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
+
+  # Publish the GitHub release (remove draft status) only after npm packages
+  # and Homebrew formulae are fully propagated. The install-matrix-smoke
+  # workflow triggers on release: [published], so this ordering guarantees
+  # the smoke starts after all distribution channels are ready.
+  finalize:
+    needs:
+      - publish-npm
+      - publish-source
+      - homebrew
+      - homebrew-source
+    # Run even when homebrew/homebrew-source are skipped (prerelease tags).
+    # Skip only if a required publish job failed or was cancelled.
+    if: >-
+      always() && !cancelled() &&
+      needs.publish-npm.result == 'success' &&
+      needs.publish-source.result == 'success' &&
+      (needs.homebrew.result == 'success' || needs.homebrew.result == 'skipped') &&
+      (needs.homebrew-source.result == 'success' || needs.homebrew-source.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
 
   # Compatibility Homebrew formula for users who installed ax-code-source
   # during the transitional source-channel rollout.
