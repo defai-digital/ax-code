@@ -15,6 +15,7 @@ Output:
 - verificationEnvelopes: one envelope each for typecheck, lint, and tests
 - repairHandoff: when requested, candidate and rejected repair handoff decisions with brief text for candidates
 - policy: when workflow is "review" or "qa", `.ax-code/review.rules.json` / `.ax-code/qa.rules.json` may set `required_checks`; any required check that is skipped makes the run fail.
+- policyContext: when workflow is "review" or "qa", `.ax-code/review.md` / `.ax-code/qa.md` may be loaded as workflow-specific prose context. It is not loaded for debug or general prompts.
 
 When to use:
 - After a code edit to produce citable verification evidence

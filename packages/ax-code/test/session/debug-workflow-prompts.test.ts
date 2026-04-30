@@ -31,6 +31,8 @@ describe("runtime debug prompt guidance", () => {
         expect(text).not.toMatch(claim)
       }
       expect(text).toContain("unresolved")
+      expect(text).toContain("debug_plan_instrumentation")
+      expect(text).toMatch(/temporary\s+instrumentation/i)
       expect(text).toContain("verify_project")
       expect(text).toContain('workflow: "debug"')
       expect(text).toContain("debug_apply_verification")

@@ -218,8 +218,78 @@ describe("VerifyProjectTool", () => {
     })
   })
 
+  test("qa workflow loads qa prose policy without review prose", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.md", "REVIEW_POLICY_TOKEN")
+    await writeFile(tmp.path, ".ax-code/qa.md", "QA_POLICY_TOKEN: run the focused regression suite first.")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await VerifyProjectTool.init()
+
+        const result = await tool.execute(
+          {
+            workflow: "qa",
+            commands: {
+              typecheck: null,
+              lint: null,
+              test: null,
+            },
+          },
+          ctx(),
+        )
+
+        expect(result.title).toBe("verify_project passed")
+        expect(result.output).toContain("Project QA policy: loaded")
+        expect(result.output).toContain("QA_POLICY_TOKEN")
+        expect(result.output).not.toContain("REVIEW_POLICY_TOKEN")
+        expect(result.metadata.policyContext).toMatchObject({
+          workflow: "qa",
+          truncated: false,
+          text: expect.stringContaining("QA_POLICY_TOKEN"),
+        })
+      },
+    })
+  })
+
+  test("review workflow loads review prose policy without qa prose", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.md", "REVIEW_POLICY_TOKEN: reject missing verification.")
+    await writeFile(tmp.path, ".ax-code/qa.md", "QA_POLICY_TOKEN")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await VerifyProjectTool.init()
+
+        const result = await tool.execute(
+          {
+            workflow: "review",
+            commands: {
+              typecheck: null,
+              lint: null,
+              test: null,
+            },
+          },
+          ctx(),
+        )
+
+        expect(result.output).toContain("Project review policy: loaded")
+        expect(result.output).toContain("REVIEW_POLICY_TOKEN")
+        expect(result.output).not.toContain("QA_POLICY_TOKEN")
+        expect(result.metadata.policyContext).toMatchObject({
+          workflow: "review",
+          text: expect.stringContaining("REVIEW_POLICY_TOKEN"),
+        })
+      },
+    })
+  })
+
   test("debug workflow does not inherit review or qa required_checks", async () => {
     await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.md", "REVIEW_POLICY_TOKEN")
+    await writeFile(tmp.path, ".ax-code/qa.md", "QA_POLICY_TOKEN")
     await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ required_checks: ["typecheck"] }))
     await writeFile(tmp.path, ".ax-code/qa.rules.json", JSON.stringify({ required_checks: ["test"] }))
 
@@ -243,7 +313,10 @@ describe("VerifyProjectTool", () => {
         expect(result.title).toBe("verify_project passed")
         expect(result.metadata.passed).toBe(true)
         expect(result.metadata.policy).toBeUndefined()
+        expect(result.metadata.policyContext).toBeUndefined()
         expect(result.output).not.toContain("Policy required checks")
+        expect(result.output).not.toContain("REVIEW_POLICY_TOKEN")
+        expect(result.output).not.toContain("QA_POLICY_TOKEN")
       },
     })
   })

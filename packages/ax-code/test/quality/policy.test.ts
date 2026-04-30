@@ -176,6 +176,34 @@ describe("Policy.loadQaPolicy", () => {
       },
     })
   })
+
+  test("respects AX_CODE_DISABLE_PROJECT_CONFIG and falls back to user policy", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using home = await tmpdir()
+    const previousDisable = process.env["AX_CODE_DISABLE_PROJECT_CONFIG"]
+    const previousHome = process.env["AX_CODE_TEST_HOME"]
+
+    try {
+      process.env["AX_CODE_DISABLE_PROJECT_CONFIG"] = "1"
+      process.env["AX_CODE_TEST_HOME"] = home.path
+      await writeFile(tmp.path, ".ax-code/review.md", "PROJECT_POLICY_SHOULD_BE_DISABLED")
+      await writeFile(home.path, ".ax-code/review.md", "USER_POLICY_FALLBACK")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const policy = await Policy.loadReviewPolicy({ worktree: tmp.path })
+          expect(policy).toContain("USER_POLICY_FALLBACK")
+          expect(policy).not.toContain("PROJECT_POLICY_SHOULD_BE_DISABLED")
+        },
+      })
+    } finally {
+      if (previousDisable === undefined) delete process.env["AX_CODE_DISABLE_PROJECT_CONFIG"]
+      else process.env["AX_CODE_DISABLE_PROJECT_CONFIG"] = previousDisable
+      if (previousHome === undefined) delete process.env["AX_CODE_TEST_HOME"]
+      else process.env["AX_CODE_TEST_HOME"] = previousHome
+    }
+  })
 })
 
 describe("Policy.loadReviewRules / loadQaRules", () => {

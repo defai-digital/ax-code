@@ -13,7 +13,7 @@ When NOT to use:
 Input:
 - caseId: the open case (rejected if not in session — no fabricated ids).
 - claim: a one-sentence falsifiable explanation. Bad: "something with the cache". Good: "Connection pool exhaustion when concurrency > 50 because pool size is hardcoded to 32".
-- staticAnalysis (optional): when debug_analyze produced a chain you want to anchor on, supply { sourceCallId, chainLength, chainConfidence } from its tool.result.
+- staticAnalysis (optional): when debug_analyze produced a chain you want to anchor on, supply { sourceCallId, chainLength, chainConfidence } from its tool.result. The sourceCallId must reference a completed debug_analyze result in this session, and chainLength/chainConfidence must match that result.
 - evidenceRefs (optional): array of 16-char hex ids that justify the hypothesis. Each id may point at EITHER a DebugEvidence (from debug_capture_evidence) OR a VerificationEnvelope (from refactor_apply / future qa runs). Both namespaces share the 16-char hex format. The tool strict-validates the union — an id that exists in neither is rejected.
 - status (optional, default "active"): "active" | "refuted" | "confirmed" | "unresolved". Use "active" for a new candidate; later tools update status as the case progresses.
 
@@ -24,5 +24,5 @@ Output:
 
 Hard rules:
 - Do NOT propose a hypothesis without at least one piece of evidence (refs or static analysis). The tool rejects hypotheses that include neither evidenceRefs nor staticAnalysis.
-- Do NOT invent evidenceRefs or sourceCallId — only cite ids you've actually observed.
+- Do NOT invent evidenceRefs or sourceCallId — only cite ids you've actually observed. The tool rejects unknown debug_analyze sourceCallId values and mismatched static analysis metadata.
 - Do NOT claim status: "confirmed" until verification has actually passed. The tool rejects confirmed hypotheses unless evidenceRefs includes a successful VerificationEnvelope set from this session: at least one passed envelope and no failed, error, or timeout envelope refs.

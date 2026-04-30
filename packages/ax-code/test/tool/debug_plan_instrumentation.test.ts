@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
-import { computeDebugCaseId, DebugInstrumentationPlanSchema, DEBUG_ID_PATTERN } from "../../src/debug-engine/runtime-debug"
+import {
+  computeDebugCaseId,
+  DebugInstrumentationPlanSchema,
+  DEBUG_ID_PATTERN,
+} from "../../src/debug-engine/runtime-debug"
 import { Installation } from "../../src/installation"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
+import { SessionDebug } from "../../src/session/debug"
 import type { SessionID } from "../../src/session/schema"
 import { DebugPlanInstrumentationTool } from "../../src/tool/debug_plan_instrumentation"
 import { tmpdir } from "../fixture/fixture"
@@ -82,10 +87,7 @@ describe("DebugPlanInstrumentationTool", () => {
 
         const tool = await DebugPlanInstrumentationTool.init()
         await expect(
-          tool.execute(
-            { caseId: "0000aaaa1111bbbb", purpose: "measure queue depth", targets },
-            fakeCtx(session.id),
-          ),
+          tool.execute({ caseId: "0000aaaa1111bbbb", purpose: "measure queue depth", targets }, fakeCtx(session.id)),
         ).rejects.toThrow(/unknown debug case/)
       },
     })
@@ -129,6 +131,53 @@ describe("DebugPlanInstrumentationTool", () => {
         const second = await tool.execute(input, fakeCtx(session.id))
 
         expect(first.metadata.planId).toBe(second.metadata.planId)
+      },
+    })
+  })
+
+  test("records applied and removed lifecycle updates for the same removable plan", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const caseId = await emitOpenedCase(session.id, tmp.path, "tests time out")
+
+        const tool = await DebugPlanInstrumentationTool.init()
+        const input = { caseId, purpose: "measure queue depth before worker acquisition", targets }
+        const planned = await tool.execute(input, fakeCtx(session.id))
+        const applied = await tool.execute({ ...input, status: "applied" }, fakeCtx(session.id))
+        const removed = await tool.execute({ ...input, status: "removed" }, fakeCtx(session.id))
+
+        expect(applied.metadata.planId).toBe(planned.metadata.planId)
+        expect(removed.metadata.planId).toBe(planned.metadata.planId)
+        expect(applied.metadata.debugInstrumentationPlan.status).toBe("applied")
+        expect(removed.metadata.debugInstrumentationPlan.status).toBe("removed")
+        expect(removed.output).toContain("Recorded as removed")
+
+        for (const [callID, result] of [
+          ["call-plan", planned],
+          ["call-applied", applied],
+          ["call-removed", removed],
+        ] as const) {
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: session.id as any,
+            tool: "debug_plan_instrumentation",
+            callID,
+            status: "completed",
+            metadata: result.metadata,
+            durationMs: 1,
+          })
+        }
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const loaded = SessionDebug.load(session.id)
+        expect(loaded.instrumentationPlans).toHaveLength(1)
+        expect(loaded.instrumentationPlans[0]).toMatchObject({
+          planId: planned.metadata.planId,
+          status: "removed",
+        })
       },
     })
   })

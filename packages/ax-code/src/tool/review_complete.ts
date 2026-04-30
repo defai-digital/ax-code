@@ -2,12 +2,13 @@ import z from "zod"
 import { Installation } from "../installation"
 import { Instance } from "../project/instance"
 import { FindingSchema } from "../quality/finding"
-import { applyPolicyFilter } from "../quality/policy-filter"
+import { applyPolicyFilter, type DroppedFinding } from "../quality/policy-filter"
 import { Policy } from "../quality/policy"
 import {
   createReviewResult,
   ReviewDecisionEnum,
   type ReviewDecision,
+  type ReviewResult,
   type VerificationEnvelopeWithId,
 } from "../quality/review-result"
 import { SessionFindings } from "../session/findings"
@@ -89,6 +90,45 @@ function validateDecision(input: {
   }
 }
 
+function policyImpact(input: {
+  before: ReviewResult
+  after: ReviewResult
+  droppedFindings: readonly DroppedFinding[]
+}) {
+  const droppedBlockingFindingIds = input.droppedFindings
+    .map((item) => item.finding)
+    .filter((finding) => finding.severity === "CRITICAL" || finding.severity === "HIGH")
+    .map((finding) => finding.findingId)
+  return {
+    before: {
+      findingCount: input.before.counts.total,
+      blockingFindingCount: input.before.blockingFindingIds.length,
+      recommendedDecision: input.before.recommendedDecision,
+    },
+    after: {
+      findingCount: input.after.counts.total,
+      blockingFindingCount: input.after.blockingFindingIds.length,
+      recommendedDecision: input.after.recommendedDecision,
+    },
+    droppedFindingCount: input.droppedFindings.length,
+    droppedBlockingFindingIds,
+    decisionChanged: input.before.recommendedDecision !== input.after.recommendedDecision,
+  }
+}
+
+function policyImpactLine(input: ReturnType<typeof policyImpact>) {
+  if (input.droppedFindingCount === 0 && !input.decisionChanged) return "Policy impact: no findings changed"
+  const decision = input.decisionChanged
+    ? `recommended ${input.before.recommendedDecision} -> ${input.after.recommendedDecision}`
+    : `recommended ${input.after.recommendedDecision}`
+  const blocking = `blocking ${input.before.blockingFindingCount} -> ${input.after.blockingFindingCount}`
+  const droppedBlocking =
+    input.droppedBlockingFindingIds.length > 0
+      ? `; dropped blocking: ${input.droppedBlockingFindingIds.join(", ")}`
+      : ""
+  return `Policy impact: ${decision}; ${blocking}; dropped ${input.droppedFindingCount}${droppedBlocking}`
+}
+
 export const ReviewCompleteTool = Tool.define("review_complete", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -106,6 +146,21 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
     const findings = policyFilter.kept
     const verificationEnvelopes = selectEnvelopes(sessionID, args.verificationEnvelopeIds)
     const verificationPolicyFailed = selectedVerificationPolicyFailed(sessionID, args.verificationEnvelopeIds)
+    const source = {
+      tool: "review_complete",
+      version: Installation.VERSION,
+      runId: sessionID,
+    }
+    const prePolicyDraft = policyRules
+      ? createReviewResult({
+          sessionID,
+          summary: args.summary,
+          findings: selectedFindings,
+          verificationEnvelopes,
+          verificationPolicyFailed,
+          source,
+        })
+      : undefined
     const draft = createReviewResult({
       sessionID,
       summary: args.summary,
@@ -114,12 +169,11 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       verificationPolicyFailed,
       decision: args.decision,
       overrideReason: args.overrideReason,
-      source: {
-        tool: "review_complete",
-        version: Installation.VERSION,
-        runId: sessionID,
-      },
+      source,
     })
+    const impact = prePolicyDraft
+      ? policyImpact({ before: prePolicyDraft, after: draft, droppedFindings: policyFilter.dropped })
+      : undefined
 
     validateDecision({
       decision: draft.decision,
@@ -140,6 +194,7 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       ...(policyRules
         ? [
             `Policy findings: ${policyFilter.kept.length} kept, ${policyFilter.dropped.length} dropped`,
+            impact ? policyImpactLine(impact) : "",
             ...policyFilter.warnings.map((warning) => `Policy warning: ${warning}`),
           ]
         : []),
@@ -165,6 +220,7 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
                 reasons: item.reasons,
               })),
               warnings: policyFilter.warnings,
+              impact,
             }
           : undefined,
       },

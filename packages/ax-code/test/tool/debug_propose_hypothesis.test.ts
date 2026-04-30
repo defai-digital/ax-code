@@ -82,6 +82,27 @@ async function emitCaseAndEvidence(sessionID: SessionID, directory: string, prob
   return { caseId, evidenceId }
 }
 
+async function emitDebugAnalyze(
+  sessionID: SessionID,
+  input: { callID: string; chainLength: number; chainConfidence: number },
+) {
+  Recorder.emit({
+    type: "tool.result",
+    sessionID: sessionID as any,
+    tool: "debug_analyze",
+    callID: input.callID,
+    status: "completed",
+    metadata: {
+      chainLength: input.chainLength,
+      confidence: input.chainConfidence,
+      resolvedCount: Math.max(0, input.chainLength - 1),
+      truncated: false,
+    },
+    durationMs: 1,
+  })
+  await new Promise((resolve) => setTimeout(resolve, 30))
+}
+
 describe("DebugProposeHypothesisTool", () => {
   test("rejects unknown caseId", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -130,6 +151,11 @@ describe("DebugProposeHypothesisTool", () => {
       fn: async () => {
         const session = await Session.create({})
         const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "log content")
+        await emitDebugAnalyze(session.id, {
+          callID: "call_debug_analyze_1",
+          chainLength: 5,
+          chainConfidence: 0.6,
+        })
 
         const tool = await DebugProposeHypothesisTool.init()
         const result = await tool.execute(
@@ -176,6 +202,11 @@ describe("DebugProposeHypothesisTool", () => {
       fn: async () => {
         const session = await Session.create({})
         const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
+        await emitDebugAnalyze(session.id, {
+          callID: "call_x",
+          chainLength: 5,
+          chainConfidence: 0.95,
+        })
 
         const tool = await DebugProposeHypothesisTool.init()
         const withEvidence = await tool.execute(
@@ -193,6 +224,59 @@ describe("DebugProposeHypothesisTool", () => {
 
         expect(withEvidence.metadata.confidence).toBeLessThan(withStatic.metadata.confidence)
         expect(withStatic.metadata.confidence).toBeLessThanOrEqual(0.95)
+      },
+    })
+  })
+
+  test("rejects staticAnalysis that does not cite a matching debug_analyze result from the session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "log content")
+        await emitDebugAnalyze(session.id, {
+          callID: "call_debug_analyze_real",
+          chainLength: 3,
+          chainConfidence: 0.62,
+        })
+
+        const tool = await DebugProposeHypothesisTool.init()
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "fabricated static analysis",
+              evidenceRefs: [evidenceId],
+              staticAnalysis: { sourceCallId: "call_debug_analyze_fake", chainLength: 3, chainConfidence: 0.62 },
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/unknown debug_analyze result/)
+
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "wrong chain length",
+              evidenceRefs: [evidenceId],
+              staticAnalysis: { sourceCallId: "call_debug_analyze_real", chainLength: 4, chainConfidence: 0.62 },
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/chainLength does not match/)
+
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "wrong chain confidence",
+              evidenceRefs: [evidenceId],
+              staticAnalysis: { sourceCallId: "call_debug_analyze_real", chainLength: 3, chainConfidence: 0.7 },
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/chainConfidence does not match/)
       },
     })
   })

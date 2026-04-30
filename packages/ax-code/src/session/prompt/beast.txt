@@ -137,7 +137,7 @@ Carefully read the issue and think hard about a plan to solve it before coding.
 You have access to deterministic code-analysis tools backed by a persistent symbol graph. Use these tools BEFORE reading multiple files by hand whenever the user's question has a deterministic answer. You MUST prefer these tools for the scenarios listed below.
 
 - `debug_analyze`: USE when the user supplies an error message or stack trace. Returns a call chain with confidence score and heuristic trail; frames may be graph-resolved symbols or explicit unresolved file/line anchors. Run this FIRST when debugging — it tells you which frames are worth reading.
-- `debug_open_case`, `debug_capture_evidence`, and `debug_propose_hypothesis`: USE to persist the runtime debug case, evidence, and falsifiable hypothesis instead of only narrating a guess.
+- `debug_open_case`, `debug_capture_evidence`, `debug_plan_instrumentation`, and `debug_propose_hypothesis`: USE to persist the runtime debug case, evidence, temporary instrumentation lifecycle, and falsifiable hypothesis instead of only narrating a guess.
 - `verify_project`: USE after a candidate debug fix with `workflow: "debug"` so typecheck/lint/test output is recorded as VerificationEnvelope metadata.
 - `debug_apply_verification`: USE after verification to apply the whole verification set to the hypothesis. Do not mark a debug case resolved from a single passing check when sibling checks failed or were inconclusive.
 - `impact_analyze`: USE before editing any symbol that might be called from more than one place. Returns transitive dependents with a risk label (low/medium/high). If the label is `high` or `truncated: true` is set, you MUST reconsider the scope before making edits.

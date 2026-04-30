@@ -167,6 +167,50 @@ describe("RiskView.lines", () => {
     expect(lines).toContain("  request changes · 1 finding · 1 blocking · 1 verification envelope")
   })
 
+  test("renders debug case rollups so unresolved runtime work stays visible", () => {
+    const debugCase = {
+      schemaVersion: 1,
+      caseId: "0123456789abcdef",
+      problem: "CLI hangs during startup",
+      status: "open",
+      createdAt: "2026-04-26T18:00:00.000Z",
+      source: { tool: "debug_open_case", version: "4.x.x", runId: "ses_debug_cases" },
+    }
+    const lines = RiskView.lines({
+      id: "ses_debug_cases",
+      title: "Debug case session",
+      assessment: {
+        level: "MEDIUM",
+        score: 45,
+        readiness: "needs_review",
+        confidence: 0.7,
+        summary: "debug case remains unresolved",
+        signals: {
+          filesChanged: 2,
+          linesChanged: 32,
+          totalTools: 4,
+          apiEndpointsAffected: 0,
+          crossModule: false,
+          securityRelated: false,
+          validationState: "partial",
+          diffState: "recorded",
+        },
+      },
+      semantic: null,
+      drivers: [],
+      debug: {
+        cases: [debugCase],
+        evidence: [],
+        instrumentationPlans: [],
+        hypotheses: [],
+        rollups: [{ ...debugCase, effectiveStatus: "unresolved" }],
+      },
+    } as any)
+
+    expect(lines).toContain("  Debug Cases")
+    expect(lines).toContain("  1 unresolved")
+  })
+
   test("renders policy-failed review verification distinctly", () => {
     const lines = RiskView.lines({
       id: "ses_review_policy_failed",

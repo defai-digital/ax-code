@@ -20,6 +20,8 @@ import { fromVerificationCommandResult } from "../quality/verification-envelope-
 import { Tool } from "./tool"
 import DESCRIPTION from "./verify_project.txt"
 
+const POLICY_CONTEXT_MAX_CHARS = 4_000
+
 const CommandOverrides = z
   .object({
     typecheck: z.string().min(1).nullable().optional(),
@@ -123,6 +125,28 @@ function policyLines(input: { rules: PolicyRules | undefined; missingRequiredChe
   return lines
 }
 
+function policyContext(input: { workflow: z.infer<typeof WorkflowEnum>; text: string | undefined }) {
+  const text = input.text?.trim()
+  if (!text) return undefined
+  const truncated = text.length > POLICY_CONTEXT_MAX_CHARS
+  return {
+    workflow: input.workflow,
+    bytes: new TextEncoder().encode(text).byteLength,
+    truncated,
+    text: truncated ? `${text.slice(0, POLICY_CONTEXT_MAX_CHARS)}\n[policy truncated]` : text,
+  }
+}
+
+function policyContextLines(context: ReturnType<typeof policyContext>) {
+  if (!context) return []
+  const label = context.workflow === "qa" ? "QA" : context.workflow
+  return [
+    "",
+    `Project ${label} policy: loaded (${context.bytes} bytes${context.truncated ? ", truncated" : ""})`,
+    context.text,
+  ]
+}
+
 function repairHandoffMetadata(input: {
   enabled: boolean | undefined
   envelopes: readonly VerificationEnvelope[]
@@ -193,6 +217,14 @@ export const VerifyProjectTool = Tool.define("verify_project", {
       worktree: Instance.worktree,
       cwd: Instance.directory,
     })
+    const loadedPolicyContext = policyContext({
+      workflow,
+      text: await Policy.loadWorkflowPolicy({
+        workflow,
+        worktree: Instance.worktree,
+        cwd: Instance.directory,
+      }),
+    })
     const commands = await resolveCommands(cwd, args.commands)
     const commandPatterns = runnableCommands(commands)
 
@@ -258,6 +290,7 @@ export const VerifyProjectTool = Tool.define("verify_project", {
         statusLine(envelope.result.name, envelope, envelopeIds[index].envelopeId),
       ),
       ...policyLines({ rules: policyRules, missingRequiredChecks: missingPolicyChecks }),
+      ...policyContextLines(loadedPolicyContext),
       ...(repairHandoff
         ? [
             "",
@@ -286,6 +319,7 @@ export const VerifyProjectTool = Tool.define("verify_project", {
               missingRequiredChecks: missingPolicyChecks,
             }
           : undefined,
+        policyContext: loadedPolicyContext,
       },
     }
   },

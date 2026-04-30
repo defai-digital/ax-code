@@ -2,8 +2,7 @@ import path from "path"
 import * as fs from "fs/promises"
 import z from "zod"
 import { CategoryEnum, SeverityEnum, WorkflowEnum } from "./finding"
-import { Filesystem } from "../util/filesystem"
-import { Global } from "../global"
+import { ConfigPaths } from "../config/paths"
 import { Log } from "../util/log"
 
 export const PolicyRequiredCheckSchema = z.enum(["typecheck", "lint", "test"])
@@ -46,11 +45,10 @@ export namespace Policy {
   // workspace-first precedence per the Phase 0 contract:
   //   workspace (.ax-code walk up from cwd to worktree) > user (~/.ax-code/)
   //
-  // We do NOT reuse `ConfigPaths.directories` because that helper is built
-  // for ax-code.json config (where global is the base and project overrides),
-  // and its iteration order puts `Global.Path.config` first. For policy files
-  // we want most-specific-wins, the inverse precedence. Mixing the two
-  // semantics caused user-global review.md to win over project — fixed here.
+  // Directory discovery is centralized in ConfigPaths.policyDirectories so
+  // policy files inherit the same project-config disable switch and `.ax-code`
+  // namespace discipline as the rest of the configuration system, while still
+  // preserving policy-specific nearest-first precedence.
   //
   // Files are intentionally loaded ONLY when the matching workflow is
   // invoked (per Phase 0 contract) — there is no eager bootstrap. Callers
@@ -79,6 +77,16 @@ export namespace Policy {
   }): Promise<PolicyRules | undefined> {
     if (input.workflow === "review") return loadReviewRules(input)
     if (input.workflow === "qa") return loadQaRules(input)
+    return undefined
+  }
+
+  export async function loadWorkflowPolicy(input: {
+    workflow: z.infer<typeof WorkflowEnum>
+    worktree: string
+    cwd?: string
+  }): Promise<string | undefined> {
+    if (input.workflow === "review") return loadReviewPolicy(input)
+    if (input.workflow === "qa") return loadQaPolicy(input)
     return undefined
   }
 
@@ -133,11 +141,7 @@ export namespace Policy {
   }
 
   async function* policyDirs(input: { worktree: string; cwd: string }): AsyncGenerator<string> {
-    // 1. Project: .ax-code dirs walking up from cwd, stopping at worktree.
-    //    Filesystem.up yields nearest-first, which is the precedence we want.
-    yield* Filesystem.up({ targets: [".ax-code"], start: input.cwd, stop: input.worktree })
-    // 2. User-home: ~/.ax-code (single-level check).
-    yield* Filesystem.up({ targets: [".ax-code"], start: Global.Path.home, stop: Global.Path.home })
+    yield* await ConfigPaths.policyDirectories(input.cwd, input.worktree)
   }
 
   async function loadByName(input: { worktree: string; cwd?: string; name: string }): Promise<string | undefined> {

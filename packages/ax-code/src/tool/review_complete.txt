@@ -12,13 +12,13 @@ Input:
 Decision guardrails:
 - HIGH or CRITICAL review findings force request_changes.
 - approve requires a successful verification set: at least one passed envelope and no failed, error, or timeout envelopes in the selected set.
-- `.ax-code/review.rules.json` can filter selected findings with severity_floor, prohibited_categories, or scope_glob before the recommendation is computed. Dropped findings and warnings are reported in metadata.policy.
+- `.ax-code/review.rules.json` can filter selected findings with severity_floor, prohibited_categories, or scope_glob before the recommendation is computed. Dropped findings, warnings, and before/after policy impact are reported in metadata.policy.
 - If there are no blocking findings but the selected verification set is missing or not fully passing, the recommended decision is needs_verification.
 
 Output:
 - reviewId: deterministic id for the review result
 - reviewResult: structured result with finding ids, verification envelope ids, severity counts, and decision
-- policy: optional details for applied review.rules.json, including dropped finding ids and warnings
+- policy: optional details for applied review.rules.json, including dropped finding ids, warnings, and impact before/after filtering
 
 When to use:
 - At the end of a code review after recording findings

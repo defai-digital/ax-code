@@ -232,8 +232,25 @@ describe("ReviewCompleteTool", () => {
               reasons: expect.arrayContaining([expect.stringContaining("not matched by scope_glob")]),
             },
           ],
+          impact: {
+            before: {
+              findingCount: 2,
+              blockingFindingCount: 1,
+              recommendedDecision: "request_changes",
+            },
+            after: {
+              findingCount: 1,
+              blockingFindingCount: 0,
+              recommendedDecision: "approve",
+            },
+            droppedFindingCount: 1,
+            droppedBlockingFindingIds: [outOfScopeHigh.findingId],
+            decisionChanged: true,
+          },
         })
         expect(result.output).toContain("Policy findings: 1 kept, 1 dropped")
+        expect(result.output).toContain("Policy impact: recommended request_changes -> approve; blocking 1 -> 0")
+        expect(result.output).toContain(`dropped blocking: ${outOfScopeHigh.findingId}`)
       },
     })
   })

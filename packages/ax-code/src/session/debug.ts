@@ -123,6 +123,12 @@ export namespace SessionDebug {
     evidenceIds: Set<string>
   }
 
+  export type DebugAnalyzeReference = {
+    callID: string
+    chainLength: number
+    chainConfidence: number
+  }
+
   export function indexedIds(sessionID: SessionID): IndexedIds {
     const loaded = load(sessionID)
     const caseIds = new Set<string>()
@@ -138,6 +144,24 @@ export namespace SessionDebug {
 
   export function evidenceIdSet(sessionID: SessionID): Set<string> {
     return indexedIds(sessionID).evidenceIds
+  }
+
+  export function debugAnalyzeReferences(sessionID: SessionID): Map<string, DebugAnalyzeReference> {
+    const references = new Map<string, DebugAnalyzeReference>()
+    for (const event of EventQuery.bySession(sessionID)) {
+      if (event.type !== "tool.result") continue
+      if (event.status !== "completed") continue
+      if (event.tool !== "debug_analyze") continue
+      const chainLength = event.metadata?.chainLength
+      const chainConfidence = event.metadata?.confidence
+      if (typeof chainLength !== "number" || typeof chainConfidence !== "number") continue
+      references.set(event.callID, {
+        callID: event.callID,
+        chainLength,
+        chainConfidence,
+      })
+    }
+    return references
   }
 
   // Aggregates per-case status by walking hypotheses. A case is:

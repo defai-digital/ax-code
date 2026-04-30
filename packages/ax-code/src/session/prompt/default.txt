@@ -160,7 +160,7 @@ IMPORTANT: Before you begin work, think about what the code you're editing is su
 You have access to a set of deterministic code-analysis tools. Prefer these over reading files when the user's question has a deterministic answer.
 
 - `debug_analyze`: use when the user supplies an error or stack trace. Returns a call chain with confidence score; frames may be graph-resolved or explicit unresolved file/line anchors.
-- `debug_open_case`, `debug_capture_evidence`, and `debug_propose_hypothesis`: use these to persist the runtime debug case, evidence, and falsifiable hypothesis instead of only narrating a guess.
+- `debug_open_case`, `debug_capture_evidence`, `debug_plan_instrumentation`, and `debug_propose_hypothesis`: use these to persist the runtime debug case, evidence, temporary instrumentation lifecycle, and falsifiable hypothesis instead of only narrating a guess.
 - `verify_project`: after a candidate debug fix, run this with `workflow: "debug"` so typecheck/lint/test output is recorded as VerificationEnvelope metadata.
 - `debug_apply_verification`: after verification, apply the whole verification set to the hypothesis. Do not mark a debug case resolved from a single passing check when sibling checks failed or were inconclusive.
 - `impact_analyze`: use before editing a widely-used symbol. Returns transitive dependents with a risk label (low/medium/high).

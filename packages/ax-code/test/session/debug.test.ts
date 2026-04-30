@@ -370,6 +370,72 @@ describe("SessionDebug.load", () => {
     })
   })
 
+  test("debugAnalyzeReferences indexes only completed debug_analyze result metadata", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "debug_analyze",
+          callID: "call-debug-good",
+          status: "completed",
+          metadata: {
+            chainLength: 4,
+            confidence: 0.62,
+            resolvedCount: 3,
+            truncated: false,
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "debug_analyze",
+          callID: "call-debug-error",
+          status: "error",
+          metadata: {
+            chainLength: 2,
+            confidence: 0.4,
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "debug_analyze",
+          callID: "call-debug-malformed",
+          status: "completed",
+          metadata: {
+            chainLength: "4",
+            confidence: 0.62,
+          },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const refs = SessionDebug.debugAnalyzeReferences(session.id)
+        expect([...refs.keys()]).toEqual(["call-debug-good"])
+        expect(refs.get("call-debug-good")).toEqual({
+          callID: "call-debug-good",
+          chainLength: 4,
+          chainConfidence: 0.62,
+        })
+      },
+    })
+  })
+
   test("caseIdSet returns the full set of opened case ids", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

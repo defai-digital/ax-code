@@ -73,6 +73,30 @@ function validateEvidencePresence(input: {
   )
 }
 
+function validateStaticAnalysis(input: {
+  staticAnalysis: z.infer<typeof StaticAnalysisInput> | undefined
+  debugAnalyzeReferences: Map<string, SessionDebug.DebugAnalyzeReference>
+  sessionID: SessionID
+}) {
+  if (!input.staticAnalysis) return
+  const referenced = input.debugAnalyzeReferences.get(input.staticAnalysis.sourceCallId)
+  if (!referenced) {
+    throw new Error(
+      `staticAnalysis.sourceCallId references an unknown debug_analyze result: ${input.staticAnalysis.sourceCallId} (no completed debug_analyze call with this id exists in session ${input.sessionID})`,
+    )
+  }
+  if (referenced.chainLength !== input.staticAnalysis.chainLength) {
+    throw new Error(
+      `staticAnalysis.chainLength does not match debug_analyze result ${referenced.callID}: expected ${referenced.chainLength}, got ${input.staticAnalysis.chainLength}`,
+    )
+  }
+  if (Math.abs(referenced.chainConfidence - input.staticAnalysis.chainConfidence) > 0.000001) {
+    throw new Error(
+      `staticAnalysis.chainConfidence does not match debug_analyze result ${referenced.callID}: expected ${referenced.chainConfidence}, got ${input.staticAnalysis.chainConfidence}`,
+    )
+  }
+}
+
 export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -100,6 +124,11 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
     validateEvidencePresence({
       evidenceRefs,
       staticAnalysis: args.staticAnalysis,
+    })
+    validateStaticAnalysis({
+      staticAnalysis: args.staticAnalysis,
+      debugAnalyzeReferences: SessionDebug.debugAnalyzeReferences(sessionID),
+      sessionID,
     })
     const verificationRuns = SessionVerifications.loadRunsWithIds(sessionID)
     const verificationEnvelopes = verificationRuns.flatMap((run) => run.envelopes)

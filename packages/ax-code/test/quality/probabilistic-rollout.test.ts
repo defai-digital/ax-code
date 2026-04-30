@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import {
+  computeDebugCaseId,
+  computeDebugEvidenceId,
+  computeDebugHypothesisId,
+} from "../../src/debug-engine/runtime-debug"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
 import { Risk } from "../../src/risk/score"
@@ -140,6 +145,23 @@ describe("ProbabilisticRollout.exportReplay", () => {
         const session = await Session.create({})
         const sid = session.id
         const projectID = Instance.project.id
+        const debugFinding = {
+          schemaVersion: 1,
+          findingId: "0123456789abcdef",
+          workflow: "debug",
+          category: "bug",
+          severity: "HIGH",
+          confidence: 0.82,
+          summary: "Runtime failure candidate: TypeError: undefined is not a function",
+          file: "/repo/src/app.ts",
+          anchor: { kind: "line", line: 10 },
+          rationale: "debug_analyze mapped the runtime failure to a 3-frame call chain with confidence 0.82.",
+          evidence: ["debug_analyze call call_debug", "primary frame: /repo/src/app.ts:10"],
+          suggestedNextAction:
+            "Capture runtime evidence for this candidate cause, then verify the fix before resolving it.",
+          ruleId: "axcode:debug-analyze",
+          source: { tool: "debug_analyze", version: "4.x.x", runId: sid },
+        }
 
         Recorder.begin(sid)
         Recorder.emit({
@@ -180,6 +202,8 @@ describe("ProbabilisticRollout.exportReplay", () => {
             chainLength: 3,
             resolvedCount: 2,
             truncated: false,
+            findingId: debugFinding.findingId,
+            finding: debugFinding,
           },
           durationMs: 18,
         })
@@ -202,6 +226,208 @@ describe("ProbabilisticRollout.exportReplay", () => {
           hasStackTrace: true,
           chainLength: 3,
         })
+        expect(exported.items[0]?.evidence.summary).toMatchObject({ findingCount: 1 })
+        expect(exported.items[1]?.evidence.finding).toMatchObject({
+          findingId: debugFinding.findingId,
+          sourceTool: "debug_analyze",
+          title: "HIGH bug at /repo/src/app.ts",
+          summary: debugFinding.summary,
+          confidence: 0.82,
+          file: "/repo/src/app.ts",
+          line: 10,
+          suggestedNextAction: debugFinding.suggestedNextAction,
+        })
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
+  test("exports persisted runtime debug case and ranked hypothesis artifacts", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        const problem = "CLI hangs during startup"
+        const caseId = computeDebugCaseId({ problem, runId: sid })
+        const evidenceContent = "startup trace stopped before appMounted"
+        const evidenceId = computeDebugEvidenceId({ caseId, kind: "log_capture", content: evidenceContent })
+        const highClaim = "OpenTUI render dispatch completed but app mount stalled"
+        const lowClaim = "The config loader is blocking startup"
+        const highHypothesisId = computeDebugHypothesisId({ caseId, claim: highClaim })
+        const lowHypothesisId = computeDebugHypothesisId({ caseId, claim: lowClaim })
+
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "debug",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "debug_analyze",
+          callID: "call-debug-analyze",
+          input: {
+            error: "TUI startup hang",
+            stackTrace: "at render (/repo/src/tui.ts:10:1)",
+          },
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "debug_analyze",
+          callID: "call-debug-analyze",
+          status: "completed",
+          metadata: {
+            confidence: 0.62,
+            chainLength: 3,
+            resolvedCount: 2,
+            truncated: false,
+          },
+          durationMs: 12,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "debug_open_case",
+          callID: "call-open",
+          status: "completed",
+          metadata: {
+            caseId,
+            debugCase: {
+              schemaVersion: 1,
+              caseId,
+              problem,
+              status: "open",
+              createdAt: "2026-04-30T00:00:00.000Z",
+              source: { tool: "debug_open_case", version: "4.x.x", runId: sid },
+            },
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "debug_capture_evidence",
+          callID: "call-evidence",
+          status: "completed",
+          metadata: {
+            evidenceId,
+            debugEvidence: {
+              schemaVersion: 1,
+              evidenceId,
+              caseId,
+              kind: "log_capture",
+              capturedAt: "2026-04-30T00:01:00.000Z",
+              content: evidenceContent,
+              source: { tool: "debug_capture_evidence", version: "4.x.x", runId: sid },
+            },
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "debug_propose_hypothesis",
+          callID: "call-low-hypothesis",
+          status: "completed",
+          metadata: {
+            hypothesisId: lowHypothesisId,
+            debugHypothesis: {
+              schemaVersion: 1,
+              hypothesisId: lowHypothesisId,
+              caseId,
+              claim: lowClaim,
+              confidence: 0.45,
+              evidenceRefs: [evidenceId],
+              status: "active",
+              source: { tool: "debug_propose_hypothesis", version: "4.x.x", runId: sid },
+            },
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "debug_propose_hypothesis",
+          callID: "call-high-hypothesis",
+          status: "completed",
+          metadata: {
+            hypothesisId: highHypothesisId,
+            debugHypothesis: {
+              schemaVersion: 1,
+              hypothesisId: highHypothesisId,
+              caseId,
+              claim: highClaim,
+              confidence: 0.72,
+              staticAnalysis: {
+                sourceCallId: "call-debug-analyze",
+                chainLength: 3,
+                chainConfidence: 0.62,
+              },
+              evidenceRefs: [evidenceId],
+              status: "active",
+              source: { tool: "debug_propose_hypothesis", version: "4.x.x", runId: sid },
+            },
+          },
+          durationMs: 1,
+        })
+        Recorder.emit({
+          type: "session.end",
+          sessionID: sid,
+          reason: "completed",
+          totalSteps: 0,
+        })
+        Recorder.end(sid)
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const exported = await ProbabilisticRollout.exportReplay(sid, "debug")
+        const runtimeCase = exported.items.find((item) => item.artifactID === `debug:${sid}:case:${caseId}`)
+        const runtimeHypotheses = exported.items.filter((item) =>
+          item.artifactID.startsWith(`debug:${sid}:hypothesis:`),
+        )
+
+        expect(runtimeCase).toMatchObject({
+          artifactKind: "debug_case",
+          baseline: { source: "debug_open_case", readiness: "investigating" },
+          evidence: {
+            summary: {
+              caseId,
+              effectiveStatus: "investigating",
+              evidenceCount: 1,
+              hypothesisCount: 2,
+            },
+          },
+        })
+        expect(runtimeHypotheses.map((item) => item.artifactID)).toEqual([
+          `debug:${sid}:hypothesis:${highHypothesisId}`,
+          `debug:${sid}:hypothesis:${lowHypothesisId}`,
+        ])
+        expect(runtimeHypotheses.map((item) => item.baseline.rank)).toEqual([1, 2])
+        expect(runtimeHypotheses[0]?.baseline.confidence).toBe(0.72)
+        expect(runtimeHypotheses[0]?.evidence.summary).toMatchObject({
+          hypothesisId: highHypothesisId,
+          caseId,
+          status: "active",
+          evidenceRefs: [evidenceId],
+          staticAnalysis: {
+            sourceCallId: "call-debug-analyze",
+            chainLength: 3,
+            chainConfidence: 0.62,
+          },
+        })
+        expect(runtimeHypotheses[0]?.evidence.toolSummaries.map((item) => item.callID)).toEqual([
+          "call-high-hypothesis",
+          "call-debug-analyze",
+        ])
+        expect(runtimeHypotheses[1]?.evidence.toolSummaries.map((item) => item.callID)).toEqual(["call-low-hypothesis"])
 
         EventQuery.deleteBySession(sid)
       },

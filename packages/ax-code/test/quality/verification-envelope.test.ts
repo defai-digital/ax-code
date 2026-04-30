@@ -169,6 +169,19 @@ describe("computeEnvelopeId", () => {
     expect(computeEnvelopeId(reordered)).toBe(computeEnvelopeId(validEnvelope))
   })
 
+  test("is stable across JSON persistence when optional fields are undefined", () => {
+    const withUndefinedOutput = VerificationEnvelopeSchema.parse({
+      ...validEnvelope,
+      result: {
+        ...validEnvelope.result,
+        output: undefined,
+      },
+    })
+    const persisted = JSON.parse(JSON.stringify(withUndefinedOutput)) as VerificationEnvelope
+
+    expect(computeEnvelopeId(withUndefinedOutput)).toBe(computeEnvelopeId(persisted))
+  })
+
   test("changes when command.runner changes", () => {
     const a = computeEnvelopeId(validEnvelope)
     const b = computeEnvelopeId({ ...validEnvelope, command: { ...validEnvelope.command, runner: "lint" } })

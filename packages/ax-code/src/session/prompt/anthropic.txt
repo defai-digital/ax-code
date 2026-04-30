@@ -162,9 +162,10 @@ whenever the user's question has a deterministic answer.
   trace. Returns a call chain with confidence; frames may be graph-resolved
   symbols or explicit unresolved file/line anchors. Run this BEFORE reading
   files from the trace.
-- `debug_open_case`, `debug_capture_evidence`, and
-  `debug_propose_hypothesis` — use these to persist the runtime debug case,
-  evidence, and falsifiable hypothesis instead of only narrating a guess.
+- `debug_open_case`, `debug_capture_evidence`,
+  `debug_plan_instrumentation`, and `debug_propose_hypothesis` — use these
+  to persist the runtime debug case, evidence, temporary instrumentation
+  lifecycle, and falsifiable hypothesis instead of only narrating a guess.
 - `verify_project` — after a candidate debug fix, run this with
   `workflow: "debug"` so typecheck/lint/test output is recorded as
   VerificationEnvelope metadata.

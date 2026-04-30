@@ -44,6 +44,25 @@ export namespace ConfigPaths {
     ]
   }
 
+  export async function policyDirectories(directory: string, worktree: string) {
+    const dirs = await directories(directory, worktree)
+    const userPolicyDir = path.resolve(Global.Path.home, ".ax-code")
+    const projectDirs: string[] = []
+    const userDirs: string[] = []
+
+    for (const dir of dirs) {
+      const resolved = path.resolve(dir)
+      if (path.basename(resolved) !== ".ax-code") continue
+      if (Filesystem.contains(worktree, resolved)) {
+        projectDirs.push(resolved)
+      } else if (resolved === userPolicyDir) {
+        userDirs.push(resolved)
+      }
+    }
+
+    return [...new Set([...projectDirs, ...userDirs])]
+  }
+
   export function fileInDirectory(dir: string, name: string) {
     return [path.join(dir, `${name}.jsonc`), path.join(dir, `${name}.json`)]
   }

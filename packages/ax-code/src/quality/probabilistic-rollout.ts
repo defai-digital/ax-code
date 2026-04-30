@@ -1,9 +1,11 @@
 import z from "zod"
 import { EventQuery } from "../replay/query"
 import { Session } from "../session"
+import { SessionDebug } from "../session/debug"
 import { SessionID } from "../session/schema"
 import { Risk } from "../risk/score"
 import { Snapshot } from "../snapshot"
+import { FindingSchema, type Finding } from "./finding"
 
 const REVIEW_TOOLS = new Set([
   "impact_analyze",
@@ -19,6 +21,13 @@ const QA_TEST_COMMAND_PATTERNS = [
   /\b(?:vitest|jest|mocha|ava|pytest|rspec|phpunit)\b/i,
   /\b(?:go test|cargo test|deno test|swift test|dotnet test)\b/i,
 ]
+const RUNTIME_DEBUG_TOOLS = new Set([
+  "debug_open_case",
+  "debug_capture_evidence",
+  "debug_plan_instrumentation",
+  "debug_propose_hypothesis",
+  "debug_apply_verification",
+])
 
 export namespace ProbabilisticRollout {
   type EventRow = ReturnType<typeof EventQuery.bySessionWithTimestamp>[number]
@@ -477,6 +486,51 @@ export namespace ProbabilisticRollout {
   function booleanField(input: Record<string, unknown> | undefined, key: string) {
     const value = input?.[key]
     return typeof value === "boolean" ? value : undefined
+  }
+
+  function recordField(input: Record<string, unknown> | undefined, key: string) {
+    const value = input?.[key]
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+    return value as Record<string, unknown>
+  }
+
+  function findingField(input: Record<string, unknown> | undefined, key: string) {
+    const candidate = recordField(input, key)
+    if (!candidate) return undefined
+    const parsed = FindingSchema.safeParse(candidate)
+    return parsed.success ? parsed.data : undefined
+  }
+
+  function findingReplaySummary(finding: Finding): Record<string, unknown> {
+    return {
+      findingId: finding.findingId,
+      sourceTool: finding.source.tool,
+      title: `${finding.severity} ${finding.category} at ${finding.file}`,
+      summary: finding.summary,
+      severity: finding.severity,
+      category: finding.category,
+      confidence: finding.confidence,
+      file: finding.file,
+      line: finding.anchor.kind === "line" ? finding.anchor.line : undefined,
+      symbolId: finding.anchor.kind === "symbol" ? finding.anchor.symbolId : undefined,
+      suggestedNextAction: finding.suggestedNextAction,
+    }
+  }
+
+  function debugMetadataCaseId(metadata: Record<string, unknown> | undefined) {
+    return (
+      stringField(metadata, "caseId") ??
+      stringField(recordField(metadata, "debugCase"), "caseId") ??
+      stringField(recordField(metadata, "debugEvidence"), "caseId") ??
+      stringField(recordField(metadata, "debugInstrumentationPlan"), "caseId") ??
+      stringField(recordField(metadata, "debugHypothesis"), "caseId")
+    )
+  }
+
+  function debugMetadataHypothesisId(metadata: Record<string, unknown> | undefined) {
+    return (
+      stringField(metadata, "hypothesisId") ?? stringField(recordField(metadata, "debugHypothesis"), "hypothesisId")
+    )
   }
 
   function toolCallCommand(call: ToolCall | undefined) {
@@ -1037,6 +1091,9 @@ export namespace ProbabilisticRollout {
 
     if (workflow === "debug") {
       const debugResults = toolRows.filter((row) => row.event_data.tool === "debug_analyze")
+      const debugAnalyzeFindings = debugResults
+        .map((row) => findingField(row.event_data.metadata, "finding"))
+        .filter((finding): finding is Finding => !!finding)
       if (debugResults.length > 0) {
         items.push({
           schemaVersion: 1,
@@ -1058,6 +1115,7 @@ export namespace ProbabilisticRollout {
               .filter((item): item is ToolSummary => !!item),
             summary: {
               debugAnalyzeCount: debugResults.length,
+              findingCount: debugAnalyzeFindings.length,
             },
           },
         })
@@ -1066,6 +1124,7 @@ export namespace ProbabilisticRollout {
       for (const row of debugResults) {
         const call = calls.get(row.event_data.callID)
         const metadata = row.event_data.metadata
+        const finding = findingField(metadata, "finding")
         items.push({
           schemaVersion: 1,
           kind: "ax-code-quality-replay-item",
@@ -1089,8 +1148,96 @@ export namespace ProbabilisticRollout {
               resolvedCount: numberField(metadata, "resolvedCount"),
               truncated: booleanField(metadata, "truncated"),
             },
+            finding: finding ? findingReplaySummary(finding) : undefined,
           },
         })
+      }
+
+      const runtimeDebug = SessionDebug.load(sessionID)
+      if (runtimeDebug.cases.length > 0) {
+        const rollups = SessionDebug.rollup(runtimeDebug)
+        for (const debugCase of runtimeDebug.cases) {
+          const rollup = rollups.find((item) => item.caseId === debugCase.caseId)
+          const caseEvidence = runtimeDebug.evidence.filter((item) => item.caseId === debugCase.caseId)
+          const casePlans = runtimeDebug.instrumentationPlans.filter((item) => item.caseId === debugCase.caseId)
+          const caseHypotheses = runtimeDebug.hypotheses
+            .filter((item) => item.caseId === debugCase.caseId)
+            .sort((a, b) => b.confidence - a.confidence || a.hypothesisId.localeCompare(b.hypothesisId))
+          const caseToolSummaries = toolRows
+            .filter((row) => RUNTIME_DEBUG_TOOLS.has(row.event_data.tool))
+            .filter((row) => debugMetadataCaseId(row.event_data.metadata) === debugCase.caseId)
+            .map((row) => toolSummary(row, calls.get(row.event_data.callID)))
+            .filter((item): item is ToolSummary => !!item)
+
+          items.push({
+            schemaVersion: 1,
+            kind: "ax-code-quality-replay-item",
+            workflow: "debug",
+            artifactKind: "debug_case",
+            artifactID: `debug:${sessionID}:case:${debugCase.caseId}`,
+            ...common,
+            title: debugCase.problem,
+            baseline: {
+              source: "debug_open_case",
+              confidence: null,
+              score: null,
+              readiness: rollup?.effectiveStatus ?? debugCase.status,
+              rank: null,
+            },
+            evidence: {
+              toolSummaries: caseToolSummaries,
+              summary: {
+                caseId: debugCase.caseId,
+                status: debugCase.status,
+                effectiveStatus: rollup?.effectiveStatus ?? debugCase.status,
+                evidenceCount: caseEvidence.length,
+                instrumentationPlanCount: casePlans.length,
+                hypothesisCount: caseHypotheses.length,
+              },
+            },
+          })
+
+          caseHypotheses.forEach((hypothesis, index) => {
+            const staticToolSummary = hypothesis.staticAnalysis
+              ? toolSummaries.find((item) => item.callID === hypothesis.staticAnalysis?.sourceCallId)
+              : undefined
+            const hypothesisToolSummaries = toolRows
+              .filter(
+                (row) =>
+                  row.event_data.tool === "debug_propose_hypothesis" ||
+                  row.event_data.tool === "debug_apply_verification",
+              )
+              .filter((row) => debugMetadataHypothesisId(row.event_data.metadata) === hypothesis.hypothesisId)
+              .map((row) => toolSummary(row, calls.get(row.event_data.callID)))
+              .filter((item): item is ToolSummary => !!item)
+            items.push({
+              schemaVersion: 1,
+              kind: "ax-code-quality-replay-item",
+              workflow: "debug",
+              artifactKind: "debug_hypothesis",
+              artifactID: `debug:${sessionID}:hypothesis:${hypothesis.hypothesisId}`,
+              ...common,
+              title: hypothesis.claim,
+              baseline: {
+                source: "debug_propose_hypothesis",
+                confidence: hypothesis.confidence,
+                score: null,
+                readiness: hypothesis.status,
+                rank: index + 1,
+              },
+              evidence: {
+                toolSummaries: [...hypothesisToolSummaries, ...(staticToolSummary ? [staticToolSummary] : [])],
+                summary: {
+                  hypothesisId: hypothesis.hypothesisId,
+                  caseId: hypothesis.caseId,
+                  status: hypothesis.status,
+                  evidenceRefs: hypothesis.evidenceRefs,
+                  staticAnalysis: hypothesis.staticAnalysis,
+                },
+              },
+            })
+          })
+        }
       }
     }
 

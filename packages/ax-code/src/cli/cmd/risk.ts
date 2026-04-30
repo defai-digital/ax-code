@@ -8,6 +8,7 @@ export namespace RiskView {
   type ReplayReadinessSummary = NonNullable<SessionRisk.QualityReadiness["review"]>
   type DecisionHintSummary = NonNullable<SessionRisk.Detail["decisionHints"]>
   type ReviewResult = NonNullable<SessionRisk.Detail["reviewResults"]>[number]
+  type DebugBundle = NonNullable<SessionRisk.Detail["debug"]>
 
   function validation(input: SessionRisk.Detail["assessment"]["signals"]) {
     if (input.validationState === "passed") return "validation passed"
@@ -49,6 +50,27 @@ export namespace RiskView {
         ? ""
         : ` · recommended: ${reviewDecisionLabel(result.recommendedDecision)}`
     return `  ${reviewDecisionLabel(result.decision)} · ${findings} finding${findings === 1 ? "" : "s"} · ${blocking} blocking · ${checks}${recommendation}`
+  }
+
+  function debugCasesLine(debug: DebugBundle) {
+    if (debug.cases.length === 0) return undefined
+    const rollups =
+      debug.rollups.length > 0 ? debug.rollups : debug.cases.map((item) => ({ ...item, effectiveStatus: item.status }))
+    const counts = {
+      unresolved: 0,
+      investigating: 0,
+      open: 0,
+      resolved: 0,
+    }
+    for (const item of rollups) {
+      counts[item.effectiveStatus]++
+    }
+    const parts: string[] = []
+    if (counts.unresolved > 0) parts.push(`${counts.unresolved} unresolved`)
+    if (counts.investigating > 0) parts.push(`${counts.investigating} investigating`)
+    if (counts.open > 0) parts.push(`${counts.open} open`)
+    if (counts.resolved > 0) parts.push(`${counts.resolved} resolved`)
+    return `  ${parts.join(" · ")}`
   }
 
   export function lines(input: SessionRisk.Detail, explain = false) {
@@ -99,6 +121,14 @@ export namespace RiskView {
       out.push("  Review Result")
       out.push("  " + "-".repeat(40))
       out.push(reviewResultLine(input.reviewResults.at(-1)!))
+    }
+
+    const debugLine = input.debug ? debugCasesLine(input.debug) : undefined
+    if (debugLine) {
+      out.push("")
+      out.push("  Debug Cases")
+      out.push("  " + "-".repeat(40))
+      out.push(debugLine)
     }
 
     if (input.decisionHints) {
@@ -187,6 +217,11 @@ export const RiskCommand = cmd({
         type: "boolean",
         default: true,
       })
+      .option("debug", {
+        describe: "Include runtime debug cases and unresolved/resolved rollups when present",
+        type: "boolean",
+        default: true,
+      })
       .option("json", { describe: "Output as JSON", type: "boolean", default: false }),
   async handler(args) {
     await Instance.provide({
@@ -197,6 +232,7 @@ export const RiskCommand = cmd({
           includeQuality: Boolean(args.quality),
           includeDecisionHints: Boolean(args.hints),
           includeReviewResults: Boolean(args.reviewResults),
+          includeDebug: Boolean(args.debug),
         })
 
         if (args.json) {

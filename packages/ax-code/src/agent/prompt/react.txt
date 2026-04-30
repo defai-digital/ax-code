@@ -53,8 +53,9 @@ reading files and guessing:
   reading any file. In the OBSERVATION step, cite frames by index; never invent
   function names for unresolved frames.
 
-- **`debug_open_case`, `debug_capture_evidence`, and
-  `debug_propose_hypothesis`** — persist the runtime debug case, evidence, and
+- **`debug_open_case`, `debug_capture_evidence`,
+  `debug_plan_instrumentation`, and `debug_propose_hypothesis`** — persist
+  the runtime debug case, evidence, temporary instrumentation lifecycle, and
   falsifiable hypothesis instead of only narrating a guess.
 
 - **`verify_project` + `debug_apply_verification`** — after a candidate fix,

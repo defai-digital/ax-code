@@ -1,10 +1,11 @@
-Plan temporary runtime instrumentation for an open debug case.
+Plan or update temporary runtime instrumentation for an open debug case.
 
-Use this before adding console logs, printf probes, trace statements, counters, or other temporary instrumentation. The tool does not edit files. It records an auditable plan in the session so the probe has an explicit purpose and removal path before any code is changed.
+Use this before adding console logs, printf probes, trace statements, counters, or other temporary instrumentation. The tool does not edit files. It records an auditable plan in the session so the probe has an explicit purpose and removal path before any code is changed. Use the same caseId, purpose, and targets to update the plan status after explicit instrumentation edits are applied or removed.
 
 Inputs:
 - caseId: 16-char hex id returned by debug_open_case in this session.
 - purpose: what runtime question this instrumentation should answer.
+- status: optional lifecycle state. Defaults to "planned". Use "applied" only after an explicit temporary instrumentation edit has been made, and "removed" only after those probes are removed.
 - targets: one or more planned probes. Each target must include:
   - file: repo-relative file to instrument.
   - anchor: optional line or symbol location.
@@ -14,4 +15,5 @@ Inputs:
 Rules:
 - Do not use this for permanent logging or product telemetry.
 - Do not edit files silently after planning. If instrumentation is applied, make the edit explicit and later capture output with debug_capture_evidence(kind="instrumentation_result").
+- After instrumentation output is captured, remove the probes and re-record the same plan with status="removed".
 - Every target must include a removal instruction.

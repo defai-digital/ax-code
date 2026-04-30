@@ -110,7 +110,7 @@ When requested to perform tasks like fixing bugs, adding features, refactoring, 
 You have access to deterministic code-analysis tools backed by a persistent symbol graph. Prefer these over reading many files by hand when the user's question has a deterministic answer.
 
 - **`debug_analyze`:** Use when the user supplies an error message or stack trace. Returns a call chain with confidence; frames may be graph-resolved symbols or explicit unresolved file/line anchors. Run this BEFORE reading files from the trace; it tells you which frames are worth investigating.
-- **`debug_open_case`, `debug_capture_evidence`, and `debug_propose_hypothesis`:** Use these to persist the runtime debug case, evidence, and falsifiable hypothesis instead of only narrating a guess.
+- **`debug_open_case`, `debug_capture_evidence`, `debug_plan_instrumentation`, and `debug_propose_hypothesis`:** Use these to persist the runtime debug case, evidence, temporary instrumentation lifecycle, and falsifiable hypothesis instead of only narrating a guess.
 - **`verify_project`:** After a candidate debug fix, run this with `workflow: "debug"` so typecheck/lint/test output is recorded as VerificationEnvelope metadata.
 - **`debug_apply_verification`:** After verification, apply the whole verification set to the hypothesis. Do not mark a debug case resolved from a single passing check when sibling checks failed or were inconclusive.
 - **`impact_analyze`:** Use before editing a symbol that might be widely referenced. Returns the transitive dependent set with a risk label. If the label is `high` or the result is `truncated: true`, reconsider the edit's scope.
