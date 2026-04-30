@@ -992,7 +992,6 @@ export function Prompt(props: PromptProps) {
 
   async function submit() {
     if (inputBlocked() || submitInFlight) return
-    if (autocomplete?.visible) return
     if (!store.prompt.input) return
     if (isPromptExitCommand(store.prompt.input)) {
       exit()
@@ -1012,6 +1011,8 @@ export function Prompt(props: PromptProps) {
     const firstLine = inputText.split("\n")[0]
     const slashName = inputText.startsWith("/") ? firstLine.split(" ")[0].slice(1) : undefined
     if (currentMode === "normal" && slashName && command.trySlash(slashName)) return
+
+    if (autocomplete?.visible) return
 
     const selectedModel = local.model.current()
     if (!selectedModel) {

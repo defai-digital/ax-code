@@ -643,6 +643,18 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("pendingSubmitStatusText(submitStage())")
   })
 
+  test("prioritizes slash command dispatch over autocomplete early return in prompt submit path", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const slashDispatch = prompt.indexOf(
+      'if (currentMode === "normal" && slashName && command.trySlash(slashName)) return',
+    )
+    const autocompleteReturn = prompt.indexOf("if (autocomplete?.visible) return")
+
+    expect(slashDispatch).toBeGreaterThan(-1)
+    expect(autocompleteReturn).toBeGreaterThan(-1)
+    expect(slashDispatch).toBeLessThan(autocompleteReturn)
+  })
+
   test("keeps newly-created prompt sessions durable before the route handoff", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
