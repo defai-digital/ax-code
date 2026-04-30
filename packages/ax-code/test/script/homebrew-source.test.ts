@@ -134,6 +134,25 @@ describe("homebrew source formula generator", () => {
     expect(text).not.toContain("@defai.digital/ax-code@$CHANNEL")
   })
 
+  test("install matrix smokes installed packages with isolated runtime homes", async () => {
+    const text = await Bun.file(installMatrixWorkflow).text()
+    const smokeJob = text.match(/smoke:[\s\S]*?(?=\n  homebrew:|$)/)
+    expect(smokeJob).not.toBeNull()
+    expect(smokeJob![0]).toContain("AX_CODE_TEST_HOME")
+    expect(smokeJob![0]).toContain("XDG_CONFIG_HOME")
+    expect(smokeJob![0]).toContain("XDG_DATA_HOME")
+    expect(smokeJob![0]).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
+    expect(smokeJob![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
+
+    const homebrewJob = text.match(/homebrew:[\s\S]*$/)
+    expect(homebrewJob).not.toBeNull()
+    expect(homebrewJob![0]).toContain("AX_CODE_TEST_HOME")
+    expect(homebrewJob![0]).toContain("XDG_CONFIG_HOME")
+    expect(homebrewJob![0]).toContain("XDG_DATA_HOME")
+    expect(homebrewJob![0]).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
+    expect(homebrewJob![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
+  })
+
   test("install matrix refreshes the Homebrew tap while waiting for formula propagation", async () => {
     const text = await Bun.file(installMatrixWorkflow).text()
     const homebrewStep = text.match(/Install ax-code from Homebrew tap[\s\S]*?(?=\n      - name: ax-code --version|$)/)
@@ -148,6 +167,11 @@ describe("homebrew source formula generator", () => {
     const text = await Bun.file(releaseWorkflow).text()
     const buildJob = text.match(/build:[\s\S]*?(?=\n  publish:|\n  publish-source:|$)/)
     expect(buildJob).not.toBeNull()
+    expect(buildJob![0]).toContain("AX_CODE_TEST_HOME")
+    expect(buildJob![0]).toContain("XDG_CONFIG_HOME")
+    expect(buildJob![0]).toContain("XDG_DATA_HOME")
+    expect(buildJob![0]).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
+    expect(buildJob![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
     expect(buildJob![0]).toContain("Smoke — compiled backend stdio handshake")
     expect(buildJob![0]).toContain("smoke-bin:")
     expect(buildJob![0]).toContain('BIN="${{ matrix.smoke-bin }}"')
