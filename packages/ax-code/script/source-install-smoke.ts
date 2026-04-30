@@ -21,8 +21,32 @@ const args = new Set(process.argv.slice(2))
 
 const packageName = process.env.AX_CODE_INSTALL_SMOKE_PACKAGE ?? "@defai.digital/ax-code"
 const expectedVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
+const runTuiStartupSmoke = args.has("--tui-startup-smoke")
 const keepTemp = args.has("--keep-temp") || args.has("--manual-first-prompt")
 const decoder = new TextDecoder()
+const TUI_STARTUP_SUCCESS_EVENT = "tui.startup.appMounted"
+const TUI_STARTUP_REQUIRED_EVENTS = [
+  "tui.backendReady",
+  "tui.appImportReady",
+  "tui.startup.renderDispatched",
+  TUI_STARTUP_SUCCESS_EVENT,
+]
+const TUI_STARTUP_FAILURE_EVENTS = new Set([
+  "fatal",
+  "cli.uncaughtException",
+  "cli.unhandledRejection",
+  "tui.backendHandshakeFailed",
+  "tui.workerHandshakeFailed",
+  "tui.appImportFailed",
+  "tui.threadError",
+  "worker.uncaughtException",
+  "worker.unhandledRejection",
+])
+
+type ProcessEvent = {
+  eventType?: string
+  data?: unknown
+}
 
 function commandDisplay(command: string[]) {
   return command.map((part) => (part.includes(" ") ? JSON.stringify(part) : part)).join(" ")
@@ -37,6 +61,28 @@ function decodeOutput(value: string | Uint8Array | undefined) {
   if (typeof value === "string") return value
   if (!value) return ""
   return decoder.decode(value)
+}
+
+function positiveIntegerEnv(name: string, fallback: number) {
+  const value = process.env[name]
+  if (!value) return fallback
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function stringEnv(input: Record<string, string | undefined>) {
+  return Object.fromEntries(Object.entries(input).filter((entry): entry is [string, string] => entry[1] !== undefined))
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
+function outputTail(output: string, limit = 4_000) {
+  return output
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, "")
+    .slice(-limit)
 }
 
 function installedPackageDir(root: string, name: string) {
@@ -103,14 +149,181 @@ async function run(
   return stdout + stderr
 }
 
+async function processEventFiles(root: string): Promise<string[]> {
+  const entries = await fs.promises.readdir(root, { withFileTypes: true }).catch(() => [])
+  const files: string[] = []
+
+  for (const entry of entries) {
+    const file = path.join(root, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...(await processEventFiles(file)))
+      continue
+    }
+    if (entry.isFile() && entry.name === "process.jsonl") files.push(file)
+  }
+
+  return files
+}
+
+async function readProcessEvents(root: string): Promise<ProcessEvent[]> {
+  const files = await processEventFiles(root)
+  const events: ProcessEvent[] = []
+
+  for (const file of files) {
+    const text = await fs.promises.readFile(file, "utf8").catch(() => "")
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue
+      try {
+        const record = JSON.parse(line) as ProcessEvent
+        events.push(record)
+      } catch {
+        // The process may append while the smoke is polling. Ignore a partial
+        // line and pick it up on the next read.
+      }
+    }
+  }
+
+  return events
+}
+
+function eventNames(events: ProcessEvent[]) {
+  return [...new Set(events.map((event) => event.eventType).filter((event): event is string => !!event))]
+}
+
+async function waitForTuiStartup(
+  debugBaseDir: string,
+  timeoutMs: number,
+  exitEvent: () => { exitCode: number; signal?: string | number } | undefined,
+) {
+  const deadline = Date.now() + timeoutMs
+  let latestEvents: ProcessEvent[] = []
+
+  while (Date.now() < deadline) {
+    latestEvents = await readProcessEvents(debugBaseDir)
+    const failure = latestEvents.find((event) => event.eventType && TUI_STARTUP_FAILURE_EVENTS.has(event.eventType))
+    if (failure) {
+      throw new Error(`TUI startup emitted ${failure.eventType}: ${JSON.stringify(failure.data ?? {})}`)
+    }
+    if (latestEvents.some((event) => event.eventType === TUI_STARTUP_SUCCESS_EVENT)) return latestEvents
+
+    const exit = exitEvent()
+    if (exit) {
+      throw new Error(
+        `TUI exited before ${TUI_STARTUP_SUCCESS_EVENT} (exitCode=${exit.exitCode}, signal=${exit.signal ?? "none"})`,
+      )
+    }
+
+    await wait(100)
+  }
+
+  const seen = eventNames(latestEvents)
+  throw new Error(
+    `TUI startup did not reach ${TUI_STARTUP_SUCCESS_EVENT} within ${timeoutMs}ms; seen events: ${
+      seen.length ? seen.join(", ") : "none"
+    }`,
+  )
+}
+
+async function runTuiStartupGate(axCodeBin: string, options: { cwd: string; debugBaseDir: string; homeDir: string }) {
+  const timeoutMs = positiveIntegerEnv("AX_CODE_INSTALL_SMOKE_TUI_TIMEOUT_MS", 20_000)
+  await fs.promises.rm(options.debugBaseDir, { recursive: true, force: true })
+  await fs.promises.mkdir(options.debugBaseDir, { recursive: true })
+  await fs.promises.mkdir(options.homeDir, { recursive: true })
+
+  console.log(`source-install-smoke: running installed TUI startup smoke (timeout ${timeoutMs}ms)`)
+  const { spawn } = await import("bun-pty")
+  const env = stringEnv({
+    ...process.env,
+    HOME: options.homeDir,
+    XDG_CONFIG_HOME: path.join(options.homeDir, ".config"),
+    XDG_CACHE_HOME: path.join(options.homeDir, ".cache"),
+    AX_CODE_DISABLE_AUTOUPDATE: "1",
+    AX_CODE_DISABLE_AUTO_INDEX: "1",
+    AX_CODE_DISABLE_LSP_DOWNLOAD: "1",
+    AX_CODE_DISABLE_MODELS_FETCH: "1",
+    AX_CODE_DISABLE_PROJECT_CONFIG: "1",
+    AX_CODE_DISABLE_SHARE: "1",
+    AX_CODE_EXPERIMENTAL_DISABLE_FILEWATCHER: "1",
+    AX_CODE_TUI_BACKEND_TRANSPORT: "worker",
+    AX_CODE_TUI_UPGRADE_CHECK_DELAY_MS: "0",
+    AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: "5000",
+    COLORTERM: "truecolor",
+    TERM: "xterm-256color",
+  })
+
+  const pty = spawn(axCodeBin, ["--debug", "--debug-dir", options.debugBaseDir], {
+    name: "xterm-256color",
+    cols: 100,
+    rows: 30,
+    cwd: options.cwd,
+    env,
+  })
+  let output = ""
+  let exit: { exitCode: number; signal?: string | number } | undefined
+  const onData = pty.onData((chunk) => {
+    output = (output + chunk).slice(-20_000)
+  })
+  let resolveExit: ((event: { exitCode: number; signal?: string | number }) => void) | undefined
+  const exitPromise = new Promise<{ exitCode: number; signal?: string | number }>((resolve) => {
+    resolveExit = resolve
+  })
+  const onExit = pty.onExit((event) => {
+    exit = event
+    resolveExit?.(event)
+  })
+  let failureMessage: string | undefined
+
+  try {
+    const events = await waitForTuiStartup(options.debugBaseDir, timeoutMs, () => exit)
+    const seen = new Set(eventNames(events))
+    const missing = TUI_STARTUP_REQUIRED_EVENTS.filter((event) => !seen.has(event))
+    if (missing.length) {
+      throw new Error(`installed TUI startup smoke missed required events: ${missing.join(", ")}`)
+    }
+    console.log(
+      `source-install-smoke: installed TUI startup reached ${TUI_STARTUP_SUCCESS_EVENT} (${TUI_STARTUP_REQUIRED_EVENTS.join(
+        " -> ",
+      )})`,
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    failureMessage = [
+      `installed TUI startup smoke failed: ${message}`,
+      `debug logs: ${options.debugBaseDir}`,
+      output ? `pty output tail:\n${outputTail(output)}` : undefined,
+    ]
+      .filter(Boolean)
+      .join("\n")
+  } finally {
+    if (!exit) {
+      try {
+        pty.write("\x03")
+      } catch {}
+      await wait(100)
+      try {
+        pty.kill()
+      } catch {}
+      await Promise.race([exitPromise, wait(1_000)])
+    }
+    onData.dispose()
+    onExit.dispose()
+  }
+
+  if (failureMessage) await fail(failureMessage)
+}
+
 const tempRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), "ax-code-source-install-smoke."))
 const installDir = path.join(tempRoot, "install")
 const npmCache = path.join(tempRoot, "npm-cache")
 const debugDir = path.join(tempRoot, "first-prompt-debug")
+const tuiDebugDir = path.join(tempRoot, "tui-startup-debug")
+const tuiHomeDir = path.join(tempRoot, "tui-home")
+const tuiProjectDir = path.join(tempRoot, "tui-project")
 
 try {
   await fs.promises.mkdir(installDir, { recursive: true })
   await fs.promises.mkdir(npmCache, { recursive: true })
+  await fs.promises.mkdir(tuiProjectDir, { recursive: true })
 
   await run(["bun", "run", "script/publish-source.ts"], {
     cwd: dir,
@@ -185,6 +398,10 @@ try {
   }
   if (!/"runtimeMode":"(bun-bundled|source)"/.test(handshakeOutput)) {
     await fail("installed backend did not report bun-bundled/source runtime")
+  }
+
+  if (runTuiStartupSmoke) {
+    await runTuiStartupGate(axCodeBin, { cwd: tuiProjectDir, debugBaseDir: tuiDebugDir, homeDir: tuiHomeDir })
   }
 
   console.log("source-install-smoke: installed source package smoke passed")

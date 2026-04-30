@@ -38,6 +38,20 @@ describe("source-bundle package.json scripts", () => {
     expect(pkg.scripts["bundle:source:install-smoke"]).toContain("script/source-install-smoke.ts")
   })
 
+  test("bundle:source:tui-smoke verifies installed OpenTUI startup explicitly", async () => {
+    const pkg = JSON.parse(await Bun.file(packageJsonPath).text())
+    expect(pkg.scripts["bundle:source:tui-smoke"]).toBeDefined()
+    expect(pkg.scripts["bundle:source:tui-smoke"]).toContain("script/source-install-smoke.ts")
+    expect(pkg.scripts["bundle:source:tui-smoke"]).toContain("--tui-startup-smoke")
+
+    const smokeScript = await Bun.file(path.resolve(import.meta.dir, "../../script/source-install-smoke.ts")).text()
+    expect(smokeScript).toContain("bun-pty")
+    expect(smokeScript).toContain("AX_CODE_INSTALL_SMOKE_TUI_TIMEOUT_MS")
+    expect(smokeScript).toContain("AX_CODE_TUI_WORKER_READY_TIMEOUT_MS")
+    expect(smokeScript).toContain("tui.startup.appMounted")
+    expect(smokeScript).toContain("pty.kill()")
+  })
+
   test("script files referenced by package.json all exist", async () => {
     // Catches typos in script paths before they hit CI.
     const pkg = JSON.parse(await Bun.file(packageJsonPath).text())
