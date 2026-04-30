@@ -36,6 +36,8 @@ export const MultiEditTool = Tool.define("multiedit", {
     const files = Array.from(new Set(params.edits.map((edit) => path.resolve(edit.filePath ?? params.filePath)))).sort()
     const original = new Map<string, string>()
     const current = new Map<string, string>()
+    const writeDeltas = new Map<string, { additions: number; deletions: number }>()
+    const writtenFiles = new Set<string>()
     const results: Array<{
       output: string
       metadata: {
@@ -55,119 +57,114 @@ export const MultiEditTool = Tool.define("multiedit", {
       BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, file))
     }
 
-    const lock = async <T>(idx: number, fn: () => Promise<T>): Promise<T> => {
-      const file = files[idx]
-      if (!file) return fn()
-      return FileTime.withLock(file, async () => lock(idx + 1, fn))
-    }
-
-    await lock(0, async () => {
-      for (const file of files) {
+    for (const file of files) {
+      await FileTime.withLock(file, async () => {
         await assertSymlinkInsideProject(file)
         await FileTime.assert(ctx.sessionID, file)
         const text = await Filesystem.readText(file)
         original.set(file, text)
         current.set(file, text)
-      }
+      })
+    }
 
-      try {
-        for (const edit of params.edits) {
-          const file = path.resolve(edit.filePath ?? params.filePath)
-          if (edit.oldString === edit.newString) {
-            throw new Error("No changes to apply: oldString and newString are identical.")
-          }
-          const before = current.get(file)
-          if (before === undefined) {
-            throw new Error(`File ${file} not found`)
-          }
-          const after = replace(before, edit.oldString, edit.newString, edit.replaceAll)
-          const diff = trimDiff(
-            createTwoFilesPatch(file, file, before.replaceAll("\r\n", "\n"), after.replaceAll("\r\n", "\n")),
-          )
-          await ctx.ask({
-            permission: "edit",
-            patterns: [path.relative(Instance.worktree, file)],
-            always: ["*"],
-            metadata: {
-              filepath: file,
-              diff,
-            },
-          })
-          current.set(file, after)
+    try {
+      for (const edit of params.edits) {
+        const file = path.resolve(edit.filePath ?? params.filePath)
+        if (edit.oldString === edit.newString) {
+          throw new Error("No changes to apply: oldString and newString are identical.")
+        }
+        const before = current.get(file)
+        if (before === undefined) {
+          throw new Error(`File ${file} not found`)
+        }
+        const after = replace(before, edit.oldString, edit.newString, edit.replaceAll)
+        const diff = trimDiff(
+          createTwoFilesPatch(file, file, before.replaceAll("\r\n", "\n"), after.replaceAll("\r\n", "\n")),
+        )
+        await ctx.ask({
+          permission: "edit",
+          patterns: [path.relative(Instance.worktree, file)],
+          always: ["*"],
+          metadata: {
+            filepath: file,
+            diff,
+          },
+        })
+        current.set(file, after)
 
-          const filediff: Snapshot.FileDiff = {
-            file,
-            before,
-            after,
-            additions: 0,
-            deletions: 0,
-          }
-          for (const change of diffLines(before, after)) {
-            if (change.added) filediff.additions += change.count || 0
-            if (change.removed) filediff.deletions += change.count || 0
-          }
-
-          results.push({
-            output: "Edit applied successfully.",
-            metadata: {
-              diff,
-              filediff,
-            },
-          })
+        const filediff: Snapshot.FileDiff = {
+          file,
+          before,
+          after,
+          additions: 0,
+          deletions: 0,
+        }
+        for (const change of diffLines(before, after)) {
+          if (change.added) filediff.additions += change.count || 0
+          if (change.removed) filediff.deletions += change.count || 0
         }
 
-        for (const file of files) {
-          const next = current.get(file)
-          const prev = original.get(file)
-          if (next === undefined || prev === undefined || next === prev) continue
+        results.push({
+          output: "Edit applied successfully.",
+          metadata: {
+            diff,
+            filediff,
+          },
+        })
+      }
+
+      for (const file of files) {
+        const next = current.get(file)
+        const prev = original.get(file)
+        if (next === undefined || prev === undefined || next === prev) continue
+        let additions = 0
+        let deletions = 0
+        for (const change of diffLines(prev, next)) {
+          if (change.added) additions += change.count || 0
+          if (change.removed) deletions += change.count || 0
+        }
+        writeDeltas.set(file, { additions, deletions })
+
+        await FileTime.withLock(file, async () => {
+          await FileTime.assert(ctx.sessionID, file)
           await Filesystem.write(file, next)
+          writtenFiles.add(file)
           await notifyFileEdited(file, "change")
           await FileTime.read(ctx.sessionID, file)
-          // Per-session file/line accounting for autonomous caps.
-          // additions+deletions matches the precise count edit.ts uses
-          // (diffLines), not the approximate split-newline count
-          // write.ts uses, since multiedit already computes the diff.
-          let additions = 0
-          let deletions = 0
-          for (const change of diffLines(prev, next)) {
-            if (change.added) additions += change.count || 0
-            if (change.removed) deletions += change.count || 0
+        })
+      }
+
+      for (const [file, diff] of writeDeltas) {
+        BlastRadius.recordWriteAndAssert(ctx.sessionID, file, diff.additions + diff.deletions)
+      }
+    } catch (error) {
+      const rollbackErrors: { file: string; error: unknown }[] = []
+
+      await Promise.all(
+        files.map((file) => {
+          const next = current.get(file)
+          const text = original.get(file)
+          if (!writtenFiles.has(file) || next === undefined || text === undefined || next === text) {
+            return Promise.resolve()
           }
-          BlastRadius.recordWriteAndAssert(ctx.sessionID, file, additions + deletions)
-        }
-      } catch (error) {
-        const rollbackErrors: { file: string; error: unknown }[] = []
-        const restoredFiles: string[] = []
-        await Promise.all(
-          files.map((file) => {
-            const text = original.get(file)
-            if (text === undefined) return Promise.resolve()
-            return Filesystem.write(file, text)
-              .then(() => {
-                restoredFiles.push(file)
-              })
-              .catch((rollbackError) => {
-                rollbackErrors.push({ file, error: rollbackError })
-                log.error("failed to roll back multiedit file", { file, error: rollbackError })
-              })
-          }),
-        )
-        for (const file of restoredFiles) {
-          try {
+
+          return FileTime.withLock(file, async () => {
+            await Filesystem.write(file, text)
             await FileTime.read(ctx.sessionID, file)
             await notifyFileEdited(file, "change")
-          } catch (rollbackError) {
+          }).catch((rollbackError) => {
             rollbackErrors.push({ file, error: rollbackError })
-            log.error("failed to notify multiedit rollback", { file, error: rollbackError })
-          }
-        }
-        if (rollbackErrors.length > 0) {
-          const message = rollbackErrors.map((item) => item.file).join(", ")
-          throw new Error(`Multiedit failed and rollback also failed for: ${message}`, { cause: error })
-        }
-        throw error
+            log.error("failed to roll back multiedit file", { file, error: rollbackError })
+          })
+        }),
+      )
+
+      if (rollbackErrors.length > 0) {
+        const message = rollbackErrors.map((item) => item.file).join(", ")
+        throw new Error(`Multiedit failed and rollback also failed for: ${message}`, { cause: error })
       }
-    })
+      throw error
+    }
 
     const changed = files.filter((file) => current.get(file) !== original.get(file))
     const { diagnostics } = await collectDiagnostics(changed)
