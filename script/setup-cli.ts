@@ -36,6 +36,7 @@ type SetupCliOptions = {
   version?: string
   exists?: (target: string) => boolean
   mkdirSync?: typeof fs.mkdirSync
+  readFileSync?: (p: string) => string
   writeFileSync?: typeof fs.writeFileSync
   spawnSync?: typeof childProcess.spawnSync
   log?: (msg: string) => void
@@ -86,6 +87,21 @@ export function bundledBinaryPath(input: {
   return path.join(input.root ?? ROOT, "packages", "ax-code", "dist", preferred.legacyName, "bin", preferred.binary)
 }
 
+export function bundledBuildMarkerPath(binary: string) {
+  return path.join(path.dirname(binary), ".built-from")
+}
+
+export function readBundledBuildMarker(
+  marker: string,
+  readFileSync: (p: string) => string = (p) => fs.readFileSync(p, "utf8"),
+) {
+  try {
+    return readFileSync(marker).trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function buildChannelForVersion(version: string) {
   const prerelease = version.split("-", 2)[1]
   if (!prerelease) return "latest"
@@ -114,6 +130,8 @@ export function ensureBundledBinary(input: {
   rebuild?: boolean
   exists?: (target: string) => boolean
   spawnSync?: typeof childProcess.spawnSync
+  readFileSync?: (p: string) => string
+  writeFileSync?: typeof fs.writeFileSync
   log?: (msg: string) => void
 }) {
   const root = input.root ?? ROOT
@@ -122,6 +140,8 @@ export function ensureBundledBinary(input: {
   const arch = input.arch ?? process.arch
   const exists = input.exists ?? fs.existsSync
   const spawnSync = input.spawnSync ?? childProcess.spawnSync
+  const readFileSync = input.readFileSync ?? ((p: string) => fs.readFileSync(p, "utf8"))
+  const writeFileSync = input.writeFileSync ?? fs.writeFileSync
   const log = input.log ?? console.log
   const preferred = preferredBundledTarget({
     platform,
@@ -136,9 +156,19 @@ export function ensureBundledBinary(input: {
     avx2: input.avx2,
     musl: input.musl,
   })
+  const marker = bundledBuildMarkerPath(binary)
+  const expectedRoot = path.resolve(root)
   if (!input.rebuild && exists(binary)) {
-    log(`Using existing bundled ax-code CLI for ${preferred.legacyName}: ${binary}`)
-    return binary
+    const recordedRoot = exists(marker) ? readBundledBuildMarker(marker, readFileSync) : undefined
+    if (recordedRoot && path.resolve(recordedRoot) === expectedRoot) {
+      log(`Using existing bundled ax-code CLI for ${preferred.legacyName}: ${binary}`)
+      return binary
+    }
+    log(
+      recordedRoot
+        ? `Rebuilding bundled ax-code CLI: existing binary was built from ${recordedRoot}, current checkout is ${expectedRoot}`
+        : `Rebuilding bundled ax-code CLI: existing binary has no build marker, cannot verify it matches ${expectedRoot}`,
+    )
   }
 
   const version =
@@ -167,6 +197,11 @@ export function ensureBundledBinary(input: {
   if (!exists(binary)) {
     throw new Error(`Bundled ax-code CLI was built, but ${binary} was not found`)
   }
+  try {
+    writeFileSync(marker, `${expectedRoot}\n`)
+  } catch (err) {
+    log(`Warning: failed to write bundled build marker at ${marker}: ${(err as Error).message}`)
+  }
   return binary
 }
 
@@ -181,6 +216,7 @@ export function setupCli(input: SetupCliOptions = {}) {
   const version = input.version
   const exists = input.exists ?? fs.existsSync
   const mkdirSync = input.mkdirSync ?? fs.mkdirSync
+  const readFileSync = input.readFileSync ?? ((p: string) => fs.readFileSync(p, "utf8"))
   const writeFileSync = input.writeFileSync ?? fs.writeFileSync
   const spawnSync = input.spawnSync ?? childProcess.spawnSync
   const log = input.log ?? console.log
@@ -207,6 +243,8 @@ export function setupCli(input: SetupCliOptions = {}) {
         rebuild: rebuildBundled,
         exists,
         spawnSync,
+        readFileSync,
+        writeFileSync,
         log,
       })
     : undefined

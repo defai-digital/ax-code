@@ -15,6 +15,14 @@ describe("install script", () => {
     expect(text).toContain(".stale-source-")
   })
 
+  test("quarantines stale bundled launchers whose target binary is missing", async () => {
+    const text = await Bun.file(installScript).text()
+    expect(text).toContain("cleanup_stale_bundled_launchers")
+    expect(text).toContain("bundled_launcher_target")
+    expect(text).toContain(".stale-bundled-")
+    expect(text).toContain("/dist/")
+  })
+
   test("warns when the installed binary is not first on PATH", async () => {
     const text = await Bun.file(installScript).text()
     expect(text).toContain("warn_path_precedence")

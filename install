@@ -268,6 +268,48 @@ cleanup_stale_source_launchers() {
     done < <(list_ax_code_paths)
 }
 
+bundled_launcher_target() {
+    local path=$1
+    if [ ! -f "$path" ]; then
+        return 1
+    fi
+    if ! grep -Fq 'AX_CODE_ORIGINAL_CWD' "$path" 2>/dev/null; then
+        return 1
+    fi
+    if grep -Fq 'bun run --cwd ' "$path" 2>/dev/null; then
+        return 1
+    fi
+    if ! grep -Fq '/dist/' "$path" 2>/dev/null; then
+        return 1
+    fi
+    sed -n 's/.*exec "\([^"]*\/dist\/[^"]*\/bin\/ax-code\)".*/\1/p' "$path" | head -n 1
+}
+
+cleanup_stale_bundled_launchers() {
+    local launcher=""
+    local target=""
+    local backup=""
+    local stamp=""
+
+    while IFS= read -r launcher; do
+        [ -n "$launcher" ] || continue
+        [ "$launcher" != "${INSTALL_DIR}/ax-code" ] || continue
+
+        target=$(bundled_launcher_target "$launcher" || true)
+        [ -n "$target" ] || continue
+        [ ! -f "$target" ] || continue
+
+        stamp=$(date +%Y%m%d%H%M%S)
+        backup="${launcher}.stale-bundled-${stamp}"
+        if mv "$launcher" "$backup" 2>/dev/null; then
+            print_message warning "${MUTED}Moved stale ax-code bundled launcher:${NC} $launcher -> $backup"
+        else
+            print_message warning "${ORANGE}Warning:${NC} stale ax-code bundled launcher still shadows the packaged runtime: $launcher"
+            print_message warning "It points to missing binary: $target"
+        fi
+    done < <(list_ax_code_paths)
+}
+
 check_version() {
     if command -v ax-code >/dev/null 2>&1; then
         ax_code_path=$(which ax-code)
@@ -422,6 +464,7 @@ warn_path_precedence() {
 }
 
 cleanup_stale_source_launchers
+cleanup_stale_bundled_launchers
 
 if [ -n "$binary_path" ]; then
     install_from_binary
