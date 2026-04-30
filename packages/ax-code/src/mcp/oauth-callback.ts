@@ -66,6 +66,7 @@ export namespace McpOAuthCallback {
   // `Bun.serve()` on the same port (EADDRINUSE). Cleared on completion so
   // a subsequent start after stop() can still initialize.
   let initPromise: Promise<void> | undefined
+  let initGeneration = 0
   const pendingAuths = new Map<string, PendingAuth>()
   const pendingStates = new Map<string, string>()
 
@@ -101,7 +102,8 @@ export namespace McpOAuthCallback {
   export async function ensureRunning(): Promise<void> {
     if (server) return
     if (initPromise) return initPromise
-    initPromise = (async () => {
+    const generation = initGeneration
+    const nextInit = (async () => {
       server = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
@@ -177,11 +179,17 @@ export namespace McpOAuthCallback {
         },
       })
 
+      if (initGeneration !== generation) {
+        server.stop()
+        return
+      }
+
       const boundPort = server.port ?? OAUTH_CALLBACK_PORT
       setCallbackPort(boundPort)
       log.info("oauth callback server started", { port: boundPort })
-    })().finally(() => {
-      initPromise = undefined
+    })()
+    initPromise = nextInit.finally(() => {
+      if (initPromise === nextInit) initPromise = undefined
     })
     return initPromise
   }
@@ -233,6 +241,7 @@ export namespace McpOAuthCallback {
   }
 
   export async function stop(): Promise<void> {
+    initGeneration++
     if (server) {
       server.stop()
       server = undefined

@@ -405,6 +405,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // aborted or network error — caller will retry on next turn
       }
     })()
+    streamPromise.finally(() => {
+      if (this.eventStream?.done === streamPromise) {
+        this.eventStream = null
+      }
+    })
 
     this.eventStream = {
       close: () => controller.abort(),

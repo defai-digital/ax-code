@@ -219,6 +219,26 @@ describe("control-plane/session-proxy-middleware", () => {
     expect(state.calls).toEqual([])
   })
 
+  test("rejects malformed percent-encoded paths with a clear 400", async () => {
+    const state: State = {
+      workspace: "first",
+      calls: [],
+    }
+
+    const ctx = await setup(state)
+
+    const response = await ctx.request("http://workspace.test/session/%E0%A4%A", {
+      method: "POST",
+      body: "payload",
+    })
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: "Invalid workspace proxy path: /session/%E0%A4%A",
+    })
+    expect(state.calls).toEqual([])
+  })
+
   test("strips sensitive headers before forwarding to the remote adaptor", async () => {
     const state: State = {
       workspace: "first",

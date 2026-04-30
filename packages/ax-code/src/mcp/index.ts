@@ -1187,7 +1187,6 @@ export namespace MCP {
     await McpAuth.remove(mcpName)
     McpOAuthCallback.cancelPending(mcpName)
     await closePendingOAuthTransport(mcpName)
-    await McpAuth.clearOAuthState(mcpName)
     log.info("removed oauth credentials", { mcpName })
   }
 

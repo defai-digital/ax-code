@@ -34,7 +34,12 @@ function normalizeWorkspacePath(rawPath: string): string {
     // Keep the raw value if malformed percent-encoding appears.
   }
 
-  const decodedPathname = decodeURIComponent(new URL(rawPath, WORKSPACE_PROXY_BASE_URL).pathname)
+  let decodedPathname: string
+  try {
+    decodedPathname = decodeURIComponent(new URL(rawPath, WORKSPACE_PROXY_BASE_URL).pathname)
+  } catch {
+    throw new Error(`Invalid workspace proxy path: ${rawPath}`)
+  }
 
   if (
     rawPath.startsWith("//") ||

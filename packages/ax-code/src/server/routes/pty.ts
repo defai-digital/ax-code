@@ -210,10 +210,12 @@ export const PtyRoutes = lazy(() =>
             handler?.onMessage(event.data)
           },
           onClose() {
+            if (closed) return
             closed = true
             handler?.onClose()
           },
           onError() {
+            if (closed) return
             closed = true
             handler?.onClose()
           },

@@ -359,7 +359,13 @@ function isPullRequest() {
 }
 
 function useContext() {
-  return isMock() ? (JSON.parse(useEnvMock().mockEvent!) as GitHubContext) : github.context
+  if (!isMock()) return github.context
+
+  const { mockEvent } = useEnvMock()
+  if (!mockEvent) {
+    throw new Error("MOCK_EVENT must be set when using GitHub mock mode")
+  }
+  return JSON.parse(mockEvent) as GitHubContext
 }
 
 function useIssueId() {

@@ -67,7 +67,6 @@ export const SmartLlmRoutes = lazy(() =>
       validator("json", z.object({ enabled: z.boolean() })),
       async (c) => {
         const { enabled } = c.req.valid("json")
-        process.env["AX_CODE_SMART_LLM"] = String(enabled)
         let persisted = true
         await updateProjectConfig((config) => {
           config.routing ??= {}
@@ -78,6 +77,7 @@ export const SmartLlmRoutes = lazy(() =>
         })
         log.info("smart LLM routing changed", { enabled, persisted })
         if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
+        process.env["AX_CODE_SMART_LLM"] = String(enabled)
         return c.json({ enabled })
       },
     ),

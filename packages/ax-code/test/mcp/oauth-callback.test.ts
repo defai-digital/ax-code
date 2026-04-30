@@ -26,6 +26,7 @@ test("cancelPending rejects a pending oauth flow by MCP name", async () => {
 test("waitForCallback keeps the latest waiter for duplicate states", async () => {
   const McpOAuthCallback = await getCallbackModule()
   const old = McpOAuthCallback.waitForCallback("dup-state", "workspace")
+  old.catch(() => {})
   const newer = McpOAuthCallback.waitForCallback("dup-state", "workspace")
 
   let newRejected = false
