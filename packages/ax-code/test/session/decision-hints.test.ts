@@ -340,4 +340,20 @@ describe("DecisionHints", () => {
       hints: [{ id: "failed-review-verification", category: "failed_validation" }],
     })
   })
+
+  test("keeps needs-verification review results actionable when earlier replay context is truncated", () => {
+    const hints = DecisionHints.fromEvents([
+      toolCall("c1", "review_complete", {}),
+      toolResult("c1", "review_complete", "completed", {
+        reviewResult: { decision: "needs_verification", missingVerification: true },
+      }),
+    ])
+
+    expect(hints).toHaveLength(1)
+    expect(hints[0]).toMatchObject({
+      id: "missing-review-verification",
+      category: "missing_verification",
+    })
+    expect(hints[0]?.evidence).toContain("review_complete result needs verification")
+  })
 })

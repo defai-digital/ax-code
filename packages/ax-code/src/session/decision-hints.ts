@@ -156,9 +156,14 @@ export namespace DecisionHints {
     const reviewVerifications = actions.filter(isReviewVerificationAction)
     const reviewSignals = [...reviewFindings, ...reviewVerifications].sort((a, b) => a.index - b.index)
     const latestReviewSignal = reviewSignals.at(-1)
-    if (!latestReviewSignal) return []
-
     const latestCompletion = actions.filter(isReviewCompleteAction).at(-1)
+    if (!latestReviewSignal) {
+      if (latestCompletion && reviewCompletionNeedsVerification(latestCompletion)) {
+        return [missingReviewVerificationHint(latestCompletion, reviewFindings, reviewVerifications)]
+      }
+      return []
+    }
+
     if (latestCompletion && latestCompletion.index > latestReviewSignal.index) {
       if (reviewCompletionNeedsVerification(latestCompletion)) {
         return [missingReviewVerificationHint(latestCompletion, reviewFindings, reviewVerifications)]
