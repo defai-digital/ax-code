@@ -117,6 +117,17 @@ describe("PR CI bundle-source job", () => {
     expect(jobMatch![0]).toMatch(/bun-bundled\|source|source\|bun-bundled/)
   })
 
+  test("bundle-source job isolates the runtime home for smoke commands", async () => {
+    const text = await Bun.file(ciWorkflowPath).text()
+    const jobMatch = text.match(/bundle-source:[\s\S]*?(?=\n  \w+:|$)/)
+    expect(jobMatch).not.toBeNull()
+    expect(jobMatch![0]).toContain("AX_CODE_TEST_HOME")
+    expect(jobMatch![0]).toContain("XDG_CONFIG_HOME")
+    expect(jobMatch![0]).toContain("XDG_DATA_HOME")
+    expect(jobMatch![0]).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
+    expect(jobMatch![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
+  })
+
   test("bundle-source job smokes the bundled tui-backend stdio handshake", async () => {
     const text = await Bun.file(ciWorkflowPath).text()
     const jobMatch = text.match(/bundle-source:[\s\S]*?(?=\n  \w+:|$)/)

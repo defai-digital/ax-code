@@ -164,6 +164,16 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AX_CODE_DISABLE_SHARE: "true"
+      AX_CODE_DISABLE_AUTOUPDATE: "1"
+      AX_CODE_DISABLE_AUTO_INDEX: "1"
+      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+      AX_CODE_DISABLE_MODELS_FETCH: "1"
+      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+      AX_CODE_TEST_HOME: ${{ runner.temp }}/ax-code-source-bundle-home
+      XDG_CONFIG_HOME: ${{ runner.temp }}/ax-code-source-bundle-home/.config
+      XDG_CACHE_HOME: ${{ runner.temp }}/ax-code-source-bundle-home/.cache
+      XDG_DATA_HOME: ${{ runner.temp }}/ax-code-source-bundle-home/.local/share
+      XDG_STATE_HOME: ${{ runner.temp }}/ax-code-source-bundle-home/.local/state
     steps:
       - uses: actions/checkout@v6
 
