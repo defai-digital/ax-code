@@ -153,7 +153,7 @@ describe("DebugProposeHypothesisTool", () => {
     })
   })
 
-  test("confidence climbs with more evidence (capped at 0.95)", async () => {
+  test("rejects hypotheses without evidence refs or static analysis", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -162,7 +162,26 @@ describe("DebugProposeHypothesisTool", () => {
         const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
 
         const tool = await DebugProposeHypothesisTool.init()
-        const noEvidence = await tool.execute({ caseId, claim: "claim a" }, fakeCtx(session.id))
+        await expect(tool.execute({ caseId, claim: "claim a" }, fakeCtx(session.id))).rejects.toThrow(
+          /without evidenceRefs or staticAnalysis/,
+        )
+      },
+    })
+  })
+
+  test("confidence climbs with more evidence (capped at 0.95)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
+
+        const tool = await DebugProposeHypothesisTool.init()
+        const withEvidence = await tool.execute(
+          { caseId, claim: "claim a", evidenceRefs: [evidenceId] },
+          fakeCtx(session.id),
+        )
         const withStatic = await tool.execute(
           {
             caseId,
@@ -172,7 +191,7 @@ describe("DebugProposeHypothesisTool", () => {
           fakeCtx(session.id),
         )
 
-        expect(noEvidence.metadata.confidence).toBeLessThan(withStatic.metadata.confidence)
+        expect(withEvidence.metadata.confidence).toBeLessThan(withStatic.metadata.confidence)
         expect(withStatic.metadata.confidence).toBeLessThanOrEqual(0.95)
       },
     })
@@ -184,10 +203,10 @@ describe("DebugProposeHypothesisTool", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
+        const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
 
         const tool = await DebugProposeHypothesisTool.init()
-        const result = await tool.execute({ caseId, claim: "x" }, fakeCtx(session.id))
+        const result = await tool.execute({ caseId, claim: "x", evidenceRefs: [evidenceId] }, fakeCtx(session.id))
         expect(result.metadata.debugHypothesis.status).toBe("active")
       },
     })
@@ -366,11 +385,17 @@ describe("DebugProposeHypothesisTool", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
+        const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "x")
 
         const tool = await DebugProposeHypothesisTool.init()
-        const a = await tool.execute({ caseId, claim: "the cache is wrong" }, fakeCtx(session.id))
-        const b = await tool.execute({ caseId, claim: "the cache is wrong" }, fakeCtx(session.id))
+        const a = await tool.execute(
+          { caseId, claim: "the cache is wrong", evidenceRefs: [evidenceId] },
+          fakeCtx(session.id),
+        )
+        const b = await tool.execute(
+          { caseId, claim: "the cache is wrong", evidenceRefs: [evidenceId] },
+          fakeCtx(session.id),
+        )
         expect(a.metadata.hypothesisId).toBe(b.metadata.hypothesisId)
       },
     })

@@ -57,6 +57,16 @@ function validateConfirmedStatus(input: {
   )
 }
 
+function validateEvidencePresence(input: {
+  evidenceRefs: readonly string[]
+  staticAnalysis: z.infer<typeof StaticAnalysisInput> | undefined
+}) {
+  if (input.evidenceRefs.length > 0 || input.staticAnalysis) return
+  throw new Error(
+    "Cannot propose a debug hypothesis without evidenceRefs or staticAnalysis. Capture evidence first or cite a debug_analyze call chain.",
+  )
+}
+
 export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -81,6 +91,10 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
         `caseId references an unknown debug case: ${args.caseId} (no DebugCase with this id was opened in session ${ctx.sessionID})`,
       )
     }
+    validateEvidencePresence({
+      evidenceRefs,
+      staticAnalysis: args.staticAnalysis,
+    })
     const verificationEnvelopes = SessionVerifications.loadWithIds(sessionID)
     if (evidenceRefs.length > 0) {
       const envelopeIds = new Set(verificationEnvelopes.map((item) => item.envelopeId))
