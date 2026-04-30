@@ -45,13 +45,28 @@ describe("source-bundle package.json scripts", () => {
     expect(pkg.scripts["bundle:source:tui-smoke"]).toContain("script/source-install-smoke.ts")
     expect(pkg.scripts["bundle:source:tui-smoke"]).toContain("--tui-startup-smoke")
 
-    const smokeScript = await Bun.file(path.resolve(import.meta.dir, "../../script/source-install-smoke.ts")).text()
-    expect(smokeScript).toContain("bun-pty")
-    expect(smokeScript).toContain("AX_CODE_INSTALL_SMOKE_TUI_TIMEOUT_MS")
-    expect(smokeScript).toContain("AX_CODE_INSTALL_SMOKE_TEMP_ROOT")
-    expect(smokeScript).toContain("AX_CODE_TUI_WORKER_READY_TIMEOUT_MS")
-    expect(smokeScript).toContain("tui.startup.appMounted")
-    expect(smokeScript).toContain("pty.kill()")
+    const installSmokeScript = await Bun.file(path.resolve(import.meta.dir, "../../script/source-install-smoke.ts")).text()
+    expect(installSmokeScript).toContain("runTuiStartupSmoke")
+    expect(installSmokeScript).toContain('backendTransport: "worker"')
+    expect(installSmokeScript).toContain("AX_CODE_INSTALL_SMOKE_TEMP_ROOT")
+
+    const tuiSmokeScript = await Bun.file(path.resolve(import.meta.dir, "../../script/tui-startup-smoke.ts")).text()
+    expect(tuiSmokeScript).toContain("bun-pty")
+    expect(tuiSmokeScript).toContain("AX_CODE_TUI_STARTUP_SMOKE_TIMEOUT_MS")
+    expect(tuiSmokeScript).toContain("AX_CODE_INSTALL_SMOKE_TUI_TIMEOUT_MS")
+    expect(tuiSmokeScript).toContain("AX_CODE_TUI_WORKER_READY_TIMEOUT_MS")
+    expect(tuiSmokeScript).toContain("tui.startup.appMounted")
+    expect(tuiSmokeScript).toContain("pty.kill()")
+  })
+
+  test("tui:startup-smoke exposes a reusable installed-binary OpenTUI gate", async () => {
+    const pkg = JSON.parse(await Bun.file(packageJsonPath).text())
+    expect(pkg.scripts["tui:startup-smoke"]).toBeDefined()
+    expect(pkg.scripts["tui:startup-smoke"]).toContain("script/tui-startup-smoke.ts")
+
+    const tuiSmokeScript = await Bun.file(path.resolve(import.meta.dir, "../../script/tui-startup-smoke.ts")).text()
+    expect(tuiSmokeScript).toContain("function resolveCommand")
+    expect(tuiSmokeScript).toContain("path.resolve(command)")
   })
 
   test("script files referenced by package.json all exist", async () => {
