@@ -136,18 +136,23 @@ function verificationEnvelope(
   }
 }
 
-async function emitVerification(sessionID: SessionID, envelope: VerificationEnvelope) {
-  const envelopeId = computeEnvelopeId(envelope)
+async function emitVerificationSet(sessionID: SessionID, envelopes: VerificationEnvelope[]) {
+  const envelopeIds = envelopes.map((envelope) => computeEnvelopeId(envelope))
   Recorder.emit({
     type: "tool.result",
     sessionID: sessionID as any,
     tool: "verify_project",
-    callID: `call-verify-${envelopeId}`,
+    callID: `call-verify-${envelopeIds[0]}`,
     status: "completed",
-    metadata: { verificationEnvelopes: [envelope] },
+    metadata: { verificationEnvelopes: envelopes },
     durationMs: 1,
   })
   await waitForRecorder()
+  return envelopeIds
+}
+
+async function emitVerification(sessionID: SessionID, envelope: VerificationEnvelope) {
+  const [envelopeId] = await emitVerificationSet(sessionID, [envelope])
   return envelopeId
 }
 
@@ -225,6 +230,40 @@ describe("DebugApplyVerificationTool", () => {
         })
         await waitForRecorder()
         expect(SessionDebug.load(session.id).hypotheses[0].status).toBe("confirmed")
+      },
+    })
+  })
+
+  test("applies the whole verification set so a sibling failure cannot be hidden by one passed envelope", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
+        const passedTypecheck = verificationEnvelope(session.id, "passed")
+        const failedTests = verificationEnvelope(session.id, "failed", [
+          {
+            kind: "test",
+            testName: "worker pool recovers",
+            framework: "bun",
+            file: "test/worker.test.ts",
+          },
+        ])
+        const [passedEnvelopeId, failedEnvelopeId] = await emitVerificationSet(session.id, [
+          passedTypecheck,
+          failedTests,
+        ])
+
+        const tool = await DebugApplyVerificationTool.init()
+        const result = await tool.execute({ hypothesisId, envelopeId: passedEnvelopeId }, fakeCtx(session.id))
+
+        expect(result.metadata.verificationOutcome).toBe("refuted")
+        expect(result.metadata.effectiveCaseStatus).toBe("unresolved")
+        expect(result.metadata.verificationEnvelopeIds).toEqual([passedEnvelopeId, failedEnvelopeId])
+        expect(result.metadata.debugHypothesis.status).toBe("refuted")
+        expect(result.metadata.debugHypothesis.evidenceRefs).toContain(passedEnvelopeId)
+        expect(result.metadata.debugHypothesis.evidenceRefs).toContain(failedEnvelopeId)
       },
     })
   })

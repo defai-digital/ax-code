@@ -250,6 +250,53 @@ describe("SessionVerifications.load", () => {
     })
   })
 
+  test("loadRunsWithIds preserves the tool.result verification set boundary", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const tc = buildEnvelope({
+          source: { tool: "verify_project", version: "4.x.x", runId: session.id },
+        })
+        const tests = buildEnvelope({
+          command: { runner: "test", argv: [], cwd: "/tmp/work" },
+          result: { ...tc.result, name: "tests", type: "test", passed: false, status: "failed" },
+          structuredFailures: [{ kind: "test", testName: "worker pool recovers", framework: "bun" }],
+          source: { tool: "verify_project", version: "4.x.x", runId: session.id },
+        })
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "call-verify",
+          status: "completed",
+          metadata: { verificationEnvelopes: [tc, tests] },
+          durationMs: 1,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const runs = SessionVerifications.loadRunsWithIds(session.id)
+        expect(runs).toHaveLength(1)
+        expect(runs[0]).toMatchObject({ tool: "verify_project", callID: "call-verify" })
+        expect(runs[0].envelopes.map((item) => item.envelopeId)).toEqual([
+          computeEnvelopeId(tc),
+          computeEnvelopeId(tests),
+        ])
+      },
+    })
+  })
+
   test("envelopeIdSet returns the set of all envelope ids in the session", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

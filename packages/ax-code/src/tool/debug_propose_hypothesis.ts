@@ -7,6 +7,7 @@ import {
   DebugHypothesisStatus,
   DEBUG_ID_PATTERN,
 } from "../debug-engine/runtime-debug"
+import { classifyEnvelopeSet } from "../debug-engine/verify-after-fix"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
 import { SessionVerifications } from "../session/verifications"
@@ -41,17 +42,18 @@ function computeConfidence(input: {
 function validateConfirmedStatus(input: {
   status: z.infer<typeof DebugHypothesisStatus> | undefined
   evidenceRefs: readonly string[]
-  verificationEnvelopes: ReturnType<typeof SessionVerifications.loadWithIds>
+  verificationRuns: ReturnType<typeof SessionVerifications.loadRunsWithIds>
 }) {
   if (input.status !== "confirmed") return
-  const envelopeById = new Map(input.verificationEnvelopes.map((item) => [item.envelopeId, item.envelope]))
-  const referencedEnvelopes = input.evidenceRefs.map((id) => envelopeById.get(id)).filter((item) => item !== undefined)
-  const hasPassingEnvelope = referencedEnvelopes.some((envelope) => envelope.result.status === "passed")
-  const hasFailingEnvelope = referencedEnvelopes.some(
-    (envelope) =>
-      envelope.result.status === "failed" || envelope.result.status === "error" || envelope.result.status === "timeout",
+  const referencedRuns = input.verificationRuns.filter((run) =>
+    run.envelopes.some((item) => input.evidenceRefs.includes(item.envelopeId)),
   )
-  if (hasPassingEnvelope && !hasFailingEnvelope) return
+  if (
+    referencedRuns.length > 0 &&
+    referencedRuns.every((run) => classifyEnvelopeSet(run.envelopes.map((item) => item.envelope)) === "confirmed")
+  ) {
+    return
+  }
   throw new Error(
     'Cannot mark hypothesis as confirmed without a successful VerificationEnvelope evidence set from this session. Run verify_project after the fix and cite at least one passed envelope and no failed, error, or timeout envelopes.',
   )
@@ -95,7 +97,8 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
       evidenceRefs,
       staticAnalysis: args.staticAnalysis,
     })
-    const verificationEnvelopes = SessionVerifications.loadWithIds(sessionID)
+    const verificationRuns = SessionVerifications.loadRunsWithIds(sessionID)
+    const verificationEnvelopes = verificationRuns.flatMap((run) => run.envelopes)
     if (evidenceRefs.length > 0) {
       const envelopeIds = new Set(verificationEnvelopes.map((item) => item.envelopeId))
       for (const id of evidenceRefs) {
@@ -109,7 +112,7 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
     validateConfirmedStatus({
       status: args.status,
       evidenceRefs,
-      verificationEnvelopes,
+      verificationRuns,
     })
 
     const hypothesisId = computeDebugHypothesisId({ caseId: args.caseId, claim: args.claim })

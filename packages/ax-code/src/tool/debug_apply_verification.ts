@@ -3,8 +3,8 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./debug_apply_verification.txt"
 import { DEBUG_ID_PATTERN, DebugHypothesisSchema } from "../debug-engine/runtime-debug"
 import {
-  applyVerificationToHypothesis,
-  classifyEnvelope,
+  applyVerificationSetToHypothesis,
+  classifyEnvelopeSet,
   resolveCaseStatus,
 } from "../debug-engine/verify-after-fix"
 import { Installation } from "../installation"
@@ -35,17 +35,22 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
       )
     }
 
-    const verification = SessionVerifications.loadWithIds(sessionID).find((item) => item.envelopeId === args.envelopeId)
-    if (!verification) {
+    const verificationRun = SessionVerifications.loadRunsWithIds(sessionID).find((run) =>
+      run.envelopes.some((item) => item.envelopeId === args.envelopeId),
+    )
+    const verification = verificationRun?.envelopes.find((item) => item.envelopeId === args.envelopeId)
+    if (!verificationRun || !verification) {
       throw new Error(
         `envelopeId references an unknown VerificationEnvelope: ${args.envelopeId} (no envelope with this id exists in session ${ctx.sessionID})`,
       )
     }
 
-    const verificationOutcome = classifyEnvelope(verification.envelope)
-    const applied = applyVerificationToHypothesis({
+    const verificationSet = verificationRun.envelopes.map((item) => item.envelope)
+    const verificationEnvelopeIds = verificationRun.envelopes.map((item) => item.envelopeId)
+    const verificationOutcome = classifyEnvelopeSet(verificationSet)
+    const applied = applyVerificationSetToHypothesis({
       hypothesis,
-      envelope: verification.envelope,
+      envelopes: verificationSet,
     })
     const debugHypothesis = DebugHypothesisSchema.parse({
       ...applied,
@@ -59,7 +64,8 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
     return {
       title: `debug_apply_verification ${verification.envelopeId}`,
       output: [
-        `Applied verification ${verification.envelopeId} to hypothesis ${debugHypothesis.hypothesisId}`,
+        `Applied verification set ${verificationRun.callID} to hypothesis ${debugHypothesis.hypothesisId}`,
+        `Selected envelope: ${verification.envelopeId}`,
         `Outcome: ${verificationOutcome}`,
         `Hypothesis status: ${debugHypothesis.status}`,
         `Case status: ${effectiveCaseStatus}`,
@@ -67,6 +73,7 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
       metadata: {
         hypothesisId: debugHypothesis.hypothesisId,
         envelopeId: verification.envelopeId,
+        verificationEnvelopeIds,
         verificationOutcome,
         effectiveCaseStatus,
         debugHypothesis,

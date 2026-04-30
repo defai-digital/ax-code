@@ -1,14 +1,14 @@
 Apply a VerificationEnvelope to an existing runtime debug hypothesis.
 
-Use this after a fix attempt has produced verification metadata through verify_project or refactor_apply. The tool updates the existing hypothesis in the session:
+Use this after a fix attempt has produced verification metadata through verify_project or refactor_apply. The tool evaluates the whole VerificationEnvelope set from the tool.result that emitted the cited envelope, then updates the existing hypothesis in the session:
 
-- passed verification -> confirmed
-- failed verification with structured failures -> refuted
-- skipped, timeout, error, or failed without structured failures -> unchanged / inconclusive
+- passed verification set -> confirmed
+- any failed envelope with structured failures -> refuted
+- skipped-only, timeout, error, or failed without structured failures -> unchanged / inconclusive
 
 Inputs:
 - hypothesisId: 16-char hex id returned by debug_propose_hypothesis.
-- envelopeId: 16-char hex id returned by verify_project/refactor_apply metadata.
+- envelopeId: 16-char hex id returned by verify_project/refactor_apply metadata. This selects the originating verification set; do not cite a lone passing check from a run where another check failed.
 
 Rules:
 - Do not use fabricated ids. Both the hypothesis and envelope must already exist in this session.

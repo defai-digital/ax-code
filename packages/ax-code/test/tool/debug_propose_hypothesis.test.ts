@@ -348,17 +348,50 @@ describe("DebugProposeHypothesisTool", () => {
           ),
         ).rejects.toThrow(/without a successful VerificationEnvelope evidence set/)
 
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "one passed check from a mixed verification run should not confirm",
+              evidenceRefs: [passedEnvelopeId],
+              status: "confirmed",
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/without a successful VerificationEnvelope evidence set/)
+
+        const cleanPassedEnvelope: VerificationEnvelope = {
+          ...passedEnvelope,
+          command: { runner: "test", argv: [], cwd: "/tmp" },
+          result: {
+            ...passedEnvelope.result,
+            name: "tests",
+            type: "test",
+          },
+        }
+        const cleanPassedEnvelopeId = computeEnvelopeId(cleanPassedEnvelope)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "verify_project",
+          callID: "call-verify-clean",
+          status: "completed",
+          metadata: { verificationEnvelopes: [cleanPassedEnvelope] },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
         const result = await tool.execute(
           {
             caseId,
             claim: "passed verification confirms the fix",
-            evidenceRefs: [passedEnvelopeId],
+            evidenceRefs: [cleanPassedEnvelopeId],
             status: "confirmed",
           },
           fakeCtx(session.id),
         )
         expect(result.metadata.debugHypothesis.status).toBe("confirmed")
-        expect(result.metadata.debugHypothesis.evidenceRefs).toContain(passedEnvelopeId)
+        expect(result.metadata.debugHypothesis.evidenceRefs).toContain(cleanPassedEnvelopeId)
       },
     })
   })

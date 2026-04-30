@@ -20,19 +20,27 @@ export namespace SessionVerifications {
   // Each envelope is re-validated via VerificationEnvelopeSchema. Entries
   // that fail validation are skipped (with a warning) so a single corrupted
   // record cannot block the rest.
-  export function load(sessionID: SessionID): VerificationEnvelope[] {
+  export type LoadedEnvelope = { envelope: VerificationEnvelope; envelopeId: string }
+  export type LoadedEnvelopeRun = {
+    tool: string
+    callID: string
+    envelopes: LoadedEnvelope[]
+  }
+
+  export function loadRunsWithIds(sessionID: SessionID): LoadedEnvelopeRun[] {
     const events = EventQuery.bySession(sessionID)
     // Dedup by computeEnvelopeId (deterministic hash of envelope content).
     // Re-running refactor_apply on the same plan in the same session
     // produces identical envelopes; we keep the first so consumers and
     // sidebar counts don't double-count the same verification run.
     const seen = new Set<string>()
-    const envelopes: VerificationEnvelope[] = []
+    const runs: LoadedEnvelopeRun[] = []
     for (const event of events) {
       if (event.type !== "tool.result") continue
       if (event.status !== "completed") continue
       const candidate = event.metadata?.verificationEnvelopes
       if (!Array.isArray(candidate)) continue
+      const envelopes: LoadedEnvelope[] = []
       for (let i = 0; i < candidate.length; i++) {
         const parsed = VerificationEnvelopeSchema.safeParse(candidate[i])
         if (!parsed.success) {
@@ -48,23 +56,23 @@ export namespace SessionVerifications {
         const id = computeEnvelopeId(parsed.data)
         if (seen.has(id)) continue
         seen.add(id)
-        envelopes.push(parsed.data)
+        envelopes.push({ envelope: parsed.data, envelopeId: id })
       }
+      if (envelopes.length > 0) runs.push({ tool: event.tool, callID: event.callID, envelopes })
     }
-    return envelopes
+    return runs
+  }
+
+  export function load(sessionID: SessionID): VerificationEnvelope[] {
+    return loadWithIds(sessionID).map((item) => item.envelope)
   }
 
   // Same as load() but each envelope is paired with its derived envelopeId
   // (computed via computeEnvelopeId). Useful for consumers that need to
   // cross-reference findings.evidenceRefs[].kind === "verification" entries
   // against the envelopes recorded in this session — see Phase 2 P2.5.
-  export type LoadedEnvelope = { envelope: VerificationEnvelope; envelopeId: string }
-
   export function loadWithIds(sessionID: SessionID): LoadedEnvelope[] {
-    return load(sessionID).map((envelope) => ({
-      envelope,
-      envelopeId: computeEnvelopeId(envelope),
-    }))
+    return loadRunsWithIds(sessionID).flatMap((run) => run.envelopes)
   }
 
   // Returns the set of envelopeIds present in the session — for callers that

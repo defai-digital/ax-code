@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import {
   applyVerificationToHypothesis,
+  applyVerificationSetToHypothesis,
   classifyEnvelope,
+  classifyEnvelopeSet,
   resolveCaseStatus,
 } from "../../src/debug-engine/verify-after-fix"
 import type { DebugHypothesis } from "../../src/debug-engine/runtime-debug"
@@ -98,6 +100,41 @@ describe("classifyEnvelope", () => {
   })
 })
 
+describe("classifyEnvelopeSet", () => {
+  test("passed plus skipped checks -> confirmed", () => {
+    expect(
+      classifyEnvelopeSet([
+        envelope(),
+        envelope({ result: { ...envelope().result, name: "lint", status: "skipped", passed: true } }),
+      ]),
+    ).toBe("confirmed")
+  })
+
+  test("any failed check with structured failures -> refuted", () => {
+    expect(
+      classifyEnvelopeSet([
+        envelope(),
+        envelope({
+          result: { ...envelope().result, name: "tests", status: "failed", passed: false },
+          structuredFailures: [{ kind: "test", testName: "x", framework: "bun" }],
+        }),
+      ]),
+    ).toBe("refuted")
+  })
+
+  test("failed without structured failures or infra failure -> inconclusive", () => {
+    expect(
+      classifyEnvelopeSet([
+        envelope(),
+        envelope({ result: { ...envelope().result, name: "tests", status: "failed", passed: false } }),
+      ]),
+    ).toBe("inconclusive")
+    expect(classifyEnvelopeSet([envelope({ result: { ...envelope().result, status: "timeout", passed: false } })])).toBe(
+      "inconclusive",
+    )
+  })
+})
+
 describe("applyVerificationToHypothesis", () => {
   test("passing envelope → hypothesis status flips to 'confirmed' and envelope id is appended to evidenceRefs", () => {
     const result = applyVerificationToHypothesis({ hypothesis: hypothesis(), envelope: envelope() })
@@ -166,6 +203,33 @@ describe("applyVerificationToHypothesis", () => {
     // Mutating the result must not bleed back into the input.
     result.evidenceRefs.push("new000aaaa1111bb")
     expect(original.evidenceRefs).toEqual([envelopeIdAlreadyPresent])
+  })
+})
+
+describe("applyVerificationSetToHypothesis", () => {
+  test("passing set appends every envelope id and confirms the hypothesis", () => {
+    const first = envelope()
+    const second = envelope({ result: { ...envelope().result, name: "lint", status: "skipped", passed: true } })
+    const result = applyVerificationSetToHypothesis({ hypothesis: hypothesis(), envelopes: [first, second] })
+
+    expect(result.status).toBe("confirmed")
+    expect(result.evidenceRefs).toHaveLength(2)
+  })
+
+  test("mixed pass plus structured failure refutes instead of confirming", () => {
+    const result = applyVerificationSetToHypothesis({
+      hypothesis: hypothesis(),
+      envelopes: [
+        envelope(),
+        envelope({
+          result: { ...envelope().result, name: "tests", status: "failed", passed: false },
+          structuredFailures: [{ kind: "test", testName: "worker pool recovers", framework: "bun" }],
+        }),
+      ],
+    })
+
+    expect(result.status).toBe("refuted")
+    expect(result.evidenceRefs).toHaveLength(2)
   })
 })
 

@@ -27,6 +27,24 @@ export function classifyEnvelope(envelope: VerificationEnvelope): VerifyOutcome 
   return "inconclusive"
 }
 
+export function classifyEnvelopeSet(envelopes: readonly VerificationEnvelope[]): VerifyOutcome {
+  if (envelopes.some((envelope) => envelope.result.status === "failed" && envelope.structuredFailures.length > 0)) {
+    return "refuted"
+  }
+  if (
+    envelopes.some(
+      (envelope) =>
+        envelope.result.status === "failed" ||
+        envelope.result.status === "error" ||
+        envelope.result.status === "timeout",
+    )
+  ) {
+    return "inconclusive"
+  }
+  if (envelopes.some((envelope) => envelope.result.status === "passed")) return "confirmed"
+  return "inconclusive"
+}
+
 export type VerifyApplication = {
   hypothesis: DebugHypothesis
   envelope: VerificationEnvelope
@@ -52,6 +70,28 @@ export function applyVerificationToHypothesis(input: VerifyApplication): DebugHy
   const evidenceRefs = input.hypothesis.evidenceRefs.includes(envelopeId)
     ? [...input.hypothesis.evidenceRefs]
     : [...input.hypothesis.evidenceRefs, envelopeId]
+
+  return {
+    ...input.hypothesis,
+    status: outcome === "confirmed" ? "confirmed" : "refuted",
+    evidenceRefs,
+  }
+}
+
+export type VerifySetApplication = {
+  hypothesis: DebugHypothesis
+  envelopes: readonly VerificationEnvelope[]
+}
+
+export function applyVerificationSetToHypothesis(input: VerifySetApplication): DebugHypothesis {
+  const outcome = classifyEnvelopeSet(input.envelopes)
+  if (outcome === "inconclusive") return input.hypothesis
+
+  const evidenceRefs = [...input.hypothesis.evidenceRefs]
+  for (const envelope of input.envelopes) {
+    const envelopeId = computeEnvelopeId(envelope)
+    if (!evidenceRefs.includes(envelopeId)) evidenceRefs.push(envelopeId)
+  }
 
   return {
     ...input.hypothesis,
