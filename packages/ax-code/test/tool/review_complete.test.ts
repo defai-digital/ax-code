@@ -180,6 +180,7 @@ describe("ReviewCompleteTool", () => {
         const result = await tool.execute({ summary: "Review still needs verification." }, ctx(session.id))
         expect(result.metadata.reviewResult.decision).toBe("needs_verification")
         expect(result.metadata.reviewResult.missingVerification).toBe(true)
+        expect(result.output).toContain('Next: run verify_project with workflow: "review"')
         await expect(
           tool.execute({ summary: "Should not approve.", decision: "approve" }, ctx(session.id)),
         ).rejects.toThrow(/without a successful verification set/)
@@ -214,6 +215,7 @@ describe("ReviewCompleteTool", () => {
           missingVerification: true,
         })
         expect(result.output).toContain("verification not fully passing")
+        expect(result.output).toContain('Next: run verify_project with workflow: "review"')
         await expect(
           tool.execute({ summary: "Should not approve.", decision: "approve" }, ctx(session.id)),
         ).rejects.toThrow(/without a successful verification set/)
@@ -244,6 +246,7 @@ describe("ReviewCompleteTool", () => {
           verificationEnvelopeIds: [],
           missingVerification: true,
         })
+        expect(result.output).toContain('Next: run verify_project with workflow: "review"')
         await expect(
           tool.execute(
             {

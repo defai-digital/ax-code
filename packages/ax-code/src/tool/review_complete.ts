@@ -116,6 +116,9 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       `Verification envelopes: ${draft.verificationEnvelopeIds.length}${
         draft.missingVerification ? " (verification not fully passing)" : ""
       }`,
+      ...(draft.missingVerification
+        ? ['Next: run verify_project with workflow: "review", then cite the passed envelope ids in review_complete.']
+        : []),
       `Review id: ${draft.reviewId}`,
     ]
 
