@@ -218,6 +218,56 @@ print_message() {
     echo -e "${color}${message}${NC}"
 }
 
+list_ax_code_paths() {
+    if command -v which >/dev/null 2>&1; then
+        which -a ax-code 2>/dev/null | awk '!seen[$0]++'
+    else
+        command -v ax-code 2>/dev/null || true
+    fi
+}
+
+source_launcher_cwd() {
+    local path=$1
+    if [ ! -f "$path" ]; then
+        return 1
+    fi
+    if ! grep -Fq 'bun run --cwd ' "$path" 2>/dev/null; then
+        return 1
+    fi
+    if ! grep -Fq '/packages/ax-code/src/index.ts' "$path" 2>/dev/null; then
+        return 1
+    fi
+    sed -n \
+        -e 's/^AX_CODE_SOURCE_CWD="\([^"]*\/packages\/ax-code\)".*/\1/p' \
+        -e 's/.*--cwd "\([^"]*\/packages\/ax-code\)".*/\1/p' \
+        "$path" | head -n 1
+}
+
+cleanup_stale_source_launchers() {
+    local launcher=""
+    local cwd=""
+    local backup=""
+    local stamp=""
+
+    while IFS= read -r launcher; do
+        [ -n "$launcher" ] || continue
+        [ "$launcher" != "${INSTALL_DIR}/ax-code" ] || continue
+
+        cwd=$(source_launcher_cwd "$launcher" || true)
+        [ -n "$cwd" ] || continue
+        [ ! -d "$cwd" ] || continue
+
+        stamp=$(date +%Y%m%d%H%M%S)
+        backup="${launcher}.stale-source-${stamp}"
+        if mv "$launcher" "$backup" 2>/dev/null; then
+            print_message warning "${MUTED}Moved stale ax-code source launcher:${NC} $launcher -> $backup"
+        else
+            print_message warning "${ORANGE}Warning:${NC} stale ax-code source launcher still shadows the packaged runtime: $launcher"
+            print_message warning "It points to missing checkout: $cwd"
+        fi
+    done < <(list_ax_code_paths)
+}
+
 check_version() {
     if command -v ax-code >/dev/null 2>&1; then
         ax_code_path=$(which ax-code)
@@ -351,12 +401,36 @@ install_from_binary() {
     chmod 755 "${INSTALL_DIR}/ax-code"
 }
 
+verify_installed_binary() {
+    local direct_version=""
+    if [ -x "${INSTALL_DIR}/ax-code" ]; then
+        direct_version=$("${INSTALL_DIR}/ax-code" --version 2>/dev/null || true)
+    fi
+
+    if [ "$specific_version" != "local" ] && [ -n "$specific_version" ] && [ "$direct_version" != "$specific_version" ]; then
+        print_message warning "${ORANGE}Warning:${NC} installed binary at ${INSTALL_DIR}/ax-code reported '${direct_version:-unknown}', expected '$specific_version'."
+    fi
+}
+
+warn_path_precedence() {
+    local resolved=""
+    resolved=$(command -v ax-code 2>/dev/null || true)
+    if [ -n "$resolved" ] && [ "$resolved" != "${INSTALL_DIR}/ax-code" ]; then
+        print_message warning "${ORANGE}Warning:${NC} your current shell resolves ax-code to $resolved"
+        print_message warning "Open a new shell or run: export PATH=${INSTALL_DIR}:\$PATH"
+    fi
+}
+
+cleanup_stale_source_launchers
+
 if [ -n "$binary_path" ]; then
     install_from_binary
 else
     check_version
     download_and_install
 fi
+
+verify_installed_binary
 
 
 add_to_path() {
@@ -442,6 +516,8 @@ if [ -n "${GITHUB_ACTIONS-}" ] && [ "${GITHUB_ACTIONS}" == "true" ]; then
     echo "$INSTALL_DIR" >> $GITHUB_PATH
     print_message info "Added $INSTALL_DIR to \$GITHUB_PATH"
 fi
+
+warn_path_precedence
 
 echo -e ""
 echo -e "${MUTED}                    ${NC}             ▄     "

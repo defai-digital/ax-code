@@ -32,7 +32,26 @@ export function sourceLauncherScript(input: SourceLauncherInput): string {
   const cwdPath = joiner.join(root, "packages", "ax-code")
   const entry = joiner.join(root, "packages", "ax-code", "src", "index.ts")
   if (input.windows) {
-    return `@echo off\nset AX_CODE_ORIGINAL_CWD=%CD%\nbun run --cwd "${cwdPath}" --conditions=browser "${entry}" %*\n`
+    return `@echo off
+set "AX_CODE_SOURCE_CWD=${cwdPath}"
+set "AX_CODE_SOURCE_ENTRY=${entry}"
+if not exist "%AX_CODE_SOURCE_CWD%\\" (
+  echo ax-code source launcher points at a missing checkout: %AX_CODE_SOURCE_CWD% 1>&2
+  echo Install the packaged runtime instead: npm install -g @defai.digital/ax-code@latest 1>&2
+  exit /b 127
+)
+set AX_CODE_ORIGINAL_CWD=%CD%
+bun run --cwd "%AX_CODE_SOURCE_CWD%" --conditions=browser "%AX_CODE_SOURCE_ENTRY%" %*
+`
   }
-  return `#!/bin/sh\nAX_CODE_ORIGINAL_CWD="\$(pwd)" exec bun run --cwd "${cwdPath}" --conditions=browser "${entry}" "$@"\n`
+  return `#!/bin/sh
+AX_CODE_SOURCE_CWD="${cwdPath}"
+AX_CODE_SOURCE_ENTRY="${entry}"
+if [ ! -d "$AX_CODE_SOURCE_CWD" ]; then
+  echo "ax-code source launcher points at a missing checkout: $AX_CODE_SOURCE_CWD" >&2
+  echo "Install the packaged runtime instead: npm install -g @defai.digital/ax-code@latest" >&2
+  exit 127
+fi
+AX_CODE_ORIGINAL_CWD="\$(pwd)" exec bun run --cwd "$AX_CODE_SOURCE_CWD" --conditions=browser "$AX_CODE_SOURCE_ENTRY" "$@"
+`
 }

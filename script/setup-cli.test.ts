@@ -49,11 +49,12 @@ describe("setup-cli helpers", () => {
   test("creates source launchers for source mode", () => {
     const unix = sourceLauncherScript({ root: "/repo", windows: false })
     const windows = sourceLauncherScript({ root: "/repo", windows: true })
-    expect(unix).toContain('exec bun run --cwd "/repo/packages/ax-code"')
-    expect(unix).toContain('"/repo/packages/ax-code/src/index.ts"')
-    expect(windows).toContain("bun run --cwd")
-    expect(windows).toContain("packages\\ax-code")
-    expect(windows).toContain("src\\index.ts")
+    expect(unix).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
+    expect(unix).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index.ts"')
+    expect(unix).toContain('exec bun run --cwd "$AX_CODE_SOURCE_CWD"')
+    expect(windows).toContain('set "AX_CODE_SOURCE_CWD=\\repo\\packages\\ax-code"')
+    expect(windows).toContain('set "AX_CODE_SOURCE_ENTRY=\\repo\\packages\\ax-code\\src\\index.ts"')
+    expect(windows).toContain('bun run --cwd "%AX_CODE_SOURCE_CWD%"')
     expect(windows).toContain("%*")
   })
 
@@ -105,7 +106,8 @@ describe("setup-cli helpers", () => {
 
     expect(writes).toHaveLength(1)
     expect(writes[0][0]).toBe("/tmp/ax-code-test-source/bin/ax-code")
-    expect(writes[0][1]).toContain('exec bun run --cwd "/repo/packages/ax-code"')
+    expect(writes[0][1]).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
+    expect(writes[0][1]).toContain('exec bun run --cwd "$AX_CODE_SOURCE_CWD"')
   })
 
   test("setupCli installs the bundled launcher when --bundled is explicit and reuses an existing binary", () => {

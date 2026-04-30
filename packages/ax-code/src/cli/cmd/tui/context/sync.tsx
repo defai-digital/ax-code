@@ -59,6 +59,7 @@ function sessionRiskURL(input: { baseUrl: string; sessionID: string; directory?:
   url.searchParams.set("envelopes", "true")
   url.searchParams.set("reviewResults", "true")
   url.searchParams.set("debug", "true")
+  url.searchParams.set("hints", "true")
   if (input.directory) url.searchParams.set("directory", input.directory)
   return url.toString()
 }
