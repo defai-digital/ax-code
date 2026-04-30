@@ -8,7 +8,6 @@
  * dependency installation and postinstall steps, which makes OpenTUI native
  * package resolution look broken even though the real user install path works.
  */
-import { $ } from "bun"
 import fs from "fs"
 import os from "os"
 import path from "path"
@@ -24,7 +23,6 @@ const packageName = process.env.AX_CODE_INSTALL_SMOKE_PACKAGE ?? "@defai.digital
 const expectedVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
 const shouldRunTuiStartupSmoke = args.has("--tui-startup-smoke")
 const keepTemp = args.has("--keep-temp") || args.has("--manual-first-prompt")
-const decoder = new TextDecoder()
 
 function commandDisplay(command: string[]) {
   return command.map((part) => (part.includes(" ") ? JSON.stringify(part) : part)).join(" ")
@@ -33,12 +31,6 @@ function commandDisplay(command: string[]) {
 async function fail(message: string): Promise<never> {
   console.error(`source-install-smoke: ${message}`)
   process.exit(1)
-}
-
-function decodeOutput(value: string | Uint8Array | undefined) {
-  if (typeof value === "string") return value
-  if (!value) return ""
-  return decoder.decode(value)
 }
 
 function installedPackageDir(root: string, name: string) {
@@ -70,15 +62,24 @@ async function collectAndMirror(stream: ReadableStream<Uint8Array> | null | unde
 
 async function run(
   command: string[],
-  options: { cwd?: string; env?: Record<string, string>; timeoutMs?: number } = {},
+  options: { cwd?: string; env?: Record<string, string>; timeoutMs?: number; input?: string } = {},
 ) {
   console.log(`source-install-smoke: running ${commandDisplay(command)}`)
   const result = Bun.spawn(command, {
     cwd: options.cwd ?? dir,
     env: { ...process.env, ...options.env },
+    stdin: options.input === undefined ? "ignore" : "pipe",
     stdout: "pipe",
     stderr: "pipe",
   })
+  if (options.input !== undefined) {
+    const stdin = result.stdin
+    if (!stdin) {
+      await fail(`${commandDisplay(command)} did not expose stdin pipe`)
+    }
+    stdin!.write(options.input)
+    stdin!.end()
+  }
 
   const stdoutPromise = collectAndMirror(result.stdout, (chunk) => process.stdout.write(chunk))
   const stderrPromise = collectAndMirror(result.stderr, (chunk) => process.stderr.write(chunk))
@@ -112,9 +113,25 @@ const tempRoot = requestedTempRoot
 const installDir = path.join(tempRoot, "install")
 const npmCache = path.join(tempRoot, "npm-cache")
 const debugDir = path.join(tempRoot, "first-prompt-debug")
+const runtimeHomeDir = path.join(tempRoot, "runtime-home")
 const tuiDebugDir = path.join(tempRoot, "tui-startup-debug")
 const tuiHomeDir = path.join(tempRoot, "tui-home")
 const tuiProjectDir = path.join(tempRoot, "tui-project")
+
+const installedRuntimeEnv = {
+  HOME: runtimeHomeDir,
+  AX_CODE_TEST_HOME: runtimeHomeDir,
+  XDG_CONFIG_HOME: path.join(runtimeHomeDir, ".config"),
+  XDG_CACHE_HOME: path.join(runtimeHomeDir, ".cache"),
+  XDG_DATA_HOME: path.join(runtimeHomeDir, ".local/share"),
+  XDG_STATE_HOME: path.join(runtimeHomeDir, ".local/state"),
+  AX_CODE_DISABLE_AUTOUPDATE: "1",
+  AX_CODE_DISABLE_AUTO_INDEX: "1",
+  AX_CODE_DISABLE_LSP_DOWNLOAD: "1",
+  AX_CODE_DISABLE_MODELS_FETCH: "1",
+  AX_CODE_DISABLE_PROJECT_CONFIG: "1",
+  AX_CODE_DISABLE_SHARE: "1",
+}
 
 try {
   if (requestedTempRoot) {
@@ -123,6 +140,7 @@ try {
   await fs.promises.mkdir(tempRoot, { recursive: true })
   await fs.promises.mkdir(installDir, { recursive: true })
   await fs.promises.mkdir(npmCache, { recursive: true })
+  await fs.promises.mkdir(runtimeHomeDir, { recursive: true })
   await fs.promises.mkdir(tuiProjectDir, { recursive: true })
 
   await run(["bun", "run", "script/publish-source.ts"], {
@@ -162,7 +180,8 @@ try {
 
   const binName = process.platform === "win32" ? "ax-code.cmd" : "ax-code"
   const axCodeBin = path.join(installDir, "node_modules", ".bin", binName)
-  const versionOutput = await run([axCodeBin, "--version"], { cwd: repoRoot })
+  const installedCommandOptions = { cwd: repoRoot, env: installedRuntimeEnv }
+  const versionOutput = await run([axCodeBin, "--version"], installedCommandOptions)
   const version = versionOutput.trim().replace(/^v/, "")
   if (version !== expectedVersion) {
     await fail(`expected installed ax-code --version to be ${expectedVersion}, got ${versionOutput.trim()}`)
@@ -170,7 +189,7 @@ try {
 
   const bunPathFile = path.join(installedPackageDir(installDir, packageName), "bin", ".ax-code-bun-path")
   await fs.promises.writeFile(bunPathFile, path.join(tempRoot, "missing-bun") + "\n")
-  const staleCacheVersionOutput = await run([axCodeBin, "--version"], { cwd: repoRoot })
+  const staleCacheVersionOutput = await run([axCodeBin, "--version"], installedCommandOptions)
   const staleCacheVersion = staleCacheVersionOutput.trim().replace(/^v/, "")
   if (staleCacheVersion !== expectedVersion) {
     await fail(
@@ -178,21 +197,15 @@ try {
     )
   }
 
-  const doctorOutput = await run([axCodeBin, "doctor"], { cwd: repoRoot })
+  const doctorOutput = await run([axCodeBin, "doctor"], installedCommandOptions)
   if (!/Runtime: Bun .*\((bun-bundled|source)\)/.test(doctorOutput)) {
     await fail("installed ax-code doctor did not report bun-bundled/source runtime")
   }
 
-  const handshake =
-    await $`printf '{"type":"rpc.request","method":"health","id":1}\n' | ${axCodeBin} tui-backend --stdio`
-      .cwd(repoRoot)
-      .quiet()
-      .nothrow()
-  const handshakeOutput = decodeOutput(handshake.stdout) + decodeOutput(handshake.stderr)
-  process.stdout.write(handshakeOutput)
-  if (handshake.exitCode !== 0) {
-    await fail(`installed backend stdio handshake exited with ${handshake.exitCode}`)
-  }
+  const handshakeOutput = await run([axCodeBin, "tui-backend", "--stdio"], {
+    ...installedCommandOptions,
+    input: '{"type":"rpc.request","method":"health","id":1}\n',
+  })
   if (!/"type":"rpc.result".*"id":1/.test(handshakeOutput)) {
     await fail("installed backend did not return rpc health result")
   }

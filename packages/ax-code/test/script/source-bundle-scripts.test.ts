@@ -51,6 +51,9 @@ describe("source-bundle package.json scripts", () => {
     expect(installSmokeScript).toContain("runTuiStartupSmoke")
     expect(installSmokeScript).toContain('backendTransport: "worker"')
     expect(installSmokeScript).toContain("AX_CODE_INSTALL_SMOKE_TEMP_ROOT")
+    expect(installSmokeScript).toContain("installedRuntimeEnv")
+    expect(installSmokeScript).toContain("AX_CODE_TEST_HOME")
+    expect(installSmokeScript).toContain("XDG_CONFIG_HOME")
 
     const tuiSmokeScript = await Bun.file(path.resolve(import.meta.dir, "../../script/tui-startup-smoke.ts")).text()
     expect(tuiSmokeScript).toContain("bun-pty")
