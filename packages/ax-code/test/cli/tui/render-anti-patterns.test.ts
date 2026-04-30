@@ -484,11 +484,15 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(sidebar).toContain("sidebarSessionStatusView")
     expect(sidebar).toContain("titleStatus().label")
+    expect(sidebar).not.toContain("{session().id}")
+    expect(sidebar).not.toContain("pendingTodos: todoRemaining()")
     expect(footerViewModel).toContain('"Thinking..."')
     expect(footerViewModel).toContain('"Processing..."')
     expect(footerViewModel).toContain('"Finished"')
     expect(footerViewModel).toContain('"Thinking stalled"')
     expect(footerViewModel).toContain('"Processing stalled"')
+    expect(footerViewModel).not.toContain("todo left")
+    expect(footerViewModel).not.toContain("todos left")
   })
 
   test("keeps the theme dialog reactive while custom themes hydrate", async () => {

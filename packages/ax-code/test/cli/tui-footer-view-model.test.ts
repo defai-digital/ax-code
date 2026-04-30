@@ -127,27 +127,15 @@ describe("sidebarSessionStatusView", () => {
     })
   })
 
-  test("keeps idle sessions with open todos out of the finished state", () => {
+  test("keeps idle session status independent from open todos", () => {
     expect(
       sidebarSessionStatusView({
         hasMessages: true,
-        pendingTodos: 2,
         status: { type: "idle" },
       }),
     ).toMatchObject({
-      label: "2 todos left",
-      tone: "warning",
-    })
-
-    expect(
-      sidebarSessionStatusView({
-        hasMessages: true,
-        pendingTodos: 1,
-        status: { type: "idle" },
-      }),
-    ).toMatchObject({
-      label: "1 todo left",
-      tone: "warning",
+      label: "Finished",
+      tone: "success",
     })
   })
 })

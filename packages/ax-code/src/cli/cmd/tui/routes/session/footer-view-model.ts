@@ -122,19 +122,9 @@ export function footerSessionStatusView(input: {
 export function sidebarSessionStatusView(input: {
   status?: FooterSessionStatus
   hasMessages: boolean
-  pendingTodos?: number
   now?: number
 }): FooterSessionStatusView & { label: string } {
   if (!input.status || input.status.type === "idle") {
-    if (input.hasMessages && input.pendingTodos && input.pendingTodos > 0) {
-      const label = input.pendingTodos === 1 ? "1 todo left" : `${input.pendingTodos} todos left`
-      return {
-        label,
-        shortLabel: label,
-        stale: false,
-        tone: "warning",
-      }
-    }
     return {
       label: input.hasMessages ? "Finished" : "Ready",
       shortLabel: input.hasMessages ? "Finished" : "Ready",
