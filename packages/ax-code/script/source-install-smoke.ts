@@ -39,6 +39,10 @@ function decodeOutput(value: string | Uint8Array | undefined) {
   return decoder.decode(value)
 }
 
+function installedPackageDir(root: string, name: string) {
+  return path.join(root, "node_modules", ...name.split("/"))
+}
+
 async function collectAndMirror(stream: ReadableStream<Uint8Array> | null | undefined, write: (chunk: string) => void) {
   if (!stream) return ""
 
@@ -149,6 +153,16 @@ try {
   const version = versionOutput.trim().replace(/^v/, "")
   if (version !== expectedVersion) {
     await fail(`expected installed ax-code --version to be ${expectedVersion}, got ${versionOutput.trim()}`)
+  }
+
+  const bunPathFile = path.join(installedPackageDir(installDir, packageName), "bin", ".ax-code-bun-path")
+  await fs.promises.writeFile(bunPathFile, path.join(tempRoot, "missing-bun") + "\n")
+  const staleCacheVersionOutput = await run([axCodeBin, "--version"], { cwd: repoRoot })
+  const staleCacheVersion = staleCacheVersionOutput.trim().replace(/^v/, "")
+  if (staleCacheVersion !== expectedVersion) {
+    await fail(
+      `expected installed ax-code --version to fall back from a stale bun path and report ${expectedVersion}, got ${staleCacheVersionOutput.trim()}`,
+    )
   }
 
   const doctorOutput = await run([axCodeBin, "doctor"], { cwd: repoRoot })

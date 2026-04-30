@@ -90,6 +90,15 @@ describe("script.publish-source", () => {
     expect(text).toContain(".ax-code-bun-path")
   })
 
+  test("source shims fall back to PATH when the cached bun path is stale", async () => {
+    const text = await Bun.file(publishSourcePath).text()
+    expect(text).toContain('if [ -z "$BUN_BIN" ] || [ ! -x "$BUN_BIN" ]; then')
+    expect(text).toContain('BUN_BIN="$(command -v bun || true)"')
+    expect(text).toContain('if not "%BUN_BIN%"=="" if exist "%BUN_BIN%" goto ax_code_have_bun')
+    expect(text).toContain("where bun")
+    expect(text).toContain(":ax_code_have_bun")
+  })
+
   test("source manifest shape pins required fields", async () => {
     const text = await Bun.file(publishSourcePath).text()
     // type: module — required so postinstall can be ESM

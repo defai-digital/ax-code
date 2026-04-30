@@ -105,7 +105,8 @@ PKG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUN_PATH_FILE="$SCRIPT_DIR/.ax-code-bun-path"
 if [ -f "$BUN_PATH_FILE" ]; then
   BUN_BIN="$(cat "$BUN_PATH_FILE")"
-else
+fi
+if [ -z "$BUN_BIN" ] || [ ! -x "$BUN_BIN" ]; then
   BUN_BIN="$(command -v bun || true)"
 fi
 if [ -z "$BUN_BIN" ] || [ ! -x "$BUN_BIN" ]; then
@@ -126,9 +127,10 @@ set "BUN_BIN="
 if exist "%BUN_PATH_FILE%" (
   set /p BUN_BIN=<"%BUN_PATH_FILE%"
 )
-if "%BUN_BIN%"=="" (
-  for /f "delims=" %%i in ('where bun 2^>nul') do if "%BUN_BIN%"=="" set "BUN_BIN=%%i"
-)
+if not "%BUN_BIN%"=="" if exist "%BUN_BIN%" goto ax_code_have_bun
+set "BUN_BIN="
+for /f "delims=" %%i in ('where bun 2^>nul') do if "%BUN_BIN%"=="" set "BUN_BIN=%%i"
+:ax_code_have_bun
 if "%BUN_BIN%"=="" (
   echo ax-code: bun runtime not found. Install bun: https://bun.sh/install 1>&2
   exit /b 127
