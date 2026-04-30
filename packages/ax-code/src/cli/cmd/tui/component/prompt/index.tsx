@@ -319,6 +319,7 @@ export function Prompt(props: PromptProps) {
   useKeyboard((evt) => {
     if (!input || input.isDestroyed || !input.focused) return
     if (!isPromptSubmitKey(evt)) return
+    if (autocomplete?.visible) return
     evt.preventDefault()
     evt.stopPropagation()
     void submit()

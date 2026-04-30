@@ -571,7 +571,7 @@ export function Autocomplete(props: {
             e.preventDefault()
             return
           }
-          if (name === "return") {
+          if (name === "return" || name === "linefeed") {
             select()
             e.preventDefault()
             return

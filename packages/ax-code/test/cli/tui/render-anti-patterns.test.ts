@@ -643,12 +643,23 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("pendingSubmitStatusText(submitStage())")
   })
 
-  test("prioritizes slash command dispatch over autocomplete early return in prompt submit path", async () => {
+  test("routes autocomplete Enter before prompt submit while submit still prioritizes slash dispatch", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
-    const slashDispatch = prompt.indexOf(
+    const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
+
+    const keyboardHandlerStart = prompt.indexOf("useKeyboard((evt) => {")
+    const keyboardHandlerEnd = prompt.indexOf("const fileStyleId", keyboardHandlerStart)
+    const keyboardHandler = prompt.slice(keyboardHandlerStart, keyboardHandlerEnd)
+    expect(keyboardHandler).toContain("if (autocomplete?.visible) return")
+    expect(autocomplete).toContain('if (name === "return" || name === "linefeed")')
+
+    const submitStart = prompt.indexOf("async function submit()")
+    const submitEnd = prompt.indexOf("const selectedModel", submitStart)
+    const submitBody = prompt.slice(submitStart, submitEnd)
+    const slashDispatch = submitBody.indexOf(
       'if (currentMode === "normal" && slashName && command.trySlash(slashName)) return',
     )
-    const autocompleteReturn = prompt.indexOf("if (autocomplete?.visible) return")
+    const autocompleteReturn = submitBody.indexOf("if (autocomplete?.visible) return")
 
     expect(slashDispatch).toBeGreaterThan(-1)
     expect(autocompleteReturn).toBeGreaterThan(-1)
