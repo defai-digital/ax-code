@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import * as fs from "fs/promises"
+import path from "path"
 import { Instance } from "../../src/project/instance"
 import { ENVELOPE_ID_PATTERN } from "../../src/quality/verification-envelope"
 import { VerifyProjectTool } from "../../src/tool/verify_project"
@@ -22,6 +24,12 @@ function ctx(asks: any[] = []) {
 afterEach(async () => {
   await Instance.disposeAll()
 })
+
+async function writeFile(dir: string, relPath: string, contents: string) {
+  const full = path.join(dir, relPath)
+  await fs.mkdir(path.dirname(full), { recursive: true })
+  await fs.writeFile(full, contents, "utf8")
+}
 
 describe("VerifyProjectTool", () => {
   test("runs configured checks and emits verification envelopes with ids", async () => {
@@ -111,6 +119,72 @@ describe("VerifyProjectTool", () => {
           kind: "custom",
           description: "manual QA smoke scope",
         })
+      },
+    })
+  })
+
+  test("review policy required_checks make skipped required checks fail the run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ required_checks: ["test"] }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const asks: any[] = []
+        const tool = await VerifyProjectTool.init()
+
+        const result = await tool.execute(
+          {
+            workflow: "review",
+            commands: {
+              typecheck: null,
+              lint: null,
+              test: null,
+            },
+          },
+          ctx(asks),
+        )
+
+        expect(asks).toHaveLength(0)
+        expect(result.title).toBe("verify_project failed")
+        expect(result.metadata.passed).toBe(false)
+        expect(result.metadata.policy).toMatchObject({
+          requiredChecksPassed: false,
+          missingRequiredChecks: ["test"],
+          rules: { required_checks: ["test"] },
+        })
+        expect(result.output).toContain("Policy required checks: test")
+        expect(result.output).toContain("Policy missing required checks: test")
+      },
+    })
+  })
+
+  test("debug workflow does not inherit review or qa required_checks", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ required_checks: ["typecheck"] }))
+    await writeFile(tmp.path, ".ax-code/qa.rules.json", JSON.stringify({ required_checks: ["test"] }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await VerifyProjectTool.init()
+
+        const result = await tool.execute(
+          {
+            workflow: "debug",
+            commands: {
+              typecheck: null,
+              lint: null,
+              test: null,
+            },
+          },
+          ctx(),
+        )
+
+        expect(result.title).toBe("verify_project passed")
+        expect(result.metadata.passed).toBe(true)
+        expect(result.metadata.policy).toBeUndefined()
+        expect(result.output).not.toContain("Policy required checks")
       },
     })
   })

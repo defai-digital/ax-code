@@ -9,9 +9,10 @@ Input:
 - commands: optional overrides for typecheck/lint/test. Omit a field to infer from package.json; set a field to null to skip that check; set it to a string to run exactly that command.
 
 Output:
-- passed: true when every configured check passed or was skipped
+- passed: true when every configured check passed or was skipped, unless review/QA policy requires a skipped check
 - envelopeIds: derived ids for the emitted VerificationEnvelopes
 - verificationEnvelopes: one envelope each for typecheck, lint, and tests
+- policy: when workflow is "review" or "qa", `.ax-code/review.rules.json` / `.ax-code/qa.rules.json` may set `required_checks`; any required check that is skipped makes the run fail.
 
 When to use:
 - After a code edit to produce citable verification evidence

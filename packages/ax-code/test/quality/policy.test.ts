@@ -196,6 +196,7 @@ describe("Policy.loadReviewRules / loadQaRules", () => {
       required_categories: ["bug", "security"],
       prohibited_categories: ["regression_risk"],
       severity_floor: "MEDIUM",
+      required_checks: ["typecheck", "test"],
       scope_glob: ["src/**", "test/**"],
     }
     await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify(rules))
@@ -242,6 +243,24 @@ describe("Policy.loadReviewRules / loadQaRules", () => {
         const q = await Policy.loadQaRules({ worktree: tmp.path })
         expect(r?.severity_floor).toBe("HIGH")
         expect(q?.severity_floor).toBe("LOW")
+      },
+    })
+  })
+
+  test("workflow rules load only review and qa policies", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(tmp.path, ".ax-code/review.rules.json", JSON.stringify({ required_checks: ["typecheck"] }))
+    await writeFile(tmp.path, ".ax-code/qa.rules.json", JSON.stringify({ required_checks: ["test"] }))
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Policy.loadWorkflowRules({ workflow: "review", worktree: tmp.path })).toEqual({
+          required_checks: ["typecheck"],
+        })
+        expect(await Policy.loadWorkflowRules({ workflow: "qa", worktree: tmp.path })).toEqual({
+          required_checks: ["test"],
+        })
+        expect(await Policy.loadWorkflowRules({ workflow: "debug", worktree: tmp.path })).toBeUndefined()
       },
     })
   })

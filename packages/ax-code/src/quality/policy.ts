@@ -1,10 +1,13 @@
 import path from "path"
 import * as fs from "fs/promises"
 import z from "zod"
-import { CategoryEnum, SeverityEnum } from "./finding"
+import { CategoryEnum, SeverityEnum, WorkflowEnum } from "./finding"
 import { Filesystem } from "../util/filesystem"
 import { Global } from "../global"
 import { Log } from "../util/log"
+
+export const PolicyRequiredCheckSchema = z.enum(["typecheck", "lint", "test"])
+export type PolicyRequiredCheck = z.infer<typeof PolicyRequiredCheckSchema>
 
 // Phase 4 P4.3: declarative rules live in a sibling JSON file
 // (.ax-code/review.rules.json or qa.rules.json), not in the markdown
@@ -25,6 +28,10 @@ export const PolicyRulesSchema = z
     // Findings below this severity are filtered out post-emit.
     // Order: CRITICAL > HIGH > MEDIUM > LOW > INFO.
     severity_floor: SeverityEnum.optional(),
+    // Verification checks that must actually run for the workflow to pass.
+    // This prevents a policy-sensitive review/QA run from reporting success
+    // when a required runner was skipped because it was missing or disabled.
+    required_checks: z.array(PolicyRequiredCheckSchema).optional(),
     // Glob patterns; only findings whose .file matches at least one
     // pattern are kept. Empty/undefined = no scope filtering.
     scope_glob: z.array(z.string().min(1)).optional(),
@@ -63,6 +70,16 @@ export namespace Policy {
 
   export async function loadQaRules(input: { worktree: string; cwd?: string }): Promise<PolicyRules | undefined> {
     return loadRulesByName({ ...input, name: "qa.rules.json" })
+  }
+
+  export async function loadWorkflowRules(input: {
+    workflow: z.infer<typeof WorkflowEnum>
+    worktree: string
+    cwd?: string
+  }): Promise<PolicyRules | undefined> {
+    if (input.workflow === "review") return loadReviewRules(input)
+    if (input.workflow === "qa") return loadQaRules(input)
+    return undefined
   }
 
   function assertSafePolicyName(name: string) {

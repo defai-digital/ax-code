@@ -9,6 +9,7 @@ import {
   type TimedTestResult,
 } from "../planner/verification/runner"
 import { WorkflowEnum } from "../quality/finding"
+import { Policy, type PolicyRequiredCheck, type PolicyRules } from "../quality/policy"
 import { computeEnvelopeId, type VerificationEnvelope } from "../quality/verification-envelope"
 import { fromVerificationCommandResult } from "../quality/verification-envelope-builder"
 import { Tool } from "./tool"
@@ -64,6 +65,29 @@ function passed(envelopes: VerificationEnvelope[]): boolean {
   return envelopes.every((envelope) => envelope.result.status === "passed" || envelope.result.status === "skipped")
 }
 
+function missingRequiredChecks(envelopes: readonly VerificationEnvelope[], rules: PolicyRules | undefined) {
+  const required = rules?.required_checks ?? []
+  if (required.length === 0) return []
+
+  const byRunner = new Map(envelopes.map((envelope) => [envelope.command.runner, envelope.result.status]))
+  return required.filter((runner) => byRunner.get(runner) === "skipped")
+}
+
+function policyLines(input: {
+  rules: PolicyRules | undefined
+  missingRequiredChecks: readonly PolicyRequiredCheck[]
+}) {
+  if (!input.rules) return []
+  const lines = ["", "Policy rules: loaded"]
+  if (input.rules.required_checks && input.rules.required_checks.length > 0) {
+    lines.push(`Policy required checks: ${input.rules.required_checks.join(", ")}`)
+  }
+  if (input.missingRequiredChecks.length > 0) {
+    lines.push(`Policy missing required checks: ${input.missingRequiredChecks.join(", ")}`)
+  }
+  return lines
+}
+
 export const VerifyProjectTool = Tool.define("verify_project", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -78,6 +102,11 @@ export const VerifyProjectTool = Tool.define("verify_project", {
     const workflow = args.workflow ?? "qa"
     const cwd = Instance.worktree
     const paths = normalizePaths(args.paths)
+    const policyRules = await Policy.loadWorkflowRules({
+      workflow,
+      worktree: Instance.worktree,
+      cwd: Instance.directory,
+    })
     const commands = await resolveCommands(cwd, args.commands)
     const commandPatterns = runnableCommands(commands)
 
@@ -124,25 +153,36 @@ export const VerifyProjectTool = Tool.define("verify_project", {
       name: envelope.result.name,
       status: envelope.result.status,
     }))
+    const missingPolicyChecks = missingRequiredChecks(verificationEnvelopes, policyRules)
+    const policyPassed = missingPolicyChecks.length === 0
+    const allPassed = passed(verificationEnvelopes) && policyPassed
 
     const lines = [
       `Workflow: ${workflow}`,
       `Scope: ${args.scopeDescription ?? (paths.length > 0 ? paths.join(", ") : "workspace")}`,
-      `Passed: ${passed(verificationEnvelopes)}`,
+      `Passed: ${allPassed}`,
       "",
       ...verificationEnvelopes.map((envelope, index) =>
         statusLine(envelope.result.name, envelope, envelopeIds[index].envelopeId),
       ),
+      ...policyLines({ rules: policyRules, missingRequiredChecks: missingPolicyChecks }),
     ]
 
     return {
-      title: passed(verificationEnvelopes) ? "verify_project passed" : "verify_project failed",
+      title: allPassed ? "verify_project passed" : "verify_project failed",
       output: lines.join("\n"),
       metadata: {
-        passed: passed(verificationEnvelopes),
+        passed: allPassed,
         envelopeIds,
         commands,
         verificationEnvelopes,
+        policy: policyRules
+          ? {
+              rules: policyRules,
+              requiredChecksPassed: policyPassed,
+              missingRequiredChecks: missingPolicyChecks,
+            }
+          : undefined,
       },
     }
   },
