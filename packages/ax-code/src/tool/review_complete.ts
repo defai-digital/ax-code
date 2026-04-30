@@ -51,17 +51,6 @@ function selectEnvelopes(sessionID: SessionID, ids: string[] | undefined): Verif
   })
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-function runPolicyFailed(metadata: Record<string, unknown> | undefined): boolean {
-  if (!metadata) return false
-  const policy = metadata.policy
-  if (!isRecord(policy)) return false
-  return policy.requiredChecksPassed === false
-}
-
 function selectedVerificationPolicyFailed(sessionID: SessionID, ids: string[] | undefined): boolean {
   const selected = ids ? new Set(ids) : undefined
   for (const run of SessionVerifications.loadRunsWithIds(sessionID)) {
@@ -69,7 +58,7 @@ function selectedVerificationPolicyFailed(sessionID: SessionID, ids: string[] | 
       if (item.envelope.workflow !== "review") return false
       return !selected || selected.has(item.envelopeId)
     })
-    if (hasSelectedReviewEnvelope && runPolicyFailed(run.metadata)) return true
+    if (hasSelectedReviewEnvelope && SessionVerifications.runPolicyFailed(run)) return true
   }
   return false
 }

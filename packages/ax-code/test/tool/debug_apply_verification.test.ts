@@ -114,7 +114,7 @@ async function emitDebugHypothesis(sessionID: SessionID, directory: string) {
 
 function verificationEnvelope(
   sessionID: SessionID,
-  status: "passed" | "failed" | "error",
+  status: VerificationEnvelope["result"]["status"],
   structuredFailures: VerificationEnvelope["structuredFailures"] = [],
 ): VerificationEnvelope {
   return {
@@ -136,7 +136,11 @@ function verificationEnvelope(
   }
 }
 
-async function emitVerificationSet(sessionID: SessionID, envelopes: VerificationEnvelope[]) {
+async function emitVerificationSet(
+  sessionID: SessionID,
+  envelopes: VerificationEnvelope[],
+  metadata: Record<string, unknown> = {},
+) {
   const envelopeIds = envelopes.map((envelope) => computeEnvelopeId(envelope))
   Recorder.emit({
     type: "tool.result",
@@ -144,7 +148,7 @@ async function emitVerificationSet(sessionID: SessionID, envelopes: Verification
     tool: "verify_project",
     callID: `call-verify-${envelopeIds[0]}`,
     status: "completed",
-    metadata: { verificationEnvelopes: envelopes },
+    metadata: { ...metadata, verificationEnvelopes: envelopes },
     durationMs: 1,
   })
   await waitForRecorder()
@@ -175,10 +179,7 @@ describe("DebugApplyVerificationTool", () => {
 
         const tool = await DebugApplyVerificationTool.init()
         await expect(
-          tool.execute(
-            { hypothesisId: "0000aaaa1111bbbb", envelopeId: "2222cccc3333dddd" },
-            fakeCtx(session.id),
-          ),
+          tool.execute({ hypothesisId: "0000aaaa1111bbbb", envelopeId: "2222cccc3333dddd" }, fakeCtx(session.id)),
         ).rejects.toThrow(/unknown debug hypothesis/)
       },
     })
@@ -264,6 +265,53 @@ describe("DebugApplyVerificationTool", () => {
         expect(result.metadata.debugHypothesis.status).toBe("refuted")
         expect(result.metadata.debugHypothesis.evidenceRefs).toContain(passedEnvelopeId)
         expect(result.metadata.debugHypothesis.evidenceRefs).toContain(failedEnvelopeId)
+      },
+    })
+  })
+
+  test("policy-failed verification stays inconclusive even when selected envelope passed", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
+        const passedTypecheck = verificationEnvelope(session.id, "passed")
+        const skippedTests = {
+          ...verificationEnvelope(session.id, "skipped"),
+          command: { runner: "test", argv: ["bun", "test", "test/foo.test.ts"], cwd: "/tmp/project" },
+          result: {
+            ...passedTypecheck.result,
+            name: "focused tests",
+            type: "test" as const,
+            passed: false,
+            status: "skipped" as const,
+            output: 'Policy required check "test" was skipped.',
+          },
+        }
+        const [passedEnvelopeId, skippedEnvelopeId] = await emitVerificationSet(
+          session.id,
+          [passedTypecheck, skippedTests],
+          {
+            policy: {
+              rules: { required_checks: ["test"] },
+              requiredChecksPassed: false,
+              missingRequiredChecks: ["test"],
+            },
+          },
+        )
+
+        const tool = await DebugApplyVerificationTool.init()
+        const result = await tool.execute({ hypothesisId, envelopeId: passedEnvelopeId }, fakeCtx(session.id))
+
+        expect(result.metadata.verificationOutcome).toBe("inconclusive")
+        expect(result.metadata.verificationPolicyFailed).toBe(true)
+        expect(result.metadata.effectiveCaseStatus).toBe("investigating")
+        expect(result.metadata.verificationEnvelopeIds).toEqual([passedEnvelopeId, skippedEnvelopeId])
+        expect(result.metadata.debugHypothesis.status).toBe("active")
+        expect(result.metadata.debugHypothesis.evidenceRefs).not.toContain(passedEnvelopeId)
+        expect(result.metadata.debugHypothesis.evidenceRefs).not.toContain(skippedEnvelopeId)
+        expect(result.output).toContain("Verification policy: failed")
       },
     })
   })

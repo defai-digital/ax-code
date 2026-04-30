@@ -50,12 +50,16 @@ function validateConfirmedStatus(input: {
   )
   if (
     referencedRuns.length > 0 &&
-    referencedRuns.every((run) => classifyEnvelopeSet(run.envelopes.map((item) => item.envelope)) === "confirmed")
+    referencedRuns.every(
+      (run) =>
+        !SessionVerifications.runPolicyFailed(run) &&
+        classifyEnvelopeSet(run.envelopes.map((item) => item.envelope)) === "confirmed",
+    )
   ) {
     return
   }
   throw new Error(
-    'Cannot mark hypothesis as confirmed without a successful VerificationEnvelope evidence set from this session. Run verify_project after the fix and cite at least one passed envelope and no failed, error, or timeout envelopes.',
+    "Cannot mark hypothesis as confirmed without a successful VerificationEnvelope evidence set from this session. Run verify_project after the fix and cite at least one passed envelope, no failed/error/timeout envelopes, and no failed verification policy.",
   )
 }
 

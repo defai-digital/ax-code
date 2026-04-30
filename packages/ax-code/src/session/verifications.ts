@@ -28,6 +28,16 @@ export namespace SessionVerifications {
     envelopes: LoadedEnvelope[]
   }
 
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+  }
+
+  export function runPolicyFailed(run: Pick<LoadedEnvelopeRun, "metadata">): boolean {
+    const policy = run.metadata?.policy
+    if (!isRecord(policy)) return false
+    return policy.requiredChecksPassed === false
+  }
+
   export function loadRunsWithIds(sessionID: SessionID): LoadedEnvelopeRun[] {
     const events = EventQuery.bySession(sessionID)
     // Dedup by computeEnvelopeId (deterministic hash of envelope content).

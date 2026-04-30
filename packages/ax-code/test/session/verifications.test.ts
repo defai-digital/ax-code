@@ -28,6 +28,29 @@ function buildEnvelope(overrides: Partial<VerificationEnvelope> = {}): Verificat
 }
 
 describe("SessionVerifications.load", () => {
+  test("detects policy failures only from explicit requiredChecksPassed false metadata", () => {
+    expect(
+      SessionVerifications.runPolicyFailed({
+        metadata: {
+          policy: {
+            requiredChecksPassed: false,
+          },
+        },
+      }),
+    ).toBe(true)
+    expect(
+      SessionVerifications.runPolicyFailed({
+        metadata: {
+          policy: {
+            requiredChecksPassed: true,
+          },
+        },
+      }),
+    ).toBe(false)
+    expect(SessionVerifications.runPolicyFailed({ metadata: { policy: [] } })).toBe(false)
+    expect(SessionVerifications.runPolicyFailed({ metadata: undefined })).toBe(false)
+  })
+
   test("returns [] for a session with no verification-emitting tool calls", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

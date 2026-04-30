@@ -47,11 +47,14 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
 
     const verificationSet = verificationRun.envelopes.map((item) => item.envelope)
     const verificationEnvelopeIds = verificationRun.envelopes.map((item) => item.envelopeId)
-    const verificationOutcome = classifyEnvelopeSet(verificationSet)
-    const applied = applyVerificationSetToHypothesis({
-      hypothesis,
-      envelopes: verificationSet,
-    })
+    const verificationPolicyFailed = SessionVerifications.runPolicyFailed(verificationRun)
+    const verificationOutcome = verificationPolicyFailed ? "inconclusive" : classifyEnvelopeSet(verificationSet)
+    const applied = verificationPolicyFailed
+      ? hypothesis
+      : applyVerificationSetToHypothesis({
+          hypothesis,
+          envelopes: verificationSet,
+        })
     const debugHypothesis = DebugHypothesisSchema.parse({
       ...applied,
       source: { tool: "debug_apply_verification", version: Installation.VERSION, runId: ctx.sessionID },
@@ -67,6 +70,7 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
         `Applied verification set ${verificationRun.callID} to hypothesis ${debugHypothesis.hypothesisId}`,
         `Selected envelope: ${verification.envelopeId}`,
         `Outcome: ${verificationOutcome}`,
+        ...(verificationPolicyFailed ? ["Verification policy: failed"] : []),
         `Hypothesis status: ${debugHypothesis.status}`,
         `Case status: ${effectiveCaseStatus}`,
       ].join("\n"),
@@ -75,6 +79,7 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
         envelopeId: verification.envelopeId,
         verificationEnvelopeIds,
         verificationOutcome,
+        verificationPolicyFailed,
         effectiveCaseStatus,
         debugHypothesis,
       },

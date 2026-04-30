@@ -360,6 +360,58 @@ describe("DebugProposeHypothesisTool", () => {
           ),
         ).rejects.toThrow(/without a successful VerificationEnvelope evidence set/)
 
+        const policyPassedEnvelope: VerificationEnvelope = {
+          ...passedEnvelope,
+          command: { runner: "typecheck", argv: ["bun", "run", "typecheck"], cwd: "/tmp" },
+          result: {
+            ...passedEnvelope.result,
+            name: "typecheck",
+            type: "typecheck",
+          },
+        }
+        const policySkippedRequiredEnvelope: VerificationEnvelope = {
+          ...passedEnvelope,
+          command: { runner: "test", argv: ["bun", "test"], cwd: "/tmp" },
+          result: {
+            ...passedEnvelope.result,
+            name: "tests",
+            type: "test",
+            passed: false,
+            status: "skipped",
+            output: 'Policy required check "test" was skipped.',
+          },
+        }
+        const policyPassedEnvelopeId = computeEnvelopeId(policyPassedEnvelope)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "verify_project",
+          callID: "call-verify-policy-failed",
+          status: "completed",
+          metadata: {
+            verificationEnvelopes: [policyPassedEnvelope, policySkippedRequiredEnvelope],
+            policy: {
+              rules: { required_checks: ["test"] },
+              requiredChecksPassed: false,
+              missingRequiredChecks: ["test"],
+            },
+          },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "policy-failed verification should not confirm",
+              evidenceRefs: [policyPassedEnvelopeId],
+              status: "confirmed",
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/failed verification policy|successful VerificationEnvelope/)
+
         const cleanPassedEnvelope: VerificationEnvelope = {
           ...passedEnvelope,
           command: { runner: "test", argv: [], cwd: "/tmp" },
