@@ -14,7 +14,7 @@ Input (all required unless noted):
 - suggestedNextAction: a concrete next step the user can take. Not a patch.
 - confidence: optional number in [0, 1]. Emit when you have a meaningful confidence signal (heuristic-derived findings); omit for deterministic findings.
 - ruleId: optional string of form "<axcode|policy|user>:<kebab-name>", e.g. "axcode:bug-empty-catch".
-- evidenceRefs: optional array of typed back-references. Use { kind: "verification", id: "<16-char hex>" } to cite a VerificationEnvelope from this session (e.g. the typecheck/lint/test run that produced the evidence). The id is computed deterministically from envelope content via computeEnvelopeId — do not invent ids; only cite envelopes you have observed in the session's tool results.
+- evidenceRefs: optional array of typed back-references. Use { kind: "verification", id: "<16-char hex>" } to cite a VerificationEnvelope from this session (e.g. the typecheck/lint/test run that produced the evidence). The id is computed deterministically from envelope content via computeEnvelopeId — do not invent ids; only cite envelopes you have observed in the session's tool results. Verification refs must belong to the same workflow as this finding.
 - tool: optional identifier of the producing tool/workflow (e.g. "review", "audit"). Defaults to "review".
 
 Output:

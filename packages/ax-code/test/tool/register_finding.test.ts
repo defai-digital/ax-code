@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
+import { Instance } from "../../src/project/instance"
+import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { RegisterFindingTool } from "../../src/tool/register_finding"
 import { computeFindingId, FindingSchema } from "../../src/quality/finding"
 import { Installation } from "../../src/installation"
+import { Recorder } from "../../src/replay/recorder"
+import { Session } from "../../src/session"
+import { tmpdir } from "../fixture/fixture"
 
 const ctx = {
   sessionID: "ses_test_register_finding",
@@ -24,6 +29,65 @@ const validInput = {
   rationale: "Loop runs n+1 times when limit equals total.",
   evidence: ["src/server/routes/list.ts:42 - condition uses <= instead of <"],
   suggestedNextAction: "Change condition to `<` and add a regression test.",
+}
+
+type Workflow = "review" | "debug" | "qa"
+
+function buildEnvelope(workflow: Workflow, runId: string): VerificationEnvelope {
+  return {
+    schemaVersion: 1,
+    workflow,
+    scope: { kind: "file", paths: ["src/server/routes/list.ts"] },
+    command: { runner: "test", argv: ["bun", "test", "test/server/routes/list.test.ts"], cwd: "/tmp/work" },
+    result: {
+      name: "route pagination test",
+      type: "test",
+      passed: true,
+      status: "passed",
+      issues: [],
+      duration: 12,
+    },
+    structuredFailures: [],
+    artifactRefs: [],
+    source: { tool: "verify_project", version: "4.x.x", runId },
+  }
+}
+
+async function withRecordedEnvelope(
+  workflow: Workflow,
+  fn: (ctxWithSession: typeof ctx, envelopeId: string) => Promise<void>,
+) {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      const envelope = buildEnvelope(workflow, session.id)
+      const envelopeId = computeEnvelopeId(envelope)
+
+      Recorder.begin(session.id)
+      Recorder.emit({
+        type: "session.start",
+        sessionID: session.id,
+        agent: "build",
+        model: "test/model",
+        directory: tmp.path,
+      })
+      Recorder.emit({
+        type: "tool.result",
+        sessionID: session.id,
+        tool: "verify_project",
+        callID: `call-${workflow}-verify`,
+        status: "completed",
+        metadata: { verificationEnvelopes: [envelope] },
+        durationMs: 12,
+      })
+      Recorder.end(session.id)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      await fn({ ...ctx, sessionID: session.id }, envelopeId)
+    },
+  })
 }
 
 describe("RegisterFindingTool", () => {
@@ -163,6 +227,38 @@ describe("RegisterFindingTool", () => {
         ctx,
       ),
     ).rejects.toThrow(/unknown verification envelope id/)
+  })
+
+  test("rejects verification evidenceRefs from a different workflow", async () => {
+    await withRecordedEnvelope("qa", async (ctxWithSession, envelopeId) => {
+      const tool = await RegisterFindingTool.init()
+      await expect(
+        tool.execute(
+          {
+            ...validInput,
+            workflow: "review",
+            evidenceRefs: [{ kind: "verification", id: envelopeId }],
+          },
+          ctxWithSession,
+        ),
+      ).rejects.toThrow(/belongs to workflow "qa"/)
+    })
+  })
+
+  test("accepts verification evidenceRefs from the same workflow", async () => {
+    await withRecordedEnvelope("review", async (ctxWithSession, envelopeId) => {
+      const tool = await RegisterFindingTool.init()
+      const result = await tool.execute(
+        {
+          ...validInput,
+          workflow: "review",
+          evidenceRefs: [{ kind: "verification", id: envelopeId }],
+        },
+        ctxWithSession,
+      )
+
+      expect(result.metadata.finding.evidenceRefs).toEqual([{ kind: "verification", id: envelopeId }])
+    })
   })
 
   test("does not strict-validate non-verification evidenceRefs (log/graph/diff pass through)", async () => {

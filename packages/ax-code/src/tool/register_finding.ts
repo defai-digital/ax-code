@@ -33,20 +33,26 @@ export const RegisterFindingTool = Tool.define("register_finding", {
     tool: z.string().min(1).optional(),
   }),
   execute: async (args, ctx) => {
-    // Phase 2 P2.5 step 4: reject hallucinated verification refs. If the
-    // model cites a verification envelope by id, the id must correspond to
-    // an envelope actually recorded in this session — otherwise the
-    // finding's "verified by" trail is fabricated. Other evidenceRef kinds
-    // (log/graph/diff) are not validated here because they don't yet have
-    // a corresponding session-level loader; they'll be validated in their
-    // own slices.
+    // Reject hallucinated or cross-lane verification refs. If the model cites
+    // a verification envelope by id, the id must correspond to an envelope
+    // actually recorded in this session and the envelope workflow must match
+    // this finding's workflow. Otherwise a review finding could launder QA or
+    // debug evidence into the wrong assurance lane.
     const verificationRefs = args.evidenceRefs?.filter((ref) => ref.kind === "verification") ?? []
     if (verificationRefs.length > 0) {
-      const knownIds = SessionVerifications.envelopeIdSet(ctx.sessionID as SessionID)
+      const envelopesById = new Map(
+        SessionVerifications.loadWithIds(ctx.sessionID as SessionID).map((item) => [item.envelopeId, item.envelope]),
+      )
       for (const ref of verificationRefs) {
-        if (!knownIds.has(ref.id)) {
+        const envelope = envelopesById.get(ref.id)
+        if (!envelope) {
           throw new Error(
             `evidenceRefs references unknown verification envelope id: ${ref.id} (no envelope with this id was recorded in session ${ctx.sessionID})`,
+          )
+        }
+        if (envelope.workflow !== args.workflow) {
+          throw new Error(
+            `evidenceRefs verification id ${ref.id} belongs to workflow "${envelope.workflow}"; register_finding with workflow "${args.workflow}" only accepts matching verification evidence.`,
           )
         }
       }
