@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
 import path from "path"
 import {
   OPENTUI_NATIVE_PACKAGES,
@@ -93,6 +95,43 @@ describe("script.publish-source", () => {
     const text = sourceDistributionPostinstall()
     expect(text).toContain("BUN_PATH_FILE")
     expect(text).toContain(".ax-code-bun-path")
+  })
+
+  test("postinstall resolves system bun from PATH without shell builtins", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "ax-code-source-postinstall-"))
+    try {
+      const packageDir = path.join(tempRoot, "package")
+      const binDir = path.join(packageDir, "bin")
+      const pathDir = path.join(tempRoot, "path-bin")
+      await mkdir(binDir, { recursive: true })
+      await mkdir(pathDir, { recursive: true })
+
+      const fakeBunName = process.platform === "win32" ? "bun.cmd" : "bun"
+      const fakeBun = path.join(pathDir, fakeBunName)
+      await writeFile(fakeBun, process.platform === "win32" ? "@echo off\r\nexit /b 0\r\n" : "#!/bin/sh\nexit 0\n")
+      if (process.platform !== "win32") await chmod(fakeBun, 0o755)
+
+      const postinstallPath = path.join(binDir, "postinstall.mjs")
+      await writeFile(postinstallPath, sourceDistributionPostinstall())
+
+      const node = Bun.which("node") ?? process.execPath
+      const result = Bun.spawnSync({
+        cmd: [node, postinstallPath],
+        cwd: packageDir,
+        env: {
+          PATH: pathDir,
+          PATHEXT: ".EXE;.CMD;.BAT;.COM",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0)
+      const cached = (await readFile(path.join(binDir, ".ax-code-bun-path"), "utf8")).trim()
+      expect(cached).toBe(fakeBun)
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
   })
 
   test("source shims fall back to PATH when the cached bun path is stale", () => {

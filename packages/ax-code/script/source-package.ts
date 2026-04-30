@@ -77,8 +77,7 @@ set "AX_CODE_ORIGINAL_CWD=%CD%"
 
 export function sourceDistributionPostinstall() {
   return `#!/usr/bin/env node
-import { existsSync, writeFileSync, chmodSync } from "node:fs"
-import { execFileSync } from "node:child_process"
+import { accessSync, chmodSync, constants, existsSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -92,33 +91,58 @@ if (process.env.AX_CODE_SKIP_POSTINSTALL === "1") {
   process.exit(0)
 }
 
+function pathValue() {
+  return process.env.PATH ?? process.env.Path ?? process.env.path ?? ""
+}
+
+function commandNames(command) {
+  if (process.platform !== "win32" || path.extname(command)) return [command]
+  const exts = (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM")
+    .split(";")
+    .map((ext) => ext.trim())
+    .filter(Boolean)
+  return [command, ...exts.map((ext) => command + ext.toLowerCase()), ...exts.map((ext) => command + ext.toUpperCase())]
+}
+
+function usableExecutable(candidate) {
+  if (!existsSync(candidate)) return false
+  if (process.platform === "win32") return true
+  try {
+    accessSync(candidate, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function findInDir(dir, command) {
+  for (const name of commandNames(command)) {
+    const candidate = path.join(dir, name)
+    if (usableExecutable(candidate)) return candidate
+  }
+  return undefined
+}
+
+function findOnPath(command) {
+  for (const dir of pathValue().split(path.delimiter).filter(Boolean)) {
+    const candidate = findInDir(dir, command)
+    if (candidate) return candidate
+  }
+  return undefined
+}
+
 function resolveBun() {
   // 1. System bun on PATH wins - respects user's preferred install/version.
-  try {
-    const cmd = process.platform === "win32" ? "where" : "command"
-    const args = process.platform === "win32" ? ["bun"] : ["-v", "bun"]
-    const out = execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
-    const candidate = out.split(/\\r?\\n/).map((line) => line.trim()).find(Boolean)
-    if (candidate && existsSync(candidate)) return candidate
-  } catch {}
+  const systemBun = findOnPath("bun")
+  if (systemBun) return systemBun
 
   // 2. The bundled @oven/bun-* dep that npm pulled into our node_modules.
-  const localBun = path.join(
-    PKG_DIR,
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "bun.exe" : "bun",
-  )
-  if (existsSync(localBun)) return localBun
+  const localBun = findInDir(path.join(PKG_DIR, "node_modules", ".bin"), "bun")
+  if (localBun) return localBun
 
   // 3. Hoisted layout - pnpm/npm may have hoisted the bun bin to the parent.
-  const hoisted = path.resolve(
-    PKG_DIR,
-    "..",
-    ".bin",
-    process.platform === "win32" ? "bun.exe" : "bun",
-  )
-  if (existsSync(hoisted)) return hoisted
+  const hoisted = findInDir(path.resolve(PKG_DIR, "..", ".bin"), "bun")
+  if (hoisted) return hoisted
 
   return undefined
 }
