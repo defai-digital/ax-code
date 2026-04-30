@@ -76,6 +76,42 @@ describe("fromRefactorApplyResult", () => {
     expect(tests.result.status).toBe("skipped")
   })
 
+  test("legacy refactor checks preserve skipped status from the shared runner", () => {
+    const envs = fromRefactorApplyResult({
+      applyResult: applyResult({
+        checks: {
+          typecheck: { ok: true, errors: [], skipped: true },
+          lint: { ok: true, errors: [], skipped: true },
+          tests: { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped", skipped: true },
+        },
+      }),
+      ...baseInput,
+    })
+
+    expect(envs.map((env) => [env.command.runner, env.result.status])).toEqual([
+      ["typecheck", "skipped"],
+      ["lint", "skipped"],
+      ["test", "skipped"],
+    ])
+  })
+
+  test("legacy refactor checks preserve timeout status from the shared runner", () => {
+    const envs = fromRefactorApplyResult({
+      applyResult: applyResult({
+        checks: {
+          typecheck: { ok: false, errors: ["typecheck command timed out after 300000ms"], timedOut: true },
+          lint: { ok: true, errors: [], skipped: true },
+          tests: { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped", skipped: true },
+        },
+      }),
+      ...baseInput,
+    })
+
+    const typecheck = envs.find((e) => e.command.runner === "typecheck")!
+    expect(typecheck.result.status).toBe("timeout")
+    expect(typecheck.result.passed).toBe(false)
+  })
+
   test("structuredFailures is empty when error strings don't match any known format", () => {
     const envs = fromRefactorApplyResult({
       applyResult: applyResult({

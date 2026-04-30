@@ -166,7 +166,7 @@ function envelopeForTypecheck(input: FromRefactorApplyInput): VerificationEnvelo
       name: "typecheck",
       type: "typecheck",
       passed: check.ok,
-      status: checkStatus(check.ok),
+      status: checkStatus(check.ok, check.skipped, check.timedOut),
       issues: [],
       duration: 0,
       output,
@@ -189,7 +189,7 @@ function envelopeForLint(input: FromRefactorApplyInput): VerificationEnvelope {
       name: "lint",
       type: "lint",
       passed: check.ok,
-      status: checkStatus(check.ok),
+      status: checkStatus(check.ok, check.skipped, check.timedOut),
       issues: [],
       duration: 0,
       output,
@@ -202,7 +202,7 @@ function envelopeForLint(input: FromRefactorApplyInput): VerificationEnvelope {
 
 function envelopeForTests(input: FromRefactorApplyInput): VerificationEnvelope {
   const tests = input.applyResult.checks.tests
-  const status = tests.selection === "skipped" ? "skipped" : checkStatus(tests.ok)
+  const status = tests.selection === "skipped" ? "skipped" : checkStatus(tests.ok, tests.skipped, tests.timedOut)
   const output = joinErrors(tests.failures)
   return VerificationEnvelopeSchema.parse({
     schemaVersion: 1,

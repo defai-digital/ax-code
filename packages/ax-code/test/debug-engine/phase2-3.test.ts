@@ -1433,6 +1433,9 @@ describe("applySafeRefactor", () => {
         expect(result.checks.typecheck.ok).toBe(true)
         expect(result.checks.lint.ok).toBe(true)
         expect(result.checks.tests.ok).toBe(true)
+        expect(result.checks.typecheck.skipped).toBe(true)
+        expect(result.checks.lint.skipped).toBe(true)
+        expect(result.checks.tests.skipped).toBe(true)
         expect(result.rolledBack).toBe(false)
         expect(result.filesChanged).toEqual([])
 
@@ -1472,6 +1475,9 @@ describe("applySafeRefactor", () => {
         expect(result.applied).toBe(false)
         expect(result.abortReason).toBe("typecheck-failed")
         expect(result.checks.typecheck.ok).toBe(false)
+        expect(result.checks.typecheck.skipped).toBeUndefined()
+        expect(result.checks.lint.skipped).toBe(true)
+        expect(result.checks.tests.skipped).toBe(true)
         expect(result.rolledBack).toBe(false)
 
         CodeIntelligence.__clearProject(projectID)

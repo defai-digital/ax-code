@@ -8,6 +8,7 @@ import {
   type TimedCheckResult,
   type TimedTestResult,
 } from "../planner/verification/runner"
+import { briefFromFailure, shouldHandoff } from "../planner/verification/repair-handoff"
 import { WorkflowEnum } from "../quality/finding"
 import { Policy, type PolicyRequiredCheck, type PolicyRules } from "../quality/policy"
 import {
@@ -122,12 +123,63 @@ function policyLines(input: { rules: PolicyRules | undefined; missingRequiredChe
   return lines
 }
 
+function repairHandoffMetadata(input: {
+  enabled: boolean | undefined
+  envelopes: readonly VerificationEnvelope[]
+  envelopeIds: readonly { envelopeId: string; name: string; status: VerificationEnvelope["result"]["status"] }[]
+}) {
+  if (!input.enabled) return undefined
+
+  const candidates: Array<{
+    envelopeId: string
+    runner: string
+    status: VerificationEnvelope["result"]["status"]
+    reasoning: string
+    brief: string
+  }> = []
+  const rejected: Array<{
+    envelopeId: string
+    runner: string
+    status: VerificationEnvelope["result"]["status"]
+    reasoning: string
+  }> = []
+
+  input.envelopes.forEach((envelope, index) => {
+    const envelopeId = input.envelopeIds[index]?.envelopeId ?? computeEnvelopeId(envelope)
+    const decision = shouldHandoff(envelope)
+    const item = {
+      envelopeId,
+      runner: envelope.command.runner,
+      status: envelope.result.status,
+      reasoning: decision.reasoning,
+    }
+    if (decision.handoff) {
+      candidates.push({
+        ...item,
+        brief: briefFromFailure(envelope),
+      })
+      return
+    }
+    rejected.push(item)
+  })
+
+  return {
+    enabled: true,
+    candidates,
+    rejected,
+  }
+}
+
 export const VerifyProjectTool = Tool.define("verify_project", {
   description: DESCRIPTION,
   parameters: z.object({
     workflow: WorkflowEnum.optional().describe('Assurance lane: "review", "debug", or "qa". Defaults to "qa".'),
     paths: z.array(z.string().min(1)).max(200).optional().describe("Repo-relative files that define the scope."),
     scopeDescription: z.string().min(1).max(500).optional().describe("Human-readable scope when paths are not enough."),
+    repairHandoff: z
+      .boolean()
+      .optional()
+      .describe("When true, include repair handoff briefs for localized structured failures. Does not edit files."),
     commands: CommandOverrides.optional().describe(
       "Optional command overrides. Omit a field to infer from package.json, set it to null to skip, or set it to a command string to run exactly that command.",
     ),
@@ -191,6 +243,11 @@ export const VerifyProjectTool = Tool.define("verify_project", {
     }))
     const policyPassed = missingPolicyChecks.length === 0
     const allPassed = passed(verificationEnvelopes) && policyPassed
+    const repairHandoff = repairHandoffMetadata({
+      enabled: args.repairHandoff,
+      envelopes: verificationEnvelopes,
+      envelopeIds,
+    })
 
     const lines = [
       `Workflow: ${workflow}`,
@@ -201,6 +258,16 @@ export const VerifyProjectTool = Tool.define("verify_project", {
         statusLine(envelope.result.name, envelope, envelopeIds[index].envelopeId),
       ),
       ...policyLines({ rules: policyRules, missingRequiredChecks: missingPolicyChecks }),
+      ...(repairHandoff
+        ? [
+            "",
+            `Repair handoff candidates: ${repairHandoff.candidates.length}`,
+            ...repairHandoff.candidates.map(
+              (candidate) =>
+                `Repair handoff: ${candidate.runner} ${candidate.status}, envelope=${candidate.envelopeId}, ${candidate.reasoning}`,
+            ),
+          ]
+        : []),
     ]
 
     return {
@@ -211,6 +278,7 @@ export const VerifyProjectTool = Tool.define("verify_project", {
         envelopeIds,
         commands,
         verificationEnvelopes,
+        repairHandoff,
         policy: policyRules
           ? {
               rules: policyRules,

@@ -197,6 +197,9 @@ export namespace DebugEngine {
   export type CheckResult = {
     ok: boolean
     errors: string[]
+    skipped?: boolean
+    timedOut?: boolean
+    exitCode?: number
   }
 
   export type TestResult = CheckResult & {

@@ -5,7 +5,13 @@ import { Instance } from "../project/instance"
 import { Log } from "../util/log"
 import { CodeIntelligence } from "../code-intelligence"
 import type { ProjectID } from "../project/schema"
-import { resolveCommands, runCheck, runTests } from "../planner/verification/runner"
+import {
+  resolveCommands,
+  runCheck,
+  runTests,
+  type TimedCheckResult,
+  type TimedTestResult,
+} from "../planner/verification/runner"
 import { DebugEngine } from "./index"
 import { DebugEngineQuery } from "./query"
 import { ShadowWorktree } from "./shadow-worktree"
@@ -94,9 +100,37 @@ export async function applySafeRefactorImpl(
 
   const emptyChecks = (): DebugEngine.ApplyResult["checks"] => ({
     typecheck: { ok: false, errors: [] },
-    lint: { ok: true, errors: [] },
-    tests: { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped" },
+    lint: skippedCheck(),
+    tests: skippedTests(),
   })
+
+  const legacyCheck = (check: TimedCheckResult): DebugEngine.CheckResult => ({
+    ok: check.ok,
+    errors: check.errors,
+    ...(check.skipped ? { skipped: true } : {}),
+    ...(check.timedOut !== undefined ? { timedOut: check.timedOut } : {}),
+    ...(check.exitCode !== undefined ? { exitCode: check.exitCode } : {}),
+  })
+
+  const legacyTests = (tests: TimedTestResult): DebugEngine.TestResult => ({
+    ok: tests.ok,
+    errors: tests.errors,
+    ran: tests.ran,
+    failed: tests.failed,
+    failures: tests.failures,
+    selection: tests.selection,
+    ...(tests.skipped ? { skipped: true } : {}),
+    ...(tests.timedOut !== undefined ? { timedOut: tests.timedOut } : {}),
+    ...(tests.exitCode !== undefined ? { exitCode: tests.exitCode } : {}),
+  })
+
+  function skippedCheck(): DebugEngine.CheckResult {
+    return { ok: true, errors: [], skipped: true }
+  }
+
+  function skippedTests(): DebugEngine.TestResult {
+    return { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped", skipped: true }
+  }
 
   const abort = (reason: string, checks?: DebugEngine.ApplyResult["checks"]): DebugEngine.ApplyResult => ({
     applied: false,
@@ -202,9 +236,9 @@ export async function applySafeRefactorImpl(
     const typecheckCheck = await runCheck("typecheck", commands.typecheck, shadowHandle.path)
     if (!typecheckCheck.ok) {
       return abort("typecheck-failed", {
-        typecheck: { ok: typecheckCheck.ok, errors: typecheckCheck.errors },
-        lint: { ok: true, errors: [] },
-        tests: { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped" },
+        typecheck: legacyCheck(typecheckCheck),
+        lint: skippedCheck(),
+        tests: skippedTests(),
       })
     }
 
@@ -214,9 +248,9 @@ export async function applySafeRefactorImpl(
         : await runCheck("lint", commands.lint, shadowHandle.path)
     if (!lintCheck.ok) {
       return abort("lint-failed", {
-        typecheck: { ok: true, errors: [] },
-        lint: { ok: false, errors: lintCheck.errors },
-        tests: { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped" },
+        typecheck: legacyCheck(typecheckCheck),
+        lint: legacyCheck(lintCheck),
+        tests: skippedTests(),
       })
     }
 
@@ -234,16 +268,9 @@ export async function applySafeRefactorImpl(
       : await runTests(commands.test, shadowHandle.path, row.affected_files, projectID, scope)
     if (!testResult.ok) {
       return abort("tests-failed", {
-        typecheck: { ok: true, errors: [] },
-        lint: { ok: true, errors: [] },
-        tests: {
-          ok: false,
-          errors: testResult.errors,
-          ran: testResult.ran,
-          failed: testResult.failed,
-          failures: testResult.failures,
-          selection: testResult.selection,
-        },
+        typecheck: legacyCheck(typecheckCheck),
+        lint: legacyCheck(lintCheck),
+        tests: legacyTests(testResult),
       })
     }
 
@@ -258,16 +285,9 @@ export async function applySafeRefactorImpl(
         applied: false,
         planId: input.planId,
         checks: {
-          typecheck: { ok: true, errors: [] },
-          lint: { ok: lintCheck.ok, errors: lintCheck.errors },
-          tests: {
-            ok: testResult.ok,
-            errors: testResult.errors,
-            ran: testResult.ran,
-            failed: testResult.failed,
-            failures: testResult.failures,
-            selection: testResult.selection,
-          },
+          typecheck: legacyCheck(typecheckCheck),
+          lint: legacyCheck(lintCheck),
+          tests: legacyTests(testResult),
         },
         filesChanged: [],
         rolledBack: false,
@@ -295,16 +315,9 @@ export async function applySafeRefactorImpl(
     if (realResult.exitCode !== 0) {
       // Worktree is unchanged because git apply failed atomically.
       return abort("real-apply-failed", {
-        typecheck: { ok: true, errors: [] },
-        lint: { ok: lintCheck.ok, errors: lintCheck.errors },
-        tests: {
-          ok: testResult.ok,
-          errors: testResult.errors,
-          ran: testResult.ran,
-          failed: testResult.failed,
-          failures: testResult.failures,
-          selection: testResult.selection,
-        },
+        typecheck: legacyCheck(typecheckCheck),
+        lint: legacyCheck(lintCheck),
+        tests: legacyTests(testResult),
       })
     }
 
@@ -319,16 +332,9 @@ export async function applySafeRefactorImpl(
       applied: true,
       planId: input.planId,
       checks: {
-        typecheck: { ok: true, errors: [] },
-        lint: { ok: lintCheck.ok, errors: lintCheck.errors },
-        tests: {
-          ok: testResult.ok,
-          errors: testResult.errors,
-          ran: testResult.ran,
-          failed: testResult.failed,
-          failures: testResult.failures,
-          selection: testResult.selection,
-        },
+        typecheck: legacyCheck(typecheckCheck),
+        lint: legacyCheck(lintCheck),
+        tests: legacyTests(testResult),
       },
       filesChanged,
       rolledBack: false,

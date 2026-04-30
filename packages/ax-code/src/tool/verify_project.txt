@@ -6,12 +6,14 @@ Input:
 - workflow: optional "review" | "debug" | "qa"; defaults to "qa"
 - paths: optional repo-relative files that define the verification scope and help test selection
 - scopeDescription: optional human-readable scope when paths alone are not enough
+- repairHandoff: optional boolean; when true, include localized repair handoff briefs for structured failures. This only records guidance; it does not edit files or start a repair loop.
 - commands: optional overrides for typecheck/lint/test. Omit a field to infer from package.json; set a field to null to skip that check; set it to a string to run exactly that command.
 
 Output:
 - passed: true when every configured check passed or was skipped, unless review/QA policy requires a skipped check
 - envelopeIds: derived ids for the emitted VerificationEnvelopes
 - verificationEnvelopes: one envelope each for typecheck, lint, and tests
+- repairHandoff: when requested, candidate and rejected repair handoff decisions with brief text for candidates
 - policy: when workflow is "review" or "qa", `.ax-code/review.rules.json` / `.ax-code/qa.rules.json` may set `required_checks`; any required check that is skipped makes the run fail.
 
 When to use:

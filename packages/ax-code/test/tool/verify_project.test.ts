@@ -119,6 +119,48 @@ describe("VerifyProjectTool", () => {
           kind: "custom",
           description: "manual QA smoke scope",
         })
+        expect(result.metadata.repairHandoff).toBeUndefined()
+      },
+    })
+  })
+
+  test("emits opt-in repair handoff briefs for localized structured failures", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await VerifyProjectTool.init()
+        const result = await tool.execute(
+          {
+            workflow: "debug",
+            repairHandoff: true,
+            commands: {
+              typecheck: `bun -e "console.error('src/foo.ts(10,4): error TS2322: Type string is not assignable to type number.'); process.exit(1)"`,
+              lint: null,
+              test: null,
+            },
+          },
+          ctx(),
+        )
+
+        expect(result.title).toBe("verify_project failed")
+        expect(result.metadata.repairHandoff).toMatchObject({
+          enabled: true,
+          candidates: [
+            {
+              runner: "typecheck",
+              status: "failed",
+              reasoning: expect.stringContaining("structured typecheck failure"),
+            },
+          ],
+        })
+        const repairHandoff = result.metadata.repairHandoff
+        if (!repairHandoff) throw new Error("missing repair handoff metadata")
+        expect(repairHandoff.candidates[0].brief).toContain("src/foo.ts:10:4 TS2322")
+        expect(repairHandoff.rejected).toHaveLength(2)
+        expect(result.output).toContain("Repair handoff candidates: 1")
+        expect(result.output).toContain("Repair handoff: typecheck failed")
       },
     })
   })
