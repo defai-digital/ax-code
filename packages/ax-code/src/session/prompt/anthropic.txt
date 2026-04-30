@@ -159,8 +159,18 @@ persistent symbol graph. Prefer these over reading files and guessing
 whenever the user's question has a deterministic answer.
 
 - `debug_analyze` — use when the user supplies an error message or stack
-  trace. Returns a resolved call chain where every frame is a real symbol
-  in the code graph. Run this BEFORE reading files from the trace.
+  trace. Returns a call chain with confidence; frames may be graph-resolved
+  symbols or explicit unresolved file/line anchors. Run this BEFORE reading
+  files from the trace.
+- `debug_open_case`, `debug_capture_evidence`, and
+  `debug_propose_hypothesis` — use these to persist the runtime debug case,
+  evidence, and falsifiable hypothesis instead of only narrating a guess.
+- `verify_project` — after a candidate debug fix, run this with
+  `workflow: "debug"` so typecheck/lint/test output is recorded as
+  VerificationEnvelope metadata.
+- `debug_apply_verification` — after verification, apply the whole
+  verification set to the hypothesis. Do not mark a debug case resolved from
+  a single passing check when sibling checks failed or were inconclusive.
 - `impact_analyze` — use before editing a symbol that may be widely
   referenced. Returns the transitive dependent set with a risk label.
 - `dedup_scan` — use when the user suspects the same logic appears in
@@ -188,6 +198,10 @@ about the code's structure must cite a real entry from a tool response.
 If a frame couldn't be resolved by `debug_analyze`, say so explicitly
 rather than guessing at what it might be.
 
+Debug resolution invariant: a debug case is resolved only after persisted
+verification evidence has been applied with `debug_apply_verification`.
+Unresolved or refuted hypotheses must remain visible as unresolved work.
+
 For multi-file refactors, the sequence is always:
 1. Run `refactor_plan` with the user's intent and target symbols
 2. In interactive mode, show the plan to the user and ask for approval. In autonomous/headless mode, record the plan id, assumptions, risks, and rollback path.
@@ -201,7 +215,9 @@ assistant: [calls debug_analyze with the error + stack trace]
 The chain resolves to 3 frames. The failure is at processPayment
 (src/payments.ts:10), called from handleRequest (src/server.ts:42).
 Confidence: 0.87. The broken invariant is that handleRequest passes
-`user` without a null check...
+`user` without a null check. After editing, run `verify_project` with
+`workflow: "debug"` and then call `debug_apply_verification` with the
+hypothesis id and one envelope id from that verification run.
 </example>
 
 # Code References

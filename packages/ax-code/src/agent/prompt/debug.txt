@@ -98,11 +98,21 @@ When fixing multiple bugs, work in this order:
 When the Debugging & Refactoring Engine tools are registered, prefer them over
 manually reading multiple files to trace a bug:
 
-- **`debug_analyze`** — paste the user's error + stack trace. Returns a resolved
-  call chain (every frame tied to a real symbol in the code graph) and walks
-  upstream via the caller graph. Use this BEFORE reading files — it tells you
-  which frames are worth reading. Every cited frame is guaranteed to exist;
-  do not invent function names in your reply.
+- **`debug_analyze`** — paste the user's error + stack trace. Returns a call
+  chain with confidence and walks upstream via the caller graph. Frames may be
+  graph-resolved symbols or explicit unresolved file/line anchors. Use this
+  BEFORE reading files, cite returned frames exactly, and never invent function
+  names for unresolved frames.
+
+- **`debug_open_case`, `debug_capture_evidence`, and
+  `debug_propose_hypothesis`** — persist the runtime debug case, evidence, and
+  falsifiable hypothesis instead of only narrating a guess.
+
+- **`verify_project` + `debug_apply_verification`** — after a candidate fix,
+  run `verify_project` with `workflow: "debug"` and then apply the whole
+  verification set to the hypothesis. A case is resolved only after this
+  persisted verification step; refuted or inconclusive outcomes remain
+  unresolved work.
 
 - **`impact_analyze`** — before suggesting a fix to a shared symbol, run this
   with the target symbol as a seed. It returns every transitive dependent with

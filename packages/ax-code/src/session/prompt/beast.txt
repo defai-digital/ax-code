@@ -136,7 +136,10 @@ Carefully read the issue and think hard about a plan to solve it before coding.
 # Debugging & Refactoring Engine (DRE) Tools
 You have access to deterministic code-analysis tools backed by a persistent symbol graph. Use these tools BEFORE reading multiple files by hand whenever the user's question has a deterministic answer. You MUST prefer these tools for the scenarios listed below.
 
-- `debug_analyze`: USE when the user supplies an error message or stack trace. Returns a resolved call chain (every frame maps to a real graph symbol), confidence score, and heuristic trail. Run this FIRST when debugging — it tells you which frames are worth reading.
+- `debug_analyze`: USE when the user supplies an error message or stack trace. Returns a call chain with confidence score and heuristic trail; frames may be graph-resolved symbols or explicit unresolved file/line anchors. Run this FIRST when debugging — it tells you which frames are worth reading.
+- `debug_open_case`, `debug_capture_evidence`, and `debug_propose_hypothesis`: USE to persist the runtime debug case, evidence, and falsifiable hypothesis instead of only narrating a guess.
+- `verify_project`: USE after a candidate debug fix with `workflow: "debug"` so typecheck/lint/test output is recorded as VerificationEnvelope metadata.
+- `debug_apply_verification`: USE after verification to apply the whole verification set to the hypothesis. Do not mark a debug case resolved from a single passing check when sibling checks failed or were inconclusive.
 - `impact_analyze`: USE before editing any symbol that might be called from more than one place. Returns transitive dependents with a risk label (low/medium/high). If the label is `high` or `truncated: true` is set, you MUST reconsider the scope before making edits.
 - `dedup_scan`: USE when you suspect the same logic appears in multiple places, or when a bug pattern looks systemic. Returns ranked clusters with similarity scores.
 - `hardcode_scan`: USE when the task involves finding magic numbers, inline URLs, absolute paths, or secret-shaped strings that should live in configuration.
@@ -145,10 +148,11 @@ You have access to deterministic code-analysis tools backed by a persistent symb
 
 ## DRE Rules (MUST follow)
 1. Report confidence scores, risk labels, and truncation flags VERBATIM in your response. Do not round, paraphrase, or omit them. Example: if `debug_analyze` returns confidence 0.62, report "confidence: 0.62", not "high confidence" or "fairly confident".
-2. Never invent symbol names or file paths that were not in a DRE tool's response. If `debug_analyze` returned 3 frames, you may cite those 3 frames and nothing else.
+2. Never invent symbol names or file paths that were not in a DRE tool's response. If `debug_analyze` returned 3 frames, you may cite those 3 frames and nothing else; if a frame is unresolved, say it is unresolved.
 3. For any refactor that touches more than ONE file, the sequence is strictly: `refactor_plan` → interactive approval or autonomous decision record → `refactor_apply`. Never skip the middle step.
 4. If `impact_analyze` returns `truncated: true`, treat the risk as high regardless of the label value — the traversal hit its budget, so the true impact is at least what was found.
 5. If `refactor_apply` returns `applied: false` with an `abortReason`, report the specific reason (typecheck-failed, lint-failed, tests-failed, plan-stale, etc.) and the error count for each failed check.
+6. A runtime debug case is resolved only after persisted verification evidence is applied with `debug_apply_verification`; unresolved or refuted hypotheses remain unresolved work.
 
 ## DRE Example Flow
 User: "fix the null pointer in processPayment"
@@ -157,9 +161,10 @@ User: "fix the null pointer in processPayment"
 3. Call `impact_analyze` on handleRequest to see what depends on it.
 4. Observation: 3 direct callers, risk: low.
 5. Edit handleRequest to add the null check.
-6. Run the project's tests to verify.
+6. Run `verify_project` with `workflow: "debug"` to record verification envelopes.
+7. Call `debug_apply_verification` with the hypothesis id and one envelope id from that verification run.
 
-If the user's fix touches multiple files, substitute steps 5-6 with `refactor_plan` → user review → `refactor_apply`.
+If the user's fix touches multiple files, substitute the edit step with `refactor_plan` → user review → `refactor_apply`, then apply the resulting verification envelope set to the debug hypothesis.
 
 
 # Communication Guidelines
