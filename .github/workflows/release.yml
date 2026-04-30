@@ -303,7 +303,8 @@ jobs:
 
       - name: Update Homebrew formula
         env:
-          GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
 
   # Publish the GitHub release (remove draft status) only after npm packages
@@ -349,5 +350,6 @@ jobs:
 
       - name: Update Homebrew source formula
         env:
-          GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/update-homebrew-source.sh

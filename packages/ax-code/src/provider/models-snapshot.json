@@ -70680,32 +70680,6 @@
     "name": "DigitalOcean",
     "doc": "https://docs.digitalocean.com/products/gradient-ai-platform/details/models/",
     "models": {
-      "openai-gpt-5-2-pro": {
-        "id": "openai-gpt-5-2-pro",
-        "name": "GPT-5.2 pro",
-        "family": "gpt-pro",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": false,
-        "knowledge": "2025-08-31",
-        "release_date": "2025-12-11",
-        "last_updated": "2025-12-11",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 400000,
-          "output": 128000
-        }
-      },
       "openai-gpt-4o-mini": {
         "id": "openai-gpt-4o-mini",
         "name": "GPT-4o mini",
@@ -70756,6 +70730,34 @@
         "limit": {
           "context": 512,
           "output": 768
+        }
+      },
+      "nemotron-3-nano-omni": {
+        "id": "nemotron-3-nano-omni",
+        "name": "Nemotron Nano 3 Omni",
+        "family": "nemotron",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-28",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 65536,
+          "output": 65536
         }
       },
       "anthropic-claude-opus-4.7": {
@@ -70812,6 +70814,29 @@
           "output": 64000
         }
       },
+      "wan2-2-t2v-a14b": {
+        "id": "wan2-2-t2v-a14b",
+        "name": "Wan2.2-T2V-A14B",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2025-07-28",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "video"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 100,
+          "output": 1
+        }
+      },
       "openai-gpt-5.4": {
         "id": "openai-gpt-5.4",
         "name": "GPT-5.4",
@@ -70840,6 +70865,31 @@
           "output": 128000
         }
       },
+      "qwen3.5-397b-a17b": {
+        "id": "qwen3.5-397b-a17b",
+        "name": "Qwen 3.5 397B A17B",
+        "family": "qwen3.5",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-02-15",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 81920
+        }
+      },
       "openai-o3": {
         "id": "openai-o3",
         "name": "o3",
@@ -70866,6 +70916,56 @@
         "limit": {
           "context": 200000,
           "output": 100000
+        }
+      },
+      "e5-large-v2": {
+        "id": "e5-large-v2",
+        "name": "E5 Large v2",
+        "family": "text-embedding",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2023-05-19",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 512,
+          "output": 1024
+        }
+      },
+      "openai-gpt-5.2-pro": {
+        "id": "openai-gpt-5.2-pro",
+        "name": "GPT-5.2 pro",
+        "family": "gpt-pro",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2025-08-31",
+        "release_date": "2025-12-11",
+        "last_updated": "2025-12-11",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 400000,
+          "output": 128000
         }
       },
       "glm-5": {
@@ -70943,6 +71043,31 @@
         "open_weights": true,
         "limit": {
           "context": 128000,
+          "output": 128000
+        }
+      },
+      "mistral-3-14B": {
+        "id": "mistral-3-14B",
+        "name": "Ministral 3 14B Instruct",
+        "family": "ministral",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2025-12-15",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
           "output": 128000
         }
       },
@@ -71051,6 +71176,30 @@
           "output": 100000
         }
       },
+      "stable-diffusion-3.5-large": {
+        "id": "stable-diffusion-3.5-large",
+        "name": "Stable Diffusion 3.5 Large",
+        "family": "stable-diffusion",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2024-10-22",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256,
+          "output": 1
+        }
+      },
       "openai-gpt-5-nano": {
         "id": "openai-gpt-5-nano",
         "name": "GPT-5 nano",
@@ -71076,6 +71225,33 @@
         "limit": {
           "context": 400000,
           "output": 128000
+        }
+      },
+      "llama-4-maverick": {
+        "id": "llama-4-maverick",
+        "name": "Llama 4 Maverick 17B 128E Instruct",
+        "family": "llama",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2024-08",
+        "release_date": "2025-04-05",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 16384
         }
       },
       "anthropic-claude-4.5-sonnet": {
@@ -71182,6 +71358,31 @@
           "output": 32768
         }
       },
+      "llama-guard-4-12b": {
+        "id": "llama-guard-4-12b",
+        "name": "Llama Guard 4 12B",
+        "family": "llama",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2025-04-05",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 16384
+        }
+      },
       "openai-gpt-5.2": {
         "id": "openai-gpt-5.2",
         "name": "GPT-5.2",
@@ -71207,6 +71408,34 @@
         "limit": {
           "context": 400000,
           "output": 128000
+        }
+      },
+      "deepseek-3.2": {
+        "id": "deepseek-3.2",
+        "name": "DeepSeek V3.2",
+        "family": "deepseek",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "knowledge": "2024-12",
+        "release_date": "2025-12-02",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 64000
         }
       },
       "anthropic-claude-opus-4": {
@@ -71262,6 +71491,31 @@
           "output": 131072
         }
       },
+      "qwen3-coder-flash": {
+        "id": "qwen3-coder-flash",
+        "name": "Qwen3 Coder Flash",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-07-28",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
       "openai-o3-mini": {
         "id": "openai-o3-mini",
         "name": "o3-mini",
@@ -71315,6 +71569,58 @@
         "limit": {
           "context": 131072,
           "output": 131072
+        }
+      },
+      "gemma-4-31B-it": {
+        "id": "gemma-4-31B-it",
+        "name": "Gemma 4 31B",
+        "family": "gemma",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "output": 8192
+        }
+      },
+      "nemotron-nano-12b-v2-vl": {
+        "id": "nemotron-nano-12b-v2-vl",
+        "name": "Nemotron Nano 12B v2 VL",
+        "family": "nemotron",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2024-10",
+        "release_date": "2025-12-01",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 16384
         }
       },
       "anthropic-claude-4.1-opus": {
@@ -71476,6 +71782,34 @@
           "output": 0
         }
       },
+      "openai-gpt-5.5": {
+        "id": "openai-gpt-5.5",
+        "name": "GPT-5.5",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-12-01",
+        "release_date": "2026-04-23",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
       "nvidia-nemotron-3-super-120b": {
         "id": "nvidia-nemotron-3-super-120b",
         "name": "Nemotron-3-Super-120B",
@@ -71551,6 +71885,30 @@
         "limit": {
           "context": 256,
           "output": 384
+        }
+      },
+      "bge-m3": {
+        "id": "bge-m3",
+        "name": "BGE M3",
+        "family": "bge",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2024-01-30",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 8192,
+          "output": 1024
         }
       },
       "openai-gpt-5.1-codex-max": {
@@ -71713,6 +72071,54 @@
           "output": 128000
         },
         "status": "beta"
+      },
+      "bge-reranker-v2-m3": {
+        "id": "bge-reranker-v2-m3",
+        "name": "BGE Reranker v2 M3",
+        "family": "bge",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2024-03-12",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        }
+      },
+      "qwen3-tts-voicedesign": {
+        "id": "qwen3-tts-voicedesign",
+        "name": "Qwen3 TTS VoiceDesign",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-04-21",
+        "last_updated": "2026-04-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 32768,
+          "output": 1
+        }
       },
       "openai-gpt-image-1.5": {
         "id": "openai-gpt-image-1.5",

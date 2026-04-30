@@ -9,6 +9,13 @@ set -euo pipefail
 VERSION="${GITHUB_REF_NAME#v}"
 TAG="v${VERSION}"
 RELEASE_BASE="https://github.com/defai-digital/ax-code/releases/download/${TAG}"
+SOURCE_REPO="${GITHUB_REPOSITORY:-defai-digital/ax-code}"
+TAP_AUTH_TOKEN="${TAP_TOKEN:-${GH_TOKEN:-}}"
+
+if [ -z "${TAP_AUTH_TOKEN}" ]; then
+  echo "::error::TAP_TOKEN or GH_TOKEN is required to update the Homebrew tap"
+  exit 1
+fi
 
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -21,18 +28,26 @@ sha256_file() {
 download_asset() {
   local asset="$1"
   local dest="/tmp/${asset}"
-  local url="${RELEASE_BASE}/${asset}"
   local attempts=0
   local max_attempts=30
 
-  while ! curl -fsSL -o "${dest}" "${url}"; do
+  rm -f "${dest}"
+  while ! gh release download "${TAG}" \
+    --repo "${SOURCE_REPO}" \
+    --pattern "${asset}" \
+    --dir /tmp \
+    --clobber >/dev/null 2>&1; do
     attempts=$((attempts + 1))
     if [ "$attempts" -ge "$max_attempts" ]; then
-      echo "::error::release asset not available at ${url} after ${max_attempts} attempts"
+      echo "::error::release asset ${asset} not available from ${SOURCE_REPO}@${TAG} after ${max_attempts} attempts"
       exit 1
     fi
     sleep 5
   done
+  if [ ! -f "${dest}" ]; then
+    echo "::error::release asset download succeeded but ${dest} was not created"
+    exit 1
+  fi
 
   sha256_file "${dest}"
 }
@@ -90,7 +105,7 @@ HEADER
 echo "Generated formula:"
 cat /tmp/ax-code.rb
 
-git clone "https://x-access-token:${GH_TOKEN}@github.com/defai-digital/homebrew-ax-code.git" /tmp/tap
+git clone "https://x-access-token:${TAP_AUTH_TOKEN}@github.com/defai-digital/homebrew-ax-code.git" /tmp/tap
 cp /tmp/ax-code.rb /tmp/tap/ax-code.rb
 cd /tmp/tap
 git config user.name "github-actions[bot]"

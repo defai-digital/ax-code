@@ -18,6 +18,12 @@ VERSION="${GITHUB_REF_NAME#v}"
 SOURCE_PACKAGE_PATH="@defai.digital/ax-code-source"
 SOURCE_TARBALL_NAME="ax-code-source"
 TARBALL_URL="https://registry.npmjs.org/${SOURCE_PACKAGE_PATH}/-/${SOURCE_TARBALL_NAME}-${VERSION}.tgz"
+TAP_AUTH_TOKEN="${TAP_TOKEN:-${GH_TOKEN:-}}"
+
+if [ -z "${TAP_AUTH_TOKEN}" ]; then
+  echo "::error::TAP_TOKEN or GH_TOKEN is required to update the Homebrew tap"
+  exit 1
+fi
 
 # Wait briefly for the npm registry to converge — publish-source job
 # completes before this homebrew-source job runs, but the registry CDN
@@ -80,7 +86,7 @@ HEADER
 echo "Generated ax-code-source.rb:"
 cat /tmp/ax-code-source.rb
 
-git clone "https://x-access-token:${GH_TOKEN}@github.com/defai-digital/homebrew-ax-code.git" /tmp/tap
+git clone "https://x-access-token:${TAP_AUTH_TOKEN}@github.com/defai-digital/homebrew-ax-code.git" /tmp/tap
 cp /tmp/ax-code-source.rb /tmp/tap/ax-code-source.rb
 cd /tmp/tap
 git config user.name "github-actions[bot]"
