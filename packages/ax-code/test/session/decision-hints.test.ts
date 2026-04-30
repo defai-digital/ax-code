@@ -56,6 +56,29 @@ function toolResult(
   }
 }
 
+function reviewFindingMetadata() {
+  return {
+    finding: {
+      workflow: "review",
+      findingId: "1111111111111111",
+      severity: "LOW",
+      summary: "Review finding",
+    },
+  }
+}
+
+function verificationEnvelope(workflow: "review" | "debug" | "qa", status: "passed" | "failed" | "skipped") {
+  return {
+    schemaVersion: 1,
+    workflow,
+    result: {
+      name: "typecheck",
+      status,
+      passed: status === "passed",
+    },
+  }
+}
+
 describe("DecisionHints", () => {
   test("returns no hints when the session has no file-changing tools", () => {
     const hints = DecisionHints.fromMessages([
@@ -235,5 +258,86 @@ describe("DecisionHints", () => {
     })
 
     expect(replayPreferred).toEqual([])
+  })
+
+  test("suggests review-scoped verification after structured review findings", () => {
+    const hints = DecisionHints.fromEvents([
+      toolCall("c1", "register_finding", { workflow: "review" }),
+      toolResult("c1", "register_finding", "completed", reviewFindingMetadata()),
+    ])
+
+    expect(hints).toHaveLength(1)
+    expect(hints[0]).toMatchObject({
+      id: "missing-review-verification",
+      category: "missing_verification",
+    })
+    expect(hints[0]?.body).toContain('workflow: "review"')
+  })
+
+  test("suggests review_complete after clean review verification", () => {
+    const hints = DecisionHints.fromEvents([
+      toolCall("c1", "register_finding", { workflow: "review" }),
+      toolResult("c1", "register_finding", "completed", reviewFindingMetadata()),
+      toolCall("c2", "verify_project", { workflow: "review" }),
+      toolResult("c2", "verify_project", "completed", {
+        verificationEnvelopes: [verificationEnvelope("review", "passed")],
+      }),
+    ])
+
+    expect(hints).toHaveLength(1)
+    expect(hints[0]).toMatchObject({
+      id: "missing-review-completion",
+      category: "missing_review_completion",
+    })
+  })
+
+  test("does not let qa verification close the review verification hint", () => {
+    const hints = DecisionHints.fromEvents([
+      toolCall("c1", "register_finding", { workflow: "review" }),
+      toolResult("c1", "register_finding", "completed", reviewFindingMetadata()),
+      toolCall("c2", "verify_project", { workflow: "qa" }),
+      toolResult("c2", "verify_project", "completed", {
+        verificationEnvelopes: [verificationEnvelope("qa", "passed")],
+      }),
+    ])
+
+    expect(hints[0]).toMatchObject({
+      id: "missing-review-verification",
+      category: "missing_verification",
+    })
+  })
+
+  test("suppresses review hints after a later completed review result", () => {
+    const hints = DecisionHints.fromEvents([
+      toolCall("c1", "register_finding", { workflow: "review" }),
+      toolResult("c1", "register_finding", "completed", reviewFindingMetadata()),
+      toolCall("c2", "verify_project", { workflow: "review" }),
+      toolResult("c2", "verify_project", "completed", {
+        verificationEnvelopes: [verificationEnvelope("review", "passed")],
+      }),
+      toolCall("c3", "review_complete", {}),
+      toolResult("c3", "review_complete", "completed", {
+        reviewResult: { decision: "approve", missingVerification: false },
+      }),
+    ])
+
+    expect(hints).toEqual([])
+  })
+
+  test("keeps review blocked after failed review verification", () => {
+    const summary = DecisionHints.summarizeEvents([
+      toolCall("c1", "register_finding", { workflow: "review" }),
+      toolResult("c1", "register_finding", "completed", reviewFindingMetadata()),
+      toolCall("c2", "verify_project", { workflow: "review" }),
+      toolResult("c2", "verify_project", "completed", {
+        verificationEnvelopes: [verificationEnvelope("review", "failed")],
+      }),
+    ])
+
+    expect(summary).toMatchObject({
+      readiness: "blocked",
+      hintCount: 1,
+      hints: [{ id: "failed-review-verification", category: "failed_validation" }],
+    })
   })
 })

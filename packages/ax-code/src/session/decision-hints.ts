@@ -3,7 +3,7 @@ import type { ReplayEvent } from "@/replay/event"
 import z from "zod"
 
 export namespace DecisionHints {
-  export const CategorySchema = z.enum(["missing_verification", "failed_validation"])
+  export const CategorySchema = z.enum(["missing_verification", "failed_validation", "missing_review_completion"])
   export type Category = z.output<typeof CategorySchema>
 
   export const HintSchema = z.object({
@@ -110,6 +110,10 @@ export namespace DecisionHints {
   }
 
   function fromActions(actions: ToolAction[]): Hint[] {
+    return [...editValidationHints(actions), ...reviewWorkflowHints(actions)]
+  }
+
+  function editValidationHints(actions: ToolAction[]): Hint[] {
     const writes = actions.filter(isCompletedWrite)
     const lastWrite = writes.at(-1)
     if (!lastWrite) return []
@@ -147,9 +151,51 @@ export namespace DecisionHints {
     return []
   }
 
+  function reviewWorkflowHints(actions: ToolAction[]): Hint[] {
+    const reviewFindings = actions.filter(isReviewFindingAction)
+    const reviewVerifications = actions.filter(isReviewVerificationAction)
+    const reviewSignals = [...reviewFindings, ...reviewVerifications].sort((a, b) => a.index - b.index)
+    const latestReviewSignal = reviewSignals.at(-1)
+    if (!latestReviewSignal) return []
+
+    const latestCompletion = actions.filter(isReviewCompleteAction).at(-1)
+    if (latestCompletion && latestCompletion.index > latestReviewSignal.index) {
+      if (reviewCompletionNeedsVerification(latestCompletion)) {
+        return [missingReviewVerificationHint(latestCompletion, reviewFindings, reviewVerifications)]
+      }
+      return []
+    }
+
+    const latestFinding = reviewFindings.at(-1)
+    const reviewVerificationsAfterFinding = reviewVerifications.filter(
+      (action) => !latestFinding || action.index > latestFinding.index,
+    )
+    const latestReviewVerification = reviewVerificationsAfterFinding.at(-1)
+    if (!latestReviewVerification) {
+      return [missingReviewVerificationHint(latestReviewSignal, reviewFindings, reviewVerifications)]
+    }
+    if (!reviewVerificationSuccessful(latestReviewVerification)) {
+      return [failedReviewVerificationHint(latestReviewVerification)]
+    }
+
+    return [
+      {
+        id: "missing-review-completion",
+        category: "missing_review_completion",
+        confidence: 0.82,
+        title: "Complete the structured review result",
+        body: "Review findings or review-scoped verification were recorded, but no later review_complete result closed the review loop. Run review_complete before finalizing the review.",
+        evidence: [describeAction(latestReviewVerification), describeReviewFindings(reviewFindings)],
+      },
+    ]
+  }
+
   function readinessFor(hints: Hint[]): Summary["readiness"] {
     if (hints.some((hint) => hint.category === "failed_validation")) return "blocked"
-    if (hints.some((hint) => hint.category === "missing_verification")) return "needs_validation"
+    if (
+      hints.some((hint) => hint.category === "missing_verification" || hint.category === "missing_review_completion")
+    )
+      return "needs_validation"
     return "clear"
   }
 
@@ -208,6 +254,45 @@ export namespace DecisionHints {
     return typeof exit === "number" && exit !== 0
   }
 
+  function isReviewFindingAction(action: ToolAction): boolean {
+    if (action.tool !== "register_finding" || action.status !== "completed") return false
+    if (action.input.workflow === "review") return true
+    const finding = action.metadata?.finding
+    return isRecord(finding) && finding.workflow === "review"
+  }
+
+  function isReviewVerificationAction(action: ToolAction): boolean {
+    return action.status === "completed" && reviewEnvelopeStatuses(action).length > 0
+  }
+
+  function isReviewCompleteAction(action: ToolAction): boolean {
+    return action.tool === "review_complete" && action.status === "completed"
+  }
+
+  function reviewCompletionNeedsVerification(action: ToolAction): boolean {
+    const reviewResult = action.metadata?.reviewResult
+    return isRecord(reviewResult) && reviewResult.missingVerification === true
+  }
+
+  function reviewVerificationSuccessful(action: ToolAction): boolean {
+    const statuses = reviewEnvelopeStatuses(action)
+    return (
+      statuses.some((status) => status === "passed") &&
+      statuses.every((status) => status === "passed" || status === "skipped")
+    )
+  }
+
+  function reviewEnvelopeStatuses(action: ToolAction): string[] {
+    const envelopes = action.metadata?.verificationEnvelopes
+    if (!Array.isArray(envelopes)) return []
+    return envelopes.flatMap((item) => {
+      if (!isRecord(item) || item.workflow !== "review") return []
+      const result = item.result
+      if (!isRecord(result) || typeof result.status !== "string") return []
+      return [result.status]
+    })
+  }
+
   function commandText(action: ToolAction): string {
     return typeof action.input.command === "string" ? action.input.command : ""
   }
@@ -222,6 +307,53 @@ export namespace DecisionHints {
     return `last file-changing tool: ${action.tool}`
   }
 
+  function missingReviewVerificationHint(
+    latestReviewSignal: ToolAction,
+    reviewFindings: ToolAction[],
+    reviewVerifications: ToolAction[],
+  ): Hint {
+    return {
+      id: "missing-review-verification",
+      category: "missing_verification",
+      confidence: 0.86,
+      title: "Run review-scoped verification before closing review",
+      body: 'Review work was recorded without a clean review verification result. Run verify_project with workflow: "review", then cite its envelope ids in review_complete.',
+      evidence: [
+        describeReviewSignal(latestReviewSignal),
+        describeReviewFindings(reviewFindings),
+        describeReviewVerificationCount(reviewVerifications),
+      ],
+    }
+  }
+
+  function failedReviewVerificationHint(action: ToolAction): Hint {
+    return {
+      id: "failed-review-verification",
+      category: "failed_validation",
+      confidence: 0.9,
+      title: "Resolve failed review verification before closing review",
+      body: "A review-scoped verification result is not fully passing. Fix the failure, rerun review verification, or close the review as needing changes instead of approving it.",
+      evidence: [
+        describeReviewSignal(action),
+        `review verification statuses: ${reviewEnvelopeStatuses(action).join(", ")}`,
+      ],
+    }
+  }
+
+  function describeReviewSignal(action: ToolAction): string {
+    if (action.tool === "review_complete") return "review_complete result needs verification"
+    if (action.tool === "verify_project") return `review verification tool: ${action.tool}`
+    return `review signal: ${action.tool}`
+  }
+
+  function describeReviewFindings(actions: ToolAction[]): string {
+    return `review findings: ${actions.length}`
+  }
+
+  function describeReviewVerificationCount(actions: ToolAction[]): string {
+    return `review verification results: ${actions.length}`
+  }
+
   function describeChangedFiles(writes: ToolAction[]): string {
     const files = Array.from(new Set(writes.flatMap((write) => changedFiles(write)).filter(Boolean)))
     if (files.length === 0) return `file-changing tools: ${writes.map((write) => write.tool).join(", ")}`
@@ -233,6 +365,10 @@ export namespace DecisionHints {
   function changedFiles(action: ToolAction): string[] {
     const candidates = [action.input.filePath, action.input.file, action.input.path, action.input.targetPath]
     return candidates.filter((item): item is string => typeof item === "string" && item.length > 0)
+  }
+
+  function isRecord(input: unknown): input is Record<string, unknown> {
+    return typeof input === "object" && input !== null && !Array.isArray(input)
   }
 
   function safeText(text: string): string {
