@@ -16,6 +16,7 @@ import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 import { createAbortableResourceFetcher } from "@tui/util/abortable-resource"
+import { autocompleteOptionID, autocompleteSelectionScrollDelta } from "./autocomplete-scroll"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -436,14 +437,15 @@ export function Autocomplete(props: {
   function moveTo(next: number) {
     setStore("selected", next)
     if (!scroll) return
-    const target = scroll.getChildren().find((child) => child.id === `autocomplete-option-${next}`)
-    if (!target) return
-    const y = target.y - scroll.y
-    if (y >= scroll.height) {
-      scroll.scrollBy(y - scroll.height + 1)
-    }
-    if (y < 0) {
-      scroll.scrollBy(y)
+    const target = scroll.getChildren().find((child) => child.id === autocompleteOptionID(next))
+    const scrollDelta = autocompleteSelectionScrollDelta({
+      selectedIndex: next,
+      scrollTop: scroll.y,
+      viewportHeight: scroll.height,
+      targetY: target?.y,
+    })
+    if (scrollDelta !== 0) {
+      scroll.scrollBy(scrollDelta)
       if (next === 0) scroll.scrollTo(0)
     }
   }
@@ -667,7 +669,7 @@ export function Autocomplete(props: {
         >
           {(option, index) => (
             <box
-              id={`autocomplete-option-${index}`}
+              id={autocompleteOptionID(index)}
               paddingLeft={1}
               paddingRight={1}
               backgroundColor={index === store.selected ? theme.primary : undefined}

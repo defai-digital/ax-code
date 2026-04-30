@@ -1430,7 +1430,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const keybind = useKeybind()
 
   const hasParts = createMemo(() => props.parts.length > 0)
-  const isThinking = createMemo(() => !hasParts() && !final() && props.last)
+  const isThinking = createMemo(() => !props.message.error && !hasParts() && !final() && props.last)
 
   return (
     <>

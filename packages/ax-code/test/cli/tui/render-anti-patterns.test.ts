@@ -666,6 +666,15 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(slashDispatch).toBeLessThan(autocompleteReturn)
   })
 
+  test("hides assistant thinking spinner once the message has an error", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(session).toContain(
+      "const isThinking = createMemo(() => !props.message.error && !hasParts() && !final() && props.last)",
+    )
+    expect(session).toContain('props.message.error?.name === "MessageAbortedError"')
+  })
+
   test("keeps newly-created prompt sessions durable before the route handoff", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
