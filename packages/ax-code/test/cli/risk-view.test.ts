@@ -167,6 +167,52 @@ describe("RiskView.lines", () => {
     expect(lines).toContain("  request changes · 1 finding · 1 blocking · 1 verification envelope")
   })
 
+  test("renders policy-failed review verification distinctly", () => {
+    const lines = RiskView.lines({
+      id: "ses_review_policy_failed",
+      title: "Review policy failed session",
+      assessment: {
+        level: "MEDIUM",
+        score: 45,
+        readiness: "needs_review",
+        confidence: 0.7,
+        summary: "review needs verification",
+        signals: {
+          filesChanged: 2,
+          linesChanged: 32,
+          totalTools: 4,
+          apiEndpointsAffected: 0,
+          crossModule: false,
+          securityRelated: false,
+          validationState: "partial",
+          diffState: "recorded",
+        },
+      },
+      semantic: null,
+      drivers: [],
+      reviewResults: [
+        {
+          schemaVersion: 1,
+          reviewId: "1111111111111111",
+          workflow: "review",
+          decision: "needs_verification",
+          recommendedDecision: "needs_verification",
+          summary: "Required test check was skipped.",
+          findingIds: [],
+          verificationEnvelopeIds: ["3333333333333333"],
+          counts: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0, total: 0 },
+          blockingFindingIds: [],
+          missingVerification: true,
+          verificationPolicyFailed: true,
+          createdAt: "2026-04-29T00:00:00.000Z",
+          source: { tool: "review_complete", version: "4.x.x", runId: "ses_review_policy_failed" },
+        },
+      ],
+    } as any)
+
+    expect(lines).toContain("  needs verification · 0 findings · 0 blocking · verification policy failed")
+  })
+
   test("renders decision hint evidence without dumping unbounded detail", () => {
     const lines = RiskView.lines({
       id: "ses_decision_hints",
@@ -214,7 +260,9 @@ describe("RiskView.lines", () => {
     } as any)
 
     expect(lines).toContain("  Decision Hints")
-    expect(lines).toContain("  - Complete the structured review result (82%): Run review_complete before finalizing the review.")
+    expect(lines).toContain(
+      "  - Complete the structured review result (82%): Run review_complete before finalizing the review.",
+    )
     expect(lines).toContain("    evidence: review verification tool: verify_project")
     expect(lines).toContain("    evidence: review findings: 1")
     expect(lines).toContain("    evidence: review verification results: 1")

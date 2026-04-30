@@ -126,5 +126,6 @@ describe("review-result", () => {
 
     expect(result.decision).toBe("needs_verification")
     expect(result.missingVerification).toBe(true)
+    expect(result.verificationPolicyFailed).toBe(true)
   })
 })

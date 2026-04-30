@@ -314,6 +314,7 @@ describe("ReviewCompleteTool", () => {
           recommendedDecision: "needs_verification",
           verificationEnvelopeIds: [computeEnvelopeId(typecheckPassed)],
           missingVerification: true,
+          verificationPolicyFailed: true,
         })
         expect(result.metadata.verificationPolicyFailed).toBe(true)
         expect(result.output).toContain("Verification policy: failed")

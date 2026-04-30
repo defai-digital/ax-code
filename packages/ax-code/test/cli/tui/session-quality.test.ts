@@ -920,6 +920,17 @@ describe("tui session quality actions", () => {
       ])
       expect(line).toBe("Review needs verification · 0 findings · 0 blocking · verification needed")
     })
+
+    test("renders policy-failed verification state distinctly", () => {
+      const line = renderSessionReviewResultsSummary([
+        reviewResult({
+          decision: "needs_verification",
+          missingVerification: true,
+          verificationPolicyFailed: true,
+        }),
+      ])
+      expect(line).toBe("Review needs verification · 0 findings · 0 blocking · verification policy failed")
+    })
   })
 
   describe("renderSessionDecisionHintsSummary", () => {
