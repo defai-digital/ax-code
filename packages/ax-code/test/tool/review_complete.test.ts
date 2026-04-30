@@ -99,6 +99,19 @@ function emitEnvelope(sessionID: string, item: VerificationEnvelope) {
   })
 }
 
+function emitEnvelopeRun(sessionID: string, items: VerificationEnvelope[], metadata: Record<string, unknown> = {}) {
+  Recorder.emit({
+    type: "tool.result",
+    sessionID: sessionID as any,
+    tool: "verify_project",
+    callID: `call-verify-${items.map((item) => computeEnvelopeId(item)).join("-")}`,
+    status: "completed",
+    output: "verified",
+    metadata: { ...metadata, verificationEnvelopes: items },
+    durationMs: 1,
+  })
+}
+
 afterEach(async () => {
   await Instance.disposeAll()
 })
@@ -199,7 +212,10 @@ describe("ReviewCompleteTool", () => {
         await new Promise((resolve) => setTimeout(resolve, 50))
 
         const tool = await ReviewCompleteTool.init()
-        const result = await tool.execute({ summary: "Review passed after applying project policy scope." }, ctx(session.id))
+        const result = await tool.execute(
+          { summary: "Review passed after applying project policy scope." },
+          ctx(session.id),
+        )
 
         expect(result.title).toBe("review_complete approve")
         expect(result.metadata.reviewResult).toMatchObject({
@@ -247,6 +263,70 @@ describe("ReviewCompleteTool", () => {
         if (!result.metadata.policy) throw new Error("missing policy metadata")
         expect(result.metadata.policy.warnings).toEqual(["required_categories missing from kept findings: security"])
         expect(result.output).toContain("Policy warning: required_categories missing from kept findings: security")
+      },
+    })
+  })
+
+  test("does not approve when a selected verification run failed required check policy", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const low = finding(session.id)
+        const typecheckPassed = envelope(session.id, "passed")
+        const testSkipped: VerificationEnvelope = {
+          ...envelope(session.id, "skipped"),
+          command: { runner: "test", argv: [], cwd: "/tmp/work" },
+          result: {
+            ...typecheckPassed.result,
+            name: "tests",
+            type: "test",
+            passed: false,
+            status: "skipped",
+          },
+        }
+
+        Recorder.begin(session.id)
+        emitFinding(session.id, low)
+        emitEnvelopeRun(session.id, [typecheckPassed, testSkipped], {
+          policy: {
+            rules: { required_checks: ["test"] },
+            requiredChecksPassed: false,
+            missingRequiredChecks: ["test"],
+          },
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const tool = await ReviewCompleteTool.init()
+        const result = await tool.execute(
+          {
+            summary: "Review still needs required verification.",
+            verificationEnvelopeIds: [computeEnvelopeId(typecheckPassed)],
+          },
+          ctx(session.id),
+        )
+
+        expect(result.title).toBe("review_complete needs_verification")
+        expect(result.metadata.reviewResult).toMatchObject({
+          decision: "needs_verification",
+          recommendedDecision: "needs_verification",
+          verificationEnvelopeIds: [computeEnvelopeId(typecheckPassed)],
+          missingVerification: true,
+        })
+        expect(result.metadata.verificationPolicyFailed).toBe(true)
+        expect(result.output).toContain("Verification policy: failed")
+        await expect(
+          tool.execute(
+            {
+              summary: "Should not approve with a policy-failed verification run.",
+              decision: "approve",
+              verificationEnvelopeIds: [computeEnvelopeId(typecheckPassed)],
+            },
+            ctx(session.id),
+          ),
+        ).rejects.toThrow(/without a successful verification set/)
       },
     })
   })
@@ -327,7 +407,10 @@ describe("ReviewCompleteTool", () => {
         await new Promise((resolve) => setTimeout(resolve, 50))
 
         const tool = await ReviewCompleteTool.init()
-        const result = await tool.execute({ summary: "Review still needs review-scoped verification." }, ctx(session.id))
+        const result = await tool.execute(
+          { summary: "Review still needs review-scoped verification." },
+          ctx(session.id),
+        )
 
         expect(result.metadata.reviewResult).toMatchObject({
           decision: "needs_verification",

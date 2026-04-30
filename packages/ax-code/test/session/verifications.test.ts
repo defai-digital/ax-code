@@ -280,7 +280,13 @@ describe("SessionVerifications.load", () => {
           tool: "verify_project",
           callID: "call-verify",
           status: "completed",
-          metadata: { verificationEnvelopes: [tc, tests] },
+          metadata: {
+            verificationEnvelopes: [tc, tests],
+            policy: {
+              requiredChecksPassed: false,
+              missingRequiredChecks: ["test"],
+            },
+          },
           durationMs: 1,
         })
         Recorder.end(session.id)
@@ -289,6 +295,12 @@ describe("SessionVerifications.load", () => {
         const runs = SessionVerifications.loadRunsWithIds(session.id)
         expect(runs).toHaveLength(1)
         expect(runs[0]).toMatchObject({ tool: "verify_project", callID: "call-verify" })
+        expect(runs[0].metadata).toMatchObject({
+          policy: {
+            requiredChecksPassed: false,
+            missingRequiredChecks: ["test"],
+          },
+        })
         expect(runs[0].envelopes.map((item) => item.envelopeId)).toEqual([
           computeEnvelopeId(tc),
           computeEnvelopeId(tests),

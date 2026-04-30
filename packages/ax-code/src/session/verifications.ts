@@ -24,6 +24,7 @@ export namespace SessionVerifications {
   export type LoadedEnvelopeRun = {
     tool: string
     callID: string
+    metadata?: Record<string, unknown>
     envelopes: LoadedEnvelope[]
   }
 
@@ -58,7 +59,8 @@ export namespace SessionVerifications {
         seen.add(id)
         envelopes.push({ envelope: parsed.data, envelopeId: id })
       }
-      if (envelopes.length > 0) runs.push({ tool: event.tool, callID: event.callID, envelopes })
+      if (envelopes.length > 0)
+        runs.push({ tool: event.tool, callID: event.callID, metadata: event.metadata, envelopes })
     }
     return runs
   }

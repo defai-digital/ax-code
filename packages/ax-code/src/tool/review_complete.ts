@@ -51,6 +51,29 @@ function selectEnvelopes(sessionID: SessionID, ids: string[] | undefined): Verif
   })
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function runPolicyFailed(metadata: Record<string, unknown> | undefined): boolean {
+  if (!metadata) return false
+  const policy = metadata.policy
+  if (!isRecord(policy)) return false
+  return policy.requiredChecksPassed === false
+}
+
+function selectedVerificationPolicyFailed(sessionID: SessionID, ids: string[] | undefined): boolean {
+  const selected = ids ? new Set(ids) : undefined
+  for (const run of SessionVerifications.loadRunsWithIds(sessionID)) {
+    const hasSelectedReviewEnvelope = run.envelopes.some((item) => {
+      if (item.envelope.workflow !== "review") return false
+      return !selected || selected.has(item.envelopeId)
+    })
+    if (hasSelectedReviewEnvelope && runPolicyFailed(run.metadata)) return true
+  }
+  return false
+}
+
 function validateDecision(input: {
   decision: ReviewDecision
   recommendedDecision: ReviewDecision
@@ -93,11 +116,13 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
     const policyFilter = applyPolicyFilter(selectedFindings, policyRules)
     const findings = policyFilter.kept
     const verificationEnvelopes = selectEnvelopes(sessionID, args.verificationEnvelopeIds)
+    const verificationPolicyFailed = selectedVerificationPolicyFailed(sessionID, args.verificationEnvelopeIds)
     const draft = createReviewResult({
       sessionID,
       summary: args.summary,
       findings,
       verificationEnvelopes,
+      verificationPolicyFailed,
       decision: args.decision,
       overrideReason: args.overrideReason,
       source: {
@@ -122,6 +147,7 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       `Verification envelopes: ${draft.verificationEnvelopeIds.length}${
         draft.missingVerification ? " (verification not fully passing)" : ""
       }`,
+      ...(verificationPolicyFailed ? ["Verification policy: failed"] : []),
       ...(policyRules
         ? [
             `Policy findings: ${policyFilter.kept.length} kept, ${policyFilter.dropped.length} dropped`,
@@ -140,6 +166,7 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       metadata: {
         reviewId: draft.reviewId,
         reviewResult: draft,
+        verificationPolicyFailed,
         policy: policyRules
           ? {
               rules: policyRules,

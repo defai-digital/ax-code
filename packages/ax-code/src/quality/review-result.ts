@@ -42,6 +42,7 @@ export type CreateReviewResultInput = {
   summary: string
   findings: Finding[]
   verificationEnvelopes: VerificationEnvelopeWithId[]
+  verificationPolicyFailed?: boolean
   decision?: ReviewDecision
   overrideReason?: string
   source: ReviewResult["source"]
@@ -105,8 +106,10 @@ export function hasSuccessfulVerificationSet(envelopes: readonly VerificationEnv
 export function recommendReviewDecision(
   findings: readonly Finding[],
   verificationEnvelopes: readonly VerificationEnvelopeWithId[],
+  options: { verificationPolicyFailed?: boolean } = {},
 ): ReviewDecision {
   if (blockingFindingIds(findings).length > 0) return "request_changes"
+  if (options.verificationPolicyFailed) return "needs_verification"
   if (!hasSuccessfulVerificationSet(verificationEnvelopes)) return "needs_verification"
   return "approve"
 }
@@ -114,7 +117,11 @@ export function recommendReviewDecision(
 export function createReviewResult(input: CreateReviewResultInput): ReviewResult {
   const findingIds = input.findings.map((finding) => finding.findingId)
   const verificationEnvelopeIds = input.verificationEnvelopes.map((item) => item.envelopeId)
-  const recommendedDecision = recommendReviewDecision(input.findings, input.verificationEnvelopes)
+  const missingVerification =
+    input.verificationPolicyFailed === true || !hasSuccessfulVerificationSet(input.verificationEnvelopes)
+  const recommendedDecision = recommendReviewDecision(input.findings, input.verificationEnvelopes, {
+    verificationPolicyFailed: input.verificationPolicyFailed,
+  })
   const decision = input.decision ?? recommendedDecision
   const reviewId = computeReviewResultId({
     sessionID: input.sessionID,
@@ -135,7 +142,7 @@ export function createReviewResult(input: CreateReviewResultInput): ReviewResult
     verificationEnvelopeIds,
     counts: countSeverities(input.findings),
     blockingFindingIds: blockingFindingIds(input.findings),
-    missingVerification: !hasSuccessfulVerificationSet(input.verificationEnvelopes),
+    missingVerification,
     overrideReason: input.overrideReason,
     createdAt: input.createdAt ?? new Date().toISOString(),
     source: input.source,

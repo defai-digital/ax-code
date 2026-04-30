@@ -153,6 +153,23 @@ describe("VerifyProjectTool", () => {
           missingRequiredChecks: ["test"],
           rules: { required_checks: ["test"] },
         })
+        const tests = result.metadata.verificationEnvelopes.find((env: any) => env.command.runner === "test")
+        if (!tests) throw new Error("missing tests envelope")
+        expect(tests.result).toMatchObject({
+          name: "tests",
+          passed: false,
+          status: "failed",
+        })
+        expect(tests.result.output).toContain('Policy required check "test" was skipped.')
+        expect(tests.structuredFailures).toContainEqual(
+          expect.objectContaining({
+            kind: "custom",
+            message: 'Policy required check "test" was skipped.',
+          }),
+        )
+        expect(result.metadata.envelopeIds.find((item: any) => item.name === "tests")).toMatchObject({
+          status: "failed",
+        })
         expect(result.output).toContain("Policy required checks: test")
         expect(result.output).toContain("Policy missing required checks: test")
       },

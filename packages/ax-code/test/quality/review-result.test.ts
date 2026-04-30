@@ -71,10 +71,14 @@ describe("review-result", () => {
     )
   })
 
+  test("recommends needs_verification when verification policy failed", () => {
+    expect(
+      recommendReviewDecision([finding("LOW")], [verification("passed")], { verificationPolicyFailed: true }),
+    ).toBe("needs_verification")
+  })
+
   test("allows skipped checks only when at least one selected verification passed", () => {
-    expect(recommendReviewDecision([finding("LOW")], [verification("passed"), verification("skipped")])).toBe(
-      "approve",
-    )
+    expect(recommendReviewDecision([finding("LOW")], [verification("passed"), verification("skipped")])).toBe("approve")
     expect(recommendReviewDecision([finding("LOW")], [verification("skipped")])).toBe("needs_verification")
   })
 
@@ -101,6 +105,21 @@ describe("review-result", () => {
       summary: "Review completed.",
       findings: [finding("LOW")],
       verificationEnvelopes: [verification("passed"), verification("failed")],
+      source: { tool: "review_complete", version: "4.x.x", runId: "ses_test" },
+      createdAt: "2026-04-29T00:00:00.000Z",
+    })
+
+    expect(result.decision).toBe("needs_verification")
+    expect(result.missingVerification).toBe(true)
+  })
+
+  test("marks policy-failed verification as missing usable verification", () => {
+    const result = createReviewResult({
+      sessionID: "ses_test",
+      summary: "Review completed.",
+      findings: [finding("LOW")],
+      verificationEnvelopes: [verification("passed")],
+      verificationPolicyFailed: true,
       source: { tool: "review_complete", version: "4.x.x", runId: "ses_test" },
       createdAt: "2026-04-29T00:00:00.000Z",
     })

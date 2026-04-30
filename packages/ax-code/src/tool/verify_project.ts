@@ -10,7 +10,11 @@ import {
 } from "../planner/verification/runner"
 import { WorkflowEnum } from "../quality/finding"
 import { Policy, type PolicyRequiredCheck, type PolicyRules } from "../quality/policy"
-import { computeEnvelopeId, type VerificationEnvelope } from "../quality/verification-envelope"
+import {
+  computeEnvelopeId,
+  type VerificationEnvelope,
+  VerificationEnvelopeSchema,
+} from "../quality/verification-envelope"
 import { fromVerificationCommandResult } from "../quality/verification-envelope-builder"
 import { Tool } from "./tool"
 import DESCRIPTION from "./verify_project.txt"
@@ -73,10 +77,40 @@ function missingRequiredChecks(envelopes: readonly VerificationEnvelope[], rules
   return required.filter((runner) => byRunner.get(runner) === "skipped")
 }
 
-function policyLines(input: {
-  rules: PolicyRules | undefined
-  missingRequiredChecks: readonly PolicyRequiredCheck[]
-}) {
+function applyRequiredCheckPolicy(
+  envelopes: readonly VerificationEnvelope[],
+  missingChecks: readonly PolicyRequiredCheck[],
+): VerificationEnvelope[] {
+  if (missingChecks.length === 0) return [...envelopes]
+  const missing = new Set<string>(missingChecks)
+  return envelopes.map((envelope) => {
+    if (!missing.has(envelope.command.runner) || envelope.result.status !== "skipped") return envelope
+    const message = `Policy required check "${envelope.command.runner}" was skipped.`
+    const output = envelope.result.output ? `${envelope.result.output}\n${message}` : message
+    return VerificationEnvelopeSchema.parse({
+      ...envelope,
+      result: {
+        ...envelope.result,
+        passed: false,
+        status: "failed",
+        output,
+      },
+      structuredFailures: [
+        ...envelope.structuredFailures,
+        {
+          kind: "custom",
+          message,
+          details: {
+            runner: envelope.command.runner,
+            policy: "required_checks",
+          },
+        },
+      ],
+    })
+  })
+}
+
+function policyLines(input: { rules: PolicyRules | undefined; missingRequiredChecks: readonly PolicyRequiredCheck[] }) {
   if (!input.rules) return []
   const lines = ["", "Policy rules: loaded"]
   if (input.rules.required_checks && input.rules.required_checks.length > 0) {
@@ -135,7 +169,7 @@ export const VerifyProjectTool = Tool.define("verify_project", {
       runTests(commands.test, cwd, paths, Instance.project.id, "worktree"),
     )
 
-    const verificationEnvelopes = fromVerificationCommandResult({
+    const rawVerificationEnvelopes = fromVerificationCommandResult({
       workflow,
       sessionID: ctx.sessionID,
       cwd,
@@ -148,12 +182,13 @@ export const VerifyProjectTool = Tool.define("verify_project", {
         tests,
       },
     })
+    const missingPolicyChecks = missingRequiredChecks(rawVerificationEnvelopes, policyRules)
+    const verificationEnvelopes = applyRequiredCheckPolicy(rawVerificationEnvelopes, missingPolicyChecks)
     const envelopeIds = verificationEnvelopes.map((envelope) => ({
       envelopeId: computeEnvelopeId(envelope),
       name: envelope.result.name,
       status: envelope.result.status,
     }))
-    const missingPolicyChecks = missingRequiredChecks(verificationEnvelopes, policyRules)
     const policyPassed = missingPolicyChecks.length === 0
     const allPassed = passed(verificationEnvelopes) && policyPassed
 
