@@ -35,6 +35,8 @@ export type HandoffPolicy = {
 
 const DEFAULT_MAX_FAILURES = 25
 const DEFAULT_ALLOWED_STATUSES: ReadonlyArray<VerificationEnvelope["result"]["status"]> = ["failed"]
+const MAX_FAILURE_FIELD_LENGTH = 240
+const MAX_BRIEF_LINE_LENGTH = 500
 
 export type HandoffDecision = { handoff: true; reasoning: string } | { handoff: false; reasoning: string }
 
@@ -78,18 +80,44 @@ export function shouldHandoff(envelope: VerificationEnvelope, policy?: HandoffPo
   }
 }
 
+function safeBriefText(value: string): string {
+  const withoutAnsi = value.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "").replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, "")
+  const normalized = withoutAnsi
+    .replace(/```/g, "'''")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .replace(/\r\n?/g, "\n")
+  return normalized
+    .split("\n")
+    .map((line) => (line.length > MAX_BRIEF_LINE_LENGTH ? `${line.slice(0, MAX_BRIEF_LINE_LENGTH)}...` : line))
+    .join("\n")
+}
+
+function truncateText(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value
+}
+
+function singleLine(value: string): string {
+  return truncateText(safeBriefText(value).replace(/\s+/g, " ").trim(), MAX_FAILURE_FIELD_LENGTH)
+}
+
 // Format a single structured failure as a short, anchor-first line.
 function formatFailure(failure: StructuredFailure): string {
   if (failure.kind === "typecheck") {
-    return `- ${failure.file}:${failure.line}${failure.column ? `:${failure.column}` : ""} ${failure.code}: ${failure.message}`
+    return `- ${singleLine(failure.file)}:${failure.line}${failure.column ? `:${failure.column}` : ""} ${singleLine(
+      failure.code,
+    )}: ${singleLine(failure.message)}`
   }
   if (failure.kind === "lint") {
-    return `- ${failure.file}:${failure.line} [${failure.severity}] ${failure.rule}: ${failure.message}`
+    return `- ${singleLine(failure.file)}:${failure.line} [${failure.severity}] ${singleLine(
+      failure.rule,
+    )}: ${singleLine(failure.message)}`
   }
   if (failure.kind === "test") {
-    return `- ${failure.framework}: ${failure.testName}${failure.assertion ? ` — ${failure.assertion}` : ""}`
+    return `- ${singleLine(failure.framework)}: ${singleLine(failure.testName)}${
+      failure.assertion ? ` — ${singleLine(failure.assertion)}` : ""
+    }`
   }
-  return `- custom: ${failure.message}`
+  return `- custom: ${singleLine(failure.message)}`
 }
 
 export function briefFromFailure(envelope: VerificationEnvelope): string {
@@ -111,7 +139,7 @@ export function briefFromFailure(envelope: VerificationEnvelope): string {
   }
 
   if (envelope.result.output) {
-    const output = envelope.result.output.split("\n").slice(0, 30).join("\n")
+    const output = safeBriefText(envelope.result.output).split("\n").slice(0, 30).join("\n")
     lines.push("Raw output (first 30 lines):")
     lines.push("```")
     lines.push(output)
