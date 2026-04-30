@@ -289,6 +289,8 @@ describe("DecisionHints", () => {
       id: "missing-review-completion",
       category: "missing_review_completion",
     })
+    expect(hints[0]?.evidence).toContain("review verification tool: verify_project")
+    expect(hints[0]?.evidence.join("\n")).not.toContain("last file-changing tool")
   })
 
   test("does not let qa verification close the review verification hint", () => {

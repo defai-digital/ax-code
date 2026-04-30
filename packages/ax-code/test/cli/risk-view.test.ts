@@ -167,6 +167,61 @@ describe("RiskView.lines", () => {
     expect(lines).toContain("  request changes · 1 finding · 1 blocking · 1 verification envelope")
   })
 
+  test("renders decision hint evidence without dumping unbounded detail", () => {
+    const lines = RiskView.lines({
+      id: "ses_decision_hints",
+      title: "Decision hint session",
+      assessment: {
+        level: "MEDIUM",
+        score: 45,
+        readiness: "needs_review",
+        confidence: 0.7,
+        summary: "review loop needs completion",
+        signals: {
+          filesChanged: 1,
+          linesChanged: 8,
+          totalTools: 3,
+          apiEndpointsAffected: 0,
+          crossModule: false,
+          securityRelated: false,
+          validationState: "partial",
+          diffState: "recorded",
+        },
+      },
+      semantic: null,
+      drivers: [],
+      decisionHints: {
+        source: "replay",
+        readiness: "needs_validation",
+        actionCount: 3,
+        hintCount: 1,
+        hints: [
+          {
+            id: "missing-review-completion",
+            category: "missing_review_completion",
+            confidence: 0.82,
+            title: "Complete the structured review result",
+            body: "Run review_complete before finalizing the review.",
+            evidence: [
+              "review verification tool: verify_project",
+              "review findings: 1",
+              "review verification results: 1",
+              "extra evidence",
+            ],
+          },
+        ],
+      },
+    } as any)
+
+    expect(lines).toContain("  Decision Hints")
+    expect(lines).toContain("  - Complete the structured review result (82%): Run review_complete before finalizing the review.")
+    expect(lines).toContain("    evidence: review verification tool: verify_project")
+    expect(lines).toContain("    evidence: review findings: 1")
+    expect(lines).toContain("    evidence: review verification results: 1")
+    expect(lines).toContain("    evidence: +1 more")
+    expect(lines).not.toContain("    evidence: extra evidence")
+  })
+
   test("normalizes stale next-action wording for replay-readiness states", () => {
     const lines = RiskView.lines({
       id: "ses_789",

@@ -108,6 +108,11 @@ export namespace RiskView {
       )
       for (const hint of input.decisionHints.hints) {
         out.push(`  - ${hint.title} (${Math.round(hint.confidence * 100)}%): ${hint.body}`)
+        const evidence = hint.evidence.slice(0, 3)
+        for (const item of evidence) out.push(`    evidence: ${item}`)
+        if (hint.evidence.length > evidence.length) {
+          out.push(`    evidence: +${hint.evidence.length - evidence.length} more`)
+        }
       }
     }
 

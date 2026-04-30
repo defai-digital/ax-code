@@ -180,13 +180,15 @@ describe("session risk endpoint", () => {
               readiness: string
               actionCount: number
               hintCount: number
+              hints?: Array<{ id: string; category: string }>
             }
           }
           expect(hintsBody.decisionHints).toMatchObject({
             source: "replay",
-            readiness: "clear",
+            readiness: "needs_validation",
             actionCount: 3,
-            hintCount: 0,
+            hintCount: 1,
+            hints: [{ id: "missing-review-verification", category: "missing_verification" }],
           })
 
           const reviewResults = await app.request(`/session/${sid}/risk?reviewResults=true`)

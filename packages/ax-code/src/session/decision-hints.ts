@@ -190,7 +190,7 @@ export namespace DecisionHints {
         confidence: 0.82,
         title: "Complete the structured review result",
         body: "Review findings or review-scoped verification were recorded, but no later review_complete result closed the review loop. Run review_complete before finalizing the review.",
-        evidence: [describeAction(latestReviewVerification), describeReviewFindings(reviewFindings)],
+        evidence: [describeReviewSignal(latestReviewVerification), describeReviewFindings(reviewFindings)],
       },
     ]
   }
