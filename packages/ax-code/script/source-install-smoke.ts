@@ -312,7 +312,10 @@ async function runTuiStartupGate(axCodeBin: string, options: { cwd: string; debu
   if (failureMessage) await fail(failureMessage)
 }
 
-const tempRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), "ax-code-source-install-smoke."))
+const requestedTempRoot = process.env.AX_CODE_INSTALL_SMOKE_TEMP_ROOT
+const tempRoot = requestedTempRoot
+  ? path.resolve(requestedTempRoot)
+  : await fs.promises.mkdtemp(path.join(os.tmpdir(), "ax-code-source-install-smoke."))
 const installDir = path.join(tempRoot, "install")
 const npmCache = path.join(tempRoot, "npm-cache")
 const debugDir = path.join(tempRoot, "first-prompt-debug")
@@ -321,6 +324,10 @@ const tuiHomeDir = path.join(tempRoot, "tui-home")
 const tuiProjectDir = path.join(tempRoot, "tui-project")
 
 try {
+  if (requestedTempRoot) {
+    await fs.promises.rm(tempRoot, { recursive: true, force: true })
+  }
+  await fs.promises.mkdir(tempRoot, { recursive: true })
   await fs.promises.mkdir(installDir, { recursive: true })
   await fs.promises.mkdir(npmCache, { recursive: true })
   await fs.promises.mkdir(tuiProjectDir, { recursive: true })

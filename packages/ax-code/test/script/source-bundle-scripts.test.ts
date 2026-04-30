@@ -5,6 +5,7 @@ import fs from "fs"
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const packageJsonPath = path.resolve(import.meta.dir, "../../package.json")
 const ciWorkflowPath = path.join(repoRoot, ".github/workflows/ax-code-ci.yml")
+const tuiRendererWorkflowPath = path.join(repoRoot, ".github/workflows/ax-code-tui-renderer.yml")
 
 describe("source-bundle package.json scripts", () => {
   test("bundle:source script exists and points at build-source.ts", async () => {
@@ -47,6 +48,7 @@ describe("source-bundle package.json scripts", () => {
     const smokeScript = await Bun.file(path.resolve(import.meta.dir, "../../script/source-install-smoke.ts")).text()
     expect(smokeScript).toContain("bun-pty")
     expect(smokeScript).toContain("AX_CODE_INSTALL_SMOKE_TUI_TIMEOUT_MS")
+    expect(smokeScript).toContain("AX_CODE_INSTALL_SMOKE_TEMP_ROOT")
     expect(smokeScript).toContain("AX_CODE_TUI_WORKER_READY_TIMEOUT_MS")
     expect(smokeScript).toContain("tui.startup.appMounted")
     expect(smokeScript).toContain("pty.kill()")
@@ -114,5 +116,16 @@ describe("PR CI bundle-source job", () => {
     // would still hit dev if the PR check didn't run.
     const text = await Bun.file(ciWorkflowPath).text()
     expect(text).toContain("pull_request:")
+  })
+})
+
+describe("manual TUI renderer workflow", () => {
+  test("uses the maintained source package TUI smoke, not a stale renderer script", async () => {
+    const text = await Bun.file(tuiRendererWorkflowPath).text()
+    expect(text).toContain("source-install-smoke.ts")
+    expect(text).toContain("--tui-startup-smoke")
+    expect(text).toContain("AX_CODE_INSTALL_SMOKE_TUI_TIMEOUT_MS")
+    expect(text).toContain("AX_CODE_INSTALL_SMOKE_TEMP_ROOT")
+    expect(text).not.toContain("tui:renderer:evaluate")
   })
 })

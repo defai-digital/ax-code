@@ -3,38 +3,28 @@ name: ax-code-tui-renderer
 on:
   workflow_dispatch:
     inputs:
-      repeat:
-        description: Benchmark samples
-        required: false
-        type: string
-        default: "3"
       timeout_ms:
-        description: Probe timeout in milliseconds
+        description: TUI startup timeout in milliseconds
         required: false
         type: string
-        default: "15000"
-      contract:
-        description: Optional contract report path relative to packages/ax-code
-        required: false
-        type: string
-        default: ""
+        default: "20000"
       run_pty:
-        description: Run PTY probes against the native renderer
+        description: Run the installed package under a PTY until OpenTUI mounts
         required: false
         type: boolean
         default: true
       require_ready:
-        description: Fail the workflow when the phase5 decision is not ready
+        description: Fail the workflow when the source package TUI gate is not ready
         required: false
         type: boolean
         default: true
 
 jobs:
-  native-renderer:
+  source-package-tui:
     runs-on: ubuntu-latest
     env:
       AX_CODE_DISABLE_SHARE: "true"
-      TUI_RENDERER_ARTIFACT_DIR: .tmp/tui-renderer-phase5
+      AX_CODE_INSTALL_SMOKE_TEMP_ROOT: .tmp/source-install-smoke
     steps:
       - uses: actions/checkout@v6
 
@@ -55,41 +45,25 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Evaluate native renderer phase5 gate
-        id: evaluate
+      - name: Evaluate source package TUI startup gate
+        id: source-package-tui
         continue-on-error: ${{ !inputs.require_ready }}
         shell: bash
         working-directory: packages/ax-code
         run: |
           set -euo pipefail
 
-          cmd=(
-            pnpm
-            run
-            tui:renderer:evaluate
-            --
-            --artifacts-dir
-            "${TUI_RENDERER_ARTIFACT_DIR}"
-            --repeat
-            "${{ inputs.repeat }}"
-            --timeout-ms
-            "${{ inputs.timeout_ms }}"
-          )
-
-          if [ -n "${{ inputs.contract }}" ]; then
-            cmd+=(--contract "${{ inputs.contract }}")
-          fi
-
           if [ "${{ inputs.run_pty }}" = "true" ]; then
-            cmd+=(--run -- bun run src/index.ts)
+            AX_CODE_INSTALL_SMOKE_TUI_TIMEOUT_MS="${{ inputs.timeout_ms }}" \
+              bun run script/source-install-smoke.ts --tui-startup-smoke --keep-temp
+          else
+            bun run script/source-install-smoke.ts --keep-temp
           fi
 
-          "${cmd[@]}"
-
-      - name: Upload native renderer artifacts
+      - name: Upload source package TUI artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ax-code-tui-renderer-phase5
-          path: packages/ax-code/.tmp/tui-renderer-phase5/
+          name: ax-code-source-package-tui
+          path: packages/ax-code/.tmp/source-install-smoke/
           if-no-files-found: ignore
