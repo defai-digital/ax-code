@@ -99,6 +99,23 @@ describe("homebrew source formula generator", () => {
     expect(jobMatch![0]).toContain("!contains(github.ref_name, '-')")
   })
 
+  test("release workflow publishes GitHub release only after package channels are ready", async () => {
+    const text = await Bun.file(releaseWorkflow).text()
+    const publishJob = text.match(/publish:[\s\S]*?(?=\n  publish-npm:|$)/)
+    expect(publishJob).not.toBeNull()
+    expect(publishJob![0]).toContain("gh release create")
+    expect(publishJob![0]).toContain("--draft")
+
+    const finalizeJob = text.match(/finalize:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
+    expect(finalizeJob).not.toBeNull()
+    expect(finalizeJob![0]).toContain("- publish-npm")
+    expect(finalizeJob![0]).toContain("- publish-source")
+    expect(finalizeJob![0]).toContain("- homebrew")
+    expect(finalizeJob![0]).toContain("- homebrew-source")
+    expect(finalizeJob![0]).toContain("always() && !cancelled()")
+    expect(finalizeJob![0]).toContain('gh release edit "${{ github.ref_name }}" --draft=false')
+  })
+
   test("install matrix installs exact package versions, not stale dist-tags", async () => {
     const text = await Bun.file(installMatrixWorkflow).text()
     expect(text).toContain('PACKAGE="@defai.digital/ax-code-source"')
@@ -115,6 +132,16 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain('\\"runtimeMode\\":\\"${RUNTIME_RE}\\"')
     expect(text).toContain("RUNTIME_RE='compiled'")
     expect(text).not.toContain("@defai.digital/ax-code@$CHANNEL")
+  })
+
+  test("install matrix refreshes the Homebrew tap while waiting for formula propagation", async () => {
+    const text = await Bun.file(installMatrixWorkflow).text()
+    const homebrewStep = text.match(/Install ax-code from Homebrew tap[\s\S]*?(?=\n      - name: ax-code --version|$)/)
+    expect(homebrewStep).not.toBeNull()
+    expect(homebrewStep![0]).toContain("brew update 2>&1 || true")
+    expect(homebrewStep![0]).toContain("brew tap defai-digital/ax-code 2>&1 || true")
+    expect(homebrewStep![0]).toContain("brew info defai-digital/ax-code/ax-code 2>/dev/null")
+    expect(homebrewStep![0]).not.toContain("brew update\n")
   })
 
   test("release build matrix smokes compiled backend stdio handshake", async () => {
