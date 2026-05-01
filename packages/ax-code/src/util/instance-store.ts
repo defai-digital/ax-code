@@ -49,12 +49,20 @@ export namespace InstanceStore {
    */
   export function create<A>(init: (ctx: StoreShape) => A | Promise<A>): Store<A> {
     const entries = new Map<string, A>()
-    const pending = new Map<string, Promise<A>>()
+    const pending = new Map<
+      string,
+      {
+        generation: number
+        promise: Promise<A>
+      }
+    >()
+    const generationByDir = new Map<string, number>()
 
     // Register cleanup so directory disposal removes stale entries
     registerDisposer(async (directory) => {
       entries.delete(directory)
       pending.delete(directory)
+      generationByDir.delete(directory)
     })
 
     return {
@@ -65,7 +73,10 @@ export namespace InstanceStore {
 
         // Check if initialization is already in-flight
         const inflight = pending.get(dir)
-        if (inflight) return inflight
+        if (inflight) return inflight.promise
+
+        const generation = (generationByDir.get(dir) ?? 0) + 1
+        generationByDir.set(dir, generation)
 
         const promise = Promise.resolve(
           init({
@@ -75,16 +86,25 @@ export namespace InstanceStore {
           }),
         )
           .then((value) => {
-            entries.set(dir, value)
-            pending.delete(dir)
+            if (generationByDir.get(dir) === generation) {
+              entries.set(dir, value)
+            }
             return value
           })
           .catch((err) => {
-            pending.delete(dir)
+            if (generationByDir.get(dir) === generation) {
+              entries.delete(dir)
+            }
             throw err
           })
+          .finally(() => {
+            const current = pending.get(dir)
+            if (current?.generation === generation) {
+              pending.delete(dir)
+            }
+          })
 
-        pending.set(dir, promise)
+        pending.set(dir, { generation, promise })
         return promise
       },
 
@@ -101,6 +121,7 @@ export namespace InstanceStore {
         const dir = Instance.directory
         entries.delete(dir)
         pending.delete(dir)
+        generationByDir.set(dir, (generationByDir.get(dir) ?? 0) + 1)
       },
     }
   }

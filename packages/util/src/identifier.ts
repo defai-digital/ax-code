@@ -19,10 +19,20 @@ export namespace Identifier {
   }
 
   function randomBase62(length: number): string {
+    // Rejection sampling: `256 % 62 = 8`, so a naive `byte % 62` gives
+    // the first 8 characters a slightly higher probability. Only accept
+    // bytes below the largest multiple of 62 <= 256 (which is 248), rejecting
+    // the rest.
+    const limit = BASE62_ALPHABET.length * Math.floor(256 / BASE62_ALPHABET.length)
     let result = ""
-    const bytes = randomBytes(length)
-    for (let i = 0; i < length; i++) {
-      result += BASE62_ALPHABET[bytes[i] % BASE62_ALPHABET.length]
+    while (result.length < length) {
+      const bytes = randomBytes(length * 2)
+      for (let i = 0; i < bytes.length && result.length < length; i++) {
+        const byte = bytes[i]
+        if (byte < limit) {
+          result += BASE62_ALPHABET[byte % BASE62_ALPHABET.length]
+        }
+      }
     }
     return result
   }

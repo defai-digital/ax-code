@@ -234,7 +234,6 @@ export namespace Question {
       log.warn("reply for unknown request", { requestID: input.requestID })
       return
     }
-    pending.delete(input.requestID)
     log.info("replied", { requestID: input.requestID, answers: input.answers })
     Bus.publishDetached(Event.Replied, {
       sessionID: existing.info.sessionID,
@@ -251,7 +250,6 @@ export namespace Question {
       log.warn("reject for unknown request", { requestID })
       return
     }
-    pending.delete(requestID)
     log.info("rejected", { requestID })
     Bus.publishDetached(Event.Rejected, {
       sessionID: existing.info.sessionID,

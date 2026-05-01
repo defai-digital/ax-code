@@ -50,6 +50,10 @@ export namespace Log {
   }
 
   const loggers = new Map<string, Logger>()
+  function isCacheableTags(tags: Record<string, any>) {
+    const service = tags["service"]
+    return typeof service === "string" && Object.keys(tags).length === 1
+  }
 
   export const Default = create({ service: "default" })
 
@@ -284,11 +288,14 @@ export namespace Log {
 
     const service = tags["service"]
     if (service && typeof service === "string") {
-      const cached = loggers.get(service)
+      const isCacheable = isCacheableTags(tags)
+      const cached = isCacheable ? loggers.get(service) : undefined
       if (cached) {
         return cached
       }
     }
+
+    let last = Date.now()
 
     function build(message: unknown, extra?: Record<string, unknown>) {
       const prefix = Object.entries({
@@ -337,8 +344,7 @@ export namespace Log {
         }
       },
       tag(key: string, value: string) {
-        tags = { ...tags, [key]: value }
-        return result
+        return Log.create({ ...tags, [key]: value })
       },
       clone() {
         return Log.create({ ...tags })
@@ -362,7 +368,7 @@ export namespace Log {
       },
     }
 
-    if (service && typeof service === "string") {
+    if (service && typeof service === "string" && isCacheableTags(tags)) {
       loggers.set(service, result)
     }
 

@@ -181,19 +181,21 @@ export namespace LSP {
   const HEALTH_CHECK_INTERVAL_MS = 60_000
   const MAX_ROOT_CACHE_ENTRIES = 2_000
 
-  // Check whether a (root, server) key is currently in cooldown. If the
-  // cooldown has expired we eagerly drop the entry so the next caller can
-  // retry a fresh spawn. The caller tracks failure count across retries so
-  // backoff compounds on repeat failures.
+  // Check whether a (root, server) key is currently in cooldown.
+  // Expired entries are kept so caller can retain failure count and
+  // continue applying backoff escalation on the next retry attempt.
   // Exported for unit tests.
   export function isBroken(broken: Map<string, BrokenEntry>, key: string): boolean {
     const entry = broken.get(key)
     if (!entry) return false
     if (Date.now() >= entry.nextAttempt) {
-      broken.delete(key)
       return false
     }
     return true
+  }
+
+  function clientKey(root: string, serverID: string) {
+    return `${root}\0${serverID}`
   }
 
   // Exported for unit tests.
@@ -484,7 +486,7 @@ export namespace LSP {
         }
         if (dead.length === 0) return
         for (const client of dead) {
-          const key = client.root + client.serverID
+          const key = clientKey(client.root, client.serverID)
           log.warn("lsp server died unexpectedly", { serverID: client.serverID, root: client.root })
           markBroken(s.broken, key)
           const idx = s.clients.indexOf(client)
@@ -649,7 +651,7 @@ export namespace LSP {
 
       const root = await resolveRoot(s, server, file)
       if (!root) continue
-      const key = root + server.id
+      const key = clientKey(root, server.id)
       if (isBroken(s.broken, key)) continue
 
       const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
@@ -731,7 +733,7 @@ export namespace LSP {
       if (!probe) continue
       const root = await server.root(probe)
       if (!root) continue
-      const key = root + server.id
+      const key = clientKey(root, server.id)
       if (isBroken(s.broken, key)) continue
 
       const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
@@ -789,7 +791,7 @@ export namespace LSP {
       if (server.extensions.length && !server.extensions.includes(extension)) continue
       const root = await resolveRoot(s, server, file)
       if (!root) continue
-      if (isBroken(s.broken, root + server.id)) continue
+      if (isBroken(s.broken, clientKey(root, server.id))) continue
       return true
     }
     return false
@@ -878,7 +880,7 @@ export namespace LSP {
             const root = await resolveRoot(s, server, file)
             if (!root) continue
 
-            const key = root + server.id
+            const key = clientKey(root, server.id)
             if (isBroken(s.broken, key)) continue
             if (planned.has(key)) continue
 

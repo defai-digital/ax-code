@@ -40,9 +40,8 @@ export const AttachCommand = cmd({
       }),
   handler: async (args) => {
     const unguard = win32InstallCtrlCGuard()
+    const restoreInputMode = win32DisableProcessedInput()
     try {
-      win32DisableProcessedInput()
-
       if (args.fork && !args.continue && !args.session) {
         UI.error("--fork requires --continue or --session")
         process.exitCode = 1
@@ -82,6 +81,7 @@ export const AttachCommand = cmd({
         headers,
       })
     } finally {
+      restoreInputMode?.()
       unguard?.()
     }
   },

@@ -12,6 +12,7 @@ import { Process } from "../util/process"
 import { which } from "../util/which"
 import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
+import { withTimeout } from "../util/timeout"
 import { JS_LOCKFILES } from "@/constants/lsp"
 import {
   PINNED_CHECKSUM_LSP_RELEASES,
@@ -84,11 +85,20 @@ async function oxlintSupportsLsp(lintBin: string): Promise<boolean> {
 
   const pending = (async () => {
     let help = ""
+    let proc: ReturnType<typeof spawn> | undefined
     try {
-      const proc = spawn(lintBin, ["--help"])
+      proc = spawn(lintBin, ["--help"])
       const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
-      ;[help] = await Promise.all([helpPromise, proc.exited])
+      ;[help] = await withTimeout(
+        Promise.all([helpPromise, proc.exited]),
+        5_000,
+        `oxlint --help timed out for ${lintBin}`,
+      )
     } catch (error) {
+      if (proc) {
+        proc.kill()
+        await withTimeout(proc.exited, 500, `oxlint process cleanup timed out`).catch(() => {})
+      }
       log.warn("oxlint --help check failed", { lintBin, error })
       setOxlintSupportCache(lintBin, false)
       return false

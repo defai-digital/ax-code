@@ -298,6 +298,8 @@ export function renderSessionQualityBrief(action: SessionQualityAction) {
     `- next action: ${action.footer}`,
   ]
 
+  let insertAt = 3
+
   if (action.kind === "capture_evidence") {
     const captureSummary = captureEvidenceStatusSummary(action.summary)
     lines.splice(
@@ -307,17 +309,20 @@ export function renderSessionQualityBrief(action: SessionQualityAction) {
         ? "- replay items: none yet"
         : `- readiness blocker: ${captureSummary}`,
     )
+    insertAt = 4
   } else if (action.kind === "finish_label_coverage") {
     const breakdown = labelCoverageBreakdown(action.summary)
-    lines.splice(3, 0, `- missing labels: ${breakdown.missingLabels}`)
-    lines.splice(4, 0, `- unresolved labels: ${breakdown.unresolvedLabeledItems}`)
-    lines.splice(5, 0, `- resolved labels: ${resolvedLabelsSummary(action.summary)}`)
+    lines.splice(insertAt, 0, `- missing labels: ${breakdown.missingLabels}`)
+    lines.splice(insertAt + 1, 0, `- unresolved labels: ${breakdown.unresolvedLabeledItems}`)
+    lines.splice(insertAt + 2, 0, `- resolved labels: ${resolvedLabelsSummary(action.summary)}`)
+    insertAt = 6
   } else {
     lines.splice(3, 0, `- resolved labels: ${resolvedLabelsSummary(action.summary)}`)
+    insertAt = 4
   }
 
   if (recommended.length > 0) {
-    lines.splice(3, 0, `- recommended tests: ${recommended.join(" | ")}`)
+    lines.splice(insertAt, 0, `- recommended tests: ${recommended.join(" | ")}`)
   }
 
   if ((action.summary.gates ?? []).length > 0) {

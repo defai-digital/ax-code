@@ -322,6 +322,7 @@ export namespace Planner {
       results.push(r)
       if (r.success) {
         plan.phasesCompleted++
+        plan.phasesFailed = Math.max(0, plan.phasesFailed - 1)
         continue
       }
       plan.phasesFailed++

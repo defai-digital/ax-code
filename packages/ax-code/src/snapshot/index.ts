@@ -328,7 +328,7 @@ export namespace Snapshot {
         exitCode: checkout.code,
         stderr: checkout.stderr,
       })
-      return
+      throw new Error(`Snapshot restore failed: checkout-index exited with code ${checkout.code}`)
     }
     log.error("failed to restore snapshot", {
       snapshot,

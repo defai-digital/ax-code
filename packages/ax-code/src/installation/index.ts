@@ -52,7 +52,7 @@ export namespace Installation {
   export function getReleaseType(current: string, latest: string): ReleaseType {
     const compare = compareVersions(current, latest)
     if (compare === undefined) return "unknown"
-    if (compare <= 0) return "patch"
+    if (compare <= 0) return "unknown"
 
     const currMajor = semver.major(current)
     const currMinor = semver.minor(current)

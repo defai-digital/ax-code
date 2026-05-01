@@ -24,6 +24,26 @@ export const AcpCommand = cmd({
     await bootstrap(process.cwd(), async () => {
       const opts = await resolveNetworkOptions(args)
       const server = Server.listen(opts)
+      let stopping = false
+
+      const shutdown = async (signal: "SIGINT" | "SIGTERM") => {
+        if (stopping) return
+        stopping = true
+        log.info("shutting down ACP server", { signal })
+        await server.stop(true).catch((error) => {
+          log.error("ACP shutdown failed", { signal, error })
+        })
+        process.exit(0)
+      }
+
+      const onSigint = () => {
+        void shutdown("SIGINT")
+      }
+      const onSigterm = () => {
+        void shutdown("SIGTERM")
+      }
+      process.on("SIGINT", onSigint)
+      process.on("SIGTERM", onSigterm)
 
       const sdk = createOpencodeClient({
         baseUrl: `http://${server.hostname}:${server.port}`,
@@ -61,10 +81,18 @@ export const AcpCommand = cmd({
 
       log.info("setup connection")
       process.stdin.resume()
-      await new Promise((resolve, reject) => {
-        process.stdin.on("end", resolve)
-        process.stdin.on("error", reject)
-      })
+      try {
+        await new Promise((resolve, reject) => {
+          process.stdin.on("end", resolve)
+          process.stdin.on("error", reject)
+        })
+      } finally {
+        process.off("SIGINT", onSigint)
+        process.off("SIGTERM", onSigterm)
+        await server.stop(true).catch((error) => {
+          log.error("ACP stop failed", { error })
+        })
+      }
     })
   },
 })

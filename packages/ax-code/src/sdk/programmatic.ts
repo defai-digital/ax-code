@@ -214,34 +214,45 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>): StreamHandle {
   let cachedResult: RunResult | undefined
   let iteratorStarted = false
   let resolveCompletion: (() => void) | undefined
+  const streamLog = Log.create({ service: "sdk.stream" })
   const completionPromise = new Promise<void>((r) => {
     resolveCompletion = r
   })
+
+  function emit<T = unknown>(type: string, callback: (listener: Function) => T) {
+    for (const cb of listeners[type] ?? []) {
+      try {
+        void Promise.resolve(callback(cb)).catch((error) => {
+          streamLog.error("sdk stream event handler rejected", { type, error })
+        })
+      } catch (error) {
+        streamLog.error("sdk stream event handler threw", { type, error })
+      }
+    }
+  }
 
   async function* wrappedIterator(): AsyncGenerator<StreamEvent> {
     try {
       for await (const event of source) {
         // Fire registered callbacks
-        if (event.type === "text" && listeners["text"]) {
-          for (const cb of listeners["text"]) cb(event.text)
+        if (event.type === "text") {
+          emit("text", (cb) => cb(event.text))
         }
-        if (event.type === "tool-call" && listeners["tool-call"]) {
-          for (const cb of listeners["tool-call"]) cb(event.tool, event.input)
+        if (event.type === "tool-call") {
+          emit("tool-call", (cb) => cb(event.tool, event.input))
         }
-        if (event.type === "tool-result" && listeners["tool-result"]) {
-          for (const cb of listeners["tool-result"]) cb(event.tool, event.output, event.status)
+        if (event.type === "tool-result") {
+          emit("tool-result", (cb) => cb(event.tool, event.output, event.status))
         }
-        if (event.type === "reasoning" && listeners["reasoning"]) {
-          for (const cb of listeners["reasoning"]) cb(event.text)
+        if (event.type === "reasoning") {
+          emit("reasoning", (cb) => cb(event.text))
         }
-        if (event.type === "error" && listeners["error"]) {
-          for (const cb of listeners["error"]) cb(event.error)
+        if (event.type === "error") {
+          emit("error", (cb) => cb(event.error))
         }
         if (event.type === "done") {
           cachedResult = event.result
-          if (listeners["done"]) {
-            for (const cb of listeners["done"]) cb(event.result)
-          }
+          emit("done", (cb) => cb(event.result))
           yield event
           return
         }

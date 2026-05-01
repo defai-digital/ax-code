@@ -1055,7 +1055,6 @@ export namespace MCP {
         throw new Error("Unknown OAuth error")
       }
       if (error instanceof UnauthorizedError && capturedUrl) {
-        await closeIfPossible(client, mcpName, "startAuth unauthorized redirect")
         // Store transport for finishAuth
         await closePendingOAuthTransport(mcpName)
         pendingOAuthTransports.set(mcpName, transport)

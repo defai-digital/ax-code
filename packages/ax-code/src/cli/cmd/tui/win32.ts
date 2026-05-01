@@ -40,6 +40,12 @@ export function win32DisableProcessedInput() {
   const mode = buf[0] ?? 0
   if ((mode & ENABLE_PROCESSED_INPUT) === 0) return
   api.symbols.SetConsoleMode(handle, mode & ~ENABLE_PROCESSED_INPUT)
+
+  return () => {
+    const current = new Uint32Array(1)
+    if (api.symbols.GetConsoleMode(handle, ptr(current)) === 0) return
+    api.symbols.SetConsoleMode(handle, mode)
+  }
 }
 
 /**

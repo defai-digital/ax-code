@@ -12,13 +12,24 @@ function encryptToken(token: string): string {
 }
 
 function decryptToken<T extends string>(raw: string, make: (s: string) => T): T {
+  let parsed: unknown
   try {
-    const parsed = JSON.parse(raw) as unknown
-    if (isEncrypted(parsed)) return make(decrypt(parsed as EncryptedValue))
+    parsed = JSON.parse(raw) as unknown
   } catch {
     // not JSON or not encrypted — treat as plaintext
+    return make(raw)
   }
-  return make(raw)
+  if (!isEncrypted(parsed)) return make(raw)
+
+  try {
+    return make(decrypt(parsed as EncryptedValue))
+  } catch (error) {
+    log.warn("failed to decrypt token", {
+      error: error instanceof Error ? error.message : String(error),
+      tokenLength: raw.length,
+    })
+    throw new Error("Failed to decrypt token: token may be corrupted or encrypted with a different key", { cause: error })
+  }
 }
 
 export type AccountRow = (typeof AccountTable)["$inferSelect"]

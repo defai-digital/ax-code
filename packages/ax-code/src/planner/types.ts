@@ -169,7 +169,7 @@ export interface CreatePlanOptions {
 export function createPlan(prompt: string, phases: TaskPhase[], opts: CreatePlanOptions = {}): TaskPlan {
   const constraints = opts.constraints?.map((c) => c.trim()).filter(Boolean)
   return {
-    id: `plan-${Date.now()}`,
+    id: `plan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     version: 1,
     originalPrompt: prompt,
     reasoning: "",

@@ -518,34 +518,52 @@ export namespace Patch {
 
     const oldLines = oldContent.split("\n")
     const newLines = newContent.split("\n")
+    const n = oldLines.length
+    const m = newLines.length
 
-    // Simple diff generation - in a real implementation you'd use a proper diff algorithm
-    let diff = "@@ -1 +1 @@\n"
-
-    // Find changes (simplified approach)
-    const maxLen = Math.max(oldLines.length, newLines.length)
-    let hasChanges = false
-
-    for (let i = 0; i < maxLen; i++) {
-      const oldLine = oldLines[i] ?? ""
-      const newLine = newLines[i] ?? ""
-      const hasOld = i < oldLines.length
-      const hasNew = i < newLines.length
-
-      if (oldLine !== newLine) {
-        // Use index checks, not truthiness. An empty-line removal or
-        // addition was previously dropped because `""` is falsy and
-        // the `if (oldLine)` / `if (newLine)` guards skipped it,
-        // leaving blank-line edits invisible in the diff output.
-        if (hasOld) diff += `-${oldLine}\n`
-        if (hasNew) diff += `+${newLine}\n`
-        hasChanges = true
-      } else if (hasOld) {
-        diff += ` ${oldLine}\n`
+    const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1))
+    for (let i = 1; i <= n; i++) {
+      for (let j = 1; j <= m; j++) {
+        if (oldLines[i - 1] === newLines[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1])
+        }
       }
     }
 
-    return hasChanges ? diff : ""
+    type Edit = { type: "equal" | "delete" | "insert"; value: string }
+    const edits: Edit[] = []
+    let i = n
+    let j = m
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+        edits.push({ type: "equal", value: oldLines[i - 1] ?? "" })
+        i--
+        j--
+        continue
+      }
+
+      if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        edits.push({ type: "insert", value: newLines[j - 1] ?? "" })
+        j--
+        continue
+      }
+
+      edits.push({ type: "delete", value: oldLines[i - 1] ?? "" })
+      i--
+    }
+
+    edits.reverse()
+    const diffBody = edits
+      .map((edit) =>
+        edit.type === "equal" ? ` ${edit.value}` : edit.type === "delete" ? `-${edit.value}` : `+${edit.value}`,
+      )
+      .join("\n")
+
+    if (!edits.some((edit) => edit.type !== "equal")) return ""
+
+    return `@@ -1,${n} +1,${m} @@\n${diffBody}\n`
   }
 
   // Apply hunks to filesystem

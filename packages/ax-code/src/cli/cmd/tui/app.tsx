@@ -416,8 +416,19 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     onCleanup(cancel)
   })
 
-  async function putJsonWithTimeout(path: string, body: unknown, headers?: Record<string, string>) {
+  async function putJsonWithTimeout(
+    path: string,
+    body: unknown,
+    headers?: Record<string, string>,
+    options?: { signal?: AbortSignal },
+  ) {
     const ctrl = new AbortController()
+    const onAbort = () => ctrl.abort()
+    if (options?.signal?.aborted) {
+      onAbort()
+    } else if (options?.signal) {
+      options.signal.addEventListener("abort", onAbort, { once: true })
+    }
     const timer = setTimeout(() => ctrl.abort(), 10_000)
     try {
       const response = await sdk.fetch(`${sdk.url}${path}`, {
@@ -434,6 +445,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       }
     } finally {
       clearTimeout(timer)
+      if (options?.signal) {
+        options.signal.removeEventListener("abort", onAbort)
+      }
     }
   }
 
@@ -441,11 +455,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const MAX_SESSION_FORK_ATTEMPTS = 3
   const retryTimers = new Set<ReturnType<typeof setTimeout>>()
   let forkRetryDisposed = false
+  let smartLlmPutController: AbortController | undefined
+  let autonomousPutController: AbortController | undefined
+  let sandboxPutController: AbortController | undefined
 
   onCleanup(() => {
     forkRetryDisposed = true
     for (const timer of retryTimers) clearTimeout(timer)
     retryTimers.clear()
+    smartLlmPutController?.abort()
+    autonomousPutController?.abort()
+    sandboxPutController?.abort()
   })
 
   function scheduleRetry(fn: () => void, delay = RETRY_DELAY_MS) {
@@ -896,8 +916,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSelect: (dialog) => {
         const previous = sync.data.smartLlm
         const next = !previous
+        smartLlmPutController?.abort()
+        const controller = new AbortController()
+        smartLlmPutController = controller
         sync.set("smartLlm", next)
-        void putJsonWithTimeout("/smart-llm", { enabled: next }).catch((error) => {
+        void putJsonWithTimeout("/smart-llm", { enabled: next }, undefined, { signal: controller.signal }).catch((error) => {
+          if (controller.signal.aborted || smartLlmPutController !== controller) return
           Log.Default.warn("failed to update smart llm setting", { error, enabled: next })
           // Only revert if no concurrent toggle has changed the state since we set it —
           // otherwise we'd clobber a newer user action with our stale rollback.
@@ -917,15 +941,21 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       slash: { name: "autonomous", aliases: ["toggle-autonomous"] },
       onSelect: (dialog) => {
         const next = !sync.data.autonomous
+        autonomousPutController?.abort()
+        const controller = new AbortController()
+        autonomousPutController = controller
         sync.set("autonomous", next)
-        void putJsonWithTimeout("/autonomous", { enabled: next }).catch((error) => {
-          Log.Default.warn("failed to update autonomous setting", { error, enabled: next })
-          if (sync.data.autonomous === next) sync.set("autonomous", !next)
-          toast.show({
-            message: error instanceof Error ? error.message : "Failed to save autonomous setting",
-            variant: "error",
-          })
-        })
+        void putJsonWithTimeout("/autonomous", { enabled: next }, undefined, { signal: controller.signal }).catch(
+          (error) => {
+            if (controller.signal.aborted || autonomousPutController !== controller) return
+            Log.Default.warn("failed to update autonomous setting", { error, enabled: next })
+            if (sync.data.autonomous === next) sync.set("autonomous", !next)
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to save autonomous setting",
+              variant: "error",
+            })
+          },
+        )
         dialog.clear()
       },
     },
@@ -938,20 +968,26 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         const previousMode = sync.data.isolation.mode
         const previousNetwork = sync.data.isolation.network
         const next = previousMode === "full-access" ? "workspace-write" : "full-access"
+        sandboxPutController?.abort()
+        const controller = new AbortController()
+        sandboxPutController = controller
         sync.set("isolation", "mode", next)
         sync.set("isolation", "network", next === "full-access")
         const headers = directoryRequestHeaders({
           directory: sdk.directory,
           contentType: "application/json",
         })
-        void putJsonWithTimeout("/isolation", { mode: next }, headers).catch((error) => {
+        void putJsonWithTimeout("/isolation", { mode: next }, headers, { signal: controller.signal }).catch((error) => {
+          if (controller.signal.aborted || sandboxPutController !== controller) return
           Log.Default.warn("failed to update sandbox setting", { error, mode: next })
-          sync.set("isolation", "mode", previousMode)
-          sync.set("isolation", "network", previousNetwork)
-          toast.show({
-            message: error instanceof Error ? error.message : "Failed to save sandbox setting",
-            variant: "error",
-          })
+          if (sync.data.isolation.mode === next) {
+            sync.set("isolation", "mode", previousMode)
+            sync.set("isolation", "network", previousNetwork)
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to save sandbox setting",
+              variant: "error",
+            })
+          }
         })
         dialog.clear()
       },

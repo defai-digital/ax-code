@@ -357,9 +357,11 @@ export namespace Risk {
             const f = item[1]?.replace(/^[ab]\//, "")
             if (f && f !== "/dev/null") files.add(f)
           }
-          const stat = patch(patchText)
-          additions += stat.add
-          deletions += stat.del
+          if (!diff) {
+            const stat = patch(patchText)
+            additions += stat.add
+            deletions += stat.del
+          }
         }
       }
     }
