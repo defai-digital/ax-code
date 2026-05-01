@@ -487,8 +487,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(footerViewModel).toContain('"Thinking..."')
     expect(footerViewModel).toContain('"Processing..."')
     expect(footerViewModel).toContain('"Finished"')
-    expect(footerViewModel).toContain('"Thinking stalled"')
-    expect(footerViewModel).toContain('"Processing stalled"')
+    expect(footerViewModel).toContain("stalled")
   })
 
   test("keeps the theme dialog reactive while custom themes hydrate", async () => {

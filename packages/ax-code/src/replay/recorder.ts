@@ -81,11 +81,10 @@ export namespace Recorder {
     const state = sessions.get(sessionID)
     if (!state) return
     const endToken = state.token
-    // Flush pending replay records before returning so a session can
-    // be safely restarted without sequence collisions.
-    await Promise.resolve().then(() => {
-      flush()
-    })
+    // One microtask tick lets any pending emit() calls that were queued
+    // before end() fire first, then flush and delete atomically.
+    await Promise.resolve()
+    flush()
     if (sessions.get(sessionID)?.token === endToken) sessions.delete(sessionID)
   }
 

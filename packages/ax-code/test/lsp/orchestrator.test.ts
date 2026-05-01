@@ -61,13 +61,13 @@ describe("LSP.markBroken / LSP.isBroken", () => {
     expect(second.nextAttempt).toBeGreaterThan(first.nextAttempt)
   })
 
-  test("isBroken drops expired entries and returns false", () => {
+  test("isBroken returns false for expired entries without removing them", () => {
     const broken = new Map<string, LSP.BrokenEntry>()
     // Hand-construct an expired entry (nextAttempt in the past)
     broken.set("key", { failures: 1, nextAttempt: Date.now() - 1000 })
     expect(LSP.isBroken(broken, "key")).toBe(false)
-    // Entry should have been removed so the next spawn can retry fresh
-    expect(broken.has("key")).toBe(false)
+    // Entry is kept so markBroken can compound failures for backoff escalation
+    expect(broken.has("key")).toBe(true)
   })
 
   test("isBroken leaves non-expired entries in place", () => {
@@ -83,7 +83,7 @@ describe("LSP.markBroken / LSP.isBroken", () => {
     broken.set("fresh", { failures: 1, nextAttempt: Date.now() + 60_000 })
     expect(LSP.isBroken(broken, "expired")).toBe(false)
     expect(LSP.isBroken(broken, "fresh")).toBe(true)
-    expect(broken.has("expired")).toBe(false)
+    expect(broken.has("expired")).toBe(true)
     expect(broken.has("fresh")).toBe(true)
   })
 

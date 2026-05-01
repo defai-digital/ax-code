@@ -75,7 +75,7 @@ describe("planner replan hook", () => {
     )
 
     expect(order).toEqual(["phase-1", "phase-1-replan-1-1", "phase-1-replan-1-2", "phase-2"])
-    expect(result.success).toBe(false) // phase-1 still counted as failed
+    expect(result.success).toBe(true) // recovery phases succeeded; phasesFailed decrements to 0
     expect(plan.phasesCompleted).toBe(3) // 2 replan phases + follow-up
   })
 

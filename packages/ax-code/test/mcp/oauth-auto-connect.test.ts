@@ -474,18 +474,21 @@ test("startAuth closes prior pending OAuth transport before creating a new one",
       const firstTransport = transportInstances[0]
       const firstClient = clientInstances[0]
       expect(firstTransport?.closeCalls).toBe(0)
-      expect(firstClient?.closeCalls).toBe(1)
+      // Client is not closed on unauthorized redirect — the redirect is the
+      // expected OAuth flow; closing the client prematurely broke auth.
+      expect(firstClient?.closeCalls).toBe(0)
 
       await MCP.startAuth("test-oauth-rotate")
       const secondClient = clientInstances[1]
 
+      // closePendingOAuthTransport closes the prior pending transport
       expect(firstTransport?.closeCalls).toBe(1)
       expect(transportInstances).toHaveLength(2)
       expect(clientInstances).toHaveLength(2)
 
       const secondTransport = transportInstances[1]
       expect(secondTransport?.closeCalls).toBe(0)
-      expect(secondClient?.closeCalls).toBe(1)
+      expect(secondClient?.closeCalls).toBe(0)
 
       await MCP.removeAuth("test-oauth-rotate")
       expect(secondTransport?.closeCalls).toBe(1)
