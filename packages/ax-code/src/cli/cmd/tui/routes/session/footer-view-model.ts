@@ -62,6 +62,8 @@ export function footerSessionStatusView(input: {
   status?: FooterSessionStatus
   now?: number
   stalledAfterMs?: number
+  model?: string
+  interruptHint?: string
 }): FooterSessionStatusView {
   const status = input.status
   if (!status || status.type === "idle") return { stale: false, tone: "muted" }
@@ -111,9 +113,11 @@ export function footerSessionStatusView(input: {
         ? `response delayed · ${inactive}`
         : `no update · ${inactive}`
 
+  const stallWho = input.model ?? (status.waitState === "llm" ? "Thinking" : "Processing")
+  const interruptSuffix = input.interruptHint ? ` · ${input.interruptHint} to cancel` : ""
   return {
     label: `${text} · ${staleHint}`,
-    shortLabel: status.waitState === "llm" ? "Thinking stalled" : "Processing stalled",
+    shortLabel: `${stallWho} stalled${interruptSuffix}`,
     stale,
     tone: "warning",
   }

@@ -1369,6 +1369,8 @@ export function Prompt(props: PromptProps) {
     return footerSessionStatusView({
       status: current,
       now: Date.now(),
+      model: local.model.parsed().model,
+      interruptHint: keybind.print("session_interrupt"),
     })
   })
 
@@ -1419,7 +1421,16 @@ export function Prompt(props: PromptProps) {
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
-                const value = input.plainText
+                const raw = input.plainText
+                // SGR mouse residue: \x1b[<Cb;Cx;CyM/m arrives as <digits;digits;digitsM
+                // when the escape sequence parser partially processes a mouse event during
+                // focus transitions (dialog open/close, session switching). Strip before
+                // the text lands in the prompt buffer.
+                const value = raw.replace(/<\d+;\d+;\d+[Mm]/g, "")
+                if (value !== raw) {
+                  input.setText(value)
+                  return
+                }
                 setStore("prompt", "input", value)
                 autocomplete.onInput(value)
                 syncExtmarksWithPromptParts()
