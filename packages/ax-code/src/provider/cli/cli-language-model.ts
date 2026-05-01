@@ -29,7 +29,7 @@ function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
 }
 
 export function cliEnv(providerEnvKeys: readonly string[] = []) {
-  const env = {
+  const env: Record<string, string> = {
     ...Env.withCliProviderKeys(Env.sanitize()),
     TERM: "dumb",
     NO_COLOR: "1",
