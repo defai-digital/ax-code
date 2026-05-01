@@ -99,13 +99,13 @@ describe("homebrew source formula generator", () => {
     expect(defaultJob).not.toBeNull()
     expect(defaultJob![0]).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
     expect(defaultJob![0]).toContain("TAP_TOKEN: ${{ secrets.TAP_TOKEN }}")
-    expect(defaultJob![0]).toContain("if: ${{ !contains(github.ref_name, '-') && secrets.TAP_TOKEN != '' }}")
+    expect(defaultJob![0]).toContain("if: ${{ !contains(github.ref_name, '-') }}")
 
     const sourceJob = text.match(/homebrew-source:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
     expect(sourceJob).not.toBeNull()
     expect(sourceJob![0]).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
     expect(sourceJob![0]).toContain("TAP_TOKEN: ${{ secrets.TAP_TOKEN }}")
-    expect(sourceJob![0]).toContain("if: ${{ !contains(github.ref_name, '-') && secrets.TAP_TOKEN != '' }}")
+    expect(sourceJob![0]).toContain("if: ${{ !contains(github.ref_name, '-') }}")
   })
 
   test("homebrew-source job exists in release.yml gated after default homebrew", async () => {
