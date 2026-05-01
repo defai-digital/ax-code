@@ -14,7 +14,7 @@ import type { ProjectID } from "../project/schema"
 // Design decisions:
 //   - `git worktree add` via the existing util/git helper. No direct
 //     shell or Bun.$ usage.
-//   - Shadow worktrees live under <instanceDir>/dre-shadow/<planId>.
+//   - Shadow worktrees live under <instanceDir>/dre/shadow/<planId>.
 //     We deliberately put it inside the instance directory rather than
 //     $TMPDIR so the instance data directory acts as the natural scope.
 //   - Branch name: ax-code/dre/shadow/<planId> with slashes preserved.
