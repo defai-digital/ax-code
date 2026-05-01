@@ -50,6 +50,7 @@ export interface CliLanguageModelProbeConfig {
   providerID: string
   modelID: string
   binary: string
+  providerEnvKeys?: readonly string[]
   args?: string[]
   parser?: CliProviderDefinition["parser"]
   promptMode?: CliProviderDefinition["promptMode"]
@@ -81,6 +82,7 @@ export async function probeCliLanguageModel(config: CliLanguageModelProbeConfig)
     binary: config.binary,
     args: resolved.args,
     parser: resolved.parser,
+    providerEnvKeys: config.providerEnvKeys,
     promptMode: resolved.promptMode,
     promptFlag: resolved.promptFlag,
   })

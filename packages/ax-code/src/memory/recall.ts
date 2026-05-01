@@ -120,6 +120,10 @@ function collectResults(
       const ageSaved = now - new Date(entry.savedAt).getTime()
       const reasons = [...scored.reasons]
       let score = scored.score
+      if (entry.confidence !== undefined) {
+        score *= entry.confidence
+        reasons.push(`confidence ${entry.confidence}`)
+      }
       if (q && ageSaved <= RECENCY_WINDOW_MS) {
         score += RECENCY_BONUS
         reasons.push("recent")
@@ -127,10 +131,6 @@ function collectResults(
       if (q && source === "project") {
         score += PROJECT_SCOPE_BONUS
         reasons.push("project scope")
-      }
-      if (entry.confidence !== undefined) {
-        score *= entry.confidence
-        reasons.push(`confidence ${entry.confidence}`)
       }
       if (wantedTags.length > 0) reasons.push("tag filter")
       if (query.path && entry.pathGlobs?.length) reasons.push("path filter")

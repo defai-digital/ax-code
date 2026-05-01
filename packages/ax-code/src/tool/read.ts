@@ -27,30 +27,45 @@ function readErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-function warmSemanticLsp(filepath: string) {
+function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
   const directory = Instance.directory
   const handle = (err: unknown) => {
     if (isHarmlessEffectInterrupt(err)) return
     log.warn("opportunistic lsp warmup failed", {
       filepath,
       error: err instanceof Error ? err.message : String(err),
-    })
+      })
   }
 
   const task = Instance.bind(async () => {
+    if (signal?.aborted) return
     // Skip deferred warmup if the project instance was already disposed.
     if (!Instance.list().includes(directory)) return
     Promise.resolve()
       .then(async () => {
+        if (signal?.aborted) return
         const available = await LSP.hasClients(filepath, { mode: "semantic" })
         if (!available) return
+        if (signal?.aborted) return
         if (!Instance.list().includes(directory)) return
         await LSP.touchFile(filepath, false, { mode: "semantic" })
       })
       .catch(handle)
   })
-  const timer = setTimeout(task, 0)
+  const cancel = () => {
+    clearTimeout(timer)
+    signal?.removeEventListener("abort", cancel)
+  }
+  const timer = setTimeout(() => {
+    signal?.removeEventListener("abort", cancel)
+    void task()
+  }, 0)
   timer.unref?.()
+  if (signal?.aborted) {
+    cancel()
+    return
+  }
+  signal?.addEventListener("abort", cancel, { once: true })
 }
 
 export const ReadTool = Tool.define("read", {
@@ -286,7 +301,7 @@ export const ReadTool = Tool.define("read", {
       // Opportunistic warmup for later semantic navigation. Schedule it
       // after the read's last awaited work so current output is not held
       // behind best-effort LSP startup.
-      warmSemanticLsp(filepath)
+      warmSemanticLsp(filepath, ctx.abort)
 
       return {
         title,

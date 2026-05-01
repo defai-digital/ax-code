@@ -221,6 +221,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
           binary: path,
           args: opts.args,
           parser: opts.parser,
+          providerEnvKeys: provider.env,
           promptMode: opts.promptMode,
           promptFlag: opts.promptFlag,
         })

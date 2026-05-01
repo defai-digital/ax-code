@@ -438,9 +438,11 @@ async function contextChecks(input: { root: string; dir: string }) {
 export namespace Server {
   const log = Log.create({ service: "server" })
   const rate = new Map<string, { count: number; reset: number }>()
+  const RATE_SWEEP_INTERVAL_MS = 30_000
+  let lastRateSweepAt = 0
   let warnedRequestIpFailure = false
 
-  export const Default = lazy(() => createApp({}))
+  export const Default = lazy(() => createApp({ port: 4096 }))
 
   function requestDirectory(c: Context): string | Response {
     const raw =
@@ -556,8 +558,10 @@ export namespace Server {
         const ip = socketAddr ?? "local"
         const key = `${ip}:${c.req.method}:${c.req.path.startsWith("/session/") ? "/session" : c.req.path}`
         const now = Date.now()
-        // Periodically evict expired buckets to prevent unbounded growth.
-        if (rate.size > 5_000) {
+        // Periodically evict expired buckets so stale keys do not accumulate
+        // indefinitely on low-cardinality traffic patterns.
+        if (rate.size > 5_000 || now - lastRateSweepAt >= RATE_SWEEP_INTERVAL_MS) {
+          lastRateSweepAt = now
           for (const [k, v] of rate) {
             if (v.reset <= now) rate.delete(k)
           }
@@ -604,7 +608,12 @@ export namespace Server {
 
             const boundPort = Number(url?.port ?? "")
             const serverPort =
-              Number.isFinite(boundPort) && boundPort > 0 ? boundPort : opts?.port && opts.port > 0 ? opts.port : 4096
+              Number.isFinite(boundPort) && boundPort > 0
+                ? boundPort
+                : opts?.port && opts.port > 0
+                  ? opts.port
+                  : undefined
+            if (serverPort === undefined) return
             const serverOrigins = [`http://localhost:${serverPort}`, `http://127.0.0.1:${serverPort}`]
             if (serverOrigins.includes(input)) return input
             if (opts?.cors?.includes(input)) return input

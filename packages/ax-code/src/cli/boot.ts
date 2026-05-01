@@ -93,6 +93,26 @@ const cmds = [
 ]
 
 let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
+let hooksInstalled = false
+
+function onUnhandledRejection(err: unknown) {
+  if (isHarmlessEffectInterrupt(err)) return
+  DiagnosticLog.recordProcess("cli.unhandledRejection", { error: err })
+  Log.Default.error("rejection", {
+    e: err instanceof Error ? err.message : err,
+  })
+  process.exitCode = 1
+}
+
+function onUncaughtException(err: Error) {
+  if (isHarmlessEffectInterrupt(err)) return
+  DiagnosticLog.recordProcess("cli.uncaughtException", { error: err })
+  Log.Default.error("exception", {
+    e: err instanceof Error ? err.message : err,
+  })
+  // Process state is unreliable after uncaught exception — exit after flushing
+  setTimeout(() => process.exit(1), 100).unref()
+}
 
 export function clearForcedExitTimer() {
   if (!forcedExitTimer) return
@@ -111,24 +131,10 @@ export function scheduleForcedExit(exit: () => void = () => process.exit()) {
 }
 
 export function hooks() {
-  process.on("unhandledRejection", (err) => {
-    if (isHarmlessEffectInterrupt(err)) return
-    DiagnosticLog.recordProcess("cli.unhandledRejection", { error: err })
-    Log.Default.error("rejection", {
-      e: err instanceof Error ? err.message : err,
-    })
-    process.exitCode = 1
-  })
-
-  process.on("uncaughtException", (err) => {
-    if (isHarmlessEffectInterrupt(err)) return
-    DiagnosticLog.recordProcess("cli.uncaughtException", { error: err })
-    Log.Default.error("exception", {
-      e: err instanceof Error ? err.message : err,
-    })
-    // Process state is unreliable after uncaught exception — exit after flushing
-    setTimeout(() => process.exit(1), 100).unref()
-  })
+  if (hooksInstalled) return
+  hooksInstalled = true
+  process.on("unhandledRejection", onUnhandledRejection)
+  process.on("uncaughtException", onUncaughtException)
 }
 
 export function cli(argv = hideBin(process.argv)) {

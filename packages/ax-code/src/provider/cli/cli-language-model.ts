@@ -18,6 +18,7 @@ export interface CliLanguageModelConfig {
   parser: CliOutputParser
   promptMode: "stdin" | "arg"
   promptFlag?: string
+  providerEnvKeys?: readonly string[]
 }
 
 function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
@@ -27,8 +28,17 @@ function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
   return detail ? `CLI exited with code ${code}: ${detail.slice(0, 500)}` : `CLI exited with code ${code}`
 }
 
-export function cliEnv() {
-  return { ...Env.withCliProviderKeys(Env.sanitize()), TERM: "dumb", NO_COLOR: "1" }
+export function cliEnv(providerEnvKeys: readonly string[] = []) {
+  const env = {
+    ...Env.withCliProviderKeys(Env.sanitize()),
+    TERM: "dumb",
+    NO_COLOR: "1",
+  }
+  for (const key of providerEnvKeys) {
+    const value = process.env[key]
+    if (value !== undefined) env[key] = value
+  }
+  return env
 }
 
 function autonomousCliArgs(providerID: string): string[] {
@@ -75,7 +85,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      env: cliEnv(),
+      env: cliEnv(this.config.providerEnvKeys),
       abort: options.abortSignal,
     })
 
@@ -119,7 +129,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      env: cliEnv(),
+      env: cliEnv(this.config.providerEnvKeys),
       abort: options.abortSignal,
     })
 

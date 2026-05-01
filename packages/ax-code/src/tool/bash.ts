@@ -356,7 +356,14 @@ export const BashTool = Tool.define("bash", async () => {
         detached: process.platform !== "win32",
         windowsHide: process.platform === "win32",
       })
-      if (proc.pid) trackedPIDs.add(proc.pid)
+      if (proc.pid) {
+        trackedPIDs.add(proc.pid)
+      } else {
+        log.warn("spawned bash process has no pid and cannot be tracked for cleanup", {
+          command: params.command,
+          cwd,
+        })
+      }
 
       let output = ""
       // Hard cap on raw output to protect process memory against

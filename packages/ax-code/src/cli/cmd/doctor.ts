@@ -37,6 +37,15 @@ async function findAncestor(start: string, predicate: (dir: string) => Promise<b
   }
 }
 
+async function getConfiguredTuiPort(): Promise<number> {
+  try {
+    const config = await Config.global()
+    const configured = config?.server?.port
+    if (typeof configured === "number" && configured > 0) return configured
+  } catch {}
+  return 4096
+}
+
 export async function doctorProjectContext(callerCwd = Filesystem.callerCwd()) {
   const projectRoot =
     (await findAncestor(
@@ -66,6 +75,7 @@ export const DoctorCommand: CommandModule = {
   handler: async () => {
     const checks: { name: string; status: "ok" | "warn" | "fail"; detail: string }[] = []
     const project = await doctorProjectContext()
+    const tuiPort = await getConfiguredTuiPort()
 
     // 1. Version
     checks.push({
@@ -221,7 +231,7 @@ export const DoctorCommand: CommandModule = {
 
     // 11b. TUI startup — port conflict and server liveness
     try {
-      const serverRunning = await fetch("http://127.0.0.1:4096/", {
+      const serverRunning = await fetch(`http://127.0.0.1:${tuiPort}/`, {
         signal: AbortSignal.timeout(1500),
       })
         .then(() => true)
@@ -231,13 +241,13 @@ export const DoctorCommand: CommandModule = {
         checks.push({
           name: "TUI server",
           status: "ok",
-          detail: "ax-code server responding on port 4096 (existing session active)",
+          detail: `ax-code server responding on port ${tuiPort} (existing session active)`,
         })
       } else {
         // Check if something else owns the port
         const portBlocked = await Bun.connect({
           hostname: "127.0.0.1",
-          port: 4096,
+          port: tuiPort,
           socket: { open() {}, data() {}, close() {}, error() {} },
         })
           .then((s) => {
@@ -250,12 +260,12 @@ export const DoctorCommand: CommandModule = {
           name: "TUI server",
           status: portBlocked ? "warn" : "ok",
           detail: portBlocked
-            ? "Port 4096 is in use by another process — ax-code may fail to start or bind a random port"
-            : "Port 4096 available",
+            ? `Port ${tuiPort} is in use by another process — ax-code may fail to start or bind a random port`
+            : `Port ${tuiPort} available`,
         })
       }
     } catch {
-      checks.push({ name: "TUI server", status: "ok", detail: "Port 4096 available" })
+      checks.push({ name: "TUI server", status: "ok", detail: `Port ${tuiPort} available` })
     }
 
     // 11b. Bun preload — required for source/dev TUI runs. Bundled runtimes

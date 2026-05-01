@@ -60,8 +60,16 @@ function getInstallSecret(): string {
       // First run — generate and persist
       installSecret = randomBytes(32).toString("hex")
       mkdirSync(path.dirname(secretPath), { recursive: true })
-      writeFileSync(secretPath, installSecret, { mode: 0o600 })
-      log.info("generated install secret for encryption key derivation")
+      try {
+        writeFileSync(secretPath, installSecret, { mode: 0o600, flag: "wx" })
+        log.info("generated install secret for encryption key derivation")
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+          installSecret = readFileSync(secretPath, "utf-8").trim()
+        } else {
+          throw error
+        }
+      }
     }
   } catch {
     // Data directory not available (e.g. unit tests) — fall back gracefully
@@ -157,7 +165,12 @@ export function decrypt(value: EncryptedValue): string {
     }
 
     // Try legacy machineId + legacy iterations (last resort)
-    return decryptWithPassword(legacy, encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
+    try {
+      return decryptWithPassword(legacy, encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
+    } catch {
+      log.debug("legacy key+legacy iterations failed")
+      throw new Error("decryption failed — all key derivation attempts exhausted")
+    }
   }
 
   // No install secret means machineId === legacyMachineId, all attempts exhausted

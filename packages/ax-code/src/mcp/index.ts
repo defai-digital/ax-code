@@ -369,39 +369,41 @@ export namespace MCP {
   }
 
   export async function add(name: string, mcp: Config.Mcp) {
-    const s = await state()
-    const result = await create(name, mcp)
-    if (!result) {
-      const status = {
-        status: "failed" as const,
-        error: "unknown error",
+    return withConnectLock(name, "MCP add failed", async () => {
+      const s = await state()
+      const result = await create(name, mcp)
+      if (!result) {
+        const status = {
+          status: "failed" as const,
+          error: "unknown error",
+        }
+        s.status[name] = status
+        return {
+          status: s.status,
+        }
       }
-      s.status[name] = status
-      return {
-        status: s.status,
+      if (!result.mcpClient) {
+        s.status[name] = result.status
+        return {
+          status: s.status,
+        }
       }
-    }
-    if (!result.mcpClient) {
+      // Close existing client if present to prevent memory leaks
+      const existingClient = s.clients[name]
+      if (existingClient) {
+        await existingClient.close().catch((error) => {
+          log.error("Failed to close existing MCP client", { name, error })
+        })
+      }
+      s.clients[name] = result.mcpClient
       s.status[name] = result.status
+      cachedTools = undefined
+      toolsCacheGeneration++
+
       return {
         status: s.status,
       }
-    }
-    // Close existing client if present to prevent memory leaks
-    const existingClient = s.clients[name]
-    if (existingClient) {
-      await existingClient.close().catch((error) => {
-        log.error("Failed to close existing MCP client", { name, error })
-      })
-    }
-    s.clients[name] = result.mcpClient
-    s.status[name] = result.status
-    cachedTools = undefined
-    toolsCacheGeneration++
-
-    return {
-      status: s.status,
-    }
+    })
   }
 
   async function create(key: string, mcp: Config.Mcp) {
@@ -702,22 +704,21 @@ export namespace MCP {
   // child process. The lock scopes to `name` so different servers
   // still connect in parallel.
   const connectLocks = new Map<string, Promise<unknown>>()
-  export async function connect(name: string) {
+  async function withConnectLock<T>(name: string, errorLabel: string, fn: () => Promise<T>) {
     const prev = connectLocks.get(name) ?? Promise.resolve()
-    const next = prev.then(
-      () => connectImpl(name),
-      () => connectImpl(name),
-    )
+    const next = prev.then(fn, fn)
     const locked = next
       .catch((err) => {
-        log.warn("MCP connect failed", { name, error: err instanceof Error ? err.message : String(err) })
+        log.warn(errorLabel, { name, error: err instanceof Error ? err.message : String(err) })
       })
       .finally(() => {
-        // Clean up settled entries to prevent unbounded Map growth
         if (connectLocks.get(name) === locked) connectLocks.delete(name)
       })
     connectLocks.set(name, locked)
     return next
+  }
+  export async function connect(name: string) {
+    return withConnectLock(name, "MCP connect failed", () => connectImpl(name))
   }
 
   async function connectImpl(name: string) {
@@ -1175,7 +1176,10 @@ export namespace MCP {
         error: NamedError.message(error),
       }
     } finally {
-      await closePendingOAuthTransport(mcpName)
+      if (pendingOAuthTransports.get(mcpName) === transport) {
+        pendingOAuthTransports.delete(mcpName)
+      }
+      await transport.close?.().catch(() => {})
     }
   }
 

@@ -187,9 +187,16 @@ jobs:
           # all publish jobs complete.
           # Idempotent: skip if any release (draft or published) already exists.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
+            VERSION="${TAG#v}"
+            NOTES_FILE="packages/ax-code/.internal/release/release-notes-v${VERSION}.md"
+            if [ -f "$NOTES_FILE" ]; then
+              NOTES_ARGS="--notes-file $NOTES_FILE"
+            else
+              NOTES_ARGS="--generate-notes"
+            fi
             gh release create "$TAG" \
               --title "$TAG" \
-              --generate-notes \
+              $NOTES_ARGS \
               --verify-tag \
               --draft \
               $PRERELEASE_FLAG
@@ -294,7 +301,7 @@ jobs:
     needs: publish
     # Homebrew tracks stable releases only. Prerelease tags still publish to
     # npm/GitHub, but they must not move brew users off the stable line.
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ !contains(github.ref_name, '-') && secrets.TAP_TOKEN != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -304,7 +311,7 @@ jobs:
       - name: Update Homebrew formula
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
 
   # Publish the GitHub release (remove draft status) only after npm packages
@@ -341,7 +348,7 @@ jobs:
     needs:
       - homebrew
       - publish-source
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ !contains(github.ref_name, '-') && secrets.TAP_TOKEN != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -351,5 +358,5 @@ jobs:
       - name: Update Homebrew source formula
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: bash .github/scripts/update-homebrew-source.sh
