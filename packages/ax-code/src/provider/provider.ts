@@ -686,7 +686,7 @@ export namespace Provider {
           ...((options["extraBody"] as Record<string, unknown> | undefined) ?? {}),
         }
         options["headers"] = {
-          "HTTP-Referer": "https://github.com/automatosx/ax-code",
+          "HTTP-Referer": "https://github.com/defai-digital/ax-code",
           "X-Title": "ax-code",
           ...((options["headers"] as Record<string, string> | undefined) ?? {}),
         }
