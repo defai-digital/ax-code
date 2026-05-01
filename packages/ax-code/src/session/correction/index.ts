@@ -134,8 +134,9 @@ export namespace SelfCorrection {
   export function recordSuccess(sessionID: string, toolName: string) {
     const budgets = sessionBudgets.get(sessionID)
     if (!budgets) return
+    const prefix = `${toolName}:`
     for (const [k] of budgets) {
-      if (k.split(":")[0] === toolName) budgets.delete(k)
+      if (k.startsWith(prefix)) budgets.delete(k)
     }
   }
 

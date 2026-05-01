@@ -77,14 +77,16 @@ export namespace Recorder {
     }
   }
 
-  export function end(sessionID: SessionID) {
+  export async function end(sessionID: SessionID) {
     const state = sessions.get(sessionID)
     if (!state) return
     const endToken = state.token
-    // Defer deletion so pending microtask-queued emits flush first
-    queueMicrotask(() => {
-      if (sessions.get(sessionID)?.token === endToken) sessions.delete(sessionID)
+    // Flush pending replay records before returning so a session can
+    // be safely restarted without sequence collisions.
+    await Promise.resolve().then(() => {
+      flush()
     })
+    if (sessions.get(sessionID)?.token === endToken) sessions.delete(sessionID)
   }
 
   export function active(sessionID: SessionID): boolean {

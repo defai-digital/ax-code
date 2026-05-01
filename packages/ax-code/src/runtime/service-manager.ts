@@ -7,6 +7,7 @@ interface ManagerState {
 }
 
 const registry = new Map<string, ManagerState>()
+const MAX_SERVICE_MANAGER_DIRECTORIES = 256
 
 function createState(): ManagerState {
   return {
@@ -16,11 +17,27 @@ function createState(): ManagerState {
   }
 }
 
+function touchRegistry(directory: string, state: ManagerState) {
+  if (registry.has(directory)) {
+    registry.delete(directory)
+  }
+  registry.set(directory, state)
+
+  while (registry.size > MAX_SERVICE_MANAGER_DIRECTORIES) {
+    const oldest = registry.keys().next().value
+    if (oldest === undefined) break
+    registry.delete(oldest)
+  }
+}
+
 function ensureState(directory: string) {
   const existing = registry.get(directory)
-  if (existing) return existing
+  if (existing) {
+    touchRegistry(directory, existing)
+    return existing
+  }
   const next = createState()
-  registry.set(directory, next)
+  touchRegistry(directory, next)
   return next
 }
 
@@ -145,7 +162,7 @@ function createManager(state: ManagerState): ServiceManager.Manager {
     },
     async track<T>(input: ServiceManager.TrackInput<T>) {
       const startedAt = Date.now()
-      const service = createManager(state).start(input.service, startedAt)
+      createManager(state).start(input.service, startedAt)
       const id = `${input.service}:${++state.nextTaskID}`
 
       if (state.tasks.size > 1000) {
@@ -180,7 +197,7 @@ function createManager(state: ManagerState): ServiceManager.Manager {
       )
       updateService(state, input.service, (current) => ({
         ...current,
-        state: service.state,
+        state: current.state === "idle" ? "starting" : current.state,
         startedAt: current.startedAt ?? startedAt,
       }))
 
@@ -463,7 +480,7 @@ export namespace ServiceManager {
 
   export function reset(directory: string) {
     const state = createState()
-    registry.set(directory, state)
+    touchRegistry(directory, state)
     return createManager(state)
   }
 

@@ -1540,8 +1540,10 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
       content: "_Thinking:_ " + content(),
     }),
   )
+  // Show while streaming even before first delta arrives (time.end undefined = still active)
+  const visible = createMemo(() => (content() || props.part.time.end === undefined) && ctx.showThinking())
   return (
-    <Show when={content() && ctx.showThinking()}>
+    <Show when={visible()}>
       <box
         id={"text-" + props.part.id}
         paddingLeft={2}

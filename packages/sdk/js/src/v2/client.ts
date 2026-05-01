@@ -2,6 +2,7 @@ export * from "./gen/types.gen.js"
 
 import { createClient } from "./gen/client/client.gen.js"
 import { type Config } from "./gen/client/types.gen.js"
+import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../protocol.js"
 import { OpencodeClient } from "./gen/sdk.gen.js"
 export { type Config as OpencodeClientConfig, OpencodeClient }
 export { type Config as AxCodeClientConfig, OpencodeClient as AxCodeClient }
@@ -32,7 +33,8 @@ export function createAxCodeClient(config?: Config & { directory?: string; exper
   if (config?.experimental_workspaceID) {
     config.headers = {
       ...config.headers,
-      "x-opencode-workspace": config.experimental_workspaceID,
+      [AX_CODE_WORKSPACE_HEADER]: config.experimental_workspaceID,
+      [LEGACY_OPENCODE_WORKSPACE_HEADER]: config.experimental_workspaceID,
     }
   }
 

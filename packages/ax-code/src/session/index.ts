@@ -685,6 +685,7 @@ export namespace Session {
     // avoid a TOCTOU window where a new child session created between
     // collection and deletion becomes an orphan.
     const allDescendants: Info[] = []
+    const allDescendantIDs = new Set<SessionID>()
     Database.transaction((db) => {
       const ids = [sessionID]
       while (ids.length > 0) {
@@ -695,14 +696,15 @@ export namespace Session {
           .where(and(eq(SessionTable.project_id, Instance.project.id), eq(SessionTable.parent_id, parentID)))
           .all()
         for (const row of rows) {
+          allDescendantIDs.add(row.id)
           const next = parseRow(row)
           if (!next) continue
           allDescendants.push(next)
           ids.push(next.id)
         }
       }
-      for (const desc of allDescendants) {
-        db.delete(SessionTable).where(eq(SessionTable.id, desc.id)).run()
+      for (const id of allDescendantIDs) {
+        db.delete(SessionTable).where(eq(SessionTable.id, id)).run()
       }
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
     })

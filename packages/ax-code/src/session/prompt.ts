@@ -501,7 +501,7 @@ export namespace SessionPrompt {
       })
     })
     let sessionStarted = false
-    await using _recorder = defer(() => {
+    await using _recorder = defer(async () => {
       if (sessionStarted) {
         Recorder.emit({
           type: "session.end",
@@ -510,7 +510,7 @@ export namespace SessionPrompt {
           totalSteps,
         })
       }
-      Recorder.end(sessionID)
+      await Recorder.end(sessionID)
       // Release the autonomous-mode per-session counters and the
       // BlastRadius cap state. Without this the module-level Map grows
       // unbounded across the process lifetime — small per-session, but

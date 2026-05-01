@@ -306,6 +306,7 @@ export namespace ShareNext {
         // flush on failure so data survives transient errors.
         inflight.add(sessionID)
         let success = false
+        const queuedSizeBefore = queued.data.size
         try {
           const req = await request()
           const response = await fetchShare(req, req.api.sync(share.id), {
@@ -331,7 +332,7 @@ export namespace ShareNext {
             // merged new items into it, in which case the entry
             // still holds unsent data that needs a fresh flush
             // timer.
-            if (current === queued && current.data.size === queued.data.size) {
+            if (current === queued && current.data.size === queuedSizeBefore) {
               queue.delete(sessionID)
             } else if (current) {
               current.attempt = 0

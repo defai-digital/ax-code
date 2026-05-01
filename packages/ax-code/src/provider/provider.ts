@@ -951,12 +951,17 @@ export namespace Provider {
         throw e
       }
     })()
+    if (s.modelPending.has(key)) {
+      return s.modelPending.get(key)!
+    }
     s.modelPending.set(key, promise)
 
     try {
       return await promise
     } finally {
-      s.modelPending.delete(key)
+      if (s.modelPending.get(key) === promise) {
+        s.modelPending.delete(key)
+      }
     }
   }
 
