@@ -56361,8 +56361,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 204800,
-          "output": 131072
+          "context": 196608,
+          "output": 196608
         }
       },
       "gpt-oss:20b": {

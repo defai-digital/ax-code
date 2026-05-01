@@ -301,7 +301,7 @@ jobs:
     needs: publish
     # Homebrew tracks stable releases only. Prerelease tags still publish to
     # npm/GitHub, but they must not move brew users off the stable line.
-    if: ${{ !contains(github.ref_name, '-') && secrets.TAP_TOKEN != '' }}
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -348,7 +348,7 @@ jobs:
     needs:
       - homebrew
       - publish-source
-    if: ${{ !contains(github.ref_name, '-') && secrets.TAP_TOKEN != '' }}
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
