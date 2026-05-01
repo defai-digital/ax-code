@@ -16,7 +16,7 @@
  * users who intentionally need the source+bun launcher. The primary
  * `@defai.digital/ax-code` package is the compiled-binary distribution.
  *
- * See: automatosx/adr/ADR-002-distribution-source-plus-bun.md
+ * See: .internal/adr/ADR-002-distribution-source-plus-bun.md
  */
 import { $ } from "bun"
 import fs from "fs"

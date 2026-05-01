@@ -1254,7 +1254,7 @@ describe("ShadowWorktree", () => {
         const shadowPath = result.handle.path
         const branch = result.handle.branch
 
-        // Shadow directory exists and lives under automatosx/tmp/dre-shadow.
+        // Shadow directory exists under the instance data directory.
         expect(shadowPath).toContain("dre-shadow")
         const stat = await fs.stat(shadowPath)
         expect(stat.isDirectory()).toBe(true)

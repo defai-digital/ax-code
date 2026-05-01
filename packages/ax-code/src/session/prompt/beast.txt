@@ -41,7 +41,7 @@ You are a highly capable and autonomous agent, and you can definitely solve this
    - What are the dependencies and interactions with other parts of the code?
 3. Investigate the codebase. Explore relevant files, search for key functions, and gather context.
 4. Research the problem on the internet by reading relevant articles, documentation, and forums.
-5. **For new features or major refactors:** Create a PRD (use /prd command) documenting requirements, scope, alternatives, and risks. Save it to automatosx/prd/. Create an ADR (use /adr command) for key design decisions. Save to automatosx/adr/. In interactive mode, get user approval before implementing; in autonomous/headless mode, proceed only after recording assumptions and tradeoffs, and still stop for high-risk permission boundaries.
+5. **For new features or major refactors:** Create a PRD (use /prd command) documenting requirements, scope, alternatives, and risks. Save it to .internal/prd/. Create an ADR (use /adr command) for key design decisions. Save to .internal/adr/. In interactive mode, get user approval before implementing; in autonomous/headless mode, proceed only after recording assumptions and tradeoffs, and still stop for high-risk permission boundaries.
 6. Develop a clear, step-by-step plan. Break down the fix into manageable, incremental steps. Display those steps in a simple todo list.
 7. **Write tests first (TDD)** — before implementing, study existing test patterns and write test cases that define expected behavior. For bug fixes, write a test that reproduces the bug. Run tests to confirm they fail (red phase).
 8. Implement incrementally. Write the minimum code to make failing tests pass (green phase). Make small, testable code changes.

@@ -2,7 +2,7 @@
  * `ax-code release check` — validate release-critical conditions before tagging.
  *
  * Implements Phase 1 of the debugging-capability plan. See
- * automatosx/prd/PRD-2026-04-13-release-readiness-check.md for rationale.
+ * .internal/prd/PRD-2026-04-13-release-readiness-check.md for rationale.
  *
  * Each check is a pure async function that returns `CheckResult`. Checks are
  * ordered fail-fast-cheap-first so the user sees feedback quickly. No side
