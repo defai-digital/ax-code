@@ -1,63 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import {
-  computeDebugCaseId,
   DebugInstrumentationPlanSchema,
   DEBUG_ID_PATTERN,
 } from "../../src/debug-engine/runtime-debug"
-import { Installation } from "../../src/installation"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionDebug } from "../../src/session/debug"
-import type { SessionID } from "../../src/session/schema"
 import { DebugPlanInstrumentationTool } from "../../src/tool/debug_plan_instrumentation"
 import { tmpdir } from "../fixture/fixture"
-
-function fakeCtx(sessionID: string) {
-  return {
-    sessionID,
-    messageID: "" as any,
-    agent: "build",
-    abort: new AbortController().signal,
-    callID: "test",
-    messages: [],
-    metadata() {},
-    ask: async () => {},
-  } as any
-}
-
-async function emitOpenedCase(sessionID: SessionID, directory: string, problem: string) {
-  const caseId = computeDebugCaseId({ problem, runId: sessionID })
-  Recorder.begin(sessionID)
-  Recorder.emit({
-    type: "session.start",
-    sessionID: sessionID as any,
-    agent: "build",
-    model: "test/model",
-    directory,
-  })
-  Recorder.emit({
-    type: "tool.result",
-    sessionID: sessionID as any,
-    tool: "debug_open_case",
-    callID: "call-open",
-    status: "completed",
-    metadata: {
-      caseId,
-      debugCase: {
-        schemaVersion: 1,
-        caseId,
-        problem,
-        status: "open",
-        createdAt: "2026-04-26T18:00:00.000Z",
-        source: { tool: "debug_open_case", version: Installation.VERSION, runId: sessionID },
-      },
-    },
-    durationMs: 1,
-  })
-  await new Promise((resolve) => setTimeout(resolve, 30))
-  return caseId
-}
+import { emitOpenedCase, fakeCtx } from "./debug-fixture"
 
 describe("DebugPlanInstrumentationTool", () => {
   const targets = [
@@ -178,6 +130,43 @@ describe("DebugPlanInstrumentationTool", () => {
           planId: planned.metadata.planId,
           status: "removed",
         })
+      },
+    })
+  })
+
+  test("rollup planSummary reflects instrumentation plan counts per case", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const caseId = await emitOpenedCase(session.id, tmp.path, "queue depth spikes")
+
+        const tool = await DebugPlanInstrumentationTool.init()
+        const input = { caseId, purpose: "measure queue depth", targets }
+        const planned = await tool.execute(input, fakeCtx(session.id))
+        const removed = await tool.execute({ ...input, status: "removed" }, fakeCtx(session.id))
+
+        for (const [callID, result] of [
+          ["call-plan", planned],
+          ["call-removed", removed],
+        ] as const) {
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: session.id as any,
+            tool: "debug_plan_instrumentation",
+            callID,
+            status: "completed",
+            metadata: result.metadata,
+            durationMs: 1,
+          })
+        }
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const debug = SessionDebug.load(session.id)
+        const rollups = SessionDebug.rollup(debug)
+        expect(rollups).toHaveLength(1)
+        expect(rollups[0].planSummary).toMatchObject({ total: 1, applied: 0, removed: 1 })
       },
     })
   })

@@ -41,6 +41,11 @@ export const DebugCaptureEvidenceTool = Tool.define("debug_capture_evidence", {
         `planId references an unknown instrumentation plan: ${args.planId} (no DebugInstrumentationPlan with this id exists in session ${ctx.sessionID})`,
       )
     }
+    if (args.kind === "instrumentation_result" && args.planId === undefined) {
+      throw new Error(
+        `debug_capture_evidence: kind "instrumentation_result" requires planId — pass the id returned by debug_plan_instrumentation`,
+      )
+    }
 
     const evidenceId = computeDebugEvidenceId({
       caseId: args.caseId,

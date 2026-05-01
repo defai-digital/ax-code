@@ -14,19 +14,7 @@ import { Installation } from "../../src/installation"
 import { computeEnvelopeId } from "../../src/quality/verification-envelope"
 import type { SessionID } from "../../src/session/schema"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
-
-function fakeCtx(sessionID: string) {
-  return {
-    sessionID,
-    messageID: "" as any,
-    agent: "build",
-    abort: new AbortController().signal,
-    callID: "test",
-    messages: [],
-    metadata() {},
-    ask: async () => {},
-  } as any
-}
+import { fakeCtx } from "./debug-fixture"
 
 async function emitCaseAndEvidence(sessionID: SessionID, directory: string, problem: string, evidenceContent: string) {
   const caseId = computeDebugCaseId({ problem, runId: sessionID })

@@ -14,19 +14,7 @@ import { SessionDebug } from "../../src/session/debug"
 import type { SessionID } from "../../src/session/schema"
 import { DebugApplyVerificationTool } from "../../src/tool/debug_apply_verification"
 import { tmpdir } from "../fixture/fixture"
-
-function fakeCtx(sessionID: string) {
-  return {
-    sessionID,
-    messageID: "" as any,
-    agent: "build",
-    abort: new AbortController().signal,
-    callID: "test",
-    messages: [],
-    metadata() {},
-    ask: async () => {},
-  } as any
-}
+import { fakeCtx } from "./debug-fixture"
 
 async function waitForRecorder() {
   await new Promise((resolve) => setTimeout(resolve, 30))

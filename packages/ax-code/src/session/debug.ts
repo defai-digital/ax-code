@@ -183,8 +183,18 @@ export namespace SessionDebug {
     return loaded.cases.map((c) => {
       const own = loaded.hypotheses.filter((h) => h.caseId === c.caseId)
       const effective = resolveCaseStatus(c.status, own)
-      return { ...c, effectiveStatus: effective }
+      const plans = loaded.instrumentationPlans?.filter((p) => p.caseId === c.caseId) ?? []
+      const planSummary = {
+        total: plans.length,
+        applied: plans.filter((p) => p.status === "applied").length,
+        removed: plans.filter((p) => p.status === "removed").length,
+      }
+      return { ...c, effectiveStatus: effective, planSummary }
     })
+  }
+
+  export function evidenceByPlanId(sessionID: SessionID, planId: string): DebugEvidence[] {
+    return load(sessionID).evidence.filter((e) => e.planId === planId)
   }
 }
 

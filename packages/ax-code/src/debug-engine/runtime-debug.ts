@@ -49,6 +49,16 @@ export type DebugCase = z.infer<typeof DebugCaseSchema>
 // forcing every caller to re-run the hypothesis aggregation rules.
 export const DebugCaseRollupSchema = DebugCaseSchema.extend({
   effectiveStatus: DebugCaseStatus,
+  // Summary of instrumentation plans for this case. Always present when
+  // computed via SessionDebug.rollup(); optional so older serialised rollups
+  // (without the field) still parse.
+  planSummary: z
+    .object({
+      total: z.number().int().min(0),
+      applied: z.number().int().min(0),
+      removed: z.number().int().min(0),
+    })
+    .optional(),
 })
 export type DebugCaseRollup = z.infer<typeof DebugCaseRollupSchema>
 
