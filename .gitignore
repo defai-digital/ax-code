@@ -47,7 +47,6 @@ auth.json
 
 # Local config
 .ax-code/
-.automatosx/
 .ax-grok/
 .cursor/
 .gemini/
@@ -61,10 +60,8 @@ AGENTS.md
 # Internal project docs (not for public)
 .internal/
 ADRS/
-BUGS/
 PRDS/
 TODOS/
 planning/
-automatosx/
 
 # Local dev files

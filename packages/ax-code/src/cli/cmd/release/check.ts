@@ -362,7 +362,7 @@ async function checkBranchSync(ctx: CheckContext): Promise<CheckResult> {
 
 async function checkReleaseNotes(ctx: CheckContext): Promise<CheckResult> {
   const [r, durationMs] = await timed(async () => {
-    const notesPath = path.join(ctx.repoRoot, `automatosx/tmp/release-notes-v${ctx.version}.md`)
+    const notesPath = path.join(ctx.repoRoot, `.internal/release/release-notes-v${ctx.version}.md`)
     try {
       const s = await stat(notesPath)
       if (s.size < 50) {
@@ -379,7 +379,7 @@ async function checkReleaseNotes(ctx: CheckContext): Promise<CheckResult> {
         "Release notes",
         "release-notes",
         "ok",
-        `found at automatosx/tmp/release-notes-v${ctx.version}.md`,
+        `found at .internal/release/release-notes-v${ctx.version}.md`,
         0,
       )
     } catch {
@@ -387,7 +387,7 @@ async function checkReleaseNotes(ctx: CheckContext): Promise<CheckResult> {
         "Release notes",
         "release-notes",
         "warn",
-        `no file at automatosx/tmp/release-notes-v${ctx.version}.md`,
+        `no file at .internal/release/release-notes-v${ctx.version}.md`,
         0,
         "CI will auto-generate notes, but a curated file is recommended for minor+ releases.",
       )

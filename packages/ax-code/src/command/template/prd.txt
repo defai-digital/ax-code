@@ -5,7 +5,7 @@ $ARGUMENTS
 Follow these steps:
 
 1. Analyze the codebase to understand the current state. Read relevant source files, configs, dependencies, and existing documentation (README, AGENTS.md, docs/).
-2. Write the PRD to automatosx/prd/ using the filename format: PRD-<YYYY-MM-DD>-<slugified-title>.md. Create the automatosx/prd/ directory if it does not exist. Note: docs/ is for product-facing user documentation only; development-stage documents (PRDs, ADRs, reports) go in automatosx/.
+2. Write the PRD to .internal/prd/ using the filename format: PRD-<YYYY-MM-DD>-<slugified-title>.md. Create the .internal/prd/ directory if it does not exist. Note: docs/ is for product-facing user documentation only; development-stage documents (PRDs, ADRs, reports) go in .internal/.
 3. Present the PRD to the user and ask for approval before any implementation begins.
 
 Use this exact format:

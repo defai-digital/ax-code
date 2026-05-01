@@ -7,8 +7,6 @@ import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-i
 const root = path.resolve(import.meta.dir, "..")
 
 const note = [
-  "docs/architecture/repo-structure.md",
-  "docs/architecture/testing-policy.md",
   "packages/integration-github/ARCHITECTURE.md",
   "packages/integration-vscode/ARCHITECTURE.md",
   "packages/ax-code/ARCHITECTURE.md",
@@ -56,7 +54,6 @@ const hot = ["packages/ax-code/src/cli/cmd", "packages/ui/src/components"]
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
 const old = ["ADRS", "PRDS", "BUGS", "TODOS", "specs", "sdks", "github", "scripts"]
 const keep = [
-  ".automatosx",
   ".ax-grok",
   ".claude",
   ".cursor",
@@ -64,9 +61,9 @@ const keep = [
   ".git",
   ".github",
   ".husky",
+  ".internal",
   ".pnpm-store",
   ".turbo",
-  "automatosx",
   "crates",
   "debug-log",
   "docs",

@@ -4,10 +4,10 @@ $ARGUMENTS
 
 Follow these steps:
 
-1. Use Glob to find existing ADRs in automatosx/adr/ matching pattern "ADR-*.md" to determine the next ADR number. If no ADRs exist, start at ADR-001.
+1. Use Glob to find existing ADRs in .internal/adr/ matching pattern "ADR-*.md" to determine the next ADR number. If no ADRs exist, start at ADR-001.
 2. Analyze the codebase for context related to this decision. Read relevant source files, configs, dependencies, and tests to understand the current state.
-3. Write the ADR file to automatosx/adr/ using the filename format: ADR-NNN-<slugified-title>.md (e.g., ADR-005-use-redis-for-caching.md). Create the automatosx/adr/ directory if it does not exist. Note: docs/ is for product-facing user documentation only; development-stage documents go in automatosx/.
-4. After writing the ADR, read ALL ADR files in automatosx/adr/ and create/update automatosx/adr/INDEX.md with a table listing every ADR.
+3. Write the ADR file to .internal/adr/ using the filename format: ADR-NNN-<slugified-title>.md (e.g., ADR-005-use-redis-for-caching.md). Create the .internal/adr/ directory if it does not exist. Note: docs/ is for product-facing user documentation only; development-stage documents go in .internal/.
+4. After writing the ADR, read ALL ADR files in .internal/adr/ and create/update .internal/adr/INDEX.md with a table listing every ADR.
 
 Use this exact format for the ADR:
 
