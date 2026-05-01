@@ -147,7 +147,7 @@ export namespace ShadowWorktree {
 
     try {
       const worktreeRoot = Instance.worktree
-      const shadowBase = path.join(Instance.directory, "automatosx", "tmp", "dre-shadow")
+      const shadowBase = path.join(Instance.directory, "dre", "shadow")
       await fs.mkdir(shadowBase, { recursive: true })
       const shadowPath = path.join(shadowBase, params.planId)
       const branch = `ax-code/dre/shadow/${params.planId}`
@@ -245,7 +245,7 @@ export namespace ShadowWorktree {
     let directories = 0
 
     // Remove orphan DRE shadow branches
-    const shadowBase = path.join(Instance.directory, "automatosx", "tmp", "dre-shadow")
+    const shadowBase = path.join(Instance.directory, "dre", "shadow")
     const branchList = await git(["branch", "--list", "ax-code/dre/shadow/*"], { cwd })
     if (branchList.exitCode === 0) {
       const names = branchList

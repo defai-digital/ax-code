@@ -1255,7 +1255,7 @@ describe("ShadowWorktree", () => {
         const branch = result.handle.branch
 
         // Shadow directory exists under the instance data directory.
-        expect(shadowPath).toContain("dre-shadow")
+        expect(shadowPath).toContain("dre/shadow")
         const stat = await fs.stat(shadowPath)
         expect(stat.isDirectory()).toBe(true)
 
