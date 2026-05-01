@@ -151,7 +151,7 @@ AX Code is a strong fit when you need one or more of these:
 - [Sandbox Mode](docs/sandbox.md): isolation modes, protected paths, and network controls
 - [Autonomous Mode](docs/autonomous.md): unattended execution behavior and safeguards
 - [Auto-Route](docs/auto-route.md): LLM-assisted agent routing and model selection
-- [Semantic Layer](.internal/architecture/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
+- [Semantic Layer](docs/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
 
 ## Common Commands
 
