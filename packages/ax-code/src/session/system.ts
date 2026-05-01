@@ -49,7 +49,7 @@ export namespace SystemPrompt {
             `  For trivial changes, keep the PRD/ADR frame lightweight in the plan instead of creating permanent docs.`,
             `  Prefer industry/common best practices and avoid over-engineering: choose the simplest change that solves the task, avoid new abstractions without 3+ concrete use cases, and verify before expanding scope.`,
             `  When autonomous mode makes choices for the user, record those choices in the final response.`,
-            `  CRITICAL: Do not end your turn while any todo is still pending or in_progress. Keep working until every todo is marked completed or cancelled. If a todo cannot be completed, mark it cancelled with a reason — never leave it pending and stop.`,
+            `  Before ending your turn, mark every todo as completed or cancelled — never leave todos in pending or in_progress state.`,
             `</autonomous_workflow>`,
           ]
         : []

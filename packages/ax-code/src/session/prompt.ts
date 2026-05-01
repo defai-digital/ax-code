@@ -42,6 +42,7 @@ import { BlastRadius } from "./blast-radius"
 import { CodeIntelligence } from "../code-intelligence"
 import { AutoIndex } from "../code-intelligence/auto-index"
 import type { ProjectID } from "../project/schema"
+import { Todo } from "./todo"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
@@ -558,6 +559,8 @@ export namespace SessionPrompt {
     const GLOBAL_STEP_LIMIT = cfg.session?.max_steps ?? _GLOBAL_STEP_LIMIT
     const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
     const maxContinuations = cfg.session?.max_continuations ?? 3
+    const maxTodoRetries = cfg.session?.max_todo_retries ?? 10
+    let todoRetries = 0
     const cachedSystemPrompt: import("./prompt-helpers").SystemCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -970,6 +973,44 @@ export namespace SessionPrompt {
       if (result === "stop") {
         reason = processor.message.error ? "error" : "completed"
         break
+      }
+
+      // In autonomous mode, when the model ends a turn cleanly but leaves todos
+      // pending, inject a continuation user message and keep the loop running.
+      // This is the runtime guarantee — complements the system-prompt reminder
+      // injected per turn. Capped by maxTodoRetries to prevent infinite loops when
+      // the model genuinely cannot finish a todo (blocked tool, missing data, etc.).
+      if (autonomous && modelFinished && !processor.message.error && todoRetries < maxTodoRetries) {
+        const pendingTodos = Todo.get(sessionID).filter(
+          (t) => t.status === "pending" || t.status === "in_progress",
+        )
+        if (pendingTodos.length > 0) {
+          todoRetries++
+          log.info("autonomous todo continuation", {
+            command: "session.prompt.loop",
+            status: "ok",
+            sessionID,
+            pendingCount: pendingTodos.length,
+            attempt: todoRetries,
+            maxAttempts: maxTodoRetries,
+          })
+          const lastMsgs = await Session.messages({ sessionID })
+          const lastUserInfo = lastMsgs.filter((m) => m.info.role === "user").pop()?.info as
+            | MessageV2.User
+            | undefined
+          await createUserMessage({
+            sessionID,
+            parts: [
+              {
+                type: "text",
+                text: `You stopped with ${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} still pending:\n${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}\nContinue working until all todos are completed or cancelled. This is auto-continuation ${todoRetries}/${maxTodoRetries}.`,
+              },
+            ],
+            agent: lastUserInfo?.agent,
+            model: lastUserInfo?.model,
+          })
+          continue
+        }
       }
 
       // Track consecutive errors — break if agent is stuck

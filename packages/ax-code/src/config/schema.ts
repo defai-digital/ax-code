@@ -697,6 +697,14 @@ export const Info = z
           .describe(
             "In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)",
           ),
+        max_todo_retries: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            "In autonomous mode, how many times to auto-continue when todos remain pending after the model stops (default: 10, 0 to disable)",
+          ),
       })
       .optional()
       .describe("Session lifecycle management"),

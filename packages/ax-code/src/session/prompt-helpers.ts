@@ -24,6 +24,7 @@ import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Filesystem } from "@/util/filesystem"
+import { Todo } from "./todo"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -508,11 +509,29 @@ export async function systemPrompt(input: {
   }
   if (!input.cache.instructions) input.cache.instructions = await (input.instructions ?? InstructionPrompt.system)()
 
+  // In autonomous mode, inject pending todos into the system context each turn
+  // so the model always knows exactly what's left — not just an upfront instruction
+  // but live state visible at the start of every reasoning cycle.
+  const pendingTodos =
+    process.env["AX_CODE_AUTONOMOUS"] === "true" && input.sessionID
+      ? Todo.get(input.sessionID).filter((t) => t.status === "pending" || t.status === "in_progress")
+      : []
+  const pendingTodosSection =
+    pendingTodos.length > 0
+      ? [
+          `<pending_todos count="${pendingTodos.length}">`,
+          ...pendingTodos.map((t) => `  [${t.status.toUpperCase()}] ${t.content}`),
+          `  Complete all of these before ending your turn.`,
+          `</pending_todos>`,
+        ].join("\n")
+      : undefined
+
   const system = [
     ...input.cache.environment,
     ...(assuranceWorkflow ? [assuranceWorkflow] : []),
     ...(memory ? [memory] : []),
     ...(decisionHints ? [decisionHints] : []),
+    ...(pendingTodosSection ? [pendingTodosSection] : []),
     ...(skills ? [skills] : []),
     ...input.cache.instructions,
   ]
