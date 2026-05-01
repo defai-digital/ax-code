@@ -27,12 +27,9 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 
 ## Architecture
 
-| Document                                                     | Summary                                                                                   |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| [Semantic Layer](architecture/semantic-layer.md)             | Current semantic contract for graph and LSP-backed answers, provenance, audit, and replay |
-| [Repository Structure](architecture/repo-structure.md)       | Canonical repo layout, dependency rules, and placement guidance                           |
-| [Testing Policy](architecture/testing-policy.md)             | Default test layout by package type and when tests are required                           |
-| [Documentation Policy](architecture/documentation-policy.md) | Status model, source-of-truth rules, and drift-prevention checklist for docs              |
+| Document                                         | Summary                                                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [Semantic Layer](semantic-layer.md)              | Current semantic contract for graph and LSP-backed answers, provenance, audit, and replay |
 
 ## Specs and Reference
 
@@ -40,7 +37,6 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | ----------------------------------------------- | ------------------------------------------------------------- |
 | [Project API Spec](specs/project.md)            | Current project and session API shape                         |
 | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)    | Cross-language HTTP integration and generated-client guidance  |
-| [Migration Review](ax-code-migration-review.md) | Migration framing for OpenCode plus ax-cli to AX Code         |
 | [Security Policy](../SECURITY.md)               | Threat model, credential storage, and server security posture |
 
 ## Policies

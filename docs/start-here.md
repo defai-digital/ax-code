@@ -58,7 +58,7 @@ The rest of the documentation maps onto those layers.
 - Read [Sandbox Mode](sandbox.md) for execution boundaries.
 - Read [Autonomous Mode](autonomous.md) if the agent will run unattended.
 - Read [Security Policy](../SECURITY.md) for threat model and credential storage details.
-- Read [Semantic Layer](architecture/semantic-layer.md) if provenance and replay matter for your workflow.
+- Read [Semantic Layer](semantic-layer.md) if provenance and replay matter for your workflow.
 
 ### I want to embed or automate it
 
@@ -69,8 +69,6 @@ The rest of the documentation maps onto those layers.
 
 ### I want to understand the repo or contribute feedback
 
-- Read [Repository Structure](architecture/repo-structure.md).
-- Read [Testing Policy](architecture/testing-policy.md).
 - Read the [Documentation Hub](README.md) for the rest of the public docs.
 - Read [CONTRIBUTING.md](../CONTRIBUTING.md) for the current external contribution policy.
 
@@ -96,4 +94,4 @@ ax-code doctor
 | SDK embedding           | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  |
 | HTTP/OpenAPI clients    | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    |
 | VS Code integration     | [VS Code integration](../packages/integration-vscode/README.md) |
-| Architecture            | [Semantic Layer](architecture/semantic-layer.md)                |
+| Architecture            | [Semantic Layer](semantic-layer.md)                             |
